@@ -109,7 +109,10 @@ describe('SrvDnsDiagnosticsProvider', () => {
 
     it('requires the querySrv message signature at the start', async (): Promise<void> => {
         await expect(
-            provider.explain({ clusterId: 'c1', error: new Error(`Failed: querySrv EBADRESP _mongodb._tcp.${HOSTNAME}`) }),
+            provider.explain({
+                clusterId: 'c1',
+                error: new Error(`Failed: querySrv EBADRESP _mongodb._tcp.${HOSTNAME}`),
+            }),
         ).resolves.toBeUndefined();
     });
 

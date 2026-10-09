@@ -7,9 +7,9 @@ import { isIP } from 'node:net';
 import { hasAzureDomain } from '../utils/connectionStringHelpers';
 import { extractHostname, isLocalOrPrivateHost } from '../utils/hostClassification';
 
-import type { SrvResolutionReport } from '@documentdb-js/srv-resolver';
-import type { ITelemetryContext } from '@microsoft/vscode-azext-utils';
-import type { SrvResolutionSurface } from './prepareDriverConnectionString';
+import { type SrvResolutionReport } from '@documentdb-js/srv-resolver';
+import { type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { type SrvResolutionSurface } from './prepareDriverConnectionString';
 
 export interface SrvResolutionTelemetry {
     properties: ITelemetryContext['properties'];
@@ -17,8 +17,10 @@ export interface SrvResolutionTelemetry {
 }
 
 function dnsServerClass(host: string): 'loopback' | 'private' | 'public' {
-    if ((isIP(host) === 4 && host.startsWith('127.')) ||
-        (isIP(host) === 6 && new URL(`http://[${host.split('%')[0]}]`).hostname === '[::1]')) {
+    if (
+        (isIP(host) === 4 && host.startsWith('127.')) ||
+        (isIP(host) === 6 && new URL(`http://[${host.split('%')[0]}]`).hostname === '[::1]')
+    ) {
         return 'loopback';
     }
     return isLocalOrPrivateHost(host) ? 'private' : 'public';
@@ -41,9 +43,12 @@ export function applySrvResolutionReport(
     const servers = report.dnsServers.map(extractHostname);
     const families = servers.map((host): string => {
         switch (isIP(host)) {
-            case 4: return 'ipv4';
-            case 6: return 'ipv6';
-            default: return 'none';
+            case 4:
+                return 'ipv4';
+            case 6:
+                return 'ipv6';
+            default:
+                return 'none';
         }
     });
     // Only correlation IDs are accepted, never arbitrary caller data.
@@ -59,10 +64,11 @@ export function applySrvResolutionReport(
         fallbackOutcome: report.fallbackOutcome,
         fallbackErrorCode: report.fallbackErrorCode,
         fallbackTransport: report.fallbackTransport,
-        targetCompressed: report.targetCompressed === undefined ? 'unknown' : (report.targetCompressed ? 'true' : 'false'),
+        targetCompressed:
+            report.targetCompressed === undefined ? 'unknown' : report.targetCompressed ? 'true' : 'false',
         txtSource: report.txtSource,
         txtOptionsApplied: report.txtOptionsApplied.length ? [...report.txtOptionsApplied].sort().join(',') : 'none',
-        tlsAdded: report.tlsAdded === undefined ? undefined : (report.tlsAdded ? 'true' : 'false'),
+        tlsAdded: report.tlsAdded === undefined ? undefined : report.tlsAdded ? 'true' : 'false',
         dnsServerClass: combinedClass(servers.map(dnsServerClass)),
         dnsServerIpFamily: combinedClass(families),
         aresVersion: report.aresVersion,

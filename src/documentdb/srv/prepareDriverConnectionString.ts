@@ -10,10 +10,10 @@ import { getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { createSrvResolutionSummary } from './srvResolutionSummary';
 import { applySrvResolutionReport } from './srvResolutionTelemetry';
 
-import type { SrvFallbackMode, SrvResolutionPath } from '@documentdb-js/srv-resolver';
-import type { MongoClientOptions } from 'mongodb';
-import type { SrvResolutionSummary } from './srvResolutionSummary';
-import type { SrvResolutionTelemetry } from './srvResolutionTelemetry';
+import { type SrvFallbackMode, type SrvResolutionPath } from '@documentdb-js/srv-resolver';
+import { type MongoClientOptions } from 'mongodb';
+import { type SrvResolutionSummary } from './srvResolutionSummary';
+import { type SrvResolutionTelemetry } from './srvResolutionTelemetry';
 
 export type SrvResolutionSurface = 'extension' | 'shell' | 'playground';
 
@@ -55,8 +55,11 @@ export async function prepareDriverConnectionString(
     const controller = new AbortController();
     const abort = (): void => controller.abort(new UserCancelledError('srvResolution'));
     input.abortSignal?.addEventListener('abort', abort, { once: true });
-    const correlationId = input.correlation.connectionCorrelationId ??
-        input.correlation.startupCorrelationId ?? input.correlation.shellSessionId ?? 'unknown';
+    const correlationId =
+        input.correlation.connectionCorrelationId ??
+        input.correlation.startupCorrelationId ??
+        input.correlation.shellSessionId ??
+        'unknown';
     let originalFailure: { error: unknown } | undefined;
     let prepared: PreparedDriverConnectionString | undefined;
     try {

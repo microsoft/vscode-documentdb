@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as dnsPacket from 'dns-packet';
 import dgram from 'node:dgram';
 import net from 'node:net';
-import * as dnsPacket from 'dns-packet';
 
-import type { DnsTransport } from '../fallbackDnsClient';
+import { type DnsTransport } from '../fallbackDnsClient';
 
 export interface StubRequest {
     readonly query: dnsPacket.DecodedPacket;
@@ -34,8 +34,12 @@ export class DnsStubServer {
         });
         this.tcp.on('connection', (socket: net.Socket): void => {
             this.tcpSockets.add(socket);
-            socket.on('close', (): void => { this.tcpSockets.delete(socket); });
-            socket.on('error', (): void => { socket.destroy(); });
+            socket.on('close', (): void => {
+                this.tcpSockets.delete(socket);
+            });
+            socket.on('error', (): void => {
+                socket.destroy();
+            });
             let received = Buffer.alloc(0);
             socket.on('data', (chunk: Buffer): void => {
                 received = Buffer.concat([received, chunk]);
@@ -55,8 +59,12 @@ export class DnsStubServer {
                             return;
                         }
                         socket.write(framed.subarray(0, 1));
-                        this.later((): void => { socket.write(framed.subarray(1, 5)); }, 5);
-                        this.later((): void => { socket.write(framed.subarray(5)); }, 10);
+                        this.later((): void => {
+                            socket.write(framed.subarray(1, 5));
+                        }, 5);
+                        this.later((): void => {
+                            socket.write(framed.subarray(5));
+                        }, 10);
                     });
                 }
             });
@@ -103,16 +111,16 @@ export class DnsStubServer {
             socket.destroy();
         }
         await Promise.all([
-            new Promise<void>((resolve): void => { this.udp.close((): void => resolve()); }),
-            new Promise<void>((resolve): void => { this.tcp.close((): void => resolve()); }),
+            new Promise<void>((resolve): void => {
+                this.udp.close((): void => resolve());
+            }),
+            new Promise<void>((resolve): void => {
+                this.tcp.close((): void => resolve());
+            }),
         ]);
     }
 
-    private dispatch(
-        bytes: Buffer,
-        transport: DnsTransport,
-        send: (response: Buffer, split?: boolean) => void,
-    ): void {
+    private dispatch(bytes: Buffer, transport: DnsTransport, send: (response: Buffer, split?: boolean) => void): void {
         const request: StubRequest = { query: dnsPacket.decode(bytes), transport, send };
         this.queries.push(request);
         this.handler(request);

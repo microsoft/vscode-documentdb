@@ -220,14 +220,15 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     async getTreeItem(element: T): Promise<vscode.TreeItem> {
         const treeItem = await element.getTreeItem();
         if (element instanceof ClusterItemBase && element.id) {
-            let rows = this.renderedClusters.get(element.cluster.clusterId);
+            const clusterId = (element as ClusterItemBase).cluster.clusterId;
+            let rows = this.renderedClusters.get(clusterId);
             if (!rows) {
                 rows = new Map();
-                this.renderedClusters.set(element.cluster.clusterId, rows);
+                this.renderedClusters.set(clusterId, rows);
             }
             rows.set(element.id, element);
             // This final choke point also covers subclasses that replace the base tooltip.
-            treeItem.tooltip = withSrvResolutionTooltip(treeItem.tooltip, element.cluster.clusterId);
+            treeItem.tooltip = withSrvResolutionTooltip(treeItem.tooltip, clusterId);
         }
         return treeItem;
     }

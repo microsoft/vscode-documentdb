@@ -10,28 +10,28 @@ created: 2026-10-09
 > Why the `mongodb+srv://` workaround for the c-ares SRV parsing regression has this shape, and
 > which alternatives were rejected.
 
-| #    | Decision                                                            | Status   | Changed from the proposal? | Date       | PR  |
-| ---- | ------------------------------------------------------------------- | -------- | -------------------------- | ---------- | --- |
-| 0001 | The resolved `mongodb://` string is transient and never persisted   | Accepted | Operator position (#993)   | 2026-10-09 | —   |
-| 0002 | The fallback queries the same system DNS servers, nothing else      | Accepted | Operator position (#993)   | 2026-10-09 | —   |
-| 0003 | Use `dns-packet` in-process, not a native addon or system tools     | Accepted | Operator position (#993)   | 2026-10-09 | —   |
-| 0004 | The rewrite mirrors the driver's SRV semantics exactly              | Accepted | Operator position (#993)   | 2026-10-09 | —   |
-| 0005 | Probe with Node's resolver first; fall back only on a broken reply  | Accepted | Operator accepted 2026-10-09 | 2026-10-09 | —   |
-| 0006 | Fallback-eligible codes are `EBADRESP` and `EFORMERR` only          | Superseded by D0012 | Operator chose Q6 option B | 2026-10-09 | —   |
-| 0007 | Two call sites: `ClustersClient` and `WorkerSessionManager`         | Accepted (modified) | Accepted; `connectToClient` also deprecated | 2026-10-09 | —   |
-| 0008 | Shell and playground resolve on the host, not in the worker         | Accepted | Operator accepted 2026-10-09 | 2026-10-09 | —   |
-| 0009 | One `connect.srvResolution` event per `+srv` connection             | Accepted | Operator accepted 2026-10-09 | 2026-10-09 | —   |
-| 0010 | A development-only switch forces the fallback path                  | Accepted | Operator accepted 2026-10-09 | 2026-10-09 | —   |
-| 0011 | No user setting; an environment variable turns the fallback off, and it is documented | Accepted | Operator chose Q1 A + D, and asked for user docs | 2026-10-09 | —   |
-| 0012 | `ECONNREFUSED` also triggers the fallback                           | Accepted | Operator chose Q6 option B; supersedes D0006 | 2026-10-09 | —   |
-| 0013 | Cached fallback clients are not refreshed in this increment          | Accepted | Operator chose Q3 A; options moved to future work | 2026-10-09 | —   |
-| 0014 | All SRV resolution output is at `trace` level                        | Accepted (modified) | Proposal was one `info` line; operator: trace only | 2026-10-09 | —   |
-| 0015 | Ship as `v0.11.1` from `release/0.11.1`, cut at `v0.11.0`, then forward-merge | Accepted | Operator decision (Q5)     | 2026-10-09 | —   |
-| 0016 | Longer fallback timeouts for slow networks                           | Accepted (modified) | Q7 option A, with longer values (operator) | 2026-10-09 | —   |
-| 0017 | The probe passes every error that skips the fallback to the driver, with no extra time limit | Accepted | Operator chose Q2 A over the recommended D | 2026-10-09 | —   |
-| 0018 | DNS preparation and the shell and playground init timeout have separate budgets | Accepted | Operator chose Q8 A, as recommended | 2026-10-09 | —   |
-| 0019 | The UI shows whether the fallback was used: the tooltip now, the dashboard later | Accepted | Operator requirement     | 2026-10-09 | —   |
-| 0020 | The VS Code-independent logic lives in a workspace package, published at the operator's discretion | Accepted | Operator chose "workspace package now" | 2026-10-09 | —   |
+| #    | Decision                                                                                           | Status              | Changed from the proposal?                         | Date       | PR  |
+| ---- | -------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------- | ---------- | --- |
+| 0001 | The resolved `mongodb://` string is transient and never persisted                                  | Accepted            | Operator position (#993)                           | 2026-10-09 | —   |
+| 0002 | The fallback queries the same system DNS servers, nothing else                                     | Accepted            | Operator position (#993)                           | 2026-10-09 | —   |
+| 0003 | Use `dns-packet` in-process, not a native addon or system tools                                    | Accepted            | Operator position (#993)                           | 2026-10-09 | —   |
+| 0004 | The rewrite mirrors the driver's SRV semantics exactly                                             | Accepted            | Operator position (#993)                           | 2026-10-09 | —   |
+| 0005 | Probe with Node's resolver first; fall back only on a broken reply                                 | Accepted            | Operator accepted 2026-10-09                       | 2026-10-09 | —   |
+| 0006 | Fallback-eligible codes are `EBADRESP` and `EFORMERR` only                                         | Superseded by D0012 | Operator chose Q6 option B                         | 2026-10-09 | —   |
+| 0007 | Two call sites: `ClustersClient` and `WorkerSessionManager`                                        | Accepted (modified) | Accepted; `connectToClient` also deprecated        | 2026-10-09 | —   |
+| 0008 | Shell and playground resolve on the host, not in the worker                                        | Accepted            | Operator accepted 2026-10-09                       | 2026-10-09 | —   |
+| 0009 | One `connect.srvResolution` event per `+srv` connection                                            | Accepted            | Operator accepted 2026-10-09                       | 2026-10-09 | —   |
+| 0010 | A development-only switch forces the fallback path                                                 | Accepted            | Operator accepted 2026-10-09                       | 2026-10-09 | —   |
+| 0011 | No user setting; an environment variable turns the fallback off, and it is documented              | Accepted            | Operator chose Q1 A + D, and asked for user docs   | 2026-10-09 | —   |
+| 0012 | `ECONNREFUSED` also triggers the fallback                                                          | Accepted            | Operator chose Q6 option B; supersedes D0006       | 2026-10-09 | —   |
+| 0013 | Cached fallback clients are not refreshed in this increment                                        | Accepted            | Operator chose Q3 A; options moved to future work  | 2026-10-09 | —   |
+| 0014 | All SRV resolution output is at `trace` level                                                      | Accepted (modified) | Proposal was one `info` line; operator: trace only | 2026-10-09 | —   |
+| 0015 | Ship as `v0.11.1` from `release/0.11.1`, cut at `v0.11.0`, then forward-merge                      | Accepted            | Operator decision (Q5)                             | 2026-10-09 | —   |
+| 0016 | Longer fallback timeouts for slow networks                                                         | Accepted (modified) | Q7 option A, with longer values (operator)         | 2026-10-09 | —   |
+| 0017 | The probe passes every error that skips the fallback to the driver, with no extra time limit       | Accepted            | Operator chose Q2 A over the recommended D         | 2026-10-09 | —   |
+| 0018 | DNS preparation and the shell and playground init timeout have separate budgets                    | Accepted            | Operator chose Q8 A, as recommended                | 2026-10-09 | —   |
+| 0019 | The UI shows whether the fallback was used: the tooltip now, the dashboard later                   | Accepted            | Operator requirement                               | 2026-10-09 | —   |
+| 0020 | The VS Code-independent logic lives in a workspace package, published at the operator's discretion | Accepted            | Operator chose "workspace package now"             | 2026-10-09 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -441,11 +441,11 @@ exactly the vetted `v0.11.0` lockfile plus `dns-packet`.
 
 Servers are queried in order (as in Q7 A), with:
 
-| Constant                   | Proposed (Q7 A)          | Accepted                       |
-| -------------------------- | ------------------------ | ------------------------------ |
-| UDP, per attempt           | 2 s                      | **5 s**                        |
-| TCP, per attempt           | 5 s                      | **10 s**                       |
-| Overall cap                | `min(10 s, connectionTimeout)` | **`min(20 s, documentDB.connectionTimeout)`** |
+| Constant         | Proposed (Q7 A)                | Accepted                                      |
+| ---------------- | ------------------------------ | --------------------------------------------- |
+| UDP, per attempt | 2 s                            | **5 s**                                       |
+| TCP, per attempt | 5 s                            | **10 s**                                      |
+| Overall cap      | `min(10 s, connectionTimeout)` | **`min(20 s, documentDB.connectionTimeout)`** |
 
 The concrete values were chosen by the agent within the operator's direction. They stay constants
 in one place, so they can be tuned from `fallbackDurationMs` telemetry.
@@ -561,7 +561,7 @@ cluster dashboard shows it later (future-work FW-2).
 
 ### Why
 
-Telemetry says how many users hit the fallback, but not whether *this* user's connection did. A
+Telemetry says how many users hit the fallback, but not whether _this_ user's connection did. A
 visible flag lets the user and support confirm it without collecting a trace. Showing it only in
 the tooltip keeps the increment small.
 

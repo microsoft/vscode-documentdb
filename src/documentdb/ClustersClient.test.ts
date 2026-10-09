@@ -3,9 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    type IActionContext,
+    type ITelemetryContext,
+    UserCancelledError,
+} from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
-import { MongoClient } from 'mongodb';
+import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
 import { AuthMethodId } from './auth/AuthMethod';
 import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
@@ -15,12 +20,10 @@ import { NoAuthHandler } from './auth/NoAuthHandler';
 import { ClustersClient, getIndexExclusionReason, type IndexItemModel } from './ClustersClient';
 import { CredentialCache } from './CredentialCache';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
-import { onDidChangeSrvResolution } from './srv/srvResolutionSummary';
+import { onDidChangeSrvResolution, type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import * as connectionStringHelpers from './utils/connectionStringHelpers';
 import { getClusterMetadata, getDomainMetadata } from './utils/getClusterMetadata';
 import * as tlsException from './utils/tlsException';
-import type { MongoClientOptions } from 'mongodb';
-import type { SrvResolutionSummary } from './srv/srvResolutionSummary';
 
 interface RecordedTelemetry {
     readonly eventName: string;
@@ -91,15 +94,16 @@ jest.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: jest.fn()
 jest.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: jest.fn() }));
 jest.mock('./srv/prepareDriverConnectionString', () => ({ prepareDriverConnectionString: jest.fn() }));
 jest.mock('./utils/connectionStringHelpers', () => ({
-    ...jest.requireActual<typeof import('./utils/connectionStringHelpers')>('./utils/connectionStringHelpers'),
+    ...jest.requireActual<typeof connectionStringHelpers>('./utils/connectionStringHelpers'),
     getHostsFromConnectionString: jest.fn(
-        jest.requireActual<typeof import('./utils/connectionStringHelpers')>('./utils/connectionStringHelpers').getHostsFromConnectionString,
+        jest.requireActual<typeof connectionStringHelpers>('./utils/connectionStringHelpers')
+            .getHostsFromConnectionString,
     ),
 }));
 jest.mock('./utils/tlsException', () => ({
-    ...jest.requireActual<typeof import('./utils/tlsException')>('./utils/tlsException'),
+    ...jest.requireActual<typeof tlsException>('./utils/tlsException'),
     resolveAllowInvalidCertificates: jest.fn(
-        jest.requireActual<typeof import('./utils/tlsException')>('./utils/tlsException').resolveAllowInvalidCertificates,
+        jest.requireActual<typeof tlsException>('./utils/tlsException').resolveAllowInvalidCertificates,
     ),
 }));
 
@@ -119,12 +123,14 @@ describe('regular connection startup diagnostics', () => {
         jest.useFakeTimers();
         mockTelemetryEvents.length = 0;
         ClustersClient._clients.clear();
-        jest.mocked(prepareDriverConnectionString).mockReset().mockImplementation(async (input) => {
-            if (input.startupTelemetry) {
-                input.startupTelemetry.properties.srvResolution = 'notSrv';
-            }
-            return { connectionString: input.connectionString, options: input.options, srvResolution: 'notSrv' };
-        });
+        jest.mocked(prepareDriverConnectionString)
+            .mockReset()
+            .mockImplementation(async (input) => {
+                if (input.startupTelemetry) {
+                    input.startupTelemetry.properties.srvResolution = 'notSrv';
+                }
+                return { connectionString: input.connectionString, options: input.options, srvResolution: 'notSrv' };
+            });
         CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://private-host:27017');
         mockConnect.mockReset().mockImplementation(async (): Promise<void> => {
             jest.advanceTimersByTime(30);
@@ -346,7 +352,11 @@ describe('regular connection startup diagnostics', () => {
         });
         jest.mocked(prepareDriverConnectionString).mockImplementationOnce(async (input) => {
             expect(getHosts).toHaveBeenCalledWith(original);
-            expect(jest.mocked(callWithTelemetryAndErrorHandling).mock.calls.some(([name]) => name === 'connect.staticmetadata')).toBe(true);
+            expect(
+                jest
+                    .mocked(callWithTelemetryAndErrorHandling)
+                    .mock.calls.some(([name]) => name === 'connect.staticmetadata'),
+            ).toBe(true);
             input.startupTelemetry!.properties.srvResolution = 'fallback';
             input.startupTelemetry!.measurements.srvResolutionDurationMs = 5;
             return { connectionString: rewritten, options: preparedOptions, srvResolution: 'fallback', summary };
@@ -384,10 +394,13 @@ describe('regular connection startup diagnostics', () => {
         const rewritten = 'mongodb://resolved.example.com/';
         const policy = jest.mocked(tlsException.resolveAllowInvalidCertificates).mockReturnValueOnce(undefined);
         jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
-            connectionString: original, options: {},
+            connectionString: original,
+            options: {},
         });
         jest.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
-            connectionString: rewritten, options: {}, srvResolution: 'fallback',
+            connectionString: rewritten,
+            options: {},
+            srvResolution: 'fallback',
         });
         const failure = new Error('ECONNREFUSED');
         mockConnect.mockRejectedValueOnce(failure);
@@ -399,11 +412,19 @@ describe('regular connection startup diagnostics', () => {
     it.each(['node', 'fallback', 'nodeErrorPassthrough', 'notSrv'] as const)(
         'keeps only the host-free summary for %s and removes it with the client',
         async (path): Promise<void> => {
-            const summary: SrvResolutionSummary | undefined = path === 'notSrv' ? undefined : {
-                path, nodeErrorCode: path === 'node' ? undefined : 'EBADRESP', resolvedAt: 1,
-            };
+            const summary: SrvResolutionSummary | undefined =
+                path === 'notSrv'
+                    ? undefined
+                    : {
+                          path,
+                          nodeErrorCode: path === 'node' ? undefined : 'EBADRESP',
+                          resolvedAt: 1,
+                      };
             jest.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
-                connectionString: 'mongodb://private-host:27017', options: {}, srvResolution: path, summary,
+                connectionString: 'mongodb://private-host:27017',
+                options: {},
+                srvResolution: path,
+                summary,
             });
             const changed = jest.fn();
             const listener = onDidChangeSrvResolution(changed);

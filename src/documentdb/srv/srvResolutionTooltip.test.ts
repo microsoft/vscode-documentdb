@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../ClustersClient';
+import { type SrvResolutionSummary } from './srvResolutionSummary';
 import { appendSrvResolutionTooltipLine, withSrvResolutionTooltip } from './srvResolutionTooltip';
-import type { SrvResolutionSummary } from './srvResolutionSummary';
 
 jest.mock('vscode', () => ({
-    ...jest.requireActual<typeof import('vscode')>('../../__mocks__/vscode.js'),
+    ...jest.requireActual<typeof vscode>('../../__mocks__/vscode.js'),
     MarkdownString: class MarkdownString {
         #delegate: Pick<vscode.MarkdownString, 'value' | 'isTrusted' | 'supportThemeIcons' | 'supportHtml' | 'baseUri'>;
 
@@ -18,16 +18,36 @@ jest.mock('vscode', () => ({
             this.#delegate = { value, supportThemeIcons };
         }
 
-        get value(): string { return this.#delegate.value; }
-        set value(value: string) { this.#delegate.value = value; }
-        get isTrusted(): vscode.MarkdownString['isTrusted'] { return this.#delegate.isTrusted; }
-        set isTrusted(value: vscode.MarkdownString['isTrusted']) { this.#delegate.isTrusted = value; }
-        get supportThemeIcons(): boolean | undefined { return this.#delegate.supportThemeIcons; }
-        set supportThemeIcons(value: boolean | undefined) { this.#delegate.supportThemeIcons = value; }
-        get supportHtml(): boolean | undefined { return this.#delegate.supportHtml; }
-        set supportHtml(value: boolean | undefined) { this.#delegate.supportHtml = value; }
-        get baseUri(): vscode.Uri | undefined { return this.#delegate.baseUri; }
-        set baseUri(value: vscode.Uri | undefined) { this.#delegate.baseUri = value; }
+        get value(): string {
+            return this.#delegate.value;
+        }
+        set value(value: string) {
+            this.#delegate.value = value;
+        }
+        get isTrusted(): vscode.MarkdownString['isTrusted'] {
+            return this.#delegate.isTrusted;
+        }
+        set isTrusted(value: vscode.MarkdownString['isTrusted']) {
+            this.#delegate.isTrusted = value;
+        }
+        get supportThemeIcons(): boolean | undefined {
+            return this.#delegate.supportThemeIcons;
+        }
+        set supportThemeIcons(value: boolean | undefined) {
+            this.#delegate.supportThemeIcons = value;
+        }
+        get supportHtml(): boolean | undefined {
+            return this.#delegate.supportHtml;
+        }
+        set supportHtml(value: boolean | undefined) {
+            this.#delegate.supportHtml = value;
+        }
+        get baseUri(): vscode.Uri | undefined {
+            return this.#delegate.baseUri;
+        }
+        set baseUri(value: vscode.Uri | undefined) {
+            this.#delegate.baseUri = value;
+        }
 
         appendMarkdown(value: string): this {
             this.#delegate.value += value;
@@ -41,10 +61,11 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('@vscode/l10n', () => ({ t: jest.fn(
-    (message: string, ...args: unknown[]): string =>
+jest.mock('@vscode/l10n', () => ({
+    t: jest.fn((message: string, ...args: unknown[]): string =>
         args.reduce<string>((translated, arg, index) => translated.replace(`{${index}}`, String(arg)), message),
-) }));
+    ),
+}));
 
 describe('SRV resolution tooltip', (): void => {
     afterEach((): void => {
@@ -54,9 +75,7 @@ describe('SRV resolution tooltip', (): void => {
     it.each(['node', 'nodeErrorPassthrough', undefined] as const)(
         'leaves the tooltip unchanged for %s',
         (path): void => {
-            jest.spyOn(ClustersClient, 'getSrvResolution').mockReturnValue(
-                path ? { path, resolvedAt: 1 } : undefined,
-            );
+            jest.spyOn(ClustersClient, 'getSrvResolution').mockReturnValue(path ? { path, resolvedAt: 1 } : undefined);
             const md = new vscode.MarkdownString('Original tooltip');
             appendSrvResolutionTooltipLine(md, 'stable-id');
             expect(md.value).toBe('Original tooltip');
@@ -87,7 +106,9 @@ describe('SRV resolution tooltip', (): void => {
         'localizes the DNS label separately from %s',
         (message): void => {
             jest.spyOn(ClustersClient, 'getSrvResolution').mockReturnValue({ path: 'fallback', resolvedAt: 1 });
-            jest.mocked(l10n.t).mockImplementationOnce(() => message).mockImplementationOnce(() => 'Translated DNS');
+            jest.mocked(l10n.t)
+                .mockImplementationOnce(() => message)
+                .mockImplementationOnce(() => 'Translated DNS');
             const md = new vscode.MarkdownString();
             appendSrvResolutionTooltipLine(md, 'stable-id');
             expect(md.value).toContain(`**Translated DNS:** ${message}`);
@@ -119,7 +140,9 @@ describe('SRV resolution tooltip', (): void => {
 
     it('keeps an already decorated tooltip unchanged on a second pass', (): void => {
         jest.spyOn(ClustersClient, 'getSrvResolution').mockReturnValue({
-            path: 'fallback', nodeErrorCode: 'EBADRESP', resolvedAt: 1,
+            path: 'fallback',
+            nodeErrorCode: 'EBADRESP',
+            resolvedAt: 1,
         });
         const original = new vscode.MarkdownString('### Connection\n\nTLS/SSL Disabled', true);
         original.isTrusted = false;

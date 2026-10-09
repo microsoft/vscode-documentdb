@@ -19,15 +19,19 @@ describe('worker OIDC allowed hosts', (): void => {
     });
 
     it('does not replace an explicitly empty allowlist', (): void => {
-        expect(getWorkerOidcAllowedHosts({
-            connectionString: 'mongodb://resolved.azure.com:27017',
-            oidcAllowedHosts: [],
-        })).toEqual([]);
+        expect(
+            getWorkerOidcAllowedHosts({
+                connectionString: 'mongodb://resolved.azure.com:27017',
+                oidcAllowedHosts: [],
+            }),
+        ).toEqual([]);
     });
 
     it('supports older init messages without a host-provided allowlist', (): void => {
-        expect(getWorkerOidcAllowedHosts({
-            connectionString: 'mongodb+srv://cluster.mongocluster.cosmos.azure.cn',
-        })).toEqual(['*.azure.cn']);
+        expect(
+            getWorkerOidcAllowedHosts({
+                connectionString: 'mongodb+srv://cluster.mongocluster.cosmos.azure.cn',
+            }),
+        ).toEqual(['*.azure.cn']);
     });
 });

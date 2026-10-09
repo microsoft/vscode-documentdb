@@ -15,14 +15,14 @@ Each observation below was **checked independently** before the plan was changed
 operator noted the feedback might be wrong. Checks were run against the driver installed in the
 main checkout (`node_modules/mongodb`, 7.2.0) and the source on this branch (`v0.11.0`).
 
-| #   | Severity | Observation                                                           | Verdict      | Plan change                         |
-| --- | -------- | --------------------------------------------------------------------- | ------------ | ----------------------------------- |
-| R1  | High     | The host-side preflight breaks Entra ID and managed identity          | **Confirmed** | WI-4 step 3 (was step 2), WI-6      |
-| R2  | High     | Cancelling during DNS preparation can still run the playground code   | **Confirmed** | WI-4, WI-6                          |
-| R3  | High     | "Exact driver semantics" is missing rules                             | **Confirmed** | WI-2, WI-3, WI-4 output             |
-| R4  | Medium   | The fallback timeout is not bounded end to end                        | **Confirmed** | WI-3, WI-6; Q8 → D0018             |
-| R5  | Medium   | The proposed diagnostic can report something false                    | **Confirmed** | WI-4 step 4, WI-7                   |
-| R6  | —        | The differential test compares at the wrong boundary                  | **Confirmed** | WI-2 tests                          |
+| #   | Severity | Observation                                                         | Verdict       | Plan change                    |
+| --- | -------- | ------------------------------------------------------------------- | ------------- | ------------------------------ |
+| R1  | High     | The host-side preflight breaks Entra ID and managed identity        | **Confirmed** | WI-4 step 3 (was step 2), WI-6 |
+| R2  | High     | Cancelling during DNS preparation can still run the playground code | **Confirmed** | WI-4, WI-6                     |
+| R3  | High     | "Exact driver semantics" is missing rules                           | **Confirmed** | WI-2, WI-3, WI-4 output        |
+| R4  | Medium   | The fallback timeout is not bounded end to end                      | **Confirmed** | WI-3, WI-6; Q8 → D0018         |
+| R5  | Medium   | The proposed diagnostic can report something false                  | **Confirmed** | WI-4 step 4, WI-7              |
+| R6  | —        | The differential test compares at the wrong boundary                | **Confirmed** | WI-2 tests                     |
 
 The reviewer's "would not expand" list (the transient rewrite, keeping the original string, asking
 only the system resolver, host-side integration, and the already deferred SRV polling and
@@ -110,12 +110,12 @@ change (WI-4, WI-6):**
 
 **Claims and checks** (driver 7.2.0, real constructor):
 
-| Claim                                                                       | Check                                                                                                                                                                                                                             | Result        |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| Absent TXT is valid                                                         | `resolveSRVRecord` returns the hosts without TXT options when the TXT lookup fails with `ENODATA` or `ENOTFOUND`. The plan never says this; WI-3 maps those replies to errors.                                                     | Confirmed     |
-| TXT can introduce invalid combinations                                      | `+srv` with `srvMaxHosts=1&replicaSet=rs` → `Cannot use srvMaxHosts option with replicaSet`. The rewritten `mongodb://…/?replicaSet=rs` (with `srvMaxHosts` removed) → **accepted**. The driver also checks TXT-provided `replicaSet` against `srvMaxHosts` (`Cannot combine replicaSet option with srvMaxHosts`). | Confirmed     |
-| Sampling hosts can hide an invalid load-balanced setup                      | `+srv` with `srvMaxHosts=1&loadBalanced=true` → `Cannot limit srv hosts with loadBalanced enabled`. Rewritten with two hosts and `loadBalanced=true` → `loadBalanced option only supported with a single host in the URI`. Sampling down to one host first would hide both errors. | Confirmed     |
-| SRV-only options can be passed programmatically                             | Rewritten URI with `{ srvMaxHosts: 1 }` or `{ srvServiceName: 'custom' }` in the options → `Cannot use srvMaxHosts or srvServiceName with a non-srv connection string`.                                                           | Confirmed     |
+| Claim                                                  | Check                                                                                                                                                                                                                                                                                                              | Result    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| Absent TXT is valid                                    | `resolveSRVRecord` returns the hosts without TXT options when the TXT lookup fails with `ENODATA` or `ENOTFOUND`. The plan never says this; WI-3 maps those replies to errors.                                                                                                                                     | Confirmed |
+| TXT can introduce invalid combinations                 | `+srv` with `srvMaxHosts=1&replicaSet=rs` → `Cannot use srvMaxHosts option with replicaSet`. The rewritten `mongodb://…/?replicaSet=rs` (with `srvMaxHosts` removed) → **accepted**. The driver also checks TXT-provided `replicaSet` against `srvMaxHosts` (`Cannot combine replicaSet option with srvMaxHosts`). | Confirmed |
+| Sampling hosts can hide an invalid load-balanced setup | `+srv` with `srvMaxHosts=1&loadBalanced=true` → `Cannot limit srv hosts with loadBalanced enabled`. Rewritten with two hosts and `loadBalanced=true` → `loadBalanced option only supported with a single host in the URI`. Sampling down to one host first would hide both errors.                                 | Confirmed |
+| SRV-only options can be passed programmatically        | Rewritten URI with `{ srvMaxHosts: 1 }` or `{ srvServiceName: 'custom' }` in the options → `Cannot use srvMaxHosts or srvServiceName with a non-srv connection string`.                                                                                                                                            | Confirmed |
 
 **Verdict:** confirmed, high. **Plan change:** new WI-2 rules and fixtures. The helper also returns
 **sanitized driver options** (a copy without `srvMaxHosts` and `srvServiceName`) alongside the

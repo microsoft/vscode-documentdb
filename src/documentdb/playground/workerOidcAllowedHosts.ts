@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
-import type { MainToWorkerMessage } from './workerTypes';
+import { type MainToWorkerMessage } from './workerTypes';
 
 export function getWorkerOidcAllowedHosts(
     msg: Pick<Extract<MainToWorkerMessage, { type: 'init' }>, 'connectionString' | 'oidcAllowedHosts'>,

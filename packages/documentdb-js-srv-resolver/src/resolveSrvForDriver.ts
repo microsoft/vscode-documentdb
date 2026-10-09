@@ -3,18 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as dns from 'node:dns';
 import { MongoClient } from 'mongodb';
+import * as dns from 'node:dns';
 import { FALLBACK_MAX_DEADLINE_MS } from './constants';
 import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient';
 import { getSrvLookupTarget, getSrvRewriteErrorKind, isSrvConnectionString, rewriteSrvUri } from './srvUriRewrite';
 import { cancellationError, noopLogger, SrvResolutionCancelledError, throwIfCancelled } from './types';
 
-import type { SrvRecord } from 'node:dns';
-import type { MongoClientOptions } from 'mongodb';
-import type { FallbackSrvResult } from './fallbackDnsClient';
-import type { SrvFallbackMode, SrvResolutionPath, SrvResolutionReport } from './report';
-import type { SrvResolverLogger } from './types';
+import { type MongoClientOptions } from 'mongodb';
+import { type SrvRecord } from 'node:dns';
+import { type FallbackSrvResult } from './fallbackDnsClient';
+import { type SrvFallbackMode, type SrvResolutionPath, type SrvResolutionReport } from './report';
+import { type SrvResolverLogger } from './types';
 
 export interface SrvProbeResolver {
     resolveSrv(hostname: string): Promise<SrvRecord[]>;
@@ -60,17 +60,17 @@ function errorCode(error: unknown): string {
 }
 
 function isCancellation(error: unknown): boolean {
-    return error instanceof SrvResolutionCancelledError ||
-        (typeof error === 'object' && error !== null && '_isUserCancelledError' in error &&
-            error._isUserCancelledError === true);
+    return (
+        error instanceof SrvResolutionCancelledError ||
+        (typeof error === 'object' &&
+            error !== null &&
+            '_isUserCancelledError' in error &&
+            error._isUserCancelledError === true)
+    );
 }
 
 /** Reject immediately on abort, even when an injected resolver never settles after cancel(). */
-async function cancellable<T>(
-    operation: () => Promise<T>,
-    signal?: AbortSignal,
-    cancel?: () => void,
-): Promise<T> {
+async function cancellable<T>(operation: () => Promise<T>, signal?: AbortSignal, cancel?: () => void): Promise<T> {
     throwIfCancelled(signal);
     let onAbort: (() => void) | undefined;
     const aborted = new Promise<never>((_resolve, reject): void => {
@@ -83,10 +83,13 @@ async function cancellable<T>(
         }
     });
     try {
-        const result = await Promise.race([Promise.resolve().then((): Promise<T> => {
-            throwIfCancelled(signal);
-            return operation();
-        }), aborted]);
+        const result = await Promise.race([
+            Promise.resolve().then((): Promise<T> => {
+                throwIfCancelled(signal);
+                return operation();
+            }),
+            aborted,
+        ]);
         throwIfCancelled(signal);
         return result;
     } catch (error) {
@@ -117,7 +120,8 @@ function preflightOptions(connectionString: string, options: MongoClientOptions)
     const properties = options.authMechanismProperties;
     const uriProperties = uriOption('authMechanismProperties') ?? '';
     const hasOidcProvider = ['OIDC_CALLBACK', 'OIDC_HUMAN_CALLBACK', 'ENVIRONMENT'].some(
-        (key): boolean => properties?.[key] != null ||
+        (key): boolean =>
+            (properties?.[key] !== undefined && properties?.[key] !== null) ||
             uriProperties.split(',').some((property): boolean => property.split(':')[0] === key),
     );
     if (!hasOidcProvider) {
@@ -161,7 +165,9 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
         const target = getSrvLookupTarget(input.connectionString, options);
         const servers = (input.getServers ?? dns.getServers)();
         report = { ...report, srvHost: target.srvHost, srvServiceName: target.srvServiceName, dnsServers: servers };
-        trace(`start ${input.logContext ?? ''} srvHost=${target.srvHost} service=${target.srvServiceName} ares=${report.aresVersion} node=${report.nodeRuntimeVersion} dnsServers=[${servers.join(',')}] forced=${report.forcedFallback}`);
+        trace(
+            `start ${input.logContext ?? ''} srvHost=${target.srvHost} service=${target.srvServiceName} ares=${report.aresVersion} node=${report.nodeRuntimeVersion} dnsServers=[${servers.join(',')}] forced=${report.forcedFallback}`,
+        );
         throwIfCancelled(input.signal);
         const probeStartedAt = Date.now();
         try {
@@ -187,14 +193,20 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
         const shouldFallback = eligible || mode === 'force';
         if (probeFailure) {
             const next = shouldFallback && mode !== 'off' ? 'running fallback' : `path=${report.path}`;
-            trace(`node probe failed code=${report.nodeErrorCode} durationMs=${report.nodeProbeDurationMs} ${eligible ? '(fallback-eligible)' : '(not fallback-eligible)'} → ${next}`);
+            trace(
+                `node probe failed code=${report.nodeErrorCode} durationMs=${report.nodeProbeDurationMs} ${eligible ? '(fallback-eligible)' : '(not fallback-eligible)'} → ${next}`,
+            );
         } else {
-            trace(`node probe ok targets=${report.srvTargetCount} durationMs=${report.nodeProbeDurationMs} → ${mode === 'force' ? 'running forced fallback' : 'path=node'}`);
+            trace(
+                `node probe ok targets=${report.srvTargetCount} durationMs=${report.nodeProbeDurationMs} → ${mode === 'force' ? 'running forced fallback' : 'path=node'}`,
+            );
         }
         if (mode === 'off' || !shouldFallback) {
             if (mode === 'off' && shouldFallback) {
                 report = { ...report, fallbackOutcome: 'disabled' };
-                trace(`fallback eligible (${report.nodeErrorCode}) but disabled by DOCUMENTDB_DISABLE_SRV_FALLBACK → original +srv handed to driver`);
+                trace(
+                    `fallback eligible (${report.nodeErrorCode}) but disabled by DOCUMENTDB_DISABLE_SRV_FALLBACK → original +srv handed to driver`,
+                );
             }
             throwIfCancelled(input.signal);
             report = { ...report, outcome: 'succeeded' };
@@ -204,14 +216,16 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
         fallbackStartedAt = Date.now();
         report = { ...report, path: 'fallback', fallbackOutcome: 'failed' };
         throwIfCancelled(input.signal);
-        const createClient = input.createPreflightClient ??
+        const createClient =
+            input.createPreflightClient ??
             ((uri: string, clientOptions: MongoClientOptions): MongoClient => new MongoClient(uri, clientOptions));
         createClient(input.connectionString, preflightOptions(input.connectionString, options));
         throwIfCancelled(input.signal);
         stage = 'dns';
         const fallback = input.fallbackDns ?? { resolveSrv: resolveSrvFallback, resolveTxt: resolveTxtFallback };
         const dnsOptions = {
-            deadlineAt: fallbackStartedAt + Math.min(input.deadlineMs ?? FALLBACK_MAX_DEADLINE_MS, FALLBACK_MAX_DEADLINE_MS),
+            deadlineAt:
+                fallbackStartedAt + Math.min(input.deadlineMs ?? FALLBACK_MAX_DEADLINE_MS, FALLBACK_MAX_DEADLINE_MS),
             signal: input.signal,
             servers,
             logger,
@@ -252,20 +266,34 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
         throwIfCancelled(input.signal);
         stage = 'rewrite';
         const rewritten = rewriteSrvUri({
-            connectionString: input.connectionString, options, srvRecords: srv.records, txtRecords: txt,
+            connectionString: input.connectionString,
+            options,
+            srvRecords: srv.records,
+            txtRecords: txt,
         });
         throwIfCancelled(input.signal);
         report = {
-            ...report, outcome: 'succeeded', fallbackOutcome: 'succeeded',
-            txtOptionsApplied: rewritten.txtApplied, tlsAdded: rewritten.tlsAdded,
+            ...report,
+            outcome: 'succeeded',
+            fallbackOutcome: 'succeeded',
+            txtOptionsApplied: rewritten.txtApplied,
+            tlsAdded: rewritten.tlsAdded,
             fallbackDurationMs: Date.now() - fallbackStartedAt,
         };
-        trace(`TXT source=${report.txtSource} keys=[${rewritten.txtKeys.join(',')}]${rewritten.txtReplicaSet === undefined ? '' : ` replicaSet=${rewritten.txtReplicaSet}`}${rewritten.txtLoadBalanced === undefined ? '' : ` loadBalanced=${rewritten.txtLoadBalanced}`}${rewritten.txtKeys.includes('authSource') ? ' authSource=<set>' : ''}`);
-        trace(`rewrite targets=[${rewritten.targets.join(',')}] tlsAdded=${rewritten.tlsAdded} removedParams=[${rewritten.removedParams.join(',')}] txtApplied=[${rewritten.txtApplied.join(',')}] txtSkipped=[${rewritten.txtSkipped.join(',')}]`);
+        trace(
+            `TXT source=${report.txtSource} keys=[${rewritten.txtKeys.join(',')}]${rewritten.txtReplicaSet === undefined ? '' : ` replicaSet=${rewritten.txtReplicaSet}`}${rewritten.txtLoadBalanced === undefined ? '' : ` loadBalanced=${rewritten.txtLoadBalanced}`}${rewritten.txtKeys.includes('authSource') ? ' authSource=<set>' : ''}`,
+        );
+        trace(
+            `rewrite targets=[${rewritten.targets.join(',')}] tlsAdded=${rewritten.tlsAdded} removedParams=[${rewritten.removedParams.join(',')}] txtApplied=[${rewritten.txtApplied.join(',')}] txtSkipped=[${rewritten.txtSkipped.join(',')}]`,
+        );
         if (probeFailure) {
-            trace(`DNS reply for ${target.srvHost} was rejected by Node.js (${report.nodeErrorCode}, c-ares ${report.aresVersion}); resolved ${srv.records.length} SRV targets via ${srv.server} (${srv.transport}) instead. See issue #993.`);
+            trace(
+                `DNS reply for ${target.srvHost} was rejected by Node.js (${report.nodeErrorCode}, c-ares ${report.aresVersion}); resolved ${srv.records.length} SRV targets via ${srv.server} (${srv.transport}) instead. See issue #993.`,
+            );
         } else {
-            trace(`forced fallback applied for ${target.srvHost}; resolved ${srv.records.length} SRV targets via ${srv.server} (${srv.transport}). See issue #993.`);
+            trace(
+                `forced fallback applied for ${target.srvHost}; resolved ${srv.records.length} SRV targets via ${srv.server} (${srv.transport}). See issue #993.`,
+            );
         }
         throwIfCancelled(input.signal);
         return { connectionString: rewritten.connectionString, options: rewritten.options, path: 'fallback', report };
@@ -286,12 +314,17 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
                 code = `${txtFailure && txtFailure.error === error ? 'txt:' : ''}${errorCode(error)}`;
             }
             report = {
-                ...report, fallbackOutcome: 'failed', fallbackErrorCode: code,
-                fallbackServersTried: error instanceof FallbackDnsError ? error.serversTried : report.fallbackServersTried,
+                ...report,
+                fallbackOutcome: 'failed',
+                fallbackErrorCode: code,
+                fallbackServersTried:
+                    error instanceof FallbackDnsError ? error.serversTried : report.fallbackServersTried,
                 fallbackDurationMs: Date.now() - fallbackStartedAt,
             };
             const useOriginal = stage === 'dns' && probeFailure !== undefined;
-            trace(`SRV fallback failed code=${code} serversTried=${report.fallbackServersTried ?? 0} durationMs=${report.fallbackDurationMs}; ${useOriginal ? 'the original error is reported' : 'the fallback error is reported'}`);
+            trace(
+                `SRV fallback failed code=${code} serversTried=${report.fallbackServersTried ?? 0} durationMs=${report.fallbackDurationMs}; ${useOriginal ? 'the original error is reported' : 'the fallback error is reported'}`,
+            );
             throwIfCancelled(input.signal);
             if (useOriginal && probeFailure) {
                 throw probeFailure.error;

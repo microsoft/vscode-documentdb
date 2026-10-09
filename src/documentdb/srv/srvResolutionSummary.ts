@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { SrvResolutionPath, SrvResolutionReport } from '@documentdb-js/srv-resolver';
+import { type SrvResolutionPath, type SrvResolutionReport } from '@documentdb-js/srv-resolver';
 import { EventEmitter, type Event } from 'vscode';
 
 let srvResolutionChanged: EventEmitter<string> | undefined;

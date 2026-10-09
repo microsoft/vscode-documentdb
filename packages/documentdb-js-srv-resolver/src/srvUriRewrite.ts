@@ -5,8 +5,8 @@
 
 import { AuthMechanism, MongoAPIError, MongoParseError, MongoRuntimeError } from 'mongodb';
 
-import type { SrvRecord } from 'node:dns';
-import type { MongoClientOptions } from 'mongodb';
+import { type MongoClientOptions } from 'mongodb';
+import { type SrvRecord } from 'node:dns';
 
 export interface SrvLookupTarget {
     readonly srvHost: string;
@@ -95,10 +95,7 @@ function splitSrvUri(connectionString: string): SrvUriParts {
         fail(new MongoParseError(`Invalid connection string "${connectionString}"`), 'optionConflict');
     }
     if (!groups.hosts) {
-        fail(
-            new MongoParseError(`Protocol and host list are required in "${connectionString}"`),
-            'optionConflict',
-        );
+        fail(new MongoParseError(`Protocol and host list are required in "${connectionString}"`), 'optionConflict');
     }
     const { hosts, protocol, rest, username, password } = groups;
     const hostStart = match[0].length - rest.length - hosts.length;
@@ -119,7 +116,7 @@ function splitSrvUri(connectionString: string): SrvUriParts {
 function objectOptions(options: MongoClientOptions | undefined): Map<string, unknown> {
     return new Map(
         Object.entries(options ?? {})
-            .filter(([, value]): boolean => value != null)
+            .filter(([, value]): boolean => value !== undefined && value !== null)
             .map(([key, value]): [string, unknown] => [key.toLowerCase(), value]),
     );
 }
@@ -264,7 +261,11 @@ function authState(parts: SrvUriParts, options: Map<string, unknown>): AuthState
     const username = auth && typeof auth === 'object' && 'username' in auth ? auth.username : parts.username;
     const password = auth && typeof auth === 'object' && 'password' in auth ? auth.password : parts.password;
     const properties = options.get('authmechanismproperties');
-    const hasObjectProperties = properties != null && typeof properties === 'object' && Object.keys(properties).length > 0;
+    const hasObjectProperties =
+        properties !== undefined &&
+        properties !== null &&
+        typeof properties === 'object' &&
+        Object.keys(properties).length > 0;
     const hasUriProperties = Boolean(uriValue(parts.params, 'authMechanismProperties'));
     // parseOptions removes empty DEFAULT credentials, even if authSource was supplied.
     return {

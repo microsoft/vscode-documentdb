@@ -6,7 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../ClustersClient';
-import type { SrvResolutionSummary } from './srvResolutionSummary';
+import { type SrvResolutionSummary } from './srvResolutionSummary';
 
 function srvResolutionTooltipLine(summary: SrvResolutionSummary): string {
     const message = summary.nodeErrorCode

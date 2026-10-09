@@ -3,16 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as SrvResolver from '@documentdb-js/srv-resolver';
 import { resolveSrvForDriver } from '@documentdb-js/srv-resolver';
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../extensionVariables';
 import { getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { prepareDriverConnectionString } from './prepareDriverConnectionString';
 
-import type { ResolveSrvForDriverInput, ResolveSrvForDriverResult, SrvResolutionReport } from '@documentdb-js/srv-resolver';
-import type { IActionContext } from '@microsoft/vscode-azext-utils';
-import type { PrepareDriverConnectionStringInput } from './prepareDriverConnectionString';
-import type { SrvResolutionTelemetry } from './srvResolutionTelemetry';
+import {
+    type ResolveSrvForDriverInput,
+    type ResolveSrvForDriverResult,
+    type SrvResolutionReport,
+} from '@documentdb-js/srv-resolver';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type PrepareDriverConnectionStringInput } from './prepareDriverConnectionString';
+import { type SrvResolutionTelemetry } from './srvResolutionTelemetry';
 
 interface RecordedEvent {
     readonly eventName: string;
@@ -24,14 +29,17 @@ const mockEvents: RecordedEvent[] = [];
 let mockReplaceError = false;
 
 jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual<{ UserCancelledError: typeof UserCancelledError }>('@microsoft/vscode-azext-utils');
+    const actual = jest.requireActual<{ UserCancelledError: typeof UserCancelledError }>(
+        '@microsoft/vscode-azext-utils',
+    );
     return {
         ...actual,
         callWithTelemetryAndErrorHandling: jest.fn(
             async (eventName: string, callback: (context: IActionContext) => Promise<void>): Promise<void> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
-                    errorHandling: {}, valuesToMask: [],
+                    errorHandling: {},
+                    valuesToMask: [],
                 } as unknown as IActionContext;
                 const event: RecordedEvent = { eventName, context };
                 try {
@@ -56,7 +64,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
 });
 
 jest.mock('@documentdb-js/srv-resolver', () => ({
-    ...jest.requireActual<typeof import('@documentdb-js/srv-resolver')>('@documentdb-js/srv-resolver'),
+    ...jest.requireActual<typeof SrvResolver>('@documentdb-js/srv-resolver'),
     resolveSrvForDriver: jest.fn(),
 }));
 jest.mock('../../extensionVariables', () => ({
@@ -67,18 +75,37 @@ jest.mock('../../utils/workspacUtils', () => ({ getConnectionTimeoutMs: jest.fn(
 const host = 'x.global.mongocluster.cosmos.azure.com';
 const uri = `mongodb+srv://user:S3cr3t%40pw@${host}/?appName=@x@`;
 const baseReport: SrvResolutionReport = {
-    srvHost: host, srvServiceName: 'mongodb', path: 'fallback', outcome: 'succeeded',
-    nodeErrorCode: 'EBADRESP', fallbackOutcome: 'succeeded', fallbackTransport: 'tcp',
-    targetCompressed: true, txtSource: 'fallback', txtOptionsApplied: ['replicaSet', 'authSource'],
-    tlsAdded: true, dnsServers: ['192.168.1.1:53'], fallbackServersTried: 1, srvTargetCount: 2,
-    nodeProbeDurationMs: 4, fallbackDurationMs: 10, forcedFallback: false,
-    aresVersion: '1.34.8', nodeRuntimeVersion: '22.0.0',
+    srvHost: host,
+    srvServiceName: 'mongodb',
+    path: 'fallback',
+    outcome: 'succeeded',
+    nodeErrorCode: 'EBADRESP',
+    fallbackOutcome: 'succeeded',
+    fallbackTransport: 'tcp',
+    targetCompressed: true,
+    txtSource: 'fallback',
+    txtOptionsApplied: ['replicaSet', 'authSource'],
+    tlsAdded: true,
+    dnsServers: ['192.168.1.1:53'],
+    fallbackServersTried: 1,
+    srvTargetCount: 2,
+    nodeProbeDurationMs: 4,
+    fallbackDurationMs: 10,
+    forcedFallback: false,
+    aresVersion: '1.34.8',
+    nodeRuntimeVersion: '22.0.0',
 };
 
 function input(overrides: Partial<PrepareDriverConnectionStringInput> = {}): PrepareDriverConnectionStringInput {
     return {
-        connectionString: uri, options: {}, surface: 'extension',
-        correlation: { connectionCorrelationId: 'connect-id', startupCorrelationId: 'startup-id', shellSessionId: 'shell-id' },
+        connectionString: uri,
+        options: {},
+        surface: 'extension',
+        correlation: {
+            connectionCorrelationId: 'connect-id',
+            startupCorrelationId: 'startup-id',
+            shellSessionId: 'shell-id',
+        },
         ...overrides,
     };
 }
@@ -109,17 +136,27 @@ describe('prepareDriverConnectionString', (): void => {
     const previousOff = process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK;
     const previousForce = process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK;
     afterAll((): void => {
-        if (previousOff === undefined) { delete process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK; }
-        else { process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK = previousOff; }
-        if (previousForce === undefined) { delete process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK; }
-        else { process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK = previousForce; }
+        if (previousOff === undefined) {
+            delete process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK;
+        } else {
+            process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK = previousOff;
+        }
+        if (previousForce === undefined) {
+            delete process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK;
+        } else {
+            process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK = previousForce;
+        }
     });
 
     it('returns non-SRV unchanged with no event, package call or log', async (): Promise<void> => {
         const telemetry = startup();
         const args = input({ connectionString: 'mongodb://localhost', startupTelemetry: telemetry });
         const result = await prepareDriverConnectionString(args);
-        expect(result).toEqual({ connectionString: args.connectionString, options: args.options, srvResolution: 'notSrv' });
+        expect(result).toEqual({
+            connectionString: args.connectionString,
+            options: args.options,
+            srvResolution: 'notSrv',
+        });
         expect(result.options).toBe(args.options);
         expect(telemetry.properties.srvResolution).toBe('notSrv');
         expect(mockEvents).toHaveLength(0);
@@ -127,45 +164,71 @@ describe('prepareDriverConnectionString', (): void => {
         expect(ext.outputChannel?.trace).not.toHaveBeenCalled();
     });
 
-    it.each(['node', 'fallback', 'nodeErrorPassthrough'] as const)('emits one private event and startup summary for %s', async (path): Promise<void> => {
-        const report: SrvResolutionReport = path === 'fallback' ? baseReport : {
-            ...baseReport, path, nodeErrorCode: path === 'node' ? 'none' : 'ENOTFOUND',
-            fallbackOutcome: 'notAttempted', fallbackTransport: undefined, targetCompressed: undefined,
-            txtSource: undefined, txtOptionsApplied: [], tlsAdded: undefined,
-            fallbackDurationMs: undefined, fallbackServersTried: undefined,
-        };
-        returnReport(report);
-        const telemetry = startup();
-        const result = await prepareDriverConnectionString(input({ startupTelemetry: telemetry }));
-        expect(result.srvResolution).toBe(path);
-        expect(result.summary).toMatchObject({ path, srvTargetCount: 2, resolvedAt: expect.any(Number) });
-        expect(result.summary).not.toHaveProperty('srvHost');
-        expect(result.summary).not.toHaveProperty('connectionString');
-        expect(mockEvents).toHaveLength(1);
-        const event = mockEvents[0];
-        expect(event.eventName).toBe('connect.srvResolution');
-        expect(event.context.errorHandling).toMatchObject({ suppressDisplay: true, rethrow: true });
-        expect(event.context.telemetry.maskEntireErrorMessage).toBe(true);
-        expect(event.context.telemetry.properties).toMatchObject({
-            result: 'Succeeded', surface: 'extension', path, nodeErrorCode: report.nodeErrorCode,
-            fallbackOutcome: report.fallbackOutcome, targetCompressed: path === 'fallback' ? 'true' : 'unknown',
-            txtOptionsApplied: path === 'fallback' ? 'authSource,replicaSet' : 'none',
-            dnsServerClass: 'private', dnsServerIpFamily: 'ipv4',
-            isAzureEndpoint: 'true', isGlobalEndpoint: 'true', forcedFallback: 'false',
-            connectionCorrelationId: 'connect-id', startupCorrelationId: 'startup-id', shellSessionId: 'shell-id',
-            aresVersion: '1.34.8', nodeRuntimeVersion: '22.0.0',
-        });
-        expect(event.context.telemetry.measurements).toMatchObject({
-            nodeProbeDurationMs: 4, dnsServerCount: 1, srvTargetCount: 2,
-            fallbackDurationMs: report.fallbackDurationMs, fallbackServersTried: report.fallbackServersTried,
-        });
-        const data = JSON.stringify(event.context.telemetry);
-        for (const secret of [host, '192.168.1.1', 'S3cr3t', 'user:', uri]) {
-            expect(data).not.toContain(secret);
-        }
-        expect(telemetry.properties.srvResolution).toBe(path);
-        expect(telemetry.measurements.srvResolutionDurationMs).toEqual(expect.any(Number));
-    });
+    it.each(['node', 'fallback', 'nodeErrorPassthrough'] as const)(
+        'emits one private event and startup summary for %s',
+        async (path): Promise<void> => {
+            const report: SrvResolutionReport =
+                path === 'fallback'
+                    ? baseReport
+                    : {
+                          ...baseReport,
+                          path,
+                          nodeErrorCode: path === 'node' ? 'none' : 'ENOTFOUND',
+                          fallbackOutcome: 'notAttempted',
+                          fallbackTransport: undefined,
+                          targetCompressed: undefined,
+                          txtSource: undefined,
+                          txtOptionsApplied: [],
+                          tlsAdded: undefined,
+                          fallbackDurationMs: undefined,
+                          fallbackServersTried: undefined,
+                      };
+            returnReport(report);
+            const telemetry = startup();
+            const result = await prepareDriverConnectionString(input({ startupTelemetry: telemetry }));
+            expect(result.srvResolution).toBe(path);
+            expect(result.summary).toMatchObject({ path, srvTargetCount: 2, resolvedAt: expect.any(Number) });
+            expect(result.summary).not.toHaveProperty('srvHost');
+            expect(result.summary).not.toHaveProperty('connectionString');
+            expect(mockEvents).toHaveLength(1);
+            const event = mockEvents[0];
+            expect(event.eventName).toBe('connect.srvResolution');
+            expect(event.context.errorHandling).toMatchObject({ suppressDisplay: true, rethrow: true });
+            expect(event.context.telemetry.maskEntireErrorMessage).toBe(true);
+            expect(event.context.telemetry.properties).toMatchObject({
+                result: 'Succeeded',
+                surface: 'extension',
+                path,
+                nodeErrorCode: report.nodeErrorCode,
+                fallbackOutcome: report.fallbackOutcome,
+                targetCompressed: path === 'fallback' ? 'true' : 'unknown',
+                txtOptionsApplied: path === 'fallback' ? 'authSource,replicaSet' : 'none',
+                dnsServerClass: 'private',
+                dnsServerIpFamily: 'ipv4',
+                isAzureEndpoint: 'true',
+                isGlobalEndpoint: 'true',
+                forcedFallback: 'false',
+                connectionCorrelationId: 'connect-id',
+                startupCorrelationId: 'startup-id',
+                shellSessionId: 'shell-id',
+                aresVersion: '1.34.8',
+                nodeRuntimeVersion: '22.0.0',
+            });
+            expect(event.context.telemetry.measurements).toMatchObject({
+                nodeProbeDurationMs: 4,
+                dnsServerCount: 1,
+                srvTargetCount: 2,
+                fallbackDurationMs: report.fallbackDurationMs,
+                fallbackServersTried: report.fallbackServersTried,
+            });
+            const data = JSON.stringify(event.context.telemetry);
+            for (const secret of [host, '192.168.1.1', 'S3cr3t', 'user:', uri]) {
+                expect(data).not.toContain(secret);
+            }
+            expect(telemetry.properties.srvResolution).toBe(path);
+            expect(telemetry.measurements.srvResolutionDurationMs).toEqual(expect.any(Number));
+        },
+    );
 
     it.each([
         [undefined, undefined, 'auto'],
@@ -176,8 +239,12 @@ describe('prepareDriverConnectionString', (): void => {
         ['0', '1', 'force'],
         ['1', '0', 'off'],
     ])('maps switches off=%s force=%s to %s', async (off, force, expected): Promise<void> => {
-        if (off !== undefined) { process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK = off; }
-        if (force !== undefined) { process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK = force; }
+        if (off !== undefined) {
+            process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK = off;
+        }
+        if (force !== undefined) {
+            process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK = force;
+        }
         await prepareDriverConnectionString(input());
         expect(jest.mocked(resolveSrvForDriver).mock.calls[0][0].fallback).toBe(expected);
     });
@@ -189,7 +256,10 @@ describe('prepareDriverConnectionString', (): void => {
     });
 
     it.each([
-        [{ connectionCorrelationId: 'connection', startupCorrelationId: 'startup', shellSessionId: 'shell' }, 'connection'],
+        [
+            { connectionCorrelationId: 'connection', startupCorrelationId: 'startup', shellSessionId: 'shell' },
+            'connection',
+        ],
         [{ startupCorrelationId: 'startup', shellSessionId: 'shell' }, 'startup'],
         [{ shellSessionId: 'shell' }, 'shell'],
         [{}, 'unknown'],
@@ -198,7 +268,7 @@ describe('prepareDriverConnectionString', (): void => {
         const args = jest.mocked(resolveSrvForDriver).mock.calls[0][0];
         expect(args.logPrefix).toBe(`[SrvResolution] ${expected}`);
         expect(args.logContext).toBe('surface=playground');
-        for (const [line] of jest.mocked(ext.outputChannel!.trace).mock.calls) {
+        for (const [line] of jest.mocked(ext.outputChannel.trace).mock.calls) {
             for (const secret of ['S3cr3t', 'user:', 'mongodb+srv://', 'mongodb://']) {
                 expect(line).not.toContain(secret);
             }
@@ -207,45 +277,66 @@ describe('prepareDriverConnectionString', (): void => {
         expect(ext.outputChannel?.debug).not.toHaveBeenCalled();
     });
 
-    it.each([false, true])('preserves original failure identity even if handlers replace it (%s)', async (replace): Promise<void> => {
-        mockReplaceError = replace;
-        const failure = Object.assign(new Error(`querySrv EBADRESP _mongodb._tcp.${host} password=S3cr3t`), { code: 'EBADRESP' });
-        const telemetry = startup();
-        jest.mocked(resolveSrvForDriver).mockImplementation(async (args): Promise<never> => {
-            args.onReport?.({ ...baseReport, outcome: 'failed', fallbackOutcome: 'failed', fallbackErrorCode: 'ETIMEOUT' });
-            throw failure;
-        });
-        await expect(prepareDriverConnectionString(input({ startupTelemetry: telemetry }))).rejects.toBe(failure);
-        expect(mockEvents).toHaveLength(1);
-        const event = mockEvents[0];
-        expect(event.error).not.toBe(failure);
-        expect(event.error).toBeInstanceOf(Error);
-        expect((event.error as Error).message).toBe('SRV resolution failed');
-        expect((event.error as Error).stack).toBeUndefined();
-        expect(failure.stack).toContain(host);
-        expect(event.context.telemetry.properties).toMatchObject({ result: 'Failed', fallbackErrorCode: 'ETIMEOUT' });
-        expect(telemetry.properties.srvResolution).toBe('fallback');
-        expect(telemetry.measurements.srvResolutionDurationMs).toEqual(expect.any(Number));
-        expect(JSON.stringify(event.context.telemetry)).not.toContain(host);
-    });
+    it.each([false, true])(
+        'preserves original failure identity even if handlers replace it (%s)',
+        async (replace): Promise<void> => {
+            mockReplaceError = replace;
+            const failure = Object.assign(new Error(`querySrv EBADRESP _mongodb._tcp.${host} password=S3cr3t`), {
+                code: 'EBADRESP',
+            });
+            const telemetry = startup();
+            jest.mocked(resolveSrvForDriver).mockImplementation(async (args): Promise<never> => {
+                args.onReport?.({
+                    ...baseReport,
+                    outcome: 'failed',
+                    fallbackOutcome: 'failed',
+                    fallbackErrorCode: 'ETIMEOUT',
+                });
+                throw failure;
+            });
+            await expect(prepareDriverConnectionString(input({ startupTelemetry: telemetry }))).rejects.toBe(failure);
+            expect(mockEvents).toHaveLength(1);
+            const event = mockEvents[0];
+            expect(event.error).not.toBe(failure);
+            expect(event.error).toBeInstanceOf(Error);
+            expect((event.error as Error).message).toBe('SRV resolution failed');
+            expect((event.error as Error).stack).toBeUndefined();
+            expect(failure.stack).toContain(host);
+            expect(event.context.telemetry.properties).toMatchObject({
+                result: 'Failed',
+                fallbackErrorCode: 'ETIMEOUT',
+            });
+            expect(telemetry.properties.srvResolution).toBe('fallback');
+            expect(telemetry.measurements.srvResolutionDurationMs).toEqual(expect.any(Number));
+            expect(JSON.stringify(event.context.telemetry)).not.toContain(host);
+        },
+    );
 
     it('maps input abort to UserCancelledError, preserving Canceled and rethrowing outside the wrapper', async (): Promise<void> => {
         const controller = new AbortController();
         const telemetry = startup();
         let packageSignal: AbortSignal | undefined;
         let started!: () => void;
-        const began = new Promise<void>((resolve): void => { started = resolve; });
+        const began = new Promise<void>((resolve): void => {
+            started = resolve;
+        });
         jest.mocked(resolveSrvForDriver).mockImplementation(async (args): Promise<never> => {
             packageSignal = args.signal;
             started();
             return new Promise((_resolve, reject): void => {
-                args.signal?.addEventListener('abort', (): void => {
-                    args.onReport?.({ ...baseReport, outcome: 'cancelled' });
-                    reject(args.signal?.reason);
-                }, { once: true });
+                args.signal?.addEventListener(
+                    'abort',
+                    (): void => {
+                        args.onReport?.({ ...baseReport, outcome: 'cancelled' });
+                        reject(args.signal?.reason as Error);
+                    },
+                    { once: true },
+                );
             });
         });
-        const result = prepareDriverConnectionString(input({ abortSignal: controller.signal, startupTelemetry: telemetry }));
+        const result = prepareDriverConnectionString(
+            input({ abortSignal: controller.signal, startupTelemetry: telemetry }),
+        );
         await began;
         controller.abort(new Error('private input abort reason'));
         await expect(result).rejects.toBeInstanceOf(UserCancelledError);
@@ -260,7 +351,9 @@ describe('prepareDriverConnectionString', (): void => {
     it('rejects already-aborted input before calling package or telemetry', async (): Promise<void> => {
         const controller = new AbortController();
         controller.abort();
-        await expect(prepareDriverConnectionString(input({ abortSignal: controller.signal }))).rejects.toBeInstanceOf(UserCancelledError);
+        await expect(prepareDriverConnectionString(input({ abortSignal: controller.signal }))).rejects.toBeInstanceOf(
+            UserCancelledError,
+        );
         expect(resolveSrvForDriver).not.toHaveBeenCalled();
         expect(mockEvents).toHaveLength(0);
     });
@@ -275,12 +368,16 @@ describe('prepareDriverConnectionString', (): void => {
 
     it('checks abort after package completion, even if the package fake ignores cancellation', async (): Promise<void> => {
         const controller = new AbortController();
-        jest.mocked(resolveSrvForDriver).mockImplementation(async (args: ResolveSrvForDriverInput): Promise<ResolveSrvForDriverResult> => {
-            args.onReport?.(baseReport);
-            controller.abort();
-            return { connectionString: uri, options: {}, path: 'node', report: baseReport };
-        });
-        await expect(prepareDriverConnectionString(input({ abortSignal: controller.signal }))).rejects.toBeInstanceOf(UserCancelledError);
+        jest.mocked(resolveSrvForDriver).mockImplementation(
+            async (args: ResolveSrvForDriverInput): Promise<ResolveSrvForDriverResult> => {
+                args.onReport?.(baseReport);
+                controller.abort();
+                return { connectionString: uri, options: {}, path: 'node', report: baseReport };
+            },
+        );
+        await expect(prepareDriverConnectionString(input({ abortSignal: controller.signal }))).rejects.toBeInstanceOf(
+            UserCancelledError,
+        );
         expect(mockEvents[0].context.telemetry.properties.result).toBe('Canceled');
     });
 

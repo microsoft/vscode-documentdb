@@ -479,7 +479,10 @@ export class ClustersClient {
             // ECONNREFUSED/self-signed failure show "local instance" troubleshooting copy.
             const isLocalish =
                 !!emulatorConfiguration?.isEmulator ||
-                !!resolveAllowInvalidCertificates(emulatorConfiguration?.disableEmulatorSecurity, originalConnectionString);
+                !!resolveAllowInvalidCertificates(
+                    emulatorConfiguration?.disableEmulatorSecurity,
+                    originalConnectionString,
+                );
             if (isLocalish && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(

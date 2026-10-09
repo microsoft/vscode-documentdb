@@ -5,16 +5,11 @@
 
 import { MongoAPIError, MongoClient, MongoParseError } from 'mongodb';
 
-import {
-    getSrvLookupTarget,
-    getSrvRewriteErrorKind,
-    isSrvConnectionString,
-    rewriteSrvUri,
-} from './srvUriRewrite';
+import { getSrvLookupTarget, getSrvRewriteErrorKind, isSrvConnectionString, rewriteSrvUri } from './srvUriRewrite';
 
-import type { SrvRecord } from 'node:dns';
-import type { MongoClientOptions } from 'mongodb';
-import type { RewriteSrvUriInput, SrvRewriteErrorKind } from './srvUriRewrite';
+import { type MongoClientOptions } from 'mongodb';
+import { type SrvRecord } from 'node:dns';
+import { type RewriteSrvUriInput, type SrvRewriteErrorKind } from './srvUriRewrite';
 
 const srvHost = 'cluster.example.com';
 const uri = `mongodb+srv://${srvHost}`;
@@ -78,8 +73,9 @@ describe('getSrvLookupTarget', (): void => {
     });
 
     it('preserves the SRV hostname and its trailing dot', (): void => {
-        expect(getSrvLookupTarget('MONGODB+SRV://u:p%40ss@cluster.example.com./db?TLS=false').srvHost)
-            .toBe('cluster.example.com.');
+        expect(getSrvLookupTarget('MONGODB+SRV://u:p%40ss@cluster.example.com./db?TLS=false').srvHost).toBe(
+            'cluster.example.com.',
+        );
     });
 
     it('leaves other validation to driver preflight', (): void => {
@@ -93,33 +89,36 @@ describe('getSrvLookupTarget', (): void => {
     it.each(['mongodb://cluster.example.com', 'https://cluster.example.com', 'mongodb+srv://', 'mongodb+srv:///db'])(
         'rejects %s',
         (connectionString): void => {
-            expect((): void => { getSrvLookupTarget(connectionString); }).toThrow(MongoParseError);
+            expect((): void => {
+                getSrvLookupTarget(connectionString);
+            }).toThrow(MongoParseError);
         },
     );
 });
 
 describe('rewriteSrvUri', (): void => {
-    it.each([
-        'u:p%40ss%3Aw%2Frd%2525@',
-        'u%40ser:p%40ss%3aw%2frd%2525@',
-        'u:p%2525%2F%3A%40@',
-        'u:@',
-        'u@',
-    ])('preserves userinfo bytes verbatim: %s', (userinfo): void => {
-        const result = rewriteSrvUri(input({ connectionString: `mongodb+srv://${userinfo}${srvHost}/db` }));
-        expect(result.connectionString.startsWith(`mongodb://${userinfo}`)).toBe(true);
-        expect(result.connectionString).toContain('/db?tls=true');
-    });
+    it.each(['u:p%40ss%3Aw%2Frd%2525@', 'u%40ser:p%40ss%3aw%2frd%2525@', 'u:p%2525%2F%3A%40@', 'u:@', 'u@'])(
+        'preserves userinfo bytes verbatim: %s',
+        (userinfo): void => {
+            const result = rewriteSrvUri(input({ connectionString: `mongodb+srv://${userinfo}${srvHost}/db` }));
+            expect(result.connectionString.startsWith(`mongodb://${userinfo}`)).toBe(true);
+            expect(result.connectionString).toContain('/db?tls=true');
+        },
+    );
 
     it.each(['', '/db', '/db%20name'])('preserves the path %s', (path): void => {
         const result = rewriteSrvUri(input({ connectionString: `${uri}${path}` }));
-        expect(result.connectionString).toBe(`mongodb://${records.map((r): string => `${r.name}:${r.port}`).join(',')}${path}?tls=true`);
+        expect(result.connectionString).toBe(
+            `mongodb://${records.map((r): string => `${r.name}:${r.port}`).join(',')}${path}?tls=true`,
+        );
     });
 
     it('preserves other query parameters, including repeated read preference tags and encoded appName', (): void => {
-        const result = rewriteSrvUri(input({
-            connectionString: `${uri}/db?appName=%40x%40&readPreference=secondary&readPreferenceTags=a%3Ab&readPreferenceTags=c%3Ad&retryWrites=false`,
-        }));
+        const result = rewriteSrvUri(
+            input({
+                connectionString: `${uri}/db?appName=%40x%40&readPreference=secondary&readPreferenceTags=a%3Ab&readPreferenceTags=c%3Ad&retryWrites=false`,
+            }),
+        );
         const params = new URLSearchParams(result.connectionString.split('?')[1]);
         expect(params.get('appName')).toBe('@x@');
         expect(params.get('readPreference')).toBe('secondary');
@@ -151,11 +150,13 @@ describe('rewriteSrvUri', (): void => {
             readPreference: 'secondary',
         });
         const before = { ...options, auth: { ...options.auth } };
-        const result = rewriteSrvUri(input({
-            connectionString: `${uri}/db?SRVMAXHOSTS=2&SRVSERVICENAME=uriService&appName=keep`,
-            options,
-            random: (): number => 0,
-        }));
+        const result = rewriteSrvUri(
+            input({
+                connectionString: `${uri}/db?SRVMAXHOSTS=2&SRVSERVICENAME=uriService&appName=keep`,
+                options,
+                random: (): number => 0,
+            }),
+        );
         expect(options).toEqual(before);
         expect(result.options).not.toBe(options);
         expect(result.options).toEqual({
@@ -178,25 +179,31 @@ describe('rewriteSrvUri', (): void => {
     });
 
     it('keeps trailing-dot targets exactly as the MongoDB API driver HostAddress does', (): void => {
-        const result = rewriteSrvUri(input({
-            srvRecords: [{ ...records[0], name: 'One.example.com.' }],
-        }));
+        const result = rewriteSrvUri(
+            input({
+                srvRecords: [{ ...records[0], name: 'One.example.com.' }],
+            }),
+        );
         expect(result.targets).toEqual(['one.example.com.:27017']);
     });
 
     it('defaults a missing SRV port to 27017', (): void => {
-        const result = rewriteSrvUri(input({
-            srvRecords: [{ ...records[0], port: undefined as unknown as number }],
-        }));
+        const result = rewriteSrvUri(
+            input({
+                srvRecords: [{ ...records[0], port: undefined as unknown as number }],
+            }),
+        );
         expect(result.targets).toEqual(['one.example.com:27017']);
     });
 
     it('reports TXT keys, sorted applied options, and trace-only values', (): void => {
-        const result = rewriteSrvUri(input({
-            connectionString: `mongodb+srv://u:p@${srvHost}/db`,
-            srvRecords: records.slice(0, 1),
-            txtRecords: [['loadBalanced=false&replicaSet=rs&auth', 'Source=authDb']],
-        }));
+        const result = rewriteSrvUri(
+            input({
+                connectionString: `mongodb+srv://u:p@${srvHost}/db`,
+                srvRecords: records.slice(0, 1),
+                txtRecords: [['loadBalanced=false&replicaSet=rs&auth', 'Source=authDb']],
+            }),
+        );
         expect(result.txtKeys).toEqual(['loadBalanced', 'replicaSet', 'authSource']);
         expect(result.txtApplied).toEqual(['authSource', 'replicaSet']);
         expect(result.txtSkipped).toEqual([]);
@@ -218,20 +225,24 @@ describe('rewriteSrvUri', (): void => {
     });
 
     it('reports user-specified TXT overrides as skipped', (): void => {
-        const result = rewriteSrvUri(input({
-            connectionString: `mongodb+srv://u:p@${srvHost}?AUTHSOURCE=userDb&REPLICASET=userRs`,
-            txtRecords: [['authSource=txtDb&replicaSet=txtRs']],
-        }));
+        const result = rewriteSrvUri(
+            input({
+                connectionString: `mongodb+srv://u:p@${srvHost}?AUTHSOURCE=userDb&REPLICASET=userRs`,
+                txtRecords: [['authSource=txtDb&replicaSet=txtRs']],
+            }),
+        );
         expect(result.txtSkipped).toEqual(['authSource:userSet', 'replicaSet:userSet']);
         expect(result.txtApplied).toEqual([]);
         expect(result.txtReplicaSet).toBe('txtRs');
     });
 
     it('reports external authentication TXT authSource as skipped', (): void => {
-        const result = rewriteSrvUri(input({
-            connectionString: `${uri}?authMechanism=MONGODB-X509`,
-            txtRecords: [['authSource=txtDb']],
-        }));
+        const result = rewriteSrvUri(
+            input({
+                connectionString: `${uri}?authMechanism=MONGODB-X509`,
+                txtRecords: [['authSource=txtDb']],
+            }),
+        );
         expect(result.txtSkipped).toEqual(['authSource:$external']);
         expect(result.txtApplied).toEqual([]);
     });
@@ -247,11 +258,13 @@ describe('rewriteSrvUri', (): void => {
 
     it.each([0, 1, 2, 3, 10])('samples min(srvMaxHosts, targets) for limit %i', (limit): void => {
         const srvRecords = Object.freeze(records.map((record): SrvRecord => Object.freeze({ ...record })));
-        const result = rewriteSrvUri(input({
-            connectionString: `${uri}?srvMaxHosts=${limit}`,
-            srvRecords,
-            random: (): number => 0,
-        }));
+        const result = rewriteSrvUri(
+            input({
+                connectionString: `${uri}?srvMaxHosts=${limit}`,
+                srvRecords,
+                random: (): number => 0,
+            }),
+        );
         expect(result.srvTargetCount).toBe(3);
         expect(result.targets).toHaveLength(limit === 0 ? 3 : Math.min(limit, 3));
         expect(new Set(result.targets).size).toBe(result.targets.length);
@@ -269,14 +282,19 @@ describe('rewriteSrvUri', (): void => {
     });
 
     it('does not shuffle when the limit is at least the target count', (): void => {
-        const random = jest.fn((): number => { throw new Error('unexpected shuffle'); });
-        expect(rewriteSrvUri(input({ options: { srvMaxHosts: 3 }, random })).targets)
-            .toEqual(records.map((record): string => `${record.name}:${record.port}`));
+        const random = jest.fn((): number => {
+            throw new Error('unexpected shuffle');
+        });
+        expect(rewriteSrvUri(input({ options: { srvMaxHosts: 3 }, random })).targets).toEqual(
+            records.map((record): string => `${record.name}:${record.port}`),
+        );
         expect(random).not.toHaveBeenCalled();
     });
 
     it('can disable sampling for the driver resolution differential boundary', (): void => {
-        const random = jest.fn((): number => { throw new Error('unexpected shuffle'); });
+        const random = jest.fn((): number => {
+            throw new Error('unexpected shuffle');
+        });
         const result = rewriteSrvUri(input({ options: { srvMaxHosts: 1 }, sampleSrvMaxHosts: false, random }));
         expect(result.targets).toHaveLength(3);
         expect(random).not.toHaveBeenCalled();
@@ -308,7 +326,10 @@ const errorFixtures: readonly ErrorFixture[] = [
     },
     {
         name: 'missing extra domain level',
-        overrides: { connectionString: 'mongodb+srv://example.com', srvRecords: [{ ...records[0], name: 'example.com' }] },
+        overrides: {
+            connectionString: 'mongodb+srv://example.com',
+            srvRecords: [{ ...records[0], name: 'example.com' }],
+        },
         errorClass: MongoAPIError,
         message: 'Server record does not have at least one more domain level than parent URI',
         kind: 'parentDomainMismatch',
@@ -386,25 +407,28 @@ const errorFixtures: readonly ErrorFixture[] = [
 ];
 
 describe('getSrvRewriteErrorKind', (): void => {
-    it.each(errorFixtures)('classifies $name without modifying the error', ({ overrides, errorClass, message, kind }): void => {
-        let caught: unknown;
-        try {
-            rewriteSrvUri(input(overrides));
-        } catch (error) {
-            caught = error;
-        }
-        expect(caught).toBeInstanceOf(errorClass);
-        if (!(caught instanceof Error)) {
-            throw new Error('Expected an error');
-        }
-        expect(caught.message).toBe(message);
-        const keys = Reflect.ownKeys(caught);
-        const descriptors = Object.getOwnPropertyDescriptors(caught);
-        expect(getSrvRewriteErrorKind(caught)).toBe(kind);
-        expect(Reflect.ownKeys(caught)).toEqual(keys);
-        expect(Object.getOwnPropertyDescriptors(caught)).toEqual(descriptors);
-        expect(caught).not.toHaveProperty('srvRewriteErrorKind');
-    });
+    it.each(errorFixtures)(
+        'classifies $name without modifying the error',
+        ({ overrides, errorClass, message, kind }): void => {
+            let caught: unknown;
+            try {
+                rewriteSrvUri(input(overrides));
+            } catch (error) {
+                caught = error;
+            }
+            expect(caught).toBeInstanceOf(errorClass);
+            if (!(caught instanceof Error)) {
+                throw new Error('Expected an error');
+            }
+            expect(caught.message).toBe(message);
+            const keys = Reflect.ownKeys(caught);
+            const descriptors = Object.getOwnPropertyDescriptors(caught);
+            expect(getSrvRewriteErrorKind(caught)).toBe(kind);
+            expect(Reflect.ownKeys(caught)).toEqual(keys);
+            expect(Object.getOwnPropertyDescriptors(caught)).toEqual(descriptors);
+            expect(caught).not.toHaveProperty('srvRewriteErrorKind');
+        },
+    );
 
     it.each([undefined, null, 'No addresses found at host', {}, new MongoAPIError('No addresses found at host')])(
         'does not classify an unrelated error or non-error',

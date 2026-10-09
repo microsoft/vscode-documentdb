@@ -3,17 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as dnsPacket from 'dns-packet';
 import * as crypto from 'node:crypto';
 import * as dgram from 'node:dgram';
 import * as dns from 'node:dns';
 import * as net from 'node:net';
-import * as dnsPacket from 'dns-packet';
 
 import { DNS_DEFAULT_PORT, FALLBACK_TCP_TIMEOUT_MS, FALLBACK_UDP_TIMEOUT_MS } from './constants';
 import { cancellationError, noopLogger, throwIfCancelled } from './types';
 
-import type { SrvRecord } from 'node:dns';
-import type { SrvResolverLogger } from './types';
+import { type SrvRecord } from 'node:dns';
+import { type SrvResolverLogger } from './types';
 
 export type DnsTransport = 'udp' | 'tcp';
 
@@ -141,12 +141,14 @@ export async function resolveSrvFallback(name: string, options: FallbackDnsOptio
     return resolveFallback(name, 'SRV', options, (answers): SrvRecord[] =>
         answers.flatMap((answer): SrvRecord[] =>
             answer.type === 'SRV'
-                ? [{
-                    name: answer.data.target,
-                    port: answer.data.port,
-                    priority: answer.data.priority ?? 0,
-                    weight: answer.data.weight ?? 0,
-                }]
+                ? [
+                      {
+                          name: answer.data.target,
+                          port: answer.data.port,
+                          priority: answer.data.priority ?? 0,
+                          weight: answer.data.weight ?? 0,
+                      },
+                  ]
                 : [],
         ),
     );
@@ -166,9 +168,10 @@ export async function resolveTxtFallback(
                     return [];
                 }
                 const chunks = Array.isArray(answer.data) ? answer.data : [answer.data];
-                return [chunks.map((chunk): string => Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk)];
+                return [chunks.map((chunk): string => (Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk))];
             }),
     );
+    void _targetCompressed;
     return result;
 }
 
@@ -199,7 +202,10 @@ async function resolveFallback<T>(
         const id = crypto.randomInt(0, 65536);
         const question: dnsPacket.Question = { name, type, class: 'IN' };
         const query = dnsPacket.encode({
-            type: 'query', id, flags: dnsPacket.RECURSION_DESIRED, questions: [question],
+            type: 'query',
+            id,
+            flags: dnsPacket.RECURSION_DESIRED,
+            questions: [question],
         });
         let transport: DnsTransport = 'udp';
         let reply: AttemptReply;
@@ -244,12 +250,18 @@ function responseError(reply: Reply, type: QueryType, transport: DnsTransport): 
     switch (reply.bytes[3] & 0x0f) {
         case 0:
             return reply.packet.answers?.some((answer): boolean => answer.type === type) ? undefined : dns.NODATA;
-        case 1: return dns.FORMERR;
-        case 2: return dns.SERVFAIL;
-        case 3: return dns.NOTFOUND;
-        case 4: return dns.NOTIMP;
-        case 5: return dns.REFUSED;
-        default: return dns.BADRESP;
+        case 1:
+            return dns.FORMERR;
+        case 2:
+            return dns.SERVFAIL;
+        case 3:
+            return dns.NOTFOUND;
+        case 4:
+            return dns.NOTIMP;
+        case 5:
+            return dns.REFUSED;
+        default:
+            return dns.BADRESP;
     }
 }
 
@@ -275,9 +287,10 @@ async function runAttempt(
 ): Promise<AttemptReply> {
     throwIfCancelled(options.signal);
     const startedAt = Date.now();
-    const perAttemptTimeout = transport === 'udp'
-        ? options.udpTimeoutMs ?? FALLBACK_UDP_TIMEOUT_MS
-        : options.tcpTimeoutMs ?? FALLBACK_TCP_TIMEOUT_MS;
+    const perAttemptTimeout =
+        transport === 'udp'
+            ? (options.udpTimeoutMs ?? FALLBACK_UDP_TIMEOUT_MS)
+            : (options.tcpTimeoutMs ?? FALLBACK_TCP_TIMEOUT_MS);
     const timeoutMs = Math.min(perAttemptTimeout, options.deadlineAt - startedAt);
     let reply: Reply | undefined;
     let errorCode: string | undefined;
@@ -295,24 +308,33 @@ async function runAttempt(
         throw error;
     } finally {
         const rcodeNumber = reply ? reply.bytes[3] & 0x0f : undefined;
-        const rcode = rcodeNumber === undefined
-            ? undefined
-            : ['NOERROR', 'FORMERR', 'SERVFAIL', 'NXDOMAIN', 'NOTIMP', 'REFUSED'][rcodeNumber]
-                ?? `RCODE_${rcodeNumber}`;
+        const rcode =
+            rcodeNumber === undefined
+                ? undefined
+                : (['NOERROR', 'FORMERR', 'SERVFAIL', 'NXDOMAIN', 'NOTIMP', 'REFUSED'][rcodeNumber] ??
+                  `RCODE_${rcodeNumber}`);
         const attempt: FallbackDnsAttempt = {
-            server: server.display, transport, id,
-            ...(reply ? {
-                rcode, tc: reply.packet.flag_tc,
-                answers: (reply.packet.answers ?? []).filter((answer): boolean => answer.type === question.type).length,
-                bytes: reply.bytes.length,
-            } : {}),
+            server: server.display,
+            transport,
+            id,
+            ...(reply
+                ? {
+                      rcode,
+                      tc: reply.packet.flag_tc,
+                      answers: (reply.packet.answers ?? []).filter((answer): boolean => answer.type === question.type)
+                          .length,
+                      bytes: reply.bytes.length,
+                  }
+                : {}),
             durationMs: Date.now() - startedAt,
             ...(errorCode ? { errorCode } : {}),
         };
         attempts.push(attempt);
         const fields = [
             `${options.logPrefix ?? '[SrvResolution]'} fallback ${question.type}`,
-            `server=${server.display}`, `transport=${transport}`, `id=0x${id.toString(16).padStart(4, '0')}`,
+            `server=${server.display}`,
+            `transport=${transport}`,
+            `id=0x${id.toString(16).padStart(4, '0')}`,
         ];
         if (reply) {
             fields.push(`rcode=${rcode}`, `tc=${attempt.tc}`, `answers=${attempt.answers}`, `bytes=${attempt.bytes}`);
@@ -343,9 +365,13 @@ function matchingReply(bytes: Buffer, id: number, question: dnsPacket.Question):
     const packet = dnsPacket.decode(bytes);
     const echoed = packet.questions?.[0];
     if (
-        packet.id !== id || !packet.flag_qr || packet.questions?.length !== 1 || !echoed ||
+        packet.id !== id ||
+        !packet.flag_qr ||
+        packet.questions?.length !== 1 ||
+        !echoed ||
         echoed.name.toLowerCase() !== question.name.replace(/\.$/, '').toLowerCase() ||
-        echoed.type !== question.type || (echoed.class ?? 'IN') !== question.class
+        echoed.type !== question.type ||
+        (echoed.class ?? 'IN') !== question.class
     ) {
         return undefined;
     }
@@ -386,6 +412,7 @@ function exchange(
             if (reply) {
                 resolve(reply);
             } else {
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- Preserve socket setup failures unchanged, including non-Error throws.
                 reject(error);
             }
         };
@@ -514,7 +541,8 @@ function scanWireName(reply: Uint8Array, start: number, end: number): WireName |
         } else {
             expandedLength += length + 1;
             if (
-                length > 63 || expandedLength > 254 ||
+                length > 63 ||
+                expandedLength > 254 ||
                 offset + length + 1 >= (nextOffset === undefined ? end : reply.length)
             ) {
                 return undefined;

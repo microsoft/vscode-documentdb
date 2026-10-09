@@ -6,14 +6,21 @@
 import { createSrvResolutionSummary } from './srvResolutionSummary';
 import { applySrvResolutionReport } from './srvResolutionTelemetry';
 
-import type { SrvResolutionReport } from '@documentdb-js/srv-resolver';
-import type { SrvResolutionTelemetry } from './srvResolutionTelemetry';
+import { type SrvResolutionReport } from '@documentdb-js/srv-resolver';
+import { type SrvResolutionTelemetry } from './srvResolutionTelemetry';
 
 const report: SrvResolutionReport = {
-    srvHost: 'x.global.mongocluster.cosmos.azure.com', srvServiceName: 'mongodb',
-    path: 'fallback', outcome: 'succeeded', nodeErrorCode: 'EBADRESP',
-    fallbackOutcome: 'succeeded', txtOptionsApplied: [], dnsServers: [],
-    forcedFallback: false, aresVersion: '1.34.8', nodeRuntimeVersion: '22.0.0',
+    srvHost: 'x.global.mongocluster.cosmos.azure.com',
+    srvServiceName: 'mongodb',
+    path: 'fallback',
+    outcome: 'succeeded',
+    nodeErrorCode: 'EBADRESP',
+    fallbackOutcome: 'succeeded',
+    txtOptionsApplied: [],
+    dnsServers: [],
+    forcedFallback: false,
+    aresVersion: '1.34.8',
+    nodeRuntimeVersion: '22.0.0',
 };
 
 describe('SRV telemetry classification', (): void => {
@@ -35,7 +42,9 @@ describe('SRV telemetry classification', (): void => {
         expect(telemetry.properties).toMatchObject({ dnsServerClass: expectedClass, dnsServerIpFamily: family });
         expect(telemetry.measurements.dnsServerCount).toBe(servers.length);
         const data = JSON.stringify(telemetry.properties);
-        for (const server of servers) { expect(data).not.toContain(server); }
+        for (const server of servers) {
+            expect(data).not.toContain(server);
+        }
         expect(data).not.toContain(report.srvHost);
     });
 
@@ -53,21 +62,41 @@ describe('SRV telemetry classification', (): void => {
 
     it('copies only correlation IDs, categorical properties and numeric measurements', (): void => {
         const telemetry: SrvResolutionTelemetry = { properties: {}, measurements: {} };
-        applySrvResolutionReport(telemetry, {
-            ...report, targetCompressed: false, tlsAdded: false, forcedFallback: true,
-            fallbackErrorCode: 'txt:ESERVFAIL', txtSource: 'none', txtOptionsApplied: ['replicaSet', 'authSource'],
-            nodeProbeDurationMs: 5, fallbackDurationMs: 8, srvTargetCount: 2, fallbackServersTried: 1,
-        }, 'extension', { journeyCorrelationId: 'journey', connectionCorrelationId: undefined, srvHost: report.srvHost });
+        applySrvResolutionReport(
+            telemetry,
+            {
+                ...report,
+                targetCompressed: false,
+                tlsAdded: false,
+                forcedFallback: true,
+                fallbackErrorCode: 'txt:ESERVFAIL',
+                txtSource: 'none',
+                txtOptionsApplied: ['replicaSet', 'authSource'],
+                nodeProbeDurationMs: 5,
+                fallbackDurationMs: 8,
+                srvTargetCount: 2,
+                fallbackServersTried: 1,
+            },
+            'extension',
+            { journeyCorrelationId: 'journey', connectionCorrelationId: undefined, srvHost: report.srvHost },
+        );
         expect(telemetry.properties).toMatchObject({
-            journeyCorrelationId: 'journey', targetCompressed: 'false', tlsAdded: 'false',
-            forcedFallback: 'true', txtOptionsApplied: 'authSource,replicaSet', txtSource: 'none',
+            journeyCorrelationId: 'journey',
+            targetCompressed: 'false',
+            tlsAdded: 'false',
+            forcedFallback: 'true',
+            txtOptionsApplied: 'authSource,replicaSet',
+            txtSource: 'none',
             fallbackErrorCode: 'txt:ESERVFAIL',
         });
         expect(telemetry.properties).not.toHaveProperty('srvHost');
         expect(telemetry.properties).not.toHaveProperty('connectionCorrelationId');
         expect(telemetry.measurements).toEqual({
-            nodeProbeDurationMs: 5, fallbackDurationMs: 8, srvTargetCount: 2,
-            dnsServerCount: 0, fallbackServersTried: 1,
+            nodeProbeDurationMs: 5,
+            fallbackDurationMs: 8,
+            srvTargetCount: 2,
+            dnsServerCount: 0,
+            fallbackServersTried: 1,
         });
     });
 
@@ -75,10 +104,17 @@ describe('SRV telemetry classification', (): void => {
         const clock = jest.spyOn(Date, 'now').mockReturnValue(123456);
         try {
             expect(createSrvResolutionSummary({ ...report, fallbackTransport: 'tcp', srvTargetCount: 2 })).toEqual({
-                path: 'fallback', nodeErrorCode: 'EBADRESP', fallbackTransport: 'tcp',
-                srvTargetCount: 2, resolvedAt: 123456,
+                path: 'fallback',
+                nodeErrorCode: 'EBADRESP',
+                fallbackTransport: 'tcp',
+                srvTargetCount: 2,
+                resolvedAt: 123456,
             });
-            expect(createSrvResolutionSummary({ ...report, path: 'node', nodeErrorCode: 'none' }).nodeErrorCode).toBeUndefined();
-        } finally { clock.mockRestore(); }
+            expect(
+                createSrvResolutionSummary({ ...report, path: 'node', nodeErrorCode: 'none' }).nodeErrorCode,
+            ).toBeUndefined();
+        } finally {
+            clock.mockRestore();
+        }
     });
 });

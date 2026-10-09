@@ -7,15 +7,15 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../documentdb/ClustersClient';
 import { notifySrvResolutionChanged } from '../documentdb/srv/srvResolutionSummary';
-import type { Experience } from '../DocumentDBExperiences';
+import { type Experience } from '../DocumentDBExperiences';
 import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { BaseExtendedTreeDataProvider } from './BaseExtendedTreeDataProvider';
-import { type TreeElement } from './TreeElement';
 import { ClusterItemBase, type EphemeralClusterCredentials } from './documentdb/ClusterItemBase';
-import type { BaseClusterModel, TreeCluster } from './models/BaseClusterModel';
+import { type BaseClusterModel, type TreeCluster } from './models/BaseClusterModel';
+import { type TreeElement } from './TreeElement';
 
 jest.mock('vscode', () => ({
-    ...jest.requireActual<typeof import('vscode')>('../__mocks__/vscode.js'),
+    ...jest.requireActual<typeof vscode>('../__mocks__/vscode.js'),
     MarkdownString: class MarkdownString {
         #delegate: Pick<vscode.MarkdownString, 'value' | 'isTrusted' | 'supportThemeIcons' | 'supportHtml' | 'baseUri'>;
 
@@ -23,16 +23,36 @@ jest.mock('vscode', () => ({
             this.#delegate = { value, supportThemeIcons };
         }
 
-        get value(): string { return this.#delegate.value; }
-        set value(value: string) { this.#delegate.value = value; }
-        get isTrusted(): vscode.MarkdownString['isTrusted'] { return this.#delegate.isTrusted; }
-        set isTrusted(value: vscode.MarkdownString['isTrusted']) { this.#delegate.isTrusted = value; }
-        get supportThemeIcons(): boolean | undefined { return this.#delegate.supportThemeIcons; }
-        set supportThemeIcons(value: boolean | undefined) { this.#delegate.supportThemeIcons = value; }
-        get supportHtml(): boolean | undefined { return this.#delegate.supportHtml; }
-        set supportHtml(value: boolean | undefined) { this.#delegate.supportHtml = value; }
-        get baseUri(): vscode.Uri | undefined { return this.#delegate.baseUri; }
-        set baseUri(value: vscode.Uri | undefined) { this.#delegate.baseUri = value; }
+        get value(): string {
+            return this.#delegate.value;
+        }
+        set value(value: string) {
+            this.#delegate.value = value;
+        }
+        get isTrusted(): vscode.MarkdownString['isTrusted'] {
+            return this.#delegate.isTrusted;
+        }
+        set isTrusted(value: vscode.MarkdownString['isTrusted']) {
+            this.#delegate.isTrusted = value;
+        }
+        get supportThemeIcons(): boolean | undefined {
+            return this.#delegate.supportThemeIcons;
+        }
+        set supportThemeIcons(value: boolean | undefined) {
+            this.#delegate.supportThemeIcons = value;
+        }
+        get supportHtml(): boolean | undefined {
+            return this.#delegate.supportHtml;
+        }
+        set supportHtml(value: boolean | undefined) {
+            this.#delegate.supportHtml = value;
+        }
+        get baseUri(): vscode.Uri | undefined {
+            return this.#delegate.baseUri;
+        }
+        set baseUri(value: vscode.Uri | undefined) {
+            this.#delegate.baseUri = value;
+        }
 
         appendMarkdown(value: string): this {
             this.#delegate.value += value;
@@ -80,7 +100,9 @@ const clusterElement = { id: 'view/cluster/db', cluster: { clusterId: 'cluster-1
 class TooltipClusterItem extends ClusterItemBase {
     public constructor(treeId = 'folder/stable-cluster', clusterId = 'stable-cluster') {
         super({
-            treeId, clusterId, name: 'Cluster',
+            treeId,
+            clusterId,
+            name: 'Cluster',
             dbExperience: { api: 'MongoDB' } as unknown as Experience,
         } as TreeCluster<BaseClusterModel>);
     }
@@ -200,7 +222,9 @@ describe('fallback tooltip row refresh', (): void => {
     it('preserves a stored override through the base item and provider tooltip passes', async (): Promise<void> => {
         const provider = new TestProvider();
         jest.spyOn(ClustersClient, 'getSrvResolution').mockReturnValue({
-            path: 'fallback', nodeErrorCode: 'EBADRESP', resolvedAt: 1,
+            path: 'fallback',
+            nodeErrorCode: 'EBADRESP',
+            resolvedAt: 1,
         });
         const content = '### Cluster heading\n\n⚠️ **Security:** TLS/SSL Disabled';
         const original = new vscode.MarkdownString(content, true);

@@ -42,7 +42,6 @@ We must also be able to answer three questions from telemetry:
 - Fixing `dns.getServers()` returning the wrong servers (nodejs/node#62326). This is measured, not
   fixed.
 
-
 - A native OS resolver (`os-dns-native`). It may come later as a first try ahead of `dns-packet`.
 - Any change to the stored connection, its display, "Copy Connection String", or export (D0001).
 - `QuickStartService` and `connectToClient` (D0007). `connectToClient` is already marked
@@ -54,14 +53,14 @@ We must also be able to answer three questions from telemetry:
 Full entries, with reasons and rejected alternatives, are in [../decisions.md](../../decisions.md).
 Changing any of them during implementation is a **deviation** (see Progress recording, below).
 
-| Area             | Decisions in force                                                                                                         |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Area             | Decisions in force                                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Core rules       | D0001 transient, never persisted · D0002 same system DNS servers only · D0003 `dns-packet` · D0004 driver semantics exactly |
-| When it runs     | D0005 Node probe first · D0012 `EBADRESP`/`EFORMERR`/`ECONNREFUSED` · D0017 unbounded probe, pass-through        |
-| Where            | D0007 `ClustersClient` + `WorkerSessionManager`; `connectToClient` deprecated · D0008 resolve on the host                          |
-| Observability    | D0009 one `connect.srvResolution` event · D0014 all output at `trace` · D0019 tooltip flag                       |
-| Switches         | D0010 force switch · D0011 off switch, documented                                                               |
-| Timing           | D0016 5 s UDP / 10 s TCP / shared cap `min(20 s, connectionTimeout)` · D0018 separate budgets                              |
+| When it runs     | D0005 Node probe first · D0012 `EBADRESP`/`EFORMERR`/`ECONNREFUSED` · D0017 unbounded probe, pass-through                   |
+| Where            | D0007 `ClustersClient` + `WorkerSessionManager`; `connectToClient` deprecated · D0008 resolve on the host                   |
+| Observability    | D0009 one `connect.srvResolution` event · D0014 all output at `trace` · D0019 tooltip flag                                  |
+| Switches         | D0010 force switch · D0011 off switch, documented                                                                           |
+| Timing           | D0016 5 s UDP / 10 s TCP / shared cap `min(20 s, connectionTimeout)` · D0018 separate budgets                               |
 | Scope / shipping | D0013 no cached-client refresh · D0015 `v0.11.1` from `release/0.11.1` · D0020 local workspace package                      |
 | Superseded       | D0006 (by D0012)                                                                                                            |
 
@@ -84,16 +83,16 @@ recorded inline under each work item (see above), and **one commit** is made per
 than one is fine; one commit for the whole increment is not). Do not push or open a PR unless the
 operator asks.
 
-| #   | Milestone                                   | Work items        | Exit criteria                                                                                                     |
-| --- | ------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
-| M1  | Package scaffold and dependency             | WI-0, WI-1        | Package builds and is linked; `dns-packet` vetted with `flagging-fresh-dependencies`; not in the worker bundle     |
-| M2  | URI rewrite                                 | WI-2              | Rule table implemented; differential tests against the installed driver pass, at the R6 boundary                   |
-| M3  | Fallback DNS client                         | WI-3              | Local UDP/TCP stub tests pass, including the compressed-target replay, TXT absence and the shared deadline        |
-| M4  | Core resolve function and extension adapters | WI-4              | Package API done; trace, telemetry and switches work in the extension adapter; R1, R2 and R5 tests pass          |
-| M5  | Tree path and tooltip flag                  | WI-5, WI-10       | `ClustersClient` uses the helper; tooltip line appears after a fallback connection; `clusterId` keyed             |
-| M6  | Shell and playground                        | WI-6              | Host-side resolution; cancellation tests (DNS held pending) pass; D0018 timing in place                           |
-| M7  | Diagnostics and documentation               | WI-7, WI-8        | Provider with negative tests; user-manual page with both switches and the timing rule; `0.11.1` release-notes entry |
-| M8  | Review and hand-over                        | WI-9, `# Outcome` | One end-of-work code review, findings resolved or recorded; automated verification done; manual steps handed to the operator |
+| #   | Milestone                                    | Work items        | Exit criteria                                                                                                                |
+| --- | -------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| M1  | Package scaffold and dependency              | WI-0, WI-1        | Package builds and is linked; `dns-packet` vetted with `flagging-fresh-dependencies`; not in the worker bundle               |
+| M2  | URI rewrite                                  | WI-2              | Rule table implemented; differential tests against the installed driver pass, at the R6 boundary                             |
+| M3  | Fallback DNS client                          | WI-3              | Local UDP/TCP stub tests pass, including the compressed-target replay, TXT absence and the shared deadline                   |
+| M4  | Core resolve function and extension adapters | WI-4              | Package API done; trace, telemetry and switches work in the extension adapter; R1, R2 and R5 tests pass                      |
+| M5  | Tree path and tooltip flag                   | WI-5, WI-10       | `ClustersClient` uses the helper; tooltip line appears after a fallback connection; `clusterId` keyed                        |
+| M6  | Shell and playground                         | WI-6              | Host-side resolution; cancellation tests (DNS held pending) pass; D0018 timing in place                                      |
+| M7  | Diagnostics and documentation                | WI-7, WI-8        | Provider with negative tests; user-manual page with both switches and the timing rule; `0.11.1` release-notes entry          |
+| M8  | Review and hand-over                         | WI-9, `# Outcome` | One end-of-work code review, findings resolved or recorded; automated verification done; manual steps handed to the operator |
 
 ## Shape
 
@@ -247,26 +246,26 @@ options object is never mutated. No I/O.
 
 Rules (D0004; mirror `mongodb` 7.2.0 `resolveSRVRecord` and `checkParentDomainMatch`):
 
-| Rule                                                                                              | Driver error to reproduce                                     |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Zero SRV records                                                                                  | `MongoAPIError('No addresses found at host')`                 |
-| Each target must pass `checkParentDomainMatch` (strip trailing dots first)                        | `MongoAPIError('Server record does not share hostname …')`    |
-| Port defaults to 27017 when missing                                                               | —                                                             |
-| More than one TXT record                                                                          | `MongoParseError('Multiple text records not allowed')`        |
-| TXT keys outside `authSource`, `replicaSet`, `loadBalanced`                                       | `MongoParseError('Text record may only set any of: …')`       |
-| Empty TXT value                                                                                   | `MongoParseError('Cannot have empty URI params in DNS TXT …')` |
-| TXT `authSource` only if the user did not set one (URI or options) and the mechanism is not `$external` (`MONGODB-OIDC`, `MONGODB-X509`, `MONGODB-AWS`, `GSSAPI`); read the mechanism from the URI **and** `options.authMechanism` | —                                                             |
-| TXT `replicaSet` only if the user did not set one (URI or options)                                | —                                                             |
-| TXT `loadBalanced=true` → `loadBalanced=true` (validated by the load-balanced rows below)          | —                                                             |
-| No TXT record (`ENODATA` or `ENOTFOUND` from either resolver) → continue without TXT options (R3) | —                                                             |
-| `replicaSet` from the URI, the options **or TXT**, combined with `srvMaxHosts > 0` (R3)            | `MongoParseError('Cannot combine replicaSet option with srvMaxHosts')` |
-| Load-balanced checks on the **full** target list, before sampling (R3): more than one target       | `MongoParseError('loadBalanced option only supported with a single host in the URI')` |
-| … `loadBalanced` with `replicaSet`, or with `directConnection`                                    | the driver's `LB_REPLICA_SET_ERROR` / `LB_DIRECT_CONNECTION_ERROR` |
-| … `loadBalanced` with `srvMaxHosts > 0`                                                            | `MongoParseError('Cannot limit srv hosts with loadBalanced enabled')` |
-| `srvMaxHosts` or `srvServiceName` in the options object → drop them from the returned options copy (R3) | —                                                             |
-| `srvServiceName` picks the SRV name; remove it from the URI                                       | —                                                             |
-| `srvMaxHosts > 0` → after every validation above, shuffle and keep N; remove it from the URI       | —                                                             |
-| Add `tls=true` unless `tls` or `ssl` is set in the URI or options                                 | —                                                             |
+| Rule                                                                                                                                                                                                                               | Driver error to reproduce                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Zero SRV records                                                                                                                                                                                                                   | `MongoAPIError('No addresses found at host')`                                         |
+| Each target must pass `checkParentDomainMatch` (strip trailing dots first)                                                                                                                                                         | `MongoAPIError('Server record does not share hostname …')`                            |
+| Port defaults to 27017 when missing                                                                                                                                                                                                | —                                                                                     |
+| More than one TXT record                                                                                                                                                                                                           | `MongoParseError('Multiple text records not allowed')`                                |
+| TXT keys outside `authSource`, `replicaSet`, `loadBalanced`                                                                                                                                                                        | `MongoParseError('Text record may only set any of: …')`                               |
+| Empty TXT value                                                                                                                                                                                                                    | `MongoParseError('Cannot have empty URI params in DNS TXT …')`                        |
+| TXT `authSource` only if the user did not set one (URI or options) and the mechanism is not `$external` (`MONGODB-OIDC`, `MONGODB-X509`, `MONGODB-AWS`, `GSSAPI`); read the mechanism from the URI **and** `options.authMechanism` | —                                                                                     |
+| TXT `replicaSet` only if the user did not set one (URI or options)                                                                                                                                                                 | —                                                                                     |
+| TXT `loadBalanced=true` → `loadBalanced=true` (validated by the load-balanced rows below)                                                                                                                                          | —                                                                                     |
+| No TXT record (`ENODATA` or `ENOTFOUND` from either resolver) → continue without TXT options (R3)                                                                                                                                  | —                                                                                     |
+| `replicaSet` from the URI, the options **or TXT**, combined with `srvMaxHosts > 0` (R3)                                                                                                                                            | `MongoParseError('Cannot combine replicaSet option with srvMaxHosts')`                |
+| Load-balanced checks on the **full** target list, before sampling (R3): more than one target                                                                                                                                       | `MongoParseError('loadBalanced option only supported with a single host in the URI')` |
+| … `loadBalanced` with `replicaSet`, or with `directConnection`                                                                                                                                                                     | the driver's `LB_REPLICA_SET_ERROR` / `LB_DIRECT_CONNECTION_ERROR`                    |
+| … `loadBalanced` with `srvMaxHosts > 0`                                                                                                                                                                                            | `MongoParseError('Cannot limit srv hosts with loadBalanced enabled')`                 |
+| `srvMaxHosts` or `srvServiceName` in the options object → drop them from the returned options copy (R3)                                                                                                                            | —                                                                                     |
+| `srvServiceName` picks the SRV name; remove it from the URI                                                                                                                                                                        | —                                                                                     |
+| `srvMaxHosts > 0` → after every validation above, shuffle and keep N; remove it from the URI                                                                                                                                       | —                                                                                     |
+| Add `tls=true` unless `tls` or `ssl` is set in the URI or options                                                                                                                                                                  | —                                                                                     |
 
 Throw the driver's own error classes (`MongoAPIError`, `MongoParseError` from `mongodb`) with the
 driver's messages, so a validation failure looks the same as it does today.
@@ -480,18 +479,18 @@ names, SRV targets, ports, TXT option **keys** and DNS server addresses are allo
 local only, and they are what a support engineer asks a user to paste. TXT option values are logged
 only for `replicaSet` and `loadBalanced`; `authSource` values are written as `<set>`.
 
-| Level   | When                                    | Example                                                                                                                                                                  |
-| ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Level   | When                                    | Example                                                                                                                                                                        |
+| ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `trace` | Start                                   | `[SrvResolution] 3f2a… start surface=extension srvHost=x.global.mongocluster.cosmos.azure.com service=mongodb ares=1.34.8 node=24.21.0 dnsServers=[192.168.10.1] forced=false` |
-| `trace` | Node probe ok                           | `… node probe ok targets=3 durationMs=11 → path=node (original +srv handed to driver)`                                                                                   |
-| `trace` | Node probe failed, not eligible         | `… node probe failed code=ENOTFOUND durationMs=40 (not fallback-eligible) → path=nodeErrorPassthrough`                                                                   |
-| `trace` | Node probe failed, eligible             | `… node probe failed code=EBADRESP durationMs=9 → running fallback`                                                                                                     |
-| `trace` | Each fallback attempt                   | `… fallback SRV server=192.168.10.1:53 transport=udp id=0x1a2b rcode=NOERROR tc=false answers=3 bytes=212 targetCompressed=true durationMs=8`                           |
-| `trace` | TXT                                     | `… TXT source=fallback keys=[authSource,replicaSet] replicaSet=globaldb authSource=<set>`                                                                                |
-| `trace` | Rewrite                                 | `… rewrite targets=[fc-…-000.global…:10260,fc-…-001.global…:10260] tlsAdded=true removedParams=[srvMaxHosts] txtApplied=[replicaSet] txtSkipped=[authSource:$external]`  |
-| `trace` | Fallback applied (one line per connect) | `… DNS reply for x.global… was rejected by Node.js (EBADRESP, c-ares 1.34.8); resolved 3 SRV targets via 192.168.10.1 (udp) instead. See issue #993.`                    |
-| `trace` | Fallback failed                         | `… SRV fallback failed code=ETIMEOUT serversTried=2 durationMs=4012; the original error is reported`                                                                      |
-| `trace` | Off switch set                          | `… fallback eligible (EBADRESP) but disabled by DOCUMENTDB_DISABLE_SRV_FALLBACK → original +srv handed to driver`                                                       |
+| `trace` | Node probe ok                           | `… node probe ok targets=3 durationMs=11 → path=node (original +srv handed to driver)`                                                                                         |
+| `trace` | Node probe failed, not eligible         | `… node probe failed code=ENOTFOUND durationMs=40 (not fallback-eligible) → path=nodeErrorPassthrough`                                                                         |
+| `trace` | Node probe failed, eligible             | `… node probe failed code=EBADRESP durationMs=9 → running fallback`                                                                                                            |
+| `trace` | Each fallback attempt                   | `… fallback SRV server=192.168.10.1:53 transport=udp id=0x1a2b rcode=NOERROR tc=false answers=3 bytes=212 targetCompressed=true durationMs=8`                                  |
+| `trace` | TXT                                     | `… TXT source=fallback keys=[authSource,replicaSet] replicaSet=globaldb authSource=<set>`                                                                                      |
+| `trace` | Rewrite                                 | `… rewrite targets=[fc-…-000.global…:10260,fc-…-001.global…:10260] tlsAdded=true removedParams=[srvMaxHosts] txtApplied=[replicaSet] txtSkipped=[authSource:$external]`        |
+| `trace` | Fallback applied (one line per connect) | `… DNS reply for x.global… was rejected by Node.js (EBADRESP, c-ares 1.34.8); resolved 3 SRV targets via 192.168.10.1 (udp) instead. See issue #993.`                          |
+| `trace` | Fallback failed                         | `… SRV fallback failed code=ETIMEOUT serversTried=2 durationMs=4012; the original error is reported`                                                                           |
+| `trace` | Off switch set                          | `… fallback eligible (EBADRESP) but disabled by DOCUMENTDB_DISABLE_SRV_FALLBACK → original +srv handed to driver`                                                              |
 
 All lines are at `trace` (D0014). The output is for support conversations, where the user is asked
 to set the log level to Trace anyway. A failed connection already shows its own error, and
@@ -509,28 +508,28 @@ userinfo from a fixture string.
 (`node`, `fallback`, `nodeErrorPassthrough`), and **Failed** when the fallback failed or the rewrite
 rejected the records.
 
-| Name                                                          | Kind  | Values                                                                         | Answers                                       |
-| ------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------ | --------------------------------------------- |
-| `surface`                                                     | prop  | `extension` · `shell` · `playground`                                           | where it happened                             |
-| `connectionCorrelationId`, `startupCorrelationId`, `shellSessionId` | prop  | as available                                                                   | join with `connect.startup` / `worker.startup` |
-| `path`                                                        | prop  | `node` · `fallback` · `nodeErrorPassthrough`                                   | **when the fix is applied**                   |
-| `nodeErrorCode`                                               | prop  | `EBADRESP` · `EFORMERR` · `ENOTFOUND` · `ETIMEOUT` · `ECONNREFUSED` · … · `none` | **blast radius**, known gap                   |
-| `fallbackOutcome`                                             | prop  | `succeeded` · `failed` · `notAttempted` · `disabled` (D0011)                   | does the fix work                             |
-| `fallbackErrorCode`                                           | prop  | `ETIMEOUT` · `ENOTFOUND` · `ENODATA` · `SERVFAIL` · `REFUSED` · `parentDomainMismatch` · `txtInvalid` · … | why it did not                                |
-| `fallbackTransport`                                           | prop  | `udp` · `tcp`                                                                  | TCP retry rate                                |
-| `targetCompressed`                                            | prop  | `'true'` · `'false'` · `unknown`                                               | **confirms the root cause**                   |
-| `txtSource`                                                   | prop  | `fallback` · `none` (no TXT record); fallback path only (R4)                    |                                               |
-| `txtOptionsApplied`                                           | prop  | sorted subset of `authSource,replicaSet,loadBalanced`, or `none`               | semantics coverage                            |
-| `tlsAdded`                                                    | prop  | `'true'` · `'false'`                                                           |                                               |
-| `dnsServerClass`                                              | prop  | `loopback` · `private` · `public` · `mixed` · `none` (from `isLocalOrPrivateHost`, never the IP) | router vs. systemd stub vs. public            |
-| `dnsServerIpFamily`                                           | prop  | `ipv4` · `ipv6` · `mixed`                                                      |                                               |
-| `aresVersion`                                                 | prop  | `process.versions.ares`                                                        | **which runtimes are affected**               |
-| `nodeRuntimeVersion`                                          | prop  | `process.versions.node`                                                        | maps to VS Code / Electron releases           |
-| `isAzureEndpoint`, `isGlobalEndpoint`                         | prop  | `'true'` · `'false'`                                                           | who is affected, without hostnames            |
-| `forcedFallback`                                              | prop  | `'true'` · `'false'`                                                           | exclude dev runs                              |
-| `nodeProbeDurationMs`                                         | meas  | ms                                                                             | cost of D0005 for everyone                    |
-| `fallbackDurationMs`                                          | meas  | ms                                                                             | cost of the fix                               |
-| `srvTargetCount`, `dnsServerCount`, `fallbackServersTried`    | meas  | counts                                                                         |                                               |
+| Name                                                                | Kind | Values                                                                                                    | Answers                                        |
+| ------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `surface`                                                           | prop | `extension` · `shell` · `playground`                                                                      | where it happened                              |
+| `connectionCorrelationId`, `startupCorrelationId`, `shellSessionId` | prop | as available                                                                                              | join with `connect.startup` / `worker.startup` |
+| `path`                                                              | prop | `node` · `fallback` · `nodeErrorPassthrough`                                                              | **when the fix is applied**                    |
+| `nodeErrorCode`                                                     | prop | `EBADRESP` · `EFORMERR` · `ENOTFOUND` · `ETIMEOUT` · `ECONNREFUSED` · … · `none`                          | **blast radius**, known gap                    |
+| `fallbackOutcome`                                                   | prop | `succeeded` · `failed` · `notAttempted` · `disabled` (D0011)                                              | does the fix work                              |
+| `fallbackErrorCode`                                                 | prop | `ETIMEOUT` · `ENOTFOUND` · `ENODATA` · `SERVFAIL` · `REFUSED` · `parentDomainMismatch` · `txtInvalid` · … | why it did not                                 |
+| `fallbackTransport`                                                 | prop | `udp` · `tcp`                                                                                             | TCP retry rate                                 |
+| `targetCompressed`                                                  | prop | `'true'` · `'false'` · `unknown`                                                                          | **confirms the root cause**                    |
+| `txtSource`                                                         | prop | `fallback` · `none` (no TXT record); fallback path only (R4)                                              |                                                |
+| `txtOptionsApplied`                                                 | prop | sorted subset of `authSource,replicaSet,loadBalanced`, or `none`                                          | semantics coverage                             |
+| `tlsAdded`                                                          | prop | `'true'` · `'false'`                                                                                      |                                                |
+| `dnsServerClass`                                                    | prop | `loopback` · `private` · `public` · `mixed` · `none` (from `isLocalOrPrivateHost`, never the IP)          | router vs. systemd stub vs. public             |
+| `dnsServerIpFamily`                                                 | prop | `ipv4` · `ipv6` · `mixed`                                                                                 |                                                |
+| `aresVersion`                                                       | prop | `process.versions.ares`                                                                                   | **which runtimes are affected**                |
+| `nodeRuntimeVersion`                                                | prop | `process.versions.node`                                                                                   | maps to VS Code / Electron releases            |
+| `isAzureEndpoint`, `isGlobalEndpoint`                               | prop | `'true'` · `'false'`                                                                                      | who is affected, without hostnames             |
+| `forcedFallback`                                                    | prop | `'true'` · `'false'`                                                                                      | exclude dev runs                               |
+| `nodeProbeDurationMs`                                               | meas | ms                                                                                                        | cost of D0005 for everyone                     |
+| `fallbackDurationMs`                                                | meas | ms                                                                                                        | cost of the fix                                |
+| `srvTargetCount`, `dnsServerCount`, `fallbackServersTried`          | meas | counts                                                                                                    |                                                |
 
 Platform and remote kind (`common.os`, `common.remotename`) come from the framework's common
 properties. Do not add them by hand.
@@ -667,7 +666,7 @@ and inside the open `worker.startup` telemetry context:
   itself today). There is no `OIDC_CALLBACK` on the host. The helper's fallback-only preflight adds
   its own non-invoked stub (WI-4 step 3, R1), so the options passed here stay serializable.
 - Post `{ ...initMsg, connectionString: prepared.connectionString, clientOptions: <serializable
-  subset of prepared.options>, oidcAllowedHosts }`, where
+subset of prepared.options>, oidcAllowedHosts }`, where
   `oidcAllowedHosts = getOidcAllowedHosts(initMsg.connectionString)` is computed from the
   **original**. Do not modify the caller's `initMsg` (D0008).
 - **Cancellation (R2).** Each startup gets its own `AbortController`, stored on the manager.
@@ -722,10 +721,15 @@ and not in `dist/playgroundWorker.js` (D0008).
 **Deviation (coupled fix).** `PlaygroundEvaluator.evaluate` wraps `ensureWorker` in
 `callWithTelemetryAndErrorHandling('playground.connect', …)`, which swallows a
 `UserCancelledError` even with `rethrow = true`. The evaluator would then have gone on to
-`sendEval` after a cancellation during DNS preparation: exactly the R2 hazard. It now uses the same
-"original failure" pattern as `spawnWorker` and rethrows the original error. `shutdown()` also
+`sendEval` after a cancellation during DNS preparation. The code would still not have run, because
+the manager creates no worker after an abort and `sendEval` rejects with "Worker is not running".
+But the user would have seen that error instead of a quiet cancellation, and an unrelated check
+would have been the only guard against R2. (Corrected 2026-10-09: the hand-over message overstated
+this as "the cancelled code would still have run".) It now uses the same "original failure"
+pattern as `spawnWorker` and rethrows the original error. `shutdown()` also
 calls `terminateWorker` when no worker exists yet, so a graceful shutdown during preparation
-aborts it. Approved by the coordinator (confidence > 90 %: without the fix, R2 is not met).
+aborts it. Approved by the coordinator (confidence > 90 %: the fix makes cancellation explicit
+instead of relying on the missing worker).
 
 ---
 
@@ -750,6 +754,7 @@ never touches the error.
 
   Both link to the user-manual page from WI-8, which explains the built-in fallback and its
   switches.
+
 - Register it in `ClustersExtension.registerDiscoveryServices`.
 - Add a `Links` constant for the documentation page.
 
@@ -838,6 +843,7 @@ the data shape must already serve both.
     `tooltipOverride` setters in `KubernetesResourceItem` and `AzureVMResourceItem`.
 
   Put the line in one shared helper that every place calls, so a future view cannot miss it.
+
 - **Refresh.** The tooltip is built in `getTreeItem()`, which runs before the first connection. The
   row must be re-rendered after a connection whose path is `fallback`, or the line never appears.
   Check during implementation which mechanism re-renders the cluster row itself, not only its
@@ -943,17 +949,17 @@ but the operator was not available, so they are **pending**. None of them is cla
 
 ## Risks
 
-| Risk                                                    | Mitigation                                                                                  |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Semantic drift from the driver after a `mongodb` upgrade | WI-2 differential test against the driver's own `resolveSRVRecord`                          |
-| UDP reply spoofing                                       | Random ID, source/ID/question match (c-ares baseline); the parent-domain check limits targets |
-| Extra latency for every SRV connection (D0005)           | Measured as `nodeProbeDurationMs`; SRV only, TXT is not probed                              |
-| Stale targets on a long-lived cached client (fallback path only) | Accepted for this increment (D0013); [future-work.md](../../future-work.md) FW-1 and FW-2 |
-| Credential leak through logs or telemetry                | Never log URIs; a log-spy test; `maskEntireErrorMessage`; no host or IP in properties       |
-| Fallback slower than the driver's own failure            | Overall timeout cap within the connection timeout (Q7)                                      |
-| Cancelled playground code still runs after DNS preparation (R2) | Per-startup `AbortController`; no `Worker` is created after abort; tests hold DNS pending and then cancel |
-| Host-side preflight rejects OIDC options (R1)            | Preflight only on the fallback path, with a non-invoked stub callback; tests use the real constructor |
-| The rewrite accepts what the driver rejects (R3)         | Validate on the full target list before sampling; sanitized options; cross-product fixtures |
+| Risk                                                                     | Mitigation                                                                                                           |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Semantic drift from the driver after a `mongodb` upgrade                 | WI-2 differential test against the driver's own `resolveSRVRecord`                                                   |
+| UDP reply spoofing                                                       | Random ID, source/ID/question match (c-ares baseline); the parent-domain check limits targets                        |
+| Extra latency for every SRV connection (D0005)                           | Measured as `nodeProbeDurationMs`; SRV only, TXT is not probed                                                       |
+| Stale targets on a long-lived cached client (fallback path only)         | Accepted for this increment (D0013); [future-work.md](../../future-work.md) FW-1 and FW-2                            |
+| Credential leak through logs or telemetry                                | Never log URIs; a log-spy test; `maskEntireErrorMessage`; no host or IP in properties                                |
+| Fallback slower than the driver's own failure                            | Overall timeout cap within the connection timeout (Q7)                                                               |
+| Cancelled playground code still runs after DNS preparation (R2)          | Per-startup `AbortController`; no `Worker` is created after abort; tests hold DNS pending and then cancel            |
+| Host-side preflight rejects OIDC options (R1)                            | Preflight only on the fallback path, with a non-invoked stub callback; tests use the real constructor                |
+| The rewrite accepts what the driver rejects (R3)                         | Validate on the full target list before sampling; sanitized options; cross-product fixtures                          |
 | With dead DNS, the probe adds about 27 s before the driver fails (D0017) | Accepted; measured as `nodeProbeDurationMs` on `path=nodeErrorPassthrough`; bounded probe (Q2 D) is the known remedy |
 
 ## Open questions for the operator
@@ -964,12 +970,12 @@ too.
 
 ### Q1: Should there be a kill switch for the fallback?
 
-| Option                                                                                                                        | Pros                                                                                                     | Cons                                                                                                                                                       |
-| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. No switch** (proposed)                                                                                                   | No new setting, no settings-naming review. The fallback only runs where the connection would fail anyway. | If the rewrite is wrong in some edge case, the only remedy is a hotfix release.                                                                           |
-| **B. User setting** (for example `documentDB.connection.srvFallback.enabled`, default `true`)                                  | Support can tell a user to turn it off. Cheap to add.                                                    | Discoverable and synced, so it needs the `settings` feature's naming and grouping review. It doubles the test matrix and will almost never be used. |
-| **C. Remote flag** (experimentation service)                                                                                  | Can be turned off for everyone without a release.                                                        | Only works if the extension already uses such a service; otherwise it is new infrastructure for one switch.                                               |
-| **D. Env var off switch** (`DOCUMENTDB_DISABLE_SRV_FALLBACK=1`, next to the D0010 force switch)                                | Invisible to normal users, no settings work, same code path as D0010.                                    | Hard for end users to set (VS Code must be started with the variable). Awkward under Remote.                                                             |
+| Option                                                                                          | Pros                                                                                                      | Cons                                                                                                                                                |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. No switch** (proposed)                                                                     | No new setting, no settings-naming review. The fallback only runs where the connection would fail anyway. | If the rewrite is wrong in some edge case, the only remedy is a hotfix release.                                                                     |
+| **B. User setting** (for example `documentDB.connection.srvFallback.enabled`, default `true`)   | Support can tell a user to turn it off. Cheap to add.                                                     | Discoverable and synced, so it needs the `settings` feature's naming and grouping review. It doubles the test matrix and will almost never be used. |
+| **C. Remote flag** (experimentation service)                                                    | Can be turned off for everyone without a release.                                                         | Only works if the extension already uses such a service; otherwise it is new infrastructure for one switch.                                         |
+| **D. Env var off switch** (`DOCUMENTDB_DISABLE_SRV_FALLBACK=1`, next to the D0010 force switch) | Invisible to normal users, no settings work, same code path as D0010.                                     | Hard for end users to set (VS Code must be started with the variable). Awkward under Remote.                                                        |
 
 **Recommendation:** A, plus D as a support escape hatch, since it costs almost nothing.
 
@@ -986,11 +992,11 @@ inside a `try/finally` with no `catch`, and `resolveSRVRecord` rethrows the raw 
 error a caller sees is therefore the original Node.js DNS error, unwrapped. The only extra behavior
 is a single retry on `ETIMEOUT` (`retryDNSTimeoutFor`).
 
-| Option                                                                                                                                   | Pros                                                                                                                                       | Cons                                                                                                                                                    |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Pass through and let the driver fail** (proposed)                                                                                   | The error the user sees is the driver's own, exactly as today. Keeps the driver's `ETIMEOUT` retry. A transient failure may succeed on the second try. | On failure, DNS latency is paid twice; with `ETIMEOUT` it can be paid three times (probe, driver, driver retry). |
-| **B. Rethrow the probe error directly**                                                                                                  | Fails fast with one lookup. Given the fact above, the error is the same object type the driver would surface.                              | Loses the driver's `ETIMEOUT` retry unless we copy it. Ties us to the driver not wrapping the error in later versions; needs a regression test. |
-| **C. Hybrid:** rethrow on errors where retrying cannot help (`ENOTFOUND`, `ENODATA`); pass through on transient ones (`ETIMEOUT`, `ESERVFAIL`, `ECONNREFUSED`) | No double wait where a retry cannot help; keeps the retry where it can.                                                                    | More branches. Still needs the regression test from B for the rethrown codes.                                                                          |
+| Option                                                                                                                                                         | Pros                                                                                                                                                   | Cons                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Pass through and let the driver fail** (proposed)                                                                                                         | The error the user sees is the driver's own, exactly as today. Keeps the driver's `ETIMEOUT` retry. A transient failure may succeed on the second try. | On failure, DNS latency is paid twice; with `ETIMEOUT` it can be paid three times (probe, driver, driver retry).                                |
+| **B. Rethrow the probe error directly**                                                                                                                        | Fails fast with one lookup. Given the fact above, the error is the same object type the driver would surface.                                          | Loses the driver's `ETIMEOUT` retry unless we copy it. Ties us to the driver not wrapping the error in later versions; needs a regression test. |
+| **C. Hybrid:** rethrow on errors where retrying cannot help (`ENOTFOUND`, `ENODATA`); pass through on transient ones (`ETIMEOUT`, `ESERVFAIL`, `ECONNREFUSED`) | No double wait where a retry cannot help; keeps the retry where it can.                                                                                | More branches. Still needs the regression test from B for the rethrown codes.                                                                   |
 
 **Recommendation (first pass, withdrawn):** C. Add a test that mocks `dns.promises.resolve` and asserts that our rethrown
 error and the driver's error (from `new MongoClient(srv).connect()`) have the same class, `code`
@@ -1004,12 +1010,12 @@ The question was then answered below.
 Measured on Node.js 22.21.1 (c-ares 1.34.5), against the system DNS server and an unreachable
 server (`10.255.255.1`):
 
-| Probe failure                                                    | Time to fail | `resolveSrv()` and `resolve(…, 'SRV')` give the same error? |
-| ---------------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
-| `ENOTFOUND` (NXDOMAIN)                                           | 6–46 ms      | yes: `querySrv ENOTFOUND _mongodb._tcp.<host>`              |
-| `ENODATA`                                                        | 3–12 ms      | yes                                                         |
-| `ETIMEOUT`, default resolver (what the driver uses)              | **27 039 ms** | yes                                                         |
-| `ETIMEOUT`, `new Resolver({ timeout: 2000, tries: 1 })`          | **2 002 ms** | yes; the bounded resolver uses the same `dns.getServers()` list |
+| Probe failure                                           | Time to fail  | `resolveSrv()` and `resolve(…, 'SRV')` give the same error?     |
+| ------------------------------------------------------- | ------------- | --------------------------------------------------------------- |
+| `ENOTFOUND` (NXDOMAIN)                                  | 6–46 ms       | yes: `querySrv ENOTFOUND _mongodb._tcp.<host>`                  |
+| `ENODATA`                                               | 3–12 ms       | yes                                                             |
+| `ETIMEOUT`, default resolver (what the driver uses)     | **27 039 ms** | yes                                                             |
+| `ETIMEOUT`, `new Resolver({ timeout: 2000, tries: 1 })` | **2 002 ms**  | yes; the bounded resolver uses the same `dns.getServers()` list |
 
 Findings:
 
@@ -1032,10 +1038,10 @@ Findings:
 
 #### New options
 
-| Option                                                                                                                                                         | Pros                                                                                                                                                                                                                         | Cons                                                                                                                                                                                                                                                                        |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **D. A with a bounded probe:** `new dns.promises.Resolver({ timeout: 5000, tries: 1 })`, an overall 5 s timer that calls `resolver.cancel()`, never rethrow | The driver stays the only source of every error not handled by the fallback, so error objects, stages and dashboards do not change. The extra wait with dead DNS drops from about 27 s to at most 5 s (about 54 s today, about 59 s with D). No new code paths. | Still up to 5 s added to an already failing connection. Fast errors are still looked up twice (milliseconds). |
-| **E. Reactive, no probe:** the driver goes first; on a `querySrv EBADRESP`/`EFORMERR`/`ECONNREFUSED` failure, rewrite the string and connect again                | No double wait and no probe cost for anyone, including successful connections.                                                                                                                                               | Reopens D0005: no denominator of all SRV connections unless we infer it from errors. A second client creation in `ClustersClient.connect` and in the cached-reconnect path. On the worker path the error arrives as a string, so the host must parse it and spawn a second worker. |
+| Option                                                                                                                                                      | Pros                                                                                                                                                                                                                                                            | Cons                                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D. A with a bounded probe:** `new dns.promises.Resolver({ timeout: 5000, tries: 1 })`, an overall 5 s timer that calls `resolver.cancel()`, never rethrow | The driver stays the only source of every error not handled by the fallback, so error objects, stages and dashboards do not change. The extra wait with dead DNS drops from about 27 s to at most 5 s (about 54 s today, about 59 s with D). No new code paths. | Still up to 5 s added to an already failing connection. Fast errors are still looked up twice (milliseconds).                                                                                                                                                                      |
+| **E. Reactive, no probe:** the driver goes first; on a `querySrv EBADRESP`/`EFORMERR`/`ECONNREFUSED` failure, rewrite the string and connect again          | No double wait and no probe cost for anyone, including successful connections.                                                                                                                                                                                  | Reopens D0005: no denominator of all SRV connections unless we infer it from errors. A second client creation in `ClustersClient.connect` and in the cached-reconnect path. On the worker path the error arrives as a string, so the host must parse it and spawn a second worker. |
 
 **Revised recommendation:** D. C is withdrawn: findings 1 to 3 show it buys about 50 ms at the
 cost of moving errors and telemetry stages. E is the only option with no double wait at all, but
@@ -1053,12 +1059,12 @@ measured) before the driver's own failure. It is visible as `nodeProbeDurationMs
 A client created from the rewritten `mongodb://` string does not poll SRV, so it does not follow
 `.global.` failover.
 
-| Option                                                                                                                       | Pros                                                                                                                                                                         | Cons                                                                                                                                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Defer** (proposed)                                                                                                      | Smallest increment. Same behavior as any user with a plain `mongodb://` string today. Telemetry (`path=fallback` count) tells us whether the affected group is large enough to justify the work. | After a failover, affected users see a dead connection until they refresh the connection or reload the window.                                                                                                           |
-| **B. Recreate on reconnect** in `getClient` when the last resolution was `fallback` and the client is not connected          | Picks up new targets the next time the user acts. Small change, in one place.                                                                                               | `getClient` today calls `connect()`, which does nothing when already connected. Telling "disconnected" from "connected" reliably is subtle. `llmEnhancedFeatureApis` and `QueryInsightsApis` hold the old client and must be rebuilt. |
-| **C. Our own SRV poller** for fallback clients: re-resolve periodically (TTL-based); on change, evict the cached client        | Closest to the driver's behavior.                                                                                                                                            | Background DNS traffic, timers, lifecycle and error handling with no user present. The largest change of the four.                                                                                                       |
-| **D. Evict on topology loss:** listen for `topologyDescriptionChanged` / heartbeat failures with no servers available, then evict | Reacts only when it matters. No background polling.                                                                                                                          | Event wiring is fiddly. A short network blip can cause an unnecessary eviction.                                                                                                                                         |
+| Option                                                                                                                            | Pros                                                                                                                                                                                             | Cons                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Defer** (proposed)                                                                                                           | Smallest increment. Same behavior as any user with a plain `mongodb://` string today. Telemetry (`path=fallback` count) tells us whether the affected group is large enough to justify the work. | After a failover, affected users see a dead connection until they refresh the connection or reload the window.                                                                                                                        |
+| **B. Recreate on reconnect** in `getClient` when the last resolution was `fallback` and the client is not connected               | Picks up new targets the next time the user acts. Small change, in one place.                                                                                                                    | `getClient` today calls `connect()`, which does nothing when already connected. Telling "disconnected" from "connected" reliably is subtle. `llmEnhancedFeatureApis` and `QueryInsightsApis` hold the old client and must be rebuilt. |
+| **C. Our own SRV poller** for fallback clients: re-resolve periodically (TTL-based); on change, evict the cached client           | Closest to the driver's behavior.                                                                                                                                                                | Background DNS traffic, timers, lifecycle and error handling with no user present. The largest change of the four.                                                                                                                    |
+| **D. Evict on topology loss:** listen for `topologyDescriptionChanged` / heartbeat failures with no servers available, then evict | Reacts only when it matters. No background polling.                                                                                                                                              | Event wiring is fiddly. A short network blip can cause an unnecessary eviction.                                                                                                                                                       |
 
 **Recommendation:** A in this increment. Decide between B and D as a follow-up once telemetry
 shows how many fallback users there are.
@@ -1069,11 +1075,11 @@ Recorded as D0013; see [future-work.md](../../future-work.md) FW-1 and FW-2.
 
 ### Q4: What log level should the "fallback applied" line use?
 
-| Option                                                        | Pros                                                                     | Cons                                                                                                                       |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| **A. `info`** (proposed)                                      | Visible at the default log level; support can find it. Not alarming.     | Easy to overlook. Printed on every connection for affected users.                                                         |
-| **B. `warn`**                                                 | Signals an unusual network condition. Highlighted in the output channel. | Affected users can do nothing about it, yet see a warning on every connection; this may trigger support requests.      |
-| **C. `warn` once per window per host, `info` afterwards**     | Visible once, then quiet.                                                | Needs a small in-memory set. This only dedupes log lines and does not cache resolution, so D0001 still holds.             |
+| Option                                                    | Pros                                                                     | Cons                                                                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| **A. `info`** (proposed)                                  | Visible at the default log level; support can find it. Not alarming.     | Easy to overlook. Printed on every connection for affected users.                                                 |
+| **B. `warn`**                                             | Signals an unusual network condition. Highlighted in the output channel. | Affected users can do nothing about it, yet see a warning on every connection; this may trigger support requests. |
+| **C. `warn` once per window per host, `info` afterwards** | Visible once, then quiet.                                                | Needs a small in-memory set. This only dedupes log lines and does not cache resolution, so D0001 still holds.     |
 
 **Recommendation:** A. C is a reasonable refinement if support says the line is being missed.
 
@@ -1088,11 +1094,11 @@ Two of those bumps, `undici` 7.30.0 (#987) and `browserslist` 4.29.3 (#989), re-
 dependencies that #986 reverted on `v0.11.0` as too fresh. Release from `main` only after rerunning
 the `flagging-fresh-dependencies` check.
 
-| Option                                                                       | Pros                                                                                                                         | Cons                                                                                                                                         |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Patch from `main`** (`0.11.1`)                                          | No backport work. Normal release process. `main` currently carries no features, so the patch scope stays small.              | Ships the dependency bumps listed above, including two that #986 reverted on `v0.11.0`. They must be re-vetted.                              |
-| **B. `release/0.11.1` backport** from `v0.11.0` (`backport` skill)           | Ships exactly the fix plus `dns-packet` on top of the vetted `v0.11.0` lockfile. Lowest risk.                                | Cherry-picking takes work, and the `dns-packet` lockfile entry has to be recreated on the release branch. Two branches to verify.            |
-| **C. Next minor release**                                                    | No extra release.                                                                                                            | Affected users stay broken until then. They upgraded to an affected VS Code without any choice.                                              |
+| Option                                                             | Pros                                                                                                            | Cons                                                                                                                              |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Patch from `main`** (`0.11.1`)                                | No backport work. Normal release process. `main` currently carries no features, so the patch scope stays small. | Ships the dependency bumps listed above, including two that #986 reverted on `v0.11.0`. They must be re-vetted.                   |
+| **B. `release/0.11.1` backport** from `v0.11.0` (`backport` skill) | Ships exactly the fix plus `dns-packet` on top of the vetted `v0.11.0` lockfile. Lowest risk.                   | Cherry-picking takes work, and the `dns-packet` lockfile entry has to be recreated on the release branch. Two branches to verify. |
+| **C. Next minor release**                                          | No extra release.                                                                                               | Affected users stay broken until then. They upgraded to an affected VS Code without any choice.                                   |
 
 **Recommendation:** A if the freshness check passes for every dependency on `main`; otherwise B.
 The milestone is `0.11.1` either way. This branch is cut from `v0.11.0`, so it can feed either
@@ -1106,11 +1112,11 @@ including the four release steps the operator confirmed afterwards.
 
 ### Q6: Should `ECONNREFUSED` trigger the fallback?
 
-| Option                                                                                                       | Pros                                                                                                                                                                                                          | Cons                                                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Measure only** (D0006, proposed)                                                                        | No extra attempt when the server list is wrong (the c-ares 1.34.6 bug, where the fallback would ask `127.0.0.1` too). Clean telemetry: `fallbackOutcome` only covers the reply-parsing case. | Any `ECONNREFUSED` that is *not* the 1.34.6 bug, where our UDP/TCP client would succeed, goes unfixed and unnoticed.                                      |
-| **B. Include it**                                                                                            | Covers unknown socket-level differences between c-ares and our client. Refusals fail fast (ICMP port unreachable), so a useless attempt costs little. Telemetry measures directly whether the fallback helps. | Mixes two root causes under `path=fallback`; dashboards must split them by `nodeErrorCode`. Slightly longer failure in the 1.34.6 case.                    |
-| **C. Include it unless the server list looks like the 1.34.6 bug** (only loopback servers on Windows)         | Targets the attempt where it can help.                                                                                                                                                                       | A heuristic; a real local DNS stub on Windows would be misclassified.                                                                                    |
+| Option                                                                                                | Pros                                                                                                                                                                                                          | Cons                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Measure only** (D0006, proposed)                                                                 | No extra attempt when the server list is wrong (the c-ares 1.34.6 bug, where the fallback would ask `127.0.0.1` too). Clean telemetry: `fallbackOutcome` only covers the reply-parsing case.                  | Any `ECONNREFUSED` that is _not_ the 1.34.6 bug, where our UDP/TCP client would succeed, goes unfixed and unnoticed.                    |
+| **B. Include it**                                                                                     | Covers unknown socket-level differences between c-ares and our client. Refusals fail fast (ICMP port unreachable), so a useless attempt costs little. Telemetry measures directly whether the fallback helps. | Mixes two root causes under `path=fallback`; dashboards must split them by `nodeErrorCode`. Slightly longer failure in the 1.34.6 case. |
+| **C. Include it unless the server list looks like the 1.34.6 bug** (only loopback servers on Windows) | Targets the attempt where it can help.                                                                                                                                                                        | A heuristic; a real local DNS stub on Windows would be misclassified.                                                                   |
 
 **Recommendation:** B. I had proposed A in D0006, but a refusal fails within milliseconds, so an
 extra attempt is cheap and the telemetry shows whether the fallback helps. If accepted, mark D0006
@@ -1124,12 +1130,12 @@ Note: the fallback only runs after Node.js received a reply and rejected it. The
 therefore known to be answering, so timeouts matter mainly for the second and later servers and
 for TCP.
 
-| Option                                                                                                                             | Pros                                                                                                                       | Cons                                                                                                                         |
-| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **A. 2 s per UDP attempt, 5 s per TCP attempt, overall cap `min(10 s, connection timeout)`, servers asked in order** (proposed)     | Bounded and predictable. Keeps the server order, so split DNS works (a VPN server listed first stays first).               | With several unresponsive servers, up to 10 s passes before the driver even starts.                                         |
-| **B. Mirror Node's resolver defaults** (c-ares timeout and tries)                                                                  | Same failure timing users already see.                                                                                     | Longer worst case. The c-ares defaults are not exposed through Node.js, so we would hardcode guesses.                          |
-| **C. Query all servers in parallel; first valid answer wins**                                                                      | Fastest success.                                                                                                           | Breaks server order. With split DNS, a public server's `NXDOMAIN` can beat the VPN server's correct answer. More traffic.  |
-| **D. Scale with the connection-timeout setting** (for example one third of it)                                                     | Respects the user's setting.                                                                                               | Less predictable. A small setting can leave too little time for TCP.                                                        |
+| Option                                                                                                                          | Pros                                                                                                         | Cons                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| **A. 2 s per UDP attempt, 5 s per TCP attempt, overall cap `min(10 s, connection timeout)`, servers asked in order** (proposed) | Bounded and predictable. Keeps the server order, so split DNS works (a VPN server listed first stays first). | With several unresponsive servers, up to 10 s passes before the driver even starts.                                       |
+| **B. Mirror Node's resolver defaults** (c-ares timeout and tries)                                                               | Same failure timing users already see.                                                                       | Longer worst case. The c-ares defaults are not exposed through Node.js, so we would hardcode guesses.                     |
+| **C. Query all servers in parallel; first valid answer wins**                                                                   | Fastest success.                                                                                             | Breaks server order. With split DNS, a public server's `NXDOMAIN` can beat the VPN server's correct answer. More traffic. |
+| **D. Scale with the connection-timeout setting** (for example one third of it)                                                  | Respects the user's setting.                                                                                 | Less predictable. A small setting can leave too little time for TCP.                                                      |
 
 **Recommendation:** A, keeping the server order. All values stay constants in one place, so they
 can be tuned from `fallbackDurationMs` telemetry.
@@ -1153,11 +1159,11 @@ the worker a `mongodb://` string, so its DNS happens entirely outside the timer.
 driver's own SRV lookup in `MongoClient._connect()` runs before server selection, so
 `serverSelectionTimeoutMS` never counts DNS either.
 
-| Option                                                                                                        | Pros                                                                                                                                                                         | Cons                                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Separate budgets:** preparation first (probe per D0017, fallback ≤ D0016 deadline), then the full init timeout | Every connection gets the same budget for connect, TLS, auth and token acquisition, whether or not it needed the fallback. Matches the driver, which does not count DNS against server selection. Simple. | The setting no longer bounds the whole startup: an affected user can wait up to the D0016 deadline (≤ 20 s) longer, and a dead DNS server adds the probe's timeout (D0017). |
-| **B. One budget:** init timeout = `connectionTimeout − preparation time`                                         | The setting bounds the whole startup, as a user would expect from its name.                                                                                                  | With the unbounded probe (D0017), a slow probe can leave almost nothing for init, causing spurious timeouts. A slow fallback (say 15 s of 30 s) leaves too little for Entra ID token acquisition and TLS. |
-| **C. One budget with a floor:** init gets `max(connectionTimeout − preparation time, floor)`, for example 10 s       | Mostly bounded, without starving init.                                                                                                                                       | Still not a hard bound. One more constant to explain and test.                                                                                                                            |
+| Option                                                                                                              | Pros                                                                                                                                                                                                      | Cons                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Separate budgets:** preparation first (probe per D0017, fallback ≤ D0016 deadline), then the full init timeout | Every connection gets the same budget for connect, TLS, auth and token acquisition, whether or not it needed the fallback. Matches the driver, which does not count DNS against server selection. Simple. | The setting no longer bounds the whole startup: an affected user can wait up to the D0016 deadline (≤ 20 s) longer, and a dead DNS server adds the probe's timeout (D0017).                               |
+| **B. One budget:** init timeout = `connectionTimeout − preparation time`                                            | The setting bounds the whole startup, as a user would expect from its name.                                                                                                                               | With the unbounded probe (D0017), a slow probe can leave almost nothing for init, causing spurious timeouts. A slow fallback (say 15 s of 30 s) leaves too little for Entra ID token acquisition and TLS. |
+| **C. One budget with a floor:** init gets `max(connectionTimeout − preparation time, floor)`, for example 10 s      | Mostly bounded, without starving init.                                                                                                                                                                    | Still not a hard bound. One more constant to explain and test.                                                                                                                                            |
 
 **Recommendation:** A, documented in WI-8 ("the connection timeout starts after DNS resolution"),
 with `srvResolutionDurationMs` on `worker.startup` showing how much time preparation really takes.
@@ -1200,6 +1206,14 @@ The hand-over commit after `2855dcc9` adds this chapter and the feature README u
   1.34.8 rejects the compressed-target replay with `EBADRESP`, and the fallback client decodes it.
 - **Code review (M8):** one medium finding (C1, tooltip content lost in real VS Code), fixed in
   `2855dcc9`; triage in [code-review.md](./code-review.md).
+- **Case 2 checks (2026-10-09, at the operator's request after hand-over):** the first run passed
+  `l10n` (5 new strings), `prettier-fix`, full `jest`, `build` and `package`, and failed `lint`
+  with 75 errors, all in this branch's files (mostly import style). The fix was mechanical, with two
+  justified suppressions: the differential test's import of the driver's internal
+  `resolveSRVRecord`, and a socket setup error passed through unchanged. A full re-run then passed
+  every step: `l10n` and `prettier-fix` changed nothing, `lint` 0 errors, `jest` 302 suites and
+  4,958 tests, `build`, `package` (`vscode-documentdb-0.11.0.vsix`, 9.17 MB). The version in
+  `package.json` is still `0.11.0`; the bump to `0.11.1` is a release step.
 
 ## Not verified
 
@@ -1207,14 +1221,11 @@ The hand-over commit after `2855dcc9` adds this chapter and the feature README u
   cluster with native auth and Entra ID on every surface, a real compressing resolver, nothing
   persisted, the unaffected path and its `nodeProbeDurationMs`, Remote, the off switch following the
   user-manual page, and a slow network. The steps are in WI-9 and in the hand-over message.
-- **Case 2 checks did not run** (`npm run l10n`, `prettier-fix`, `lint`, full `jest`, `package`);
-  they run when the PR is prepared for review. `l10n` is needed: WI-7 and WI-10 add strings. The
-  subagent code has not been through Prettier yet, so `prettier-fix` will reformat several new files.
 
 ## Open items
 
 - Run the pending manual checks and record the results here.
-- Case 2 checks, the PR into `release/0.11.1` (created by a maintainer from `v0.11.0`), and the
+- The AI pre-review file required by CONTRIBUTING §6, the `0.11.1` version bump, the PR into `release/0.11.1` (created by a maintainer from `v0.11.0`), and the
   forward-merge into `main` (D0015).
 - Optional release-notes screenshot of the tooltip line (needs an image from the operator).
 - Final package name and the publish workflow entry before the first npm publish (D0020).

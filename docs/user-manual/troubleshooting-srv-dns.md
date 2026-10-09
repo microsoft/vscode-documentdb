@@ -69,11 +69,11 @@ In these cases you can:
 
 1. **Use a non-SRV connection string.** Look up the servers with a resolver that works, for example `nslookup -type=SRV _mongodb._tcp.<host>`, and build a `mongodb://` string that lists every server with its port, keeps `tls=true`, and adds any options from the TXT record (`nslookup -type=TXT <host>`):
 
-    ```
-    mongodb://<user>:<password>@<server1>:<port1>,<server2>:<port2>/?tls=true&<options from the TXT record>
-    ```
+   ```
+   mongodb://<user>:<password>@<server1>:<port1>,<server2>:<port2>/?tls=true&<options from the TXT record>
+   ```
 
-    **Caveat:** this list does not follow failover or server changes. If the connection stops working later, look the servers up again.
+   **Caveat:** this list does not follow failover or server changes. If the connection stops working later, look the servers up again.
 
 2. **Use a different DNS server** for your network connection. **Caveat:** this is a machine-wide change and can break name resolution for VPN or corporate networks.
 
@@ -94,10 +94,10 @@ These lines show the host name, the DNS servers asked, the SRV targets and ports
 
 Two environment variables control the fallback. They are meant for support and troubleshooting; there is no setting for them in VS Code.
 
-| Variable                                 | Effect                                                                                                                     |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `DOCUMENTDB_DISABLE_SRV_FALLBACK=1`      | Turns the fallback off. The original error is reported exactly as before. Use this if you suspect the fallback causes a problem. |
-| `DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK=1`  | Always uses the fallback for `mongodb+srv://` connections, even when the built-in lookup works. For diagnosis only.        |
+| Variable                                | Effect                                                                                                                           |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `DOCUMENTDB_DISABLE_SRV_FALLBACK=1`     | Turns the fallback off. The original error is reported exactly as before. Use this if you suspect the fallback causes a problem. |
+| `DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK=1` | Always uses the fallback for `mongodb+srv://` connections, even when the built-in lookup works. For diagnosis only.              |
 
 If both are set, `DOCUMENTDB_DISABLE_SRV_FALLBACK` wins.
 

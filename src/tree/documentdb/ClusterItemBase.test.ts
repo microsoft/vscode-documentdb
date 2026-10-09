@@ -12,7 +12,7 @@ import { type TreeElement } from '../TreeElement';
 import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItemBase';
 
 jest.mock('vscode', () => ({
-    ...jest.requireActual<typeof import('vscode')>('../../__mocks__/vscode.js'),
+    ...jest.requireActual<typeof vscode>('../../__mocks__/vscode.js'),
     MarkdownString: class MarkdownString {
         #delegate: Pick<vscode.MarkdownString, 'value' | 'isTrusted' | 'supportThemeIcons' | 'supportHtml' | 'baseUri'>;
 
@@ -20,16 +20,36 @@ jest.mock('vscode', () => ({
             this.#delegate = { value, supportThemeIcons };
         }
 
-        get value(): string { return this.#delegate.value; }
-        set value(value: string) { this.#delegate.value = value; }
-        get isTrusted(): vscode.MarkdownString['isTrusted'] { return this.#delegate.isTrusted; }
-        set isTrusted(value: vscode.MarkdownString['isTrusted']) { this.#delegate.isTrusted = value; }
-        get supportThemeIcons(): boolean | undefined { return this.#delegate.supportThemeIcons; }
-        set supportThemeIcons(value: boolean | undefined) { this.#delegate.supportThemeIcons = value; }
-        get supportHtml(): boolean | undefined { return this.#delegate.supportHtml; }
-        set supportHtml(value: boolean | undefined) { this.#delegate.supportHtml = value; }
-        get baseUri(): vscode.Uri | undefined { return this.#delegate.baseUri; }
-        set baseUri(value: vscode.Uri | undefined) { this.#delegate.baseUri = value; }
+        get value(): string {
+            return this.#delegate.value;
+        }
+        set value(value: string) {
+            this.#delegate.value = value;
+        }
+        get isTrusted(): vscode.MarkdownString['isTrusted'] {
+            return this.#delegate.isTrusted;
+        }
+        set isTrusted(value: vscode.MarkdownString['isTrusted']) {
+            this.#delegate.isTrusted = value;
+        }
+        get supportThemeIcons(): boolean | undefined {
+            return this.#delegate.supportThemeIcons;
+        }
+        set supportThemeIcons(value: boolean | undefined) {
+            this.#delegate.supportThemeIcons = value;
+        }
+        get supportHtml(): boolean | undefined {
+            return this.#delegate.supportHtml;
+        }
+        set supportHtml(value: boolean | undefined) {
+            this.#delegate.supportHtml = value;
+        }
+        get baseUri(): vscode.Uri | undefined {
+            return this.#delegate.baseUri;
+        }
+        set baseUri(value: vscode.Uri | undefined) {
+            this.#delegate.baseUri = value;
+        }
 
         appendMarkdown(value: string): this {
             this.#delegate.value += value;
@@ -162,9 +182,10 @@ function makeClient(listDatabases: jest.Mock): ClustersClient {
 
 describe('ClusterItemBase SRV tooltips', (): void => {
     afterEach((): void => {
-        jest.mocked(jest.requireMock<{ ClustersClient: typeof ClustersClient }>(
-            '../../documentdb/ClustersClient',
-        ).ClustersClient.getSrvResolution).mockReset();
+        jest.mocked(
+            jest.requireMock<{ ClustersClient: typeof ClustersClient }>('../../documentdb/ClustersClient')
+                .ClustersClient.getSrvResolution,
+        ).mockReset();
     });
 
     it.each(['node', 'fallback', 'nodeErrorPassthrough', undefined] as const)(
