@@ -168,6 +168,7 @@
     "@documentdb-js/operator-registry": "*",
     "@documentdb-js/schema-analyzer": "*",
     "@documentdb-js/shell-runtime": "*",
+    "@documentdb-js/srv-resolver": "*",
     "@fluentui/react-components": "~9.74.4",
     "@fluentui/react-icons": "~2.0.320",
     "@kubernetes/client-node": "1.4.0",
