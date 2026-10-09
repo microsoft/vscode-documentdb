@@ -20,7 +20,7 @@
 
 **The free, open-source DocumentDB GUI and MongoDB GUI for VS Code.**
 
-Browse, query and manage your data without leaving your editor. One extension for all three:
+Connect to your databases, explore your data, run and tune queries, and move collections around, all without leaving your editor. One extension for all three:
 
 | **Azure DocumentDB**                                                                   | **DocumentDB**                                                                                       | **MongoDB**                                                                            |
 | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -30,152 +30,55 @@ Browse, query and manage your data without leaving your editor. One extension fo
 
 <p align="center"><img src="resources/readme/vscode-documentdb-hero-screenshot.png" alt="DocumentDB for VS Code: the Collection View with a query, autocompletion and results in a table" width="800" style="max-width:100%;height:auto;"></p>
 
-# Get Started in a Minute
+## Connect in Seconds, Wherever Your Data Lives
 
-Pick whichever way matches where your data lives:
+- **No database yet?** Select **Set up DocumentDB Local** and the extension starts [DocumentDB](https://documentdb.io) in Docker for you, with a persistent volume, generated credentials and optional sample data. No `docker run` command to assemble. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start)
+- **On Azure?** Browse your Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts across accounts, tenants and subscriptions, and sign in with **Microsoft Entra ID** or a managed identity. They also show up in the Azure Resources view. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery)
+- **On MongoDB Atlas?** Sign in with an Atlas service account or API key and pick a cluster from your organizations and projects instead of copying endpoints. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery-mongodb-atlas)
+- **In Kubernetes?** DocumentDB clusters on AKS, EKS, GKE, kind, minikube or Docker Desktop are found from your kubeconfig, and port forwarding is handled for you. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery-kubernetes)
+- **Anything else?** Paste a connection string. Keep all your connections organized in folders.
 
-- **Paste a connection string** in the **Connections** view and connect
-- **Discover your databases** in Azure, MongoDB Atlas or Kubernetes from the **Service Discovery** view, without copying endpoints
-- **No database yet?** Start **DocumentDB Local** with one click and get a running database with sample data
+## See What You Have
 
-Nothing else to install: the shell and the query runtime are built in. DocumentDB Local is the only feature that needs Docker.
-
-# Features
-
-## Query Your Data, Your Way
-
-Three connected ways to work with the same query: visually, in a script, or at a command line. All three understand your data's schema, and one click moves your query from one to the other.
-
-### Collection View
-
-The visual query editor with filter, project and sort fields. As you type, it suggests **field names** from your actual data, **operators** that fit each field's type, and suitable **values**. Hover over an operator to see its documentation. Look at results as a **Table**, a **Tree** or **JSON**, and create, edit or delete documents in place (the screenshot at the top of this page shows the Collection View).
-
-- Relaxed query syntax: unquoted keys, single quotes, `ObjectId()`, `ISODate()` and JavaScript expressions
-- Real-time validation that catches typos ("Did you mean `ObjectId`?")
-- Pagination and quick actions for the documents you select
-
-### Query Playground
-
-Write JavaScript in `.documentdb.js` files and run each block with its own **Run** button, or all of them with **Run All**. Results appear in a side panel.
-
-<p align="center"><img src="resources/readme/query-playground.png" alt="Query Playground with Run buttons above each query block and results in a side panel" width="800" style="max-width:100%;height:auto;"></p>
-
-- Autocompletion for `db.*` chains, collection methods and your schema's field names
-- Several playgrounds open at once, each connected to a different server
-- Save your queries as files and keep them in your project
-
-### Interactive Shell
-
-A shell inside VS Code with `show dbs`, `use <db>`, `help` and `it`, persistent variables, syntax highlighting, and tab completion with ghost text suggestions.
-
-<p align="center"><img src="resources/readme/interactive-shell.png" alt="Interactive Shell with syntax highlighting and tab completion" width="800" style="max-width:100%;height:auto;"></p>
-
-- Completion for databases, collections, methods, operators and field names
-- `Ctrl+C` cancels long-running operations
-- Links in the output open a collection in the Collection View or a Query Playground
-
-The Query Playground and Interactive Shell need **no external tools**. The runtime is bundled with the extension and reuses your connection, including **Microsoft Entra ID** sign-in, on Windows, macOS and Linux. Schema information for autocompletion is collected locally from the documents you browse and is never sent to external services.
-
-## Connect Anywhere
-
-Your connections live in the **Connections** view, organized in folders you create. Sign in with a username and password, with **Microsoft Entra ID** (multiple accounts and tenants, or a managed identity on an Azure VM), or with no authentication for local development.
-
-<p align="center"><img src="resources/readme/authentication-methods.png" alt="Choosing an authentication method: Username and Password, Microsoft Entra ID or No Authentication, and for Entra ID, your account or a managed identity" width="800" style="max-width:100%;height:auto;"></p>
-
-Already using the [Azure Resources](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azureresourcegroups) extension? Your Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts also appear in the **Azure** view, next to the rest of your resources.
-
-### DocumentDB Local
-
-Run [DocumentDB](https://documentdb.io) on your own machine without writing a `docker run` command. Select **Set up DocumentDB Local** in the Connections view: the extension pulls the official image, creates a persistent volume, generates credentials, picks a free port, loads optional sample data and saves the connection for you.
-
-<p align="center"><img src="resources/readme/documentdb-local.png" alt="DocumentDB Local setup view with Set up DocumentDB Local highlighted in the Connections view" width="800" style="max-width:100%;height:auto;"></p>
-
-- Start, stop, restart and delete the instance from the Connections view
-- If Docker isn't ready, the setup explains what to fix, for local machines, WSL, SSH, dev containers and Codespaces
-- Works with Docker Engine or Docker Desktop. The extension never installs software or asks for elevated privileges
-
-See [Set up DocumentDB Local](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start) for details.
-
-### MongoDB Atlas Service Discovery
-
-Browse your Atlas organizations, projects and clusters from the sidebar, and connect to any cluster without copying endpoints by hand.
-
-<p align="center"><img src="resources/readme/mongodb-atlas-discovery.png" alt="Adding a MongoDB Atlas connection with a Service Account or API Key, next to MongoDB Atlas in the Service Discovery view" width="800" style="max-width:100%;height:auto;"></p>
-
-- Sign in with an Atlas **Service Account** or **API Key**, verified before it is stored
-- Add one credential per organization and see all their clusters together, as a tree or a flat list
-- Paused, creating and updating clusters are labeled, so you don't wait on a connection that can't succeed
-- **Open in MongoDB Atlas** takes you straight to the cluster's page in the Atlas console
-
-The Atlas credential is only used to find clusters. You still connect with your Atlas database user. See [MongoDB Atlas Service Discovery](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery-mongodb-atlas) for the full guide.
-
-### Kubernetes Service Discovery
-
-Find DocumentDB clusters running in Kubernetes, from AKS, EKS and GKE to kind, minikube and Docker Desktop, without writing connection strings or running `kubectl port-forward` yourself.
-
-<p align="center"><img src="resources/readme/kubernetes-discovery.png" alt="Kubernetes Service Discovery tree with kubeconfig sources, contexts, namespaces and discovered DocumentDB clusters" width="800" style="max-width:100%;height:auto;"></p>
-
-- Clusters managed by the DocumentDB Kubernetes Operator are recognized automatically
-- Clusters that are only reachable inside Kubernetes get a port forward that is opened and restored for you
-- Use several kubeconfig sources side by side: the default file, a file from disk, or pasted YAML
-
-See [Kubernetes Service Discovery](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery-kubernetes) for the full guide.
-
-### Azure Service Discovery
-
-Find Azure DocumentDB clusters, Azure Cosmos DB for MongoDB (RU) accounts and MongoDB-compatible databases on Azure VMs across your accounts, tenants and subscriptions. See [Service Discovery](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery) for details.
-
-## Cluster Dashboard
-
-See what's in a cluster at a glance. The dashboard shows whether it is connected, the round-trip time and, on Azure, its high-availability setup. Below that, an inventory lists every database and collection with its storage size, data size, index size and document count.
+The first question on any cluster is "what's in here?" The **Cluster Dashboard** answers it on one page: whether you're connected, the round-trip time, and an inventory of every database and collection with its storage size, index size and document count. Sort and filter the list, drill into a database, or create and delete databases and collections right there.
 
 <p align="center"><img src="resources/readme/cluster-dashboard.png" alt="Cluster Dashboard with connection status, storage and document metrics, and a filterable database inventory" width="800" style="max-width:100%;height:auto;"></p>
 
-Sort and filter the list, drill into a database, create or delete databases and collections, open a shell, or copy the connection string.
+## Query Your Data, Your Way
 
-## Query Insights
+Three connected ways to work with the same query, and one click moves it between them. All three know your data's schema, so field names, operators and values are suggested as you type.
 
-Find out why a query is slow. Run it in the Collection View and open the **Query Insights** tab:
+- **Collection View** (shown at the top): build a query with filter, project and sort editors, and browse results as a **Table**, a **Tree** or **JSON**. Create, edit and delete documents in place.
+- **Interactive Shell**: `show dbs`, `use <db>`, persistent variables, syntax highlighting and tab completion with ghost text, right in a VS Code terminal.
+- **Query Playground**: write JavaScript in `.documentdb.js` files and run each block with its own **Run** button. Keep the queries you want to reuse next to your code.
 
-1. **Query plan**: how the database intends to run the query, for example with an index or with a full collection scan
-2. **Execution statistics**: documents and index keys examined, run time, and a Good, Fair or Poor rating
-3. **AI recommendations**: GitHub Copilot explains what is happening and suggests changes, such as creating or hiding an index, which you can apply directly
+<p align="center"><img src="resources/readme/interactive-shell.png" alt="Interactive Shell with syntax highlighting and tab completion" width="800" style="max-width:100%;height:auto;"></p>
+
+Nothing to install: the shell and query runtime are bundled with the extension, reuse your connection (including Entra ID sign-in), and work the same on Windows, macOS and Linux.
+
+## Find Out Why a Query Is Slow, and Fix It
+
+Whether you wrote a query yourself or an AI agent suggested it, you want to know how it runs. **Query Insights** explains it in three steps: the query plan, then execution statistics with a simple Good, Fair or Poor rating, and then optional AI recommendations from GitHub Copilot that explain what's happening and suggest changes you can apply directly.
 
 <p align="center"><img src="resources/readme/query-insights.png" alt="Query Insights streaming an AI summary and index recommendations" width="800" style="max-width:100%;height:auto;"></p>
 
-> AI recommendations require the [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension. The extension sends the query shape and execution statistics, not your documents.
-
-## Manage Indexes
-
-The **Indexes** tab in the Collection View puts index work next to the queries it affects. Review what exists, create what is missing, and remove what is not earning its keep.
+**Index management** sits right next to it, so understanding a query and fixing it happen in the same place. See which indexes are used and which are not, create standard, wildcard and vector indexes with a guided form, and **hide** an index to check the impact before you delete it.
 
 <p align="center"><img src="resources/readme/index-management.png" alt="Indexes tab with index count, size and usage metrics above a filterable table of indexes and their actions" width="800" style="max-width:100%;height:auto;"></p>
 
-- Size and usage for every index, with quick filters for **Hidden** and **Unused** indexes
-- Create **Standard**, **Wildcard** and **Vector** indexes with a guided form, and preview the definition as JSON
-- **Hide** an index to test whether your queries still need it, before you delete it
-- Send the generated command to a Query Playground or the Interactive Shell instead of running it directly
+> AI recommendations require the [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension. The extension sends the query shape and execution statistics, not your documents.
 
-See [Manage Indexes in Collection View](https://microsoft.github.io/vscode-documentdb/user-manual/collection-view-index-management) for the full guide.
+## Bring Your Data With You
 
-## Copy and Paste Collections
-
-Copy a collection the way you copy files: right-click it and select **Copy Collection…**, then right-click a database on the same server or any other one and select **Paste Collection…**. Moving sample data from DocumentDB Local to a cloud cluster, or the other way around, takes just a few clicks.
+Copy a collection the way you copy files: right-click it and select **Copy Collection…**, then right-click a database on the same cluster or any other and select **Paste Collection…**. A collection from MongoDB Atlas, Azure or a shared development cluster can land in your DocumentDB Local instance in a few clicks. If the target already has documents, you decide what happens with duplicates, and the indexes can come along too.
 
 <p align="center"><img src="resources/readme/copy-and-paste.png" alt="Copy and paste in three steps: copy the source collection, paste it into the target, and choose how to handle conflicts" width="800" style="max-width:100%;height:auto;"></p>
 
-- Choose what happens when documents share an `_id`: abort, skip and log, overwrite, or generate new `_id` values
-- Recreate the collection's indexes on the target, or copy and paste indexes on their own
-- Designed for development and small to medium datasets. For large production migrations, use a dedicated migration service
-
-See [Copy and Paste](https://microsoft.github.io/vscode-documentdb/user-manual/copy-and-paste) for details. You can also **import** JSON files into a collection and **export** documents, query results or entire collections.
+Copy and paste is built for development and small to medium datasets. For large production migrations, use a dedicated migration service. You can also **import** JSON files and **export** documents, query results or entire collections.
 
 ## Open Source and Extensible
 
-All development, roadmap planning and feature discussions happen publicly on [GitHub](https://github.com/microsoft/vscode-documentdb). Your feedback, bug reports, ideas and pull requests shape the extension.
-
-- **Service Discovery plugins**: connect to databases hosted on any cloud provider through the plugin architecture
-- **Data migration providers**: other extensions can register as migration providers for specialized data movement
+Everything happens in the open on [GitHub](https://github.com/microsoft/vscode-documentdb): the roadmap, the discussions and every change. Your bug reports, ideas and pull requests shape the extension. Other extensions can plug in as **Service Discovery** providers for more clouds, or as **data migration** providers.
 
 # Prerequisites
 
