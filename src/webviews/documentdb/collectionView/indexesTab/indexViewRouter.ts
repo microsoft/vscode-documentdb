@@ -43,6 +43,7 @@ import { ClustersClient, type IndexItemModel } from '../../../../documentdb/Clus
 import { PlaygroundCommandIds } from '../../../../documentdb/playground/constants';
 import { SchemaStore } from '../../../../documentdb/SchemaStore';
 import { ShellCommandIds } from '../../../../documentdb/shell/constants';
+import { recordSurveyActivity } from '../../../../services/survey/SurveyService';
 import { meterSilentCatch } from '../../../../utils/accumulatingTelemetry';
 import { confirmIndexAction } from '../../../../utils/dialogs/confirmIndexAction';
 import { readOnlyJsonDocumentProvider } from '../../../../utils/readOnlyJsonDocumentProvider';
@@ -295,6 +296,7 @@ export const indexViewRouter = router({
             const message = typeof result.note === 'string' ? result.note : l10n.t('Failed to create index.');
             throw new Error(message);
         }
+        recordSurveyActivity('dataManagement');
         return { ok: true, indexName: result.indexName };
     }),
 

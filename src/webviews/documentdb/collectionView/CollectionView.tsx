@@ -8,7 +8,6 @@ import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
-import { UsageImpact } from '../../../utils/surveyTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
@@ -452,8 +451,6 @@ export const CollectionView = (): JSX.Element => {
 
         setCurrentContext((prev) => ({ ...prev, currentView: selection }));
         getDataForView(selection);
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     };
 
     function handleDeleteDocumentRequest(): void {

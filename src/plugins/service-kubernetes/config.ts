@@ -84,9 +84,9 @@ export const DEFAULT_VIEW_MODE: KubernetesViewMode = 'list';
 /**
  * GlobalState key persisting the discovery tree {@link KubernetesViewMode}.
  *
- * Stored directly via `ext.context.globalState` (like the survey state in
- * `src/utils/survey.ts`) rather than a user-facing setting, so the last choice
- * always persists without exposing it in Settings.
+ * Stored directly via `ext.context.globalState` (like the release notes version in
+ * `src/services/releaseNotesNotification.ts`) rather than a user-facing setting,
+ * so the last choice always persists without exposing it in Settings.
  *
  * TODO: a future "internal settings store" abstraction could centralize these
  * ad-hoc globalState keys (see follow-up issue).

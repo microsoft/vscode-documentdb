@@ -6,7 +6,7 @@
 /**
  * Root tRPC router for the extension. Bundles each webview's router together
  * with a shared `commonRouter` exposing cross-webview procedures (telemetry
- * helpers, dialog helpers, survey hooks).
+ * helpers, dialog helpers, URL opening).
  *
  * The tRPC primitives (`publicProcedureWithTelemetry` and the re-exports of
  * `publicProcedure` / `router`) live in `./trpc.ts`, a leaf module that this
@@ -31,8 +31,6 @@ import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
-import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
-import { UsageImpact } from '../../utils/surveyTypes';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
@@ -223,24 +221,6 @@ const commonRouter = router({
         )
         .mutation(({ input }) => {
             showConfirmationAsInSettings(input.message);
-        }),
-    surveyPing: publicProcedure
-        .input(
-            z.object({
-                usageImpact: z.enum(UsageImpact),
-            }),
-        )
-        .mutation(({ input }) => {
-            void promptAfterActionEventually(input.usageImpact);
-        }),
-    surveyOpen: publicProcedure
-        .input(
-            z.object({
-                triggerAction: z.string(), // Optional action that triggered the survey for telemetry
-            }),
-        )
-        .mutation(({ input }) => {
-            void openSurvey(input.triggerAction);
         }),
     openUrl: publicProcedure
         .input(

@@ -14,6 +14,8 @@ const mockCanReuseExistingData = jest.fn();
 const mockSuggestPort = jest.fn();
 const mockProvision = jest.fn();
 
+jest.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: jest.fn() }));
+
 /** Drives `QuickStartService.onDidChangeStatus` so a test can push status changes at the router. */
 const statusListeners = new Set<() => void>();
 const fireStatusChange = (): void => statusListeners.forEach((listener) => listener());
