@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { escapeMarkdown } from './escapeMarkdown';
+import { escapeMarkdown, formatInlineCode } from './escapeMarkdown';
 
 describe('escapeMarkdown', () => {
     test('returns plain text unchanged', () => {
@@ -15,7 +15,7 @@ describe('escapeMarkdown', () => {
     });
 
     test('escapes markdown link syntax', () => {
-        expect(escapeMarkdown('[click](https://evil.com)')).toBe('\\[click\\]\\(https://evil\\.com\\)');
+        expect(escapeMarkdown('[click](https://evil.com)')).toBe('\\[click\\]\\(https\\://evil\\.com\\)');
     });
 
     test('escapes angle brackets (HTML tags)', () => {
@@ -37,5 +37,23 @@ describe('escapeMarkdown', () => {
     test('passes through numbers and underscores', () => {
         // underscore IS a markdown metacharacter, so it gets escaped
         expect(escapeMarkdown('field_1')).toBe('field\\_1');
+    });
+
+    test('escapes colons so bare URLs are not autolinked', () => {
+        expect(escapeMarkdown('https://evil.example')).toBe('https\\://evil\\.example');
+    });
+});
+
+describe('formatInlineCode', () => {
+    test.each([
+        ['plain', '`plain`'],
+        ['tick`field', '``tick`field``'],
+        ['`edge`', '`` `edge` ``'],
+        ['field```ticks', '````field```ticks````'],
+        [' spaced ', '`  spaced  `'],
+        ['   ', '`   `'],
+        ['line\n\nfield', '`"line\\n\\nfield"`'],
+    ])('delimits %j safely', (value, expected) => {
+        expect(formatInlineCode(value)).toBe(expected);
     });
 });
