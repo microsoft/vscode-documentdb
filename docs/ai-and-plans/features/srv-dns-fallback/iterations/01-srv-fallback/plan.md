@@ -699,7 +699,7 @@ review:
 - **R1:** an Entra ID and a managed identity SRV startup on the Node.js path and on the forced
   fallback path both reach `new Worker(...)`; the host never throws an OIDC argument error.
 
-**Done.** `@M6@` `feat(srv): resolve SRV on the host for the shell and query playground`.
+**Done.** `e5c67354` `feat(srv): resolve SRV on the host for the shell and query playground`.
 `initializeWorker` calls `prepareDriverConnectionString` before `new Worker(...)`, with
 `authMechanism: 'MONGODB-OIDC'` and `tls: true` on a copy of the options for Entra ID and managed
 identity, as the worker does itself. It posts a copy of `initMsg` with the prepared string, the
@@ -758,6 +758,17 @@ never touches the error.
 `syscall: 'connect'`) returns `undefined`; a `querySrv EBADRESP` produced with the off switch set
 gets the same neutral text.
 
+**Done.** `@M7@` `feat(srv): SRV DNS diagnostics, troubleshooting page and 0.11.1 notes`.
+`src/documentdb/srv/SrvDnsDiagnosticsProvider.ts` (`id: 'srv-dns'`) requires SRV evidence (the
+message starts with `querySrv ` or `syscall === 'querySrv'`) before it looks at the code, which it
+reads from `error.code` or, for worker-relayed errors, from the message. The texts are as planned,
+with ` See {link} for troubleshooting.` appended (`Links.SrvDnsTroubleshooting`); they contain
+neither the host name nor the raw message. It is registered **last** in
+`registerDiscoveryServices`, because the first explanation wins and source-specific providers
+(QuickStart, Kubernetes, Atlas) should take priority. 25 tests, including the R5 negatives
+(`connect ECONNREFUSED`, `EBADRESP` without SRV evidence), `UserCancelledError`, and the off switch
+producing the same neutral text.
+
 ---
 
 ## WI-8: Documentation and release notes
@@ -779,6 +790,29 @@ gets the same neutral text.
 - Add a `0.11.1` release-notes entry through the `writing-release-notes` skill (D0015).
 - Update the feature README: code map, the `code` frontmatter, the timeline, and the decision status
   changes.
+
+**Done.** `@M7@` (same commit as WI-7). `docs/user-manual/troubleshooting-srv-dns.md` covers the
+symptom, the cause, what the fallback does (including the tooltip line), the
+`ELECTRON_RUN_AS_NODE` check for Windows, macOS (`Contents/MacOS/Code` since VS Code 1.110) and
+Linux, the cases the fallback cannot fix, the two workarounds with their caveats, the timing rule
+(D0016, D0018), how to collect the `[SrvResolution]` trace, and both switches. It also explains how
+to set them on Windows, macOS and Linux, and under WSL (`~/.vscode-server/server-env-setup`),
+Remote-SSH (remote login profile, then **Kill VS Code Server on Host**) and Dev Containers
+(`remoteEnv`). The page is linked from the user-manual index in `docs/index.md` and from
+`how-to-construct-url.md`. The `0.11.1` entries are in `CHANGELOG.md`, `docs/release-notes/0.11.md`
+and the release-notes index, written with the `writing-release-notes` skill.
+
+**Deviation.** Approved by the coordinator (confidence ≥ 85 %):
+
+- `how-to-construct-url.md` is about `vscode://` deep links, not connection strings, so the page is
+  also listed in the user-manual index under "Connecting to Databases", where users will find it.
+- No release-notes screenshots: the skill asks whether to include any, and the operator was not
+  available (autopilot). A screenshot of the tooltip line can be added once the operator provides
+  one.
+
+**Not done / deferred.** `npm run l10n` for the new strings (WI-4 has none; WI-7 and WI-10 do) is a
+Case 2 step and runs when the PR is prepared for review. The feature README is updated at
+hand-over (M8), together with the final code map.
 
 ---
 

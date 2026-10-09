@@ -152,6 +152,7 @@ import { PlaygroundHoverProvider } from './query-language/playground-completions
 import { PlaygroundSnippetSessionManager } from './query-language/playground-completions/PlaygroundSnippetSessionManager';
 import { ShellCommandIds } from './shell/constants';
 import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
+import { SrvDnsDiagnosticsProvider } from './srv/SrvDnsDiagnosticsProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -182,6 +183,8 @@ export class ClustersExtension implements vscode.Disposable {
         ConnectionDiagnosticsService.registerProvider(new QuickStartDiagnosticsProvider());
         ConnectionDiagnosticsService.registerProvider(new KubernetesDiagnosticsProvider());
         ConnectionDiagnosticsService.registerProvider(new AtlasDiagnosticsProvider());
+        // First explanation wins, so source-specific diagnostics take priority over generic SRV failures.
+        ConnectionDiagnosticsService.registerProvider(new SrvDnsDiagnosticsProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
