@@ -167,7 +167,6 @@
   "[Survey] Presentation deferred: destination unavailable.": "[Survey] Presentation deferred: destination unavailable.",
   "[Survey] Presentation deferred: presentation failed.": "[Survey] Presentation deferred: presentation failed.",
   "[Survey] Presentation deferred: reveal failed.": "[Survey] Presentation deferred: reveal failed.",
-  "[Survey] Presentation deferred: reveal timed out.": "[Survey] Presentation deferred: reveal timed out.",
   "[Survey] Presentation requested.": "[Survey] Presentation requested.",
   "[Survey] Skipping evaluation: covered by an in-flight evaluation.": "[Survey] Skipping evaluation: covered by an in-flight evaluation.",
   "[Survey] Skipping evaluation: pending work canceled.": "[Survey] Skipping evaluation: pending work canceled.",
