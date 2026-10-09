@@ -1,0 +1,58 @@
+{
+  "src": "originals",
+  "out": ".",
+  "jobs": {
+    "1.0.0_collection_view.png": {},
+    "1.0.0_query_playground.png": {},
+    "1.0.0_interactive_shell.png": {},
+    "1.0.0_documentdb_local.png": {},
+    "1.0.0_mongodb_atlas_discovery.png": {},
+    "1.0.0_query_insights_streaming.png": {},
+    "1.0.0_index_management.png": {},
+    "1.0.0_inline_action_buttons.png": { "scale": 0.96 },
+    "1.0.0_cluster_dashboard.png": { "scale": 1.12 },
+    "1.0.0_kubernetes_discovery.png": { "scale": 0.81, "pad": [16, 14, 0, 6] },
+    "1.0.0_copy_and_paste.png": {
+      "badges": [
+        [478, 400, "1"],
+        [682, 916, "2"],
+        [782, 551, "3"]
+      ],
+      "legend": [
+        [
+          "1",
+          [
+            ["Right-click the source collection and choose", false],
+            ["Copy Collection…", true]
+          ]
+        ],
+        [
+          "2",
+          [
+            ["Right-click the target and choose", false],
+            ["Paste Collection…", true]
+          ]
+        ],
+        ["3", [["Choose how to handle conflicts, then paste", false]]]
+      ]
+    },
+    "1.0.0_authentication_methods.png": {
+      "mode": "panels",
+      "panels": [
+        [58, 78, 1139, 399],
+        [577, 495, 1657, 902]
+      ],
+      "badges": [
+        [10, 266, "1"],
+        [529, 651, "2"]
+      ],
+      "arrows": [
+        [
+          [1150, 266],
+          [1420, 266],
+          [1420, 480]
+        ]
+      ]
+    }
+  }
+}
