@@ -7,10 +7,11 @@ import { FALLBACK_MAX_DEADLINE_MS, isSrvConnectionString, resolveSrvForDriver } 
 import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../extensionVariables';
 import { getConnectionTimeoutMs } from '../../utils/workspacUtils';
+import { showSrvFallbackPreviewNotice } from './srvFallbackPreviewNotice';
 import { createSrvResolutionSummary } from './srvResolutionSummary';
 import { applySrvResolutionReport } from './srvResolutionTelemetry';
 
-import { type SrvFallbackMode, type SrvResolutionPath } from '@documentdb-js/srv-resolver';
+import { type SrvFallbackMode, type SrvResolutionPath, type SrvResolutionReport } from '@documentdb-js/srv-resolver';
 import { type MongoClientOptions } from 'mongodb';
 import { type SrvResolutionSummary } from './srvResolutionSummary';
 import { type SrvResolutionTelemetry } from './srvResolutionTelemetry';
@@ -62,6 +63,7 @@ export async function prepareDriverConnectionString(
         'unknown';
     let originalFailure: { error: unknown } | undefined;
     let prepared: PreparedDriverConnectionString | undefined;
+    let resolutionReport: SrvResolutionReport | undefined;
     try {
         await callWithTelemetryAndErrorHandling('connect.srvResolution', async (context): Promise<void> => {
             context.errorHandling.suppressDisplay = true;
@@ -79,6 +81,7 @@ export async function prepareDriverConnectionString(
                     logPrefix: `[SrvResolution] ${correlationId}`,
                     logContext: `surface=${input.surface}`,
                     onReport: (report): void => {
+                        resolutionReport = report;
                         applySrvResolutionReport(context.telemetry, report, input.surface, input.correlation);
                         if (input.startupTelemetry) {
                             input.startupTelemetry.properties.srvResolution = report.path;
@@ -121,6 +124,14 @@ export async function prepareDriverConnectionString(
     }
     if (!prepared) {
         throw new Error('SRV resolution did not return a result');
+    }
+    if (
+        !controller.signal.aborted &&
+        prepared.srvResolution === 'fallback' &&
+        resolutionReport?.path === 'fallback' &&
+        resolutionReport.outcome === 'succeeded'
+    ) {
+        showSrvFallbackPreviewNotice(resolutionReport, input.surface);
     }
     return prepared;
 }

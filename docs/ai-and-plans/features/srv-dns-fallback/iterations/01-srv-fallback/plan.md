@@ -1229,7 +1229,20 @@ The hand-over commit after `2855dcc9` adds this chapter and the feature README u
   persisted, the unaffected path and its `nodeProbeDurationMs`, Remote, the off switch following the
   user-manual page, and a slow network. The steps are in WI-9 and in the hand-over message.
 
+## Developer-preview build (operator request, 2026-10-09)
+
+For feedback from an affected user before the release review, the operator asked for a
+`0.11.1-preview` build with a modal dialog that explains the workaround when it was applied.
+`src/documentdb/srv/srvFallbackPreviewNotice.ts` shows "Developer Preview: DNS workaround applied
+for <host>" after a **successful fallback on a tree connection** only (the operator: "only on the
+tree expansion"), once per SRV host per window. It is non-blocking (never awaited), and its
+"Copy Details" summary has no credentials, connection string or resolved target hosts. It sits
+behind `SHOW_SRV_FALLBACK_PREVIEW_NOTICE`.
+
 ## Open items
+
+- **Before the `0.11.1` release:** decide whether to keep the developer-preview notice
+  (`SHOW_SRV_FALLBACK_PREVIEW_NOTICE`), and set the version from `0.11.1-preview` to `0.11.1`.
 
 - Run the pending manual checks and record the results here.
 - The AI pre-review file required by CONTRIBUTING §6, the `0.11.1` version bump, the PR into `release/0.11.1` (created by a maintainer from `v0.11.0`), and the
