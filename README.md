@@ -11,6 +11,7 @@
 > **Built in the open, with you.** DocumentDB for VS Code is open source under the MIT license. The roadmap, the design discussions and every change happen right here on GitHub.
 >
 > - ⬇️ **Install it** from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb), or search for "DocumentDB" in the VS Code Extensions view
+> - 💬 **Have a question or an idea?** Join the conversation in [GitHub Discussions](https://github.com/microsoft/vscode-documentdb/discussions)
 > - 🐞 **Found a bug or missing a feature?** [Open an issue](https://github.com/microsoft/vscode-documentdb/issues/new)
 > - 💡 **Want to help?** Pick an [open issue](https://github.com/microsoft/vscode-documentdb/issues), read the [contributing guide](./CONTRIBUTING.md) and send a pull request
 > - ⭐ **Like it?** Star the repository, it helps others find the project
@@ -63,8 +64,6 @@ Whether you wrote a query yourself or an AI agent suggested it, you want to know
 <p align="center"><img src="resources/readme/query-insights.png" alt="Query Insights streaming an AI summary and index recommendations" width="800" style="max-width:100%;height:auto;"></p>
 
 **Index management** sits right next to it, so understanding a query and fixing it happen in the same place. See which indexes are used and which are not, create standard, wildcard and vector indexes with a guided form, and **hide** an index to check the impact before you delete it.
-
-<p align="center"><img src="resources/readme/index-management.png" alt="Indexes tab with index count, size and usage metrics above a filterable table of indexes and their actions" width="800" style="max-width:100%;height:auto;"></p>
 
 > AI recommendations require the [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension. The extension sends the query shape and execution statistics, not your documents.
 
