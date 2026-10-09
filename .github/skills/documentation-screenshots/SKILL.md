@@ -74,12 +74,24 @@ Text in every image should look the same size as text in a full 1920 px capture.
 
 To choose `scale` for a capture that is not 1920 px wide:
 
-1. Measure a comparable element in a full capture and in the crop: tree row spacing, table row spacing, a repeated label or the editor line height.
-2. `scale = 0.9333 * reference / crop`.
-3. Reference values for full captures (125% scaling): tree rows about **41 px** apart, Indexes table rows about **55 px**, editor lines about **35.5 px**.
-4. `python frame.py --measure capture.png` prints a rough median row spacing. Treat it as a hint and confirm by eye.
+1. If the capture already has approved values in [references/example-jobs.json](./references/example-jobs.json), reuse them instead of measuring again.
+2. Measure the **same kind of element** in a full capture and in the crop: tree row spacing, the same table, a repeated label or the editor line height. Row heights differ between UI surfaces, so never compare one table with another.
+3. `scale = 0.9333 * reference / crop`.
+4. Reference values for full captures (125% scaling): tree rows about **41 px** apart, editor lines about **35.5 px**, and rows of the Indexes table in the Collection View about **55 px** (this value applies to that table only).
+5. `python frame.py --measure capture.png` prints a rough median row spacing. Treat it as a hint and confirm by eye.
 
-Values used for 1.0 (see the example jobs file): tree crop 0.96, Cluster Dashboard 1.12 (captured at a lower zoom), Kubernetes tree 0.81 with pad `[16, 14, 0, 6]` (captured at a higher zoom, text touched the top and left edges), quick picks 0.9333.
+### Don't scale up
+
+A scale above **1.0** enlarges the capture. Resampling can't add detail, so text, icons and 1 px lines turn soft. It shows on high-DPI screens and when readers open the image at full size. A small mismatch in text size is much less visible than blur.
+
+- If the computed scale is above 1.0, first check that you measured the same kind of element as the reference. A wrong reference is the most common cause.
+- If the capture really was taken at a lower zoom, **recapture** it at 125% scaling (or the matching VS Code zoom). This is the fix.
+- If you can't recapture, use **1.0**, accept slightly smaller text, and mention it to the operator.
+- Scale up only when the operator explicitly approves it, and never above about 1.15. Don't silently clamp a computed value to a maximum.
+
+`frame.py` warns whenever a job scales up.
+
+Values used for 1.0 (see the example jobs file): tree crop 0.96, Kubernetes tree 0.81 with pad `[16, 14, 0, 6]` (captured at a higher zoom, text touched the top and left edges), quick picks 0.9333. Cluster Dashboard 1.12 is an **approved exception**: it was captured at a lower zoom and couldn't be recaptured in time. Recapture it before reusing it for a new image.
 
 ## Annotations
 
@@ -132,6 +144,7 @@ Hero images, diagrams and other rendered graphics are not framed. After renderin
 - [ ] File names follow `{version}_{feature_name}.png` and don't overwrite existing images
 - [ ] Every framed image is 1920 px wide, with transparent rounded corners
 - [ ] Text size matches full captures (no blown-up crops)
+- [ ] No job scales above 1.0 unless the operator approved it
 - [ ] Badges and arrows don't cover UI text or icons
 - [ ] All images referenced with `width="800"` and descriptive alt text
 - [ ] Every image reference resolves; preview files deleted

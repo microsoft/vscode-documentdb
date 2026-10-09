@@ -192,6 +192,12 @@ def warn(msg):
     print(f"WARNING: {msg}", file=sys.stderr)
 
 
+def check_upscale(src, scale):
+    if scale > 1.0:
+        warn(f"{os.path.basename(src)} is scaled up ({scale:g}); text will be soft. Check the measurement "
+             "reference or recapture at 125%; scale up only with operator approval (see SKILL.md)")
+
+
 def opaque(img):
     """Flatten transparent captures onto white so they don't leave holes in the card."""
     if img.getextrema()[3][0] < 255:
@@ -203,6 +209,7 @@ def opaque(img):
 
 def frame(src, dst, scale=BASE_SCALE, badges=(), legend=None, pad=0, pad_color=None, arrows=()):
     """Standard layout: whole capture as one card, centred on a 1920 wide background."""
+    check_upscale(src, scale)
     img = opaque(Image.open(src).convert("RGBA"))
     if pad:   # extend tight crops with the capture's own background colour (l, t, r, b)
         p = (pad,) * 4 if isinstance(pad, int) else tuple(pad)
@@ -241,6 +248,7 @@ def frame(src, dst, scale=BASE_SCALE, badges=(), legend=None, pad=0, pad_color=N
 def frame_panels(src, dst, panels, scale=BASE_SCALE, radius=PANEL_RADIUS, badges=(), arrows=()):
     """Floating-panel layout: lift quick-pick panels (x0, y0, x1, y1 inclusive) out of a
     white capture, keep their relative layout, place them straight on the background."""
+    check_upscale(src, scale)
     img = opaque(Image.open(src).convert("RGBA"))
     for x0, y0, x1, y1 in panels:
         if not (0 <= x0 < x1 < img.width and 0 <= y0 < y1 < img.height):
