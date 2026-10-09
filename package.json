@@ -2173,46 +2173,10 @@
           {
             "id": "cluster-dashboard-v1.0.0",
             "title": "See What You Have",
-            "description": "Right-click a cluster and select **Cluster Dashboard** to see what is in it on one page: connection status, round-trip time, and an inventory of every database and collection with storage size, index size and document count. Sort, filter and drill into any database.\n[Open DocumentDB Connections](command:connectionsView.focus)",
+            "description": "Right-click a cluster and select **Cluster Dashboard** to see what is in it on one page: connection status, round-trip time, and an inventory of every database and collection with storage size, index size and document count. Sort, filter and drill into any database, then open a collection, an Interactive Shell or a Query Playground right from the list.\n[Open DocumentDB Connections](command:connectionsView.focus)",
             "media": {
               "image": "resources/walkthroughs/cluster-dashboard.png",
               "altText": "Cluster Dashboard with connection status, storage and document metrics, and a filterable database inventory"
-            }
-          },
-          {
-            "id": "collection-view-v1.0.0",
-            "title": "Explore Data in the Collection View",
-            "description": "Open any collection to build a query with filter, project and sort editors. Field names, operators and values are suggested from your actual data as you type. Browse the results as a **Table**, a **Tree** or **JSON**, and create, edit or delete documents in place.",
-            "media": {
-              "image": "resources/walkthroughs/collection-view.png",
-              "altText": "Collection View with a query, autocompletion suggestions and results in a table"
-            }
-          },
-          {
-            "id": "interactive-shell-v1.0.0",
-            "title": "Ask the Next Question in the Interactive Shell",
-            "description": "Right-click a cluster, database or collection and select **Open Interactive Shell**. Use `show dbs`, `use <db>`, persistent variables, syntax highlighting and tab completion, right in a VS Code terminal. Nothing to install: the shell is built in. One click takes your query from the Collection View to the shell and back. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/interactive-shell)",
-            "media": {
-              "image": "resources/walkthroughs/interactive-shell.png",
-              "altText": "Interactive Shell with syntax highlighting and tab completion"
-            }
-          },
-          {
-            "id": "query-playground-v1.0.0",
-            "title": "Save Your Work in a Query Playground",
-            "description": "Right-click a database or collection and select **New Query Playground**. Write JavaScript in `.documentdb.js` files, run each block with its own **Run** button, and keep the queries you want to reuse next to your code. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/query-playground)",
-            "media": {
-              "image": "resources/walkthroughs/query-playground.png",
-              "altText": "Query Playground with Run buttons above each query block and results in a side panel"
-            }
-          },
-          {
-            "id": "query-insights-v1.0.0",
-            "title": "Find Out Why a Query Is Slow, and Fix It",
-            "description": "Run a query in the Collection View and open the **Query Insights** tab: see the query plan, then execution statistics with a Good, Fair or Poor rating, then optional AI recommendations from GitHub Copilot. Act on them in the **Indexes** tab: create, hide or delete indexes next to the query they affect.",
-            "media": {
-              "image": "resources/walkthroughs/query-insights-streaming.png",
-              "altText": "Query Insights streaming an AI summary and index recommendations"
             }
           },
           {
