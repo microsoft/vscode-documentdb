@@ -15,7 +15,9 @@ import type * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
+import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
 import { SettingsHintError } from '../shell/SettingsHintError';
+import { prepareDriverConnectionString } from '../srv/prepareDriverConnectionString';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import {
     type MainToWorkerMessage,
@@ -101,6 +103,7 @@ export class WorkerSessionManager implements vscode.Disposable {
     /** Set before intentional worker termination to suppress the onWorkerExit callback. */
     private _terminatingIntentionally = false;
     private _startup: WorkerStartup | undefined;
+    private _startupAbortController: AbortController | undefined;
 
     // ─── Telemetry tracking ──────────────────────────────────────────────────
     /** Number of workers spawned during this manager's lifetime. */
@@ -196,6 +199,7 @@ export class WorkerSessionManager implements vscode.Disposable {
      */
     async shutdown(): Promise<void> {
         if (!this._worker || this._workerState === 'idle') {
+            this.terminateWorker('intentional');
             return;
         }
 
@@ -233,6 +237,8 @@ export class WorkerSessionManager implements vscode.Disposable {
         telemetryContext: WorkerStartupTelemetryContext,
     ): Promise<void> {
         let originalFailure: { error: unknown } | undefined;
+        const controller = new AbortController();
+        this._startupAbortController = controller;
 
         try {
             await callWithTelemetryAndErrorHandling('worker.startup', async (context) => {
@@ -262,10 +268,19 @@ export class WorkerSessionManager implements vscode.Disposable {
                 }
 
                 try {
-                    await this.initializeWorker(clusterId, initMsg, initTimeoutMs);
+                    await this.initializeWorker(
+                        clusterId,
+                        initMsg,
+                        initTimeoutMs,
+                        startup,
+                        controller.signal,
+                        telemetryContext,
+                    );
                 } catch (error) {
-                    this.finishStartup(error instanceof UserCancelledError ? 'canceled' : 'failed');
-                    this.terminateWorker('intentional');
+                    if (this._startupAbortController === controller) {
+                        this.finishStartup(error instanceof UserCancelledError ? 'canceled' : 'failed');
+                        this.terminateWorker('intentional');
+                    }
                     originalFailure = { error };
                     if (startup.outcome === 'terminated' || startup.outcome === 'canceled') {
                         throw new UserCancelledError('workerStartup');
@@ -277,6 +292,10 @@ export class WorkerSessionManager implements vscode.Disposable {
             });
         } catch (error) {
             throw originalFailure ? originalFailure.error : error;
+        } finally {
+            if (this._startupAbortController === controller) {
+                this._startupAbortController = undefined;
+            }
         }
 
         if (originalFailure) {
@@ -288,13 +307,47 @@ export class WorkerSessionManager implements vscode.Disposable {
         clusterId: string,
         initMsg: MainToWorkerMessage & { type: 'init' },
         initTimeoutMs: number,
+        startup: WorkerStartup,
+        abortSignal: AbortSignal,
+        telemetryContext: WorkerStartupTelemetryContext,
     ): Promise<void> {
         this._workerState = 'spawning';
+        const options = { ...initMsg.clientOptions };
+        const usesOidc = initMsg.authMechanism === 'MicrosoftEntraID' || initMsg.authMechanism === 'ManagedIdentity';
+        const prepared = await prepareDriverConnectionString({
+            connectionString: initMsg.connectionString,
+            options: usesOidc ? { ...options, authMechanism: 'MONGODB-OIDC', tls: true } : options,
+            surface: initMsg.persistent ? 'shell' : 'playground',
+            correlation: {
+                ...telemetryContext,
+                startupCorrelationId: startup.requestId,
+            },
+            startupTelemetry: startup.telemetry,
+            abortSignal,
+        });
+        if (abortSignal.aborted) {
+            throw new UserCancelledError('workerStartup');
+        }
+        // Keep the worker's OIDC callback local, and never structured-clone driver functions.
+        const preparedInitMsg: MainToWorkerMessage & { type: 'init' } = {
+            ...initMsg,
+            connectionString: prepared.connectionString,
+            clientOptions: {
+                serverSelectionTimeoutMS: prepared.options.serverSelectionTimeoutMS,
+                tlsAllowInvalidCertificates: prepared.options.tlsAllowInvalidCertificates,
+                appName: prepared.options.appName,
+                tls: prepared.options.tls,
+            },
+            oidcAllowedHosts: getOidcAllowedHosts(initMsg.connectionString),
+        };
         this._spawnCount++;
         this._lastSpawnTime = Date.now();
 
         // Resolve worker script path (same directory as the main bundle in dist/)
         const workerPath = path.join(__dirname, 'playgroundWorker.js');
+        if (abortSignal.aborted) {
+            throw new UserCancelledError('workerStartup');
+        }
         this._worker = new Worker(workerPath);
         this._workerClusterId = clusterId;
 
@@ -324,7 +377,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             this._pendingRequests.clear();
         });
 
-        await this.sendRequest<void>(initMsg, initTimeoutMs, settingsKeys.connectionTimeout);
+        await this.sendRequest<void>(preparedInitMsg, initTimeoutMs, settingsKeys.connectionTimeout);
         this.finishStartup('succeeded');
         this._workerState = 'ready';
     }
@@ -569,6 +622,7 @@ export class WorkerSessionManager implements vscode.Disposable {
     // ─── Private: Worker cleanup ─────────────────────────────────────────────
 
     private terminateWorker(reason: 'intentional' | 'forced'): void {
+        this._startupAbortController?.abort();
         this.finishStartup('terminated');
         const wasAlive = !!this._worker;
 

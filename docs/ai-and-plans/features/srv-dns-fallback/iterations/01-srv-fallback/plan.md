@@ -643,7 +643,7 @@ await this.connect(startup, prepared.connectionString, prepared.options, credent
 `path=fallback, mongodb://…`, `MongoClient` must receive the rewritten string, while
 `CredentialCache`, `getHostsFromConnectionString` and `connect.staticmetadata` see the original.
 
-**Done.** `@M5@` `feat(srv): wire ClustersClient and show fallback use in the cluster tooltip`.
+**Done.** `d7df1147` `feat(srv): wire ClustersClient and show fallback use in the cluster tooltip`.
 `initializeClient` calls `prepareDriverConnectionString` after `connect.staticmetadata`, passing
 `startup.telemetry` so `connect.startup` gets `srvResolution` and `srvResolutionDurationMs`.
 `connect()` gets the original string as a separate parameter for the TLS-exception (`isLocalish`)
@@ -698,6 +698,34 @@ review:
   shell.
 - **R1:** an Entra ID and a managed identity SRV startup on the Node.js path and on the forced
   fallback path both reach `new Worker(...)`; the host never throws an OIDC argument error.
+
+**Done.** `@M6@` `feat(srv): resolve SRV on the host for the shell and query playground`.
+`initializeWorker` calls `prepareDriverConnectionString` before `new Worker(...)`, with
+`authMechanism: 'MONGODB-OIDC'` and `tls: true` on a copy of the options for Entra ID and managed
+identity, as the worker does itself. It posts a copy of `initMsg` with the prepared string, the
+`SerializableMongoClientOptions` fields from the prepared options (the whole serializable type, so
+nothing the worker used before is dropped, and no functions), and `oidcAllowedHosts` computed from
+the original. The worker uses them through `getWorkerOidcAllowedHosts`
+(`workerOidcAllowedHosts.ts`), a small pure helper that the worker bundle imports without pulling
+in any resolver code. Each startup has its own `AbortController`; `terminateWorker`, which
+`killWorker`, `dispose` and `shutdown` reach, aborts it, and the signal is checked after
+preparation and again right before `new Worker(...)`. `sendRequest` still gets the full
+`initTimeoutMs` after preparation (D0018). `ShellSessionManager.extractHosts` and the banner read
+the caller's original `initMsg`. No startup stage was added or renamed; preparation time is the
+adapter's `srvResolutionDurationMs` on `worker.startup`. 20 new tests, including pending-DNS
+cancellation through the playground and shell paths, shutdown before a worker exists, and the real
+adapter and resolver with injected DNS plus the real driver preflight for both OIDC methods on the
+Node.js and forced-fallback paths. Bundle check (M5/M6 gate, `webpack-dev-ext`): `dns-packet`,
+`rewriteSrvUri`, `resolveSrvFallback` and `prepareDriverConnectionString` occur in `dist/main.js`
+and not in `dist/playgroundWorker.js` (D0008).
+
+**Deviation (coupled fix).** `PlaygroundEvaluator.evaluate` wraps `ensureWorker` in
+`callWithTelemetryAndErrorHandling('playground.connect', …)`, which swallows a
+`UserCancelledError` even with `rethrow = true`. The evaluator would then have gone on to
+`sendEval` after a cancellation during DNS preparation: exactly the R2 hazard. It now uses the same
+"original failure" pattern as `spawnWorker` and rethrows the original error. `shutdown()` also
+calls `terminateWorker` when no worker exists yet, so a graceful shutdown during preparation
+aborts it. Approved by the coordinator (confidence > 90 %: without the fix, R2 is not met).
 
 ---
 
@@ -790,7 +818,7 @@ the data shape must already serve both.
 a connection into a folder: the tooltip still shows the line); the tooltip contains the line only
 for `fallback`; it is gone after `deleteClient`.
 
-**Done.** `@M5@` (same commit as WI-5). `ClustersClient.getSrvResolution(clusterId)` returns the
+**Done.** `d7df1147` (same commit as WI-5). `ClustersClient.getSrvResolution(clusterId)` returns the
 in-memory `SrvResolutionSummary` from the client instance in `_clients`, so it is keyed by
 `clusterId` and disappears with `deleteClient` and on reload. One helper,
 `src/documentdb/srv/srvResolutionTooltip.ts`, renders the line as

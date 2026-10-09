@@ -189,15 +189,29 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         }
 
         onProgress?.(l10n.t('Authenticating…'));
-        await callWithTelemetryAndErrorHandling('playground.connect', async (context) => {
-            context.errorHandling.suppressDisplay = true;
-            context.errorHandling.rethrow = true;
-            context.telemetry.properties.authMethod = initMsg.authMechanism;
-            context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
-            await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs(), {
-                sessionId: this._sessionId,
+        let originalFailure: { error: unknown } | undefined;
+        try {
+            await callWithTelemetryAndErrorHandling('playground.connect', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.errorHandling.rethrow = true;
+                context.telemetry.properties.authMethod = initMsg.authMechanism;
+                context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
+                try {
+                    await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs(), {
+                        sessionId: this._sessionId,
+                    });
+                } catch (error) {
+                    originalFailure = { error };
+                    throw error;
+                }
             });
-        });
+        } catch (error) {
+            throw originalFailure ? originalFailure.error : error;
+        }
+        // The telemetry wrapper swallows cancellation even when rethrow is enabled.
+        if (originalFailure) {
+            throw originalFailure.error;
+        }
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
         // Reset console output counter for this eval run
