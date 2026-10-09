@@ -5,9 +5,14 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ClustersClient } from '../documentdb/ClustersClient';
+import { notifySrvResolutionChanged } from '../documentdb/srv/srvResolutionSummary';
+import type { Experience } from '../DocumentDBExperiences';
 import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { BaseExtendedTreeDataProvider } from './BaseExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
+import { ClusterItemBase, type EphemeralClusterCredentials } from './documentdb/ClusterItemBase';
+import type { BaseClusterModel, TreeCluster } from './models/BaseClusterModel';
 
 jest.mock('../extensionVariables', () => ({
     ext: {
@@ -19,9 +24,6 @@ jest.mock('../extensionVariables', () => ({
 class TestProvider extends BaseExtendedTreeDataProvider<TreeElement> {
     getChildren(): Promise<TreeElement[] | null | undefined> {
         return Promise.resolve([]);
-    }
-    getTreeItem(): Promise<vscode.TreeItem> {
-        return Promise.resolve({});
     }
     public fetch(
         element: TreeElement,
@@ -42,6 +44,127 @@ function actionContext(): IActionContext {
 }
 
 const clusterElement = { id: 'view/cluster/db', cluster: { clusterId: 'cluster-1' } } as unknown as TreeElement;
+
+class TooltipClusterItem extends ClusterItemBase {
+    public constructor(treeId = 'folder/stable-cluster', clusterId = 'stable-cluster') {
+        super({
+            treeId, clusterId, name: 'Cluster',
+            dbExperience: { api: 'MongoDB' } as unknown as Experience,
+        } as TreeCluster<BaseClusterModel>);
+    }
+
+    protected authenticateAndConnect(): Promise<ClustersClient | null> {
+        return Promise.resolve(null);
+    }
+
+    public getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
+        return Promise.resolve(undefined);
+    }
+
+    public override getTreeItem(): vscode.TreeItem {
+        // Simulates discovery subclasses that replace, rather than call, the base tooltip.
+        return { id: this.id, tooltip: new vscode.MarkdownString('Discovery override') };
+    }
+}
+
+describe('fallback tooltip row refresh', (): void => {
+    afterEach((): void => {
+        jest.restoreAllMocks();
+    });
+
+    it('refreshes each rendered row of the cluster once without refreshing other clusters', async (): Promise<void> => {
+        const provider = new TestProvider();
+        const first = new TooltipClusterItem();
+        const second = new TooltipClusterItem('another-folder/stable-cluster');
+        const other = new TooltipClusterItem('folder/other-cluster', 'other-cluster');
+        const summary = jest.spyOn(ClustersClient, 'getSrvResolution').mockReturnValue(undefined);
+        const changed = jest.fn();
+        const listener = provider.onDidChangeTreeData(changed);
+        try {
+            for (const item of [first, second, other]) {
+                expect((await provider.getTreeItem(item)).tooltip).toHaveProperty('value', 'Discovery override');
+            }
+            await provider.getTreeItem(first);
+            summary.mockReturnValue({ path: 'fallback', nodeErrorCode: 'EBADRESP', resolvedAt: 1 });
+            notifySrvResolutionChanged('stable-cluster');
+            expect(changed.mock.calls).toEqual([[first], [second]]);
+            const tooltip = (await provider.getTreeItem(first)).tooltip as vscode.MarkdownString;
+            expect(tooltip.value).toContain('Discovery override');
+            expect(tooltip.value).toContain('**DNS:**');
+            expect(tooltip.value.match(/\*\*DNS:\*\*/g)).toHaveLength(1);
+            expect(changed).toHaveBeenCalledTimes(2);
+        } finally {
+            listener.dispose();
+            provider.dispose();
+        }
+    });
+
+    it('ignores other clusters and removes its subscription when disposed', async (): Promise<void> => {
+        const provider = new TestProvider();
+        const item = new TooltipClusterItem();
+        const changed = jest.fn();
+        provider.onDidChangeTreeData(changed);
+        await provider.getTreeItem(item);
+        notifySrvResolutionChanged('other-cluster');
+        expect(changed).not.toHaveBeenCalled();
+        provider.dispose();
+        notifySrvResolutionChanged('stable-cluster');
+        expect(changed).not.toHaveBeenCalled();
+    });
+
+    it('updates a collapsed row and omits the flag on the next render after the client is removed', async (): Promise<void> => {
+        const provider = new TestProvider();
+        const item = new TooltipClusterItem();
+        const summary = jest.spyOn(ClustersClient, 'getSrvResolution').mockReturnValue(undefined);
+        const changed = jest.fn();
+        provider.onDidChangeTreeData(changed);
+        try {
+            await provider.getTreeItem(item);
+            summary.mockReturnValue({ path: 'fallback', resolvedAt: 1 });
+            notifySrvResolutionChanged('stable-cluster');
+            expect(changed).toHaveBeenCalledTimes(1);
+            expect(((await provider.getTreeItem(item)).tooltip as vscode.MarkdownString).value).toContain('**DNS:**');
+            summary.mockReturnValue(undefined);
+            expect(((await provider.getTreeItem(item)).tooltip as vscode.MarkdownString).value).not.toContain('DNS');
+            expect(changed).toHaveBeenCalledTimes(1);
+        } finally {
+            provider.dispose();
+        }
+    });
+
+    it('does not refresh stale cluster rows removed by a parent refresh', async (): Promise<void> => {
+        const provider = new TestProvider();
+        const changed = jest.fn();
+        provider.onDidChangeTreeData(changed);
+        try {
+            await provider.getTreeItem(new TooltipClusterItem());
+            provider.refresh({ id: 'folder', getTreeItem: (): vscode.TreeItem => ({}) });
+            await Promise.resolve();
+            changed.mockClear();
+            notifySrvResolutionChanged('stable-cluster');
+            expect(changed).not.toHaveBeenCalled();
+        } finally {
+            provider.dispose();
+        }
+    });
+
+    it('fetches fresh children on the next expansion after a collapsed row refresh', async (): Promise<void> => {
+        const provider = new TestProvider();
+        const item = new TooltipClusterItem();
+        const oldChildren = [{ id: `${item.id}/old`, getTreeItem: (): vscode.TreeItem => ({}) }];
+        const newChildren = [{ id: `${item.id}/new`, getTreeItem: (): vscode.TreeItem => ({}) }];
+        const listDatabases = jest.fn().mockResolvedValueOnce(oldChildren).mockResolvedValueOnce(newChildren);
+        try {
+            await provider.getTreeItem(item);
+            await expect(provider.fetch(item, actionContext(), listDatabases)).resolves.toBe(oldChildren);
+            notifySrvResolutionChanged('stable-cluster');
+            await expect(provider.fetch(item, actionContext(), listDatabases)).resolves.toBe(newChildren);
+            expect(listDatabases).toHaveBeenCalledTimes(2);
+        } finally {
+            provider.dispose();
+        }
+    });
+});
 
 describe('BaseExtendedTreeDataProvider error translation', () => {
     let showErrorMessage: jest.SpyInstance;

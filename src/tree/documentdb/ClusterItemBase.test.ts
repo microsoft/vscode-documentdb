@@ -60,7 +60,7 @@ jest.mock('../../documentdb/CredentialCache', () => ({
 }));
 
 jest.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn(), exists: jest.fn().mockReturnValue(false) },
+    ClustersClient: { getClient: jest.fn(), exists: jest.fn().mockReturnValue(false), getSrvResolution: jest.fn() },
 }));
 
 jest.mock('../../extensionVariables', () => ({
@@ -109,6 +109,10 @@ class TestClusterItem extends ClusterItemBase {
     public getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return Promise.resolve(undefined);
     }
+
+    public setTooltip(tooltip: string | vscode.MarkdownString): void {
+        this.tooltipOverride = tooltip;
+    }
 }
 
 function makeCluster(): TreeCluster<BaseClusterModel> {
@@ -123,6 +127,53 @@ function makeCluster(): TreeCluster<BaseClusterModel> {
 function makeClient(listDatabases: jest.Mock): ClustersClient {
     return { listDatabases } as unknown as ClustersClient;
 }
+
+describe('ClusterItemBase SRV tooltips', (): void => {
+    afterEach((): void => {
+        jest.mocked(jest.requireMock<{ ClustersClient: typeof ClustersClient }>(
+            '../../documentdb/ClustersClient',
+        ).ClustersClient.getSrvResolution).mockReset();
+    });
+
+    it.each(['node', 'fallback', 'nodeErrorPassthrough', undefined] as const)(
+        'includes the DNS line only for %s',
+        (path): void => {
+            const client = jest.requireMock<{ ClustersClient: typeof ClustersClient }>(
+                '../../documentdb/ClustersClient',
+            ).ClustersClient;
+            jest.mocked(client.getSrvResolution).mockReturnValue(path ? { path, resolvedAt: 1 } : undefined);
+            const item = new TestClusterItem({ ...makeCluster(), treeId: 'folder/cluster-1' }, null);
+            const tooltip = item.getTreeItem().tooltip as vscode.MarkdownString;
+            expect(tooltip.value.includes('**DNS:**')).toBe(path === 'fallback');
+            expect(client.getSrvResolution).toHaveBeenLastCalledWith('cluster-1');
+        },
+    );
+
+    it('appends once to discovery overrides without mutating their markdown or theme-icon options', (): void => {
+        const client = jest.requireMock<{ ClustersClient: typeof ClustersClient }>(
+            '../../documentdb/ClustersClient',
+        ).ClustersClient;
+        jest.mocked(client.getSrvResolution).mockReturnValue({ path: 'fallback', resolvedAt: 1 });
+        const item = new TestClusterItem(makeCluster(), null);
+        const original = new vscode.MarkdownString('$(plug) **Reachability:** Direct');
+        original.supportThemeIcons = true;
+        item.setTooltip(original);
+        for (let render = 0; render < 2; render++) {
+            const tooltip = item.getTreeItem().tooltip as vscode.MarkdownString;
+            expect(tooltip.value.match(/\*\*DNS:\*\*/g)).toHaveLength(1);
+            expect(tooltip.supportThemeIcons).toBe(true);
+        }
+        expect(original.value).not.toContain('DNS');
+        jest.mocked(client.getSrvResolution).mockReturnValue(undefined);
+        expect((item.getTreeItem().tooltip as vscode.MarkdownString).value).toBe(original.value);
+    });
+
+    it('preserves plain-text overrides when no fallback was used', (): void => {
+        const item = new TestClusterItem(makeCluster(), null);
+        item.setTooltip('plain *text*');
+        expect(item.getTreeItem().tooltip).toBe('plain *text*');
+    });
+});
 
 describe('ClusterItemBase.getChildren — listDatabases failure handling', () => {
     beforeEach(() => {

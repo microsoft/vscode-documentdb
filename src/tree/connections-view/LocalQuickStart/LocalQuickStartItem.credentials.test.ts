@@ -77,6 +77,7 @@ const mockGetClient = jest.fn();
 jest.mock('../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         exists: jest.fn().mockReturnValue(false),
+        getSrvResolution: jest.fn(),
         getClient: (...args: unknown[]) => mockGetClient(...args),
     },
 }));

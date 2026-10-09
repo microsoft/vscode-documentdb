@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
 import { MongoClient } from 'mongodb';
 import { ext } from '../extensionVariables';
@@ -14,6 +14,13 @@ import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { NoAuthHandler } from './auth/NoAuthHandler';
 import { ClustersClient, getIndexExclusionReason, type IndexItemModel } from './ClustersClient';
 import { CredentialCache } from './CredentialCache';
+import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
+import { onDidChangeSrvResolution } from './srv/srvResolutionSummary';
+import * as connectionStringHelpers from './utils/connectionStringHelpers';
+import { getClusterMetadata, getDomainMetadata } from './utils/getClusterMetadata';
+import * as tlsException from './utils/tlsException';
+import type { MongoClientOptions } from 'mongodb';
+import type { SrvResolutionSummary } from './srv/srvResolutionSummary';
 
 interface RecordedTelemetry {
     readonly eventName: string;
@@ -29,6 +36,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     );
     return {
         ...actual,
+        appendExtensionUserAgent: jest.fn().mockReturnValue('test-extension'),
         parseError: (error: unknown): { message: string } => ({
             message: error instanceof Error ? error.message : String(error),
         }),
@@ -81,6 +89,19 @@ jest.mock('./utils/getClusterMetadata', () => ({
 
 jest.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: jest.fn() }));
 jest.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: jest.fn() }));
+jest.mock('./srv/prepareDriverConnectionString', () => ({ prepareDriverConnectionString: jest.fn() }));
+jest.mock('./utils/connectionStringHelpers', () => ({
+    ...jest.requireActual<typeof import('./utils/connectionStringHelpers')>('./utils/connectionStringHelpers'),
+    getHostsFromConnectionString: jest.fn(
+        jest.requireActual<typeof import('./utils/connectionStringHelpers')>('./utils/connectionStringHelpers').getHostsFromConnectionString,
+    ),
+}));
+jest.mock('./utils/tlsException', () => ({
+    ...jest.requireActual<typeof import('./utils/tlsException')>('./utils/tlsException'),
+    resolveAllowInvalidCertificates: jest.fn(
+        jest.requireActual<typeof import('./utils/tlsException')>('./utils/tlsException').resolveAllowInvalidCertificates,
+    ),
+}));
 
 describe('ClustersClient', () => {
     it('should be defined', () => {
@@ -98,8 +119,14 @@ describe('regular connection startup diagnostics', () => {
         jest.useFakeTimers();
         mockTelemetryEvents.length = 0;
         ClustersClient._clients.clear();
+        jest.mocked(prepareDriverConnectionString).mockReset().mockImplementation(async (input) => {
+            if (input.startupTelemetry) {
+                input.startupTelemetry.properties.srvResolution = 'notSrv';
+            }
+            return { connectionString: input.connectionString, options: input.options, srvResolution: 'notSrv' };
+        });
         CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://private-host:27017');
-        mockConnect.mockImplementation(async (): Promise<void> => {
+        mockConnect.mockReset().mockImplementation(async (): Promise<void> => {
             jest.advanceTimersByTime(30);
         });
         mockClose.mockResolvedValue(undefined);
@@ -302,6 +329,112 @@ describe('regular connection startup diagnostics', () => {
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
         expect(jest.mocked(MongoClient)).not.toHaveBeenCalled();
     });
+
+    it('hands only the transient URI and prepared options to the driver, retaining original metadata and credentials', async () => {
+        const original = 'mongodb+srv://original.global.mongocluster.cosmos.azure.com/';
+        const rewritten = 'mongodb://resolved.example.com:27017/?tls=true';
+        const callback = jest.fn();
+        const options: MongoClientOptions = { authMechanismProperties: { OIDC_CALLBACK: callback } };
+        const preparedOptions: MongoClientOptions = { ...options, tls: true };
+        const summary: SrvResolutionSummary = { path: 'fallback', nodeErrorCode: 'EBADRESP', resolvedAt: 1 };
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, original);
+        const credentials = CredentialCache.getCredentials(clusterId);
+        const getHosts = jest.mocked(connectionStringHelpers.getHostsFromConnectionString);
+        jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: original,
+            options,
+        });
+        jest.mocked(prepareDriverConnectionString).mockImplementationOnce(async (input) => {
+            expect(getHosts).toHaveBeenCalledWith(original);
+            expect(jest.mocked(callWithTelemetryAndErrorHandling).mock.calls.some(([name]) => name === 'connect.staticmetadata')).toBe(true);
+            input.startupTelemetry!.properties.srvResolution = 'fallback';
+            input.startupTelemetry!.measurements.srvResolutionDurationMs = 5;
+            return { connectionString: rewritten, options: preparedOptions, srvResolution: 'fallback', summary };
+        });
+        const changed = jest.fn();
+        const listener = onDidChangeSrvResolution(changed);
+        try {
+            const client = await ClustersClient.getClient(clusterId);
+            await Promise.resolve();
+            expect(MongoClient).toHaveBeenCalledWith(rewritten, preparedOptions);
+            expect(jest.mocked(MongoClient).mock.calls[0][1]).toBe(preparedOptions);
+            expect(preparedOptions.authMechanismProperties?.OIDC_CALLBACK).toBe(callback);
+            expect(CredentialCache.getCredentials(clusterId)).toBe(credentials);
+            expect(credentials?.connectionString).toBe(original);
+            const hosts = ['original.global.mongocluster.cosmos.azure.com'];
+            expect(getDomainMetadata).toHaveBeenCalledWith(hosts);
+            expect(getClusterMetadata).toHaveBeenCalledWith(client.getMongoClient(), hosts);
+            expect(ClustersClient.getSrvResolution(clusterId)).toBe(summary);
+            expect(startupEvent().telemetry).toMatchObject({
+                properties: { srvResolution: 'fallback' },
+                measurements: { srvResolutionDurationMs: 5 },
+            });
+            expect(changed).toHaveBeenCalledTimes(1);
+            expect(changed).toHaveBeenCalledWith(clusterId);
+            await ClustersClient.getClient(clusterId);
+            expect(prepareDriverConnectionString).toHaveBeenCalledTimes(1);
+            expect(changed).toHaveBeenCalledTimes(1);
+        } finally {
+            listener.dispose();
+        }
+    });
+
+    it('evaluates the TLS exception policy against the original SRV URI on driver failure', async () => {
+        const original = 'mongodb+srv://original.example.com/';
+        const rewritten = 'mongodb://resolved.example.com/';
+        const policy = jest.mocked(tlsException.resolveAllowInvalidCertificates).mockReturnValueOnce(undefined);
+        jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: original, options: {},
+        });
+        jest.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
+            connectionString: rewritten, options: {}, srvResolution: 'fallback',
+        });
+        const failure = new Error('ECONNREFUSED');
+        mockConnect.mockRejectedValueOnce(failure);
+        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
+        expect(policy).toHaveBeenCalledWith(undefined, original);
+        expect(failure.message).toBe('ECONNREFUSED');
+    });
+
+    it.each(['node', 'fallback', 'nodeErrorPassthrough', 'notSrv'] as const)(
+        'keeps only the host-free summary for %s and removes it with the client',
+        async (path): Promise<void> => {
+            const summary: SrvResolutionSummary | undefined = path === 'notSrv' ? undefined : {
+                path, nodeErrorCode: path === 'node' ? undefined : 'EBADRESP', resolvedAt: 1,
+            };
+            jest.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
+                connectionString: 'mongodb://private-host:27017', options: {}, srvResolution: path, summary,
+            });
+            const changed = jest.fn();
+            const listener = onDidChangeSrvResolution(changed);
+            try {
+                await ClustersClient.getClient(clusterId);
+                expect(ClustersClient.getSrvResolution(clusterId)).toBe(summary);
+                expect(ClustersClient.getSrvResolution(`folder/${clusterId}`)).toBeUndefined();
+                expect(JSON.stringify(ClustersClient.getSrvResolution(clusterId)) ?? '').not.toContain('host');
+                expect(changed).toHaveBeenCalledTimes(path === 'fallback' ? 1 : 0);
+                await ClustersClient.deleteClient(clusterId);
+                expect(ClustersClient.getSrvResolution(clusterId)).toBeUndefined();
+                expect(changed).toHaveBeenCalledTimes(path === 'fallback' ? 1 : 0);
+            } finally {
+                listener.dispose();
+            }
+        },
+    );
+
+    it.each([new UserCancelledError('srvResolution'), new Error('original resolution failure')])(
+        'preserves SRV preparation failure %s without constructing a driver',
+        async (failure): Promise<void> => {
+            jest.mocked(prepareDriverConnectionString).mockRejectedValueOnce(failure);
+            await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
+            expect(MongoClient).not.toHaveBeenCalled();
+            expect(startupEvent().telemetry.properties).toMatchObject({
+                startupOutcome: failure instanceof UserCancelledError ? 'canceled' : 'failed',
+                lastStage: 'stage03PreparingClient',
+            });
+            expect(ClustersClient.getSrvResolution(clusterId)).toBeUndefined();
+        },
+    );
 });
 
 describe('getIndexExclusionReason', () => {

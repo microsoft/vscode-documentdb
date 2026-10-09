@@ -230,7 +230,10 @@ said 2023-08-25; the registry `time` map is authoritative), `@leichtgewicht/ip-c
 `notice@0` task in `.azure-pipelines/build.yml`, so it is not edited by hand.
 
 **Not done / deferred.** The bundle-placement and worker-size checks run at the M5/M6 gates, once
-the extension imports the package (see WI-0).
+the extension imports the package (see WI-0). **Done at the M5/M6 gate:** after
+`npm run webpack-dev-ext`, `dns-packet` and the resolver code occur in `dist/main.js` and not in
+`dist/playgroundWorker.js`. The worker bundle gains only the small `workerOidcAllowedHosts` helper
+(WI-6); no byte-for-byte size comparison against `v0.11.0` was run.
 
 ---
 
@@ -570,7 +573,7 @@ Assert that `notSrv` emits no event. Added after review:
   called.
 - **R5:** force switch with a successful probe and a failing fallback throws the fallback's error.
 
-**Done.** `@M4@` `feat(srv): core SRV resolve function, extension adapter and telemetry`.
+**Done.** `be0337b4` `feat(srv): core SRV resolve function, extension adapter and telemetry`.
 The package's `resolveSrvForDriver()` (`src/resolveSrvForDriver.ts`, report types in
 `src/report.ts`) implements steps 1–6. The extension adapter
 `src/documentdb/srv/prepareDriverConnectionString.ts` maps the two environment switches to
@@ -639,6 +642,16 @@ await this.connect(startup, prepared.connectionString, prepared.options, credent
 **Tests:** extend `ClustersClient.test.ts`. With the helper mocked to return
 `path=fallback, mongodb://…`, `MongoClient` must receive the rewritten string, while
 `CredentialCache`, `getHostsFromConnectionString` and `connect.staticmetadata` see the original.
+
+**Done.** `@M5@` `feat(srv): wire ClustersClient and show fallback use in the cluster tooltip`.
+`initializeClient` calls `prepareDriverConnectionString` after `connect.staticmetadata`, passing
+`startup.telemetry` so `connect.startup` gets `srvResolution` and `srvResolutionDurationMs`.
+`connect()` gets the original string as a separate parameter for the TLS-exception (`isLocalish`)
+check. The audit of `connect()` found no other use of the string: credentials, `hosts`, metadata
+and display keep the original, and the driver gets the rewritten string and `prepared.options`.
+The cached-reconnect path is unchanged (D0013). Tests cover the rewritten string reaching
+`MongoClient` while everything else sees the original, cancellation (no client created), error
+identity and the startup property.
 
 ---
 
@@ -776,6 +789,41 @@ the data shape must already serve both.
 **Tests:** the summary is set for each path and contains no host; it is keyed by `clusterId` (move
 a connection into a folder: the tooltip still shows the line); the tooltip contains the line only
 for `fallback`; it is gone after `deleteClient`.
+
+**Done.** `@M5@` (same commit as WI-5). `ClustersClient.getSrvResolution(clusterId)` returns the
+in-memory `SrvResolutionSummary` from the client instance in `_clients`, so it is keyed by
+`clusterId` and disappears with `deleteClient` and on reload. One helper,
+`src/documentdb/srv/srvResolutionTooltip.ts`, renders the line as
+`**DNS:** SRV record resolved by the extension's fallback resolver, because VS Code's DNS resolver
+could not use the reply (`EBADRESP`).` (label and message localized separately; no hostnames), and
+only for `path === 'fallback'`. It is called from `buildClusterTooltip` (Connections view and
+Local Quick Start; `clusterId` added to `ClusterPresentationModel`), from
+`ClusterItemBase.getTreeItem`, and from `BaseExtendedTreeDataProvider.getTreeItem` for every
+`ClusterItemBase`. The provider is the choke point that also covers subclasses that replace the
+tooltip (Kubernetes, Azure VM and the Atlas item, which the plan did not list). A dedupe guard stops
+the line from appearing twice.
+
+**Refresh mechanism.** After a successful connection whose path is `fallback`, `getClient` fires
+`onDidChangeSrvResolution(clusterId)`. Each `BaseExtendedTreeDataProvider` keeps a map from
+`clusterId` to the rows it has rendered (cleared on `clearParentCache`, on a subtree `refresh`, and
+on dispose) and fires `onDidChangeTreeData` for each row, so VS Code calls `getTreeItem` again.
+
+**Deviation.** Approved by the coordinator (confidence ≥ 85 %):
+
+- **One extra `listDatabases` per fallback connection is accepted.** For an expanded row, VS Code
+  also asks for the children again. The coding agent first added a one-shot children-reuse cache to
+  `BaseExtendedTreeDataProvider` to avoid that second listing. It was removed in review: it put
+  stateful caching into the provider every tree uses, and if the row was collapsed when the event
+  fired, the cached promise stayed and the next expansion would have returned old children, even
+  after a disconnect. Only affected users pay the extra listing.
+- **No refresh on `deleteClient`.** Firing on an expanded row would make VS Code call
+  `getChildren`, which reconnects silently after a disconnect. The summary disappears with the
+  client, so the next render omits the line.
+- **Lazy `resolveTreeItem` was rejected**: VS Code calls it only when `tooltip` is undefined, and
+  caches the result per item, so a hover before the first connection would hide the line.
+- `SrvResolutionTelemetry`'s property and measurement types were widened to
+  `ITelemetryContext['properties']` and `['measurements']`, so the startup contexts (which can hold
+  `TelemetryTrustedValue`) type-check.
 
 ---
 

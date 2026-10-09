@@ -12,8 +12,8 @@ import type { ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import type { SrvResolutionSurface } from './prepareDriverConnectionString';
 
 export interface SrvResolutionTelemetry {
-    properties: Record<string, string | undefined>;
-    measurements: Record<string, number | undefined>;
+    properties: ITelemetryContext['properties'];
+    measurements: ITelemetryContext['measurements'];
 }
 
 function dnsServerClass(host: string): 'loopback' | 'private' | 'public' {

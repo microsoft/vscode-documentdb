@@ -5,6 +5,8 @@
 
 import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { onDidChangeSrvResolution } from '../documentdb/srv/srvResolutionSummary';
+import { withSrvResolutionTooltip } from '../documentdb/srv/srvResolutionTooltip';
 import { ext } from '../extensionVariables';
 import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { dispose } from '../utils/vscodeUtils';
@@ -13,6 +15,7 @@ import { type TreeElement } from './TreeElement';
 import { isTreeElementWithContextValue, type TreeElementWithContextValue } from './TreeElementWithContextValue';
 import { isTreeElementWithRetryChildren } from './TreeElementWithRetryChildren';
 import { TreeParentCache } from './TreeParentCache';
+import { ClusterItemBase } from './documentdb/ClusterItemBase';
 
 /**
  * Base implementation of the ExtendedTreeDataProvider interface that provides
@@ -141,6 +144,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * Derived classes can add their own disposables to this array.
      */
     protected readonly disposables: vscode.Disposable[] = [];
+    private readonly renderedClusters = new Map<string, Map<string, T>>();
 
     /**
      * Event fired when tree data changes. Required by vscode.TreeDataProvider.
@@ -151,6 +155,13 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
 
     constructor() {
         super(() => this.dispose());
+        this.disposables.push(
+            onDidChangeSrvResolution((clusterId) => {
+                for (const element of this.renderedClusters.get(clusterId)?.values() ?? []) {
+                    this.onDidChangeTreeDataEmitter.fire(element);
+                }
+            }),
+        );
     }
 
     /**
@@ -161,6 +172,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      */
     protected clearParentCache(): void {
         this.parentCache.clear();
+        this.renderedClusters.clear();
     }
 
     /**
@@ -206,7 +218,18 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * @returns Promise resolving to the tree item representation
      */
     async getTreeItem(element: T): Promise<vscode.TreeItem> {
-        return element.getTreeItem();
+        const treeItem = await element.getTreeItem();
+        if (element instanceof ClusterItemBase && element.id) {
+            let rows = this.renderedClusters.get(element.cluster.clusterId);
+            if (!rows) {
+                rows = new Map();
+                this.renderedClusters.set(element.cluster.clusterId, rows);
+            }
+            rows.set(element.id, element);
+            // This final choke point also covers subclasses that replace the base tooltip.
+            treeItem.tooltip = withSrvResolutionTooltip(treeItem.tooltip, element.cluster.clusterId);
+        }
+        return treeItem;
     }
 
     /**
@@ -307,6 +330,16 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      */
     refresh(element?: T): void {
         if (element?.id) {
+            for (const [clusterId, rows] of this.renderedClusters) {
+                for (const id of rows.keys()) {
+                    if (id.startsWith(`${element.id}/`)) {
+                        rows.delete(id);
+                    }
+                }
+                if (rows.size === 0) {
+                    this.renderedClusters.delete(clusterId);
+                }
+            }
             // We have an element with an ID
 
             // Handle potential stale reference issue:
@@ -683,6 +716,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * This includes the event emitter and any disposables registered by derived classes.
      */
     dispose(): void {
+        this.renderedClusters.clear();
         this.onDidChangeTreeDataEmitter.dispose();
         dispose(this.disposables);
     }

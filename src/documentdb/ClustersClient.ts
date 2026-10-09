@@ -59,6 +59,8 @@ import {
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
 import { SchemaStore } from './SchemaStore';
+import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
+import { notifySrvResolutionChanged, type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
@@ -196,6 +198,7 @@ export class ClustersClient {
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
+    private _srvResolution?: SrvResolutionSummary;
 
     /** In-memory cache for listDatabases results. */
     private _databasesCache: DatabaseItemModel[] | null = null;
@@ -370,8 +373,23 @@ export class ClustersClient {
             };
         });
 
-        // Connect with the configured options
-        await this.connect(startup, connectionString, options, credentials.emulatorConfiguration, abortSignal);
+        const prepared = await prepareDriverConnectionString({
+            connectionString,
+            options,
+            surface: 'extension',
+            correlation: { connectionCorrelationId: this.connectionCorrelationId },
+            abortSignal,
+            startupTelemetry: startup.telemetry,
+        });
+        this._srvResolution = prepared.summary;
+        await this.connect(
+            startup,
+            prepared.connectionString,
+            prepared.options,
+            credentials.emulatorConfiguration,
+            abortSignal,
+            connectionString,
+        );
 
         // Start metadata collection and store the promise
         this._clusterMetadataPromise = getClusterMetadata(this._mongoClient, hosts);
@@ -394,6 +412,7 @@ export class ClustersClient {
         options: MongoClientOptions,
         emulatorConfiguration?: EmulatorConfiguration,
         abortSignal?: AbortSignal,
+        originalConnectionString: string = connectionString,
     ): Promise<void> {
         // Create the client instance first so we hold a reference during connection.
         // This allows callers to abort via abortSignal by closing the underlying client.
@@ -460,7 +479,7 @@ export class ClustersClient {
             // ECONNREFUSED/self-signed failure show "local instance" troubleshooting copy.
             const isLocalish =
                 !!emulatorConfiguration?.isEmulator ||
-                !!resolveAllowInvalidCertificates(emulatorConfiguration?.disableEmulatorSecurity, connectionString);
+                !!resolveAllowInvalidCertificates(emulatorConfiguration?.disableEmulatorSecurity, originalConnectionString);
             if (isLocalish && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
@@ -544,6 +563,9 @@ export class ClustersClient {
             // Cluster metadata is set in initClient
             await client.initClient(abortSignal);
             ClustersClient._clients.set(clusterId, client);
+            if (client._srvResolution?.path === 'fallback') {
+                notifySrvResolutionChanged(clusterId);
+            }
         } catch (error) {
             // On failure (including abort), clean up the partially-created client
             void client._mongoClient?.close().catch(() => {
@@ -585,6 +607,10 @@ export class ClustersClient {
      */
     public static getExistingClient(clusterId: string): ClustersClient | undefined {
         return ClustersClient._clients.get(clusterId);
+    }
+
+    public static getSrvResolution(clusterId: string): SrvResolutionSummary | undefined {
+        return ClustersClient._clients.get(clusterId)?._srvResolution;
     }
 
     public static async deleteClient(clusterId: string): Promise<void> {

@@ -6,6 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { AuthMethodId, getAuthMethod, isSupportedAuthMethod } from '../../documentdb/auth/AuthMethod';
+import { appendSrvResolutionTooltipLine } from '../../documentdb/srv/srvResolutionTooltip';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../../documentdb/utils/tlsException';
 import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
@@ -21,7 +22,7 @@ import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 /** The fields a cluster row needs to render; a `Pick` so callers need not own the whole model. */
 export type ClusterPresentationModel = Pick<
     ConnectionClusterModel,
-    'name' | 'connectionString' | 'emulatorConfiguration' | 'selectedAuthMethod' | 'connectionUser'
+    'clusterId' | 'name' | 'connectionString' | 'emulatorConfiguration' | 'selectedAuthMethod' | 'connectionUser'
 >;
 
 /**
@@ -137,6 +138,7 @@ export function buildClusterTooltip(cluster: ClusterPresentationModel): vscode.M
         md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
     }
 
+    appendSrvResolutionTooltipLine(md, cluster.clusterId);
     return md;
 }
 

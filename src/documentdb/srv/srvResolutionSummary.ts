@@ -4,6 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { SrvResolutionPath, SrvResolutionReport } from '@documentdb-js/srv-resolver';
+import { EventEmitter, type Event } from 'vscode';
+
+let srvResolutionChanged: EventEmitter<string> | undefined;
+export const onDidChangeSrvResolution: Event<string> = (listener, thisArgs, disposables) => {
+    srvResolutionChanged ??= new EventEmitter<string>();
+    return srvResolutionChanged.event(listener, thisArgs, disposables);
+};
+
+export function notifySrvResolutionChanged(clusterId: string): void {
+    srvResolutionChanged?.fire(clusterId);
+}
 
 export interface SrvResolutionSummary {
     readonly path: SrvResolutionPath;
