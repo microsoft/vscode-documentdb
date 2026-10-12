@@ -87,4 +87,18 @@ describe('CollectionItem', () => {
         expect(children[0].id).toBe('connectionsView/cluster-1/db1/coll1/documents');
         expect(children[1].id).toBe('connectionsView/cluster-1/db1/coll1/indexes');
     });
+
+    it('keeps shard key fields with backticks inside their code span', () => {
+        const item = new CollectionItem(
+            cluster as never,
+            databaseInfo as never,
+            {
+                ...collectionInfo,
+                shardKey: { 'tick`[x](https://example.invalid)': 'hashed', userId: 1 },
+            } as never,
+        );
+        const tooltip = (item.getTreeItem().tooltip as { toString(): string }).toString();
+
+        expect(tooltip).toContain('``tick`[x](https://example.invalid): "hashed"``, `userId: 1`');
+    });
 });
