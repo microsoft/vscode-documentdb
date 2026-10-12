@@ -154,13 +154,17 @@ async function resolveFallback<T>(
     let lastCode: string = dns.CONNREFUSED;
     const failure = (code: string): FallbackDnsError =>
         new FallbackDnsError(code, type === 'SRV' ? 'querySrv' : 'queryTxt', name, serversTried);
-
-    for (const server of servers) {
+    const attemptServer = async (
+        server: DnsServerAddress,
+        countServer: boolean,
+    ): Promise<FallbackDnsResult<T> | undefined> => {
         throwIfCancelled(options.signal);
         if (Date.now() >= options.deadlineAt) {
             throw failure(dns.TIMEOUT);
         }
-        serversTried++;
+        if (countServer) {
+            serversTried++;
+        }
         const id = crypto.randomInt(0, 65536);
         const question: dnsPacket.Question = { name, type, class: 'IN' };
         const query = dnsPacket.encode({
@@ -180,7 +184,7 @@ async function resolveFallback<T>(
         } catch (error) {
             throwIfCancelled(options.signal);
             lastCode = socketErrorCode(error);
-            continue;
+            return undefined;
         }
         throwIfCancelled(options.signal);
         lastCode = reply.errorCode ?? dns.BADRESP;
@@ -188,7 +192,7 @@ async function resolveFallback<T>(
             throw failure(reply.errorCode);
         }
         if (reply.errorCode) {
-            continue;
+            return undefined;
         }
         return {
             records: recordsFromAnswers(reply.packet.answers ?? []),
@@ -196,6 +200,23 @@ async function resolveFallback<T>(
             transport,
             serversTried,
         };
+    };
+
+    const timedOutServers: DnsServerAddress[] = [];
+    for (const server of servers) {
+        const result = await attemptServer(server, true);
+        if (result) {
+            return result;
+        }
+        if (lastCode === dns.TIMEOUT) {
+            timedOutServers.push(server);
+        }
+    }
+    for (const server of timedOutServers) {
+        const result = await attemptServer(server, false);
+        if (result) {
+            return result;
+        }
     }
     throwIfCancelled(options.signal);
     throw failure(servers.length > 0 && Date.now() >= options.deadlineAt ? dns.TIMEOUT : lastCode);

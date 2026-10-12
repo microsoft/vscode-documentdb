@@ -176,6 +176,26 @@ describe('fallback DNS client', (): void => {
         expect(result.serversTried).toBe(2);
     });
 
+    it('retries a server once after a UDP timeout', async (): Promise<void> => {
+        const server = await stub((request): void => {
+            if (server.queries.length === 2) {
+                request.send(reply(request));
+            }
+        });
+        const result = await resolveSrvFallback(srvName, options([server], { udpTimeoutMs: 25 }));
+
+        expect(result.serversTried).toBe(1);
+        expect(server.queries).toHaveLength(2);
+        expect(server.queries[0].query.id).not.toBe(server.queries[1].query.id);
+    });
+
+    it('does not retry a server after SERVFAIL', async (): Promise<void> => {
+        const server = await stub((request): void => request.send(reply(request, [], 2)));
+
+        await expect(resolveSrvFallback(srvName, options([server]))).rejects.toMatchObject({ code: dns.SERVFAIL });
+        expect(server.queries).toHaveLength(1);
+    });
+
     it('returns TXT chunks as UTF-8 strings per record', async (): Promise<void> => {
         const server = await stub((request): void =>
             request.send(
