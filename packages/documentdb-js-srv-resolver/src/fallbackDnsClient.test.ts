@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as dnsPacket from 'dns-packet';
+import dgram from 'node:dgram';
 import dns from 'node:dns';
 
 import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient.js';
@@ -223,5 +224,25 @@ describe('fallback DNS client', (): void => {
         const outcome = resolveTxtFallback(srvName, { deadlineAt: Date.now() + 100, servers: ['bad'] });
         await expect(outcome).rejects.toBeInstanceOf(FallbackDnsError);
         await expect(outcome).rejects.toMatchObject({ code: dns.CONNREFUSED, syscall: 'queryTxt', serversTried: 0 });
+    });
+
+    it('fails fast when a UDP server refuses the query', async (): Promise<void> => {
+        const port = await new Promise<number>((resolve, reject): void => {
+            const socket = dgram.createSocket('udp4');
+            socket.once('error', reject);
+            socket.bind(0, '127.0.0.1', (): void => {
+                const address = socket.address();
+                socket.close((): void => resolve(address.port));
+            });
+        });
+        const started = Date.now();
+        const outcome = resolveSrvFallback(srvName, {
+            servers: [`127.0.0.1:${port}`],
+            deadlineAt: started + 3000,
+            udpTimeoutMs: 2000,
+        });
+
+        await expect(outcome).rejects.toMatchObject({ code: dns.CONNREFUSED, serversTried: 1 });
+        expect(Date.now() - started).toBeLessThan(1000);
     });
 });

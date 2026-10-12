@@ -322,6 +322,8 @@ A refused query fails within milliseconds, so a useless fallback attempt (the c-
 `127.0.0.1` case) costs almost nothing. Any refusal that comes from a difference between c-ares and
 our socket client gets fixed instead of going unnoticed. Telemetry separates the two root causes
 by `nodeErrorCode`, and `fallbackOutcome` shows whether the fallback helps for `ECONNREFUSED`.
+The fallback sends from a connected UDP socket because only a connected socket receives the refusal;
+an unconnected socket waits for the UDP timeout (found in PR #997 review P1).
 
 ### Rejected alternatives
 

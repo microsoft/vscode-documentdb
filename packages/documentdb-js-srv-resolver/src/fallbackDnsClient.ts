@@ -297,14 +297,6 @@ async function runAttempt(
     }
 }
 
-function normalizedAddress(host: string): string {
-    if (net.isIP(host) === 6) {
-        // UDP source addresses may use a different IPv6 spelling or omit the interface scope.
-        return new URL(`http://[${host.split('%')[0]}]/`).hostname;
-    }
-    return host;
-}
-
 function matchingReply(bytes: Buffer, id: number, question: dnsPacket.Question): Reply | undefined {
     const packet = dnsPacket.decode(bytes);
     const echoed = packet.questions?.[0];
@@ -344,7 +336,6 @@ function exchange(
             clearTimeout(timer);
             options.signal?.removeEventListener('abort', onAbort);
             udp?.removeAllListeners('message');
-            udp?.removeAllListeners('listening');
             if (udp) {
                 try {
                     udp.close();
@@ -394,24 +385,16 @@ function exchange(
         tcp?.on('error', (error: Error): void => finish(error));
         try {
             if (udp) {
-                udp.on('message', (bytes: Buffer, source: dgram.RemoteInfo): void => {
-                    if (
-                        source.port === server.port &&
-                        normalizedAddress(source.address) === normalizedAddress(server.host)
-                    ) {
-                        accept(bytes);
-                    }
-                });
-                udp.once('listening', (): void => {
+                udp.on('message', (bytes: Buffer): void => accept(bytes));
+                udp.connect(server.port, server.host, (): void => {
                     if (!settled) {
-                        udp.send(query, server.port, server.host, (error): void => {
+                        udp.send(query, (error): void => {
                             if (error) {
                                 finish(error);
                             }
                         });
                     }
                 });
-                udp.bind(0);
             } else if (tcp) {
                 tcp.on('data', (chunk: Buffer): void => {
                     received = Buffer.concat([received, chunk]);
