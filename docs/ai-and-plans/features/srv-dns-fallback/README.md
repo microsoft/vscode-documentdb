@@ -96,7 +96,7 @@ Increment 1 ([plan](./iterations/01-srv-fallback/plan.md), progress recorded per
 | 2026-10-09 | —    | VS Code-independent logic goes into workspace package `@documentdb-js/srv-resolver` (D0020, WI-0)              | [decisions.md](./decisions.md)                                                                                                 |
 | 2026-10-09 | —    | D0005, D0007–D0010 accepted; `connectToClient` deprecated; iteration 01 moved into a folder                    | [decisions.md](./decisions.md)                                                                                                 |
 | 2026-10-12 | -    | Increment 1 implemented; end-of-work review; simplified per operator review (D0022); manual checks 2-8 pending | [plan.md Outcome](./iterations/01-srv-fallback/plan.md#outcome), [code-review.md](./iterations/01-srv-fallback/code-review.md) |
-| 2026-10-12 | #997 | PR pre-review with the Copilot reviewer's comments cross-checked; proposed solutions, author decisions pending | [pr-997-review.md](./iterations/01-srv-fallback/pr-997-review.md)                                                              |
+| 2026-10-12 | #997 | PR pre-review with the Copilot reviewer's comments cross-checked; fixes applied per the author's decisions     | [pr-997-review.md](./iterations/01-srv-fallback/pr-997-review.md)                                                              |
 
 ## Decisions
 

@@ -20,17 +20,17 @@ Not yet done: the §6.1 step 3 validation gate with a model from a different ven
 
 | ID  | Source                 | Severity     | Finding                                                                | Author decision                      |
 | --- | ---------------------- | ------------ | ---------------------------------------------------------------------- | ------------------------------------ |
-| C1  | Copilot, valid         | Medium       | Webview errors never get the SRV explanation                           | Pending                              |
-| P1  | Review                 | Medium       | A refused DNS query costs a full UDP timeout, not milliseconds (D0012) | Pending                              |
+| C1  | Copilot, valid         | Medium       | Webview errors never get the SRV explanation                           | A: fixed in `c3b9c28b`               |
+| P1  | Review                 | Medium       | A refused DNS query costs a full UDP timeout, not milliseconds (D0012) | A: fixed in `af0af52f`               |
 | P2  | Review                 | Medium       | Troubleshooting link is 404 until the docs reach `main`                | No change: release process covers it |
 | P3  | Review                 | Medium       | Version is `0.11.1-preview`, not `0.11.1`                              | Dedicated work item                  |
-| P4  | Review                 | Low          | One UDP attempt per server, no retransmit                              | Pending                              |
-| C2  | Copilot, doc-only      | Low          | Force mode still runs the Node.js probe; D0010 says it skips it        | Pending                              |
-| P5  | Review                 | Low (latent) | Concurrent `ensureWorker()` during SRV preparation can orphan a worker | Pending                              |
-| P6  | Review                 | Info         | D0022 overstates what the driver still validates                       | Pending                              |
-| P7  | Review                 | Info         | `ClustersClient.getSrvResolution()` has no production caller           | Pending                              |
-| P8  | Review                 | Info         | Feature README still says the package is not published                 | Pending                              |
-| C3  | Copilot, **not valid** | None         | Lowercase DNS names before the parent-domain comparison                | Pending                              |
+| P4  | Review                 | Low          | One UDP attempt per server, no retransmit                              | A (refined): fixed in `c830c252`     |
+| C2  | Copilot, doc-only      | Low          | Force mode still runs the Node.js probe; D0010 says it skips it        | A: D0010 updated in `b3e142d7`       |
+| P5  | Review                 | Low (latent) | Concurrent `ensureWorker()` during SRV preparation can orphan a worker | C: `1c7e2f34`, issue #1002           |
+| P6  | Review                 | Info         | D0022 overstates what the driver still validates                       | A: D0022 updated in `44c6dd3c`       |
+| P7  | Review                 | Info         | `ClustersClient.getSrvResolution()` has no production caller           | A: keep, no change                   |
+| P8  | Review                 | Info         | Feature README still says the package is not published                 | A: fixed in `7e012e66`               |
+| C3  | Copilot, **not valid** | None         | Lowercase DNS names before the parent-domain comparison                | A: no change, replied in thread      |
 
 Checked and found correct: the rewritten string is never logged or persisted; telemetry carries
 only categorical codes, classes and counts; fallback queries use a random ID and source port and
@@ -68,7 +68,13 @@ Usually the tree connects first, so the user sees the explained error there.
 
 **Recommendation: A** in this PR, then reply in the Copilot thread. Leave B for `main`.
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): A**, as recommended.
+
+**Done in [`c3b9c28b`](https://github.com/microsoft/vscode-documentdb/commit/c3b9c28b).** The
+provider takes the message from a string or an `Error`, keeps the `UserCancelledError` exclusion
+and the `querySrv ` evidence check, and reads `syscall` and `code` only from `Error` objects. The
+old `'a non-Error value'` case is now a positive `'webview-relayed EBADRESP'` case; an unrelated
+string and a non-string value stay untranslated. Replied in the Copilot thread.
 
 ---
 
@@ -97,7 +103,13 @@ closed port on `127.0.0.1`: unconnected, no error after 3,000 ms; connected, `EC
 **Recommendation: A**, with a test that a closed UDP port fails within a few hundred milliseconds,
 and a one-line note in D0012 that the premise depends on a connected socket.
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): A**, as recommended.
+
+**Done in [`af0af52f`](https://github.com/microsoft/vscode-documentdb/commit/af0af52f).** The UDP
+socket is connected to the server and sends without an address. The manual source-address check
+and `normalizedAddress()` are removed because the kernel now filters replies by peer. New test:
+a closed UDP port on `127.0.0.1` rejects with `ECONNREFUSED` in under 1 s with a 2 s UDP timeout.
+D0012 gained a sentence saying the premise depends on the connected socket.
 
 ---
 
@@ -163,7 +175,15 @@ The affected users mostly sit behind a home router, which is often the only serv
 **Recommendation: A**, after P1 (so a refused server fails fast on both passes). If the branch must
 stay minimal, C now and A on `main`, decided from `fallbackErrorCode=ETIMEOUT` telemetry.
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): A**, as recommended.
+
+**Done in [`c830c252`](https://github.com/microsoft/vscode-documentdb/commit/c830c252).** Refined
+from A: the second pass retries only servers whose first attempt timed out. A refused server
+(fast after P1) or a `SERVFAIL`/`REFUSED` rcode is not retried, and an authoritative answer still
+stops at once. Each retry uses a new socket and query ID, and the shared deadline still bounds
+all attempts. `serversTried` keeps counting distinct servers, so `fallbackServersTried` keeps its
+meaning. New tests: a server that ignores the first query and answers the second; a `SERVFAIL`
+server is queried once.
 
 ---
 
@@ -185,7 +205,12 @@ fallback asks the same dead servers and fails too, so skipping the probe gains l
 
 **Recommendation: A**, then reply in the Copilot thread.
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): A**, as recommended.
+
+**Done in [`b3e142d7`](https://github.com/microsoft/vscode-documentdb/commit/b3e142d7).** D0010
+now says the switch always runs the fallback whatever Node's resolver returns, and records that the
+probe still runs first so forced events keep the probe fields. No code change. Replied in the
+Copilot thread.
 
 ---
 
@@ -210,7 +235,11 @@ was no `await` between the check and the assignment. Today the playground guards
 
 **Recommendation: C** for `release/0.11.1`, with an issue for A on `main` (CONTRIBUTING §6.5).
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): C**, as recommended.
+
+**Done in [`1c7e2f34`](https://github.com/microsoft/vscode-documentdb/commit/1c7e2f34).** One-line
+comment above the spawn check in `ensureWorker()`; no behaviour change. Option A is tracked in
+[#1002](https://github.com/microsoft/vscode-documentdb/issues/1002).
 
 ---
 
@@ -230,7 +259,11 @@ fallback path `srvMaxHosts` with `replicaSet` or with `loadBalanced` is accepted
 
 **Recommendation: A.**
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): A**, as recommended.
+
+**Done in [`44c6dd3c`](https://github.com/microsoft/vscode-documentdb/commit/44c6dd3c).** D0022
+names the exception: `srvMaxHosts` with `replicaSet` or `loadBalanced` is accepted on the fallback
+path.
 
 ---
 
@@ -248,7 +281,7 @@ fallback path `srvMaxHosts` with `replicaSet` or with `loadBalanced` is accepted
 
 **Recommendation: A.**
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): A**, as recommended. No change; D0021 stands.
 
 ---
 
@@ -262,7 +295,9 @@ and the new `publish_srv_resolver` workflow input plan to publish it after merge
 **Options.** A: change the cell to "published after merge, D0023". B: no change. **Recommendation:
 A.**
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): A**, as recommended.
+
+**Done in [`7e012e66`](https://github.com/microsoft/vscode-documentdb/commit/7e012e66).**
 
 ---
 
@@ -287,4 +322,5 @@ driver path.
 
 **Recommendation: A.**
 
-**Author decision:** _pending_
+**Author decision (2026-10-12): A**, as recommended. No code change; replied in the Copilot thread
+with the driver evidence.
