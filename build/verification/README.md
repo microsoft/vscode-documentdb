@@ -282,6 +282,10 @@ This is not a real `vscode-webview://` test, an extension-host E2E suite, or pro
 ## L2-dev: source scenarios
 
 Start `npm run watch:views` and open `http://localhost:18080/scenarios/` (127.0.0.1 also works).
+L2-dev must listen on port 18080: `vite.config.views.mjs` fixes `server.origin` to
+`http://localhost:18080` for the development CSP, so Monaco worker URLs still point there if Vite
+switches ports, and the Collection View and Document View routes fail with
+"Could not create web worker(s)" unless another server supplies those workers on port 18080.
 The serve-only [Vite plugin](../vite/webview-scenarios.mjs) lists every
 `/<view>/<scenario>/<theme>` route; unknown routes return 404 with that list.
 No scenario or helper URL uses query strings, which remote port forwarding mangles.

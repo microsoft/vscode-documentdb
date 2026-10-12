@@ -654,9 +654,17 @@ plumbing_ plus _new optional seams exposed alongside_.
 **No. The refactor is a source/API reshape, not a build-system change, and it is
 fully decoupled from the bundler choice.**
 
-Why our current toolchain already supports everything proposed:
+**2026-10-12, Stage 8 of the modernization:** The package is now ESM-only,
+with `tsc` emitting ES modules and declarations into `dist/`. The extension host
+and webviews are built with Vite. Vite also serves development webviews on port 18080. These independent changes are recorded in the
+[modernization plan](../../modernization/build-and-test-stack.md).
+The table and conclusion below describe the toolchain at the time of the API
+rework, not the current build architecture. The later "No Vite" passage in
+section 13.9 has the same historical scope.
 
-| Concern                          | Today                                                            | Does the rework force a change?                                                                                                                                                                                                                                             |
+Why the toolchain at the time supported everything proposed:
+
+| Concern                          | At the API rework                                                | Does the rework force a change?                                                                                                                                                                                                                                             |
 | -------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Package build                    | `tsc -p .` → CommonJS `dist/` + `.d.ts` (composite)              | **No.** `tsc` compiles all of `src/**` regardless of how many subpath entries exist. Adding `./client` / `./react` / `./server` is just adding entry files + `exports` / `typesVersions` map keys — the **same mechanism** `./server` already uses and which already works. |
 | Consumer (webview) bundle        | webpack + `swc-loader`, `target: web`, output ESM                | **No.** webpack resolves subpath `exports` natively and tree-shakes the React-free `./client` path. Optional `react` peer needs no loader change.                                                                                                                           |
