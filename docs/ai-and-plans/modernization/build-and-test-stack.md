@@ -3987,7 +3987,7 @@ Stage 0 must also be made.
     the Stage 1 to 3 records the re-evaluation found wrong, without inventing history (CI runs, the
     namespace explanation), and mark implemented, observed, attested and pending where they blur.
     S2-F01's ADO evidence is BuildId 240165962 at `e338339c`.
-    - **Done by the coordinator** (in the `S8: correct the Stage 0 to 3 records` commit). Each
+    - **Done by the coordinator** in `8e27139d`. Each
       correction is a dated note beside the original statement, which stays as history:
       - **S1-F04:** run 37021977737 did run and passed (Stage 2's opening bullets).
       - **S2-F05:** the Stage 2 head's run 37051119892 failed on Prettier and skipped Build, L1
@@ -4075,10 +4075,114 @@ Stage 0 must also be made.
   `verify:packages`; a green `main.yml` dispatch with `enforce_full_run=true`; and a publish dry
   run (check the workflow first, as in Stage 7). Ask the operator to queue both ADO builds again:
   W1 changes the lockfile, W3 the ADO npm build. Verify the drops as at G7 item 27.
+  - **Final verification (coordinator, 2026-10-12)** on `21b0da12`, the last commit that changes
+    code; every later Stage 8 commit changes documentation only.
+    - **L0:** `npm run build`; `npx vitest run` **298 files / 4,612 tests**;
+      `npm run test:verification` **126 Node, 79 browser**; `npm run lint`;
+      `npm run verify:packages` ("All package checks passed."); `npm run typecheck:tests`.
+      All passed. **Watch item:** `dockerCommand.test.ts` passed here and in every subagent run;
+      no recurrence.
+    - **L1:** `npm run package`: `vscode-documentdb-0.11.0.vsix`, 204 files, 8,504,243 bytes,
+      SHA-256 `68d28822…09de8`, copied to the kit as `artifacts/s8-21b0da12.vsix` with its
+      reports. `verify:vsix`: exit 0, **all 14 graphs `ok`**. Only `playgroundWorker`
+      (+21,782 bytes, the Stage 7 `browserslist` bump) and `vsix` (+10,433) differ from the
+      budget by more than a few bytes, both well inside their limits; the budget is unchanged.
+      `prove:vsix`: **25 PASS, 0 FAIL** (24 after W2, plus W13's `ambiguous-script-owner`; W3
+      and W12 added their controls to `test:verification` instead).
+    - **L3:** `L3 PASS` and `L3 PROOF PASS` (Xvfb from the kit); `probe:host-unbundled`:
+      `UNBUNDLED HOST PROBE PASS` (70.4 s).
+    - **L2:** `L2 HEADLESS PASS`: five views with 0 errors, worker round-trips in Collection
+      View and Document View, 7 errors on the CSS-negative page. Headless, as in Stages 4 to 7.
+    - **L2-dev:** port 18080 was held by a `webpack` server from another worktree (S8-N04), not
+      by this tree's Watch task. On 18087: 37 of 42 routes ready, the Monaco default routes
+      failing to create workers. The operator was unavailable when asked. **Coordinator
+      decision (for G8):** not to stop another worktree's process, and to run L2-dev on port
+      18080 inside a private network namespace (`unshare -rn`, loopback only), where the
+      configured origin is this tree's server: `routes=42 ready=42 errors=0 assertions=60/60`,
+      **`L2-DEV PASS`**. Xvfb and the coordinator's servers were stopped by PID.
+    - **GitHub Actions:** dispatch with `enforce_full_run=true`,
+      [38235071767](https://github.com/microsoft/vscode-documentdb/actions/runs/38235071767) at
+      `21b0da12`: **success**, all four jobs (Code Quality & Tests, which now also runs root
+      `tsc`, `typecheck:tests` and `verify:packages`; Build & Package; L1; L3). PR-triggered
+      CI passed at the same commit
+      ([38235017206](https://github.com/microsoft/vscode-documentdb/actions/runs/38235017206)).
+    - **Publish dry run**
+      [38236032367](https://github.com/microsoft/vscode-documentdb/actions/runs/38236032367) at
+      `21b0da12`. Checked first: W6 only added the `typecheck:tests` step to `verify`; the
+      publish job, its environment and `id-token: write` are still reachable only with
+      `dry_run=false`. `verify` passed (including the new step and four `--dry-run`
+      publishes), `publish` was skipped, pending deployments are 0, and npm still lists 0.8.1
+      for all four packages.
+    - **ADO: pending (operator).** Both builds need a new run on this branch: W1 changed the
+      lockfile, W3 and W6 added the archive check and `typecheck:tests` to the ADO npm build,
+      which have never run on a Windows agent. See G8 item 21.
 - **Stage 8 review:** GPT-6 Sol in a fresh session, without the authors' reasoning, written to
   `iterations/08-stage8-review.md` in the format of the earlier stage reviews.
+  - **Done in `7e7f543c`:** [08-stage8-review.md](./iterations/08-stage8-review.md)
+    (`kind: review`, `status: active`), range `d9b85811..8e27139d`. It was given the commit
+    range, this Stage 8 section, the G7 decisions and the code. Four findings, none critical or
+    high: S8-F01 and S8-F02 (medium) and S8-F03 (low), all in W3's archive reader, and S8-F04
+    (low), the default VS Code build task after W5. It found no weakened check and confirmed
+    W14's cited runs.
 - **Operator gate G8:** review the fixes, the release notes and the Stage 8 review, and decide its
   findings.
+  - **G8 list (coordinator, 2026-10-12).** Answer by number.
+    - **A. Release notes (drafts, not final):**
+      - **1.** W16 (`21b0da12`): the `0.11.2` section of `CHANGELOG.md`, the "Patch Release
+        v0.11.2" section of `docs/release-notes/0.11.md` and its `docs/index.md` link. Approve,
+        or say what to change.
+      - **2.** W4 (`20e11e14`, plus W11's line): the package READMEs and changelogs, including
+        the TypeScript caveat measured with TypeScript 6.0.3.
+    - **B. Stage 8 review findings:**
+      - **3.** S8-F01 (medium): an archive's package name can move extraction outside the
+        consumer. Rec.: fix before Stage 9 (option 1: validate the name, confine the path, add
+        a negative test).
+      - **4.** S8-F02 (medium): duplicate tar members let the check read one `package.json` and
+        install another. Rec.: fix before Stage 9 (option 1: reject duplicates).
+      - **5.** S8-F03 (low): truncated tar members are accepted. Rec.: fix with 3 and 4
+        (option 1).
+      - **6.** S8-F04 (low): the default VS Code build task (`npm run compile`, `tsc -watch`)
+        emits nothing since W5. Rec.: fix (option 1: make `Watch` the default build task and
+        keep the type-check watcher as a named task), then check F5.
+    - **C. New findings:**
+      - **7.** S8-N01 (low): stale non-test files in a local `dist/`. Rec.: accept for this PR
+        (CI and ADO build from clean checkouts), or file an issue.
+      - **8.** S8-N02 (info): `bson-identity/check.cjs --prove` is weaker than the test. Rec.:
+        fix with 3 to 5, or accept (CI runs the stricter test).
+      - **9.** S8-N03 (info): the shell-api-types README's test description. Rec.: one-line
+        fix with 3 to 5.
+      - **10.** S8-N04 (info): another worktree's server on port 18080. Rec.: carry to Stage 10
+        with X7-F09 option 2.
+    - **D. Coordinator decisions and deviations to confirm or reverse:**
+      - **11.** Subagents ran in the foreground (the tool has no background mode), so there was
+        no 10-minute supervision.
+      - **12.** W6 added strict test configs to all six packages, not the three named.
+      - **13.** W5: the extension always passes the bundled webview layout (`isBundled: true`);
+        the package's `dev` layout API is unchanged.
+      - **14.** W12 replaced the three "Must stay a static import" comments: with the `bson`
+        alias a dynamic import is the same copy, and the probes now test it.
+      - **15.** W11 skipped a test tying the default directory to the Vite copy target.
+      - **16.** W14 corrected the records with dated notes beside the original statements,
+        not by rewriting them.
+      - **17.** W16 labels the notes `0.11.2` (the milestone) without a version bump.
+      - **18.** The final L2-dev ran in a private network namespace instead of stopping the
+        process on port 18080.
+      - **19.** W13's author checked L1 on the Stage 7 ADO drop because W5's `build-prod` had
+        replaced the reports; the final verification re-ran L1 on a fresh VSIX (25 PASS).
+      - **20.** The bundles of W8, W9, W11 / W10, W12, W13 / W15, W16 were your request; listed
+        only for completeness.
+    - **E. Operator action:**
+      - **21.** Queue the ADO extension build and the npm-package build on
+        `dev/tnaum/modernization` at the final Stage 8 commit or later. The npm build is the
+        first Windows run of W3's archive check and W6's `typecheck:tests`. The coordinator
+        verifies the drops as at G7 item 27.
+- **Stage 8 commits:** `5124c392` (W1), `46c1b0b7` (W7), `550eff6b` (W2), `b69422b6` (W3),
+  `20e11e14` (W4), `1750d40e` (W5), `7f6dd66f` (W6), `960c2b57` (W8), `01051ca8` (W9),
+  `78e46f03` (W11), `55af1a67` (W10), `4cabe7d8` (W12), `77b5d702` (W13), `21b0da12` (W16),
+  `8e27139d` (W14), `7e7f543c` (the review), and the `S8: record …` documentation commits
+  `276163e0`, `df7eb036` and this one. W15 and W17 made no commit.
+  **Status: Stage 8 work complete; stopped at G8 (2026-10-12).** ADO builds pending (item 21).
+  Case 1 applied throughout; the Case 2 list runs in Stage 9.
 
 ### Stage 9: ready for review, merge and release
 
