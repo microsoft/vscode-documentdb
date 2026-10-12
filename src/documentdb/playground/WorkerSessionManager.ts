@@ -107,8 +107,6 @@ export class WorkerSessionManager implements vscode.Disposable {
     private _worker: Worker | undefined;
     private _workerState: WorkerState = 'idle';
     private _workerClusterId: string | undefined;
-    /** Set before intentional worker termination to suppress the onWorkerExit callback. */
-    private _terminatingIntentionally = false;
     private _startup: WorkerStartup | undefined;
     private _startupAbortController: AbortController | undefined;
 
@@ -357,27 +355,32 @@ export class WorkerSessionManager implements vscode.Disposable {
         if (abortSignal.aborted) {
             throw new UserCancelledError('workerStartup');
         }
-        this._worker = new Worker(workerPath);
+        const worker = new Worker(workerPath);
+        this._worker = worker;
         this._workerClusterId = clusterId;
         // Everything this worker reports stays tied to the startup that created it.
         const connection: AuthTraceContext = { startupCorrelationId: startup.requestId, surface: startup.surface };
 
         // Listen for messages from the worker
-        this._worker.on('message', (msg: WorkerToMainMessage) => {
+        worker.on('message', (msg: WorkerToMainMessage) => {
             this.handleWorkerMessage(msg, connection);
         });
 
-        // Listen for worker exit (crash or termination)
-        this._worker.on('exit', (exitCode: number) => {
+        // terminateWorker() detaches a worker before it exits, so only the current worker can exit unexpectedly.
+        worker.on('exit', (exitCode: number) => {
             this._callbacks.onLog?.('debug', `Worker exited with code ${String(exitCode)}`, startup.requestId);
-            if (!this._terminatingIntentionally) {
-                this._callbacks.onWorkerExit?.(exitCode);
+            if (this._worker !== worker) {
+                return;
             }
+            this._callbacks.onWorkerExit?.(exitCode);
             this.handleWorkerExit();
         });
 
-        this._worker.on('error', (error: Error) => {
+        worker.on('error', (error: Error) => {
             this._callbacks.onLog?.('error', error.message, startup.requestId);
+            if (this._worker !== worker) {
+                return;
+            }
 
             // Reject all pending requests with the actual error so callers
             // get an immediate, meaningful failure instead of waiting for
@@ -639,7 +642,6 @@ export class WorkerSessionManager implements vscode.Disposable {
         const wasAlive = !!this._worker;
 
         if (this._worker) {
-            this._terminatingIntentionally = true;
             void this._worker.terminate();
             this._worker = undefined;
         }
@@ -666,25 +668,21 @@ export class WorkerSessionManager implements vscode.Disposable {
         }
     }
 
+    /** Handles an exit of the current worker. Intentional exits are tracked by worker.terminated. */
     private handleWorkerExit(): void {
         this.finishStartup('exited');
-        // Only emit unexpected exit when the worker was NOT intentionally terminated.
-        // Intentional exits (dispose, shutdown, cluster switch) are tracked by worker.terminated.
-        if (!this._terminatingIntentionally) {
-            ext.outputChannel?.warn('[WorkerSessionManager] Unexpected worker exit detected');
-            void callWithTelemetryAndErrorHandling('worker.unexpectedExit', async (context) => {
-                context.errorHandling.suppressDisplay = true;
-                context.telemetry.measurements.spawnCount = this._spawnCount;
-                if (this._lastSpawnTime > 0) {
-                    context.telemetry.measurements.lifetimeMs = Date.now() - this._lastSpawnTime;
-                }
-            });
-        }
+        ext.outputChannel?.warn('[WorkerSessionManager] Unexpected worker exit detected');
+        void callWithTelemetryAndErrorHandling('worker.unexpectedExit', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.telemetry.measurements.spawnCount = this._spawnCount;
+            if (this._lastSpawnTime > 0) {
+                context.telemetry.measurements.lifetimeMs = Date.now() - this._lastSpawnTime;
+            }
+        });
 
         this._worker = undefined;
         this._workerState = 'idle';
         this._workerClusterId = undefined;
-        this._terminatingIntentionally = false;
 
         // Reject any still-pending requests
         for (const [, entry] of this._pendingRequests) {

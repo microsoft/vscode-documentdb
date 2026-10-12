@@ -975,9 +975,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._spinner?.stop();
             this._spinner = undefined;
 
-            // Kill the worker to cancel a running evaluation.
-            // The _terminatingIntentionally flag in WorkerSessionManager prevents
-            // the onWorkerExit callback from showing "ended unexpectedly".
+            // Kill the worker to cancel a running evaluation. WorkerSessionManager
+            // ignores exits of killed workers, so no "ended unexpectedly" message appears.
             this._sessionManager.killWorker();
             this._evaluating = false;
             this._inputHandler.setEnabled(true);

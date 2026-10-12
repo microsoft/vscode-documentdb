@@ -614,6 +614,38 @@ describe('WorkerSessionManager', () => {
             expect(startupEvent().telemetry.properties).toMatchObject({ startupOutcome: 'exited', result: 'Failed' });
         });
 
+        it('ignores a killed worker that exits while its replacement starts', async (): Promise<void> => {
+            const first = await startWorker();
+            first.worker._emit('message', { type: 'initResult', requestId: first.requestId, success: true });
+            await first.initPromise;
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const wt = require('worker_threads') as {
+                _getListeners: () => Map<string, ((...args: unknown[]) => void)[]>;
+                _resetListeners: () => void;
+            };
+            const staleExit = [...(wt._getListeners().get('exit') ?? [])];
+            const staleError = [...(wt._getListeners().get('error') ?? [])];
+            wt._resetListeners();
+            first.manager.killWorker();
+
+            const second = await startWorker(true, {}, first.manager);
+            staleError.forEach((handler) => handler(new Error('stale worker error')));
+            staleExit.forEach((handler) => handler(1));
+            second.worker._emit('message', { type: 'initResult', requestId: second.requestId, success: true });
+            await second.initPromise;
+
+            expect(callbacks.onLog).toHaveBeenCalledWith('debug', 'Worker exited with code 1', first.requestId);
+            expect(callbacks.onWorkerExit).not.toHaveBeenCalled();
+            expect(first.manager.workerState).toBe('ready');
+            const startups = mockTelemetryEvents.filter((event) => event.eventName === 'worker.startup');
+            expect(startups.map((event) => event.telemetry.properties.startupOutcome)).toEqual([
+                'succeeded',
+                'succeeded',
+            ]);
+            expect(mockTelemetryEvents.some((event) => event.eventName === 'worker.unexpectedExit')).toBe(false);
+            first.manager.dispose();
+        });
+
         it('keeps intentional startup cancellation at trace level', async () => {
             const { manager, initPromise, requestId } = await startWorker();
             manager.dispose();
