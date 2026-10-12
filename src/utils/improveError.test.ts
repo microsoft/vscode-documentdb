@@ -21,6 +21,13 @@ describe('improveError', () => {
         expect(improved).toHaveProperty('message', 'Could not find /tools/database client');
     });
 
+    it('explains an ENOENT string with a Windows executable path and backslashes', () => {
+        const improved = improveError('spawn C:\\Program Files\\DocumentDB\\bin\\client.exe ENOENT');
+
+        expect(improved).toBeInstanceOf(Error);
+        expect(improved).toHaveProperty('message', 'Could not find C:\\Program Files\\DocumentDB\\bin\\client.exe');
+    });
+
     it.each([new Error('Connection refused'), 'Connection refused'])('preserves unrelated errors: %s', (error) => {
         expect(improveError(error)).toBe(error);
     });

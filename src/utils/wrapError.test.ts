@@ -22,6 +22,14 @@ describe('wrapError', () => {
         expect(wrapError(undefined, error)).toBe(error);
     });
 
+    it('returns an outer string unchanged when the inner error is absent', () => {
+        expect(wrapError('Query failed')).toBe('Query failed');
+    });
+
+    it('returns an inner string unchanged when the outer error is absent', () => {
+        expect(wrapError(undefined, 'Invalid input')).toBe('Invalid input');
+    });
+
     it('appends the inner message while preserving the outer error identity', () => {
         const outer = new TypeError('Query failed');
 
@@ -34,6 +42,25 @@ describe('wrapError', () => {
         const wrapped = wrapError('Query failed', 'Invalid input');
 
         expect(wrapped).toBeInstanceOf(Error);
+        expect(wrapped).toHaveProperty('message', `Query failed${os.EOL}Invalid input`);
+    });
+
+    it('combines an outer string and an inner Error into a new Error', () => {
+        const inner = new TypeError('Invalid input');
+        const wrapped = wrapError('Query failed', inner);
+
+        expect(wrapped).toBeInstanceOf(Error);
+        expect(wrapped).not.toBe(inner);
+        expect(wrapped).toHaveProperty('message', `Query failed${os.EOL}Invalid input`);
+        expect(inner.message).toBe('Invalid input');
+    });
+
+    it('appends an inner string while preserving the outer Error identity and type', () => {
+        const outer = new TypeError('Query failed');
+        const wrapped = wrapError(outer, 'Invalid input');
+
+        expect(wrapped).toBe(outer);
+        expect(wrapped).toBeInstanceOf(TypeError);
         expect(wrapped).toHaveProperty('message', `Query failed${os.EOL}Invalid input`);
     });
 });
