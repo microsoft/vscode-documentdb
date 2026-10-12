@@ -80,6 +80,9 @@ jobs:
             - name: 🧪 Run Unit Tests (Vitest)
               run: npm test
 
+            - name: 📦 Verify Packed Workspace Packages
+              run: npm run verify:packages -- --no-build
+
             - name: 💬 Post PR Code Quality Report
               if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

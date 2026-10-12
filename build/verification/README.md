@@ -342,14 +342,19 @@ not on the workspace sources:
 ```bash
 npm run verify:packages                      # builds the workspaces first
 npm run verify:packages -- --no-build --keep --report <file.json>
+npm run verify:packages -- --archives <dir-or-.tgz> [--archives ...]   # offline, already packed
 ```
 
 [`package-checks/check-packages.mjs`](./package-checks/check-packages.mjs) packs every workspace
-into a temp directory outside the repository and, for each tarball, runs:
+into a temp directory outside the repository and, for each tarball, prints its file name and
+SHA-256 and runs:
 
 - a fail-closed check rejecting every `*.test.*` and `*.spec.*` file, including declarations and
   source maps left by older incremental builds. A packed fixture with a planted `dist/x.test.js`
   must be rejected for exactly this reason; builds do not clean composite `dist` output;
+- a check that every `main`, `types`, `bin` and `exports` target in the packed `package.json` is in
+  the tarball (`*` subpaths must match a file), and every `files` entry packed something
+  ([`package-targets.cjs`](./package-checks/package-targets.cjs));
 - `publint --strict` and `@arethetypeswrong/cli` (pinned versions, through `npx`; they are not
   dependencies). The only accepted ATTW finding is `CJSResolvesToESM` for TypeScript's node16
   CommonJS resolution, which is inherent to an ESM-only package; the CommonJS probe below shows
@@ -363,13 +368,35 @@ into a temp directory outside the repository and, for each tarball, runs:
   [`calls.mjs`](./package-checks/calls.mjs) on every entry point, for example reading the shell API
   `.d.ts`, analysing a document with driver `bson` values, and a tRPC round trip between
   `vscode-ext-webview/webview` and `/host`. The Vitest probe aliases `vscode` to
-  [`vscode-stub.cjs`](./package-checks/vscode-stub.cjs) and runs the Fluent calls under jsdom.
+  [`vscode-stub.cjs`](./package-checks/vscode-stub.cjs) and runs the Fluent calls under jsdom. A
+  package with no calls in `calls.mjs` fails.
 
 Expected and enforced: plain Node cannot load `vscode-ext-webview-fluentui` and its `/components`
 entry, because of Fluent UI's own packaging (see that package's README), so the Node probes require
 exactly that failure. A control run of the Vitest probe without inlining must fail for the same
 reason and for the host entry's bare `vscode` import. Rerun this after any change to a package's
 `package.json`, `tsconfig` or entry points.
+
+**Archive mode (offline).** `--archives <dir-or-.tgz>` (repeatable; a directory means every `.tgz`
+in it) checks tarballs that were already packed, instead of building and packing. It never runs
+npm, npx or any tool other than Node, and reads the tarballs with
+[`tarball.cjs`](./package-checks/tarball.cjs) rather than `tar`, so it works on a network-isolated
+Windows agent with only `npm ci` behind it. It runs every check above except `publint` and
+`@arethetypeswrong/cli`, which are not in the lockfile, and says so in its output. The probes cover
+only the archives' entry points (`PROBE_PACKAGES`); the Vitest control without inlining runs when
+both inlined packages are among the archives. The packed-test control writes its tarball directly
+instead of running `npm pack`. The output and `--report` record the checkout commit and each
+archive's SHA-256. [`package-archives.test.cjs`](./package-checks/package-archives.test.cjs) packs
+`vscode-ext-webview` and requires archive mode to pass it, and to reject it with a planted
+`dist/host.test.js` and without `dist/host.js` (an `exports` target), each with its own diagnostic.
+
+Where it runs:
+
+| Route                                                           | Command                                                           |
+| --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| GitHub Actions CI, Code Quality & Tests (every PR and push)     | `npm run verify:packages -- --no-build` after the workspace build |
+| `npm-publish-documentdb-js.yml` verify job (`@documentdb-js/*`) | `npm run verify:packages`                                         |
+| ADO `build-npm-packages.yml` (`@microsoft/vscode-ext-webview*`) | archive mode on the `npm-packages` tarballs it just packed        |
 
 ### Unbundled `vscode-ext-webview/host` in VS Code (S3-F02)
 

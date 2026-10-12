@@ -139,6 +139,19 @@ extends:
                                   -SourcesDirectory '$(Build.SourcesDirectory)'
                                   -OutputDirectory '$(ob_outputDirectory)'
 
+                        # Offline: checks the tarballs just packed, without npm, npx or downloads.
+                        - task: PowerShell@2
+                          displayName: 'Verify packed npm packages (offline)'
+                          condition: succeeded()
+                          inputs:
+                              targetType: 'inline'
+                              workingDirectory: '$(Build.SourcesDirectory)'
+                              script: |
+                                  node build/verification/package-checks/check-packages.mjs --archives "$(ob_outputDirectory)\npm-packages"
+                                  if ($LASTEXITCODE -ne 0) {
+                                      throw "Package archive verification failed with exit code $LASTEXITCODE"
+                                  }
+
                         - task: CopyFiles@2
                           displayName: 'Copy package metadata to staging'
                           condition: succeeded()

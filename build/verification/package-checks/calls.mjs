@@ -57,7 +57,7 @@ function stubPanel(onPost) {
     return { panel, send: (message) => handler(message) };
 }
 
-export const checks = {
+export const allChecks = {
     '@documentdb-js/operator-registry': async (load) => {
         const m = await load('@documentdb-js/operator-registry');
         const all = m.getAllCompletions();
@@ -204,6 +204,18 @@ export const checks = {
         },
     },
 };
+
+// The package an entry point belongs to, among `packages`.
+export function ownerOf(entryName, packages) {
+    return [...packages].find((name) => entryName === name || entryName.startsWith(`${name}/`));
+}
+
+// PROBE_PACKAGES (comma-separated) limits the probes to the packages under test; empty means all.
+const underTest = (process.env.PROBE_PACKAGES ?? '').split(',').filter(Boolean);
+export const checks =
+    underTest.length === 0
+        ? allChecks
+        : Object.fromEntries(Object.entries(allChecks).filter(([name]) => ownerOf(name, underTest)));
 
 // The module specifier a check loads first; `typeDefs/*` is a non-JS subpath of shell-api-types.
 export function entryOf(name) {
