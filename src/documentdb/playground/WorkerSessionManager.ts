@@ -316,7 +316,8 @@ export class WorkerSessionManager implements vscode.Disposable {
         const usesOidc = initMsg.authMechanism === 'MicrosoftEntraID' || initMsg.authMechanism === 'ManagedIdentity';
         const prepared = await prepareDriverConnectionString({
             connectionString: initMsg.connectionString,
-            options: usesOidc ? { ...options, authMechanism: 'MONGODB-OIDC', tls: true } : options,
+            // The worker adds OIDC itself; the mechanism is passed so a TXT authSource is not applied.
+            options: usesOidc ? { ...options, authMechanism: 'MONGODB-OIDC' } : options,
             surface: initMsg.persistent ? 'shell' : 'playground',
             correlation: {
                 ...telemetryContext,

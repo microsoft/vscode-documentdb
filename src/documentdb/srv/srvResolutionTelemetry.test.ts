@@ -11,7 +11,6 @@ import { type SrvResolutionTelemetry } from './srvResolutionTelemetry';
 
 const report: SrvResolutionReport = {
     srvHost: 'x.global.mongocluster.cosmos.azure.com',
-    srvServiceName: 'mongodb',
     path: 'fallback',
     outcome: 'succeeded',
     nodeErrorCode: 'EBADRESP',

@@ -10,7 +10,6 @@ export type SrvFallbackOutcome = 'succeeded' | 'failed' | 'notAttempted' | 'disa
 export interface SrvResolutionReport {
     /** Local use only; never send the host or DNS server addresses to telemetry. */
     readonly srvHost: string;
-    readonly srvServiceName: string;
     readonly path: SrvResolutionPath;
     readonly outcome: 'succeeded' | 'failed' | 'cancelled';
     readonly nodeErrorCode: string;

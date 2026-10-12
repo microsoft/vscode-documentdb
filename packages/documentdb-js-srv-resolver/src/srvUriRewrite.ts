@@ -167,7 +167,11 @@ export function rewriteSrvUri(input: RewriteSrvUriInput): RewriteSrvUriResult {
             }
         }
         const authSource = txt.get('authSource');
-        const mechanism = String(value('authMechanism') ?? '').toUpperCase();
+        const mechanism = (
+            input.options?.authMechanism ??
+            getParam(parts.params, 'authMechanism') ??
+            ''
+        ).toUpperCase();
         if (authSource && value('authSource') === undefined && !externalMechanisms.has(mechanism)) {
             setParam(parts.params, 'authSource', authSource);
             txtApplied.push('authSource');

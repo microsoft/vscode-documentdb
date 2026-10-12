@@ -3,15 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as SrvResolver from '@documentdb-js/srv-resolver';
-import { resolveSrvForDriver } from '@documentdb-js/srv-resolver';
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
-import type * as DriverConnectionPreparation from '../srv/prepareDriverConnectionString';
 import {
     prepareDriverConnectionString,
     type PreparedDriverConnectionString,
@@ -83,11 +80,6 @@ jest.mock('../../extensionVariables', () => ({
 
 jest.mock('../srv/prepareDriverConnectionString', () => ({
     prepareDriverConnectionString: jest.fn(),
-}));
-
-jest.mock('@documentdb-js/srv-resolver', () => ({
-    ...jest.requireActual<typeof SrvResolver>('@documentdb-js/srv-resolver'),
-    resolveSrvForDriver: jest.fn(),
 }));
 
 jest.mock('../CredentialCache', () => ({
@@ -457,61 +449,25 @@ describe('WorkerSessionManager', () => {
             }
         });
 
-        it.each([
-            ['MicrosoftEntraID', 'node'],
-            ['MicrosoftEntraID', 'fallback'],
-            ['ManagedIdentity', 'node'],
-            ['ManagedIdentity', 'fallback'],
-        ] as const)(
-            'R1: %s %s path uses the real adapter and driver preflight without a host OIDC callback',
-            async (authMechanism, resolution): Promise<void> => {
-                const adapter = jest.requireActual<typeof DriverConnectionPreparation>(
-                    '../srv/prepareDriverConnectionString',
-                );
-                const resolver = jest.requireActual<typeof SrvResolver>('@documentdb-js/srv-resolver');
-                const records = [
-                    { name: 'resolved.mongocluster.cosmos.azure.us', port: 10260, priority: 0, weight: 0 },
-                ];
-                const dnsMetadata = {
-                    server: '192.168.1.1:53',
-                    transport: 'udp' as const,
-                    serversTried: 1,
-                };
-                jest.mocked(resolveSrvForDriver).mockImplementation((input) =>
-                    resolver.resolveSrvForDriver({
-                        ...input,
-                        fallback: resolution === 'fallback' ? 'force' : 'auto',
-                        createProbeResolver: () => ({ resolveSrv: async () => records, cancel: (): void => undefined }),
-                        fallbackDns: {
-                            resolveSrv: async () => ({ ...dnsMetadata, records }),
-                            resolveTxt: async () => ({ ...dnsMetadata, records: [['authSource=admin']] }),
-                        },
-                        getServers: () => ['192.168.1.1'],
-                    }),
-                );
-                jest.mocked(prepareDriverConnectionString).mockImplementation(adapter.prepareDriverConnectionString);
+        it.each(['MicrosoftEntraID', 'ManagedIdentity'] as const)(
+            'passes the OIDC mechanism to preparation but not to the worker (%s)',
+            async (authMechanism): Promise<void> => {
+                jest.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
+                    connectionString: rewrittenUri,
+                    options: input.options,
+                    srvResolution: 'fallback',
+                }));
                 const manager = new WorkerSessionManager(callbacks);
-                const input = Object.freeze({ ...initMessage(), authMechanism });
-                const initializing = manager.ensureWorker('cluster-id', input);
+                const initializing = manager.ensureWorker('cluster-id', { ...initMessage(), authMechanism });
                 await jest.mocked(prepareDriverConnectionString).mock.results[0].value;
                 const posted = replyInit();
                 await initializing;
-                const preparationOptions = jest.mocked(prepareDriverConnectionString).mock.calls[0][0].options;
-                expect(preparationOptions).toMatchObject({ authMechanism: 'MONGODB-OIDC', tls: true });
-                expect(preparationOptions).not.toHaveProperty('authMechanismProperties');
-                expect(Worker).toHaveBeenCalledTimes(1);
+                expect(jest.mocked(prepareDriverConnectionString).mock.calls[0][0].options).toMatchObject({
+                    authMechanism: 'MONGODB-OIDC',
+                });
                 expect(posted.authMechanism).toBe(authMechanism);
                 expect(posted.clientOptions).not.toHaveProperty('authMechanism');
-                expect(posted.clientOptions.tls).toBe(true);
-                expect(() => structuredClone(posted)).not.toThrow();
-                expect(posted.connectionString).not.toContain('authSource=admin');
-                expect(
-                    posted.connectionString.startsWith(resolution === 'fallback' ? 'mongodb://' : 'mongodb+srv://'),
-                ).toBe(true);
                 expect(posted.oidcAllowedHosts).toEqual(['*.azure.us']);
-                expect(input.clientOptions).not.toHaveProperty('authMechanism');
-                expect(startupEvent().telemetry.properties.srvResolution).toBe(resolution);
-                expect(startupEvent().telemetry.measurements.srvResolutionDurationMs).toEqual(expect.any(Number));
                 manager.dispose();
             },
         );

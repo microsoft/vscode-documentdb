@@ -76,7 +76,6 @@ const host = 'x.global.mongocluster.cosmos.azure.com';
 const uri = `mongodb+srv://user:S3cr3t%40pw@${host}/?appName=@x@`;
 const baseReport: SrvResolutionReport = {
     srvHost: host,
-    srvServiceName: 'mongodb',
     path: 'fallback',
     outcome: 'succeeded',
     nodeErrorCode: 'EBADRESP',
