@@ -3789,12 +3789,63 @@ Stage 0 must also be made.
   - **W4** (PR-F03, S3-F12; GPT-6.1 Sol): ESM-only package notes: a migration section in each
     changed package README and changelog (ESM-only, `exports`, the `engines` floor), including the
     TypeScript `node16`-CommonJS consumer caveat.
+    - **Done in `20e11e14`** (GPT-6.1 Sol). operator-registry, shell-api-types and shell-runtime
+      each get a "Migrating to 0.9.0" README section and a new `CHANGELOG.md` with a 0.9.0 entry
+      (ESM-only, the allowed `exports` subpaths, including shell-api-types' `typeDefs/*`, no
+      deep `dist/` imports, Node.js `>=22.18.0`, `require()` of ESM from Node.js 20.19 and
+      22.12). `CHANGELOG.md` is added to their `files`, as schema-analyzer already does.
+      schema-analyzer's 2.0.0 entry and `vscode-ext-webview`'s `MIGRATION.md` get the
+      TypeScript caveat; fluentui is unchanged (already ESM-only at `v0.11.0`, browser-only).
+    - **The caveat was measured, not recalled:** TypeScript 6.0.3, a CommonJS-format `.ts`
+      consumer of the built operator-registry: a static import fails with TS1479 under
+      `module: node16` and `node18`, compiles under `node20` and `nodenext`; `await import()`
+      compiles under `node16`.
+    - **Checks:** build, lint, Prettier; `verify:packages -- --no-build` passes with the new
+      `files` entries (re-run by the coordinator).
   - **W5** (PR-F04; GPT-6.1 Sol): Leftovers: the root `out/` emit (keep the workspace packages'
     emit), `BUNDLE_ANALYZE` in `main.yml`, `.swcrc` in `.vscodeignore`, and
     `WEBVIEW_CONFIG.bundle.dev`.
+    - **Done in `1750d40e`** (GPT-6.1 Sol). The root `tsconfig.json` sets `noEmit: true` and drops
+      `outDir`, `sourceMap` and `rootDir`; `npm run build` (`tsc`) stays the full root
+      type-check, and the six packages keep their own emitting configs. `out` leaves the `clean`
+      and `resapi.resetall` scripts, `.vscode/settings.json`'s search exclusions and
+      `.vscodeignore`; `.gitignore` keeps it for stale local directories. `BUNDLE_ANALYZE` (no
+      reader left) leaves `main.yml`, `.swcrc` leaves `.vscodeignore`.
+      `WEBVIEW_CONFIG.bundle.dev` (`out/src/webviews/index.js`) is removed, and
+      `openAppWebview` passes the bundled layout for both package slots with `isBundled: true`:
+      every supported host build defines `IS_BUNDLE=true`, so the bundled layout was already
+      the only one in use. The package's own `dev` layout API is unchanged.
+    - **Checks:** build with no `out/` created (re-run by the coordinator), workspace builds emit
+      their `dist/`, full Vitest 298 files / 4,603 tests, lint, Prettier, `build-prod`; the
+      coordinator re-ran `src/webviews` (38 files, 653 tests).
+    - **Side effect found later:** the author's `build-prod` rewrote `dist/` and
+      `build/verification/reports/` at 08:53, so the Stage 7 VSIX in the root no longer matched
+      the reports (W13 below). The final verification packages afresh.
   - **W6** (S2-F07, SW7-F01 (option 1); Claude Opus 5.5): Type-checks: a root no-emit type-check in
     Code Quality & Tests on every path, and strict no-emit test configs for the three packages whose
     tests left the build, run in CI and in both package-verification paths.
+    - **Done in `7f6dd66f`** (Claude Opus 5.5).
+      - **Root:** Code Quality & Tests runs `npx tsc -p tsconfig.json` (no emit since W5) on
+        every path, before the unit tests.
+      - **Packages:** each package gets a `tsconfig.test.json` that extends its build config,
+        emits nothing and includes its tests; the production configs and `files` are unchanged.
+        operator-registry adds `types: ["node"]` (its tests need it), schema-analyzer includes
+        `test/`. A `typecheck:tests` script in each package and at the root runs them; 45 test
+        files (6, 5, 1, 4, 11 and 18).
+      - **Wired into** Code Quality & Tests, the publish workflow's `verify` job and a PowerShell
+        step in `build-npm-packages.yml` after the workspace tests. The publish job's condition,
+        environment and `id-token: write` are unchanged.
+    - **Deviation:** all six packages, not the three named. The author found the same gap in
+      schema-analyzer, `vscode-ext-webview` and fluentui (S2-F07 counts all 45 files); they
+      passed with no fix. No test needed a type fix.
+    - **Proof:** an implicit-`any` function planted in one test per package made
+      `typecheck:tests` fail with TS7006 in all six while root `tsc` exited 0 (SW7-F01's
+      lost diagnostic). A TS2322 in `src/utils/classifyCommand.test.ts` failed root `tsc` while
+      Vitest passed (S2-F07). All reverted.
+    - **Checks:** build, full Vitest 298 / 4,603, `test:verification` 123 / 79,
+      `verify:packages` (no `tsconfig.test.json` packed), lint, Prettier; the coordinator
+      re-ran `typecheck:tests`. The author briefly created a probe config inside the checkout,
+      against the brief; it was deleted in the same command and never staged.
   - **W7** (PR-F05; GPT-6.1 Sol): Prettier coverage of `build/` and the root `.mjs` and `.cjs`
     files, excluding generated output. Do this early, so later items are formatted.
     - **Done in `46c1b0b7`** (GPT-6.1 Sol), second, after W1. `prettier` and `prettier-fix` add
@@ -3813,21 +3864,76 @@ Stage 0 must also be made.
     knowledge-base index (`docs/ai-and-plans/README.md`), linking this plan as the decision record
     (G7 item 28); update or mark the stale `features/webview-ext-package/design.md`; add the
     port-18080 note to L2-dev in `build/verification/README.md`.
+    - **Done in `960c2b57`** (GPT-6.1 Sol, bundle A). `docs/ai-and-plans/README.md` gets a
+      `modernization` row linking this plan, and a paragraph saying the decisions stay here, not
+      in a `decisions.md`, with links to the folder's other active documents; its fluentui row
+      moves from 1.1.0 to 1.1.1. `features/webview-ext-package/design.md` gets a dated note
+      (ESM-only package, Vite build, history kept), and its "Today" column becomes "At the API
+      rework". `build/verification/README.md` gets the port-18080 sentence.
   - **W9** (S1-F02, S1-F03; GPT-6.1 Sol): Test hygiene: add the missing string, Windows-path and
     mixed-error assertions to `improveError.test.ts` and `wrapError.test.ts`; delete the unused
     `src/utils/testUtils/setEnvironmentVariables.ts` and its self-test.
+    - **Done in `01051ca8`** (GPT-6.1 Sol, bundle A). Five cases with exact assertions: an ENOENT
+      string with a Windows path; `wrapError` with an outer string only, an inner string only,
+      a string with an inner `Error`, and an `Error` with an inner string. No product bug
+      surfaced. The helper and its self-test are deleted (`git grep` found no other user), so
+      Vitest has 297 files.
   - **W10** (S2-F03; Claude Opus 5.5): Vitest isolation: set `pool` and `isolate` explicitly in
     `vitest.config.ts`, add a test that fails if the VS Code mock identities split, and correct
     `test/vitest/setup.ts`'s comment. Removing the `require('vscode')` hook stays in #990.
+    - **Done in `55af1a67`** (Claude Opus 5.5, bundle B). All seven Vitest projects set
+      `pool: 'forks'` and `isolate: true`: Vitest 4.1.11's defaults, confirmed from each
+      project's resolved config before and after. `src/vscodeMockIdentity.test.ts` checks that
+      `require('vscode')` returns the ESM default's object (and its `window`, `commands`,
+      `workspace`, `Uri`), and that a `vi.doMock` factory reaches ESM only, the split
+      `setup.ts` documents. The comment now points at `vitest.config.ts`.
+    - **Proof:** the hook returning a shallow copy, a copy with its own `window`, or nothing
+      each fails the test. Suite time 70.2 s before, 69.1 s and 74.6 s after.
   - **W11** (S3-F01; GPT-6.1 Sol): `getShellApiDtsContent()` in `shell-api-types` resolves a
     directory that does not exist in the bundled extension: make the asset resolution explicit and
     add a layout test. It has no caller in `src/` today.
+    - **Done in `78e46f03`** (GPT-6.1 Sol, bundle A). `getShellApiDtsContent(typeDefsDirectory?)`:
+      the default is still the package's `typeDefs/` next to `dist/`; a bundled caller passes
+      its own directory. The cache is per resolved file. The JSDoc no longer says the TS plugin
+      uses it. Four tests in `methodRegistry.test.ts`; README and the 0.9.0 changelog get one
+      line each. A test tying the default to `vite.config.ext.mjs`'s copy target was skipped, to
+      keep the package's tests free of bundler configuration.
+    - **Bundle A checks:** per item, build, the covering tests, ESLint and Prettier on changed
+      files, and for W11 `typecheck:tests` and `verify:packages`. At the end: lint, Prettier,
+      Vitest 297 files / 4,610 tests, `test:verification` 123 / 79. The coordinator re-ran the
+      build and the three covering files (21 tests).
   - **W12** (S3-F04, X7-F02, G5-I01 opt 4; Claude Opus 5.5): Verification hardening: awaited dynamic
     `import('bson')` routes in both identity probes (`hostProbe.ts`, `workerProbe.ts`), and a
     production-config probe for Rolldown's lowered-`import()` pattern, with proof that each fails on
     the broken form.
+    - **Done in `4cabe7d8`** (Claude Opus 5.5, bundle B).
+      - **bson:** both probes add awaited `import('bson')` and `import('mongodb')` routes (7 in
+        `main`, 6 in `playgroundWorker`), and `check.cjs` awaits them. Without the alias, six
+        routes split (in both graphs: `bson` via TypeScript, dynamic import and an ES module,
+        to `bson.node.mjs`). The alias-removed control now requires both the ES-module and the
+        dynamic route to be rejected in both graphs, where it used to need one ES-module match.
+      - **Lowered `import()` (G5-I01 option 4):** `build/verification/lowered-import/` builds
+        azureauth's exact `Promise.resolve().then(() => require('@azure/arm-resources-subscriptions'))`
+        with the real host config in production mode and requires a `SubscriptionClient`
+        function. With Rolldown 1.0.3 the bug still reproduces: without the alias the result
+        is `undefined` (an `__esmMin` initializer). Pointing the real alias at `dist-esm`, or
+        removing it, fails the test. Both run in `test:verification` (+0.7 s). It proves the
+        shipped alias fixes the real pattern, not the Azure journeys (Stage 10).
+      - The three `src` comments that said `await import('bson')` loads the ESM entry were
+        wrong with the alias; corrected, comment-only.
   - **W13** (X7-F08 (option 1); Claude Opus 5.5): L1: require exactly one owning bundle report for
     every packaged script, with a negative test (the same bytes in two reports).
+    - **Done in `77b5d702`** (Claude Opus 5.5, bundle B). A script owned by two reports fails with
+      `ambiguous script owner; owned by host bundle report and views bundle report`. Unit test:
+      `shared.mjs` with `import('node:fs')` passes with a host owner only, fails with a views
+      owner only, and fails as ambiguous with both (the old rule accepted it). New proof
+      control `ambiguous-script-owner`: `prove:vsix` prints **25 PASS**; with the old
+      `inspect.cjs` it stops at 16 PASS.
+    - **Deviation:** the author checked `verify:vsix` and `prove:vsix` on the Stage 7 ADO drop,
+      because the root VSIX no longer matched the reports (see W5). The final verification below
+      covers the fresh VSIX.
+    - **Bundle B checks:** at the end, lint, Prettier, Vitest 298 files / 4,612 tests,
+      `test:verification` 126 Node / 79 browser (re-run by the coordinator), `typecheck:tests`.
   - **W14** (S1-F04, S2-F04, S2-F05, S3-F07, X7-F07; coordinator): Records (coordinator): correct
     the Stage 1 to 3 records the re-evaluation found wrong, without inventing history (CI runs, the
     namespace explanation), and mark implemented, observed, attested and pending where they blur.
@@ -3836,11 +3942,41 @@ Stage 0 must also be made.
     each linking its finding, and record the links in the re-evaluation file: CI checkouts keep Git
     credentials (`persist-credentials`); unit-test wall time and the worker cap; declaration maps
     that point at sources the tarballs don't ship; stale maintenance URLs.
+    - **Done (GPT-6.1 Sol, bundle C; no commit):** no open issue covered any of them (two or three
+      searches each). Filed in §6.5's format, which prescribes no labels:
+      [#998](https://github.com/microsoft/vscode-documentdb/issues/998) (S1-F07),
+      [#999](https://github.com/microsoft/vscode-documentdb/issues/999) (S2-F02),
+      [#1000](https://github.com/microsoft/vscode-documentdb/issues/1000) (S3-F06 remainder;
+      schema-analyzer has the same gap) and
+      [#1001](https://github.com/microsoft/vscode-documentdb/issues/1001) (S3-F13; the verifier
+      is in shell-api-types, and the endpoints returned 404 on 2026-10-12). The links are in
+      the re-evaluation file.
   - **W16** (operator request; GPT-6.1 Sol): Release notes (operator: "all release notes will be
     updaetd before the merge"): the extension's `CHANGELOG.md` and `docs/release-notes/`, using the
     `writing-release-notes` skill. The package changelogs are W4. The operator reviews both at G8.
+    - **Draft in `21b0da12`** (GPT-6.1 Sol, bundle C), for review at G8. Following the skill's
+      patch rule for milestone `0.11.2`: a `## 0.11.2` section in `CHANGELOG.md` (four
+      Improvements: webview code splitting, build and test tooling, the ESM package releases,
+      packaged-artifact checks; each links #880), a "Patch Release v0.11.2" section appended to
+      `docs/release-notes/0.11.md`, and its link in `docs/index.md`. No version was bumped.
   - **W17** (ground rule 1; GPT-6.1 Sol): Re-merge `main` if it has moved since `1380b758`
     (quarantine-clean, as in step 7.1), and review that difference.
+    - **Nothing to merge (coordinator):** `origin/main` was still `1380b758` at the start and at
+      10:14 UTC, so there is no difference to review and no lockfile to scan.
+
+- **How Stage 8 was actually run (deviations from "How to run it"):**
+  - **Subagents ran in the foreground.** The subagent tool has no background mode, so the
+    coordinator could not check a running subagent every 10 minutes or steer it; each one
+    returned a single report. None ran longer than 15 minutes.
+  - **Bundles, at the operator's request.** After W6 the operator asked, verbatim: "maybe
+    bundle workitems into larger blocks to speed up, it feels like the context switch or tests
+    slow down the process a lot." The coordinator measured the first seven subagents (4 to 15
+    minutes each, about half of it in full-repository `lint`, `prettier` and Vitest runs) and
+    proposed three bundles; the operator: "yes, please carry on." Bundle A (W8, W9, W11) and
+    C (W15, W16) went to GPT-6.1 Sol, bundle B (W10, W12, W13) to Claude Opus 5.5, still one
+    commit per item. Inside a bundle each commit ran the build and its covering tests; the
+    full lint, Prettier and test suites ran once per bundle.
+  - **Authors** were as the work items name them; W14 and W17 were the coordinator's.
 
 - **New findings during Stage 8 (S8-N):**
   - **S8-N01** (low; found in W3): `verify:packages` rejects packed test files and missing
@@ -3849,6 +3985,21 @@ Stage 0 must also be made.
     it moot for the publishing routes; a developer packing locally is not protected.
     **Recommendation:** compare each tarball's `dist/` with the current build's output list in a
     later change, or accept it with that reason. Not fixed: it does not block W3.
+  - **S8-N02** (info; found in W12): `bson-identity/check.cjs --prove` still accepts the
+    alias-removed run when it finds `bson.node.mjs` anywhere in the error, while
+    `identity.test.cjs` (what `test:verification` runs) now requires the specific routes.
+    **Recommendation:** align the standalone mode with the test, or drop `--prove` and point the
+    README at the test. Not fixed: CI uses the stricter test.
+  - **S8-N03** (info; found in W11): `packages/documentdb-js-shell-api-types/README.md` (about
+    line 83) still describes the package's tests as covering the method registry only.
+    **Recommendation:** one-line README fix with the next package change.
+  - **S8-N04** (info; found in the final verification): port 18080 was held by a `webpack`
+    server from another worktree (`vscode-documentdb.worktrees/network-issues`), not by this
+    tree's Watch task. On port 18087, L2-dev's Collection View and Document View default routes
+    then loaded their workers from that server and failed (37 of 42 ready). X7-F09's lesson
+    "18080 is the operator's Watch task, which serves the same tree" does not always hold.
+    **Recommendation:** the Stage 10 fail-fast check (X7-F09 option 2) should also confirm that
+    the server on the dev origin serves this tree, not only that the port matches.
 
 - **Not in Stage 8:** accepted findings (G7 items 20, 21 and 25), the Stage 10 carry-overs
   (items 20 to 24, listed under Stage 10), #990, #991 and the dependency refresh.
