@@ -15,11 +15,11 @@ created: 2026-09-29
 
 Three questions, three IDs.
 
-| Question | Property | Meaning |
-| --- | --- | --- |
-| How long did a connection take, and did it fail? | `startupCorrelationId` | One database client: the extension's `ClustersClient`, or one shell or playground worker. New for every attempt, retry, and worker restart. Cached reuse creates none. |
-| Which cluster is this? | `connectionCorrelationId` | The extension client whose `connect.staticmetadata` and `connect.getmetadata` events describe the cluster. On extension events it equals `startupCorrelationId`. Shell and playground events carry it only as a pointer to that metadata, and only when an extension client was already connected. |
-| What did the user do in this shell or playground? | `shellSessionId`, playground `sessionId` | One terminal (stable across worker restarts), or one playground worker session. |
+| Question                                          | Property                                 | Meaning                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How long did a connection take, and did it fail?  | `startupCorrelationId`                   | One database client: the extension's `ClustersClient`, or one shell or playground worker. New for every attempt, retry, and worker restart. Cached reuse creates none.                                                                                                                             |
+| Which cluster is this?                            | `connectionCorrelationId`                | The extension client whose `connect.staticmetadata` and `connect.getmetadata` events describe the cluster. On extension events it equals `startupCorrelationId`. Shell and playground events carry it only as a pointer to that metadata, and only when an extension client was already connected. |
+| What did the user do in this shell or playground? | `shellSessionId`, playground `sessionId` | One terminal (stable across worker restarts), or one playground worker session.                                                                                                                                                                                                                    |
 
 `startupCorrelationId` appears on `connect.startup`, `worker.startup`, `connect.srvResolution`,
 `connect.staticmetadata`, `connect.getmetadata`, and `connect.managedIdentityToken` failures.

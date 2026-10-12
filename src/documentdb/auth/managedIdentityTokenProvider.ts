@@ -130,7 +130,12 @@ async function getCredential(
     );
     const cachedAfterImport = credentialsByClientId.get(key);
     if (cachedAfterImport) {
-        traceAuthFlow('managedIdentity.credential', { outcome: 'reusedAfterConcurrentImport' }, correlationId, traceContext);
+        traceAuthFlow(
+            'managedIdentity.credential',
+            { outcome: 'reusedAfterConcurrentImport' },
+            correlationId,
+            traceContext,
+        );
         return cachedAfterImport;
     }
 

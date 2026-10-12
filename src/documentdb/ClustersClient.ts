@@ -484,9 +484,7 @@ export class ClustersClient {
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
             if (abortSignal?.aborted) {
-                ext.outputChannel.debug(
-                    `[ClustersClient] startup=${startup.id} canceled by user surface=extension`,
-                );
+                ext.outputChannel.debug(`[ClustersClient] startup=${startup.id} canceled by user surface=extension`);
                 throw new UserCancelledError('abortConnection');
             }
 

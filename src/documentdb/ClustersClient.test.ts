@@ -330,7 +330,8 @@ describe('regular connection startup diagnostics', () => {
         expect(mockClose).toHaveBeenCalled();
         expect(ext.outputChannel.error).not.toHaveBeenCalled();
         expect(ClustersClient._clients.has(clusterId)).toBe(false);
-        const startupId = startupEvent().telemetry.properties.startupCorrelationId;
+        const startupId = startupEvent().telemetry.properties.startupCorrelationId as string;
+        expect(startupId).toMatch(/^[0-9a-f-]{36}$/);
         expect(ext.outputChannel.debug).toHaveBeenCalledWith(
             `[ClustersClient] startup=${startupId} canceled by user surface=extension`,
         );

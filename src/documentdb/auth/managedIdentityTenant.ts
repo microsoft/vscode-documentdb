@@ -80,7 +80,12 @@ export function verifyManagedIdentityTenant(
         return;
     }
 
-    traceAuthFlow('managedIdentity.tenantCheck', { outcome: 'failed', reason: 'tenantMismatch' }, correlationId, traceContext);
+    traceAuthFlow(
+        'managedIdentity.tenantCheck',
+        { outcome: 'failed', reason: 'tenantMismatch' },
+        correlationId,
+        traceContext,
+    );
     reportManagedIdentityFailureReason('tenantMismatch', clientId, correlationId, traceContext);
     throw new Error(describeManagedIdentityTenantMismatch(identityTenantId, clusterTenantId));
 }
