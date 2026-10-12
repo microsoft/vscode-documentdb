@@ -63,12 +63,6 @@ They are not duplicated here.
 - **Visible in the trace, later in the dashboard.** The `[SrvResolution]` trace says when the
   fallback resolved a connection. There is no tooltip flag (D0021, which superseded D0019's
   tooltip); the cluster dashboard will show it later.
-- **Developer-preview notice.** A successful fallback on a tree connection (`ClustersClient`) also
-  shows a non-blocking modal, once per SRV host per VS Code window. The shell and playground report
-  to the trace only.
-  Its Copy Details action includes runtime and DNS diagnostics, but no credentials, connection
-  string or resolved target host names. This is notice deduplication, not DNS caching.
-  `SHOW_SRV_FALLBACK_PREVIEW_NOTICE` must be reviewed before the `0.11.1` release.
 - **Ships as `v0.11.1`**, which is `v0.11.0` plus this fix, from `release/0.11.1`. It is then
   forward-merged into `main` for 1.0.
 
@@ -80,7 +74,6 @@ Increment 1 ([plan](./iterations/01-srv-fallback/plan.md), progress recorded per
 | ---------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/documentdb-js-srv-resolver/` (`@documentdb-js/srv-resolver`, not published, D0020)   | —                             | No VS Code imports. `srvUriRewrite.ts` (driver-equivalent rewrite), `fallbackDnsClient.ts` (`dns-packet` over UDP/TCP), `resolveSrvForDriver.ts` (probe, preflight, fallback, error and cancellation rules), `report.ts`, `constants.ts` (D0016 timings), `types.ts` |
 | `src/documentdb/srv/prepareDriverConnectionString.ts`                                          | All                           | Extension adapter: environment switches, deadline, trace output, `connect.srvResolution` telemetry, `UserCancelledError`                                                                                                                                             |
-| `src/documentdb/srv/srvFallbackPreviewNotice.ts`                                               | Tree                          | Developer-preview modal after successful fallback; in-window host deduplication, credential-free Copy Details and troubleshooting link                                                                                                                               |
 | `src/documentdb/srv/srvResolutionTelemetry.ts`, `srvResolutionSummary.ts`                      | All                           | Telemetry properties without hosts or IPs; the in-memory summary kept on `ClustersClient` for the future dashboard (D0021)                                                                                                                                           |
 | `src/documentdb/srv/SrvDnsDiagnosticsProvider.ts`                                              | Error messages                | Neutral, actionable text for `querySrv EBADRESP`/`EFORMERR`/`ECONNREFUSED` (WI-7)                                                                                                                                                                                    |
 | `src/documentdb/ClustersClient.ts`                                                             | Tree, webviews, commands      | Resolves between `configureAuth()` and `new MongoClient()`; `getSrvResolution(clusterId)`                                                                                                                                                                            |
@@ -102,6 +95,7 @@ Increment 1 ([plan](./iterations/01-srv-fallback/plan.md), progress recorded per
 | 2026-10-09 | —   | D0005, D0007–D0010 accepted; `connectToClient` deprecated; iteration 01 moved into a folder                              | [decisions.md](./decisions.md)                                                                                                 |
 | 2026-10-09 | —   | Increment 1 implemented (M1–M8, `406b5f73`…`2855dcc9`); end-of-work review, one finding fixed; manual checks 2–8 pending | [plan.md Outcome](./iterations/01-srv-fallback/plan.md#outcome), [code-review.md](./iterations/01-srv-fallback/code-review.md) |
 | 2026-10-09 | —   | Tooltip flag dropped; tree code back to `v0.11.0` (D0021 supersedes D0019)                                               | [decisions.md](./decisions.md)                                                                                                 |
+| 2026-10-12 | —   | Developer-preview build `0.11.1-preview` (`72d3d019`) with a modal notice on fallback; notice removed after the preview  | [plan.md](./iterations/01-srv-fallback/plan.md#developer-preview-build-operator-request-2026-10-09)                            |
 
 ## Decisions
 

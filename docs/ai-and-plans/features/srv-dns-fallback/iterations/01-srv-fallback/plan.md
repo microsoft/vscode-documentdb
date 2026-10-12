@@ -1239,10 +1239,15 @@ tree expansion"), once per SRV host per window. It is non-blocking (never awaite
 "Copy Details" summary has no credentials, connection string or resolved target hosts. It sits
 behind `SHOW_SRV_FALLBACK_PREVIEW_NOTICE`.
 
+The preview VSIX was built from `72d3d019` and shared with the affected user. **Removed
+(operator, 2026-10-12):** "that experimental phase has completed". The notice module, its tests,
+its call site in `prepareDriverConnectionString` and its localized strings are gone; the adapter
+is back to its `3024e370` state. Fallback use stays visible in the `[SrvResolution]` trace and in
+telemetry (D0021).
+
 ## Open items
 
-- **Before the `0.11.1` release:** decide whether to keep the developer-preview notice
-  (`SHOW_SRV_FALLBACK_PREVIEW_NOTICE`), and set the version from `0.11.1-preview` to `0.11.1`.
+- **Before the `0.11.1` release:** set the version from `0.11.1-preview` to `0.11.1`.
 
 - Run the pending manual checks and record the results here.
 - The AI pre-review file required by CONTRIBUTING §6, the `0.11.1` version bump, the PR into `release/0.11.1` (created by a maintainer from `v0.11.0`), and the

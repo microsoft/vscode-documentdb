@@ -6,11 +6,9 @@
 import type * as SrvResolver from '@documentdb-js/srv-resolver';
 import { resolveSrvForDriver } from '@documentdb-js/srv-resolver';
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
-import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { prepareDriverConnectionString } from './prepareDriverConnectionString';
-import { resetSrvFallbackPreviewNoticeForTests } from './srvFallbackPreviewNotice';
 
 import {
     type ResolveSrvForDriverInput,
@@ -127,8 +125,6 @@ function returnReport(report: SrvResolutionReport): void {
 describe('prepareDriverConnectionString', (): void => {
     beforeEach((): void => {
         jest.clearAllMocks();
-        resetSrvFallbackPreviewNoticeForTests();
-        jest.mocked(vscode.window.showInformationMessage).mockReset().mockResolvedValue(undefined);
         mockEvents.length = 0;
         mockReplaceError = false;
         delete process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK;
@@ -166,7 +162,6 @@ describe('prepareDriverConnectionString', (): void => {
         expect(mockEvents).toHaveLength(0);
         expect(resolveSrvForDriver).not.toHaveBeenCalled();
         expect(ext.outputChannel?.trace).not.toHaveBeenCalled();
-        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
 
     it.each(['node', 'fallback', 'nodeErrorPassthrough'] as const)(
@@ -192,7 +187,6 @@ describe('prepareDriverConnectionString', (): void => {
             const telemetry = startup();
             const result = await prepareDriverConnectionString(input({ startupTelemetry: telemetry }));
             expect(result.srvResolution).toBe(path);
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(path === 'fallback' ? 1 : 0);
             expect(result.summary).toMatchObject({ path, srvTargetCount: 2, resolvedAt: expect.any(Number) });
             expect(result.summary).not.toHaveProperty('srvHost');
             expect(result.summary).not.toHaveProperty('connectionString');
@@ -315,7 +309,6 @@ describe('prepareDriverConnectionString', (): void => {
             expect(telemetry.properties.srvResolution).toBe('fallback');
             expect(telemetry.measurements.srvResolutionDurationMs).toEqual(expect.any(Number));
             expect(JSON.stringify(event.context.telemetry)).not.toContain(host);
-            expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
         },
     );
 
@@ -353,7 +346,6 @@ describe('prepareDriverConnectionString', (): void => {
         expect(mockEvents[0].context.telemetry.properties.result).toBe('Canceled');
         expect(telemetry.properties.srvResolution).toBe('fallback');
         expect(telemetry.measurements.srvResolutionDurationMs).toEqual(expect.any(Number));
-        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
 
     it('rejects already-aborted input before calling package or telemetry', async (): Promise<void> => {
@@ -364,7 +356,6 @@ describe('prepareDriverConnectionString', (): void => {
         );
         expect(resolveSrvForDriver).not.toHaveBeenCalled();
         expect(mockEvents).toHaveLength(0);
-        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
 
     it('preserves package UserCancelledError without an input abort', async (): Promise<void> => {
@@ -373,7 +364,6 @@ describe('prepareDriverConnectionString', (): void => {
         await expect(prepareDriverConnectionString(input())).rejects.toBe(cancellation);
         expect(mockEvents[0].error).toBeInstanceOf(UserCancelledError);
         expect(mockEvents[0].context.telemetry.properties.result).toBe('Canceled');
-        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
 
     it('checks abort after package completion, even if the package fake ignores cancellation', async (): Promise<void> => {
@@ -389,49 +379,6 @@ describe('prepareDriverConnectionString', (): void => {
             UserCancelledError,
         );
         expect(mockEvents[0].context.telemetry.properties.result).toBe('Canceled');
-        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
-    });
-
-    it('returns the prepared connection without waiting for the preview dialog', async (): Promise<void> => {
-        jest.mocked(vscode.window.showInformationMessage).mockReturnValue(new Promise((): void => {}));
-        await expect(prepareDriverConnectionString(input())).resolves.toMatchObject({
-            connectionString: 'mongodb://resolved.example.com',
-            srvResolution: 'fallback',
-        });
-        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            `Developer Preview: DNS workaround applied for ${host}`,
-            expect.objectContaining({ modal: true }),
-            'Copy Details',
-            'Open Troubleshooting Guide',
-        );
-        expect(mockEvents[0].context.telemetry.properties.result).toBe('Succeeded');
-    });
-
-    it('uses the onReport callback to show the notice only after a fallback result is prepared', async (): Promise<void> => {
-        jest.mocked(resolveSrvForDriver).mockImplementation(async (args): Promise<ResolveSrvForDriverResult> => {
-            args.onReport?.(baseReport);
-            expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
-            return { connectionString: 'mongodb://resolved.example.com', options: {}, path: 'fallback' };
-        });
-        await expect(prepareDriverConnectionString(input())).resolves.toMatchObject({ srvResolution: 'fallback' });
-        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
-    });
-
-    it('returns the prepared connection even if the preview dialog rejects', async (): Promise<void> => {
-        jest.mocked(vscode.window.showInformationMessage).mockRejectedValue(new Error('UI rejected'));
-        await expect(prepareDriverConnectionString(input())).resolves.toMatchObject({
-            connectionString: 'mongodb://resolved.example.com',
-            srvResolution: 'fallback',
-        });
-        expect(mockEvents[0].context.telemetry.properties.result).toBe('Succeeded');
-    });
-
-    it('resolves DNS on every connection while deduplicating only the notice', async (): Promise<void> => {
-        await prepareDriverConnectionString(input());
-        await prepareDriverConnectionString(input({ surface: 'shell' }));
-        expect(resolveSrvForDriver).toHaveBeenCalledTimes(2);
-        expect(mockEvents).toHaveLength(2);
-        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
     });
 
     it('removes the linked input abort listener after completion', async (): Promise<void> => {
