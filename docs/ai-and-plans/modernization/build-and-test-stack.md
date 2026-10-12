@@ -4205,6 +4205,17 @@ Stage 0 must also be made.
           dependency (Cosmos DB uses `vite-bundle-analyzer`, opt-in); not done.
         - The W16 release notes no longer say "size budget" (coordinator, in the record
           commit), and the pipeline guide is updated.
+  - **G8 answers so far (operator, 2026-10-12), verbatim:**
+    - **1 and 2:** "drafts: approved."
+    - **11 to 20:** "confirmed, but explain w5 to me" (explained in chat: W5 changes neither F5
+      nor Watch).
+    - **3 (S8-F01):** "this feels like a no real issue, i choose ppackages I import, correct?
+      adding name chevck is cheap, but what if we miss something." **4 (S8-F02):** "maybe
+      sometimes a duplicate is allowed, what then.." **6 (S8-F04, written as "s8-f05"):** "well,
+      I need to be able just to hit F5 and be able to debug quickly." Answered in chat; the
+      decisions are still open, as are 5 and 7 to 10.
+    - **22 follow-up:** "size-report - show me an example of what it could delvier" (answered
+      in chat with a one-off per-package measurement; nothing committed).
 - **Stage 8 commits:** `5124c392` (W1), `46c1b0b7` (W7), `550eff6b` (W2), `b69422b6` (W3),
   `20e11e14` (W4), `1750d40e` (W5), `7f6dd66f` (W6), `960c2b57` (W8), `01051ca8` (W9),
   `78e46f03` (W11), `55af1a67` (W10), `4cabe7d8` (W12), `77b5d702` (W13), `21b0da12` (W16),
