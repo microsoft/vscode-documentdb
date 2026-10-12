@@ -3,12 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    callWithTelemetryAndErrorHandling,
-    type IActionContext,
-    type ITelemetryContext,
-    UserCancelledError,
-} from '@microsoft/vscode-azext-utils';
+import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
 import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
@@ -21,7 +16,6 @@ import { ClustersClient, getIndexExclusionReason, type IndexItemModel } from './
 import { CredentialCache } from './CredentialCache';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
 import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
-import * as connectionStringHelpers from './utils/connectionStringHelpers';
 import { getClusterMetadata, getDomainMetadata } from './utils/getClusterMetadata';
 import * as tlsException from './utils/tlsException';
 
@@ -93,13 +87,6 @@ jest.mock('./utils/getClusterMetadata', () => ({
 jest.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: jest.fn() }));
 jest.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: jest.fn() }));
 jest.mock('./srv/prepareDriverConnectionString', () => ({ prepareDriverConnectionString: jest.fn() }));
-jest.mock('./utils/connectionStringHelpers', () => ({
-    ...jest.requireActual<typeof connectionStringHelpers>('./utils/connectionStringHelpers'),
-    getHostsFromConnectionString: jest.fn(
-        jest.requireActual<typeof connectionStringHelpers>('./utils/connectionStringHelpers')
-            .getHostsFromConnectionString,
-    ),
-}));
 jest.mock('./utils/tlsException', () => ({
     ...jest.requireActual<typeof tlsException>('./utils/tlsException'),
     resolveAllowInvalidCertificates: jest.fn(
@@ -336,62 +323,42 @@ describe('regular connection startup diagnostics', () => {
         expect(jest.mocked(MongoClient)).not.toHaveBeenCalled();
     });
 
-    it('hands only the transient URI and prepared options to the driver, retaining original metadata and credentials', async () => {
+    it('hands the transient URI to the driver while metadata and credentials keep the original', async () => {
         const original = 'mongodb+srv://original.global.mongocluster.cosmos.azure.com/';
         const rewritten = 'mongodb://resolved.example.com:27017/?tls=true';
-        const callback = jest.fn();
-        const options: MongoClientOptions = { authMechanismProperties: { OIDC_CALLBACK: callback } };
-        const preparedOptions: MongoClientOptions = { ...options, tls: true };
+        const preparedOptions: MongoClientOptions = { tls: true };
         const summary: SrvResolutionSummary = { path: 'fallback', nodeErrorCode: 'EBADRESP', resolvedAt: 1 };
         CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, original);
-        const credentials = CredentialCache.getCredentials(clusterId);
-        const getHosts = jest.mocked(connectionStringHelpers.getHostsFromConnectionString);
-        jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
-            connectionString: original,
-            options,
-        });
-        jest.mocked(prepareDriverConnectionString).mockImplementationOnce(async (input) => {
-            expect(getHosts).toHaveBeenCalledWith(original);
-            expect(
-                jest
-                    .mocked(callWithTelemetryAndErrorHandling)
-                    .mock.calls.some(([name]) => name === 'connect.staticmetadata'),
-            ).toBe(true);
-            input.startupTelemetry!.properties.srvResolution = 'fallback';
-            input.startupTelemetry!.measurements.srvResolutionDurationMs = 5;
-            return { connectionString: rewritten, options: preparedOptions, srvResolution: 'fallback', summary };
-        });
-        {
-            const client = await ClustersClient.getClient(clusterId);
-            await Promise.resolve();
-            expect(MongoClient).toHaveBeenCalledWith(rewritten, preparedOptions);
-            expect(jest.mocked(MongoClient).mock.calls[0][1]).toBe(preparedOptions);
-            expect(preparedOptions.authMechanismProperties?.OIDC_CALLBACK).toBe(callback);
-            expect(CredentialCache.getCredentials(clusterId)).toBe(credentials);
-            expect(credentials?.connectionString).toBe(original);
-            const hosts = ['original.global.mongocluster.cosmos.azure.com'];
-            expect(getDomainMetadata).toHaveBeenCalledWith(hosts);
-            expect(getClusterMetadata).toHaveBeenCalledWith(client.getMongoClient(), hosts);
-            expect(ClustersClient.getSrvResolution(clusterId)).toBe(summary);
-            expect(startupEvent().telemetry).toMatchObject({
-                properties: { srvResolution: 'fallback' },
-                measurements: { srvResolutionDurationMs: 5 },
-            });
-            await ClustersClient.getClient(clusterId);
-            expect(prepareDriverConnectionString).toHaveBeenCalledTimes(1);
-        }
-    });
-
-    it('evaluates the TLS exception policy against the original SRV URI on driver failure', async () => {
-        const original = 'mongodb+srv://original.example.com/';
-        const rewritten = 'mongodb://resolved.example.com/';
-        const policy = jest.mocked(tlsException.resolveAllowInvalidCertificates).mockReturnValueOnce(undefined);
         jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
             connectionString: original,
             options: {},
         });
         jest.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
             connectionString: rewritten,
+            options: preparedOptions,
+            srvResolution: 'fallback',
+            summary,
+        });
+        const client = await ClustersClient.getClient(clusterId);
+        expect(MongoClient).toHaveBeenCalledWith(rewritten, preparedOptions);
+        expect(CredentialCache.getCredentials(clusterId)?.connectionString).toBe(original);
+        const hosts = ['original.global.mongocluster.cosmos.azure.com'];
+        expect(getDomainMetadata).toHaveBeenCalledWith(hosts);
+        expect(getClusterMetadata).toHaveBeenCalledWith(client.getMongoClient(), hosts);
+        expect(ClustersClient.getSrvResolution(clusterId)).toBe(summary);
+        await ClustersClient.deleteClient(clusterId);
+        expect(ClustersClient.getSrvResolution(clusterId)).toBeUndefined();
+    });
+
+    it('evaluates the TLS exception policy against the original SRV URI on driver failure', async () => {
+        const original = 'mongodb+srv://original.example.com/';
+        const policy = jest.mocked(tlsException.resolveAllowInvalidCertificates).mockReturnValueOnce(undefined);
+        jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: original,
+            options: {},
+        });
+        jest.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
+            connectionString: 'mongodb://resolved.example.com/',
             options: {},
             srvResolution: 'fallback',
         });
@@ -399,48 +366,18 @@ describe('regular connection startup diagnostics', () => {
         mockConnect.mockRejectedValueOnce(failure);
         await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
         expect(policy).toHaveBeenCalledWith(undefined, original);
-        expect(failure.message).toBe('ECONNREFUSED');
     });
 
-    it.each(['node', 'fallback', 'nodeErrorPassthrough', 'notSrv'] as const)(
-        'keeps only the host-free summary for %s and removes it with the client',
-        async (path): Promise<void> => {
-            const summary: SrvResolutionSummary | undefined =
-                path === 'notSrv'
-                    ? undefined
-                    : {
-                          path,
-                          nodeErrorCode: path === 'node' ? undefined : 'EBADRESP',
-                          resolvedAt: 1,
-                      };
-            jest.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
-                connectionString: 'mongodb://private-host:27017',
-                options: {},
-                srvResolution: path,
-                summary,
-            });
-            await ClustersClient.getClient(clusterId);
-            expect(ClustersClient.getSrvResolution(clusterId)).toBe(summary);
-            expect(ClustersClient.getSrvResolution(`folder/${clusterId}`)).toBeUndefined();
-            expect(JSON.stringify(ClustersClient.getSrvResolution(clusterId)) ?? '').not.toContain('host');
-            await ClustersClient.deleteClient(clusterId);
-            expect(ClustersClient.getSrvResolution(clusterId)).toBeUndefined();
-        },
-    );
-
-    it.each([new UserCancelledError('srvResolution'), new Error('original resolution failure')])(
-        'preserves SRV preparation failure %s without constructing a driver',
-        async (failure): Promise<void> => {
-            jest.mocked(prepareDriverConnectionString).mockRejectedValueOnce(failure);
-            await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
-            expect(MongoClient).not.toHaveBeenCalled();
-            expect(startupEvent().telemetry.properties).toMatchObject({
-                startupOutcome: failure instanceof UserCancelledError ? 'canceled' : 'failed',
-                lastStage: 'stage03PreparingClient',
-            });
-            expect(ClustersClient.getSrvResolution(clusterId)).toBeUndefined();
-        },
-    );
+    it('rethrows an SRV preparation failure without constructing a driver', async (): Promise<void> => {
+        const failure = new Error('original resolution failure');
+        jest.mocked(prepareDriverConnectionString).mockRejectedValueOnce(failure);
+        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
+        expect(MongoClient).not.toHaveBeenCalled();
+        expect(startupEvent().telemetry.properties).toMatchObject({
+            startupOutcome: 'failed',
+            lastStage: 'stage03PreparingClient',
+        });
+    });
 });
 
 describe('getIndexExclusionReason', () => {

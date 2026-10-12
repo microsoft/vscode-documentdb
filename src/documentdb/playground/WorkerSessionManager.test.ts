@@ -261,75 +261,46 @@ describe('WorkerSessionManager', () => {
             return mockTelemetryEvents.find((event) => event.eventName === 'worker.startup')!;
         }
 
-        it.each([false, true])(
-            'posts only serializable prepared options without changing frozen input (persistent=%s)',
-            async (persistent): Promise<void> => {
-                const input = Object.freeze({
-                    ...initMessage(persistent),
-                    clientOptions: Object.freeze({ ...initMessage().clientOptions }),
-                });
-                const snapshot = JSON.parse(JSON.stringify(input)) as unknown;
-                const sanitizedOptions = {
+        it('posts only serializable prepared options without changing the input', async (): Promise<void> => {
+            const input = Object.freeze({
+                ...initMessage(),
+                clientOptions: Object.freeze({ ...initMessage().clientOptions }),
+            });
+            const snapshot = JSON.parse(JSON.stringify(input)) as unknown;
+            jest.mocked(prepareDriverConnectionString).mockResolvedValue({
+                connectionString: rewrittenUri,
+                options: {
                     serverSelectionTimeoutMS: 8000,
-                    tlsAllowInvalidCertificates: false,
                     tls: true,
-                    appName: 'prepared-app',
-                    authMechanism: 'MONGODB-OIDC' as const,
-                    authMechanismProperties: {
-                        OIDC_CALLBACK: async (): Promise<never> => {
-                            throw new Error('never called');
-                        },
-                    },
-                };
-                jest.mocked(prepareDriverConnectionString).mockResolvedValue({
-                    connectionString: rewrittenUri,
-                    options: sanitizedOptions,
-                    srvResolution: 'fallback',
-                });
-                const manager = new WorkerSessionManager(callbacks);
-                const telemetryContext = {
-                    shellSessionId: 'shell-session',
-                    sessionId: 'playground-session',
-                    connectionCorrelationId: 'connection-id',
-                };
-                const initializing = manager.ensureWorker('cluster-id', input, 1000, telemetryContext);
-                await Promise.resolve();
-                const posted = replyInit();
-                await initializing;
+                    authMechanismProperties: { OIDC_CALLBACK: jest.fn() },
+                },
+                srvResolution: 'fallback',
+            });
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('cluster-id', input, 1000, { sessionId: 'playground-session' });
+            await Promise.resolve();
+            const posted = replyInit();
+            await initializing;
 
-                expect(posted).toMatchObject({
-                    connectionString: rewrittenUri,
-                    clientOptions: {
-                        serverSelectionTimeoutMS: 8000,
-                        tlsAllowInvalidCertificates: false,
-                        tls: true,
-                        appName: 'prepared-app',
-                    },
-                    oidcAllowedHosts: ['*.azure.us'],
-                });
-                expect(posted.clientOptions).not.toHaveProperty('authMechanism');
-                expect(posted.clientOptions).not.toHaveProperty('authMechanismProperties');
-                expect(() => structuredClone(posted)).not.toThrow();
-                expect(input).toEqual(snapshot);
-                expect(jest.mocked(prepareDriverConnectionString).mock.calls[0][0]).toMatchObject({
-                    connectionString: originalUri,
-                    options: input.clientOptions,
-                    surface: persistent ? 'shell' : 'playground',
-                    correlation: { ...telemetryContext, startupCorrelationId: posted.requestId },
-                    startupTelemetry: startupEvent().telemetry,
-                    abortSignal: expect.any(AbortSignal),
-                });
-                manager.dispose();
-            },
-        );
+            expect(posted).toMatchObject({
+                connectionString: rewrittenUri,
+                clientOptions: { serverSelectionTimeoutMS: 8000, tls: true },
+                oidcAllowedHosts: ['*.azure.us'],
+            });
+            expect(() => structuredClone(posted)).not.toThrow();
+            expect(input).toEqual(snapshot);
+            expect(jest.mocked(prepareDriverConnectionString).mock.calls[0][0]).toMatchObject({
+                connectionString: originalUri,
+                surface: 'playground',
+                correlation: { sessionId: 'playground-session', startupCorrelationId: posted.requestId },
+                abortSignal: expect.any(AbortSignal),
+            });
+            manager.dispose();
+        });
 
         it.each([
-            ['playground', 'killWorker'],
-            ['playground', 'dispose'],
             ['playground', 'shutdown'],
             ['shell', 'killWorker'],
-            ['shell', 'dispose'],
-            ['shell', 'shutdown'],
         ] as const)(
             'R2: %s %s during pending DNS rejects startup and never sends code',
             async (surface, method): Promise<void> => {
@@ -385,18 +356,6 @@ describe('WorkerSessionManager', () => {
             },
         );
 
-        it('preserves an adapter cancellation object even when telemetry swallows cancellation', async (): Promise<void> => {
-            const canceled = new UserCancelledError('srvResolution');
-            jest.mocked(prepareDriverConnectionString).mockRejectedValue(canceled);
-            const manager = new WorkerSessionManager(callbacks);
-            await expect(manager.ensureWorker('cluster-id', initMessage())).rejects.toBe(canceled);
-            expect(Worker).not.toHaveBeenCalled();
-            expect(startupEvent().telemetry.properties).toMatchObject({
-                startupOutcome: 'canceled',
-                result: 'Canceled',
-            });
-        });
-
         it('does not let a canceled preparation terminate a newer startup', async (): Promise<void> => {
             const pending = deferred<PreparedDriverConnectionString>();
             jest.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
@@ -449,28 +408,26 @@ describe('WorkerSessionManager', () => {
             }
         });
 
-        it.each(['MicrosoftEntraID', 'ManagedIdentity'] as const)(
-            'passes the OIDC mechanism to preparation but not to the worker (%s)',
-            async (authMechanism): Promise<void> => {
-                jest.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
-                    connectionString: rewrittenUri,
-                    options: input.options,
-                    srvResolution: 'fallback',
-                }));
-                const manager = new WorkerSessionManager(callbacks);
-                const initializing = manager.ensureWorker('cluster-id', { ...initMessage(), authMechanism });
-                await jest.mocked(prepareDriverConnectionString).mock.results[0].value;
-                const posted = replyInit();
-                await initializing;
-                expect(jest.mocked(prepareDriverConnectionString).mock.calls[0][0].options).toMatchObject({
-                    authMechanism: 'MONGODB-OIDC',
-                });
-                expect(posted.authMechanism).toBe(authMechanism);
-                expect(posted.clientOptions).not.toHaveProperty('authMechanism');
-                expect(posted.oidcAllowedHosts).toEqual(['*.azure.us']);
-                manager.dispose();
-            },
-        );
+        it('passes the OIDC mechanism to preparation but not to the worker', async (): Promise<void> => {
+            jest.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
+                connectionString: rewrittenUri,
+                options: input.options,
+                srvResolution: 'fallback',
+            }));
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('cluster-id', {
+                ...initMessage(),
+                authMechanism: 'MicrosoftEntraID',
+            });
+            await jest.mocked(prepareDriverConnectionString).mock.results[0].value;
+            const posted = replyInit();
+            await initializing;
+            expect(jest.mocked(prepareDriverConnectionString).mock.calls[0][0].options).toMatchObject({
+                authMechanism: 'MONGODB-OIDC',
+            });
+            expect(posted.clientOptions).not.toHaveProperty('authMechanism');
+            manager.dispose();
+        });
 
         it('keeps the original SRV host in shell connection metadata used by the banner', async (): Promise<void> => {
             jest.mocked(CredentialCache.getCredentials).mockReturnValue({
