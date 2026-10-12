@@ -10,7 +10,7 @@ import { getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { createSrvResolutionSummary } from './srvResolutionSummary';
 import { applySrvResolutionReport } from './srvResolutionTelemetry';
 
-import { type SrvFallbackMode, type SrvResolutionPath } from '@documentdb-js/srv-resolver';
+import { type SrvFallbackMode, type SrvResolutionPath, type SrvResolutionReport } from '@documentdb-js/srv-resolver';
 import { type MongoClientOptions } from 'mongodb';
 import { type SrvResolutionSummary } from './srvResolutionSummary';
 import { type SrvResolutionTelemetry } from './srvResolutionTelemetry';
@@ -40,6 +40,28 @@ function fallbackMode(): SrvFallbackMode {
     return process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK === '1' ? 'force' : 'auto';
 }
 
+async function sendSrvResolutionEvent(
+    report: SrvResolutionReport,
+    input: PrepareDriverConnectionStringInput,
+): Promise<void> {
+    await callWithTelemetryAndErrorHandling('connect.srvResolution', async (context): Promise<void> => {
+        context.errorHandling.suppressDisplay = true;
+        context.telemetry.maskEntireErrorMessage = true;
+        applySrvResolutionReport(context.telemetry, report, input.surface, input.correlation);
+        // Throwing sets the event's result; the real error never enters telemetry.
+        if (report.outcome === 'cancelled') {
+            throw new UserCancelledError('srvResolution');
+        }
+        if (report.outcome === 'failed') {
+            throw new Error('SRV resolution failed');
+        }
+    });
+}
+
+/**
+ * Returns the connection string to hand to the driver: the original one, or for a `mongodb+srv://`
+ * string whose DNS reply Node.js rejects, a transient `mongodb://` equivalent. Never persist it.
+ */
 export async function prepareDriverConnectionString(
     input: PrepareDriverConnectionStringInput,
 ): Promise<PreparedDriverConnectionString> {
@@ -52,75 +74,51 @@ export async function prepareDriverConnectionString(
         }
         return { connectionString: input.connectionString, options: input.options, srvResolution: 'notSrv' };
     }
-    const controller = new AbortController();
-    const abort = (): void => controller.abort(new UserCancelledError('srvResolution'));
-    input.abortSignal?.addEventListener('abort', abort, { once: true });
     const correlationId =
         input.correlation.connectionCorrelationId ??
         input.correlation.startupCorrelationId ??
         input.correlation.shellSessionId ??
         'unknown';
-    let originalFailure: { error: unknown } | undefined;
-    let prepared: PreparedDriverConnectionString | undefined;
+    const startedAt = Date.now();
+    // Widened so control flow does not narrow it to undefined; onReport assigns it.
+    let report = undefined as SrvResolutionReport | undefined;
     try {
-        await callWithTelemetryAndErrorHandling('connect.srvResolution', async (context): Promise<void> => {
-            context.errorHandling.suppressDisplay = true;
-            context.errorHandling.rethrow = true;
-            context.telemetry.maskEntireErrorMessage = true;
-            const startedAt = Date.now();
-            try {
-                const result = await resolveSrvForDriver({
-                    connectionString: input.connectionString,
-                    options: input.options,
-                    fallback: fallbackMode(),
-                    deadlineMs: Math.min(FALLBACK_MAX_DEADLINE_MS, getConnectionTimeoutMs()),
-                    signal: controller.signal,
-                    logger: { trace: (message: string): void => ext.outputChannel?.trace(message) },
-                    logPrefix: `[SrvResolution] ${correlationId}`,
-                    logContext: `surface=${input.surface}`,
-                    onReport: (report): void => {
-                        applySrvResolutionReport(context.telemetry, report, input.surface, input.correlation);
-                        if (input.startupTelemetry) {
-                            input.startupTelemetry.properties.srvResolution = report.path;
-                        }
-                    },
-                });
-                if (controller.signal.aborted) {
-                    throw controller.signal.reason;
-                }
-                prepared = {
-                    connectionString: result.connectionString,
-                    options: result.options,
-                    srvResolution: result.path,
-                    summary: result.report ? createSrvResolutionSummary(result.report) : undefined,
-                };
-            } catch (error) {
-                const failure: unknown = controller.signal.aborted ? controller.signal.reason : error;
-                originalFailure = { error: failure };
-                if (failure instanceof UserCancelledError) {
-                    throw new UserCancelledError('srvResolution');
-                }
-                // Framework handlers may replace errors, and masking does not redact the stack.
-                const telemetryError = new Error('SRV resolution failed');
-                telemetryError.stack = undefined;
-                throw telemetryError;
-            } finally {
-                if (input.startupTelemetry) {
-                    input.startupTelemetry.measurements.srvResolutionDurationMs = Date.now() - startedAt;
-                }
-            }
+        const result = await resolveSrvForDriver({
+            connectionString: input.connectionString,
+            options: input.options,
+            fallback: fallbackMode(),
+            deadlineMs: Math.min(FALLBACK_MAX_DEADLINE_MS, getConnectionTimeoutMs()),
+            signal: input.abortSignal,
+            logger: { trace: (message: string): void => ext.outputChannel?.trace(message) },
+            logPrefix: `[SrvResolution] ${correlationId}`,
+            logContext: `surface=${input.surface}`,
+            onReport: (resolved): void => {
+                report = resolved;
+            },
         });
+        if (input.abortSignal?.aborted) {
+            throw new UserCancelledError('srvResolution');
+        }
+        return {
+            connectionString: result.connectionString,
+            options: result.options,
+            srvResolution: result.path,
+            summary: result.report ? createSrvResolutionSummary(result.report) : undefined,
+        };
     } catch (error) {
-        throw originalFailure ? originalFailure.error : error;
+        if (input.abortSignal?.aborted) {
+            throw new UserCancelledError('srvResolution');
+        }
+        throw error;
     } finally {
-        input.abortSignal?.removeEventListener('abort', abort);
+        if (input.startupTelemetry) {
+            input.startupTelemetry.measurements.srvResolutionDurationMs = Date.now() - startedAt;
+            if (report) {
+                input.startupTelemetry.properties.srvResolution = report.path;
+            }
+        }
+        if (report) {
+            await sendSrvResolutionEvent(report, input);
+        }
     }
-    // The telemetry framework swallows UserCancelledError even with rethrow enabled.
-    if (originalFailure) {
-        throw originalFailure.error;
-    }
-    if (!prepared) {
-        throw new Error('SRV resolution did not return a result');
-    }
-    return prepared;
 }
