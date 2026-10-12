@@ -4,13 +4,11 @@ In-memory SRV DNS fallback for `mongodb+srv://` connection strings, for Node.js 
 
 When Node.js's own DNS resolver rejects a valid SRV reply, this package resolves the SRV and TXT records itself, from the same DNS servers, and hands the driver an equivalent `mongodb://host1:port1,host2:port2/…` string. The resolved string exists only in memory, for that one connection.
 
-> **Status:** used by the [DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb) extension through npm workspaces. Not yet published to npm; version 1.0.0 is the first planned release.
-
 ## Why this exists
 
 A `mongodb+srv://` connection string does not list the servers. Before connecting, the driver looks up an SRV record (`_mongodb._tcp.<host>`) and an optional TXT record with connection options, using `dns.promises` from Node.js. Node.js does not use the operating system's resolver for these lookups. It uses its bundled **c-ares** library.
 
-Since c-ares **1.34.7** ([c-ares/c-ares#1190](https://github.com/c-ares/c-ares/pull/1190)), the reply parser rejects DNS **name compression inside SRV record data**. Compression is valid DNS, and many home routers, phone hotspots, some VPN and corporate DNS servers, and Samba AD domain controllers use it for the SRV target. A cloud host name like `fc-abc-000.<cluster>.global.mongocluster.cosmos.azure.com` shares a long suffix with the queried name, so a compressing server almost always compresses it. The lookup then fails before any connection is attempted:
+Since c-ares **1.34.7** ([c-ares/c-ares#1190](https://github.com/c-ares/c-ares/pull/1190)), the reply parser rejects DNS **name compression inside SRV record data**. RFC 2782 says senders should not compress the SRV target, but [RFC 3597 section 4](https://www.rfc-editor.org/rfc/rfc3597#section-4) says receivers should decompress it for compatibility with existing servers. Many home routers, phone hotspots, some VPN and corporate DNS servers, and Samba AD domain controllers do compress the target. A cloud host name like `fc-abc-000.<cluster>.global.mongocluster.cosmos.azure.com` shares a long suffix with the queried name, so a compressing server almost always replaces that suffix with a pointer. c-ares treats the otherwise usable reply as malformed, and the lookup fails before any connection is attempted:
 
 ```
 Error: querySrv EBADRESP _mongodb._tcp.<cluster>.global.mongocluster.cosmos.azure.com
@@ -18,7 +16,28 @@ Error: querySrv EBADRESP _mongodb._tcp.<cluster>.global.mongocluster.cosmos.azur
 
 Other tools on the same machine (`nslookup`, browsers) keep working, because they use a different resolver. Node.js 24.19+ bundles c-ares 1.34.8, and so does VS Code (through Electron), so users can start seeing the error after an automatic update, with no change on their side. The upstream fix ([c-ares/c-ares#1290](https://github.com/c-ares/c-ares/pull/1290)) was closed without being merged, and any fix would still have to ship through c-ares, Node.js and Electron. The replay in [nodejs/node#66173](https://github.com/nodejs/node/issues/66173) shows the problem.
 
-The full analysis, with the platform exposure and the alternatives that were rejected, is in [microsoft/vscode-documentdb#993](https://github.com/microsoft/vscode-documentdb/issues/993).
+The replay produces different results for the same DNS bytes depending only on the bundled c-ares version:
+
+| Runtime                                     | c-ares | Compressed SRV target | Uncompressed SRV target |
+| ------------------------------------------- | ------ | --------------------- | ----------------------- |
+| Node.js 22.21.1                             | 1.34.5 | succeeds              | succeeds                |
+| VS Code 1.139.x (Node.js 24.20.0)           | 1.34.8 | `EBADRESP`            | succeeds                |
+| VS Code 1.140.0 / 1.141.0 (Node.js 24.21.0) | 1.34.8 | `EBADRESP`            | succeeds                |
+
+This also explains why switching to a public resolver can appear to fix the problem: resolvers such as `1.1.1.1` and `8.8.8.8` return the SRV target in full. That is not a suitable library workaround because it breaks private endpoints and split DNS, and sends host names to a third party. Retrying Node.js, disabling EDNS or forcing TCP does not help either; the failure is in the reply parser, not the query or transport.
+
+### Platform exposure
+
+Exposure depends on the DNS path of the process running Node.js, not on the application UI or the location of the database:
+
+| Platform                       | DNS path seen by c-ares                                                                      | Exposure        |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | --------------- |
+| Windows                        | Adapter DNS servers, often a home router                                                     | Exposed         |
+| macOS                          | System-configured resolvers, often the router from DHCP; c-ares does not use `mDNSResponder` | Exposed         |
+| Linux with `systemd-resolved`  | The local `127.0.0.53` stub, which normally parses and re-serializes the upstream reply      | Mostly shielded |
+| Linux without a local DNS stub | The router or upstream DNS server directly, common in containers and minimal servers         | Exposed         |
+
+For remote development, the relevant platform is where the Node.js process runs. A process in WSL, a development container or a remote host uses that environment's DNS path, even when its UI is displayed on another machine.
 
 ## What it does
 
