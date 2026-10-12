@@ -4176,12 +4176,43 @@ Stage 0 must also be made.
         `dev/tnaum/modernization` at the final Stage 8 commit or later. The npm build is the
         first Windows run of W3's archive check and W6's `typecheck:tests`. The coordinator
         verifies the drops as at G7 item 27.
+    - **F. Decided by the operator after the list (2026-10-12):**
+      - **22. Size budget replaced by a warning-only size report** (reverses the size-budget part
+        of G7 item 31). The operator, verbatim: "this worries me as it's hard to update the
+        'snapshots' I guess, so I'd rely just on having a warning"; after the coordinator
+        checked vscode-cosmosdb (no PR size comparison, only the VSIX artifact size and an
+        opt-in local treemap): "I don't want just report for the sake of reporting"; then
+        "please implement it now in a stage 8 follow up".
+        - **Done in `6c5eb435`** (Claude Opus 5.5). `size-budget.json`, `--size-budget`,
+          `--write-size-budget` and the budget failure are gone from L1 (GitHub, ADO before
+          signing, the cache-seed workflow). L1 still measures the same 14 graphs
+          (`manifestReport.graphSizes`) with the same ownership and hash checks; every other
+          invariant stays a hard failure. The PR comment compares with the `main` cache (same
+          v2 format) and is one line when nothing moved; a graph that changes by at least 5% or
+          50 KiB is listed (pages, activation, host, playground worker and VSIX first), growth
+          with ⚠ and a GitHub warning annotation. All graphs stay in a collapsed table, and a
+          missing base is said explicitly. The three size-budget proof controls are retired
+          (the gate they exercised no longer exists): `prove:vsix` prints **22 PASS**. Twelve
+          unit tests in `build-size-report.test.cjs` cover the thresholds; raising a threshold
+          or changing `>=` to `>` made four and two of them fail.
+        - **Checks:** build, lint, Prettier; `test:verification` 125 Node (126 before: six budget
+          tests removed, five report tests added) and 79 browser tests;
+          `verify:vsix` exit 0 and `prove:vsix` 22 PASS on the final Stage 8 VSIX (both re-run
+          by the coordinator).
+        - **Not as proposed:** the comment points at the chunk data in `host.json` and
+          `views.json` (Bundle-reports artifact), not a treemap: the Vite build writes none,
+          and the local `views.html` was a stale webpack file. Adding a treemap needs a
+          dependency (Cosmos DB uses `vite-bundle-analyzer`, opt-in); not done.
+        - The W16 release notes no longer say "size budget" (coordinator, in the record
+          commit), and the pipeline guide is updated.
 - **Stage 8 commits:** `5124c392` (W1), `46c1b0b7` (W7), `550eff6b` (W2), `b69422b6` (W3),
   `20e11e14` (W4), `1750d40e` (W5), `7f6dd66f` (W6), `960c2b57` (W8), `01051ca8` (W9),
   `78e46f03` (W11), `55af1a67` (W10), `4cabe7d8` (W12), `77b5d702` (W13), `21b0da12` (W16),
   `8e27139d` (W14), `7e7f543c` (the review), and the `S8: record …` documentation commits
-  `276163e0`, `df7eb036` and this one. W15 and W17 made no commit.
-  **Status: Stage 8 work complete; stopped at G8 (2026-10-12).** ADO builds pending (item 21).
+  `276163e0`, `df7eb036` and `ebd68c15`. W15 and W17 made no commit. After the G8 list:
+  `6c5eb435` (item 22, the size report) and its record commit.
+  **Status: Stage 8 work complete; stopped at G8 (2026-10-12).** ADO builds pending (item 21);
+  `prove:vsix` now prints 22 PASS (item 22), not the 25 of the final verification above.
   Case 1 applied throughout; the Case 2 list runs in Stage 9.
 
 ### Stage 9: ready for review, merge and release

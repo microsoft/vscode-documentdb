@@ -142,7 +142,7 @@ or a display, and everything that exists for PR feedback.
 
 The check names L1 to L3 come from the modernization plan
 ([build-and-test-stack.md, the automated checks](./build-and-test-stack.md#the-automated-checks)):
-L1 inspects the unzipped VSIX against its invariants and size budget, L2 renders the production webview bundle
+L1 inspects the unzipped VSIX against its invariants and measures per-graph sizes for a warning-only PR report, L2 renders the production webview bundle
 in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that it activates.
 
 | Check                               | Today                                                            | GitHub Actions (planned)                                                                                                                  | ADO official build (planned)                                                                                   | Why                                                                                                                                                                                                                                                                                |
@@ -168,17 +168,18 @@ On GitHub Actions, **Build & Package** still depends on **Code Quality & Tests**
 Bundle-report upload uses `if: always()` and treats missing files as an error. **VSIX inspection
 (L1)** downloads those two artifacts, runs the offline inspection and rejection proofs, and
 uploads `L1-manifest-report-<run_id>` with `if: always()` (missing reports warn, because failures
-before size evaluation may not write one). The report contains the VSIX and graph sizes and
-the enforced per-graph `sizeBudget` (the informational manifest drift was removed in Stage 8,
-W2); an over-budget inspection writes the report and still
-fails the job. **Installed VSIX activation (L3)** independently consumes the VSIX from Build &
+before size evaluation may not write one). The report contains the VSIX size and `graphSizes`,
+the per-graph measurements (the informational manifest drift was removed in Stage 8, W2, and
+the size budget by G8 item 22, so size never fails the job). **Installed VSIX activation (L3)** independently consumes the VSIX from Build &
 Package, runs on GitHub only, and keeps its failure-diagnostics artifact unchanged.
 
 L1 now owns size collection, cache save/restore and the `<!-- build-size-report -->` PR comment.
 The shared [report formatter](../../../build/verification/build-size-report.cjs) reads L1's
-`sizeBudget.graphs` without reimplementing graph traversal. It reports all five views, the views
-entry, both Monaco workers, all host graphs (including `mainStartup`), and the VSIX total, with
-exact PR bytes, base bytes, delta and budget status/limit. Shared chunks occur in multiple graphs,
+`graphSizes` without reimplementing graph traversal. It flags a graph that changed by at least
+5% of its base or 50 KiB (⚠ and a GitHub warning annotation on growth), shows one line when
+nothing moved, and keeps every graph's exact PR bytes, base bytes and delta (all five views, the
+views entry, both Monaco workers, all host graphs including `mainStartup`, and the VSIX) in a
+collapsed `<details>` block. Shared chunks occur in multiple graphs,
 so these rows are not additive. The old `dist/views.js` metric is no longer used as a proxy for
 all webviews.
 
@@ -192,17 +193,17 @@ base SHA, then the branch prefix. Restored data is renamed before collecting PR 
 cannot accidentally become a PR-as-base comparison.
 
 The PR comment updates its existing marker comment, links the VSIX and both report artifacts,
-and runs with `if: always()` even after a budget failure; it does not turn the failed L1 check
+and runs with `if: always()` even after an L1 failure; it does not turn the failed L1 check
 green. Legacy `{vsixSize, webviewSize}` cache entries still give a VSIX delta, but explicitly say
-per-graph base values are unavailable instead of showing a false reduction. With no base, deltas
-are `N/A`; if an earlier invariant prevents the L1 report, the comment says measurements are
+per-graph base values are unavailable instead of showing a false reduction. With no base, the
+comment says "No size data for `<base>` yet; sizes only."; if an earlier invariant prevents the L1 report, the comment says measurements are
 unavailable. As before, token-written comments are restricted to same-repository PRs; fork PRs
 still get artifacts and job logs. Packaging/L1/L3 run for PRs to `main` or `release/**`, pushes
 to `main`, and dispatches on those refs or with `enforce_full_run`; feature-target PRs otherwise
 run only quality/tests under the existing job condition.
 
-ADO's unsigned-VSIX inspection uses `--manifest-report` and enforces the same budget **before
-signing**. A report-only `CopyFiles@2` step, with `condition: succeededOrFailed()`, stages
+ADO's unsigned-VSIX inspection uses `--manifest-report` and enforces the L1 invariants **before
+signing** (no size gate since G8 item 22). A report-only `CopyFiles@2` step, with `condition: succeededOrFailed()`, stages
 `build/verification/l1-manifest-report.json` and `build/verification/reports/*.json` under the
 existing OneBranch `ob_outputDirectory`, whose contents are published as pipeline artifacts.
 This moves report staging out of the final success-only package-copy step without duplicating
