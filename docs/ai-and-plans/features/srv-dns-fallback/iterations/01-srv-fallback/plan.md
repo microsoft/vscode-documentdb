@@ -1121,6 +1121,8 @@ The hand-over commit adds this chapter and the feature README update.
 - Run the pending manual checks and record the results here.
 - The AI pre-review file required by CONTRIBUTING §6, the `0.11.1` version bump, the PR into `release/0.11.1` (created by a maintainer from `v0.11.0`), and the
   forward-merge into `main` (D0015).
-- Final package name and the publish workflow entry before the first npm publish (D0020).
+- Final package name and the publish workflow entry before the first npm publish (D0020). **Done:**
+  the name is final, the package is ESM-only `1.0.0`, and the workflow has a `publish_srv_resolver`
+  input (D0023). Publishing waits until this PR merges.
 - Deviations recorded under WI-0 to WI-9 were approved by the coordinator at ≥ 80 % confidence;
   none changed a decision in `decisions.md`.
