@@ -2,12 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Type-check (watch)",
             "type": "npm",
             "script": "compile",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
             "isBackground": true,
             "presentation": {
                 "reveal": "always"
@@ -21,7 +18,11 @@
         },
         {
             "label": "Watch",
-            "dependsOn": ["watch:ext", "watch:views"]
+            "dependsOn": ["watch:ext", "watch:views"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
         },
         {
             "label": "watch:ext",
@@ -57,7 +58,7 @@
                 "panel": "new",
                 "showReuseMessage": false,
                 "clear": true,
-                "group": "Cosmos DB Extension Watch"
+                "group": "DocumentDB Extension Watch"
             }
         },
         {
@@ -87,7 +88,7 @@
                 "panel": "new",
                 "showReuseMessage": false,
                 "clear": true,
-                "group": "Cosmos DB Extension Watch"
+                "group": "DocumentDB Extension Watch"
             }
         }
     ]
