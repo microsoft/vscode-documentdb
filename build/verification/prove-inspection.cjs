@@ -238,6 +238,15 @@ try {
                 report.chunks.find((chunk) => chunk.facadeModuleId === './src/extension.ts').facadeModuleId = null;
             },
         ],
+        [
+            'ambiguous-script-owner',
+            undefined,
+            /: extension\/views\.js: ambiguous script owner; owned by host bundle report and views bundle report$/,
+            (report) => {
+                assert.ok(Object.hasOwn(views.assetHashes, 'views.js'), 'Proof requires views-owned views.js');
+                report.assetHashes['views.js'] = views.assetHashes['views.js'];
+            },
+        ],
     ];
     for (const [name, mutateFiles, expected, mutateReport] of hostControls) {
         const files = readVsix(filename);

@@ -433,6 +433,29 @@ for (const extension of ['js', 'cjs', 'mjs']) {
     });
 }
 
+test('a packaged script needs exactly one owning report, so a views script cannot borrow host permissions', () => {
+    const { report: host } = hostFixture();
+    const views = {
+        ...viewReport,
+        chunks: [
+            { name: 'views', fileName: 'views.js', isEntry: true, imports: [], dynamicImports: [], moduleIds: [] },
+        ],
+    };
+    const owning = (report) => ({ ...report, assetHashes: { ...report.assetHashes, 'shared.mjs': 'same-bytes' } });
+    const bundled = new Map([['extension/shared.mjs', Buffer.from("export const load = () => import('node:fs');")]]);
+    inspectJavaScript(bundled, [owning(host), views]);
+    assert.throws(() => inspectJavaScript(bundled, [host, owning(views)]), /shared\.mjs: missing dynamic import/);
+    assert.throws(
+        () => inspectJavaScript(bundled, [owning(host), owning(views)]),
+        (error) =>
+            error.message ===
+            'extension/shared.mjs: ambiguous script owner; owned by host bundle report and views bundle report',
+    );
+    bundled.set('extension/shared.mjs', Buffer.from('export const value = 1;'));
+    inspectJavaScript(bundled, [host, owning(views)]);
+    assert.throws(() => inspectJavaScript(bundled, [owning(host), owning(views)]), /ambiguous script owner/);
+});
+
 test('.cjs is inspected as CommonJS and .mjs as a module', () => {
     const bundled = new Map([
         ...files,

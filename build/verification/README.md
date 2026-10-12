@@ -34,8 +34,8 @@ npm run test:verification
 Inspection reports archive file-list and per-file size drift without failing; per-graph sizes are
 enforced by the [size budget](#size-budget-enforced), and the host's kept class names by the
 [`keepNames` invariant](#host-class-names-keepnames-review-item-f17). Hard checks cover required
-package files and the resolved `package.json` main entry, bundle-report ownership of every packaged
-`.js`, `.cjs` and `.mjs` file under `extension/`, the named `render` export,
+package files and the resolved `package.json` main entry, exactly one owning bundle report for every packaged
+`.js`, `.cjs` and `.mjs` file under `extension/` (two reports binding the same script are ambiguous), the named `render` export,
 literal dynamic imports, Vite literal `new URL(..., import.meta.url)`
 assets (fonts and workers), development-server strings, `import.meta` in
 CommonJS bundles (including `.cjs`), and reachable BSON implementations. Reports must match the packaged JavaScript
@@ -156,7 +156,8 @@ Seven host controls additionally reject `missing-host-lazy-chunk`, `duplicate-ho
 `kubernetes-in-extension-static-closure` and `missing-extension-implementation-boundary`.
 Host controls refresh copied hashes to model matching newly built output and assert the intended
 diagnostic, not a stale-report failure. Stage 6 adds `keepnames-class-name-lost` to the host
-controls and three size-budget controls (below). The proof prints 24 PASS lines in total.
+controls and three size-budget controls (below). Stage 8 adds `ambiguous-script-owner`, which copies
+`views.js`'s entry into the host report and requires the single-owner rejection. The proof prints 25 PASS lines in total.
 The unrelated README-image asset-change reporting control was retired because the Stage 0
 manifest-drift report it exercised no longer exists.
 Proof variants are written with deflated entries, so their VSIX size stays comparable to `vsce`

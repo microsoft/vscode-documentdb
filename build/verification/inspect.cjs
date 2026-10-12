@@ -375,6 +375,12 @@ function isViteHostReport(report) {
     return report.bundler === 'vite' && report.chunks?.some((chunk) => chunk.isEntry && chunk.fileName === 'main.mjs');
 }
 
+function bundleReportName(report, index) {
+    if (isViteHostReport(report)) return 'host bundle report';
+    if (report.chunks?.some((chunk) => chunk.isEntry && chunk.fileName === 'views.js')) return 'views bundle report';
+    return `bundle report ${index + 1}`;
+}
+
 function babelConfigFileImportLimit(node, ancestors) {
     const helper = ancestors.at(-4);
     const assignment = ancestors.at(-5);
@@ -438,6 +444,13 @@ function inspectJavaScript(files, reports) {
         );
         if (filename.startsWith('extension/')) {
             assert.ok(compilations.length > 0, `${filename}: unowned script; no bundle report assetHashes entry`);
+            // One owner decides the script's permissions (host-only runtime imports, Babel allowance).
+            if (compilations.length > 1) {
+                const owners = reports.flatMap((report, index) =>
+                    compilations.includes(report) ? [bundleReportName(report, index)] : [],
+                );
+                assert.fail(`${filename}: ambiguous script owner; owned by ${owners.join(' and ')}`);
+            }
         }
         const commonJs =
             filename.endsWith('.cjs') ||
