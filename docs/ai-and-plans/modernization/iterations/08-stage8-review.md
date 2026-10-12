@@ -24,7 +24,7 @@ Four findings: **0 critical, 0 high, 2 medium, 2 low, 0 info**. W3's new archive
 - **What is wrong:** `extractFiles` checks each member relative to its supplied destination, but `entry.name` from the archive's `package.json` constructs that destination without validation. A name containing `..` moves it outside the consumer, potentially outside the temporary work directory. The reader's member-path guard does not protect against an archive-controlled extraction root. ADO-produced `npm pack` archives should have valid names; the `--archives` interface itself makes a stronger confinement claim than it enforces.
 - **Solutions:** (1) Validate package names against npm's scoped/unscoped naming rules and require the resolved destination to remain under the intended `node_modules`. **Pros:** preserves the consumer layout and rejects malicious metadata. **Cons:** adds explicit name validation. (2) Derive safe temporary directory names independent of the manifest and map them to package entry points. **Pros:** separates archive identity from filesystem placement. **Cons:** complicates module resolution.
 - **Recommended:** 1, with a malicious-manifest regression test on both path separators.
-- **Author decision:** _pending_
+- **Author decision (operator, G8, 2026-10-12):** "agree". Fixed in `4cc5b0f2` with an exact allow-list of the six workspace package names and a destination guard, with tests.
 
 ### S8-F02: duplicate archive entries let validation inspect different bytes from the consumer
 
@@ -34,7 +34,7 @@ Four findings: **0 critical, 0 high, 2 medium, 2 low, 0 info**. W3's new archive
 - **What is wrong:** The target check validates the first `package.json`, but extraction overwrites it with the last. A later unprobed export or `files` entry can therefore evade `packageTargetFailures` even though it is present in the installed manifest. Duplicate scripts can likewise be scanned after extraction using different bytes from their reported archive entries. Normal `npm pack` does not intentionally produce duplicate members, but the offline reader must not certify an ambiguous archive.
 - **Solutions:** (1) Reject duplicate normalized member paths in `readTarball`. **Pros:** fail closed before probes; matches the single-file-per-path publication contract. **Cons:** rejects exotic tarballs with intentional overwrites. (2) Check only the last occurrence. **Pros:** matches extraction. **Cons:** leaves ambiguous bytes and tool-dependent behavior.
 - **Recommended:** 1, with a duplicate-manifest negative control.
-- **Author decision:** _pending_
+- **Author decision (operator, G8, 2026-10-12):** "agree". Fixed in `4cc5b0f2`: duplicate member paths are rejected, with a test.
 
 ### S8-F03: truncated tar members are accepted as complete files
 
@@ -44,7 +44,7 @@ Four findings: **0 critical, 0 high, 2 medium, 2 low, 0 info**. W3's new archive
 - **What is wrong:** The parser slices the body before checking that `size` is a valid nonnegative integer or that the body and padding fit in the decompressed archive. `Buffer.subarray` silently clips an oversized range. A malformed archive can therefore be reported and, if the damaged member is outside the probed entry points, accepted as though it were complete. `gunzipSync` detects gzip corruption, not a tar header that lies about member size.
 - **Solutions:** (1) Validate the octal field, header boundaries, body length and padded offset before accepting each member. **Pros:** fail closed on malformed tar. **Cons:** slightly more parser code and tests. (2) Use a maintained tar parser with equivalent strict checks. **Pros:** broader format coverage. **Cons:** changes the offline dependency story.
 - **Recommended:** 1, with oversized and malformed-size controls.
-- **Author decision:** _pending_
+- **Author decision (operator, G8, 2026-10-12):** "agree". Fixed in `4cc5b0f2`: size fields and member bounds are validated, with tests.
 
 ### S8-F04: the default VS Code build task no longer builds output
 
@@ -54,7 +54,7 @@ Four findings: **0 critical, 0 high, 2 medium, 2 low, 0 info**. W3's new archive
 - **What is wrong:** After W5, the default VS Code build shortcut starts a long-running type-check with no emitted JavaScript, despite being labeled as the default build. `Watch` remains the working F5 launch prerequisite, but the build shortcut no longer produces runnable artifacts and `npm run compile` contradicts the repository's instruction to use `npm run build`.
 - **Solutions:** (1) Point the default build task at the established Vite build/watch tasks and give the no-emit watcher a clearly named optional type-check task. **Pros:** restores the expected shortcut while keeping continuous diagnostics. **Cons:** changes task startup behavior. (2) Remove the default-build designation and document `Watch` as the build task. **Pros:** minimal change. **Cons:** removes the usual build shortcut.
 - **Recommended:** 1, checking task readiness and F5 launch in VS Code.
-- **Author decision:** _pending_
+- **Author decision (operator, G8, 2026-10-12):** "agreed". Fixed in `e396a92d`: `Watch` is the default build task and the type-check watcher is a separate task; F5 check pending.
 
 ## Checked And Sound
 

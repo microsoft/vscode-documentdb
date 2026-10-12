@@ -4066,6 +4066,15 @@ Stage 0 must also be made.
     "18080 is the operator's Watch task, which serves the same tree" does not always hold.
     **Recommendation:** the Stage 10 fail-fast check (X7-F09 option 2) should also confirm that
     the server on the dev origin serves this tree, not only that the port matches.
+  - **S8-N05** (info; found while fixing S8-F01 to S8-F03): three narrow archive-reader edge
+    cases remain. Two archives with the same workspace name both install into one folder;
+    duplicate paths are compared case-sensitively, though Windows extracts case-insensitively;
+    an archive cut exactly at a member boundary, with no end-of-archive blocks, is accepted.
+    All inputs are this pipeline's own `npm pack` output. **Recommendation:** accept with that
+    reason, or fix together in a few lines.
+  - **S8-N06** (info; found while fixing S8-F04): the `Debug Mongo grammar` launch
+    configuration in `.vscode/launch.json` points at a `grammar/` directory that no longer
+    exists. **Recommendation:** remove it with the next change to `launch.json`.
 
 - **Not in Stage 8:** accepted findings (G7 items 20, 21 and 25), the Stage 10 carry-overs
   (items 20 to 24, listed under Stage 10), #990, #991 and the dependency refresh.
@@ -4216,13 +4225,66 @@ Stage 0 must also be made.
       decisions are still open, as are 5 and 7 to 10.
     - **22 follow-up:** "size-report - show me an example of what it could delvier" (answered
       in chat with a one-off per-package measurement; nothing committed).
+  - **G8 answers, second round (operator, 2026-10-12), verbatim:** "s8-f01: agree / s8-f02:
+    agree / s8-f03: agree / f8-04: agreed." "w5 - okay, sot het out folder can be removed.
+    good." "5 - what grew, that vite-bundle-analyzer , yes do the recommended feature." And: "the
+    .tmp folder cotnains the latest ado builds - builds were successful".
+    - **Items 3 to 6, fixed** (Claude Opus 5.5, one subagent, one commit each):
+      - **`4cc5b0f2` (S8-F01 to S8-F03):** an archive's `name` must be exactly one of the six
+        workspace package names (the coordinator's answer to "what if we miss something":
+        an exact list cannot miss), and the install path must stay under the consumer's
+        `node_modules`; `readTarball` rejects a path that occurs twice, an invalid size field
+        and a member that runs past the archive. Each new test failed with its fix reverted;
+        with the name check reverted, a `../../../escaped` archive really wrote files outside
+        the work directory. Package-check tests 31/31, `verify:packages` and archive mode pass.
+      - **`e396a92d` (S8-F04):** `Watch` is the default build task, so `Ctrl+Shift+B` and F5
+        start the same thing; the `tsc` watcher stays as `Type-check (watch)` (Vite does not
+        type-check); the terminal group is renamed "DocumentDB Extension Watch". F5 itself
+        was never affected (both launch configurations use `preLaunchTask: "Watch"`).
+        **Pending: the operator's F5 check.**
+    - **Item 22, second part (`d6c2aa4b`):** the bundle reports record each module's
+      rendered length (Rolldown `renderedLength`, before minification), L1 adds
+      `graphPackages` per graph, the `main` cache moves to version 3 (v2 and legacy entries
+      still read, with no package line), and a flagged graph gets one line naming its three
+      biggest package changes, for example "`acorn` +169.1 KiB (new)". Nothing extra when
+      nothing is flagged. **Coordinator decision (for G8):** a package missing on one side is
+      not called new or removed when it could just have moved into the `(other)` bucket (each
+      graph keeps its top 99% or 60 packages); without that rule the bucket edge produced false
+      entries. Real data: `npm run package` gives SHA-256 `37e79f16…748874` (8,504,251
+      bytes); `verify:vsix` exit 0 and `prove:vsix` **22 PASS** (re-run by the coordinator).
+    - **End of the fixes:** lint, Prettier, `test:verification` **135 Node** and 79 browser
+      tests (re-run by the coordinator), Vitest 298 files / 4,612 tests.
+    - **Item 21, the ADO builds (verified by the coordinator):** both SBOMs name
+      `4144bc23` on `refs/heads/dev/tnaum/modernization`: extension BuildId 240201964
+      (`vscode-documentdb-2026-10-12.1`) and npm BuildId 240202025
+      (`vscode-documentdb-npm-build-2026-10-12.1`); both SBOM comparisons report 0 differences.
+      `4144bc23` has the code of `6c5eb435`.
+      - **Extension VSIX** (8,544,892 bytes, SHA-256 `63c57b6a…1bdc`) against the local Stage 8
+        VSIX (`21b0da12`): the same 204 paths; 159 byte-identical, including all 122 scripts;
+        43 differ only in CRLF; `NOTICE.html` is ADO's; `changelog.md` changed after
+        `21b0da12` (the size-budget wording). ADO's `host.json` and `views.json` equal the
+        local ones byte for byte, and the drop's `package.json` is the committed one. On that
+        file with ADO's reports: `verify:vsix` exit 0, `prove:vsix` 22 PASS, `L3 PASS`,
+        `L3 PROOF PASS`, `L2 HEADLESS PASS` (five views, 0 errors, both worker round-trips, 7
+        errors on the CSS-negative page).
+      - **npm tarballs:** `microsoft-vscode-ext-webview-0.11.0.tgz` (`8efe41f5…`) and
+        `-fluentui-1.1.1.tgz` (`aeab06dc…`) against a local `npm pack`: the same files, each
+        identical or different only in CRLF, no test files, `package.json` files committed.
+        The archive check passes on them locally. **Inferred, not observed:** the drop has no
+        logs, so W3's archive step and W6's `typecheck:tests` step count as passed because the
+        build succeeded (operator) and both steps fail the build on a non-zero exit at
+        `4144bc23`. This is their first Windows run.
+      - The archive reader hardening (`4cc5b0f2`) and the size-report change (`d6c2aa4b`) came
+        after `4144bc23`; neither changes product code.
 - **Stage 8 commits:** `5124c392` (W1), `46c1b0b7` (W7), `550eff6b` (W2), `b69422b6` (W3),
   `20e11e14` (W4), `1750d40e` (W5), `7f6dd66f` (W6), `960c2b57` (W8), `01051ca8` (W9),
   `78e46f03` (W11), `55af1a67` (W10), `4cabe7d8` (W12), `77b5d702` (W13), `21b0da12` (W16),
   `8e27139d` (W14), `7e7f543c` (the review), and the `S8: record …` documentation commits
   `276163e0`, `df7eb036` and `ebd68c15`. W15 and W17 made no commit. After the G8 list:
-  `6c5eb435` (item 22, the size report) and its record commit.
-  **Status: Stage 8 work complete; stopped at G8 (2026-10-12).** ADO builds pending (item 21);
+  `6c5eb435` (item 22, the size report), `4cc5b0f2` (S8-F01 to S8-F03), `e396a92d` (S8-F04),
+  `d6c2aa4b` (item 22, package changes) and their record commits.
+  **Status: Stage 8 work complete; at G8 (2026-10-12).** Answered: 1 to 6, 11 to 22. Open: 7
+  to 10 (S8-N01 to S8-N04, plus S8-N05 below) and the F5 check after `e396a92d`.
   `prove:vsix` now prints 22 PASS (item 22), not the 25 of the final verification above.
   Case 1 applied throughout; the Case 2 list runs in Stage 9.
 
