@@ -28,6 +28,18 @@
     {
       "file": "packages\\documentdb-js-srv-resolver\\src\\srvUriRewrite.test.ts",
       "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "packages\\documentdb-js-srv-resolver\\src\\resolveSrvForDriver.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "packages\\documentdb-js-srv-resolver\\src\\srvUriRewrite.differential.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "src\\documentdb\\srv\\prepareDriverConnectionString.test.ts",
+      "_justification": "Fake credentials used for unit tests."
     }
   ]
 }
