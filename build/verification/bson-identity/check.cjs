@@ -9,61 +9,18 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { buildHostProbes } = require('../vite-host-probe.cjs');
 
-const repository = path.resolve(__dirname, '../../..');
 const probes = { main: 'hostProbe.ts', playgroundWorker: 'workerProbe.ts' };
 const reference = 'mongodb';
 
-async function compile(outputPath, { withoutAlias }) {
-    const { createBuilder } = await import('vite');
-    const { default: createConfig } = await import(pathToFileURL(path.join(repository, 'vite.config.ext.mjs')));
-    const config = await createConfig({ mode: 'production', command: 'build' });
-    const bsonAlias = config.resolve.alias.find((alias) => alias.find instanceof RegExp && alias.find.test('bson'));
-    assert.ok(bsonAlias, 'vite.config.ext.mjs no longer pins bson (resolve.alias)');
-    const host = config.environments.host;
-    let chunks;
-    const builder = await createBuilder({
-        ...config,
-        configFile: false,
-        mode: 'production',
-        logLevel: 'silent',
-        resolve: {
-            ...config.resolve,
-            alias: config.resolve.alias.filter((alias) => !(withoutAlias && alias === bsonAlias)),
-        },
-        environments: {
-            host: {
-                ...host,
-                build: {
-                    ...host.build,
-                    outDir: outputPath,
-                    rolldownOptions: {
-                        ...host.build.rolldownOptions,
-                        input: Object.fromEntries(
-                            Object.entries(probes).map(([name, file]) => [name, path.join(__dirname, file)]),
-                        ),
-                    },
-                },
-            },
-        },
-        builder: {
-            async buildApp(builder) {
-                await builder.build(builder.environments.host);
-            },
-        },
-        // Never copy product assets or overwrite the packaged artifact's provenance report.
-        plugins: [
-            {
-                name: 'documentdb:bson-probe-chunks',
-                generateBundle(_options, bundle) {
-                    chunks = Object.values(bundle).filter((output) => output.type === 'chunk');
-                },
-            },
-        ],
+function compile(outputPath, { withoutAlias }) {
+    return buildHostProbes({
+        input: Object.fromEntries(Object.entries(probes).map(([name, file]) => [name, path.join(__dirname, file)])),
+        outputPath,
+        pinned: 'bson',
+        withoutAlias,
     });
-    await builder.buildApp();
-    assert.ok(chunks, 'BSON probe build produced no chunks');
-    return chunks;
 }
 
 function bsonModules(chunks, entryName) {
@@ -100,7 +57,7 @@ async function checkBsonIdentity({ withoutAlias = false } = {}) {
         for (const name of Object.keys(probes)) {
             const modules = bsonModules(chunks, name);
             const { objectIdRoutes } = await import(pathToFileURL(path.join(outputPath, `${name}.mjs`)));
-            const routes = objectIdRoutes();
+            const routes = await objectIdRoutes();
             const expected = routes[reference];
             assert.equal(typeof expected, 'function', `${name}: ObjectId via ${reference} is not a constructor`);
             const instance = new expected();

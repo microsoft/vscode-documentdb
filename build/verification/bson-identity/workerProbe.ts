@@ -9,10 +9,12 @@ import * as bson from 'bson';
 import * as mongodb from 'mongodb';
 import { esmBsonObjectId, esmMongodbObjectId } from './esmConsumer.mjs';
 
-export function objectIdRoutes(): Record<string, unknown> {
+export async function objectIdRoutes(): Promise<Record<string, unknown>> {
     return {
         mongodb: mongodb.ObjectId,
         'bson (TypeScript, compiled like src/)': bson.ObjectId,
+        'bson (dynamic import)': (await import('bson')).ObjectId,
+        'mongodb (dynamic import)': (await import('mongodb')).ObjectId,
         'bson (ES module)': esmBsonObjectId,
         'mongodb (ES module)': esmMongodbObjectId,
     };

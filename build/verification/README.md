@@ -108,17 +108,27 @@ to the CommonJS entry the driver `require`s. Vite views pin bson's browser entry
 `vite.config.ext.mjs` (production mode, reusing its `host` environment, root aliases, resolve
 settings, externals, defines, and ES output), runs them in Node
 and requires every route to `ObjectId` to be one constructor, separately for the `main` and
-`playgroundWorker` graphs. Routes: `mongodb`; `bson` from TypeScript compiled like `src/`; `bson`
-and `mongodb` from an ES module (as our ESM-only packages would import them); and, in the host, a
-value parsed by `@mongodb-js/shell-bson-parser`. `npm run test:verification` runs it together with a
-negative control that removes the alias and must fail on the ES-module route. Standalone:
+`playgroundWorker` graphs. Routes: `mongodb`; `bson` from TypeScript compiled like `src/`; awaited
+`import('bson')` and `import('mongodb')`; `bson` and `mongodb` from an ES module (as our ESM-only
+packages would import them); and, in the host, a value parsed by `@mongodb-js/shell-bson-parser`.
+`npm run test:verification` runs it together with a negative control that removes the alias and
+must fail on the ES-module and dynamic-import `bson` routes in both graphs (the TypeScript route
+splits too). Standalone:
 
 ```bash
 node build/verification/bson-identity/check.cjs            # identity
 node build/verification/bson-identity/check.cjs --prove    # identity, then the alias-removed control
 ```
 
-It builds and runs probe bundles instead of inspecting the packaged artifact, so it is not part of L1,
+[`lowered-import/check.cjs`](./lowered-import/check.cjs) builds the same way (shared
+[`vite-host-probe.cjs`](./vite-host-probe.cjs)) a CommonJS module containing azureauth's lowered
+`Promise.resolve().then(() => require('@azure/arm-resources-subscriptions'))` and requires the
+result to expose `SubscriptionClient` (G5-I01, [Vite rationale](../vite/README.md)). Its negative
+control removes the package's CommonJS alias; Rolldown 1.0.3 then emits a call to the ESM
+initializer, and the result must be `undefined`. Both run in `npm run test:verification`; add
+`--prove` to the standalone command for the control.
+
+These probes build and run bundles instead of inspecting the packaged artifact, so they are not part of L1,
 which stays offline and build-free for the ADO release build.
 
 The JSON result includes `manifestReport`: current `vsixBytes.bytes`, `graphAssetBytes` sums and

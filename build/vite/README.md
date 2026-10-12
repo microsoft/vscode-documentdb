@@ -221,8 +221,10 @@ dynamic import. When `x` resolved to ESM, Rolldown 1.0.3 emitted a call to its E
 that returned `undefined`, not the module namespace; reading `SubscriptionClient` then failed.
 Pinning this package to CommonJS restores the expected result without rewriting dependencies.
 `TODO(#990)` tracks upgrading azureauth to real `import()` and removing the alias in
-[#990](https://github.com/microsoft/vscode-documentdb/issues/990). There is no dedicated L1
-invariant for this lowering bug, and L3 does not call Azure discovery; re-test discovery and
+[#990](https://github.com/microsoft/vscode-documentdb/issues/990). There is no L1 invariant for
+this lowering bug, and L3 does not call Azure discovery; the build-time
+[lowered-import probe](../verification/README.md#bson-identity-runtime) bundles the same lowered
+`require` with this config and fails without the alias. Re-test discovery and
 both azureauth subscription-provider paths when removing the workaround.
 
 ### Externals: deliberate runtime requests
