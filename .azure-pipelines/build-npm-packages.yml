@@ -130,6 +130,18 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: PowerShell@2
+                          displayName: 'Type-check package tests (strict, no emit)'
+                          condition: succeeded()
+                          inputs:
+                              targetType: 'inline'
+                              workingDirectory: '$(Build.SourcesDirectory)'
+                              script: |
+                                  npm run typecheck:tests
+                                  if ($LASTEXITCODE -ne 0) {
+                                      throw "Package test type-check failed with exit code $LASTEXITCODE"
+                                  }
+
+                        - task: PowerShell@2
                           displayName: 'Pack npm packages'
                           condition: succeeded()
                           inputs:

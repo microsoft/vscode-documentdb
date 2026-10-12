@@ -75,6 +75,7 @@
     "prettier-fix": "prettier -w \"(src|test|l10n|grammar|docs|packages)/**/*.@(js|ts|jsx|tsx|json|md)\" \"build/**/*.@(js|ts|jsx|tsx|mjs|cjs|json|md)\" \"./*.@(js|ts|jsx|tsx|mjs|cjs|json|md)\" \".github/**/*.md\"",
     "pretest": "npm run build --workspaces --if-present",
     "test": "vitest run",
+    "typecheck:tests": "npm run typecheck:tests --workspaces --if-present",
     "verify:vsix": "node build/verification/inspect.cjs",
     "prove:vsix": "node build/verification/prove-inspection.cjs",
     "verify:packages": "node build/verification/package-checks/check-packages.mjs",

@@ -44,6 +44,7 @@
     "build:monaco-color-ids": "node scripts/build-monaco-color-ids.mjs",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "test": "vitest run --config ../../vitest.config.ts --project vscode-ext-webview-fluentui",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
     "prettier-fix": "prettier -w \"src/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\""
   },
   "repository": {

@@ -77,6 +77,12 @@ jobs:
               continue-on-error: true
               run: npm run prettier
 
+            - name: 🔍 Type-check Extension and Tests (root tsc, no emit)
+              run: npx tsc -p tsconfig.json
+
+            - name: 🔍 Type-check Package Tests (strict, no emit)
+              run: npm run typecheck:tests
+
             - name: 🧪 Run Unit Tests (Vitest)
               run: npm test
 

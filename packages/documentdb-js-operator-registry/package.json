@@ -20,6 +20,7 @@
     "build": "tsc -p . && tsc -p scripts --noEmit",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "test": "vitest run --config ../../vitest.config.ts --project documentdb-js-operator-registry",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
     "prettier-fix": "prettier -w \"(scripts|src)/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\"",
     "scrape": "tsx scripts/scrape-operator-docs.ts && prettier --write resources/scraped/operator-reference.md resources/scraped/index-reference.md",
     "generate": "tsx scripts/generate-from-reference.ts",
