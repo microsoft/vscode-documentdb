@@ -15,18 +15,24 @@ export class SrvDnsDiagnosticsProvider implements ConnectionDiagnosticsProvider 
     public readonly id = 'srv-dns';
 
     public async explain({ error }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
-        if (!(error instanceof Error) || error instanceof UserCancelledError) {
+        const message = typeof error === 'string' ? error : error instanceof Error ? error.message : undefined;
+        if (!message || error instanceof UserCancelledError) {
             return undefined;
         }
 
         // A socket refusal has the same code as a DNS refusal, so require the SRV operation first.
-        if (!error.message.startsWith('querySrv ') && !('syscall' in error && error.syscall === 'querySrv')) {
+        if (
+            !message.startsWith('querySrv ') &&
+            !(error instanceof Error && 'syscall' in error && error.syscall === 'querySrv')
+        ) {
             return undefined;
         }
 
         // Worker-relayed errors preserve only the message, not the Node.js error properties.
         const code =
-            'code' in error && error.code !== undefined ? error.code : /^querySrv (\S+)/.exec(error.message)?.[1];
+            error instanceof Error && 'code' in error && error.code !== undefined
+                ? error.code
+                : /^querySrv (\S+)/.exec(message)?.[1];
 
         switch (code) {
             case 'EBADRESP':
