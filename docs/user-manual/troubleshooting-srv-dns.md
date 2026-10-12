@@ -24,7 +24,7 @@ When the built-in lookup fails with `EBADRESP`, `EFORMERR` or `ECONNREFUSED`, th
 
 - It asks **the same DNS servers your system is configured with**, in the same order. It never uses a public DNS server and never uses DNS over HTTPS.
 - It applies the same rules the database driver applies to SRV records (the servers must belong to the same domain as the host name, only the allowed TXT options are used, TLS stays on).
-- The resolved server list exists **only in memory**, for that one connection. It is never saved. Your stored connection string, **Copy Connection String**, **Update Connection String…** and exports all keep the original `mongodb+srv://` string, and every new connection looks up DNS again, so failover keeps working.
+- The resolved server list exists **only in memory**, for that one connection. It is never saved. Your stored connection string, **Copy Connection String**, **Update Connection String…** and exports all keep the original `mongodb+srv://` string. Every new connection looks up DNS again, but a fallback connection does not periodically refresh the DNS server list while it remains open.
 - It works the same way for the tree, the Collection View, the interactive shell and the query playground.
 
 To see whether a connection was resolved this way, collect a trace (see [Collect a trace for support](#collect-a-trace-for-support)).

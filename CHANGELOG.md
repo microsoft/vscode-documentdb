@@ -4,7 +4,11 @@
 
 ### Fixes
 
-- **SRV Connections on Affected Networks**: `mongodb+srv://` connections that failed with `querySrv EBADRESP` because VS Code's DNS resolver rejects compressed SRV replies now connect through an in-memory fallback resolver that asks the system's own DNS servers. The resolved server list is never stored, and the shell and query playground use the fallback too. Adds an SRV DNS troubleshooting page and the `DOCUMENTDB_DISABLE_SRV_FALLBACK` environment variable for support cases. [#993](https://github.com/microsoft/vscode-documentdb/issues/993)
+- **SRV Connections on Affected Networks**: Fixes `mongodb+srv://` connections that fail with `querySrv EBADRESP` on networks returning compressed SRV replies. An in-memory fallback uses the system's configured DNS servers across the tree, Collection View, Interactive Shell, and Query Playground. [#993](https://github.com/microsoft/vscode-documentdb/issues/993), [#997](https://github.com/microsoft/vscode-documentdb/pull/997)
+
+### Security
+
+- **Tooltip and Documentation Hardening**: Escapes database-derived index and shard-key metadata so special characters render literally, and disables command links in index tooltips, operator hovers, and completion documentation. Preserves stored names, regular documentation links, and completion behavior. [#996](https://github.com/microsoft/vscode-documentdb/pull/996)
 
 ## 0.11.0
 
