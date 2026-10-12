@@ -175,7 +175,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             this.terminateWorker('intentional');
         }
 
-        // If no worker exists, spawn one
+        // Callers must not overlap ensureWorker calls because SRV preparation runs before _worker is set.
         if (!this._worker || this._workerState === 'idle') {
             await this.spawnWorker(clusterId, initMsg, initTimeoutMs, telemetryContext);
         }
