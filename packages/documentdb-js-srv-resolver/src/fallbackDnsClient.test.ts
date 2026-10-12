@@ -203,9 +203,9 @@ describe('fallback DNS client', (): void => {
         const reason = new Error('cancelled');
         const first = await stub((): void => controller.abort(reason));
         const second = await stub((request): void => request.send(reply(request)));
-        await expect(
-            resolveSrvFallback(srvName, options([first, second], { signal: controller.signal })),
-        ).rejects.toBe(reason);
+        await expect(resolveSrvFallback(srvName, options([first, second], { signal: controller.signal }))).rejects.toBe(
+            reason,
+        );
         expect(second.queries).toHaveLength(0);
     });
 

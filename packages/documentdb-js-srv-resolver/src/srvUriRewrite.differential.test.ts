@@ -50,9 +50,18 @@ const fixtures: readonly Fixture[] = [
     { name: 'URI authSource beats TXT', uri: `${credentialUri}/db?authsource=userDb`, txtRecords: [['authSource=t']] },
     { name: 'TXT authSource without credentials', uri: `${baseUri}/db`, txtRecords: [['authSource=txtDb']] },
     { name: 'OIDC ignores TXT authSource', uri: baseUri, options: oidcOptions, txtRecords: [['authSource=txtDb']] },
-    { name: 'X509 ignores TXT authSource', uri: `${baseUri}?authMechanism=MONGODB-X509`, txtRecords: [['authSource=t']] },
+    {
+        name: 'X509 ignores TXT authSource',
+        uri: `${baseUri}?authMechanism=MONGODB-X509`,
+        txtRecords: [['authSource=t']],
+    },
     { name: 'TXT replicaSet', uri: baseUri, txtRecords: [['replicaSet=txtRs']] },
-    { name: 'options replicaSet beats TXT', uri: baseUri, options: { replicaSet: 'mine' }, txtRecords: [['replicaSet=t']] },
+    {
+        name: 'options replicaSet beats TXT',
+        uri: baseUri,
+        options: { replicaSet: 'mine' },
+        txtRecords: [['replicaSet=t']],
+    },
     {
         name: 'TXT loadBalanced overrides false URI value',
         uri: `${baseUri}?LOADBALANCED=false`,
@@ -62,7 +71,11 @@ const fixtures: readonly Fixture[] = [
     { name: 'SRV service name in options', uri: baseUri, options: { srvServiceName: 'custom' } },
     { name: 'tls=false', uri: `${baseUri}?tls=false` },
     { name: 'ssl=false option', uri: baseUri, options: { ssl: false } },
-    { name: 'targets with trailing dots', uri: baseUri, srvRecords: twoTargets.map((r) => ({ ...r, name: `${r.name}.` })) },
+    {
+        name: 'targets with trailing dots',
+        uri: baseUri,
+        srvRecords: twoTargets.map((r) => ({ ...r, name: `${r.name}.` })),
+    },
     {
         name: 'deceptive parent-domain suffix',
         uri: baseUri,

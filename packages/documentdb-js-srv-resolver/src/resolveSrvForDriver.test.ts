@@ -8,8 +8,8 @@ import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fall
 import { resolveSrvForDriver } from './resolveSrvForDriver.js';
 import { SrvResolutionCancelledError } from './types.js';
 
-import type * as FallbackDnsClient from './fallbackDnsClient.js';
 import { type SrvRecord } from 'node:dns';
+import type * as FallbackDnsClient from './fallbackDnsClient.js';
 import { type SrvResolutionReport } from './report.js';
 import { type ResolveSrvForDriverInput } from './resolveSrvForDriver.js';
 

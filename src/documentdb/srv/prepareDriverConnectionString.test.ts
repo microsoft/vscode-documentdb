@@ -186,18 +186,18 @@ describe('prepareDriverConnectionString', (): void => {
             args.onReport?.({ ...baseReport, outcome: 'cancelled' });
             throw new Error('aborted');
         });
-        await expect(
-            prepareDriverConnectionString(input({ abortSignal: controller.signal })),
-        ).rejects.toBeInstanceOf(UserCancelledError);
+        await expect(prepareDriverConnectionString(input({ abortSignal: controller.signal }))).rejects.toBeInstanceOf(
+            UserCancelledError,
+        );
         expect(mockEvents[0].context.telemetry.properties.result).toBe('Canceled');
     });
 
     it('rejects an already-aborted call before resolving', async (): Promise<void> => {
         const controller = new AbortController();
         controller.abort();
-        await expect(
-            prepareDriverConnectionString(input({ abortSignal: controller.signal })),
-        ).rejects.toBeInstanceOf(UserCancelledError);
+        await expect(prepareDriverConnectionString(input({ abortSignal: controller.signal }))).rejects.toBeInstanceOf(
+            UserCancelledError,
+        );
         expect(resolveSrvForDriver).not.toHaveBeenCalled();
     });
 });
