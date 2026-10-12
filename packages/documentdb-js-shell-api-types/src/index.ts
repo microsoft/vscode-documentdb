@@ -9,8 +9,8 @@
  * Shell API type definitions and method-to-command mapping for DocumentDB
  * query playground IntelliSense. This package provides:
  *
- *   1. The `.d.ts` content as a string — used by the TS Server Plugin to
- *      inject type declarations into query playground files.
+ *   1. The `.d.ts` content as a string for tooling to inject type declarations.
+ *      The extension's TS Server Plugin reads its copied declarations directly.
  *   2. A method registry mapping each shell method to its underlying server
  *      command(s) — used for compatibility verification.
  *   3. A verification script (`npm run verify`) that checks the method
@@ -27,16 +27,23 @@ export { SHELL_API_METHODS, getMethodsByTarget, getRequiredServerCommands } from
 import * as fs from 'fs';
 import * as path from 'path';
 
-let _dtsContent: string | undefined;
+const dtsContentByPath = new Map<string, string>();
 
 /**
  * Returns the full content of the DocumentDB shell API `.d.ts` file.
- * The content is read from disk once and cached in memory.
+ * The content is read from disk once per resolved file path and cached in memory.
+ * @param typeDefsDirectory Directory containing `documentdb-shell-api.d.ts`.
+ * Defaults to the published package's `typeDefs/` next to `dist/`. Bundled callers
+ * can pass their output root's `typeDefs/` directory explicitly.
  */
-export function getShellApiDtsContent(): string {
-    if (_dtsContent === undefined) {
-        const dtsPath = path.join(import.meta.dirname, '..', 'typeDefs', 'documentdb-shell-api.d.ts');
-        _dtsContent = fs.readFileSync(dtsPath, 'utf8');
+export function getShellApiDtsContent(
+    typeDefsDirectory: string = path.join(import.meta.dirname, '..', 'typeDefs'),
+): string {
+    const dtsPath = path.resolve(typeDefsDirectory, 'documentdb-shell-api.d.ts');
+    let dtsContent = dtsContentByPath.get(dtsPath);
+    if (dtsContent === undefined) {
+        dtsContent = fs.readFileSync(dtsPath, 'utf8');
+        dtsContentByPath.set(dtsPath, dtsContent);
     }
-    return _dtsContent;
+    return dtsContent;
 }

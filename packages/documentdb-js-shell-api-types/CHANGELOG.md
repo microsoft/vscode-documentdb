@@ -2,6 +2,8 @@
 
 ## 0.9.0
 
+- `getShellApiDtsContent(typeDefsDirectory?)` accepts a declarations directory for bundled callers; the default package layout is unchanged.
+
 ### Breaking changes
 
 - **ESM-only.** The package declares `"type": "module"` and an `exports` map. The allowed entry points are `.`, `./typeDefs/*`, and `./package.json`. Declaration assets remain accessible through `typeDefs/*`. Deep imports into `dist/` are no longer allowed.
