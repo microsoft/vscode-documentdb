@@ -264,9 +264,13 @@ debugging
 
 ### Decision (proposed)
 
-When the environment variable `DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK=1` is set, the helper skips
-Node's resolver and treats the probe as `EBADRESP`. Developers set it in `launch.json`. Events
+When the environment variable `DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK=1` is set, the helper always
+runs the fallback, whatever Node's resolver returns. Developers set it in `launch.json`. Events
 emitted with the switch on carry `forcedFallback = 'true'`, so dashboards can exclude them.
+
+Clarified in the PR #997 review (C2): the Node.js probe still runs first, as plan WI-4 (R5)
+specifies, so forced events keep `nodeErrorCode` and `nodeProbeDurationMs`. The switch overrides
+only the decision to fall back. An earlier wording said the helper skips Node's resolver.
 
 ### Why
 
