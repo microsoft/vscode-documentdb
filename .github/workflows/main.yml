@@ -239,7 +239,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   script: |
                       const fs = require('node:fs');
-                      const { buildSizeComment } = require('./build/verification/build-size-report.cjs');
+                      const { buildSizeComment, sizeWarnings } = require('./build/verification/build-size-report.cjs');
                       const reportFile = 'verification-artifacts/l1-manifest-report.json';
                       const report = fs.existsSync(reportFile) ? JSON.parse(fs.readFileSync(reportFile, 'utf8')) : null;
                       const base = fs.existsSync('base-sizes.json') ? JSON.parse(fs.readFileSync('base-sizes.json', 'utf8')) : null;
@@ -254,6 +254,9 @@ jobs:
                         l1Url: process.env.L1_URL,
                       });
                       await core.summary.addRaw(body).write();
+                      for (const warning of sizeWarnings(report, base, process.env.BASE_REF)) {
+                        core.warning(warning.message, { title: warning.title });
+                      }
                       const comments = await github.paginate(github.rest.issues.listComments, {
                         ...context.repo,
                         issue_number: context.issue.number,

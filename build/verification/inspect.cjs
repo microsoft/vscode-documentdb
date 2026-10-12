@@ -134,9 +134,6 @@ const runtimeAssets = [
         reason: 'Query Insights reads the stage 2 debug override when present',
     },
 ];
-const sizeBudgetFile = path.join(__dirname, 'size-budget.json');
-// Coordinator decision (Stage 6), mirroring the operator-approved per-file tolerance.
-const defaultSizeTolerance = { fraction: 0.1, absoluteBytes: 4096 };
 // The host build sets Rolldown `keepNames` because runtime code reads `constructor.name`. Each entry
 // names one class in the `main` graph, located by a member name the minifier does not rename.
 const keptClassNames = [
@@ -798,7 +795,7 @@ function monacoWorkerAssets(report, files) {
 }
 
 /**
- * Packaged bytes per size-budget graph. Every counted file must be owned by the bundle report its
+ * Packaged bytes per size graph. Every counted file must be owned by the bundle report its
  * graph comes from; `inspect` checks those reports' hashes against the packaged bytes.
  */
 function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
@@ -825,7 +822,7 @@ function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
             measured[name] = assets.reduce((bytes, asset) => {
                 assert.ok(
                     Object.hasOwn(report.assetHashes, asset),
-                    `${name}: size budget counts ${asset}, which its bundle report does not own`,
+                    `${name}: size graph counts ${asset}, which its bundle report does not own`,
                 );
                 assert.ok(files.has(`extension/${asset}`), `${name}: missing packaged asset ${asset}`);
                 return bytes + files.get(`extension/${asset}`).length;
@@ -834,108 +831,6 @@ function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
     }
     measured.vsix = vsixBytes;
     return measured;
-}
-
-function validateSizeTolerance(tolerance, source) {
-    assert.ok(
-        tolerance &&
-            Number.isFinite(tolerance.fraction) &&
-            tolerance.fraction >= 0 &&
-            Number.isSafeInteger(tolerance.absoluteBytes) &&
-            tolerance.absoluteBytes >= 0,
-        `${source}: tolerance needs a non-negative fraction and integer absoluteBytes`,
-    );
-}
-
-function readSizeBudget(filename) {
-    const budget = JSON.parse(fs.readFileSync(filename, 'utf8'));
-    assert.equal(budget.version, 1, `${filename}: unsupported size budget version`);
-    validateSizeTolerance(budget.tolerance, filename);
-    assert.ok(budget.graphs && typeof budget.graphs === 'object', `${filename}: missing graphs`);
-    for (const [name, bytes] of Object.entries(budget.graphs)) {
-        assert.ok(Number.isSafeInteger(bytes) && bytes >= 0, `${filename}: ${name} budget must be a byte count`);
-    }
-    return budget;
-}
-
-function sizeToleranceBytes(budgetBytes, tolerance) {
-    return Math.max(tolerance.absoluteBytes, Math.floor(budgetBytes * tolerance.fraction));
-}
-
-/**
- * Compares measured graph bytes with a budget. A graph fails when it exceeds its budget by more than
- * the tolerance (the greater of `fraction` of the budget and `absoluteBytes`), or when it is missing
- * from either side. Decreases never fail; one beyond the tolerance gets a note to update the budget.
- */
-function evaluateSizeBudget(measured, budget) {
-    validateSizeTolerance(budget.tolerance, 'size budget');
-    const names = [...Object.keys(measured), ...Object.keys(budget.graphs).filter((name) => !(name in measured))];
-    const graphs = names.map((graph) => {
-        const bytes = Object.hasOwn(measured, graph) ? measured[graph] : null;
-        const budgetBytes = Object.hasOwn(budget.graphs, graph) ? budget.graphs[graph] : null;
-        if (budgetBytes === null) {
-            return { graph, bytes, budgetBytes, limitBytes: null, deltaBytes: null, status: 'unbudgeted' };
-        }
-        const toleranceBytes = sizeToleranceBytes(budgetBytes, budget.tolerance);
-        const limitBytes = budgetBytes + toleranceBytes;
-        if (bytes === null) {
-            return { graph, bytes, budgetBytes, limitBytes, deltaBytes: null, status: 'missing' };
-        }
-        const deltaBytes = bytes - budgetBytes;
-        const status = deltaBytes > toleranceBytes ? 'over' : -deltaBytes > toleranceBytes ? 'below' : 'ok';
-        return { graph, bytes, budgetBytes, limitBytes, deltaBytes, status };
-    });
-    return {
-        enforced: true,
-        tolerance: budget.tolerance,
-        graphs,
-        failures: graphs
-            .filter((entry) => ['over', 'missing', 'unbudgeted'].includes(entry.status))
-            .map((entry) => entry.graph),
-        notes: graphs
-            .filter((entry) => entry.status === 'below')
-            .map(
-                (entry) =>
-                    `${entry.graph} is ${-entry.deltaBytes} bytes below its budget (${entry.budgetBytes}); consider updating it with --write-size-budget`,
-            ),
-    };
-}
-
-function sizeBudgetError(sizeBudget) {
-    const details = sizeBudget.graphs
-        .filter((entry) => sizeBudget.failures.includes(entry.graph))
-        .map((entry) =>
-            entry.status === 'over'
-                ? `${entry.graph} is ${entry.bytes} bytes, over its limit of ${entry.limitBytes} (budget ${entry.budgetBytes}, +${entry.deltaBytes})`
-                : entry.status === 'missing'
-                  ? `${entry.graph} is budgeted but not produced by the artifact`
-                  : `${entry.graph} (${entry.bytes} bytes) has no budget`,
-        );
-    return new Error(
-        `Size budget failed: ${details.join('; ')}. If intentional, update build/verification/size-budget.json with npm run verify:vsix -- <vsix> --write-size-budget`,
-    );
-}
-
-function formatSizeTable(sizeBudget) {
-    const rows = [
-        ['graph', 'bytes', 'budget', 'limit', 'delta', 'status'],
-        ...sizeBudget.graphs.map((entry) => [
-            entry.graph,
-            entry.bytes ?? '-',
-            entry.budgetBytes ?? '-',
-            entry.limitBytes ?? '-',
-            entry.deltaBytes === null || entry.deltaBytes === undefined
-                ? '-'
-                : `${entry.deltaBytes >= 0 ? '+' : ''}${entry.deltaBytes}`,
-            entry.status,
-        ]),
-    ].map((row) => row.map(String));
-    const widths = rows[0].map((_, column) => Math.max(...rows.map((row) => row[column].length)));
-    return rows.map((row) =>
-        row
-            .map((cell, column) => (column === 0 ? cell.padEnd(widths[column]) : cell.padStart(widths[column])))
-            .join('  '),
-    );
 }
 
 function inspect(filename, options = {}) {
@@ -991,32 +886,8 @@ function inspect(filename, options = {}) {
                 graph.assets.reduce((bytes, asset) => bytes + files.get(`extension/${asset}`).length, 0),
             ]),
         ),
+        graphSizes: measureSizeGraphs(files, reports[0], reports[1], graphs, result.vsixBytes),
     };
-    const measured = measureSizeGraphs(files, reports[0], reports[1], graphs, result.vsixBytes);
-    const sizeBudget = options.sizeBudget
-        ? evaluateSizeBudget(measured, readSizeBudget(options.sizeBudget))
-        : {
-              enforced: false,
-              tolerance: null,
-              graphs: Object.entries(measured).map(([graph, bytes]) => ({
-                  graph,
-                  bytes,
-                  budgetBytes: null,
-                  limitBytes: null,
-                  deltaBytes: null,
-                  status: 'not-enforced',
-              })),
-              failures: [],
-              notes: [],
-          };
-    result.manifestReport.sizeBudget = sizeBudget;
-    if (sizeBudget.failures.length > 0) {
-        // Hard failure, raised after every invariant; carries the result so the CLI still writes reports.
-        const error = sizeBudgetError(sizeBudget);
-        // Non-enumerable, so an uncaught failure prints the message rather than the whole result.
-        Object.defineProperties(error, { sizeBudget: { value: sizeBudget }, inspection: { value: result } });
-        throw error;
-    }
     return result;
 }
 
@@ -1025,20 +896,14 @@ if (require.main === module) {
     const filename = args.shift();
     if (!filename) {
         throw new Error(
-            'Usage: node build/verification/inspect.cjs <vsix> [--manifest-report <file>] [--reports <directory>] [--size-budget <file>] [--write-size-budget [<file>]]',
+            'Usage: node build/verification/inspect.cjs <vsix> [--manifest-report <file>] [--reports <directory>]',
         );
     }
-    const options = { sizeBudget: sizeBudgetFile };
+    const options = {};
     let manifestOutput;
-    let sizeBudgetOutput;
     while (args.length) {
         const flag = args.shift();
-        if (flag === '--write-size-budget') {
-            sizeBudgetOutput = args[0] && !args[0].startsWith('--') ? args.shift() : sizeBudgetFile;
-        } else if (flag === '--size-budget') {
-            options.sizeBudget = args.shift();
-            assert.ok(options.sizeBudget, '--size-budget requires a filename');
-        } else if (flag === '--manifest-report') {
+        if (flag === '--manifest-report') {
             manifestOutput = args.shift();
             assert.ok(manifestOutput, '--manifest-report requires a filename');
         } else if (flag === '--reports') {
@@ -1048,41 +913,10 @@ if (require.main === module) {
             throw new Error(`Unknown inspection option: ${flag}`);
         }
     }
-    // Writing a budget measures without enforcing the one it replaces; every invariant still applies.
-    const budgetToKeep = sizeBudgetOutput && fs.existsSync(options.sizeBudget) ? options.sizeBudget : undefined;
-    if (sizeBudgetOutput) {
-        delete options.sizeBudget;
+    const result = inspect(filename, options);
+    if (manifestOutput) {
+        fs.writeFileSync(manifestOutput, JSON.stringify(result.manifestReport, null, 2) + '\n');
     }
-    const writeManifestReport = (report) => {
-        if (manifestOutput) {
-            fs.writeFileSync(manifestOutput, JSON.stringify(report, null, 2) + '\n');
-        }
-    };
-    let result;
-    try {
-        result = inspect(filename, options);
-    } catch (error) {
-        if (error.inspection) {
-            writeManifestReport(error.inspection.manifestReport);
-            console.error(formatSizeTable(error.sizeBudget).join('\n'));
-        }
-        throw error;
-    }
-    if (sizeBudgetOutput) {
-        const tolerance = budgetToKeep ? readSizeBudget(budgetToKeep).tolerance : defaultSizeTolerance;
-        const budget = {
-            version: 1,
-            description:
-                'L1 size budget: packaged bytes per graph (see build/verification/README.md). Update intentionally with npm run verify:vsix -- <vsix> --write-size-budget',
-            tolerance,
-            graphs: Object.fromEntries(
-                result.manifestReport.sizeBudget.graphs.map((entry) => [entry.graph, entry.bytes]),
-            ),
-        };
-        fs.writeFileSync(sizeBudgetOutput, JSON.stringify(budget, null, 2) + '\n');
-        console.error(`Size budget written to ${sizeBudgetOutput}`);
-    }
-    writeManifestReport(result.manifestReport);
     const report = result.manifestReport;
     console.error(`VSIX: ${report.vsixBytes.bytes} bytes`);
     console.error(
@@ -1091,27 +925,18 @@ if (require.main === module) {
             .join(', ')}`,
     );
     console.error(
-        report.sizeBudget.enforced
-            ? `Size budget (enforced; tolerance ${report.sizeBudget.tolerance.fraction * 100}% or ${report.sizeBudget.tolerance.absoluteBytes} bytes, whichever is greater):`
-            : 'Size budget (not enforced):',
+        `Graph sizes (bytes; not enforced): ${Object.entries(report.graphSizes)
+            .map(([name, bytes]) => `${name}=${bytes}`)
+            .join(', ')}`,
     );
-    console.error(formatSizeTable(report.sizeBudget).join('\n'));
-    for (const note of report.sizeBudget.notes) {
-        console.error(`Note: ${note}`);
-    }
     console.log(JSON.stringify(result, null, 2));
 }
 
 module.exports = {
-    defaultSizeTolerance,
-    evaluateSizeBudget,
-    formatSizeTable,
     inspectKeptClassNames,
     keptClassNames,
     keptClassNameSites,
     measureSizeGraphs,
-    readSizeBudget,
-    sizeBudgetFile,
     babelConfigFileImports,
     babelConfigFileImportLimit,
     viteChunkClosure,

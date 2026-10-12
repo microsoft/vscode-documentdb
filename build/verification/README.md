@@ -32,7 +32,7 @@ npm run test:verification
 ```
 
 Inspection reports archive file-list and per-file size drift without failing; per-graph sizes are
-enforced by the [size budget](#size-budget-enforced), and the host's kept class names by the
+measured for the [size report](#size-report-warning-only), which only warns, and the host's kept class names are enforced by the
 [`keepNames` invariant](#host-class-names-keepnames-review-item-f17). Hard checks cover required
 package files and the resolved `package.json` main entry, exactly one owning bundle report for every packaged
 `.js`, `.cjs` and `.mjs` file under `extension/` (two reports binding the same script are ambiguous), the named `render` export,
@@ -132,11 +132,11 @@ These probes build and run bundles instead of inspecting the packaged artifact, 
 which stays offline and build-free for the ADO release build.
 
 The JSON result includes `manifestReport`: current `vsixBytes.bytes`, `graphAssetBytes` sums and
-the enforced `sizeBudget` measurements. A short summary goes to stderr;
+`graphSizes`, the per-graph measurements below. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
 GitHub Actions publishes `Bundle-reports-<run_id>` from the package job and
 `L1-manifest-report-<run_id>` from L1, including on inspection failure. L1's PR comment reads the
-report's `sizeBudget` measurements, not the thin `views.js` entry. Push builds and manual cache
+report's `graphSizes`, not the thin `views.js` entry. Push builds and manual cache
 seeding use `{version: 2, vsixSize, graphSizes}` in the existing `build-sizes-<ref>-<sha>` cache;
 legacy `{vsixSize, webviewSize}` baselines compare only the VSIX and mark graph deltas unavailable.
 The shared [`build-size-report.cjs`](./build-size-report.cjs) formats those measurements and writes
@@ -156,20 +156,21 @@ Seven host controls additionally reject `missing-host-lazy-chunk`, `duplicate-ho
 `kubernetes-in-extension-static-closure` and `missing-extension-implementation-boundary`.
 Host controls refresh copied hashes to model matching newly built output and assert the intended
 diagnostic, not a stale-report failure. Stage 6 adds `keepnames-class-name-lost` to the host
-controls and three size-budget controls (below). Stage 8 adds `ambiguous-script-owner`, which copies
-`views.js`'s entry into the host report and requires the single-owner rejection. The proof prints 25 PASS lines in total.
+controls. Stage 8 adds `ambiguous-script-owner`, which copies
+`views.js`'s entry into the host report and requires the single-owner rejection. The proof prints 22 PASS lines in total.
 The unrelated README-image asset-change reporting control was retired because the Stage 0
-manifest-drift report it exercised no longer exists.
+manifest-drift report it exercised no longer exists, and the three Stage 6 size-budget controls
+(`size-budget-collection-view`, `size-budget-host-startup`, `size-budget-views-assets`) were retired
+with the size budget (G8 item 22).
 Proof variants are written with deflated entries, so their VSIX size stays comparable to `vsce`
-output and within the `vsix` budget.
+output.
 
-### Size budget (enforced)
+### Size report (warning only)
 
-The [size budget](./size-budget.json) is a hard failure, and
-`verify:vsix` enforces it by default (so the GitHub Actions and ADO inspection steps run it). It
-budgets the packaged bytes of whole graphs, not single files. Every counted file must be owned by
-the bundle report its graph comes from, and L1 checks those reports' hashes against the packaged
-bytes, so the sizes are those of the files inside the VSIX:
+L1 measures the packaged bytes of whole graphs, not single files, and no size ever fails a check
+(operator decision, G8 item 22). Every counted file must still be owned by the bundle report its
+graph comes from, and L1 checks those reports' hashes against the packaged bytes, so the sizes are
+those of the files inside the VSIX. `manifestReport.graphSizes` holds one byte count per graph:
 
 | Graph                                                                                       | Files counted                                                                                                                                  |
 | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -183,39 +184,25 @@ bytes, so the sizes are those of the files inside the VSIX:
 | `editorWorker`, `jsonWorker`                                                                | each Monaco worker script (`<name>.worker-<hash>.js`, self-contained classic scripts)                                                          |
 | `vsix`                                                                                      | the compressed VSIX file                                                                                                                       |
 
-A graph fails when it exceeds its budget by more than the tolerance, **10% or 4 KiB, whichever is
-greater** (a coordinator decision for Stage 6, mirroring the operator-approved per-file tolerance).
-Decreases never fail; a graph more than the tolerance below its budget prints a note suggesting an
-update. A graph in the budget but not in the artifact, or in the artifact but not in the budget, also
-fails, so a renamed or added view, worker or host entry cannot escape the budget. The budget is
-checked after every other invariant, so an invariant failure is always reported first. ADO's
-regenerated `NOTICE.html` is larger than the committed copy; compressed, the difference stays well
-inside the `vsix` tolerance.
+On same-repository PRs, L1 compares these sizes with the base branch's cached sizes and flags a
+graph that changed by **at least 5% of its base or at least 50 KiB** (`SIZE_CHANGE_FRACTION`
+and `SIZE_CHANGE_BYTES` in [`build-size-report.cjs`](./build-size-report.cjs)). The
+`<!-- build-size-report -->` comment, also written to the job summary, is:
 
-`verify:vsix` prints a table (graph, bytes, budget, limit, delta, status) to stderr. The JSON from
-`--manifest-report <file>` (and `manifestReport` on stdout) includes it as `sizeBudget`:
-`enforced`, `tolerance`, `graphs` (`graph`, `bytes`, `budgetBytes`, `limitBytes`, `deltaBytes`,
-`status`: `ok`, `below`, `over`, `missing` or `unbudgeted`), `failures` and `notes`. On a budget
-failure the report and table are still written before the command exits non-zero.
-`--size-budget <file>` checks against another budget file.
+- one line when nothing was flagged, with the VSIX size;
+- otherwise a table of the flagged graphs only (human-readable sizes and percentages), growth marked
+  ⚠, decreases listed without it, and a pointer to the bundle reports;
+- an explicit "No size data for `<base>` yet; sizes only." when the base has no cache entry, and a
+  VSIX-only comparison for a legacy `{vsixSize, webviewSize}` entry;
+- always, every graph in exact bytes inside a collapsed `<details>` block, with the artifact links.
 
-Update the budget only for an intended size change, from a fresh `npm run package`, and commit it
-with the change that caused it. Writing never runs implicitly; it still runs every invariant, but
-does not enforce the budget it replaces, and keeps that file's tolerance:
+Rows list the pages (`collectionView`, `documentView`, `localQuickStart`, `atlasCredentials`,
+`clusterDashboard`), activation (`mainStartup`), `main`, `playgroundWorker` and `vsix` first, then
+the other graphs. Each flagged growth also emits a GitHub warning annotation, so it shows in the
+checks UI. Shared chunks count in every graph that loads them, so rows do not add up.
 
-```bash
-npm run verify:vsix -- vscode-documentdb-0.11.0.vsix --write-size-budget            # build/verification/size-budget.json
-npm run verify:vsix -- vscode-documentdb-0.11.0.vsix --write-size-budget <file>     # another path
-```
-
-Proof controls: `size-budget-collection-view` appends a compressible comment past the
-`collectionView` limit to the Collection View lazy chunk, and `size-budget-host-startup` does the
-same to the extension implementation chunk. Both refresh the copied host and views reports' hashes
-and chunk sizes, and require the failure to be the size budget for exactly the expected graphs
-(`collectionView`; `main` and `mainStartup`). `size-budget-views-assets` grows the codicon font
-past the `viewsAssets` limit, refreshing its copied report hash and asset size, and requires exactly
-`viewsAssets` to fail. Per-view rows budget JavaScript closures, not all loaded resources;
-`viewsAssets` separately budgets every report-owned non-script view asset with the same hash binding.
+To find out why a graph moved, download `Bundle-reports-<run_id>` from the PR run and from a base
+build and compare the chunks' `bytes` and `moduleIds` in `host.json` and `views.json`.
 
 ### Host class names (`keepNames`, review item F17)
 

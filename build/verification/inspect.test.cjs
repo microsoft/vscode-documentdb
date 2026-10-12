@@ -22,15 +22,10 @@ const {
     viteViewGraph,
     viewGraphs,
     viewModules,
-    defaultSizeTolerance,
-    evaluateSizeBudget,
-    formatSizeTable,
     inspectKeptClassNames,
     keptClassNames,
     keptClassNameSites,
     measureSizeGraphs,
-    readSizeBudget,
-    sizeBudgetFile,
 } = require('./inspect.cjs');
 const { readVsix, writeVsix, extractVsix } = require('./vsix.cjs');
 
@@ -519,13 +514,10 @@ test('host chunks and the CJS plugin require their own report ownership and matc
         writeReports();
         writeVsix(filename, bundled);
         const { manifestReport } = inspect(filename, { reports: directory });
-        assert.deepEqual(Object.keys(manifestReport).sort(), ['graphAssetBytes', 'sizeBudget', 'vsixBytes']);
+        assert.deepEqual(Object.keys(manifestReport).sort(), ['graphAssetBytes', 'graphSizes', 'vsixBytes']);
         assert.deepEqual(manifestReport.vsixBytes, { bytes: fs.statSync(filename).size });
-        assert.equal(manifestReport.sizeBudget.enforced, false);
-        const measured = Object.fromEntries(
-            manifestReport.sizeBudget.graphs.map((entry) => [entry.graph, entry.bytes]),
-        );
-        assert.equal(measured.viewsAssets, 100);
+        assert.equal(manifestReport.graphSizes.vsix, manifestReport.vsixBytes.bytes);
+        assert.equal(manifestReport.graphSizes.viewsAssets, 100);
         bundled.set('extension/codicon-fixture.ttf', Buffer.alloc(101));
         writeVsix(filename, bundled);
         assert.throws(
@@ -534,27 +526,6 @@ test('host chunks and the CJS plugin require their own report ownership and matc
         );
         bundled.set('extension/codicon-fixture.ttf', Buffer.alloc(100));
         writeVsix(filename, bundled);
-        const budgetFile = path.join(directory, 'size-budget.json');
-        fs.writeFileSync(budgetFile, JSON.stringify({ version: 1, tolerance: defaultSizeTolerance, graphs: measured }));
-        assert.deepEqual(
-            inspect(filename, { reports: directory, sizeBudget: budgetFile }).manifestReport.sizeBudget.failures,
-            [],
-        );
-        fs.writeFileSync(
-            budgetFile,
-            JSON.stringify({
-                version: 1,
-                tolerance: { fraction: 0, absoluteBytes: 0 },
-                graphs: { ...measured, main: 0 },
-            }),
-        );
-        assert.throws(
-            () => inspect(filename, { reports: directory, sizeBudget: budgetFile }),
-            (error) =>
-                /^Size budget failed: main is \d+ bytes, over its limit of 0 \(budget 0, \+\d+\)/.test(error.message) &&
-                error.sizeBudget.failures.join() === 'main' &&
-                error.inspection.manifestReport.sizeBudget === error.sizeBudget,
-        );
         host.bundled.set(
             'extension/main.mjs',
             Buffer.from(keptClassSource.replace('class extends', 'class e extends')),
@@ -1016,92 +987,6 @@ test('VSIX writer can deflate entries and keeps stored entries when deflating do
     }
 });
 
-const budget = (graphs, tolerance = defaultSizeTolerance) => ({ version: 1, tolerance, graphs });
-
-test('size budget fails a graph more than ten percent over budget and passes within tolerance', () => {
-    const passing = evaluateSizeBudget({ views: 110_000 }, budget({ views: 100_000 }));
-    assert.deepEqual(passing.failures, []);
-    assert.deepEqual(passing.graphs, [
-        { graph: 'views', bytes: 110_000, budgetBytes: 100_000, limitBytes: 110_000, deltaBytes: 10_000, status: 'ok' },
-    ]);
-    const failing = evaluateSizeBudget({ views: 110_001 }, budget({ views: 100_000 }));
-    assert.deepEqual(failing.failures, ['views']);
-    assert.equal(failing.graphs[0].status, 'over');
-    assert.equal(failing.graphs[0].deltaBytes, 10_001);
-});
-
-test('size budget applies the 4 KiB floor to small graphs', () => {
-    assert.deepEqual(evaluateSizeBudget({ plugin: 6000 + 4096 }, budget({ plugin: 6000 })).failures, []);
-    assert.deepEqual(evaluateSizeBudget({ plugin: 6000 + 4097 }, budget({ plugin: 6000 })).failures, ['plugin']);
-    assert.equal(evaluateSizeBudget({ plugin: 0 }, budget({ plugin: 0 })).graphs[0].limitBytes, 4096);
-});
-
-test('size budget decreases never fail and note an update only beyond the tolerance', () => {
-    const small = evaluateSizeBudget({ views: 90_000 }, budget({ views: 100_000 }));
-    assert.deepEqual([small.failures, small.notes, small.graphs[0].status], [[], [], 'ok']);
-    const large = evaluateSizeBudget({ views: 1 }, budget({ views: 100_000 }));
-    assert.deepEqual(large.failures, []);
-    assert.equal(large.graphs[0].status, 'below');
-    assert.match(
-        large.notes[0],
-        /^views is 99999 bytes below its budget \(100000\); consider updating it with --write-size-budget$/,
-    );
-});
-
-test('size budget fails graphs missing from either the artifact or the budget', () => {
-    const result = evaluateSizeBudget({ main: 10, renamedView: 10 }, budget({ main: 10, localQuickStart: 10 }));
-    assert.deepEqual(result.failures, ['renamedView', 'localQuickStart']);
-    assert.deepEqual(
-        result.graphs.map((entry) => [entry.graph, entry.status]),
-        [
-            ['main', 'ok'],
-            ['renamedView', 'unbudgeted'],
-            ['localQuickStart', 'missing'],
-        ],
-    );
-    const table = formatSizeTable(result);
-    assert.equal(table.length, 4);
-    assert.match(table[0], /^graph\s+bytes\s+budget\s+limit\s+delta\s+status$/);
-    assert.match(table[3], /^localQuickStart\s+-\s+10\s+4106\s+-\s+missing$/);
-});
-
-test('size budget files are validated and the committed budget covers every graph with the coordinator tolerance', () => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-size-budget-'));
-    try {
-        const file = path.join(directory, 'budget.json');
-        for (const [content, error] of [
-            [{ ...budget({}), version: 2 }, /unsupported size budget version/],
-            [budget({}, { fraction: -1, absoluteBytes: 0 }), /tolerance/],
-            [budget({}, { fraction: 0.1 }), /tolerance/],
-            [budget({ main: -1 }), /main budget must be a byte count/],
-            [budget({ main: 1.5 }), /main budget must be a byte count/],
-        ]) {
-            fs.writeFileSync(file, JSON.stringify(content));
-            assert.throws(() => readSizeBudget(file), error);
-        }
-    } finally {
-        fs.rmSync(directory, { recursive: true, force: true });
-    }
-    const committed = readSizeBudget(sizeBudgetFile);
-    assert.deepEqual(committed.tolerance, { fraction: 0.1, absoluteBytes: 4096 });
-    assert.deepEqual(Object.keys(committed.graphs).sort(), [
-        'atlasCredentials',
-        'clusterDashboard',
-        'collectionView',
-        'documentView',
-        'editorWorker',
-        'jsonWorker',
-        'localQuickStart',
-        'main',
-        'mainStartup',
-        'playgroundTsPlugin',
-        'playgroundWorker',
-        'viewsAssets',
-        'viewsEntry',
-        'vsix',
-    ]);
-});
-
 test('size graphs sum packaged bytes of report-owned host, startup, view, entry and worker closures', () => {
     const host = hostFixture();
     const views = viteFixture();
@@ -1153,7 +1038,7 @@ test('size graphs sum packaged bytes of report-owned host, startup, view, entry 
     delete views.report.assetHashes['localQuickStart.js'];
     assert.throws(
         () => measureSizeGraphs(bundled, host.report, views.report, graphs, 42),
-        /localQuickStart: size budget counts localQuickStart\.js, which its bundle report does not own/,
+        /localQuickStart: size graph counts localQuickStart\.js, which its bundle report does not own/,
     );
 });
 
@@ -1193,21 +1078,8 @@ test('viewsAssets remains required even when the views report owns no non-script
     const bundled = new Map([...host.bundled, ...views.bundled]);
     const graphs = { ...hostGraphs(host.report, bundled), ...viewGraphs(views.report, bundled) };
     const measured = measureSizeGraphs(bundled, host.report, views.report, graphs, 42);
+    assert.ok(Object.hasOwn(measured, 'viewsAssets'));
     assert.equal(measured.viewsAssets, 0);
-    assert.deepEqual(evaluateSizeBudget(measured, budget(measured)).failures, []);
-    const withoutAssets = { ...measured };
-    delete withoutAssets.viewsAssets;
-    assert.deepEqual(evaluateSizeBudget(measured, budget(withoutAssets)).failures, ['viewsAssets']);
-    assert.deepEqual(evaluateSizeBudget(withoutAssets, budget(measured)).failures, ['viewsAssets']);
-});
-
-test('view asset growth fails only viewsAssets while JavaScript and VSIX graphs stay within tolerance', () => {
-    const measured = { viewsAssets: 100_000, collectionView: 6_000_000, vsix: 8_500_000 };
-    assert.deepEqual(evaluateSizeBudget({ ...measured, viewsAssets: 110_000 }, budget(measured)).failures, []);
-    assert.deepEqual(
-        evaluateSizeBudget({ ...measured, viewsAssets: 110_001, vsix: 8_756_000 }, budget(measured)).failures,
-        ['viewsAssets'],
-    );
 });
 
 test('keepNames sites report the runtime class name for every emitted shape', () => {

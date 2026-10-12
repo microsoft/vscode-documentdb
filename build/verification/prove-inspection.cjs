@@ -14,7 +14,6 @@ const {
     babelConfigFileImports,
     keptClassNames,
     keptClassNameSites,
-    sizeBudgetFile,
 } = require('./inspect.cjs');
 const { readVsix, writeVsix } = require('./vsix.cjs');
 
@@ -28,8 +27,8 @@ while (args.length) {
     reports = args.shift();
     assert.ok(reports, '--reports requires a directory');
 }
-const options = { reports, sizeBudget: sizeBudgetFile };
-const { manifestReport: originalManifestReport } = inspect(filename, options);
+const options = { reports };
+inspect(filename, options);
 const views = JSON.parse(fs.readFileSync(path.join(reports, 'views.json'), 'utf8'));
 const host = JSON.parse(fs.readFileSync(path.join(reports, 'host.json'), 'utf8'));
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-broken-vsix-'));
@@ -351,72 +350,6 @@ try {
         writeVsix(variant, files, { compress: true });
         assert.throws(() => inspect(variant, { ...options, reports: controlReports }), expected);
         console.log(`PASS: ${name} rejected for the expected reason`);
-    }
-    // Size budget: inflate packaged chunks/assets past their graphs' limits with compressible bytes, so
-    // the VSIX total stays within its own budget, and refresh both reports' hashes and sizes so the
-    // only remaining violation is the budget.
-    const sizeEntries = new Map(originalManifestReport.sizeBudget.graphs.map((entry) => [entry.graph, entry]));
-    const collectionViewChunk = views.chunks.find((chunk) => chunk.facadeModuleId === viewModules.collectionView);
-    assert.ok(collectionViewChunk, 'Proof requires the Collection View lazy chunk');
-    const font = Object.keys(views.assetHashes).find((asset) => /^codicon-[A-Za-z0-9_-]+\.ttf$/.test(asset));
-    assert.ok(font, 'Proof requires the report-owned codicon font');
-    const sizeControls = [
-        ['size-budget-collection-view', collectionViewChunk.fileName, ['collectionView']],
-        ['size-budget-host-startup', implementation.fileName, ['main', 'mainStartup']],
-        ['size-budget-views-assets', font, ['viewsAssets']],
-    ];
-    for (const [name, asset, expectedFailures] of sizeControls) {
-        const inflation =
-            Math.max(
-                ...expectedFailures.map((graph) => sizeEntries.get(graph).limitBytes - sizeEntries.get(graph).bytes),
-            ) + 1024;
-        const files = readVsix(filename);
-        const file = `extension/${asset}`;
-        const padding = asset === font ? Buffer.alloc(inflation, 'x') : Buffer.from(`\n/*${'x'.repeat(inflation)}*/\n`);
-        files.set(file, Buffer.concat([files.get(file), padding]));
-        const controlReports = path.join(directory, name);
-        fs.mkdirSync(controlReports);
-        for (const [reportName, original] of [
-            ['host', host],
-            ['views', views],
-        ]) {
-            const report = structuredClone(original);
-            for (const reportAsset of Object.keys(report.assetHashes)) {
-                if (files.has(`extension/${reportAsset}`)) {
-                    report.assetHashes[reportAsset] = createHash('sha256')
-                        .update(files.get(`extension/${reportAsset}`))
-                        .digest('hex');
-                }
-            }
-            for (const chunk of report.chunks) {
-                if (files.has(`extension/${chunk.fileName}`)) {
-                    chunk.bytes = files.get(`extension/${chunk.fileName}`).length;
-                }
-            }
-            for (const reportAsset of report.assets || []) {
-                if (files.has(`extension/${reportAsset.fileName}`)) {
-                    reportAsset.bytes = files.get(`extension/${reportAsset.fileName}`).length;
-                }
-            }
-            fs.writeFileSync(path.join(controlReports, `${reportName}.json`), JSON.stringify(report));
-        }
-        const variant = path.join(directory, `${name}.vsix`);
-        writeVsix(variant, files, { compress: true });
-        let rejection;
-        assert.throws(
-            () => inspect(variant, { ...options, reports: controlReports }),
-            (error) => {
-                assert.match(error.message, /^Size budget failed: /);
-                assert.deepEqual(error.sizeBudget.failures, expectedFailures);
-                for (const graph of expectedFailures) {
-                    assert.match(error.message, new RegExp(`\\b${graph} is \\d+ bytes, over its limit`));
-                }
-                rejection = error.message;
-                return true;
-            },
-        );
-        console.log(`PASS: ${name} rejected for the expected reason`);
-        console.log(`Expected failure: ${rejection}`);
     }
 } finally {
     fs.rmSync(directory, { recursive: true, force: true });
