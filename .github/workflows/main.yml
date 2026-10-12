@@ -348,8 +348,6 @@ jobs:
 
             - name: 📦 Package Distributables (vsix/tgz)
               run: npm run package
-              env:
-                  BUNDLE_ANALYZE: 'true'
 
             - name: 📤 Upload Artifacts
               id: artifacts

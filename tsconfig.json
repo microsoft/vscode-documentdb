@@ -3,9 +3,8 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ES2023",
-    "outDir": "out",
+    "noEmit": true,
     "lib": ["ES2023", "dom", "dom.iterable", "webworker"],
-    "sourceMap": true,
     // TypeScript 6 defaults `strict` to true. This project has never enabled it as a whole; it opts
     // into individual checks below (`strictNullChecks`, `noImplicitThis`, `alwaysStrict`).
     "strict": false,
@@ -20,7 +19,6 @@
     "strictNullChecks": true,
     "skipLibCheck": true,
     "noUnusedParameters": true,
-    "rootDir": ".",
     "experimentalDecorators": true,
     "resolveJsonModule": true,
     "alwaysStrict": true,

@@ -12,7 +12,6 @@
   "files.insertFinalNewline": true,
   "files.trimTrailingWhitespace": true,
   "search.exclude": {
-    "out": true,
     "**/node_modules": true,
     ".vscode-test": true
   },

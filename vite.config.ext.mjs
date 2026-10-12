@@ -142,7 +142,6 @@ export default defineConfig(({ mode }) => {
         clearScreen: false,
         define: {
             'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
-            // `ext.isBundle` selects the bundled webview script.
             'process.env.IS_BUNDLE': JSON.stringify('true'),
             // WebviewController loads webviews from the dev server when this is set. Replaced at build
             // time so production code never contains the dev server switch.
