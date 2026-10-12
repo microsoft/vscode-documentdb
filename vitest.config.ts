@@ -33,6 +33,11 @@ const quietMissingDependencySourceMaps = {
 // Inline projects do not inherit root `test` options, so every project sets it.
 const testTimeout = 15_000;
 
+// Vitest 4's defaults, pinned: test/vitest/setup.ts patches Node's CommonJS loader, which stays per
+// test file only because each file gets a fresh child process. Not inherited either, as above.
+const pool = 'forks';
+const isolate = true;
+
 const packageRoot = (name: string): string => path.join(repoRoot, 'packages', name);
 
 export default defineConfig({
@@ -58,6 +63,8 @@ export default defineConfig({
                     name: 'extension',
                     root: repoRoot,
                     testTimeout,
+                    pool,
+                    isolate,
                     environment: 'node',
                     include: ['src/**/*.test.{ts,tsx}'],
                     // Lets CommonJS dependencies `require('vscode')` and get the aliased mock above.
@@ -84,6 +91,8 @@ export default defineConfig({
                     name: 'documentdb-js-schema-analyzer',
                     root: packageRoot('documentdb-js-schema-analyzer'),
                     testTimeout,
+                    pool,
+                    isolate,
                     environment: 'node',
                     include: ['test/**/*.test.{ts,tsx}'],
                 },
@@ -93,6 +102,8 @@ export default defineConfig({
                     name: 'documentdb-js-operator-registry',
                     root: packageRoot('documentdb-js-operator-registry'),
                     testTimeout,
+                    pool,
+                    isolate,
                     environment: 'node',
                     include: ['src/**/*.test.{ts,tsx}'],
                 },
@@ -103,6 +114,8 @@ export default defineConfig({
                     name: 'documentdb-js-shell-api-types',
                     root: packageRoot('documentdb-js-shell-api-types'),
                     testTimeout,
+                    pool,
+                    isolate,
                     environment: 'node',
                     include: ['src/**/*.test.{ts,tsx}'],
                 },
@@ -112,6 +125,8 @@ export default defineConfig({
                     name: 'documentdb-js-shell-runtime',
                     root: packageRoot('documentdb-js-shell-runtime'),
                     testTimeout,
+                    pool,
+                    isolate,
                     environment: 'node',
                     include: ['src/**/*.test.{ts,tsx}'],
                 },
@@ -130,6 +145,8 @@ export default defineConfig({
                     name: 'vscode-ext-webview',
                     root: packageRoot('vscode-ext-webview'),
                     testTimeout,
+                    pool,
+                    isolate,
                     environment: 'node',
                     include: ['src/**/*.test.{ts,tsx}'],
                 },
@@ -141,6 +158,8 @@ export default defineConfig({
                     name: 'vscode-ext-webview-fluentui',
                     root: packageRoot('vscode-ext-webview-fluentui'),
                     testTimeout,
+                    pool,
+                    isolate,
                     environment: 'jsdom',
                     include: ['src/**/*.test.{ts,tsx}'],
                 },

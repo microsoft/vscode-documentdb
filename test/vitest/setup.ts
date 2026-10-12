@@ -12,8 +12,9 @@
 // mock; here Node's CommonJS loader returns the very object this test file's `vscode` import gets,
 // so ESM and CommonJS importers share one mock instance.
 //
-// Every test file runs in its own worker process (`isolate: true`), so Node's `require` cache, and
-// with it this hook and the mock it hands out, is per test file, as it was under Jest.
+// vitest.config.ts pins `pool: 'forks'` and `isolate: true` (Vitest 4's defaults) on every project,
+// so each test file runs in a fresh child process and Node's `require` cache, and with it this hook
+// and the mock it hands out, is per test file, as it was under Jest.
 //
 // Inlining these packages (`server.deps.inline`) or pre-bundling them (`deps.optimizer.ssr`) was
 // measured and does not work: Node still resolves their `require`, and pre-bundling embeds a second
@@ -21,7 +22,8 @@
 // Stage 2 record in docs/ai-and-plans/modernization/build-and-test-stack.md).
 //
 // A test-level `vi.mock('vscode', factory)` replaces the module for ESM importers only. CommonJS
-// dependencies keep seeing the shared default mock below.
+// dependencies keep seeing the shared default mock below. src/vscodeMockIdentity.test.ts checks
+// both the shared identity and this split.
 
 import Module from 'module';
 import * as vscode from 'vscode';
