@@ -12,8 +12,10 @@
 // The default mode builds and `npm pack`s every workspace into a temp directory outside the
 // repository. Archive mode checks tarballs that were already packed (the ADO npm build's) offline:
 // it never builds, packs or runs npm/npx, so it skips step 2. For each tarball:
-// 1. Reports its file name and SHA-256, rejects test files, and requires every `files`, `main`,
-//    `types` and `exports` target in package.json to be in the tarball.
+// 1. Reports its file name and SHA-256, requires its package.json name to be one of this
+//    repository's workspace packages, rejects test files, and requires every `files`, `main`,
+//    `types` and `exports` target in package.json to be in the tarball. The reader rejects
+//    malformed tar members and duplicate paths.
 // 2. publint and @arethetypeswrong/cli (pinned versions, through npx; not in the lockfile).
 // 3. Static scan of every shipped .js file for top-level await, which `require(esm)` rejects.
 // 4. Two throwaway consumer projects with the tarballs unpacked into node_modules (all other
@@ -186,15 +188,19 @@ mkdirSync(tarballs);
 console.log(`Work directory: ${workDir}`);
 
 try {
+    const workspaces = JSON.parse(readFileSync(path.join(repo, 'package.json'), 'utf8')).workspaces;
+    const packageDirs = workspaces.flatMap((pattern) => {
+        const base = path.join(repo, pattern.replace(/\/\*$/, ''));
+        return readdirSync(base).map((name) => path.join(base, name));
+    });
+    // An archive's name places its files under node_modules, so only our own names are accepted.
+    const workspaceNames = new Set(
+        packageDirs.map((dir) => JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')).name),
+    );
     let tarballFiles;
     if (archiveMode) {
         tarballFiles = archiveFiles(archiveInputs);
     } else {
-        const workspaces = JSON.parse(readFileSync(path.join(repo, 'package.json'), 'utf8')).workspaces;
-        const packageDirs = workspaces.flatMap((pattern) => {
-            const base = path.join(repo, pattern.replace(/\/\*$/, ''));
-            return readdirSync(base).map((name) => path.join(base, name));
-        });
         const pack = run('npm', [
             'pack',
             '--json',
@@ -210,6 +216,12 @@ try {
         const manifestFile = archive.files.find((file) => file.path === 'package.json');
         if (!manifestFile) throw new Error(`${path.basename(tarball)} has no package.json`);
         const manifest = JSON.parse(manifestFile.data.toString('utf8'));
+        if (!workspaceNames.has(manifest.name)) {
+            throw new Error(
+                `${path.basename(tarball)}: package.json name ${JSON.stringify(manifest.name)} is not a workspace ` +
+                    `package of this repository (${[...workspaceNames].join(', ')})`,
+            );
+        }
         return { name: manifest.name, version: manifest.version, manifest, tarball, ...archive };
     });
     const ours = new Set(packed.map((entry) => entry.name));
@@ -230,8 +242,13 @@ try {
             JSON.stringify({ name: path.basename(consumer), private: true }),
         );
         linkDependencies(consumer, ours);
+        const nodeModules = path.join(consumer, 'node_modules');
         for (const entry of packed) {
-            extractFiles(entry.files, path.join(consumer, 'node_modules', entry.name));
+            const destination = path.resolve(nodeModules, entry.name);
+            if (!destination.startsWith(nodeModules + path.sep)) {
+                throw new Error(`Refusing to install ${entry.name} outside ${nodeModules}`);
+            }
+            extractFiles(entry.files, destination);
         }
     }
     mkdirSync(path.join(nodeConsumer, 'node_modules', 'vscode'));

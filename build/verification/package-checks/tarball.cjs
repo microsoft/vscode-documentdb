@@ -16,6 +16,8 @@ const BLOCK = 512;
 
 /**
  * Reads a `.tgz`. File paths are relative to the archive's top folder (`package/` for npm).
+ * Rejects a member whose size field is not octal or overruns the archive, and a path that
+ * occurs twice: npm installs the last copy, so reading the first could check other bytes.
  * @param {string} file
  * @returns {{ sha256: string, bytes: number, files: { path: string, data: Buffer }[] }}
  */
@@ -23,15 +25,29 @@ function readTarball(file) {
     const archive = readFileSync(file);
     const data = gunzipSync(archive);
     const files = [];
+    const seen = new Set();
     let longPath;
     for (let offset = 0; offset + BLOCK <= data.length; ) {
         const header = data.subarray(offset, offset + BLOCK);
         if (header.every((byte) => byte === 0)) break;
         const field = (start, length) => header.toString('utf8', start, start + length).replace(/\0[\s\S]*$/, '');
-        const size = parseInt(field(124, 12).trim() || '0', 8);
+        const sizeField = header
+            .toString('latin1', 124, 136)
+            .replace(/[\0 ]+$/, '')
+            .trimStart();
+        if (!/^[0-7]{1,11}$/.test(sizeField)) {
+            throw new Error(`${path.basename(file)}: invalid tar size field ${JSON.stringify(sizeField)} at ${offset}`);
+        }
+        const size = parseInt(sizeField, 8);
+        const end = offset + BLOCK + Math.ceil(size / BLOCK) * BLOCK;
+        if (end > data.length) {
+            throw new Error(
+                `${path.basename(file)}: tar member at ${offset} declares ${size} bytes, past the end of the archive`,
+            );
+        }
         const type = field(156, 1) || '0';
         const body = data.subarray(offset + BLOCK, offset + BLOCK + size);
-        offset += BLOCK + Math.ceil(size / BLOCK) * BLOCK;
+        offset = end;
         if (type === 'x') {
             longPath = /(?:^|\n)\d+ path=([^\n]*)\n/.exec(body.toString('utf8'))?.[1] ?? longPath;
         } else if (type === 'L') {
@@ -42,7 +58,11 @@ function readTarball(file) {
             const prefix = field(345, 155);
             const name = longPath ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
             longPath = undefined;
-            files.push({ path: name.slice(name.indexOf('/') + 1), data: Buffer.from(body) });
+            const member = name.slice(name.indexOf('/') + 1);
+            const key = path.posix.normalize(member.replaceAll('\\', '/'));
+            if (seen.has(key)) throw new Error(`${path.basename(file)}: duplicate tar member ${member}`);
+            seen.add(key);
+            files.push({ path: member, data: Buffer.from(body) });
         } else {
             throw new Error(`${path.basename(file)}: unsupported tar entry type '${type}'`);
         }

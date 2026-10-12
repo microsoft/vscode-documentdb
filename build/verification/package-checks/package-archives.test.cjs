@@ -10,6 +10,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const { after, before, describe, it } = require('node:test');
 const { packageTargetFailures } = require('./package-targets.cjs');
 const { extractFiles, readTarball, writeTarball } = require('./tarball.cjs');
@@ -46,6 +47,55 @@ describe('package archives: tarball reader and writer', () => {
             () => extractFiles([{ path: '../escape.js', data: Buffer.from('') }], path.join(dir, 'out')),
             /Refusing to extract \.\.\/escape\.js/,
         );
+    });
+
+    // Rewrites the size field of the second header (the first member's body is one block).
+    const withSizeField = (name, sizeField) => {
+        const file = path.join(dir, `${name}.tgz`);
+        writeTarball(file, [
+            { path: 'package.json', data: '{"name":"x"}' },
+            { path: 'index.js', data: 'export {};\n' },
+        ]);
+        const tar = zlib.gunzipSync(fs.readFileSync(file));
+        const header = tar.subarray(1024, 1536);
+        header.fill(0, 124, 136);
+        header.write(sizeField, 124, 'latin1');
+        header.fill(0x20, 148, 156);
+        const checksum = header.reduce((sum, byte) => sum + byte, 0);
+        header.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148);
+        fs.writeFileSync(file, zlib.gzipSync(tar));
+        return file;
+    };
+
+    it('rejects a member whose size runs past the end of the archive', () => {
+        assert.throws(
+            () => readTarball(withSizeField('oversized', '00000177777\0')),
+            /oversized\.tgz: tar member at 1024 declares 65535 bytes, past the end of the archive/,
+        );
+    });
+
+    it('rejects a size field that is not a non-negative octal number', () => {
+        for (const sizeField of ['0000000001z\0', '-0000000001\0', '\0']) {
+            assert.throws(
+                () => readTarball(withSizeField('malformed', sizeField)),
+                /malformed\.tgz: invalid tar size field/,
+            );
+        }
+    });
+
+    it('rejects a path that occurs twice, also when spelled differently', () => {
+        for (const second of ['package.json', './package.json']) {
+            const file = path.join(dir, 'duplicate.tgz');
+            writeTarball(file, [
+                { path: 'package.json', data: '{"name":"x","main":"a.js"}' },
+                { path: 'a.js', data: '' },
+                { path: second, data: '{"name":"x","main":"missing.js"}' },
+            ]);
+            assert.throws(
+                () => readTarball(file),
+                new RegExp(`duplicate\\.tgz: duplicate tar member ${second.replaceAll('.', '\\.')}$`),
+            );
+        }
     });
 });
 
@@ -150,5 +200,33 @@ describe('package archives: check-packages.mjs --archives', () => {
             result.stderr,
             /- @microsoft\/vscode-ext-webview: exports\["\.\/host"\]\["default"\] -> \.\/dist\/host\.js is not in the tarball\n/,
         );
+    });
+
+    // TMPDIR (TEMP on Windows) points the work directory into a sandbox, so a write that escapes
+    // the work directory would still land where the test can see it.
+    it('rejects a package name that is not a workspace package, writing nothing outside the work directory', () => {
+        for (const name of ['../../../escaped', '..\\..\\..\\escaped', 'left-pad']) {
+            const sandbox = fs.mkdtempSync(path.join(dir, 'sandbox-'));
+            const tarball = variant('renamed', (files) =>
+                files.map((file) => {
+                    if (file.path !== 'package.json') return file;
+                    const manifest = JSON.parse(file.data.toString('utf8'));
+                    return { path: file.path, data: JSON.stringify({ ...manifest, name }) };
+                }),
+            );
+            const result = spawnSync(process.execPath, [CHECK, '--archives', tarball], {
+                cwd: REPO,
+                encoding: 'utf8',
+                env: { ...process.env, TMPDIR: sandbox, TEMP: sandbox, TMP: sandbox },
+            });
+            assert.equal(result.status, 1, name);
+            assert.ok(
+                result.stderr.includes(
+                    `renamed.tgz: package.json name ${JSON.stringify(name)} is not a workspace package of this repository (`,
+                ),
+                result.stderr,
+            );
+            assert.deepEqual(fs.readdirSync(sandbox), [], name);
+        }
     });
 });
