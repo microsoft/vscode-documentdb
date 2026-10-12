@@ -3722,16 +3722,70 @@ Stage 0 must also be made.
 - **Work items,** in the suggested order (findings; author):
   - **W1** (G7 items 32, 36; GPT-6.1 Sol): Restore the `glob` override: `git revert 63a69976`. The
     lockfile must equal `946f7961`'s; rerun the fresh-dependency scan and `npm run build`.
+    - **Done in `5124c392`** (GPT-6.1 Sol). `git revert 63a69976` restores `glob: ~12.0.0`;
+      `vite: $vite` stays. `git diff 946f7961 -- package.json package-lock.json` is empty (re-run by
+      the coordinator). Scan: root 1,274 versions / 1,200 packages, **0 fresh** (6 not on the
+      registry); `api/` 116 / 106, 0 fresh; exit 0 (re-run by the coordinator). `npm ci` with npm
+      10.9.3 left the manifest and lockfile unchanged; `npm run build` passed. No deviation.
   - **W2** (G7 item 35; GPT-6.1 Sol): Remove the Stage 0 baseline comparison: `baseline.json`,
     `measurements.json`, `measure.cjs`, the manifest-drift report in `inspect.cjs`
     (`compareManifest`, `--baseline`, `--write-baseline`) and its README text. Retire the
     `asset-added-and-removed-reported` proof control with a recorded reason (`prove:vsix` then
     prints 24 PASS). Keep every L1 invariant, the size budget, the required-file and runtime-asset
     lists, and the PR size comment, whose cached baseline is a different mechanism.
+    - **Done in `550eff6b`** (GPT-6.1 Sol). Deleted `baseline.json`, `measurements.json` and
+      `measure.cjs`. `inspect.cjs` loses `compareManifest`, `normalizeAssetPath`, the `NOTICE.html`
+      size exemption (used only by the comparison), `--baseline` and `--write-baseline`.
+      `manifestReport` drops `added`, `removed`, `sizeChanges` and the baseline fields of
+      `vsixBytes`; it keeps `vsixBytes.bytes`, `graphAssetBytes` and `sizeBudget`, which are
+      all that `build-size-report.cjs` (the PR size comment and its cache) reads. The
+      `asset-added-and-removed-reported` control is retired: the drift report it exercised no
+      longer exists. The README and the two `.prettierignore` lines from W7 follow.
+    - **Checks:** `npm run build`, lint, Prettier; `test:verification` 116 Node tests (123 before,
+      the seven `compareManifest` tests removed) and 79 browser tests; `prove:vsix` on the
+      Stage 7 VSIX **24 PASS** (re-run by the coordinator). The plan's earlier records still
+      mention the baseline; they are history and stay.
   - **W3** (PR-F02, X7-F01 (option 1); Claude Opus 5.5): Package verification on every publishing
     route: run `verify:packages` in general CI (`main.yml`), and check the tarballs the ADO npm
     build produces (`build-npm-packages.yml`, after `pack-npm-packages.ps1`) with an offline mode
     that needs no public downloads. Prove both can fail.
+    - **Done in `b69422b6`** (Claude Opus 5.5).
+      - **General CI:** Code Quality & Tests runs `npm run verify:packages -- --no-build` after the
+        unit tests. The job has no `if:`, so it runs on every PR, push and dispatch. About 35 s
+        locally.
+      - **Archive mode:** `check-packages.mjs --archives <directory or .tgz>` checks tarballs that
+        are already packed. It spawns only Node (`run()` throws for anything else) and reads
+        tarballs with a small reader (`tarball.cjs`) that refuses paths outside the target, so
+        it needs no `npm`, `npx`, `tar` or network. It prints the checkout commit and each
+        archive's name, size and SHA-256. It runs the packed-test, top-level-await, `require()`
+        and `import()` probe, Vitest probe and packed-test control checks, and the
+        no-inlining control when both `@microsoft/*` packages are present. publint and attw are
+        not in the lockfile, so they run only in the default mode; the output says so.
+      - **Both modes:** a new `package-targets.cjs` check requires every `main`, `types`, `bin`
+        and `exports` target to be in the tarball and every `files` entry to pack something;
+        a package with no representative calls in `calls.mjs` fails. The default mode now
+        unpacks with the same reader instead of `tar`.
+      - **ADO:** one PowerShell step in `build-npm-packages.yml`, right after
+        `pack-npm-packages.ps1`, runs
+        `node build/verification/package-checks/check-packages.mjs --archives "$(ob_outputDirectory)\npm-packages"`
+        and fails the build on a non-zero exit. **Not yet run on a Windows agent;** the
+        operator's ADO build is the first run.
+    - **Proof:** `package-archives.test.cjs` (7 tests in `test:verification`): a good
+      `npm pack` tarball passes, the same tarball with `dist/host.test.js` planted fails with
+      `packed test files are forbidden`, one without `dist/host.js` fails with
+      `exports["./host"]["default"] -> ./dist/host.js is not in the tarball`, and extraction
+      refuses `../escape.js`. For general CI, a planted
+      `packages/vscode-ext-webview/dist/host.test.js` made `verify:packages -- --no-build` exit 1
+      with the same diagnostic (author's run; the file was removed).
+    - **Checks:** build, lint, Prettier; `test:verification` 123 Node (116 + 7) and 79 browser
+      tests; `verify:packages` passes (re-run by the coordinator). Archive mode on the two
+      ADO tarballs packed as `pack-npm-packages.ps1` does: the author ran it in a network
+      namespace without network (`unshare -rn`, a probe got `EAI_AGAIN`), the coordinator with
+      `npm_config_offline=true` and an unreachable proxy; both passed, with SHA-256
+      `de2e8650…473a` (webview 0.11.0) and `2f57d1c6…c385` (fluentui 1.1.1).
+    - **Not done, recorded as S8-N01:** stale non-test files in a local `dist/` (the
+      `WizardBreadcrumb.*` case) are still undetected; clean CI and ADO checkouts make it moot.
+      The digests are only in the ADO log; `--report <file>` would add a JSON artifact.
   - **W4** (PR-F03, S3-F12; GPT-6.1 Sol): ESM-only package notes: a migration section in each
     changed package README and changelog (ESM-only, `exports`, the `engines` floor), including the
     TypeScript `node16`-CommonJS consumer caveat.
@@ -3743,6 +3797,18 @@ Stage 0 must also be made.
     tests left the build, run in CI and in both package-verification paths.
   - **W7** (PR-F05; GPT-6.1 Sol): Prettier coverage of `build/` and the root `.mjs` and `.cjs`
     files, excluding generated output. Do this early, so later items are formatted.
+    - **Done in `46c1b0b7`** (GPT-6.1 Sol), second, after W1. `prettier` and `prettier-fix` add
+      `build/**/*.@(js|ts|jsx|tsx|mjs|cjs|json|md)` and `mjs|cjs` to the root glob; the other
+      globs are unchanged, and CI already calls `npm run prettier`. `.prettierignore` adds the
+      three JSON files `inspect.cjs` and `measure.cjs` write (`baseline.json`,
+      `measurements.json`, `size-budget.json`); W2 removed the first two again. Gitignored
+      reports are skipped by Prettier itself. 22 files were reformatted. The coordinator read
+      the diff: formatting only, plus the organize-imports plugin's reordering in three files
+      and three `@ts-expect-error` comments in `browser/core.test.ts` moved onto the lines that
+      now carry the error after reflow (the build fails if one is unused).
+    - **Checks:** `npm run prettier` (re-run by the coordinator), build, `test:verification`
+      (123 Node, 79 browser), lint. A planted formatting error in `measure.cjs` and
+      `prettier.config.mjs` made `npm run prettier` fail naming both.
   - **W8** (PR-F06, X7-F09 (option 1); GPT-6.1 Sol): Navigation: add the modernization to the
     knowledge-base index (`docs/ai-and-plans/README.md`), linking this plan as the decision record
     (G7 item 28); update or mark the stale `features/webview-ext-package/design.md`; add the
@@ -3775,6 +3841,14 @@ Stage 0 must also be made.
     `writing-release-notes` skill. The package changelogs are W4. The operator reviews both at G8.
   - **W17** (ground rule 1; GPT-6.1 Sol): Re-merge `main` if it has moved since `1380b758`
     (quarantine-clean, as in step 7.1), and review that difference.
+
+- **New findings during Stage 8 (S8-N):**
+  - **S8-N01** (low; found in W3): `verify:packages` rejects packed test files and missing
+    targets, but not stale non-test files left in a local `dist/` (the four `WizardBreadcrumb.*`
+    files in a local fluentui tarball, Stage 6 ADO side note). Clean CI and ADO checkouts make
+    it moot for the publishing routes; a developer packing locally is not protected.
+    **Recommendation:** compare each tarball's `dist/` with the current build's output list in a
+    later change, or accept it with that reason. Not fixed: it does not block W3.
 
 - **Not in Stage 8:** accepted findings (G7 items 20, 21 and 25), the Stage 10 carry-overs
   (items 20 to 24, listed under Stage 10), #990, #991 and the dependency refresh.
