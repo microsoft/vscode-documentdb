@@ -404,6 +404,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       graph; the lightweight-view assertion remains opt-in until Stage 4.
       **Accepted by the operator at G0 (2026-10-02):** browser graphs may contain zero or one BSON
       implementation; host graphs exactly one; duplicates always fail.
+    - **Hashes (Stage 8, W14; X7-F07):** `c1d29535`, `0be05e8c` and `a6689e76` below predate the
+      branch's rebase onto `v0.11.0`. On the branch they are `a0836927`, `88b568cf` and
+      `b3a42db6`: the same patch IDs, checked in Stage 7. The old hashes are not on the branch.
     - **Review correction landed in `c1d29535`:** numeric webpack chunk references now resolve only
       within the referencing file's owning compilation. A collision/ambiguous-owner regression
       test was added; six inspector tests and the final-VSIX positive/negative checks passed.
@@ -845,6 +848,10 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     and [37021977737](https://github.com/microsoft/vscode-documentdb/actions/runs/37021977737)
     never got a runner. The branch base is unchanged (no merge or rebase onto `main`, per the
     Stage 1 operator decision).
+    - **Corrected in Stage 8 (W14, S1-F04):** "never got a runner" is wrong for 37021977737.
+      Checked through the GitHub API on 2026-10-12: it ran at `5b4ead56`, Stage 1's final head,
+      and passed all four jobs (Code Quality & Tests, Build & Package, L1, L3). 37011967057
+      (`b08aa1c7`) shows as cancelled; whether it got a runner is not established.
   - **Status: completed (Phases A, B and C).** Phase A: `2c54aacf` (setup), `56c4ff9d` (pilot),
     `86baf001`, `73046b44`, `df9a8e1a` (shared-harness fixes), records `29d5d4ff`, `d75fb904`,
     `a04a4516`. Phase B: B01-B15 in `e2f99b4a` to `1b06cf46`, each with a record commit (listed
@@ -1388,6 +1395,15 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       and its status are in the Phase C handoff report. CI verification is the orchestrator's
       (operator, 2026-10-02: runners stalled; bounded check only). This record does not claim a
       CI result.
+      - **Added in Stage 8 (W14, S2-F05):** the run on the Stage 2 head,
+        [37051119892](https://github.com/microsoft/vscode-documentdb/actions/runs/37051119892) at
+        `875ad255`, **failed**: Code Quality & Tests failed on `npm run prettier` (this plan's
+        Markdown), so Build & Package, L1 and L3 were skipped. Per the Stage 7 re-evaluation, its
+        log shows l10n and lint passing and 296 files / 4,588 tests passing. The fix,
+        `811b33b5`, re-wrapped this plan only (recorded under Stage 3, "Plan Markdown made
+        Prettier-stable"); [37068033773](https://github.com/microsoft/vscode-documentdb/actions/runs/37068033773)
+        at `811b33b5` passed all four jobs. Job results re-checked through the GitHub API on
+        2026-10-12.
 
   - **Open item for G1-3 (temporary overrides):** `vite` (`$vite`), `chai` 6.2.2, `std-env`
     4.2.0 and `tinyrainbow` 3.1.1 remain in `overrides` from Phase A. Remove each before G6 once
@@ -1416,6 +1432,12 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     an initializer and TypeScript emits nothing for one without. An initializer added later would
     be dropped silently under Vitest, and under Vite in Stage 5. Rewriting `ext` is a production
     change this plan does not make; the decision is the operator's, at Stage 5 at the latest.
+    - **Corrected in Stage 8 (W14, S2-F04):** the explanation above is wrong. Oxc keeps an
+      initializer (`export let a = 1` becomes `let a = _ext.a = 1`). What it does not do is
+      rewrite bare-name references inside the namespace, so a member read or written from inside
+      `namespace ext` is a local copy, decoupled from `ext.<member>` (Stage 2 review, S2-F04).
+      The hazard is gone: `4386c580` (Stage 5) replaced the namespace with a plain object, and
+      `src/extensionVariables.ts` states the correct reason. Closed.
 
 - **Operator gate G2:** review the tests that changed beyond mechanical renames, and every recorded
   `TDD:` suite change (ground rule 2). Reviewed at the combined checkpoint G1-3 after Stage 3.
@@ -1444,6 +1466,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     (L1 `import.meta` check), `471be2e2` and `3ccd5a06` (Prettier on the L1 scripts and on
     `template.ts`, format only), `e8568718` and a follow-up (this record). Details under each task
     and under "Automated verification". **CI: pending**; the orchestrator verifies the pushed head.
+    **Added in Stage 8 (W14, S3-F07):** the Stage 3 head after the formatting fix, `811b33b5`,
+    passed all four jobs in
+    [37068033773](https://github.com/microsoft/vscode-documentdb/actions/runs/37068033773).
 - **Goal:** all six workspace packages ship as **ESM-only**, not as dual ESM + CJS builds.
 - **Why ESM-only:**
   - Dual packages load two module instances. This repo has been bitten by exactly that: `bson`
@@ -1476,6 +1501,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 
   The `@documentdb-js/*` packages are published from GitHub (`npm-publish-documentdb-js.yml`), the
   `@microsoft/*` packages from ADO (`release-npm-packages.yml`).
+  - **Corrected in Stage 8 (W14, S3-F07):** the playground TS plugin does not run
+    `shell-api-types`. It reads its own copied `typeDefs` (as the next bullet says), so
+    `getShellApiDtsContent()` had no caller in the extension (S3-F01; made explicit in W11).
   - **Dependency order (Phase A).** The workspace graph has no edges between the six packages: no
     package imports or declares another (only doc comments name them). They are six leaves whose
     consumers are the extension host bundle (`main`), the playground worker, the webview bundle,
@@ -1533,6 +1561,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
        moment someone does); a global `node.__dirname: 'eval-only'` (also changes webpack's
        static evaluation of `__dirname` in CommonJS dependencies); ESM output (Stage 5). L1 has
        no check for `import.meta` in CommonJS bundles; see the open items.
+       **Corrected in Stage 8 (W14, S3-F07):** the production build kept `getShellApiDtsContent`
+       too (S3-F01), so this webpack rule was load-bearing in the shipped `main.js`, not only in
+       development builds. The decision stands; the stated reason understated it.
        - **Phase B: L1 now checks it (`dd8202bd`, format-only follow-up `471be2e2`).**
          `BundleReportPlugin` records each compilation's normalized `output.chunkFormat` (host
          `commonjs`, views `module`), and L1 requires one of those two values. Every packaged
@@ -1574,6 +1605,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
        it ran under `tsx` up to and including its own Phase 0 verification, then a preload stopped
        it before it could scrape or write. Phase 0 failed upstream: all four probe URLs return 404,
        because `MicrosoftDocs/nosql-docs` is now private (anonymous raw fetches return 404).
+       **Corrected in Stage 8 (W14, S3-F07):** only the 404s were observed; an anonymous 404
+       does not show whether the repository is private, renamed or deleted. The endpoints still
+       returned 404 on 2026-10-12 ([#1001](https://github.com/microsoft/vscode-documentdb/issues/1001)).
        `verify` also gets 404 from
        `MicrosoftDocs/azure-databases-docs/.../compatibility-query-language.md`. It was replayed
        offline: a `fetch` stub served a table rebuilt from the committed report. It ran end to end
@@ -1807,6 +1841,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - **Operator:** the operator-registry `scrape` source (`MicrosoftDocs/nosql-docs`) is
       private, and shell-api-types `verify`'s compatibility page returns 404. Both scripts need
       new upstream URLs before their next real run. This is not caused by this stage.
+      **Corrected in Stage 8 (W14, S3-F07):** "private" is not established, only the 404s;
+      tracked in [#1001](https://github.com/microsoft/vscode-documentdb/issues/1001).
     - **G1-3:** the `engines.vscode` and version decisions listed under the checkpoint. fluentui
       declares no `engines.node` (browser-only), which departs from "the packages declare the
       same floor".
@@ -1851,6 +1887,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       Electron libraries (`libatk-1.0.so.0`) could not be installed. Left to CI.
     - **CI: pending**, verified by the orchestrator. Pushed once at the end; no run was
       dispatched, re-run or watched.
+      **Added in Stage 8 (W14, S3-F07):** the Stage 2 head's run
+      [37051119892](https://github.com/microsoft/vscode-documentdb/actions/runs/37051119892)
+      (`875ad255`) had failed on Prettier (see below); with the Stage 3 commits and `811b33b5`,
+      [37068033773](https://github.com/microsoft/vscode-documentdb/actions/runs/37068033773)
+      passed all four jobs. The integrated-browser L2 run left to the orchestrator above has no
+      record of running on the Stage 3 VSIX; later L2 passes (Stages 4 to 8) used later
+      artifacts and do not cover it.
     - **Dependency scans:** one `package.json` change (the `test:verification` script, in
       `089afba3`): 0 fresh (1,635 locked versions; `api/` 116). No pins, no overrides, no
       lockfile change in Phase B.
@@ -1907,7 +1950,9 @@ our packages become ESM inside the bundles, and L3 does not cover workers or the
 1. **Playground (worker and `shell-runtime`):** open a `.documentdb` playground and run a query
    against a real cluster. Results appear, and the output channel shows no errors.
 2. **TS plugin (`shell-api-types` reading its `.d.ts`):** in the same file, completions and hover
-   return results for shell methods such as `db.collection.find`.
+   return results for shell methods such as `db.collection.find`. (Corrected in Stage 8, W14,
+   S3-F07: the plugin reads its own copied `typeDefs`, not through `shell-api-types`, so this
+   check does not exercise `getShellApiDtsContent()`.)
 3. **Single `bson` copy, as the user sees it (`schema-analyzer`):** open a collection whose
    documents contain `ObjectId`, `Double` and `Int32` fields. Schema-driven completions and types
    show those BSON types, not plain `object`.
@@ -3084,6 +3129,10 @@ Stage 0 must also be made.
     - **Not stated:** the commit both ADO runs built, and the platform and commit of the
       locally built VSIX. Those runs were branch builds, so they do not replace release steps
       3 to 5, which use the signed VSIX built from `main`.
+    - **Added in Stage 8 (W14, X7-F07):** the S2-F01 reading above is an operator attestation,
+      not an observed run. The first ADO npm build with a recorded commit is BuildId 240165962
+      at `e338339c` (2026-10-11, Windows agent), which ran "Test Workspace Packages" and passed
+      (verified by the coordinator from its drop at G7, item 27).
     - **Installed-VSIX checklist, what the report covers:** item 1 (webviews and Monaco
       completion) and item 6 (authentication) on one platform. The shell is not on the list.
       Not yet reported: items 2 to 5 and 7 to 9, and a second platform.
@@ -3938,6 +3987,23 @@ Stage 0 must also be made.
     the Stage 1 to 3 records the re-evaluation found wrong, without inventing history (CI runs, the
     namespace explanation), and mark implemented, observed, attested and pending where they blur.
     S2-F01's ADO evidence is BuildId 240165962 at `e338339c`.
+    - **Done by the coordinator** (in the `S8: correct the Stage 0 to 3 records` commit). Each
+      correction is a dated note beside the original statement, which stays as history:
+      - **S1-F04:** run 37021977737 did run and passed (Stage 2's opening bullets).
+      - **S2-F05:** the Stage 2 head's run 37051119892 failed on Prettier and skipped Build, L1
+        and L3; `811b33b5` fixed it and 37068033773 passed (Stage 2's CI record).
+      - **S2-F04:** the Oxc namespace explanation corrected and closed by `4386c580`.
+      - **S3-F07:** both "CI: pending" records get the actual runs; "private" becomes "returned
+        404"; the tree-shaking reason and the TS-plugin attribution (packages table and G1-3
+        hands-on item 2) are corrected; the Stage 3 L2 run is recorded as never run on that
+        VSIX, not invented.
+      - **X7-F07:** the Stage 0 pre-rebase hashes are mapped to the branch's, and the G6
+        S2-F01 reading is marked as an operator attestation, with BuildId 240165962 at
+        `e338339c` as the first recorded run.
+    - Every job result cited was re-checked through the GitHub API on 2026-10-12. The
+      re-evaluation's other points (the Stage 1 to 3 review decision cells reading _pending_)
+      are answered by the G7 decisions table in the re-evaluation file; the original review
+      files stay unchanged.
   - **W15** (S1-F07, S2-F02, S3-F06, S3-F13; GPT-6.1 Sol): File four issues (CONTRIBUTING.md §6.5),
     each linking its finding, and record the links in the re-evaluation file: CI checkouts keep Git
     credentials (`persist-credentials`); unit-test wall time and the worker cap; declaration maps
