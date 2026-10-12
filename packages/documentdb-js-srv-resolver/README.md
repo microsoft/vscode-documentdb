@@ -30,12 +30,11 @@ The full analysis, with the platform exposure and the alternatives that were rej
    - **`EBADRESP`, `EFORMERR` or `ECONNREFUSED`:** runs the fallback.
    - **Any other error** (`ENOTFOUND`, `ETIMEOUT`, …): returns the original string, so the driver reports its own error exactly as before.
 3. **Fallback.**
-   - It checks the original string with the driver's own parser (a `MongoClient` that is constructed but never connected), so invalid options fail with the driver's own error.
    - It queries SRV and TXT with [`dns-packet`](https://github.com/mafintosh/dns-packet): UDP first, then TCP if the reply is truncated.
    - It asks only the servers from `dns.getServers()`, in order. No public resolvers, no DNS over HTTPS.
-   - It applies the driver's SRV rules: the parent-domain check, the TXT option allowlist (`authSource`, `replicaSet`, `loadBalanced`), the `$external` rule for `authSource`, `srvServiceName`, `srvMaxHosts`, and an implicit `tls=true`.
-   - It returns a `mongodb://` string plus a copy of your options without the SRV-only options. Credentials are copied byte for byte; other query parameters keep their meaning (the tests check this with the driver's own parser).
-4. **If the fallback fails**, it rethrows the **original Node.js error object**, so your error handling sees exactly what it saw before. Errors from the driver's own validation are thrown as they are.
+   - It applies the driver's SRV rules: the parent-domain check, the TXT option allowlist (`authSource`, `replicaSet`, `loadBalanced`), the `$external` rule for `authSource`, `srvServiceName`, `srvMaxHosts` (the first N targets), and an implicit `tls=true`.
+   - It returns a `mongodb://` string plus a copy of your options without the SRV-only options. Credentials are copied byte for byte; other query parameters keep their meaning (the tests check this with the driver's own parser). Conflicting options are rejected by the driver when it parses the result.
+4. **If the fallback fails**, it rethrows the **original Node.js error object**, so your error handling sees exactly what it saw before. A rewrite rejection (for example a target outside the parent domain) is thrown as an `SrvRewriteError`.
 
 Nothing is cached: every call looks up DNS again, so failover keeps working.
 
@@ -88,7 +87,7 @@ async function connect(storedConnectionString: string, signal?: AbortSignal): Pr
 | `signal`           | none                | Rejects with `signal.reason` if it is an `Error`, otherwise with `SrvResolutionCancelledError`. Pending sockets and the probe are cancelled.                                   |
 | `logger`           | no-op               | `{ trace(line: string): void }`. Lines include host names, SRV targets, ports and DNS server addresses, never connection strings, user names or passwords.                     |
 | `logPrefix`        | `'[SrvResolution]'` | Prefix for every trace line, for example with a connection ID.                                                                                                                 |
-| `onReport`         | none                | Receives a `SrvResolutionReport`: path, error codes, outcome, durations, transport, whether the SRV target was compressed, counts and runtime versions.                        |
+| `onReport`         | none                | Receives a `SrvResolutionReport`: path, error codes, outcome, durations, transport, TXT source, counts and runtime versions.                                                   |
 
 The package never reads environment variables. If you want switches like the extension's `DOCUMENTDB_DISABLE_SRV_FALLBACK=1`, map them to `fallback` yourself.
 
@@ -96,9 +95,8 @@ The package never reads environment variables. If you want switches like the ext
 
 These are exported too, for callers that need only one step:
 
-- `rewriteSrvUri()`: pure rewrite of a `+srv` string plus SRV and TXT records into a `mongodb://` string, with the driver's validation and error messages.
+- `rewriteSrvUri()`: pure rewrite of a `+srv` string plus SRV and TXT records into a `mongodb://` string.
 - `resolveSrvFallback()` and `resolveTxtFallback()`: the `dns-packet` client (UDP, then TCP on truncation, one absolute deadline).
-- `hasCompressedSrvTarget()`: tells whether a raw reply uses compression in an SRV target. This is the trigger for the c-ares rejection.
 
 ## Guarantees and limits
 

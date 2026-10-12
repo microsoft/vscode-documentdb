@@ -32,6 +32,8 @@ created: 2026-10-09
 | 0018 | DNS preparation and the shell and playground init timeout have separate budgets                    | Accepted            | Operator chose Q8 A, as recommended                | 2026-10-09 | —   |
 | 0019 | The UI shows whether the fallback was used: the tooltip now, the dashboard later                   | Accepted            | Operator requirement                               | 2026-10-09 | —   |
 | 0020 | The VS Code-independent logic lives in a workspace package, published at the operator's discretion | Accepted            | Operator chose "workspace package now"             | 2026-10-09 | —   |
+| 0021 | No tooltip flag in v0.11.1; the trace shows fallback use, the dashboard will later                 | Accepted            | Operator, after reviewing WI-10; supersedes D0019  | 2026-10-09 | -   |
+| 0022 | KISS pass: no driver preflight, the driver validates the rewritten string, fewer telemetry fields  | Accepted            | Operator review request                            | 2026-10-12 | -   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -675,3 +677,43 @@ The users who need to know can read the trace, and the dashboard is the better p
 - WI-10 is reverted, except for the summary on `ClustersClient`. The M8 review finding C1 (tooltip
   content lost) no longer applies.
 - No new user-facing strings remain from WI-10.
+
+---
+
+## 0022 - KISS pass: no driver preflight, the driver validates the rewritten string, fewer telemetry fields
+
+**Status:** Accepted · **Date:** 2026-10-12 · **Raised by:** operator, after a simplification review
+of increment 1; narrows D0004
+
+### Decision
+
+Increment 1 is simplified without changing what affected or unaffected users see:
+
+- **No driver preflight.** The throwaway `MongoClient` on the `+srv` string, and its OIDC callback
+  stub, are removed. Invalid options are rejected by the driver when it parses the rewritten
+  `mongodb://` string, with its `mongodb://` wording.
+- **The rewrite keeps only what SRV adds or rejects:** the host list, the parent-domain check, the
+  TXT allowlist and value checks, the `$external` rule for TXT `authSource`, implicit `tls=true`,
+  and dropping `srvServiceName`/`srvMaxHosts`. `srvMaxHosts` takes the first N targets instead of
+  the driver's random sample. Rewrite errors are `SrvRewriteError` with a `kind`.
+- **Cancellation** relies on the probe resolver's `cancel()` and the DNS client's socket abort,
+  not a race wrapper and per-step checks. Test-only input hooks are removed.
+- **Telemetry** drops `targetCompressed`, `txtOptionsApplied`, `tlsAdded`, `isGlobalEndpoint` and
+  `dnsServerIpFamily`. The `connect.srvResolution` event is sent after resolution, outside the
+  wrapper that swallows cancellations.
+- **Tests** keep one case per behaviour; the differential test against the driver stays, with
+  fewer fixtures.
+
+### Why
+
+The operator asked for a "let's just make it work and be KISS" review. The removed parts guarded
+rare paths (invalid options on a broken network, `srvMaxHosts`) or fed telemetry that the root
+cause analysis no longer needs. Two parts stay on the operator's instruction: the workspace package
+(D0020, "we need it elsewhere") and the `SrvResolutionSummary` on `ClustersClient` (D0021, the
+dashboard "will be added soon").
+
+### Consequences
+
+- D0004 now holds for the semantics that matter for a working connection, not for the driver's
+  exact error messages or host sampling.
+- `connect.srvResolution` loses five properties.
