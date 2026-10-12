@@ -10,7 +10,6 @@ const path = require('node:path');
 const { test } = require('node:test');
 const {
     inspect,
-    compareManifest,
     inspectRequiredFiles,
     manifestAssets,
     inspectManifestAssets,
@@ -23,7 +22,6 @@ const {
     viteViewGraph,
     viewGraphs,
     viewModules,
-    manifest,
     defaultSizeTolerance,
     evaluateSizeBudget,
     formatSizeTable,
@@ -67,105 +65,6 @@ test('VSIX round-trip and extraction preserve files and exclude archive metadata
 test('unsafe paths cannot be written or extracted', () => {
     assert.throws(() => writeVsix('unused.vsix', new Map([['extension/../../outside', Buffer.from('bad')]])), /Unsafe/);
     assert.throws(() => writeVsix('unused.vsix', new Map([['C:/outside', Buffer.from('bad')]])), /Unsafe/);
-});
-
-test('manifest reports added, removed and oversized files without failing, accepting the exact tolerance boundary', () => {
-    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(files) };
-    assert.deepEqual(compareManifest(files, baseline), { added: [], removed: [], sizeChanges: [] });
-    const changed = new Map(files);
-    changed.set('extension/views.js', Buffer.alloc(files.get('extension/views.js').length + 4096));
-    assert.deepEqual(compareManifest(changed, baseline).sizeChanges, []);
-    changed.set('extension/views.js', Buffer.alloc(files.get('extension/views.js').length + 4097));
-    changed.delete('extension/package.json');
-    changed.set('extension/resources/proof-added.svg', Buffer.from('<svg/>'));
-    assert.deepEqual(compareManifest(changed, baseline), {
-        added: ['extension/resources/proof-added.svg'],
-        removed: ['extension/package.json'],
-        sizeChanges: [
-            {
-                path: 'extension/views.js',
-                baselinePath: 'extension/views.js',
-                baselineBytes: files.get('extension/views.js').length,
-                bytes: changed.get('extension/views.js').length,
-                deltaBytes: 4097,
-                toleranceBytes: 4096,
-            },
-        ],
-    });
-});
-
-test('pipeline-generated NOTICE.html size is exempt from the report', () => {
-    const withNotice = new Map([...files, ['extension/NOTICE.html', Buffer.alloc(100)]]);
-    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(withNotice) };
-    withNotice.set('extension/NOTICE.html', Buffer.alloc(2_000_000));
-    assert.deepEqual(compareManifest(withNotice, baseline).sizeChanges, []);
-    withNotice.delete('extension/NOTICE.html');
-    assert.deepEqual(compareManifest(withNotice, baseline).removed, ['extension/NOTICE.html']);
-});
-
-test('every size mismatch is reported, not only the first', () => {
-    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(files) };
-    const changed = new Map([...files].map(([name]) => [name, Buffer.alloc(10_000)]));
-    assert.deepEqual(
-        compareManifest(changed, baseline).sizeChanges.map((entry) => entry.path),
-        ['extension/package.json', 'extension/views.js'],
-    );
-});
-
-test('manifest pairs renamed content hashes, but numeric chunks remain added and removed', () => {
-    const original = new Map([
-        ['extension/assets/monaco-editor-AbC12_x-.js', Buffer.alloc(10)],
-        ['extension/assets/runtime-A-B_Cd12.js', Buffer.alloc(10)],
-        ['extension/assets/f6283f7ccaed1249d9eb.ttf', Buffer.alloc(10)],
-        ['extension/58.js', Buffer.alloc(10)],
-    ]);
-    const changed = new Map([
-        ['extension/assets/monaco-editor-ZZ9.js', Buffer.alloc(5000)],
-        ['extension/assets/runtime-ZY98abcd.js', Buffer.alloc(10)],
-        ['extension/assets/0123456789abcdefabcd.ttf', Buffer.alloc(10)],
-        ['extension/59.js', Buffer.alloc(10)],
-    ]);
-    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(original) };
-    const report = compareManifest(changed, baseline);
-    assert.deepEqual(report.added, ['extension/59.js']);
-    assert.deepEqual(report.removed, ['extension/58.js']);
-    assert.equal(report.sizeChanges.length, 1);
-    assert.equal(report.sizeChanges[0].path, 'extension/assets/monaco-editor-ZZ9.js');
-    assert.equal(report.sizeChanges[0].baselinePath, 'extension/assets/monaco-editor-AbC12_x-.js');
-    assert.equal(report.sizeChanges[0].deltaBytes, 4990);
-});
-
-test('manifest hash pairing preserves exact matches and reports surplus logical files', () => {
-    const original = new Map([
-        ['extension/chunk-AbC12345.js', Buffer.alloc(10)],
-        ['extension/chunk-XyZ12345.js', Buffer.alloc(10)],
-        ['extension/resources/proof-added.svg', Buffer.alloc(10)],
-    ]);
-    const changed = new Map([
-        ['extension/chunk-XyZ12345.js', Buffer.alloc(10)],
-        ['extension/chunk-ZzZ12345.js', Buffer.alloc(10)],
-        ['extension/chunk-New12345.js', Buffer.alloc(10)],
-        ['extension/resources/proof-removed.svg', Buffer.alloc(10)],
-    ]);
-    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(original) };
-    assert.deepEqual(compareManifest(changed, baseline), {
-        added: ['extension/chunk-ZzZ12345.js', 'extension/resources/proof-removed.svg'],
-        removed: ['extension/resources/proof-added.svg'],
-        sizeChanges: [],
-    });
-});
-
-test('fractional size tolerance reports changes only beyond ten percent', () => {
-    const original = new Map([['extension/large.bin', Buffer.alloc(100_000)]]);
-    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(original) };
-    assert.deepEqual(
-        compareManifest(new Map([['extension/large.bin', Buffer.alloc(110_000)]]), baseline).sizeChanges,
-        [],
-    );
-    const report = compareManifest(new Map([['extension/large.bin', Buffer.alloc(89_999)]]), baseline);
-    assert.equal(report.sizeChanges[0].deltaBytes, -10_001);
-    assert.equal(report.sizeChanges[0].toleranceBytes, 10_000);
-    assert.throws(() => compareManifest(original, { ...baseline, version: 2 }), /Unsupported VSIX baseline version/);
 });
 
 test('required ESM host entries and the resolved manifest main entry must exist', () => {
@@ -523,20 +422,6 @@ test('every runtime asset is required with its reason, including the shell decla
     }
 });
 
-test('unrelated informational asset removal passes the asset gates and is still reported', () => {
-    const unrelated = 'extension/resources/readme/vscode-documentdb-hero-screenshot.png';
-    const bundled = new Map([
-        ...files,
-        ...runtimeAssets.map((asset) => [asset.path, Buffer.from('fixture')]),
-        [unrelated, Buffer.from('image')],
-    ]);
-    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(bundled) };
-    bundled.delete(unrelated);
-    inspectManifestAssets(bundled);
-    inspectRuntimeAssets(bundled);
-    assert.deepEqual(compareManifest(bundled, baseline).removed, [unrelated]);
-});
-
 for (const extension of ['js', 'cjs', 'mjs']) {
     test(`unowned .${extension} scripts fail with their packaged filename`, () => {
         const filename = `extension/stray.${extension}`;
@@ -611,6 +496,8 @@ test('host chunks and the CJS plugin require their own report ownership and matc
         writeReports();
         writeVsix(filename, bundled);
         const { manifestReport } = inspect(filename, { reports: directory });
+        assert.deepEqual(Object.keys(manifestReport).sort(), ['graphAssetBytes', 'sizeBudget', 'vsixBytes']);
+        assert.deepEqual(manifestReport.vsixBytes, { bytes: fs.statSync(filename).size });
         assert.equal(manifestReport.sizeBudget.enforced, false);
         const measured = Object.fromEntries(
             manifestReport.sizeBudget.graphs.map((entry) => [entry.graph, entry.bytes]),

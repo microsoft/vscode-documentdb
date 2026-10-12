@@ -121,11 +121,8 @@ node build/verification/bson-identity/check.cjs --prove    # identity, then the 
 It builds and runs probe bundles instead of inspecting the packaged artifact, so it is not part of L1,
 which stays offline and build-free for the ADO release build.
 
-The committed [baseline](./baseline.json) uses the operator-approved tolerance: the greater of 10%
-or 4 KiB per file (`NOTICE.html` is size-exempt). Added/removed files and size changes beyond
-tolerance are informational, with content hashes normalized when pairing renamed assets (numeric
-webpack chunks remain distinct). The JSON result includes `manifestReport`: `added`, `removed`,
-`sizeChanges`, total `vsixBytes` delta and `graphAssetBytes` sums. A short summary goes to stderr;
+The JSON result includes `manifestReport`: current `vsixBytes.bytes`, `graphAssetBytes` sums and
+the enforced `sizeBudget` measurements. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
 GitHub Actions publishes `Bundle-reports-<run_id>` from the package job and
 `L1-manifest-report-<run_id>` from L1, including on inspection failure. L1's PR comment reads the
@@ -139,8 +136,7 @@ its existing OneBranch pipeline artifact, even if inspection fails. See the
 [pipeline guide](../../docs/ai-and-plans/modernization/pipelines-readme.md#31-reports-artifacts-and-pr-size-feedback-stage-6)
 for job conditions, artifact paths and the merge-ref checkout policy.
 The proof has eight original rejection controls (including missing contributed grammar and runtime shell declarations;
-the CommonJS `import.meta` control now mutates `playgroundTsPlugin.cjs`)
-and one positive, unrelated README-image asset-change reporting control. Vite adds
+the CommonJS `import.meta` control now mutates `playgroundTsPlugin.cjs`). Vite adds
 `missing-lazy-chunk` (the entry's missing dynamic import fires first),
 `monaco-in-local-quick-start`, `duplicate-bson`, `nonliteral-import` and
 `allowlisted-shape-at-top-level`. All controls are mandatory.
@@ -150,18 +146,15 @@ Seven host controls additionally reject `missing-host-lazy-chunk`, `duplicate-ho
 `kubernetes-in-extension-static-closure` and `missing-extension-implementation-boundary`.
 Host controls refresh copied hashes to model matching newly built output and assert the intended
 diagnostic, not a stale-report failure. Stage 6 adds `keepnames-class-name-lost` to the host
-controls and three size-budget controls (below). The proof prints 25 PASS lines in total.
+controls and three size-budget controls (below). The proof prints 24 PASS lines in total.
+The unrelated README-image asset-change reporting control was retired because the Stage 0
+manifest-drift report it exercised no longer exists.
 Proof variants are written with deflated entries, so their VSIX size stays comparable to `vsce`
 output and within the `vsix` budget.
-Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
-
-```bash
-node build/verification/inspect.cjs <vsix> --write-baseline build/verification/baseline.json
-```
 
 ### Size budget (enforced)
 
-Unlike the per-file manifest report, the [size budget](./size-budget.json) is a hard failure, and
+The [size budget](./size-budget.json) is a hard failure, and
 `verify:vsix` enforces it by default (so the GitHub Actions and ADO inspection steps run it). It
 budgets the packaged bytes of whole graphs, not single files. Every counted file must be owned by
 the bundle report its graph comes from, and L1 checks those reports' hashes against the packaged
@@ -234,21 +227,6 @@ Downloaded artifacts need their matching bundle reports, not reports from an unr
 GitHub Actions uploads them separately; ADO stages `build/verification/reports/*.json` alongside the
 release artifacts. Pass `--reports <downloaded-report-directory>` to either inspection or proof
 for a downloaded VSIX (both default to `build/verification/reports`).
-
-The [measurements](./measurements.json) record three production builds, three unit-test runs (Jest
-at Stage 0; the script now runs Vitest), the median test time, installed package count, and every
-measured `dist/` file size. Reproduce them with:
-
-```bash
-node build/verification/measure.cjs <output-directory>
-```
-
-Production timings now run `npm run build-prod` to measure the shipped Vite host and views build.
-New measurements use `buildSeconds` and `build-N.log`. The committed Stage 0 measurements remain
-unchanged and readable with their historical `webpackSeconds` key.
-
-Run measurements without concurrent builds or full test suites. They are machine-specific wall
-times, not CI performance thresholds.
 
 ## L2: production webviews in the integrated browser
 

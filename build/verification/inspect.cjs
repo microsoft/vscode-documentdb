@@ -134,8 +134,6 @@ const runtimeAssets = [
         reason: 'Query Insights reads the stage 2 debug override when present',
     },
 ];
-// ADO regenerates NOTICE.html (notice@0) and falls back to the committed copy if that task fails.
-const sizeExempt = new Set(['extension/NOTICE.html']);
 const sizeBudgetFile = path.join(__dirname, 'size-budget.json');
 // Coordinator decision (Stage 6), mirroring the operator-approved per-file tolerance.
 const defaultSizeTolerance = { fraction: 0.1, absoluteBytes: 4096 };
@@ -153,18 +151,6 @@ function manifest(files) {
     return [...files]
         .map(([name, data]) => ({ path: name, bytes: data.length }))
         .sort((left, right) => left.path.localeCompare(right.path));
-}
-
-function normalizeAssetPath(filename) {
-    const basename = path.posix.basename(filename);
-    // Match the usual eight-character hash first: its alphabet includes hyphens.
-    const normalized = basename
-        .replace(/^[a-f0-9]{20}(\.[^.]+)$/i, '[hash]$1')
-        .replace(/-[A-Za-z0-9_-]{8}(\.[^.]+)$/, '-[hash]$1')
-        .replace(/-([A-Za-z0-9_]{3,})(\.[^.]+)$/, (match, hash, extension) =>
-            /[A-Z0-9_]/.test(hash) ? `-[hash]${extension}` : match,
-        );
-    return path.posix.join(path.posix.dirname(filename), normalized);
 }
 
 function inspectRequiredFiles(files) {
@@ -229,58 +215,6 @@ function inspectRuntimeAssets(files) {
     for (const asset of runtimeAssets) {
         assert.ok(files.has(asset.path), `VSIX missing runtime asset: ${asset.path} (${asset.reason})`);
     }
-}
-
-function compareManifest(files, baseline) {
-    assert.equal(baseline.version, 1, 'Unsupported VSIX baseline version');
-    const remaining = new Map(manifest(files).map((entry) => [entry.path, entry]));
-    const pairs = [];
-    const unmatched = [];
-    for (const entry of baseline.files) {
-        if (remaining.has(entry.path)) {
-            pairs.push([entry, remaining.get(entry.path)]);
-            remaining.delete(entry.path);
-        } else {
-            unmatched.push(entry);
-        }
-    }
-    const logicalFiles = new Map();
-    for (const entry of remaining.values()) {
-        const logicalPath = normalizeAssetPath(entry.path);
-        if (!logicalFiles.has(logicalPath)) {
-            logicalFiles.set(logicalPath, []);
-        }
-        logicalFiles.get(logicalPath).push(entry);
-    }
-    const removed = [];
-    for (const entry of unmatched) {
-        const actual = logicalFiles.get(normalizeAssetPath(entry.path))?.shift();
-        if (actual) {
-            pairs.push([entry, actual]);
-            remaining.delete(actual.path);
-        } else {
-            removed.push(entry.path);
-        }
-    }
-    const sizeChanges = [];
-    for (const [entry, actual] of pairs) {
-        const tolerance = Math.max(baseline.tolerance.absoluteBytes, entry.bytes * baseline.tolerance.fraction);
-        if (!sizeExempt.has(entry.path) && Math.abs(actual.bytes - entry.bytes) > tolerance) {
-            sizeChanges.push({
-                path: actual.path,
-                baselinePath: entry.path,
-                baselineBytes: entry.bytes,
-                bytes: actual.bytes,
-                deltaBytes: actual.bytes - entry.bytes,
-                toleranceBytes: tolerance,
-            });
-        }
-    }
-    return {
-        added: [...remaining.keys()].sort(),
-        removed: removed.sort(),
-        sizeChanges: sizeChanges.sort((left, right) => left.path.localeCompare(right.path)),
-    };
 }
 
 function resolveAsset(files, filename, reference) {
@@ -1029,19 +963,14 @@ function inspect(filename, options = {}) {
     inspectKeptClassNames(files, graphs.main.assets);
     const result = {
         version: 1,
-        tolerance: { fraction: 0.1, absoluteBytes: 4096 },
         vsixBytes: fs.statSync(filename).size,
         files: manifest(files),
         graphs,
         requiredAssets: { manifestDeclared: declaredAssets, runtime: runtimeAssets },
     };
-    const baseline = options.baseline ? JSON.parse(fs.readFileSync(options.baseline, 'utf8')) : undefined;
     result.manifestReport = {
-        ...(baseline ? compareManifest(files, baseline) : { added: [], removed: [], sizeChanges: [] }),
         vsixBytes: {
-            baselineBytes: baseline ? baseline.vsixBytes : null,
             bytes: result.vsixBytes,
-            deltaBytes: baseline ? result.vsixBytes - baseline.vsixBytes : null,
         },
         graphAssetBytes: Object.fromEntries(
             Object.entries(graphs).map(([name, graph]) => [
@@ -1083,11 +1012,10 @@ if (require.main === module) {
     const filename = args.shift();
     if (!filename) {
         throw new Error(
-            'Usage: node build/verification/inspect.cjs <vsix> [--write-baseline <file>] [--baseline <file>] [--manifest-report <file>] [--reports <directory>] [--size-budget <file>] [--write-size-budget [<file>]]',
+            'Usage: node build/verification/inspect.cjs <vsix> [--manifest-report <file>] [--reports <directory>] [--size-budget <file>] [--write-size-budget [<file>]]',
         );
     }
-    const options = { baseline: path.join(__dirname, 'baseline.json'), sizeBudget: sizeBudgetFile };
-    let output;
+    const options = { sizeBudget: sizeBudgetFile };
     let manifestOutput;
     let sizeBudgetOutput;
     while (args.length) {
@@ -1097,13 +1025,6 @@ if (require.main === module) {
         } else if (flag === '--size-budget') {
             options.sizeBudget = args.shift();
             assert.ok(options.sizeBudget, '--size-budget requires a filename');
-        } else if (flag === '--write-baseline') {
-            output = args.shift();
-            assert.ok(output, '--write-baseline requires a filename');
-            delete options.baseline;
-        } else if (flag === '--baseline') {
-            options.baseline = args.shift();
-            assert.ok(options.baseline, '--baseline requires a filename');
         } else if (flag === '--manifest-report') {
             manifestOutput = args.shift();
             assert.ok(manifestOutput, '--manifest-report requires a filename');
@@ -1148,19 +1069,9 @@ if (require.main === module) {
         fs.writeFileSync(sizeBudgetOutput, JSON.stringify(budget, null, 2) + '\n');
         console.error(`Size budget written to ${sizeBudgetOutput}`);
     }
-    if (output) {
-        const baseline = { ...result };
-        delete baseline.manifestReport;
-        fs.writeFileSync(output, JSON.stringify(baseline, null, 2) + '\n');
-    }
     writeManifestReport(result.manifestReport);
     const report = result.manifestReport;
-    console.error(
-        `Manifest report (non-failing): ${report.added.length} added, ${report.removed.length} removed, ${report.sizeChanges.length} size changes beyond tolerance`,
-    );
-    console.error(
-        `VSIX: ${report.vsixBytes.bytes} bytes; delta ${report.vsixBytes.deltaBytes ?? 'unavailable (no baseline)'} bytes`,
-    );
+    console.error(`VSIX: ${report.vsixBytes.bytes} bytes`);
     console.error(
         `Graph assets (bytes): ${Object.entries(report.graphAssetBytes)
             .map(([name, bytes]) => `${name}=${bytes}`)
@@ -1193,7 +1104,6 @@ module.exports = {
     viteChunkClosure,
     hostGraphs,
     inspect,
-    compareManifest,
     inspectRequiredFiles,
     manifestAssets,
     inspectManifestAssets,

@@ -28,8 +28,7 @@ while (args.length) {
     reports = args.shift();
     assert.ok(reports, '--reports requires a directory');
 }
-const baseline = path.join(__dirname, 'baseline.json');
-const options = { baseline, reports, sizeBudget: sizeBudgetFile };
+const options = { reports, sizeBudget: sizeBudgetFile };
 const { manifestReport: originalManifestReport } = inspect(filename, options);
 const views = JSON.parse(fs.readFileSync(path.join(reports, 'views.json'), 'utf8'));
 const host = JSON.parse(fs.readFileSync(path.join(reports, 'host.json'), 'utf8'));
@@ -125,21 +124,6 @@ try {
         assert.throws(() => inspect(variant, options), expected);
         console.log(`PASS: ${name} rejected for the expected reason`);
     }
-    const files = readVsix(filename);
-    assert.ok(files.delete('extension/resources/readme/vscode-documentdb-hero-screenshot.png'));
-    files.set('extension/resources/proof-added.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'));
-    const variant = path.join(directory, 'asset-added-and-removed-reported.vsix');
-    writeVsix(variant, files, { compress: true });
-    const { manifestReport } = inspect(variant, options);
-    assert.deepEqual(
-        manifestReport.removed,
-        [...originalManifestReport.removed, 'extension/resources/readme/vscode-documentdb-hero-screenshot.png'].sort(),
-    );
-    assert.deepEqual(
-        manifestReport.added,
-        [...originalManifestReport.added, 'extension/resources/proof-added.svg'].sort(),
-    );
-    console.log('PASS: asset-added-and-removed-reported reported without failing');
     const mainEntry = host.chunks.find((chunk) => chunk.isEntry && chunk.name === 'main');
     const originalFiles = readVsix(filename);
     const staticMain = viteChunkClosure(host, 'main', [mainEntry.fileName], originalFiles, { host: true });
