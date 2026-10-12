@@ -7,7 +7,7 @@ import { MongoClient } from 'mongodb';
 import * as dns from 'node:dns';
 import { FALLBACK_MAX_DEADLINE_MS } from './constants';
 import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient';
-import { getSrvLookupTarget, getSrvRewriteErrorKind, isSrvConnectionString, rewriteSrvUri } from './srvUriRewrite';
+import { getSrvLookupTarget, isSrvConnectionString, rewriteSrvUri, SrvRewriteError } from './srvUriRewrite';
 import { cancellationError, noopLogger, SrvResolutionCancelledError, throwIfCancelled } from './types';
 
 import { type MongoClientOptions } from 'mongodb';
@@ -280,10 +280,7 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
             fallbackDurationMs: Date.now() - fallbackStartedAt,
         };
         trace(
-            `TXT source=${report.txtSource} keys=[${rewritten.txtKeys.join(',')}]${rewritten.txtReplicaSet === undefined ? '' : ` replicaSet=${rewritten.txtReplicaSet}`}${rewritten.txtLoadBalanced === undefined ? '' : ` loadBalanced=${rewritten.txtLoadBalanced}`}${rewritten.txtKeys.includes('authSource') ? ' authSource=<set>' : ''}`,
-        );
-        trace(
-            `rewrite targets=[${rewritten.targets.join(',')}] tlsAdded=${rewritten.tlsAdded} removedParams=[${rewritten.removedParams.join(',')}] txtApplied=[${rewritten.txtApplied.join(',')}] txtSkipped=[${rewritten.txtSkipped.join(',')}]`,
+            `rewrite targets=[${rewritten.targets.join(',')}] tlsAdded=${rewritten.tlsAdded} txtSource=${report.txtSource} txtApplied=[${rewritten.txtApplied.join(',')}]`,
         );
         if (probeFailure) {
             trace(
@@ -308,7 +305,7 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
             if (stage === 'preflight') {
                 code = 'preflight';
             } else if (stage === 'rewrite') {
-                code = getSrvRewriteErrorKind(error) ?? 'unknown';
+                code = error instanceof SrvRewriteError ? error.kind : 'unknown';
             } else {
                 code = `${txtFailure && txtFailure.error === error ? 'txt:' : ''}${errorCode(error)}`;
             }

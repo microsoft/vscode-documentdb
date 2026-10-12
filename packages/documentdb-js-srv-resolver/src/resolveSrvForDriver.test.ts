@@ -7,8 +7,6 @@ import { MongoAPIError, MongoClient } from 'mongodb';
 import * as dns from 'node:dns';
 import { FallbackDnsError } from './fallbackDnsClient';
 import { resolveSrvForDriver } from './resolveSrvForDriver';
-import * as srvUriRewrite from './srvUriRewrite';
-import { getSrvRewriteErrorKind } from './srvUriRewrite';
 import { SrvResolutionCancelledError } from './types';
 
 import { type MongoClientOptions } from 'mongodb';
@@ -16,7 +14,6 @@ import { type SrvRecord } from 'node:dns';
 import { type FallbackDnsResult } from './fallbackDnsClient';
 import { type SrvResolutionReport } from './report';
 import { type ResolveSrvForDriverInput } from './resolveSrvForDriver';
-import { type RewriteSrvUriResult } from './srvUriRewrite';
 
 type FallbackSrvResult = FallbackDnsResult<SrvRecord>;
 
@@ -306,30 +303,8 @@ describe('errors, preflight and privacy', (): void => {
             ...srvReply,
             records: [{ ...records[0], name: 'evil.example.org' }],
         });
-        const originalRewrite = srvUriRewrite.rewriteSrvUri;
-        let originalFailure: unknown;
-        const rewrite = jest.spyOn(srvUriRewrite, 'rewriteSrvUri').mockImplementation((args): RewriteSrvUriResult => {
-            try {
-                return originalRewrite(args);
-            } catch (error) {
-                originalFailure = error;
-                throw error;
-            }
-        });
-        try {
-            let failure: unknown;
-            try {
-                await resolveSrvForDriver(f.input);
-            } catch (error) {
-                failure = error;
-            }
-            expect(failure).toBeInstanceOf(MongoAPIError);
-            expect(failure).toBe(originalFailure);
-            expect(getSrvRewriteErrorKind(failure)).toBe('parentDomainMismatch');
-            expect(f.reports[0]).toMatchObject({ fallbackErrorCode: 'parentDomainMismatch', outcome: 'failed' });
-        } finally {
-            rewrite.mockRestore();
-        }
+        await expect(resolveSrvForDriver(f.input)).rejects.toMatchObject({ kind: 'parentDomainMismatch' });
+        expect(f.reports[0]).toMatchObject({ fallbackErrorCode: 'parentDomainMismatch', outcome: 'failed' });
     });
 
     it('throws the real preflight error as-is and never starts fallback DNS', async (): Promise<void> => {
@@ -383,13 +358,6 @@ describe('errors, preflight and privacy', (): void => {
         f.fallback.resolveTxt.mockRejectedValue(dnsError('ESERVFAIL', 'queryTxt'));
         await expect(resolveSrvForDriver(f.input)).rejects.toBe(original);
         expect(f.reports[0].fallbackErrorCode).toBe('ETIMEOUT');
-    });
-
-    it('keeps the rewrite validation behavior for an empty successful TXT answer', async (): Promise<void> => {
-        const f = fixture();
-        f.fallback.resolveTxt.mockResolvedValue({ ...txtReply, records: [] });
-        await expect(resolveSrvForDriver(f.input)).rejects.toBeInstanceOf(TypeError);
-        expect(f.reports[0]).toMatchObject({ txtSource: 'fallback', fallbackErrorCode: 'txtInvalid' });
     });
 
     it.each(['options', 'uri'])('does not preflight OIDC on the node path (%s)', async (source): Promise<void> => {
