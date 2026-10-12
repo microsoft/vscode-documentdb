@@ -3222,7 +3222,8 @@ Stage 0 must also be made.
       see ground rules 1 and 6. The merge itself stands and opens Stage 7.
       Coordinator's reading of "our overrides": both remaining entries, `vite: $vite` (an npm
       10.9.3 workaround) and `glob ~12.0.0` (it predates this work). It is unconfirmed whether
-      the `glob` entry is meant; check it during the merge.
+      the `glob` entry is meant; check it during the merge. **Answered at G7 (2026-10-12):**
+      the pre-existing overrides stay; see "G7 decisions" under Stage 7.
     - "I guess we can drop all snapshot tests etc - this was only relevan tduring the
       moddernization." **Coordinator's reading, not confirmed:** the Stage 0 baseline
       comparison, which is modernization-only:
@@ -3233,7 +3234,8 @@ Stage 0 must also be made.
       The L1 invariants, the size budget and the proof controls stay. The four product
       `toMatchSnapshot` tests in `promptTemplates.test.ts` predate the modernization and are
       not meant. The operator was asked which was meant and was unavailable. Nothing is deleted
-      yet; this is to be done with the review findings before the merge.
+      yet; this is to be done with the review findings before the merge. **Confirmed at G7
+      (2026-10-12):** the operator meant the Stage 0 baseline comparison.
 
     - "the reveiw finigs will be addressed befre we mare the PR." PR-F02 to PR-F06 and the
       pending stage-review findings are fixed or decided before #880 merges.
@@ -3605,6 +3607,28 @@ Stage 0 must also be made.
       - **35.** "snapshot tests" means the Stage 0 baseline comparison, not the prompt-template
         snapshots.
       - **36.** "our overrides" includes `glob` (acted on in 32).
+  - **G7 decisions (operator, 2026-10-12), recorded verbatim.** The coordinator explained items
+    35 and 36 first. For 36 it also offered a reading it had not considered in Stage 7: that
+    "remove our overrides" referred to the Stage 1 decision not to merge `main`, which the
+    PR-F01 text just before it calls an override.
+    - **35:** "I meant A". **Confirmed:** "snapshot tests" means the Stage 0 baseline
+      comparison (`baseline.json`, `measurements.json`, `measure.cjs` and L1's manifest-drift
+      report). The four prompt-template snapshot tests stay. Stage 8 removes the baseline
+      tooling.
+    - **36:** "let's keep old overrides - I'll have a work item just after modernization that
+      just focues on the refresh of our dependencies, we'll look at this in more detail."
+      **The coordinator's reading is reversed:** "our overrides" did not include the pre-existing
+      `glob ~12.0.0`. **Item 32 is reversed with it:** Stage 8 reverts `63a69976`. `vite: $vite`
+      stays, as before. Overrides and dependency versions are reviewed in the dependency-refresh
+      work item after this iteration.
+      - **Effect on the pending ADO runs (coordinator):** the revert only removes the 25
+        lockfile entries that `63a69976` added (`glob` 10.5.0, 11.1.0 and 13.0.6 and their
+        dependencies). It changes and adds none, so the reverted lockfile is a subset of the one
+        ADO is building now: an ADO pass there also shows the feed has every version the
+        reverted lockfile needs. `glob` is dev-only, so the VSIX is unaffected; Stage 8's checks
+        and CI confirm both.
+    - **Still open at G7:** items 1 to 34, except 32. The operator is waiting for the ADO runs
+      (item 27); the gate continues once they are in.
 - **Stage 7 commits:** `946f7961` (merge of `main` `1380b758`), `63a69976` (the `glob`
   override), `4ce40970` (the re-evaluation), and the `S7: record …` documentation commit.
   **Status: stopped at G7; Stage 8 has not started.** Case 1 applied throughout; the Case 2
@@ -3628,7 +3652,10 @@ Stage 0 must also be made.
     - PR-F05: Prettier globs that cover `build/`.
     - PR-F06: the modernization docs in the knowledge-base index, and the stale
       `features/webview-ext-package/design.md`.
-  - **Remove the Stage 0 baseline tooling,** if confirmed at G7: `baseline.json`,
+  - **Restore the `glob` override (decided at G7, item 36):** `git revert 63a69976`. Then
+    check that the lockfile equals `946f7961`'s, rerun the fresh-dependency scan and
+    `npm run build`, and record the result.
+  - **Remove the Stage 0 baseline tooling** (confirmed at G7, item 35): `baseline.json`,
     `measurements.json`, `measure.cjs` and L1's manifest-drift report against the baseline.
     Keep every L1 invariant, the size budget, the required-file and runtime-asset lists, and the
     proof controls. The `asset-added-and-removed-reported` control depends on the drift report:
@@ -3707,6 +3734,9 @@ Stage 0 must also be made.
   `@microsoft/vscode-azext-azureauth` and remove the G5-I01 alias.
 - [#991](https://github.com/microsoft/vscode-documentdb/issues/991): align the Node.js and npm
   toolchain versions with VS Code's extension host.
+- **Dependency refresh (operator, G7, 2026-10-12):** a work item right after the modernization
+  that "just focues on the refresh of our dependencies". It also reviews the remaining
+  `overrides` (`glob ~12.0.0`, and `vite: $vite` with #991).
 - Deferred items: [future-work.md](./future-work.md).
 
 ---
