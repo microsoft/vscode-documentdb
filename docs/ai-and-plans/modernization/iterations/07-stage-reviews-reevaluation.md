@@ -103,6 +103,38 @@ Stage 9, consistently with that re-evaluator's status-count classification.
   - S5-SW10: Full Case 2 verification remains deferred to Stage 9.
   - S5-SW11: Execution record committed but coordinator decisions await confirmation.
 
+## G7 decisions (operator, 2026-10-12)
+
+The operator decided every G7 item: "record G7 guar decisions (also the uncanhged ones from the
+propsal)". Unless the operator answered otherwise, each finding is decided as its recommended
+action. The full record, including the operator's words, is under Stage 7 in
+[build-and-test-stack.md](../build-and-test-stack.md); W1 to W17 are Stage 8's work items there.
+
+| Findings                                                       | Decision                                                                                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| PR-F01                                                         | Resolved: `main` merged (`946f7961`); local, CI and ADO checks pass on the merged code (ADO builds 240165932 and 240165962 at `e338339c`). |
+| PR-F02, X7-F01                                                 | Fix in Stage 8: W3.                                                                                                                        |
+| PR-F03, S3-F12                                                 | Fix in Stage 8: W4.                                                                                                                        |
+| PR-F04                                                         | Fix in Stage 8: W5.                                                                                                                        |
+| S2-F07, SW7-F01                                                | Fix in Stage 8: W6.                                                                                                                        |
+| PR-F05                                                         | Fix in Stage 8: W7.                                                                                                                        |
+| PR-F06, X7-F09                                                 | Fix in Stage 8: W8 (X7-F09 option 2 goes to Stage 10).                                                                                     |
+| S1-F02, S1-F03                                                 | Fix in Stage 8: W9.                                                                                                                        |
+| S2-F03                                                         | Fix in Stage 8: W10; the hook's removal stays in #990.                                                                                     |
+| S3-F01                                                         | Fix in Stage 8: W11.                                                                                                                       |
+| S3-F04, X7-F02                                                 | Fix in Stage 8: W12, with G5-I01 option 4.                                                                                                 |
+| X7-F08                                                         | Fix in Stage 8: W13.                                                                                                                       |
+| S1-F04, S2-F04, S2-F05, S3-F07, X7-F07                         | Fix in Stage 8: W14, record corrections by the coordinator.                                                                                |
+| S1-F07, S2-F02, S3-F06 (declaration maps), S3-F13              | File an issue each: W15.                                                                                                                   |
+| S5-SW12, X7-F03                                                | Accepted for this PR; a macOS lane is carried to Stage 10.                                                                                 |
+| S5-SW5, X7-F05                                                 | The G6 acceptance stands; the cold-start journey is carried to Stage 10.                                                                   |
+| X7-F04                                                         | Carried to Stage 10.                                                                                                                       |
+| S5-SW8, X7-F06                                                 | Accepted for this PR; telemetry transport coverage is carried to Stage 10.                                                                 |
+| S3-F08, S3-F09, S3-F10, S3-F11, S5-SW1, S5-SW2, S5-SW3, S5-SW4 | Accepted, with the reasons in their rows.                                                                                                  |
+| S5-SW10                                                        | Accepted: the Case 2 list runs in Stage 9.                                                                                                 |
+| S5-SW11                                                        | The six Stage 5 coordinator decisions are confirmed.                                                                                       |
+| S2-F01                                                         | Resolved; its provenance gap is closed by ADO npm build 240165962 at `e338339c`, which ran the workspace tests on Windows.                 |
+
 ## Per-review tables
 
 ### 00-stage0-review.md
@@ -165,7 +197,7 @@ Original: [01-stage1-review.md](./01-stage1-review.md).
 Read-only source/history and CI-metadata assessment; no builds, installs, tests or artifact
 inspection. Manifest evidence was frozen to `946f7961`, not concurrent working-tree output.
 
-Author decisions for these findings are taken at G7.
+Author decisions were taken at G7 (2026-10-12); see [G7 decisions](#g7-decisions-operator-2026-10-12). Findings that are not still valid are decided as their Action cell recommends.
 
 | ID                                               | Original severity | Current status              | Current severity | Decision carried out?                                                  | Evidence                                                                                                                                                                         | Action                                                                                                             |
 | ------------------------------------------------ | ----------------- | --------------------------- | ---------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -206,7 +238,7 @@ Read-only source/history, assertion comparisons and existing Actions-log assessm
 install, build, package or test execution; manifests frozen to `946f7961`, not concurrent
 working-tree output. All fourteen original decisions remain pending.
 
-Author decisions for these findings are taken at G7.
+Author decisions were taken at G7 (2026-10-12); see [G7 decisions](#g7-decisions-operator-2026-10-12). Findings that are not still valid are decided as their Action cell recommends.
 
 S2-F08 to S2-F14 were informational verification notes in the original review (for example
 “TDD contracts preserved”); “false positive in hindsight” here means no defect exists, not
@@ -267,7 +299,7 @@ Read-only source/history assessment, manifests frozen to `946f7961`; no build, i
 tests, publication or concurrent outputs. Coverage means a check exists, not a fresh pass.
 Still-valid informational findings remain observations, not newly discovered defects.
 
-Author decisions for these findings are taken at G7.
+Author decisions were taken at G7 (2026-10-12); see [G7 decisions](#g7-decisions-operator-2026-10-12). Findings that are not still valid are decided as their Action cell recommends.
 
 | ID                                                      | Original severity | Current status | Current severity | Decision carried out?                                                                  | Evidence                                                                                                                                                                 | Action                                                                                                   |
 | ------------------------------------------------------- | ----------------- | -------------- | ---------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -595,7 +627,7 @@ No broader L2/ADO/signed-artifact conclusion is inferred.
   2. Verify the downloaded ADO tarballs manually before each release and record digests. **Pros:** quickest closure for this release. **Cons:** procedural, easy to omit, and a local rebuild is not verification of the downloaded archives.
 - **Recommended option:** 1, because the architecture now distributes six ESM packages through two different publication systems and the guard must follow the artifact, not the developer's chosen command.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 1, fix in Stage 8 (W3).
 
 ### X7-F02 — Dynamic interoperability is less well covered than the graph and mock checks imply
 
@@ -609,7 +641,7 @@ No broader L2/ADO/signed-artifact conclusion is inferred.
   2. Explicitly accept both residual limits and require an installed-VSIX discovery/worker check whenever the aliases, bundler or implicated dependencies change. **Pros:** avoids additional harness code. **Cons:** depends on manual discipline and leaves the known missing dynamic route open.
 - **Recommended option:** 1, because it targets two demonstrated historical failure mechanisms instead of equating green unit tests, graph structure and successful activation with exercised runtime semantics.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 1, fix in Stage 8 (W12), including G5-I01 option 4; the installed-VSIX Azure discovery journey is carried to Stage 10.
 
 ### X7-F03 — No macOS execution is evidenced across the migration
 
@@ -623,7 +655,7 @@ No broader L2/ADO/signed-artifact conclusion is inferred.
   2. Accept the platform gap explicitly and create a Stage 10 macOS lane/manual checklist with an owner. **Pros:** consistent with the actual G6 requirement and avoids blocking this PR solely on an extra platform. **Cons:** users may encounter a platform-only problem before automation lands.
 - **Recommended option:** 2, unless a Mac is readily available, because the required Windows alternative was exercised and the remaining uncertainty should be tracked honestly rather than called a gate failure.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 2, accepted for this PR (Windows was the G6 second platform); a macOS lane is carried to Stage 10.
 
 ### X7-F04 — Browser gates remain agent/operator-run, with a documented headless substitution
 
@@ -637,7 +669,7 @@ No broader L2/ADO/signed-artifact conclusion is inferred.
   2. Require all future gate browser runs through integrated tools and retain real-origin behavior as a manual checklist only. **Pros:** matches the original procedure literally. **Cons:** integrated tooling availability remains a bottleneck and still does not turn static L2 into real-origin coverage.
 - **Recommended option:** 1, because the headless runs execute the same assertions without CSP bypass, while only a separate workbench test can close the origin/host boundary.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 1, carried to Stage 10.
 
 ### X7-F05 — The cold-start URI journey remains explicitly untested and accepted
 
@@ -650,7 +682,7 @@ No broader L2/ADO/signed-artifact conclusion is inferred.
   2. Run an operator protocol-launch smoke before release and append its exact artifact/platform evidence. **Pros:** cheap additional confidence now. **Cons:** a happy-path manual run does not replace a deterministic race test.
 - **Recommended option:** 1, because there is an explicit accepted exception and no evidence justifying silently reopening it as a confirmed runtime failure.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 1; the G6 acceptance stands, and the cold-start journey is carried to Stage 10.
 
 ### X7-F06 — Telemetry emission was observed locally, not at the receiving service
 
@@ -664,7 +696,7 @@ No broader L2/ADO/signed-artifact conclusion is inferred.
   2. Accept service ingestion as outside this migration and add transport-dispatch coverage with a controlled reporter in Stage 10, retaining the debug event assertions. **Pros:** deterministic and no production-data access. **Cons:** still cannot establish that the production service received an event.
 - **Recommended option:** 2 for the PR, because the existing gate promises debug-event observation; explicitly retain a separate operator ingestion check rather than overstating its proof.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 2, accepted for this PR; transport coverage is carried to Stage 10, and ingestion stays an operator check.
 
 ### X7-F07 — Historical evidence, implementation status and author disposition have drifted apart
 
@@ -679,7 +711,7 @@ No broader L2/ADO/signed-artifact conclusion is inferred.
   2. Retain the scattered records and add only a short caveat that some statuses are stale. **Pros:** minimal effort. **Cons:** leaves the same ambiguous claims for Stage 10 and future release reviewers.
 - **Recommended option:** 1, because it follows Stage 7's no-history-rewrite model while preventing “resolved,” “accepted,” and “verified at HEAD” from being treated as interchangeable.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 1, fix in Stage 8 (W14). The ADO npm build is now identified: BuildId 240165962 at `e338339c`.
 
 ### X7-F08 — Vite inspection dropped the old fail-closed ambiguous-owner guard
 
@@ -694,7 +726,7 @@ No broader L2/ADO/signed-artifact conclusion is inferred.
   2. Accept the disjoint filename-format policy and add a configuration/report test proving host and view inventories cannot overlap. **Pros:** reflects today's output layout. **Cons:** protects the convention rather than rejecting malformed provenance at the inspection boundary.
 - **Recommended option:** 1, because ownership ambiguity can be rejected directly without weakening any current build.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 1, fix in Stage 8 (W13).
 
 ### X7-F09 — L2-dev on a non-default port silently depends on a server on port 18080
 
@@ -711,7 +743,7 @@ Observed by: the Stage 7 coordinator while running step 7.1's checks; HEAD `63a6
   3. Derive `server.origin` from the actual port. **Pros:** any port works. **Cons:** the extension's development CSP allows exactly 18080; both sides would have to change, for a scenario-only convenience.
 - **Recommended option:** 1 now, plus 2 in the E2E iteration when L2-dev moves into CI, because the repository's documented recipe is already correct.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 1 in Stage 8 (W8), and option 2 carried to Stage 10.
 
 ## Deferred-item and regression ledger
 
@@ -757,7 +789,7 @@ S6-F01's stale output was an incomplete clean-build fix, not reintroduction of t
   2. Compile tests with their original package settings into a separate non-published output directory, then continue using the tarball hygiene guard. **Pros:** restores diagnostics and provides explicit build inputs. **Cons:** more output/cleaning and configuration than a no-emit check.
 - **Recommended option:** 1, because it preserves both fixes—strict test validation and clean published packages—without forcing the whole extension into strict mode.
 
-**Author decision:** _pending_
+**Author decision (G7, operator, 2026-10-12):** option 1, fix in Stage 8 (W6).
 
 ### Sweep boundaries checked without another finding
 
