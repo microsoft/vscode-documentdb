@@ -4,7 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
-import { type FixtureAtPath, type FixtureInputs, type FixtureOutputs, type FixturePaths, type TypedRpcFixtures } from './core/fixtures';
+import {
+    type FixtureAtPath,
+    type FixtureInputs,
+    type FixtureOutputs,
+    type FixturePaths,
+    type TypedRpcFixtures,
+} from './core/fixtures';
 import { fixtures, type StyleExpectation } from './fixtures';
 
 export interface ScenarioReadiness {
@@ -41,7 +47,9 @@ export interface Scenario<V extends WebviewName = WebviewName> {
 type ScenarioTable = { readonly [V in WebviewName]: Readonly<Record<string, Scenario<V>>> };
 type QuickStartOutputs = FixtureOutputs['localQuickStart'];
 
-const continueSteps = [{ action: 'click', role: 'button', name: 'Continue' }] as const satisfies readonly ScenarioStep[];
+const continueSteps = [
+    { action: 'click', role: 'button', name: 'Continue' },
+] as const satisfies readonly ScenarioStep[];
 const setupSteps = [
     ...continueSteps,
     { action: 'click', role: 'button', name: 'Start DocumentDB Local' },
@@ -55,8 +63,13 @@ const atlasSteps = [
 function defaultScenario<V extends WebviewName>(view: V, steps: readonly ScenarioStep[] = []): Scenario<V> {
     const fixture = fixtures[view];
     return {
-        config: fixture.config, rpc: fixture.rpc,
-        readiness: { content: fixture.content, selectors: fixture.styles.map((style): string => style.selector), noProgressbar: true },
+        config: fixture.config,
+        rpc: fixture.rpc,
+        readiness: {
+            content: fixture.content,
+            selectors: fixture.styles.map((style): string => style.selector),
+            noProgressbar: true,
+        },
         steps,
         assertions: fixture.styles.map((style): ScenarioAssertion => ({ kind: 'style', ...style })),
     };
@@ -72,10 +85,20 @@ const completedStages = [
 ] as const;
 
 const missingReadiness = {
-    outcome: 'diagnosed', environment: 'windows', endpointKind: 'namedPipe', endpointSource: 'platformDefault',
-    provider: 'unknown', providerEvidence: 'none', executionTarget: 'local', failureKind: 'cliMissing',
-    checkedAtMs: 1791199200000, cliInstalled: false, arch: 'x64', platformSupported: true,
-    canContinueAnyway: false, daemonReachable: false,
+    outcome: 'diagnosed',
+    environment: 'windows',
+    endpointKind: 'namedPipe',
+    endpointSource: 'platformDefault',
+    provider: 'unknown',
+    providerEvidence: 'none',
+    executionTarget: 'local',
+    failureKind: 'cliMissing',
+    checkedAtMs: 1791199200000,
+    cliInstalled: false,
+    arch: 'x64',
+    platformSupported: true,
+    canContinueAnyway: false,
+    daemonReachable: false,
 } as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
 
 function dockerMissing(
@@ -90,17 +113,33 @@ function dockerMissing(
             'localQuickStart.getDockerStatus': { type: 'query', results: [{ ...readyDocker, readiness }] },
             'localQuickStart.startQuickStart': {
                 type: 'subscription',
-                results: [{ stage: 'checking', status: 'error', message: { key: 'dockerCliMissing' }, dockerReadiness: readiness }],
+                results: [
+                    {
+                        stage: 'checking',
+                        status: 'error',
+                        message: { key: 'dockerCliMissing' },
+                        dockerReadiness: readiness,
+                    },
+                ],
             },
             'common.openUrl': { type: 'mutation', results: [true] },
         } as const satisfies TypedRpcFixtures,
         steps: setupSteps,
-        readiness: { content: ['Docker CLI not found', label], selectors: ['[role="button"], button'], noProgressbar: true },
-        assertions: [{
-            kind: 'calls', name: `${label} opens the platform install guide exactly once`,
-            path: 'common.openUrl', input: { url }, count: 1,
-            steps: [{ action: 'click', role: 'button', name: label }],
-        }],
+        readiness: {
+            content: ['Docker CLI not found', label],
+            selectors: ['[role="button"], button'],
+            noProgressbar: true,
+        },
+        assertions: [
+            {
+                kind: 'calls',
+                name: `${label} opens the platform install guide exactly once`,
+                path: 'common.openUrl',
+                input: { url },
+                count: 1,
+                steps: [{ action: 'click', role: 'button', name: label }],
+            },
+        ],
     };
 }
 
@@ -112,19 +151,30 @@ export const scenarios = {
     localQuickStart: {
         default: defaultScenario('localQuickStart', continueSteps),
         introduction: {
-            config: base.config, rpc: base.rpc,
+            config: base.config,
+            rpc: base.rpc,
             readiness: { content: ['Develop and test locally', 'Continue'], selectors: ['h2'], noProgressbar: true },
         },
         configure: {
-            config: base.config, rpc: base.rpc, steps: continueSteps,
-            readiness: { content: ['Configure setup', '10260', 'Start DocumentDB Local'], selectors: ['table'], noProgressbar: true },
+            config: base.config,
+            rpc: base.rpc,
+            steps: continueSteps,
+            readiness: {
+                content: ['Configure setup', '10260', 'Start DocumentDB Local'],
+                selectors: ['table'],
+                noProgressbar: true,
+            },
         },
         provisioning: {
             config: base.config,
             rpc: {
                 ...base.rpc,
                 'localQuickStart.startQuickStart': {
-                    type: 'subscription', results: [{ stage: 'checking', status: 'done' }, { stage: 'pulling', status: 'active' }],
+                    type: 'subscription',
+                    results: [
+                        { stage: 'checking', status: 'done' },
+                        { stage: 'pulling', status: 'active' },
+                    ],
                     keepOpen: true,
                 },
             },
@@ -139,21 +189,35 @@ export const scenarios = {
             config: base.config,
             rpc: {
                 ...base.rpc,
-                'localQuickStart.startQuickStart': { type: 'subscription', results: [
-                    ...completedStages, { stage: 'waiting', status: 'done' },
-                    { stage: 'done', status: 'done', message: { key: 'instanceRunning', port: 10260 }, boundPort: 10260 },
-                ] },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [
+                        ...completedStages,
+                        { stage: 'waiting', status: 'done' },
+                        {
+                            stage: 'done',
+                            status: 'done',
+                            message: { key: 'instanceRunning', port: 10260 },
+                            boundPort: 10260,
+                        },
+                    ],
+                },
             },
             steps: setupSteps,
-            readiness: { content: ['DocumentDB Local is ready', 'All set', 'Open Connection'], selectors: ['h2'], noProgressbar: true },
+            readiness: {
+                content: ['DocumentDB Local is ready', 'All set', 'Open Connection'],
+                selectors: ['h2'],
+                noProgressbar: true,
+            },
         },
         'failed-port-in-use': {
             config: base.config,
             rpc: {
                 ...base.rpc,
-                'localQuickStart.startQuickStart': { type: 'subscription', results: [
-                    { stage: 'checking', status: 'error', message: { key: 'portInUse', port: 10260 } },
-                ] },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [{ stage: 'checking', status: 'error', message: { key: 'portInUse', port: 10260 } }],
+                },
             },
             steps: setupSteps,
             readiness: { content: ['Port 10260 is already in use.', 'Retry setup'], noProgressbar: true },
@@ -162,20 +226,35 @@ export const scenarios = {
             config: base.config,
             rpc: {
                 ...base.rpc,
-                'localQuickStart.startQuickStart': { type: 'subscription', results: [
-                    ...completedStages,
-                    { stage: 'waiting', status: 'error', message: { key: 'readinessTimeout' }, timedOut: true },
-                ] },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [
+                        ...completedStages,
+                        { stage: 'waiting', status: 'error', message: { key: 'readinessTimeout' }, timedOut: true },
+                    ],
+                },
             },
             steps: setupSteps,
-            readiness: { content: ['DocumentDB did not accept connections in time.', 'Wait longer', 'Start over'], noProgressbar: true },
+            readiness: {
+                content: ['DocumentDB did not accept connections in time.', 'Wait longer', 'Start over'],
+                noProgressbar: true,
+            },
         },
-        'docker-missing-windows': dockerMissing(missingReadiness, 'Get Docker Desktop for Windows',
-            'https://docs.docker.com/desktop/setup/install/windows-install/'),
-        'docker-missing-mac': dockerMissing({ ...missingReadiness, environment: 'macos', endpointKind: 'unixSocket' },
-            'Get Docker Desktop for Mac', 'https://docs.docker.com/desktop/setup/install/mac-install/'),
-        'docker-missing-linux': dockerMissing({ ...missingReadiness, environment: 'linux', endpointKind: 'unixSocket' },
-            'Open Docker install guide', 'https://docs.docker.com/engine/install/'),
+        'docker-missing-windows': dockerMissing(
+            missingReadiness,
+            'Get Docker Desktop for Windows',
+            'https://docs.docker.com/desktop/setup/install/windows-install/',
+        ),
+        'docker-missing-mac': dockerMissing(
+            { ...missingReadiness, environment: 'macos', endpointKind: 'unixSocket' },
+            'Get Docker Desktop for Mac',
+            'https://docs.docker.com/desktop/setup/install/mac-install/',
+        ),
+        'docker-missing-linux': dockerMissing(
+            { ...missingReadiness, environment: 'linux', endpointKind: 'unixSocket' },
+            'Open Docker install guide',
+            'https://docs.docker.com/engine/install/',
+        ),
     },
 } as const satisfies ScenarioTable;
 
@@ -192,7 +271,16 @@ export interface ScenarioRoute {
 export function scenarioRoutes(): ScenarioRoute[] {
     return Object.entries(scenarios).flatMap(([view, entries]): ScenarioRoute[] =>
         Object.keys(entries).flatMap((scenario): ScenarioRoute[] =>
-            themes.map((theme): ScenarioRoute => ({ view: view as WebviewName, scenario, theme, path: `/${view}/${scenario}/${theme}` }))));
+            themes.map(
+                (theme): ScenarioRoute => ({
+                    view: view as WebviewName,
+                    scenario,
+                    theme,
+                    path: `/${view}/${scenario}/${theme}`,
+                }),
+            ),
+        ),
+    );
 }
 
 export function findScenario(route: ScenarioRoute): Scenario {

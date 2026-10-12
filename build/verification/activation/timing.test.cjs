@@ -11,7 +11,15 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { TARGET_ID, LATE_COMMANDS } = require('./checks.cjs');
-const { parseArguments, parseCodeLoadMs, parseActivateTelemetry, median, summarize, formatSummary, measureRun } = require('./timing.cjs');
+const {
+    parseArguments,
+    parseCodeLoadMs,
+    parseActivateTelemetry,
+    median,
+    summarize,
+    formatSummary,
+    measureRun,
+} = require('./timing.cjs');
 
 /** @param {string} [kind] @returns {string[]} */
 function activationLines(kind = 'cjs') {
@@ -30,11 +38,20 @@ function telemetryLine(measures = { duration: 0.061, mainFileLoad: 0 }, result =
 test('parses mandatory VSIX, default five runs, explicit runs, and optional JSON path', () => {
     assert.deepEqual(parseArguments(['baseline.vsix']), { vsix: path.resolve('baseline.vsix'), runs: 5 });
     assert.deepEqual(parseArguments(['baseline.vsix', '--runs', '2', '--json', 'timing.json']), {
-        vsix: path.resolve('baseline.vsix'), runs: 2, json: path.resolve('timing.json'),
+        vsix: path.resolve('baseline.vsix'),
+        runs: 2,
+        json: path.resolve('timing.json'),
     });
     assert.equal(parseArguments(['baseline.vsix', '--json', 'timing.json', '--runs', '1']).runs, 1);
-    for (const args of [[], ['--runs', '5'], ['a.vsix', 'b.vsix'], ['a.vsix', '--unknown'],
-        ['a.vsix', '--runs'], ['a.vsix', '--json'], ['a.vsix', '--runs', '1', '--runs', '2']]) {
+    for (const args of [
+        [],
+        ['--runs', '5'],
+        ['a.vsix', 'b.vsix'],
+        ['a.vsix', '--unknown'],
+        ['a.vsix', '--runs'],
+        ['a.vsix', '--json'],
+        ['a.vsix', '--runs', '1', '--runs', '2'],
+    ]) {
         assert.throws(() => parseArguments(args), /Usage/);
     }
     for (const value of ['0', '-1', '1.5', 'NaN', 'Infinity', '2x', '9007199254740992']) {
@@ -51,10 +68,12 @@ for (const kind of ['cjs', 'esm']) {
 }
 
 test('code loading crosses midnight with millisecond resolution', () => {
-    const lines = activationLines().map((line, index) => line.replace(
-        index === 2 ? '2026-10-05 16:44:49.317' : '2026-10-05 16:44:48.939',
-        index === 2 ? '2026-10-06 00:00:00.317' : '2026-10-05 23:59:59.939',
-    ));
+    const lines = activationLines().map((line, index) =>
+        line.replace(
+            index === 2 ? '2026-10-05 16:44:49.317' : '2026-10-05 16:44:48.939',
+            index === 2 ? '2026-10-06 00:00:00.317' : '2026-10-05 23:59:59.939',
+        ),
+    );
     assert.equal(parseCodeLoadMs(lines.join('\n')), 378);
 });
 
@@ -62,7 +81,10 @@ test('code loading rejects missing, duplicate, unsupported, unordered, or untime
     const lines = activationLines();
     assert.throws(() => parseCodeLoadMs(''), /Expected exactly one/);
     for (let index = 0; index < lines.length; index++) {
-        assert.throws(() => parseCodeLoadMs(lines.filter((_, other) => other !== index).join('\n')), /Expected exactly one/);
+        assert.throws(
+            () => parseCodeLoadMs(lines.filter((_, other) => other !== index).join('\n')),
+            /Expected exactly one/,
+        );
         assert.throws(() => parseCodeLoadMs([...lines, lines[index]].join('\n')), /Expected exactly one/);
     }
     assert.throws(() => parseCodeLoadMs(activationLines('unknown').join('\n')), /Expected exactly one/);
@@ -73,21 +95,37 @@ test('code loading rejects missing, duplicate, unsupported, unordered, or untime
 
 test('activate telemetry converts both seconds measurements to ms and ignores other events', () => {
     const other = telemetryLine().replace('vscode-documentdb/activate', 'vscode-documentdb/other');
-    assert.deepEqual(parseActivateTelemetry(`prefix\n${other}\n${telemetryLine()}\n`), { activateMs: 61, mainFileLoadMs: 0 });
+    assert.deepEqual(parseActivateTelemetry(`prefix\n${other}\n${telemetryLine()}\n`), {
+        activateMs: 61,
+        mainFileLoadMs: 0,
+    });
     assert.deepEqual(parseActivateTelemetry(telemetryLine({ duration: 0.123, mainFileLoad: 0.012 })), {
-        activateMs: 123, mainFileLoadMs: 12,
+        activateMs: 123,
+        mainFileLoadMs: 12,
     });
 });
 
 test('activate telemetry rejects missing, ambiguous, malformed, failed, and invalid measurements', () => {
     assert.throws(() => parseActivateTelemetry(''), /Expected exactly one/);
     assert.throws(() => parseActivateTelemetry(`${telemetryLine()}\n${telemetryLine()}`), /Expected exactly one/);
-    assert.throws(() => parseActivateTelemetry('** TELEMETRY("vscode-documentdb/activate", 0.11.0) broken'), /Malformed/);
-    assert.throws(() => parseActivateTelemetry(telemetryLine().replace('"duration":0.061', '"duration":broken')), SyntaxError);
+    assert.throws(
+        () => parseActivateTelemetry('** TELEMETRY("vscode-documentdb/activate", 0.11.0) broken'),
+        /Malformed/,
+    );
+    assert.throws(
+        () => parseActivateTelemetry(telemetryLine().replace('"duration":0.061', '"duration":broken')),
+        SyntaxError,
+    );
     assert.throws(() => parseActivateTelemetry(telemetryLine(undefined, 'Failed')), /not Succeeded/);
-    for (const measures of [{}, { duration: 1 }, { duration: '0.1', mainFileLoad: 0 },
-        { duration: -1, mainFileLoad: 0 }, { duration: 0, mainFileLoad: null },
-        { duration: 0, mainFileLoad: -1 }, { duration: 1e308, mainFileLoad: 0 }]) {
+    for (const measures of [
+        {},
+        { duration: 1 },
+        { duration: '0.1', mainFileLoad: 0 },
+        { duration: -1, mainFileLoad: 0 },
+        { duration: 0, mainFileLoad: null },
+        { duration: 0, mainFileLoad: -1 },
+        { duration: 1e308, mainFileLoad: 0 },
+    ]) {
         assert.throws(() => parseActivateTelemetry(telemetryLine(measures)), /missing or invalid/);
     }
 });
@@ -111,8 +149,10 @@ test('summarizes per-run totals instead of adding independent medians', () => {
     ]);
     assert.deepEqual(summary.codeLoadMs, { median: 200, min: 100, max: 300 });
     assert.equal(summary.totalMs.median, 400);
-    assert.equal(formatSummary(summary),
-        'L3 TIMING: runs=3 codeLoadMs median=200.000 min=100.000 max=300.000; activateMs median=100.000; totalMs median=400.000; mainFileLoadMs median=1.000');
+    assert.equal(
+        formatSummary(summary),
+        'L3 TIMING: runs=3 codeLoadMs median=200.000 min=100.000 max=300.000; activateMs median=100.000; totalMs median=400.000; mainFileLoadMs median=1.000',
+    );
     assert.throws(() => summarize([]), /nonempty/);
 });
 
@@ -152,13 +192,24 @@ function fixture(context, behavior = {}) {
                 const installed = path.join(extensions, `${TARGET_ID}-0.11.0`);
                 if (args.includes('--install-extension')) {
                     fs.mkdirSync(installed);
-                    fs.writeFileSync(path.join(installed, 'package.json'), JSON.stringify({
-                        publisher: 'ms-azuretools', name: 'vscode-documentdb', main: './main',
-                    }));
+                    fs.writeFileSync(
+                        path.join(installed, 'package.json'),
+                        JSON.stringify({
+                            publisher: 'ms-azuretools',
+                            name: 'vscode-documentdb',
+                            main: './main',
+                        }),
+                    );
                 } else {
-                    fs.writeFileSync(options.env.DOCUMENTDB_L3_RESULT, JSON.stringify({
-                        extensionId: TARGET_ID, extensionPath: installed, active: true, commands: LATE_COMMANDS,
-                    }));
+                    fs.writeFileSync(
+                        options.env.DOCUMENTDB_L3_RESULT,
+                        JSON.stringify({
+                            extensionId: TARGET_ID,
+                            extensionPath: installed,
+                            active: true,
+                            commands: LATE_COMMANDS,
+                        }),
+                    );
                     fs.writeFileSync(options.log, behavior.malformed ? 'no telemetry' : telemetryLine());
                     if (behavior.fail) {
                         throw new Error('fixture launch failed');
@@ -182,7 +233,10 @@ function fixture(context, behavior = {}) {
 test('full L3 success is required, child telemetry is enabled, and parsed artifacts are deleted', async (context) => {
     const run = fixture(context);
     assert.deepEqual(await measureRun(run.vsix, run.dependencies), {
-        codeLoadMs: 378, activateMs: 61, totalMs: 439, mainFileLoadMs: 0,
+        codeLoadMs: 378,
+        activateMs: 61,
+        totalMs: 439,
+        mainFileLoadMs: 0,
     });
     assert.equal(run.dependencies.env.DEBUGTELEMETRY, '0');
     assert.equal(fs.existsSync(run.artifacts()), false);
@@ -196,6 +250,9 @@ test('L3 failures cannot become timing successes and retain diagnostic artifacts
 
 test('parse failures fail loudly and retain diagnostics instead of reporting zero timings', async (context) => {
     const run = fixture(context, { malformed: true });
-    await assert.rejects(measureRun(run.vsix, run.dependencies), /Cannot measure activation:.*TELEMETRY.*\nL3 artifacts retained:/);
+    await assert.rejects(
+        measureRun(run.vsix, run.dependencies),
+        /Cannot measure activation:.*TELEMETRY.*\nL3 artifacts retained:/,
+    );
     assert.equal(fs.existsSync(run.artifacts()), true);
 });

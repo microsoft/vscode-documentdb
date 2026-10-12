@@ -5,7 +5,7 @@
 
 // @vitest-environment jsdom
 
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeVsCodeApi } from './core/fakeVsCodeApi';
 import { type FixtureOutputs, type RpcFixtures } from './core/fixtures';
@@ -19,20 +19,30 @@ const rpc = {
 } satisfies RpcFixtures;
 
 describe('Shared browser fixture core', (): void => {
-    afterEach((): void => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+    afterEach((): void => {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
 
     it('records an unknown call and its error and answers with an error, never a default result', (): void => {
         const errors: string[] = [];
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = fakeVsCodeApi(rpc, errors)();
-        expect((): void => api.postMessage({ id: 'unknown', op: { type: 'query', path: 'unknown.path', input: { key: 1 } } }))
-            .toThrow('No query fixture for unknown.path');
+        expect((): void =>
+            api.postMessage({ id: 'unknown', op: { type: 'query', path: 'unknown.path', input: { key: 1 } } }),
+        ).toThrow('No query fixture for unknown.path');
         expect(errors).toEqual(['No query fixture for unknown.path']);
         expect(window.__harnessCalls).toEqual([{ path: 'unknown.path', type: 'query', input: { key: 1 } }]);
-        expect(messages.mock.calls).toEqual([[
-            { id: 'unknown', error: { name: 'FixtureError', message: 'No query fixture for unknown.path' }, complete: true },
-            window.location.origin,
-        ]]);
+        expect(messages.mock.calls).toEqual([
+            [
+                {
+                    id: 'unknown',
+                    error: { name: 'FixtureError', message: 'No query fixture for unknown.path' },
+                    complete: true,
+                },
+                window.location.origin,
+            ],
+        ]);
     });
 
     it('records every procedure path, type and input without deduplicating calls', async (): Promise<void> => {
@@ -49,8 +59,10 @@ describe('Shared browser fixture core', (): void => {
         ]);
         expect(errors).toEqual([]);
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
-            { id: 'first', result: 'available' }, { id: 'first', complete: true },
-            { id: 'second', result: 'available' }, { id: 'second', complete: true },
+            { id: 'first', result: 'available' },
+            { id: 'first', complete: true },
+            { id: 'second', result: 'available' },
+            { id: 'second', complete: true },
         ]);
     });
 
@@ -75,9 +87,12 @@ describe('Shared browser fixture core', (): void => {
         expect(writeText).not.toHaveBeenCalled();
         expect(errors).toEqual([]);
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
-            { id: '0', result: undefined }, { id: '0', complete: true },
-            { id: '1', result: undefined }, { id: '1', complete: true },
-            { id: '2', result: undefined }, { id: '2', complete: true },
+            { id: '0', result: undefined },
+            { id: '0', complete: true },
+            { id: '1', result: undefined },
+            { id: '1', complete: true },
+            { id: '2', result: undefined },
+            { id: '2', complete: true },
         ]);
     });
 
@@ -85,12 +100,23 @@ describe('Shared browser fixture core', (): void => {
         const errors: string[] = [];
         vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = fakeVsCodeApi({}, errors)();
-        expect((): void => api.postMessage({ id: 'escape', op: {
-            type: 'mutation', path: 'common.openUrl', input: { url: 'https://example.invalid' },
-        } })).toThrow('No mutation fixture for common.openUrl');
-        expect(window.__harnessCalls).toEqual([{
-            path: 'common.openUrl', type: 'mutation', input: { url: 'https://example.invalid' },
-        }]);
+        expect((): void =>
+            api.postMessage({
+                id: 'escape',
+                op: {
+                    type: 'mutation',
+                    path: 'common.openUrl',
+                    input: { url: 'https://example.invalid' },
+                },
+            }),
+        ).toThrow('No mutation fixture for common.openUrl');
+        expect(window.__harnessCalls).toEqual([
+            {
+                path: 'common.openUrl',
+                type: 'mutation',
+                input: { url: 'https://example.invalid' },
+            },
+        ]);
         expect(errors).toEqual(['No mutation fixture for common.openUrl']);
     });
 

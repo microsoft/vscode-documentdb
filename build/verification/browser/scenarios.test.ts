@@ -29,9 +29,13 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it.each([
-        '/unknown/default/dark', '/localQuickStart/missing/dark', '/localQuickStart/introduction/blue',
-        '/localQuickStart/introduction/dark?theme=light', '/localQuickStart/introduction/dark/',
-        '/localQuickStart/introduction/dark#light', '/localQuickStart/%69ntroduction/dark',
+        '/unknown/default/dark',
+        '/localQuickStart/missing/dark',
+        '/localQuickStart/introduction/blue',
+        '/localQuickStart/introduction/dark?theme=light',
+        '/localQuickStart/introduction/dark/',
+        '/localQuickStart/introduction/dark#light',
+        '/localQuickStart/%69ntroduction/dark',
     ])('rejects an unknown or non-canonical route: %s', (path): void => {
         expect(parseScenarioRoute(path)).toBeUndefined();
         const notFound = scenarioIndex(`Unknown L2-dev route: ${path}`);
@@ -101,15 +105,23 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('checks procedure outputs and assertion inputs at compile time', (): void => {
-        const valid = { 'localQuickStart.checkPort': { type: 'query', results: ['available'] } } as const satisfies TypedRpcFixtures;
-        // @ts-expect-error Unknown procedures must not be accepted, even when a result is supplied.
-        const unknownPath = { 'localQuickStart.nonexistent': { type: 'query', results: [] } } as const satisfies TypedRpcFixtures;
-        // @ts-expect-error This router returns a port-availability union, not an arbitrary object.
-        const wrongOutput = { 'localQuickStart.checkPort': { type: 'query', results: [{ available: true }] } } as const satisfies TypedRpcFixtures;
+        const valid = {
+            'localQuickStart.checkPort': { type: 'query', results: ['available'] },
+        } as const satisfies TypedRpcFixtures;
+        const unknownPath = {
+            // @ts-expect-error Unknown procedures must not be accepted, even when a result is supplied.
+            'localQuickStart.nonexistent': { type: 'query', results: [] },
+        } as const satisfies TypedRpcFixtures;
+        const wrongOutput = {
+            // @ts-expect-error This router returns a port-availability union, not an arbitrary object.
+            'localQuickStart.checkPort': { type: 'query', results: [{ available: true }] },
+        } as const satisfies TypedRpcFixtures;
         const invalidAssertion = {
             ...scenarios.localQuickStart.introduction,
-            // @ts-expect-error common.openUrl requires a string URL.
-            assertions: [{ kind: 'calls', name: 'wrong URL', path: 'common.openUrl', input: { url: 1 }, count: 1, steps: [] }],
+            assertions: [
+                // @ts-expect-error common.openUrl requires a string URL.
+                { kind: 'calls', name: 'wrong URL', path: 'common.openUrl', input: { url: 1 }, count: 1, steps: [] },
+            ],
         } as const satisfies Scenario<'localQuickStart'>;
         expect(valid['localQuickStart.checkPort'].results).toEqual(['available']);
         expect([unknownPath, wrongOutput, invalidAssertion]).toHaveLength(3);

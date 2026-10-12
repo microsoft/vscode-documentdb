@@ -27,7 +27,15 @@ describe('L2-dev readiness', (): void => {
         document.body.innerHTML = '<h2>Visible fixture</h2>';
         Object.defineProperty(document.body, 'innerText', { configurable: true, value: 'Visible fixture' });
         vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
-            x: 0, y: 0, width: 200, height: 40, top: 0, bottom: 40, left: 0, right: 200, toJSON: (): object => ({}),
+            x: 0,
+            y: 0,
+            width: 200,
+            height: 40,
+            top: 0,
+            bottom: 40,
+            left: 0,
+            right: 200,
+            toJSON: (): object => ({}),
         });
         window.__harnessErrors = [];
         const route = parseScenarioRoute('/localQuickStart/introduction/dark');
@@ -50,8 +58,9 @@ describe('L2-dev readiness', (): void => {
         boot();
         const api = window.acquireVsCodeApi();
         vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
-        expect((): void => api.postMessage({ id: 'missing', op: { type: 'query', path: 'unknown.path' } }))
-            .toThrow('No query fixture for unknown.path');
+        expect((): void => api.postMessage({ id: 'missing', op: { type: 'query', path: 'unknown.path' } })).toThrow(
+            'No query fixture for unknown.path',
+        );
         vi.advanceTimersByTime(50);
         expect(document.documentElement.dataset.ready).toBe('failed');
         expect(window.__harnessErrors).toContain('No query fixture for unknown.path');

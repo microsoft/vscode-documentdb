@@ -17,8 +17,9 @@ function escapeHtml(value: string): string {
 }
 
 export function scenarioIndex(message = 'L2-dev scenarios'): string {
-    const list = scenarioRoutes().map((route): string =>
-        `<li><a href="${route.path}">${escapeHtml(route.path)}</a></li>`).join('\n');
+    const list = scenarioRoutes()
+        .map((route): string => `<li><a href="${route.path}">${escapeHtml(route.path)}</a></li>`)
+        .join('\n');
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>L2-dev</title><link rel="icon" href="data:,"></head>
 <body><h1>${escapeHtml(message)}</h1><p>Run <a href="/scenarios/run-all.js">/scenarios/run-all.js</a> with a Playwright page.
 Flows need the declared steps (shown in window.__scenario.data.steps), or run the helper.
@@ -28,7 +29,11 @@ Themes: ${themes.join(', ')}. Unknown paths are not substituted.</p><ul>${list}<
 export function scenarioHtml(route: ScenarioRoute, devServerOrigin = 'http://localhost:18080'): string {
     const scenario = findScenario(route);
     const kind = route.theme === 'high-contrast' ? 'vscode-high-contrast' : `vscode-${route.theme}`;
-    const initial = { initialData: encodeURIComponent(JSON.stringify(scenario.config)), l10n: {}, viewType: route.view };
+    const initial = {
+        initialData: encodeURIComponent(JSON.stringify(scenario.config)),
+        l10n: {},
+        viewType: route.view,
+    };
     // Like the host's development CSP, allow the configured server origin as well as the document
     // origin: Vite emits absolute font/worker URLs even when this page is opened on 127.0.0.1.
     const source = `'self' ${devServerOrigin}`;
@@ -62,7 +67,9 @@ export function runnerRoutes(path: string): ScenarioRoute[] | undefined {
     if (path === '/scenarios/run-all.js') return scenarioRoutes();
     const match = /^\/scenarios\/run-all\/([a-zA-Z]+)(?:\/(dark|light|high-contrast))?\.js$/.exec(path);
     if (!match) return undefined;
-    const routes = scenarioRoutes().filter((route): boolean => route.view === match[1] && (!match[2] || route.theme === match[2]));
+    const routes = scenarioRoutes().filter(
+        (route): boolean => route.view === match[1] && (!match[2] || route.theme === match[2]),
+    );
     return routes.length ? routes : undefined;
 }
 

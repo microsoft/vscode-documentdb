@@ -39,7 +39,12 @@ async function run() {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     fs.writeFileSync(
         requiredEnvironment('DOCUMENTDB_L3_RESULT'),
-        JSON.stringify({ extensionId: TARGET_ID, extensionPath: target.extensionPath, active: true, commands: LATE_COMMANDS }),
+        JSON.stringify({
+            extensionId: TARGET_ID,
+            extensionPath: target.extensionPath,
+            active: true,
+            commands: LATE_COMMANDS,
+        }),
     );
 }
 

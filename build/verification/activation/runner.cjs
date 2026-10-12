@@ -68,16 +68,18 @@ async function requireDisplay(environment, platform) {
     }
     const display = environment.DISPLAY;
     const match = display && /^(.*):(\d+)(?:\.\d+)?$/.exec(display);
-    const help = 'L3 requires a working X11 display. In CI run: xvfb-run -a npm run test:vsix -- <production.vsix>. No system packages were installed.';
+    const help =
+        'L3 requires a working X11 display. In CI run: xvfb-run -a npm run test:vsix -- <production.vsix>. No system packages were installed.';
     if (!match) {
         throw new Error(`${help} DISPLAY=${JSON.stringify(display)}`);
     }
     const host = match[1];
     // Like Xlib on Linux, try the abstract socket before the filesystem one: a user-local Xvfb
     // cannot create /tmp/.X11-unix/X<n> when that directory is a read-only (WSLg) mount.
-    const candidates = !host || host === 'unix'
-        ? [{ path: `\0/tmp/.X11-unix/X${match[2]}` }, { path: `/tmp/.X11-unix/X${match[2]}` }]
-        : [{ host, port: 6000 + Number(match[2]) }];
+    const candidates =
+        !host || host === 'unix'
+            ? [{ path: `\0/tmp/.X11-unix/X${match[2]}` }, { path: `/tmp/.X11-unix/X${match[2]}` }]
+            : [{ host, port: 6000 + Number(match[2]) }];
     /** @type {Error | undefined} */
     let lastError;
     for (const candidate of candidates) {
@@ -89,7 +91,9 @@ async function requireDisplay(environment, platform) {
                     socket.destroy();
                     resolve(undefined);
                 });
-                socket.once('error', (error) => reject(new Error(`${help} Cannot reach DISPLAY=${display}: ${error.message}`)));
+                socket.once('error', (error) =>
+                    reject(new Error(`${help} Cannot reach DISPLAY=${display}: ${error.message}`)),
+                );
                 socket.once('timeout', () => {
                     socket.destroy();
                     reject(new Error(`${help} Timed out reaching DISPLAY=${display}.`));
@@ -146,9 +150,11 @@ async function runProcess(executable, args, options) {
                 if (spawnError) {
                     reject(spawnError);
                 } else if (timedOut || code !== 0) {
-                    reject(new Error(
-                        `${timedOut ? `Timed out after ${options.timeout}ms` : `Exit ${code}, signal ${signal}`} running ${executable}. See ${options.log}.`,
-                    ));
+                    reject(
+                        new Error(
+                            `${timedOut ? `Timed out after ${options.timeout}ms` : `Exit ${code}, signal ${signal}`} running ${executable}. See ${options.log}.`,
+                        ),
+                    );
                 } else {
                     resolve(undefined);
                 }
@@ -267,16 +273,19 @@ async function runActivation(options, dependencies) {
     const resultPath = path.join(temporary, 'probe-result.json');
     fs.mkdirSync(extensionsDir);
     fs.mkdirSync(path.join(userDataDir, 'User'), { recursive: true });
-    fs.writeFileSync(path.join(userDataDir, 'User/settings.json'), JSON.stringify({
-        'telemetry.telemetryLevel': 'off',
-        'update.mode': 'none',
-        'extensions.autoUpdate': false,
-        'extensions.autoCheckUpdates': false,
-        'workbench.enableExperiments': false,
-        'workbench.startupEditor': 'none',
-        'security.workspace.trust.enabled': false,
-        'window.restoreWindows': 'none',
-    }));
+    fs.writeFileSync(
+        path.join(userDataDir, 'User/settings.json'),
+        JSON.stringify({
+            'telemetry.telemetryLevel': 'off',
+            'update.mode': 'none',
+            'extensions.autoUpdate': false,
+            'extensions.autoCheckUpdates': false,
+            'workbench.enableExperiments': false,
+            'workbench.startupEditor': 'none',
+            'security.workspace.trust.enabled': false,
+            'window.restoreWindows': 'none',
+        }),
+    );
     dependencies.emit(`L3 artifacts: ${temporary}`);
     let passed = false;
     try {
@@ -301,14 +310,17 @@ async function runActivation(options, dependencies) {
         const probe = path.join(__dirname, 'probe');
         const args = [
             ...profileArgs,
-            '--extensionDevelopmentPath', probe,
-            '--extensionTestsPath', path.join(probe, 'tests.cjs'),
+            '--extensionDevelopmentPath',
+            probe,
+            '--extensionTestsPath',
+            path.join(probe, 'tests.cjs'),
             '--disable-workspace-trust',
             '--skip-welcome',
             '--skip-release-notes',
             '--disable-updates',
             '--disable-telemetry',
-            '--log', 'trace',
+            '--log',
+            'trace',
             '--new-window',
         ];
         if (dependencies.platform === 'linux') {
@@ -346,7 +358,7 @@ async function runActivation(options, dependencies) {
             fs.writeFileSync(path.join(temporary, 'log-report.json'), JSON.stringify(report, null, 2));
             dependencies.emit(
                 `L3 logs: ${report.hostLogs.length} extension host, ${report.outputLogs.length} DocumentDB output. ` +
-                `${report.unrelatedHostErrors.length} unrelated/unattributed host errors excluded (see log-report.json).`,
+                    `${report.unrelatedHostErrors.length} unrelated/unattributed host errors excluded (see log-report.json).`,
             );
             for (const error of report.unrelatedHostErrors) {
                 dependencies.emit(`EXCLUDED host error ${error.file}:${error.line}\n${error.text}`);
@@ -363,7 +375,9 @@ async function runActivation(options, dependencies) {
             throw new ActivationFailure(failures, temporary, probePassed, logReport, logGateRejected);
         }
         passed = true;
-        dependencies.emit('L3 PASS: installed VSIX activated, final commands registered, and DocumentDB activation logs are clean.');
+        dependencies.emit(
+            'L3 PASS: installed VSIX activated, final commands registered, and DocumentDB activation logs are clean.',
+        );
     } finally {
         if (passed && !options.keepArtifacts) {
             fs.rmSync(temporary, { recursive: true });
@@ -390,12 +404,16 @@ async function runProof(options, dependencies) {
             error.logReport.errors.length > 0 &&
             error.logReport.errors.every((finding) => finding.text.includes(INJECTION_MARKER))
         ) {
-            dependencies.emit(`L3 PROOF PASS: activation and final commands passed; actual logs rejected ${INJECTION_MARKER}.`);
+            dependencies.emit(
+                `L3 PROOF PASS: activation and final commands passed; actual logs rejected ${INJECTION_MARKER}.`,
+            );
             return;
         }
         throw error;
     }
-    throw new Error('L3 negative control unexpectedly passed; the activation log gate did not reject the injected failure.');
+    throw new Error(
+        'L3 negative control unexpectedly passed; the activation log gate did not reject the injected failure.',
+    );
 }
 
 /** @param {string[]} args @param {boolean} [prove] @returns {Promise<void>} */

@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../../../../packages/vscode-ext-webview/src/shared/wireProtocol';
 import { type WebviewApi } from 'vscode-webview';
+import {
+    type VsCodeLinkRequestMessage,
+    type VsCodeLinkResponseMessage,
+} from '../../../../packages/vscode-ext-webview/src/shared/wireProtocol';
 import { type FixturePaths, type RpcFixtures } from './fixtures';
 
 export interface HarnessCall {
@@ -85,8 +88,12 @@ export function fakeVsCodeApi(rpc: RpcFixtures, errors: string[]): typeof window
         acquired = true;
         let state: StateType | undefined;
         return {
-            postMessage: receive, getState: (): StateType | undefined => state,
-            setState: <T extends StateType | undefined>(next: T): T => { state = next; return next; },
+            postMessage: receive,
+            getState: (): StateType | undefined => state,
+            setState: <T extends StateType | undefined>(next: T): T => {
+                state = next;
+                return next;
+            },
         };
     };
 }

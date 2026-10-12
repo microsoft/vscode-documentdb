@@ -24,7 +24,14 @@ const {
     inspectLogs,
     assertCleanLogs,
 } = require('./checks.cjs');
-const { parseArguments, requireDisplay, runProcess, injectSwallowedError, runActivation, runProof } = require('./runner.cjs');
+const {
+    parseArguments,
+    requireDisplay,
+    runProcess,
+    injectSwallowedError,
+    runActivation,
+    runProof,
+} = require('./runner.cjs');
 
 /** @param {import('node:test').TestContext} context @returns {string} */
 function temporaryDirectory(context) {
@@ -35,10 +42,13 @@ function temporaryDirectory(context) {
 
 /** @param {string} text @param {string} [file] @returns {ReturnType<typeof recognizeLogs>} */
 function recognized(text, file = 'logs/exthost1/output_logging/1-DocumentDB for VS Code.log') {
-    return recognizeLogs([
-        { file: 'logs/exthost1/exthost.log', contents: '2026-10-01 12:00:00 [info] Extension host started' },
-        { file, contents: text },
-    ], '/isolated/extensions/ms-azuretools.vscode-documentdb-0.10.2');
+    return recognizeLogs(
+        [
+            { file: 'logs/exthost1/exthost.log', contents: '2026-10-01 12:00:00 [info] Extension host started' },
+            { file, contents: text },
+        ],
+        '/isolated/extensions/ms-azuretools.vscode-documentdb-0.10.2',
+    );
 }
 
 test('pins the exact minimum instead of stable, a cached newer release, or the probe engine', () => {
@@ -53,11 +63,18 @@ test('pins the exact minimum instead of stable, a cached newer release, or the p
 test('parses the future npm entry point, default artifact, and negative-control option', () => {
     const manifest = { name: 'vscode-documentdb', version: '0.10.2' };
     assert.deepEqual(parseArguments([], manifest, '/checkout'), {
-        vsix: '/checkout/vscode-documentdb-0.10.2.vsix', injectError: false, keepArtifacts: false,
+        vsix: '/checkout/vscode-documentdb-0.10.2.vsix',
+        injectError: false,
+        keepArtifacts: false,
     });
-    assert.deepEqual(parseArguments(['artifacts/prod.vsix', '--inject-error', '--keep-artifacts'], manifest, '/checkout'), {
-        vsix: '/checkout/artifacts/prod.vsix', injectError: true, keepArtifacts: true,
-    });
+    assert.deepEqual(
+        parseArguments(['artifacts/prod.vsix', '--inject-error', '--keep-artifacts'], manifest, '/checkout'),
+        {
+            vsix: '/checkout/artifacts/prod.vsix',
+            injectError: true,
+            keepArtifacts: true,
+        },
+    );
     assert.throws(() => parseArguments(['--unknown'], manifest, '/checkout'), /Usage/);
     assert.throws(() => parseArguments(['a.vsix', 'b.vsix'], manifest, '/checkout'), /Usage/);
 });
@@ -74,7 +91,10 @@ test('rejects the checkout, sibling prefixes, mismatched installs, and symlink e
     }
     assert.doesNotThrow(() => assertInstalledPath(installed, installed, installedRoot, checkout));
     for (const actual of [checkout, sibling, other]) {
-        assert.throws(() => assertInstalledPath(actual, installed, installedRoot, checkout), /not the isolated installed/);
+        assert.throws(
+            () => assertInstalledPath(actual, installed, installedRoot, checkout),
+            /not the isolated installed/,
+        );
     }
     const escaped = path.join(installedRoot, 'linked-checkout');
     fs.symlinkSync(checkout, escaped, 'junction');
@@ -144,20 +164,28 @@ test('catches swallowed telemetry failures logged at info severity and optional 
 
 test('trace initData manifest and debug diagnostic error words are metadata, not error records', () => {
     const manifest = JSON.stringify({
-        extensions: [{
-            identifier: TARGET_ID,
-            description: 'Error reporting and failure diagnostics',
-            commands: ['documentdb.error', 'documentdb.failure'],
-        }],
+        extensions: [
+            {
+                identifier: TARGET_ID,
+                description: 'Error reporting and failure diagnostics',
+                commands: ['documentdb.error', 'documentdb.failure'],
+            },
+        ],
     });
     for (const severity of ['trace', 'debug']) {
         const report = recognized(`2026-10-02 06:59:45.329 [${severity}] initData ${manifest}`, 'exthost.log');
         assert.deepEqual(report.errors, []);
         assert.deepEqual(report.unrelatedHostErrors, []);
     }
-    const actual = recognized(`2026-10-02 06:59:46.000 [error] ${TARGET_ID} failed; diagnostic text "[trace]"`, 'exthost.log');
+    const actual = recognized(
+        `2026-10-02 06:59:46.000 [error] ${TARGET_ID} failed; diagnostic text "[trace]"`,
+        'exthost.log',
+    );
     assert.equal(actual.errors.length, 1);
-    assert.throws(() => assertCleanLogs(recognized(`2026-10-02 06:59:46.000 [info] Error: ${INJECTION_MARKER}`)), /DocumentDB activation errors/);
+    assert.throws(
+        () => assertCleanLogs(recognized(`2026-10-02 06:59:46.000 [info] Error: ${INJECTION_MARKER}`)),
+        /DocumentDB activation errors/,
+    );
 });
 
 test('captured successful-run teardown retains the real SchemaStore disposed-channel lifecycle error', () => {
@@ -173,10 +201,16 @@ test('captured successful-run teardown retains the real SchemaStore disposed-cha
         '    at SZ.terminate (file:///cache/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:118:10178)',
         '2026-10-02 06:59:47.798 [info] Extension host with pid 3337 exiting with code 0',
     ].join('\n');
-    const report = recognizeLogs([
-        { file: 'exthost.log', contents: host },
-        { file: 'DocumentDB for VS Code.log', contents: '2026-10-02 06:59:46.280 [info] Showing welcome screen...' },
-    ], `/isolated/extensions/${TARGET_ID}-0.11.0`);
+    const report = recognizeLogs(
+        [
+            { file: 'exthost.log', contents: host },
+            {
+                file: 'DocumentDB for VS Code.log',
+                contents: '2026-10-02 06:59:46.280 [info] Showing welcome screen...',
+            },
+        ],
+        `/isolated/extensions/${TARGET_ID}-0.11.0`,
+    );
     assert.equal(report.errors.length, 2);
     assert.equal(report.errors[0].line, 3);
     assert.match(report.errors[1].text, /SchemaStore.dispose/);
@@ -199,19 +233,25 @@ test('attributes multiline host stacks, Windows paths, and activation errors wit
 });
 
 test('explicitly excludes unrelated and unattributed VS Code host errors, not DocumentDB errors', () => {
-    const report = recognizeLogs([
-        {
-            file: 'exthost1/exthost.log',
-            contents: [
-                '2026-10-01 12:00:00 [error] Activating vscode.git failed',
-                '2026-10-01 12:00:01 [error] ECONNREFUSED marketplace service',
-                `2026-10-01 12:00:02 [error] Activating ${TARGET_ID} failed`,
-            ].join('\n'),
-        },
-        { file: 'renderer.log', contents: '2026-10-01 12:00:00 [error] GPU unavailable' },
-        { file: 'exthost1/output/1-Other Extension.log', contents: 'Error: unrelated' },
-        { file: 'exthost1/output/2-DocumentDB Query Playground Output.log', contents: 'Error: initialization failed' },
-    ], '/installed');
+    const report = recognizeLogs(
+        [
+            {
+                file: 'exthost1/exthost.log',
+                contents: [
+                    '2026-10-01 12:00:00 [error] Activating vscode.git failed',
+                    '2026-10-01 12:00:01 [error] ECONNREFUSED marketplace service',
+                    `2026-10-01 12:00:02 [error] Activating ${TARGET_ID} failed`,
+                ].join('\n'),
+            },
+            { file: 'renderer.log', contents: '2026-10-01 12:00:00 [error] GPU unavailable' },
+            { file: 'exthost1/output/1-Other Extension.log', contents: 'Error: unrelated' },
+            {
+                file: 'exthost1/output/2-DocumentDB Query Playground Output.log',
+                contents: 'Error: initialization failed',
+            },
+        ],
+        '/installed',
+    );
     assert.equal(report.errors.length, 2);
     assert.equal(report.unrelatedHostErrors.length, 2);
     assert.equal(report.outputLogs.length, 1);
@@ -233,22 +273,29 @@ test('Linux without DISPLAY fails loudly before network download; non-Linux need
     await requireDisplay({}, 'win32');
 });
 
-test('Linux accepts a reachable abstract X11 socket without a filesystem socket', {
-    skip: process.platform !== 'linux',
-}, async (context) => {
-    const display = randomInt(100000, 1000000);
-    const server = net.createServer((socket) => socket.end());
-    context.after(() => new Promise((resolve, reject) => {
-        server.close((error) => error ? reject(error) : resolve());
-    }));
-    await new Promise((resolve, reject) => {
-        server.once('error', reject);
-        server.listen(`\0/tmp/.X11-unix/X${display}`, resolve);
-    });
-    assert.equal(fs.existsSync(`/tmp/.X11-unix/X${display}`), false);
-    await requireDisplay({ DISPLAY: `:${display}` }, 'linux');
-    await requireDisplay({ DISPLAY: `unix:${display}.0` }, 'linux');
-});
+test(
+    'Linux accepts a reachable abstract X11 socket without a filesystem socket',
+    {
+        skip: process.platform !== 'linux',
+    },
+    async (context) => {
+        const display = randomInt(100000, 1000000);
+        const server = net.createServer((socket) => socket.end());
+        context.after(
+            () =>
+                new Promise((resolve, reject) => {
+                    server.close((error) => (error ? reject(error) : resolve()));
+                }),
+        );
+        await new Promise((resolve, reject) => {
+            server.once('error', reject);
+            server.listen(`\0/tmp/.X11-unix/X${display}`, resolve);
+        });
+        assert.equal(fs.existsSync(`/tmp/.X11-unix/X${display}`), false);
+        await requireDisplay({ DISPLAY: `:${display}` }, 'linux');
+        await requireDisplay({ DISPLAY: `unix:${display}.0` }, 'linux');
+    },
+);
 
 test('process wrapper captures output, reports nonzero exits, missing executables, and timeouts', async (context) => {
     const root = temporaryDirectory(context);
@@ -406,10 +453,17 @@ function fixture(context, behavior = {}) {
                     assert.ok(!args.includes('--extensionDevelopmentPath'));
                     const installed = path.join(extensionsDir, 'ms-azuretools.vscode-documentdb-0.10.2');
                     fs.mkdirSync(installed);
-                    fs.writeFileSync(path.join(installed, 'package.json'), JSON.stringify({
-                        publisher: 'ms-azuretools', name: 'vscode-documentdb', main: './main',
-                    }));
-                    fs.writeFileSync(path.join(installed, 'main.js'), `
+                    fs.writeFileSync(
+                        path.join(installed, 'package.json'),
+                        JSON.stringify({
+                            publisher: 'ms-azuretools',
+                            name: 'vscode-documentdb',
+                            main: './main',
+                        }),
+                    );
+                    fs.writeFileSync(
+                        path.join(installed, 'main.js'),
+                        `
 const vscode = require("vscode");
 module.exports.activate = async function () {
     try {
@@ -421,7 +475,8 @@ module.exports.activate = async function () {
     }
     return { apiVersion: "0.3.0" };
 };
-`);
+`,
+                    );
                     return;
                 }
                 events.push('launch');
@@ -453,18 +508,26 @@ module.exports.activate = async function () {
                 if (!behavior.missingLogs) {
                     const logs = path.join(userDataDir, 'logs/session/exthost1');
                     fs.mkdirSync(path.join(logs, 'output_logging'), { recursive: true });
-                    fs.writeFileSync(path.join(logs, 'exthost.log'),
-                        `2026-10-01 12:00:00 [info] Activated ${TARGET_ID}\n2026-10-01 12:00:01 [error] vscode.git unrelated failure`);
-                    fs.writeFileSync(path.join(logs, 'output_logging/1-DocumentDB for VS Code.log'),
-                        output.length ? output.map((message) => `2026-10-01 12:00:01 [info] ${message}`).join('\n')
-                            : '2026-10-01 12:00:01 [info] Showing welcome screen...');
+                    fs.writeFileSync(
+                        path.join(logs, 'exthost.log'),
+                        `2026-10-01 12:00:00 [info] Activated ${TARGET_ID}\n2026-10-01 12:00:01 [error] vscode.git unrelated failure`,
+                    );
+                    fs.writeFileSync(
+                        path.join(logs, 'output_logging/1-DocumentDB for VS Code.log'),
+                        output.length
+                            ? output.map((message) => `2026-10-01 12:00:01 [info] ${message}`).join('\n')
+                            : '2026-10-01 12:00:01 [info] Showing welcome screen...',
+                    );
                 }
-                fs.writeFileSync(options.env.DOCUMENTDB_L3_RESULT, JSON.stringify({
-                    extensionId: TARGET_ID,
-                    extensionPath: behavior.wrongReceipt ? checkout : installed,
-                    active: true,
-                    commands: behavior.missingCommand ? registered.slice(1) : registered,
-                }));
+                fs.writeFileSync(
+                    options.env.DOCUMENTDB_L3_RESULT,
+                    JSON.stringify({
+                        extensionId: TARGET_ID,
+                        extensionPath: behavior.wrongReceipt ? checkout : installed,
+                        active: true,
+                        commands: behavior.missingCommand ? registered.slice(1) : registered,
+                    }),
+                );
                 if (behavior.launchFailure) {
                     throw new Error('extension host exited 1');
                 }
@@ -517,15 +580,12 @@ test('only Linux GitHub Actions explicitly disables the Electron sandbox, for ma
 
 test('negative mutation registers all late commands and returns API, but swallowed error fails log gate', async (context) => {
     const data = fixture(context);
-    await assert.rejects(
-        runActivation({ ...data.options, injectError: true }, data.dependencies),
-        (error) => {
-            assert.match(error.message, /DocumentDB activation errors/);
-            assert.match(error.message, new RegExp(INJECTION_MARKER));
-            assert.doesNotMatch(error.message, /final command registrations|did not produce/);
-            return true;
-        },
-    );
+    await assert.rejects(runActivation({ ...data.options, injectError: true }, data.dependencies), (error) => {
+        assert.match(error.message, /DocumentDB activation errors/);
+        assert.match(error.message, new RegExp(INJECTION_MARKER));
+        assert.doesNotMatch(error.message, /final command registrations|did not produce/);
+        return true;
+    });
     const receipt = JSON.parse(fs.readFileSync(path.join(data.artifact(), 'probe-result.json'), 'utf8'));
     assert.equal(receipt.active, true);
     assert.deepEqual(receipt.commands, LATE_COMMANDS);
@@ -576,7 +636,11 @@ test('proof rejects absent marker and unrelated DocumentDB failures, not just ar
     const inspectUnrelated = unrelated.dependencies.logs;
     unrelated.dependencies.logs = (userDataDir, installed) => {
         const report = inspectUnrelated(userDataDir, installed);
-        report.errors.push({ file: 'DocumentDB for VS Code.log', line: 2, text: 'Error: another initialization failure' });
+        report.errors.push({
+            file: 'DocumentDB for VS Code.log',
+            line: 2,
+            text: 'Error: another initialization failure',
+        });
         return report;
     };
     await assert.rejects(runProof(unrelated.options, unrelated.dependencies), /another initialization failure/);
@@ -602,7 +666,10 @@ test('runner fails before download without display or VSIX, and never launches a
     await assert.rejects(runActivation(headless.options, headless.dependencies), /No display/);
     assert.deepEqual(headless.events, ['display']);
     const missing = fixture(context);
-    await assert.rejects(runActivation({ ...missing.options, vsix: '/no-such-artifact.vsix' }, missing.dependencies), /VSIX not found/);
+    await assert.rejects(
+        runActivation({ ...missing.options, vsix: '/no-such-artifact.vsix' }, missing.dependencies),
+        /VSIX not found/,
+    );
     assert.deepEqual(missing.events, []);
     const brokenInstall = fixture(context, { installFailure: true });
     await assert.rejects(runActivation(brokenInstall.options, brokenInstall.dependencies), /installation failed/);

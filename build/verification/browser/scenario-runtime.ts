@@ -16,16 +16,18 @@ declare global {
 export function visible(element: Element): boolean {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
-    return style.visibility !== 'hidden' && style.display !== 'none' &&
-        rect.width > 0 && rect.height > 0;
+    return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
 }
 
 export function readinessHolds(scenario: Scenario): boolean {
     const text = document.body.innerText.replace(/\s+/g, ' ');
-    return scenario.readiness.content.every((content): boolean => text.includes(content.replace(/\s+/g, ' '))) &&
+    return (
+        scenario.readiness.content.every((content): boolean => text.includes(content.replace(/\s+/g, ' '))) &&
         (scenario.readiness.selectors ?? []).every((selector): boolean =>
-            [...document.querySelectorAll(selector)].some(visible)) &&
-        (!scenario.readiness.noProgressbar || ![...document.querySelectorAll('[role="progressbar"]')].some(visible));
+            [...document.querySelectorAll(selector)].some(visible),
+        ) &&
+        (!scenario.readiness.noProgressbar || ![...document.querySelectorAll('[role="progressbar"]')].some(visible))
+    );
 }
 
 export function installScenario(route: ScenarioRoute, data: Scenario): void {
@@ -40,9 +42,13 @@ export function installScenario(route: ScenarioRoute, data: Scenario): void {
     const timer = setInterval(check, 50);
     const observer = new MutationObserver(check);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
-    window.addEventListener('pagehide', (): void => {
-        clearInterval(timer);
-        observer.disconnect();
-    }, { once: true });
+    window.addEventListener(
+        'pagehide',
+        (): void => {
+            clearInterval(timer);
+            observer.disconnect();
+        },
+        { once: true },
+    );
     check();
 }

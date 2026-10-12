@@ -96,7 +96,9 @@ function isError(text) {
         return false;
     }
     // appendLog from callWithTelemetryAndErrorHandling writes "[info] Error: ...", not "[error]".
-    return /\[(?:error|critical)\]|\b(?:error|exception|failed|failure|uncaught|unhandled)\b|\b(?:TypeError|ReferenceError|SyntaxError|RangeError):/i.test(text);
+    return /\[(?:error|critical)\]|\b(?:error|exception|failed|failure|uncaught|unhandled)\b|\b(?:TypeError|ReferenceError|SyntaxError|RangeError):/i.test(
+        text,
+    );
 }
 
 /**
@@ -140,10 +142,12 @@ function inspectLogs(userDataDir, installedPath) {
         throw new Error(`VS Code produced no logs at ${logRoot}; activation cannot be verified.`);
     }
     return recognizeLogs(
-        listFiles(logRoot).filter((filename) => filename.endsWith('.log')).map((file) => ({
-            file,
-            contents: fs.readFileSync(file, 'utf8'),
-        })),
+        listFiles(logRoot)
+            .filter((filename) => filename.endsWith('.log'))
+            .map((file) => ({
+                file,
+                contents: fs.readFileSync(file, 'utf8'),
+            })),
         installedPath,
     );
 }

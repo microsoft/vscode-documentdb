@@ -71,7 +71,9 @@ function parseCodeLoadMs(contents) {
         new RegExp(`ExtensionService#loadModule \\[(?:cjs|esm)\\] -> file://.*[\\\\/]${target}-[^\\\\/]+[\\\\/]`),
         new RegExp(`ExtensionService#_callActivateOptional ${target}(?:$|[ ,])`),
     ];
-    const matches = patterns.map((pattern) => lines.flatMap((line, index) => pattern.test(line) ? [{ line, index }] : []));
+    const matches = patterns.map((pattern) =>
+        lines.flatMap((line, index) => (pattern.test(line) ? [{ line, index }] : [])),
+    );
     if (matches.some((entries) => entries.length !== 1)) {
         throw new Error(
             `Expected exactly one target _doActivateExtension, loadModule [cjs|esm], and _callActivateOptional; found ${matches.map((entries) => entries.length).join(', ')}.`,
@@ -91,7 +93,10 @@ function parseActivateTelemetry(contents) {
     if (lines.length !== 1) {
         throw new Error(`Expected exactly one DocumentDB activate TELEMETRY line; found ${lines.length}.`);
     }
-    const match = /\*\* TELEMETRY\("vscode-documentdb\/activate", [^)]+\) properties=(\{.*\}), measures=(\{.*\})\s*$/.exec(lines[0]);
+    const match =
+        /\*\* TELEMETRY\("vscode-documentdb\/activate", [^)]+\) properties=(\{.*\}), measures=(\{.*\})\s*$/.exec(
+            lines[0],
+        );
     if (!match) {
         throw new Error(`Malformed DocumentDB activate TELEMETRY line: ${lines[0]}`);
     }
@@ -101,8 +106,12 @@ function parseActivateTelemetry(contents) {
         throw new Error(`DocumentDB activate TELEMETRY result was not Succeeded: ${properties.result}`);
     }
     for (const key of ['duration', 'mainFileLoad']) {
-        if (typeof measures[key] !== 'number' || !Number.isFinite(measures[key]) || measures[key] < 0 ||
-            !Number.isFinite(measures[key] * 1000)) {
+        if (
+            typeof measures[key] !== 'number' ||
+            !Number.isFinite(measures[key]) ||
+            measures[key] < 0 ||
+            !Number.isFinite(measures[key] * 1000)
+        ) {
             throw new Error(`DocumentDB activate TELEMETRY has missing or invalid ${key}.`);
         }
     }
@@ -138,9 +147,11 @@ function summarize(samples) {
 /** @param {Summary} summary @returns {string} */
 function formatSummary(summary) {
     const load = summary.codeLoadMs;
-    return `L3 TIMING: runs=${summary.runs} codeLoadMs median=${load.median.toFixed(3)} min=${load.min.toFixed(3)} max=${load.max.toFixed(3)}; ` +
+    return (
+        `L3 TIMING: runs=${summary.runs} codeLoadMs median=${load.median.toFixed(3)} min=${load.min.toFixed(3)} max=${load.max.toFixed(3)}; ` +
         `activateMs median=${summary.activateMs.median.toFixed(3)}; totalMs median=${summary.totalMs.median.toFixed(3)}; ` +
-        `mainFileLoadMs median=${summary.mainFileLoadMs.median.toFixed(3)}`;
+        `mainFileLoadMs median=${summary.mainFileLoadMs.median.toFixed(3)}`
+    );
 }
 
 /**
@@ -151,27 +162,31 @@ function formatSummary(summary) {
 async function measureRun(vsix, dependencies) {
     let artifacts;
     let hostLogs = [];
-    await runActivation({ vsix, injectError: false, keepArtifacts: true }, {
-        ...dependencies,
-        env: { ...dependencies.env, DEBUGTELEMETRY: 'verbose' },
-        emit: (text) => {
-            if (text.startsWith('L3 artifacts: ')) {
-                artifacts = text.slice('L3 artifacts: '.length);
-            }
-            dependencies.emit(text);
+    await runActivation(
+        { vsix, injectError: false, keepArtifacts: true },
+        {
+            ...dependencies,
+            env: { ...dependencies.env, DEBUGTELEMETRY: 'verbose' },
+            emit: (text) => {
+                if (text.startsWith('L3 artifacts: ')) {
+                    artifacts = text.slice('L3 artifacts: '.length);
+                }
+                dependencies.emit(text);
+            },
+            logs: (userDataDir, installedPath) => {
+                const report = dependencies.logs(userDataDir, installedPath);
+                hostLogs = report.hostLogs;
+                return report;
+            },
         },
-        logs: (userDataDir, installedPath) => {
-            const report = dependencies.logs(userDataDir, installedPath);
-            hostLogs = report.hostLogs;
-            return report;
-        },
-    });
+    );
     if (!artifacts) {
         throw new Error('L3 passed without reporting its artifact directory.');
     }
     let sample;
     try {
-        const targetLogs = hostLogs.map((filename) => fs.readFileSync(filename, 'utf8'))
+        const targetLogs = hostLogs
+            .map((filename) => fs.readFileSync(filename, 'utf8'))
             .filter((contents) => contents.includes(`ExtensionService#_doActivateExtension ${TARGET_ID},`));
         if (targetLogs.length !== 1) {
             throw new Error(`Expected exactly one target activation extension-host log; found ${targetLogs.length}.`);
@@ -180,7 +195,9 @@ async function measureRun(vsix, dependencies) {
         const telemetry = parseActivateTelemetry(fs.readFileSync(path.join(artifacts, 'electron.log'), 'utf8'));
         sample = { codeLoadMs, ...telemetry, totalMs: codeLoadMs + telemetry.activateMs };
     } catch (error) {
-        throw new Error(`Cannot measure activation: ${error instanceof Error ? error.message : String(error)}\nL3 artifacts retained: ${artifacts}`);
+        throw new Error(
+            `Cannot measure activation: ${error instanceof Error ? error.message : String(error)}\nL3 artifacts retained: ${artifacts}`,
+        );
     }
     fs.rmSync(artifacts, { recursive: true });
     return sample;
@@ -206,27 +223,45 @@ async function main(args) {
         try {
             sample = await measureRun(options.vsix, dependencies);
         } catch (error) {
-            throw new Error(`Timing run ${run}/${options.runs} failed: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(
+                `Timing run ${run}/${options.runs} failed: ${error instanceof Error ? error.message : String(error)}`,
+            );
         }
         samples.push({ run, ...sample });
         console.log(
             `L3 TIMING RUN ${run}/${options.runs}: codeLoadMs=${sample.codeLoadMs.toFixed(3)} activateMs=${sample.activateMs.toFixed(3)} ` +
-            `totalMs=${sample.totalMs.toFixed(3)} mainFileLoadMs=${sample.mainFileLoadMs.toFixed(3)}`,
+                `totalMs=${sample.totalMs.toFixed(3)} mainFileLoadMs=${sample.mainFileLoadMs.toFixed(3)}`,
         );
     }
     const summary = summarize(samples);
     if (options.json) {
-        fs.writeFileSync(options.json, `${JSON.stringify({
-            vsix: options.vsix,
-            vscodeVersion: minimumVSCodeVersion(manifest.engines.vscode),
-            runs: samples,
-            summary,
-        }, null, 2)}\n`);
+        fs.writeFileSync(
+            options.json,
+            `${JSON.stringify(
+                {
+                    vsix: options.vsix,
+                    vscodeVersion: minimumVSCodeVersion(manifest.engines.vscode),
+                    runs: samples,
+                    summary,
+                },
+                null,
+                2,
+            )}\n`,
+        );
     }
     console.log(formatSummary(summary));
 }
 
-module.exports = { parseArguments, parseCodeLoadMs, parseActivateTelemetry, median, summarize, formatSummary, measureRun, main };
+module.exports = {
+    parseArguments,
+    parseCodeLoadMs,
+    parseActivateTelemetry,
+    median,
+    summarize,
+    formatSummary,
+    measureRun,
+    main,
+};
 
 if (require.main === module) {
     main(process.argv.slice(2)).catch((error) => {

@@ -5,8 +5,8 @@
 
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
 import { type render } from '../../../src/webviews/index';
-import { type Scenario, type ScenarioRoute } from './scenarios';
 import { installScenario } from './scenario-runtime';
+import { type Scenario, type ScenarioRoute } from './scenarios';
 
 interface InitialData {
     readonly initialData: string;
@@ -43,4 +43,6 @@ async function boot(): Promise<void> {
     module.render(initial.viewType, window.acquireVsCodeApi());
 }
 
-void boot().catch((error: unknown): void => { console.error(error); });
+void boot().catch((error: unknown): void => {
+    console.error(error);
+});
