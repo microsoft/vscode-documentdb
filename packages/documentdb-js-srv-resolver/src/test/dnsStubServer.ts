@@ -7,7 +7,7 @@ import * as dnsPacket from 'dns-packet';
 import dgram from 'node:dgram';
 import net from 'node:net';
 
-import { type DnsTransport } from '../fallbackDnsClient';
+import { type DnsTransport } from '../fallbackDnsClient.js';
 
 export interface StubRequest {
     readonly query: dnsPacket.DecodedPacket;

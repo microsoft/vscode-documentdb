@@ -4,17 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import dns from 'node:dns';
-import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient';
-import { resolveSrvForDriver } from './resolveSrvForDriver';
-import { SrvResolutionCancelledError } from './types';
+import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient.js';
+import { resolveSrvForDriver } from './resolveSrvForDriver.js';
+import { SrvResolutionCancelledError } from './types.js';
 
-import type * as FallbackDnsClient from './fallbackDnsClient';
+import type * as FallbackDnsClient from './fallbackDnsClient.js';
 import { type SrvRecord } from 'node:dns';
-import { type SrvResolutionReport } from './report';
-import { type ResolveSrvForDriverInput } from './resolveSrvForDriver';
+import { type SrvResolutionReport } from './report.js';
+import { type ResolveSrvForDriverInput } from './resolveSrvForDriver.js';
 
-jest.mock('./fallbackDnsClient', () => ({
-    ...jest.requireActual<typeof FallbackDnsClient>('./fallbackDnsClient'),
+jest.mock('./fallbackDnsClient.js', () => ({
+    ...jest.requireActual<typeof FallbackDnsClient>('./fallbackDnsClient.js'),
     resolveSrvFallback: jest.fn(),
     resolveTxtFallback: jest.fn(),
 }));

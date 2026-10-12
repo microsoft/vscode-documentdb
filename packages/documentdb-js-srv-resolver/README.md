@@ -4,7 +4,7 @@ In-memory SRV DNS fallback for `mongodb+srv://` connection strings, for Node.js 
 
 When Node.js's own DNS resolver rejects a valid SRV reply, this package resolves the SRV and TXT records itself, from the same DNS servers, and hands the driver an equivalent `mongodb://host1:port1,host2:port2/…` string. The resolved string exists only in memory, for that one connection.
 
-> **Status:** used by the [DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb) extension through npm workspaces. Not yet published to npm; the package name may still change.
+> **Status:** used by the [DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb) extension through npm workspaces. Not yet published to npm; version 1.0.0 is the first planned release.
 
 ## Why this exists
 
@@ -105,10 +105,11 @@ These are exported too, for callers that need only one step:
 - **Same DNS servers.** If `dns.getServers()` itself returns the wrong servers (for example the `127.0.0.1` bug in c-ares 1.34.6 on Windows, [nodejs/node#62326](https://github.com/nodejs/node/issues/62326)), the fallback asks the wrong servers too.
 - **Driver parity is tested, not assumed.** The tests compare the rewrite with the installed driver's own SRV resolution. They run against `mongodb` 7.2.0; rerun them when you upgrade the driver.
 - **One dependency:** `dns-packet` (pure JavaScript, MIT). No dependency on the `mongodb` driver: options are typed structurally, and your own options type is returned unchanged.
+- **ESM only.** CommonJS code can still `require()` it on Node.js 20.19+ / 22.12+ (`require(esm)`); the package declares Node.js 22.18 or later.
 
 ## Development
 
 ```bash
 npm run build    # tsc -p .
-npx jest --config jest.config.js
+npx jest --config jest.config.cjs
 ```

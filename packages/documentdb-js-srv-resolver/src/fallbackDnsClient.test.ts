@@ -6,11 +6,11 @@
 import * as dnsPacket from 'dns-packet';
 import dns from 'node:dns';
 
-import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient';
-import { DnsStubServer } from './test/dnsStubServer';
+import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient.js';
+import { DnsStubServer } from './test/dnsStubServer.js';
 
-import { type FallbackDnsOptions } from './fallbackDnsClient';
-import { type StubRequest } from './test/dnsStubServer';
+import { type FallbackDnsOptions } from './fallbackDnsClient.js';
+import { type StubRequest } from './test/dnsStubServer.js';
 
 const srvName = '_mongodb._tcp.x.global.mongocluster.cosmos.azure.com';
 const targetName = 'fc-abc-000.global.mongocluster.cosmos.azure.com';

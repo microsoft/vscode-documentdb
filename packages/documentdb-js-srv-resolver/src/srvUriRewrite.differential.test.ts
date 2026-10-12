@@ -6,7 +6,7 @@
 import { MongoClient } from 'mongodb';
 import * as dns from 'node:dns';
 
-import { rewriteSrvUri } from './srvUriRewrite';
+import { rewriteSrvUri } from './srvUriRewrite.js';
 
 import { type MongoClientOptions } from 'mongodb';
 import { type SrvRecord } from 'node:dns';

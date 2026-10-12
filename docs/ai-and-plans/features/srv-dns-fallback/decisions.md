@@ -32,6 +32,7 @@ created: 2026-10-09
 | 0020 | The VS Code-independent logic lives in a workspace package, published at the operator's discretion | Accepted            | Operator chose "workspace package now"             | 2026-10-09 | —   |
 | 0021 | Fallback use shows in the trace now and on the cluster dashboard later, not in the tree            | Accepted            | Operator decision                                  | 2026-10-09 | -   |
 | 0022 | Option validation is left to the driver; the rewrite covers only what SRV adds                     | Accepted            | Operator review request                            | 2026-10-12 | -   |
+| 0023 | The package ships ESM-only as 1.0.0, ahead of the repository's ESM migration                       | Accepted            | Operator decision                                  | 2026-10-12 | -   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -637,3 +638,42 @@ worth the code.
   broken networks.
 - **Record whether the SRV target was compressed**: the Node.js rejection already identifies the
   cause.
+
+---
+
+## 0023 - The package ships ESM-only as 1.0.0, ahead of the repository's ESM migration
+
+**Status:** Accepted · **Date:** 2026-10-12 · **Raised by:** operator; extends D0020
+
+### Decision
+
+- `@documentdb-js/srv-resolver` is `"type": "module"` with an `exports` map, compiled with
+  `NodeNext`, following Stage 3 of the modernization plan (PR #880,
+  `docs/ai-and-plans/modernization/build-and-test-stack.md`). No dual ESM + CJS build.
+- Its version is `1.0.0`. The operator plans to publish it after this PR merges, through
+  `npm-publish-documentdb-js.yml` (new `publish_srv_resolver` input), and use it in another
+  project. The name is final.
+- Tests and `src/test/**` are excluded from the package build, so `dist` ships no test files. The
+  root `tsc` and ESLint still type-check them.
+
+### Why
+
+The whole repository moves to ESM in PR #880; converting a new package now avoids a second
+migration and a breaking release right after the first publish. CommonJS consumers can still
+`require()` it on Node.js 20.19+ / 22.12+.
+
+### Bridges needed while this branch still runs Jest (removed once Vitest arrives)
+
+- **Package tests use ts-jest with a CommonJS override**, plus a `.js` → source `moduleNameMapper`.
+  SWC, as in the fluentui package, was tried and failed 7 tests: its namespace interop copies
+  `node:dns`, so `jest.spyOn(dns, ...)` in a test no longer reaches the source.
+- **The root `jest.config.js` compiles the package's `dist/*.js` to CommonJS with SWC**, because
+  Jest's module system cannot `require()` an ES module and the extension tests load the real
+  package.
+
+### Rejected alternatives
+
+- **Stay CommonJS until PR #880 merges**: the first published version would be CommonJS, and the
+  switch to ESM would be a breaking release shortly after.
+- **Map the root Jest import to the package's TypeScript sources**: needs a global `.js`
+  `moduleNameMapper`, which also rewrites relative requests inside `node_modules`.

@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getSrvLookupTarget, isSrvConnectionString, rewriteSrvUri, SrvRewriteError } from './srvUriRewrite';
+import { getSrvLookupTarget, isSrvConnectionString, rewriteSrvUri, SrvRewriteError } from './srvUriRewrite.js';
 
 import { type SrvRecord } from 'node:dns';
-import { type RewriteSrvUriInput } from './srvUriRewrite';
+import { type RewriteSrvUriInput } from './srvUriRewrite.js';
 
 const srvHost = 'cluster.example.com';
 const uri = `mongodb+srv://${srvHost}`;

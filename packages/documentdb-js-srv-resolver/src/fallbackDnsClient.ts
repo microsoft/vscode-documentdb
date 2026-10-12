@@ -9,11 +9,11 @@ import * as dgram from 'node:dgram';
 import * as dns from 'node:dns';
 import * as net from 'node:net';
 
-import { DNS_DEFAULT_PORT, FALLBACK_TCP_TIMEOUT_MS, FALLBACK_UDP_TIMEOUT_MS } from './constants';
-import { cancellationError, noopLogger, throwIfCancelled } from './types';
+import { DNS_DEFAULT_PORT, FALLBACK_TCP_TIMEOUT_MS, FALLBACK_UDP_TIMEOUT_MS } from './constants.js';
+import { cancellationError, noopLogger, throwIfCancelled } from './types.js';
 
 import { type SrvRecord } from 'node:dns';
-import { type SrvResolverLogger } from './types';
+import { type SrvResolverLogger } from './types.js';
 
 export type DnsTransport = 'udp' | 'tcp';
 

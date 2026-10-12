@@ -4,15 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as dns from 'node:dns';
-import { FALLBACK_MAX_DEADLINE_MS } from './constants';
-import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient';
-import { getSrvLookupTarget, isSrvConnectionString, rewriteSrvUri, SrvRewriteError } from './srvUriRewrite';
-import { cancellationError, noopLogger, throwIfCancelled } from './types';
+import { FALLBACK_MAX_DEADLINE_MS } from './constants.js';
+import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient.js';
+import { getSrvLookupTarget, isSrvConnectionString, rewriteSrvUri, SrvRewriteError } from './srvUriRewrite.js';
+import { cancellationError, noopLogger, throwIfCancelled } from './types.js';
 
 import { type SrvRecord } from 'node:dns';
-import { type FallbackDnsOptions } from './fallbackDnsClient';
-import { type SrvFallbackMode, type SrvResolutionPath, type SrvResolutionReport } from './report';
-import { type SrvResolverLogger } from './types';
+import { type FallbackDnsOptions } from './fallbackDnsClient.js';
+import { type SrvFallbackMode, type SrvResolutionPath, type SrvResolutionReport } from './report.js';
+import { type SrvResolverLogger } from './types.js';
 
 export interface ResolveSrvForDriverInput<T extends object = object> {
     readonly connectionString: string;
