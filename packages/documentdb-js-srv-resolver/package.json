@@ -22,11 +22,9 @@
   "publishConfig": {
     "access": "public"
   },
-  "peerDependencies": {
-    "mongodb": ">=6.0.0"
-  },
   "devDependencies": {
-    "@types/dns-packet": "^5.6.5"
+    "@types/dns-packet": "^5.6.5",
+    "mongodb": "^7.1.0"
   },
   "dependencies": {
     "dns-packet": "^5.6.1"

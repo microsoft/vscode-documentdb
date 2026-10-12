@@ -104,7 +104,7 @@ These are exported too, for callers that need only one step:
 - **No SRV polling on the fallback path.** A client created from the rewritten string does not follow SRV changes (failover, scaling) until it is recreated.
 - **Same DNS servers.** If `dns.getServers()` itself returns the wrong servers (for example the `127.0.0.1` bug in c-ares 1.34.6 on Windows, [nodejs/node#62326](https://github.com/nodejs/node/issues/62326)), the fallback asks the wrong servers too.
 - **Driver parity is tested, not assumed.** The tests compare the rewrite with the installed driver's own SRV resolution. They run against `mongodb` 7.2.0; rerun them when you upgrade the driver.
-- **Peer dependency:** `mongodb >= 6`. **Dependency:** `dns-packet` (pure JavaScript, MIT).
+- **One dependency:** `dns-packet` (pure JavaScript, MIT). No dependency on the `mongodb` driver: options are typed structurally, and your own options type is returned unchanged.
 
 ## Development
 

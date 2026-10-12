@@ -9,15 +9,14 @@ import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fall
 import { getSrvLookupTarget, isSrvConnectionString, rewriteSrvUri, SrvRewriteError } from './srvUriRewrite';
 import { cancellationError, noopLogger, throwIfCancelled } from './types';
 
-import { type MongoClientOptions } from 'mongodb';
 import { type SrvRecord } from 'node:dns';
 import { type FallbackDnsOptions } from './fallbackDnsClient';
 import { type SrvFallbackMode, type SrvResolutionPath, type SrvResolutionReport } from './report';
 import { type SrvResolverLogger } from './types';
 
-export interface ResolveSrvForDriverInput {
+export interface ResolveSrvForDriverInput<T extends object = object> {
     readonly connectionString: string;
-    readonly options?: MongoClientOptions;
+    readonly options?: T;
     readonly fallback?: SrvFallbackMode;
     readonly deadlineMs?: number;
     readonly signal?: AbortSignal;
@@ -27,10 +26,10 @@ export interface ResolveSrvForDriverInput {
     readonly onReport?: (report: SrvResolutionReport) => void;
 }
 
-export interface ResolveSrvForDriverResult {
+export interface ResolveSrvForDriverResult<T extends object = object> {
     /** Transient: never persist or log. */
     readonly connectionString: string;
-    readonly options: MongoClientOptions;
+    readonly options: T;
     readonly path: SrvResolutionPath | 'notSrv';
     readonly report?: SrvResolutionReport;
 }
@@ -63,8 +62,10 @@ async function probeSrv(name: string, signal: AbortSignal | undefined): Promise<
  * our own client against the same DNS servers and returns an equivalent `mongodb://` string.
  * Otherwise returns the original string, so the driver keeps its own SRV handling and errors.
  */
-export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Promise<ResolveSrvForDriverResult> {
-    const options = input.options ?? {};
+export async function resolveSrvForDriver<T extends object>(
+    input: ResolveSrvForDriverInput<T>,
+): Promise<ResolveSrvForDriverResult<T>> {
+    const options = input.options ?? ({} as T);
     if (!isSrvConnectionString(input.connectionString)) {
         return { connectionString: input.connectionString, options, path: 'notSrv' };
     }

@@ -3,8 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type MongoClientOptions } from 'mongodb';
 import { type SrvRecord } from 'node:dns';
+
+/** The driver options the rewrite reads; any other options pass through unchanged. */
+export interface SrvClientOptions {
+    srvServiceName?: string;
+    srvMaxHosts?: number;
+    authMechanism?: string;
+    authSource?: string;
+    replicaSet?: string;
+    tls?: boolean;
+    ssl?: boolean;
+}
 
 export interface SrvLookupTarget {
     readonly srvHost: string;
@@ -12,19 +22,19 @@ export interface SrvLookupTarget {
     readonly srvQueryName: string;
 }
 
-export interface RewriteSrvUriInput {
+export interface RewriteSrvUriInput<T extends object = object> {
     readonly connectionString: string;
-    readonly options?: MongoClientOptions;
+    readonly options?: T;
     readonly srvRecords: readonly SrvRecord[];
     readonly txtRecords: readonly (readonly string[])[] | undefined;
 }
 
 export type SrvTxtOptionKey = 'authSource' | 'replicaSet' | 'loadBalanced';
 
-export interface RewriteSrvUriResult {
+export interface RewriteSrvUriResult<T extends object = object> {
     /** Transient connection string. Never persist or log it. */
     readonly connectionString: string;
-    readonly options: MongoClientOptions;
+    readonly options: T;
     readonly targets: readonly string[];
     readonly tlsAdded: boolean;
     readonly txtApplied: readonly SrvTxtOptionKey[];
@@ -101,9 +111,12 @@ function deleteParam(params: URLSearchParams, name: string): void {
     }
 }
 
-export function getSrvLookupTarget(connectionString: string, options?: MongoClientOptions): SrvLookupTarget {
+export function getSrvLookupTarget(connectionString: string, options?: object): SrvLookupTarget {
     const parts = splitSrvUri(connectionString);
-    const srvServiceName = options?.srvServiceName ?? getParam(parts.params, 'srvServiceName') ?? 'mongodb';
+    const srvServiceName =
+        (options as SrvClientOptions | undefined)?.srvServiceName ??
+        getParam(parts.params, 'srvServiceName') ??
+        'mongodb';
     return {
         srvHost: parts.host,
         srvServiceName,
@@ -136,9 +149,10 @@ function checkParentDomainMatch(address: string, srvHost: string): void {
  * Turns a `mongodb+srv://` string into the equivalent `mongodb://` string, as the driver would after
  * its own SRV and TXT lookups. Option conflicts are left to the driver when it parses the result.
  */
-export function rewriteSrvUri(input: RewriteSrvUriInput): RewriteSrvUriResult {
+export function rewriteSrvUri<T extends object>(input: RewriteSrvUriInput<T>): RewriteSrvUriResult<T> {
     const parts = splitSrvUri(input.connectionString);
-    const value = (name: keyof MongoClientOptions): unknown => input.options?.[name] ?? getParam(parts.params, name);
+    const known = input.options as SrvClientOptions | undefined;
+    const value = (name: keyof SrvClientOptions): unknown => known?.[name] ?? getParam(parts.params, name);
 
     if (input.srvRecords.length === 0) {
         throw new SrvRewriteError('noAddresses', 'No addresses found at host');
@@ -167,11 +181,7 @@ export function rewriteSrvUri(input: RewriteSrvUriInput): RewriteSrvUriResult {
             }
         }
         const authSource = txt.get('authSource');
-        const mechanism = (
-            input.options?.authMechanism ??
-            getParam(parts.params, 'authMechanism') ??
-            ''
-        ).toUpperCase();
+        const mechanism = (known?.authMechanism ?? getParam(parts.params, 'authMechanism') ?? '').toUpperCase();
         if (authSource && value('authSource') === undefined && !externalMechanisms.has(mechanism)) {
             setParam(parts.params, 'authSource', authSource);
             txtApplied.push('authSource');
@@ -189,9 +199,9 @@ export function rewriteSrvUri(input: RewriteSrvUriInput): RewriteSrvUriResult {
 
     deleteParam(parts.params, 'srvMaxHosts');
     deleteParam(parts.params, 'srvServiceName');
-    const options = { ...input.options };
-    delete options.srvMaxHosts;
-    delete options.srvServiceName;
+    const options = { ...input.options } as T;
+    delete (options as SrvClientOptions).srvMaxHosts;
+    delete (options as SrvClientOptions).srvServiceName;
 
     const tlsAdded = value('tls') === undefined && value('ssl') === undefined;
     if (tlsAdded) {
