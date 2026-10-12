@@ -15,56 +15,17 @@ Each observation below was **checked independently** before the plan was changed
 operator noted the feedback might be wrong. Checks were run against the driver installed in the
 main checkout (`node_modules/mongodb`, 7.2.0) and the source on this branch (`v0.11.0`).
 
-| #   | Severity | Observation                                                         | Verdict       | Plan change                    |
-| --- | -------- | ------------------------------------------------------------------- | ------------- | ------------------------------ |
-| R1  | High     | The host-side preflight breaks Entra ID and managed identity        | **Confirmed** | WI-4 step 3 (was step 2), WI-6 |
-| R2  | High     | Cancelling during DNS preparation can still run the playground code | **Confirmed** | WI-4, WI-6                     |
-| R3  | High     | "Exact driver semantics" is missing rules                           | **Confirmed** | WI-2, WI-3, WI-4 output        |
-| R4  | Medium   | The fallback timeout is not bounded end to end                      | **Confirmed** | WI-3, WI-6; Q8 → D0018         |
-| R5  | Medium   | The proposed diagnostic can report something false                  | **Confirmed** | WI-4 step 4, WI-7              |
-| R6  | —        | The differential test compares at the wrong boundary                | **Confirmed** | WI-2 tests                     |
+| #   | Severity | Observation                                                         | Verdict       | Plan change             |
+| --- | -------- | ------------------------------------------------------------------- | ------------- | ----------------------- |
+| R2  | High     | Cancelling during DNS preparation can still run the playground code | **Confirmed** | WI-4, WI-6              |
+| R3  | High     | "Exact driver semantics" is missing rules                           | **Confirmed** | WI-2, WI-3, WI-4 output |
+| R4  | Medium   | The fallback timeout is not bounded end to end                      | **Confirmed** | WI-3, WI-6; Q8 → D0018  |
+| R5  | Medium   | The proposed diagnostic can report something false                  | **Confirmed** | WI-4 step 4, WI-7       |
+| R6  | —        | The differential test compares at the wrong boundary                | **Confirmed** | WI-2 tests              |
 
 The reviewer's "would not expand" list (the transient rewrite, keeping the original string, asking
 only the system resolver, host-side integration, and the already deferred SRV polling and
 wrong-server-list gaps) matches the recorded decisions. Nothing changes there.
-
----
-
-## R1: the host-side preflight breaks Entra ID and managed identity
-
-**Claim.** WI-6 sets `authMechanism = 'MONGODB-OIDC'` on the host, and WI-4 step 2 then constructs
-a `MongoClient` to validate the original URI. `OIDC_CALLBACK` exists only inside the worker, and the
-driver validates credentials at construction time, so every Entra ID and managed identity SRV
-connection from the shell or playground would fail, even on unaffected networks.
-
-**Check.** Constructed real clients with driver 7.2.0:
-
-```
-new MongoClient('mongodb+srv://x.global.mongocluster.cosmos.azure.com/?tls=true',
-                { authMechanism: 'MONGODB-OIDC', tls: true })
-→ MongoInvalidArgumentError: Either a ENVIRONMENT, OIDC_CALLBACK, or OIDC_HUMAN_CALLBACK must be
-  specified for mechanism 'MONGODB-OIDC'.
-
-same URI, authMechanismProperties: { OIDC_CALLBACK: async () => { throw … } }
-→ OK (no network access, the callback is never invoked)
-```
-
-Step 2 runs for every `+srv` string, before the probe, so the claim about unaffected networks also
-holds. The `ClustersClient` path is not affected: its auth handlers put a real `OIDC_CALLBACK` in
-`options` before the helper is called.
-
-**Verdict:** confirmed, high. **Plan change:**
-
-- The preflight runs **only on the fallback path**, after an eligible probe error. It exists to
-  protect the rewrite. On the Node.js path the driver sees the original string anyway, so a
-  preflight there adds nothing, and limiting it to the fallback path limits the impact of any bug in
-  it.
-- The preflight options are a copy of the worker-equivalent options. For `MONGODB-OIDC` without a
-  callback or `ENVIRONMENT`, a **stub** `OIDC_CALLBACK` that rejects is added. The stub is never
-  invoked, because the preflight client never connects. Nothing is serialized and no token is
-  acquired.
-- Tests use the real driver constructor for Entra ID and managed identity, on both the Node.js path
-  and the fallback path.
 
 ---
 
@@ -94,8 +55,7 @@ change (WI-4, WI-6):**
 - Each worker startup gets its own `AbortController`. `terminateWorker`, `killWorker` and `dispose`
   abort it.
 - The abort signal reaches the Node.js probe (a `dns.promises.Resolver` instance, so `cancel()` is
-  available; still the default timeout, per D0017), the fallback's SRV and TXT queries, and the
-  preflight.
+  available; still the default timeout, per D0017) and the fallback's SRV and TXT queries.
 - After preparation, and again right before `new Worker(...)`, the manager checks the signal and
   throws `UserCancelledError` without creating a worker. `ensureWorker` therefore rejects, and
   `evaluate()` never reaches `sendEval`.

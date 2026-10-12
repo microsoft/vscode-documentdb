@@ -47,14 +47,13 @@ whether they are reachable. The only way to start over is to reload VS Code or c
    arbiter, mongos, load balancer), and state (reachable, unknown, unreachable, with the last
    error). Show how it was resolved (`direct`, `SRV via Node.js`, `SRV via fallback`) and when.
    Increment 1 already provides the data for the tree's connection: `SrvResolutionSummary` from
-   `ClustersClient.getSrvResolution(clusterId)`. Nothing shows it in increment 1 (D0021, which
-   dropped the tooltip line of D0019); the dashboard should be the first place that does, extended
-   to shell and playground sessions.
+   `ClustersClient.getSrvResolution(clusterId)`. Nothing shows it yet (D0021); the dashboard
+   should be the first place that does, extended to shell and playground sessions.
    Sources: the driver's public SDAM events (`topologyDescriptionChanged`,
    `serverDescriptionChanged`, `serverHeartbeatSucceeded/Failed`), the `srvResolution` result from
    this feature, and `getClusterMetadata`. Avoid reading the driver's internal `client.topology`.
 2. **Where.** Options to evaluate:
-   - a "Servers" child node, or extra lines in the cluster node tooltip;
+   - a "Servers" child node;
    - a cluster-dashboard section (see the `cluster-dashboard` feature, which already gathers
      cluster-wide facts);
    - a "Show Connection Details" command that writes a summary to the output channel, cheapest

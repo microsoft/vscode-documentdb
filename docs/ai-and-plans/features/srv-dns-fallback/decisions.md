@@ -17,23 +17,21 @@ created: 2026-10-09
 | 0003 | Use `dns-packet` in-process, not a native addon or system tools                                    | Accepted            | Operator position (#993)                           | 2026-10-09 | —   |
 | 0004 | The rewrite mirrors the driver's SRV semantics exactly                                             | Accepted            | Operator position (#993)                           | 2026-10-09 | —   |
 | 0005 | Probe with Node's resolver first; fall back only on a broken reply                                 | Accepted            | Operator accepted 2026-10-09                       | 2026-10-09 | —   |
-| 0006 | Fallback-eligible codes are `EBADRESP` and `EFORMERR` only                                         | Superseded by D0012 | Operator chose Q6 option B                         | 2026-10-09 | —   |
 | 0007 | Two call sites: `ClustersClient` and `WorkerSessionManager`                                        | Accepted (modified) | Accepted; `connectToClient` also deprecated        | 2026-10-09 | —   |
 | 0008 | Shell and playground resolve on the host, not in the worker                                        | Accepted            | Operator accepted 2026-10-09                       | 2026-10-09 | —   |
 | 0009 | One `connect.srvResolution` event per `+srv` connection                                            | Accepted            | Operator accepted 2026-10-09                       | 2026-10-09 | —   |
 | 0010 | A development-only switch forces the fallback path                                                 | Accepted            | Operator accepted 2026-10-09                       | 2026-10-09 | —   |
 | 0011 | No user setting; an environment variable turns the fallback off, and it is documented              | Accepted            | Operator chose Q1 A + D, and asked for user docs   | 2026-10-09 | —   |
-| 0012 | `ECONNREFUSED` also triggers the fallback                                                          | Accepted            | Operator chose Q6 option B; supersedes D0006       | 2026-10-09 | —   |
+| 0012 | `ECONNREFUSED` also triggers the fallback                                                          | Accepted            | Operator chose Q6 option B                         | 2026-10-09 | —   |
 | 0013 | Cached fallback clients are not refreshed in this increment                                        | Accepted            | Operator chose Q3 A; options moved to future work  | 2026-10-09 | —   |
 | 0014 | All SRV resolution output is at `trace` level                                                      | Accepted (modified) | Proposal was one `info` line; operator: trace only | 2026-10-09 | —   |
 | 0015 | Ship as `v0.11.1` from `release/0.11.1`, cut at `v0.11.0`, then forward-merge                      | Accepted            | Operator decision (Q5)                             | 2026-10-09 | —   |
 | 0016 | Longer fallback timeouts for slow networks                                                         | Accepted (modified) | Q7 option A, with longer values (operator)         | 2026-10-09 | —   |
 | 0017 | The probe passes every error that skips the fallback to the driver, with no extra time limit       | Accepted            | Operator chose Q2 A over the recommended D         | 2026-10-09 | —   |
 | 0018 | DNS preparation and the shell and playground init timeout have separate budgets                    | Accepted            | Operator chose Q8 A, as recommended                | 2026-10-09 | —   |
-| 0019 | The UI shows whether the fallback was used: the tooltip now, the dashboard later                   | Accepted            | Operator requirement                               | 2026-10-09 | —   |
 | 0020 | The VS Code-independent logic lives in a workspace package, published at the operator's discretion | Accepted            | Operator chose "workspace package now"             | 2026-10-09 | —   |
-| 0021 | No tooltip flag in v0.11.1; the trace shows fallback use, the dashboard will later                 | Accepted            | Operator, after reviewing WI-10; supersedes D0019  | 2026-10-09 | -   |
-| 0022 | KISS pass: no driver preflight, the driver validates the rewritten string, fewer telemetry fields  | Accepted            | Operator review request                            | 2026-10-12 | -   |
+| 0021 | Fallback use shows in the trace now and on the cluster dashboard later, not in the tree            | Accepted            | Operator decision                                  | 2026-10-09 | -   |
+| 0022 | Option validation is left to the driver; the rewrite covers only what SRV adds                     | Accepted            | Operator review request                            | 2026-10-12 | -   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -177,28 +175,6 @@ Option 1.
 
 ---
 
-## 0006 — Fallback-eligible codes are `EBADRESP` and `EFORMERR` only
-
-**Status:** Superseded by D0012 · **Date:** 2026-10-09 · **Raised by:** planning
-
-> **Superseded (2026-10-09).** Plan question Q6 reopened this entry, and the operator chose to
-> include `ECONNREFUSED` (D0012). The options are in
-> [iterations/01-srv-fallback/plan.md, Q6](./iterations/01-srv-fallback/plan.md#q6-should-econnrefused-trigger-the-fallback).
-> The original proposal is kept below as written.
-
-### Decision (proposed)
-
-Only `EBADRESP` and `EFORMERR` trigger the fallback. `ECONNREFUSED` does not.
-
-### Why
-
-`ECONNREFUSED` on SRV comes from c-ares 1.34.6 reporting `127.0.0.1` as the DNS server. The
-fallback uses the same `dns.getServers()` list and would be refused as well, so it would only add
-latency. The telemetry event still records `nodeErrorCode` for every non-eligible failure, so the
-size of that known gap is measured and can justify `os-dns-native` later.
-
----
-
 ## 0007 — Two call sites: `ClustersClient` and `WorkerSessionManager`
 
 **Status:** Accepted (modified) (operator, 2026-10-09; was Proposed) · **Date:** 2026-10-09 · **Raised by:** planning
@@ -333,8 +309,7 @@ explaining it again each time.
 
 ## 0012 — `ECONNREFUSED` also triggers the fallback
 
-**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** plan Q6; operator chose B; supersedes
-D0006
+**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** plan Q6; operator chose B
 
 ### Decision
 
@@ -349,7 +324,9 @@ by `nodeErrorCode`, and `fallbackOutcome` shows whether the fallback helps for `
 
 ### Rejected alternatives
 
-- **Measure only** (D0006, Q6 A): leaves any fixable refusal unfixed and unnoticed.
+- **Measure only** (Q6 A): `ECONNREFUSED` usually comes from c-ares 1.34.6 reporting `127.0.0.1`
+  as the DNS server, where the fallback is refused too. Leaves any fixable refusal unfixed and
+  unnoticed.
 - **Heuristic on the server list** (Q6 C): would misclassify a real local DNS stub on Windows.
 
 ---
@@ -550,36 +527,6 @@ setting suggests, and a dead DNS server adds the probe's timeout (D0017). Both a
 
 ---
 
-## 0019 — The UI shows whether the fallback was used: the tooltip now, the dashboard later
-
-**Status:** Superseded by D0021 · **Date:** 2026-10-09 · **Raised by:** operator requirement
-
-> **Superseded (2026-10-09).** After implementation, the operator dropped the tooltip line (D0021).
-> The in-memory summary stays for the dashboard. The original decision is kept below as written.
-
-### Decision
-
-The extension keeps an in-memory flag recording whether a cluster's connection was resolved by the
-fallback: an `SrvResolutionSummary` on `ClustersClient`, keyed by `clusterId`, with no hostnames and
-never persisted. This increment shows it as one line in the cluster tooltip (plan WI-10). The
-cluster dashboard shows it later (future-work FW-2).
-
-### Why
-
-Telemetry says how many users hit the fallback, but not whether _this_ user's connection did. A
-visible flag lets the user and support confirm it without collecting a trace. Showing it only in
-the tooltip keeps the increment small.
-
-### Consequences
-
-- Without re-rendering, the row would never show the line, because the tooltip is built before the
-  first connection. WI-10 includes re-rendering the row (or resolving the tooltip lazily on
-  hover).
-- In this increment the flag covers the tree's connection only. Shell and playground sessions
-  resolve on their own and report only to trace and telemetry.
-
----
-
 ## 0020 — The VS Code-independent logic lives in a workspace package, published at the operator's discretion
 
 **Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** operator ("could this help another
@@ -592,7 +539,7 @@ a new workspace package, `packages/documentdb-js-srv-resolver` (working name
 `@documentdb-js/srv-resolver`). It has `mongodb` as a peer dependency and `dns-packet` as a
 dependency. The extension consumes it locally through npm workspaces (`"*"`), the same way as the
 other `@documentdb-js` packages. Telemetry, the output channel, environment switches, localized
-text, the tooltip and the worker wiring stay in the extension. They connect through an injected
+text and the worker wiring stay in the extension. They connect through an injected
 `logger`, an `onReport` callback and plain options. The package is created in this increment and
 published later, whenever the operator decides.
 
@@ -632,88 +579,61 @@ published later, whenever the operator decides.
 
 ---
 
-## 0021 — No tooltip flag in v0.11.1; the trace shows fallback use, the dashboard will later
+## 0021 - Fallback use shows in the trace now and on the cluster dashboard later, not in the tree
 
-**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** operator, after reviewing the WI-10
-implementation; supersedes D0019
+**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** operator
 
 ### Decision
 
-The cluster tooltip does **not** show whether the fallback resolved a connection. The tooltip line,
-the row redraw after a fallback connection and every change to the tree code are removed; the tree
-files are back to their `v0.11.0` state. Fallback use stays visible in the `[SrvResolution]` trace
-output (D0014) and in telemetry (D0009). `ClustersClient` keeps the in-memory, host-free
-`SrvResolutionSummary` (`getSrvResolution(clusterId)`), so the cluster dashboard can show it later
-(future-work FW-2).
+The tree does not show whether the fallback resolved a connection. Fallback use is visible in the
+`[SrvResolution]` trace output (D0014) and in telemetry (D0009). `ClustersClient` keeps an
+in-memory, host-free `SrvResolutionSummary` (`getSrvResolution(clusterId)`), keyed by `clusterId`
+and never persisted, so the cluster dashboard can show it (future-work FW-2). Shell and playground
+sessions report only to trace and telemetry.
 
 ### Why
 
-The operator: the price of the workarounds is too high. VS Code builds a tree row's tooltip when it
-draws the row, before the user expands it and connects. Showing the line therefore needs a redraw
-after connecting, and redrawing an expanded row always makes VS Code fetch its children again (one
-extra `listDatabases`). Every way around that adds edge cases to code all trees share:
-
-- a children cache to reuse the first listing could show stale databases once if the row was
-  collapsed when the redraw fired;
-- redrawing on disconnect to remove the line would silently reconnect an expanded row;
-- reusing the client's database list behind a short-lived flag adds time-based state to the
-  cluster's child listing.
-
-The users who need to know can read the trace, and the dashboard is the better place to show it.
+Telemetry says how many users hit the fallback, but not whether _this_ user's connection did; the
+dashboard is the place to show that. A tree tooltip is built when the row is drawn, before the user
+connects, so showing the flag there needs a redraw after connecting. Redrawing an expanded row
+makes VS Code fetch its children again (one extra `listDatabases`), and every way around that adds
+edge cases to code all trees share.
 
 ### Rejected alternatives
 
-- **Keep the tooltip with the row redraw** (the implementation in `d7df1147` and `2855dcc9`): one
-  extra listing per fallback connection, plus the risk surface above in shared tree code.
-- **Reuse the first listing** (children cache in the base provider, or the client's database cache
-  behind a one-time flag): avoids the extra query, adds stale-data edge cases.
+- **A tooltip line with a row redraw**: one extra listing per fallback connection, plus risk in
+  shared tree code.
+- **Reuse the first listing** (a children cache, or the client's database cache behind a one-time
+  flag): avoids the extra query, adds stale-data edge cases.
 - **Build the tooltip lazily on hover (`resolveTreeItem`)**: VS Code resolves it once per drawn
   row, so a hover before connecting hides the line until the next redraw anyway.
-- **Show the line only after a manual refresh**: simplest, but users would rarely see it when it
-  matters.
-
-### Consequences
-
-- WI-10 is reverted, except for the summary on `ClustersClient`. The M8 review finding C1 (tooltip
-  content lost) no longer applies.
-- No new user-facing strings remain from WI-10.
 
 ---
 
-## 0022 - KISS pass: no driver preflight, the driver validates the rewritten string, fewer telemetry fields
+## 0022 - Option validation is left to the driver; the rewrite covers only what SRV adds
 
-**Status:** Accepted · **Date:** 2026-10-12 · **Raised by:** operator, after a simplification review
-of increment 1; narrows D0004
+**Status:** Accepted · **Date:** 2026-10-12 · **Raised by:** operator review; narrows D0004
 
 ### Decision
 
-Increment 1 is simplified without changing what affected or unaffected users see:
-
-- **No driver preflight.** The throwaway `MongoClient` on the `+srv` string, and its OIDC callback
-  stub, are removed. Invalid options are rejected by the driver when it parses the rewritten
-  `mongodb://` string, with its `mongodb://` wording.
-- **The rewrite keeps only what SRV adds or rejects:** the host list, the parent-domain check, the
-  TXT allowlist and value checks, the `$external` rule for TXT `authSource`, implicit `tls=true`,
-  and dropping `srvServiceName`/`srvMaxHosts`. `srvMaxHosts` takes the first N targets instead of
-  the driver's random sample. Rewrite errors are `SrvRewriteError` with a `kind`.
-- **Cancellation** relies on the probe resolver's `cancel()` and the DNS client's socket abort,
-  not a race wrapper and per-step checks. Test-only input hooks are removed.
-- **Telemetry** drops `targetCompressed`, `txtOptionsApplied`, `tlsAdded`, `isGlobalEndpoint` and
-  `dnsServerIpFamily`. The `connect.srvResolution` event is sent after resolution, outside the
-  wrapper that swallows cancellations.
-- **Tests** keep one case per behaviour; the differential test against the driver stays, with
-  fewer fixtures.
+- The rewrite applies the D0004 rules and nothing more. Option conflicts (for example
+  `loadBalanced` with several hosts) are rejected by the driver when it parses the rewritten
+  `mongodb://` string, in its `mongodb://` wording.
+- `srvMaxHosts` takes the first N targets, not the driver's random sample.
+- Rewrite rejections are `SrvRewriteError` with a `kind`, and never contain the connection string.
+- `connect.srvResolution` carries only what sizes the problem: path, error codes, transport, TXT
+  source, DNS server class, runtime versions, the Azure endpoint flag and timings.
 
 ### Why
 
-The operator asked for a "let's just make it work and be KISS" review. The removed parts guarded
-rare paths (invalid options on a broken network, `srvMaxHosts`) or fed telemetry that the root
-cause analysis no longer needs. Two parts stay on the operator's instruction: the workspace package
-(D0020, "we need it elsewhere") and the `SrvResolutionSummary` on `ClustersClient` (D0021, the
-dashboard "will be added soon").
+The operator: "let's just make it work and be KISS". The fallback runs only on networks whose DNS
+replies Node.js rejects; matching the driver's exact error wording or host sampling there is not
+worth the code.
 
-### Consequences
+### Rejected alternatives
 
-- D0004 now holds for the semantics that matter for a working connection, not for the driver's
-  exact error messages or host sampling.
-- `connect.srvResolution` loses five properties.
+- **Check the `+srv` string with a throwaway `MongoClient` before the fallback**, to get the
+  driver's own error text: needs an OIDC callback stub, and only matters for invalid strings on
+  broken networks.
+- **Record whether the SRV target was compressed**: the Node.js rejection already identifies the
+  cause.

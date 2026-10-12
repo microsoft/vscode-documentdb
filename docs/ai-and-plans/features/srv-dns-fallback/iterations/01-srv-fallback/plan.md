@@ -17,7 +17,7 @@ The problem, root cause and rejected alternatives are in issue #993 and in
 [../README.md](../../README.md). This document is the development plan. Progress is recorded
 **inline, against each work item**, when that item is committed.
 
-**Revised after design review (2026-10-09).** Six findings (R1–R6) were verified and folded into
+**Revised after design review (2026-10-09).** The findings were verified and folded into
 WI-2 to WI-7, and Q8 was added. Each change is marked with its finding number. Evidence and
 verdicts: [design-review.md](./design-review.md).
 
@@ -58,11 +58,10 @@ Changing any of them during implementation is a **deviation** (see Progress reco
 | Core rules       | D0001 transient, never persisted · D0002 same system DNS servers only · D0003 `dns-packet` · D0004 driver semantics exactly |
 | When it runs     | D0005 Node probe first · D0012 `EBADRESP`/`EFORMERR`/`ECONNREFUSED` · D0017 unbounded probe, pass-through                   |
 | Where            | D0007 `ClustersClient` + `WorkerSessionManager`; `connectToClient` deprecated · D0008 resolve on the host                   |
-| Observability    | D0009 one `connect.srvResolution` event · D0014 all output at `trace` · ~~D0019 tooltip flag~~ D0021 no tooltip flag        |
+| Observability    | D0009 one `connect.srvResolution` event · D0014 all output at `trace` · D0021 no tree flag, dashboard later                 |
 | Switches         | D0010 force switch · D0011 off switch, documented                                                                           |
 | Timing           | D0016 5 s UDP / 10 s TCP / shared cap `min(20 s, connectionTimeout)` · D0018 separate budgets                               |
 | Scope / shipping | D0013 no cached-client refresh · D0015 `v0.11.1` from `release/0.11.1` · D0020 local workspace package                      |
-| Superseded       | D0006 (by D0012)                                                                                                            |
 
 ## Progress recording
 
@@ -88,8 +87,8 @@ operator asks.
 | M1  | Package scaffold and dependency              | WI-0, WI-1        | Package builds and is linked; `dns-packet` vetted with `flagging-fresh-dependencies`; not in the worker bundle               |
 | M2  | URI rewrite                                  | WI-2              | Rule table implemented; differential tests against the installed driver pass, at the R6 boundary                             |
 | M3  | Fallback DNS client                          | WI-3              | Local UDP/TCP stub tests pass, including the compressed-target replay, TXT absence and the shared deadline                   |
-| M4  | Core resolve function and extension adapters | WI-4              | Package API done; trace, telemetry and switches work in the extension adapter; R1, R2 and R5 tests pass                      |
-| M5  | Tree path and tooltip flag                   | WI-5, WI-10       | `ClustersClient` uses the helper; tooltip line appears after a fallback connection; `clusterId` keyed                        |
+| M4  | Core resolve function and extension adapters | WI-4              | Package API done; trace, telemetry and switches work in the extension adapter; R2 and R5 tests pass                          |
+| M5  | Tree path                                    | WI-5              | `ClustersClient` uses the helper; `clusterId` keyed                                                                          |
 | M6  | Shell and playground                         | WI-6              | Host-side resolution; cancellation tests (DNS held pending) pass; D0018 timing in place                                      |
 | M7  | Diagnostics and documentation                | WI-7, WI-8        | Provider with negative tests; user-manual page with both switches and the timing rule; `0.11.1` release-notes entry          |
 | M8  | Review and hand-over                         | WI-9, `# Outcome` | One end-of-work code review, findings resolved or recorded; automated verification done; manual steps handed to the operator |
@@ -105,7 +104,6 @@ configureAuth()  ──►  prepareDriverConnectionString({ connectionString, op
                          │     ├─ EBADRESP / EFORMERR / ECONNREFUSED (or forced) → fallback ▼
                          │     └─ other error                         → return ORIGINAL +srv string   (path=nodeErrorPassthrough)
                          └─ fallback (one shared deadline)
-                               ├─ preflight: new MongoClient(original, options + OIDC stub), never connected
                                ├─ SRV and TXT in parallel via dns-packet: system servers in order, UDP → TCP on TC
                                │     (no TXT record = no TXT options)
                                ├─ apply driver semantics (D0004), rewrite to mongodb://h1:p1,h2:p2/…
@@ -131,16 +129,16 @@ packages/documentdb-js-srv-resolver/            # @documentdb-js/srv-resolver (w
 ├── tsconfig.json, jest.config.js, README.md, LICENSE   # copied from documentdb-js-shell-api-types
 └── src/
     ├── index.ts                     # public API: resolveSrvForDriver(), types
-    ├── resolveSrvForDriver.ts       # WI-4 core: probe, decide, preflight, fallback, error/cancel rules, deadline
+    ├── resolveSrvForDriver.ts       # WI-4 core: probe, decide, fallback, error/cancel rules, deadline
     ├── srvUriRewrite.ts             # WI-2, pure
     ├── fallbackDnsClient.ts         # WI-3, dns-packet over UDP/TCP against dns.getServers()
-    ├── report.ts                    # SrvResolutionReport, DNS-server classification, compression probe
+    ├── report.ts                    # SrvResolutionReport, DNS-server classification
     └── *.test.ts                    # differential tests against the installed driver, DNS stub server
 
 src/documentdb/srv/                              # extension adapters only
 ├── prepareDriverConnectionString.ts  # calls the package; maps the env switches to options (D0010, D0011)
 ├── srvResolutionTelemetry.ts         # report → connect.srvResolution and the startup summary
-├── srvResolutionSummary.ts           # tooltip summary (WI-10)
+├── srvResolutionSummary.ts           # in-memory summary for the future cluster dashboard (D0021)
 └── *.test.ts
 ```
 
@@ -149,7 +147,7 @@ Package boundary, injected by the caller:
 - **`logger`**: `{ trace(message: string): void }`, a no-op by default. The extension passes
   `ext.outputChannel`.
 - **`onReport`**: called in a `finally` block with a `SrvResolutionReport` (path, error codes,
-  outcome, durations, transport, target compression, DNS-server class, counts). It is called for
+  outcome, durations, transport, DNS-server class, counts). It is called for
   failures too, without modifying the error. The extension turns it into telemetry.
 - **Options**: `fallback: 'auto' | 'off' | 'force'`, `deadlineMs`, `signal`. Environment variables
   are an extension concern; the package never reads `process.env`.
@@ -231,7 +229,7 @@ said 2023-08-25; the registry `time` map is authoritative), `@leichtgewicht/ip-c
 **Not done / deferred.** The bundle-placement and worker-size checks run at the M5/M6 gates, once
 the extension imports the package (see WI-0). **Done at the M5/M6 gate:** after
 `npm run webpack-dev-ext`, `dns-packet` and the resolver code occur in `dist/main.js` and not in
-`dist/playgroundWorker.js`. The worker bundle gains only the small `workerOidcAllowedHosts` helper
+`dist/playgroundWorker.js`. The worker bundle gains only the inline `msg.oidcAllowedHosts` read
 (WI-6); no byte-for-byte size comparison against `v0.11.0` was run.
 
 ---
@@ -327,7 +325,7 @@ tested separately through an injected `random`.
 - A successful but empty TXT answer throws the same `TypeError` as the driver. The fallback client
   never produces one (`NOERROR` without answers is `ENODATA`), so this is unreachable in practice.
 - The rewrite repeats the SRV-only option conflicts (`directConnection`, `loadBalanced` in the
-  options object) so it is safe on its own; the WI-4 preflight normally raises them first.
+  options object) so it is safe on its own.
 
 Alternative considered: follow the plan's table literally. Rejected because any divergence is
 exactly the drift D0004 forbids, and the differential test would fail.
@@ -357,10 +355,7 @@ exactly the drift D0004 forbids, and the differential test would fail.
   shared deadline and the caller's cancellation signal are combined into one signal.
 - **Answers.** Use only answers of the requested type (SRV or TXT). Ignore CNAME records and
   additional sections.
-- **Compression probe.** For each SRV answer, inspect the raw RDATA from offset 6 for a label
-  pointer (`0b11xxxxxx`), and report `targetCompressed: boolean`. This confirms the root cause in
-  the logs and in telemetry.
-- **Return value.** `{ records, server, transport, attempts, replyBytes, targetCompressed }`. Every
+- **Return value.** `{ records, server, transport, serversTried }`. Every
   attempt is also logged at trace level (see [Trace output](#trace-output)).
 
 **Tests:** a UDP+TCP DNS stub on `127.0.0.1` with an ephemeral port, built with `dns-packet` plus a
@@ -373,8 +368,8 @@ deadline, not at a multiple of it (R4).
 
 **Done.** `023e7446` `feat(srv-resolver): fallback DNS client over UDP and TCP`.
 `packages/documentdb-js-srv-resolver/src/fallbackDnsClient.ts` exports `resolveSrvFallback`,
-`resolveTxtFallback`, `parseDnsServers`, `hasCompressedSrvTarget` and `FallbackDnsError` (Node-shaped:
-`code`, `syscall`, `hostname`, plus `serversTried` and `attempts`). The timing constants live in
+`resolveTxtFallback`, `parseDnsServers` and `FallbackDnsError` (Node-shaped:
+`code`, `syscall`, `hostname`, plus `serversTried`). The timing constants live in
 `src/constants.ts`; the logger interface and the cancellation helpers in `src/types.ts`. Each
 attempt's timeout is `min(per-attempt limit, time left until the caller's absolute deadlineAt)`.
 46 tests against a UDP+TCP stub on `127.0.0.1` (`src/test/dnsStubServer.ts`) with a hand-built
@@ -437,25 +432,17 @@ Steps:
    - On any other error, return the original string (`path=nodeErrorPassthrough`) and let the driver
      report its own error. The probe uses Node's default resolver with no extra time limit, and
      never rethrows (D0017).
-3. **Preflight, on the fallback path only (R1).** Construct, but never connect,
-   `new MongoClient(original, preflightOptions)`, so the driver raises its own parse errors first
-   (`directConnection`, a port on an SRV host, multiple hosts, `srvMaxHosts` with a URI
-   `replicaSet`, …). `preflightOptions` is a copy of the options as the driver will finally see
-   them. For `MONGODB-OIDC` without `OIDC_CALLBACK`, `OIDC_HUMAN_CALLBACK` or `ENVIRONMENT`, add a
-   stub `OIDC_CALLBACK` that rejects. The stub is never invoked, because this client never
-   connects (verified with driver 7.2.0, see the review, R1). Discard the instance. On the Node.js
-   path there is no preflight, because the driver gets the original string anyway.
-4. Fallback: resolve SRV and TXT with WI-3, started in parallel (as the driver does), under one
+3. Fallback: resolve SRV and TXT with WI-3, started in parallel (as the driver does), under one
    shared deadline (R4). No TXT record means no TXT options (R3). Then rewrite with WI-2. Return the
    rewritten string and the sanitized options as `path=fallback`. Errors:
    - `UserCancelledError` always propagates as cancellation, never replaced (R2).
-   - Rewrite and preflight validation errors (WI-2, step 3) are thrown as they are, because the
+   - Rewrite validation errors (WI-2) are thrown as they are, because the
      driver would have thrown the same ones.
    - Any other fallback failure is logged, and the **original probe error** is rethrown.
    - Force switch after a **successful** probe (D0010, development only): there is no probe error,
      so the fallback's own error is thrown (R5).
-5. No caching of any kind. Every call queries DNS (D0001).
-6. The abort signal is checked between steps, so cancellation never waits for the next DNS reply
+4. No caching of any kind. Every call queries DNS (D0001).
+5. The abort signal is checked between steps, so cancellation never waits for the next DNS reply
    (R2).
 
 **Switches (D0010, D0011):**
@@ -485,9 +472,8 @@ only for `replicaSet` and `loadBalanced`; `authSource` values are written as `<s
 | `trace` | Node probe ok                           | `… node probe ok targets=3 durationMs=11 → path=node (original +srv handed to driver)`                                                                                         |
 | `trace` | Node probe failed, not eligible         | `… node probe failed code=ENOTFOUND durationMs=40 (not fallback-eligible) → path=nodeErrorPassthrough`                                                                         |
 | `trace` | Node probe failed, eligible             | `… node probe failed code=EBADRESP durationMs=9 → running fallback`                                                                                                            |
-| `trace` | Each fallback attempt                   | `… fallback SRV server=192.168.10.1:53 transport=udp id=0x1a2b rcode=NOERROR tc=false answers=3 bytes=212 targetCompressed=true durationMs=8`                                  |
-| `trace` | TXT                                     | `… TXT source=fallback keys=[authSource,replicaSet] replicaSet=globaldb authSource=<set>`                                                                                      |
-| `trace` | Rewrite                                 | `… rewrite targets=[fc-…-000.global…:10260,fc-…-001.global…:10260] tlsAdded=true removedParams=[srvMaxHosts] txtApplied=[replicaSet] txtSkipped=[authSource:$external]`        |
+| `trace` | Each fallback attempt                   | `… fallback SRV server=192.168.10.1:53 transport=udp id=0x1a2b rcode=NOERROR tc=false answers=3 bytes=212 durationMs=8`                                                        |
+| `trace` | Rewrite                                 | `… rewrite targets=[fc-…-000.global…:10260,fc-…-001.global…:10260] tlsAdded=true txtSource=fallback txtApplied=[replicaSet]`                                                   |
 | `trace` | Fallback applied (one line per connect) | `… DNS reply for x.global… was rejected by Node.js (EBADRESP, c-ares 1.34.8); resolved 3 SRV targets via 192.168.10.1 (udp) instead. See issue #993.`                          |
 | `trace` | Fallback failed                         | `… SRV fallback failed code=ETIMEOUT serversTried=2 durationMs=4012; the original error is reported`                                                                           |
 | `trace` | Off switch set                          | `… fallback eligible (EBADRESP) but disabled by DOCUMENTDB_DISABLE_SRV_FALLBACK → original +srv handed to driver`                                                              |
@@ -517,15 +503,11 @@ rejected the records.
 | `fallbackOutcome`                                                   | prop | `succeeded` · `failed` · `notAttempted` · `disabled` (D0011)                                              | does the fix work                              |
 | `fallbackErrorCode`                                                 | prop | `ETIMEOUT` · `ENOTFOUND` · `ENODATA` · `SERVFAIL` · `REFUSED` · `parentDomainMismatch` · `txtInvalid` · … | why it did not                                 |
 | `fallbackTransport`                                                 | prop | `udp` · `tcp`                                                                                             | TCP retry rate                                 |
-| `targetCompressed`                                                  | prop | `'true'` · `'false'` · `unknown`                                                                          | **confirms the root cause**                    |
 | `txtSource`                                                         | prop | `fallback` · `none` (no TXT record); fallback path only (R4)                                              |                                                |
-| `txtOptionsApplied`                                                 | prop | sorted subset of `authSource,replicaSet,loadBalanced`, or `none`                                          | semantics coverage                             |
-| `tlsAdded`                                                          | prop | `'true'` · `'false'`                                                                                      |                                                |
 | `dnsServerClass`                                                    | prop | `loopback` · `private` · `public` · `mixed` · `none` (from `isLocalOrPrivateHost`, never the IP)          | router vs. systemd stub vs. public             |
-| `dnsServerIpFamily`                                                 | prop | `ipv4` · `ipv6` · `mixed`                                                                                 |                                                |
 | `aresVersion`                                                       | prop | `process.versions.ares`                                                                                   | **which runtimes are affected**                |
 | `nodeRuntimeVersion`                                                | prop | `process.versions.node`                                                                                   | maps to VS Code / Electron releases            |
-| `isAzureEndpoint`, `isGlobalEndpoint`                               | prop | `'true'` · `'false'`                                                                                      | who is affected, without hostnames             |
+| `isAzureEndpoint`                                                   | prop | `'true'` · `'false'`                                                                                      | who is affected, without hostnames             |
 | `forcedFallback`                                                    | prop | `'true'` · `'false'`                                                                                      | exclude dev runs                               |
 | `nodeProbeDurationMs`                                               | meas | ms                                                                                                        | cost of D0005 for everyone                     |
 | `fallbackDurationMs`                                                | meas | ms                                                                                                        | cost of the fix                                |
@@ -559,14 +541,10 @@ RawEventsVSCodeExt | where EventName endswith "connect.srvresolution" and Proper
 // join connect.srvResolution ⨝ connect.startup on connectionCorrelationId; compare startupOutcome by path
 ```
 
-**Tests:** inject the Node resolver and the fallback client. Assert the properties and measurements
+**Tests:** mock `node:dns` and the fallback DNS client module. Assert the properties and measurements
 for each path. Assert that no property value contains the host, a DNS server IP or the password.
 Assert that `notSrv` emits no event. Added after review:
 
-- **R1:** with the real driver constructor, for Entra ID and managed identity options (no
-  callback, as the worker path supplies them): the Node.js path does not construct a preflight
-  client; the fallback path's preflight succeeds with the stub; the returned options never contain
-  the stub.
 - **R2:** abort while the probe is pending, while SRV or TXT is pending, and between steps. Each
   rejects with `UserCancelledError` (not the probe error), and the probe resolver's `cancel()` was
   called.
@@ -574,14 +552,13 @@ Assert that `notSrv` emits no event. Added after review:
 
 **Done.** `be0337b4` `feat(srv): core SRV resolve function, extension adapter and telemetry`.
 The package's `resolveSrvForDriver()` (`src/resolveSrvForDriver.ts`, report types in
-`src/report.ts`) implements steps 1–6. The extension adapter
+`src/report.ts`) implements steps 1-5. The extension adapter
 `src/documentdb/srv/prepareDriverConnectionString.ts` maps the two environment switches to
 `fallback: 'off' | 'force' | 'auto'` (off wins; only the value `1` counts), passes
 `deadlineMs = min(20 s, documentDB.connectionTimeout)`, writes trace lines to
 `ext.outputChannel.trace`, and emits `connect.srvResolution` through
 `srvResolutionTelemetry.ts`. `.vscode/launch.json` has both switches as commented-out `env`
-entries. 99 new tests (58 package, 41 extension), covering every path, R1 with the real driver
-constructor, R2 at each await point (including a DNS error racing the abort), R4 (one deadline
+entries. 99 new tests (58 package, 41 extension), covering every path, R2 at each await point (including a DNS error racing the abort), R4 (one deadline
 for SRV and TXT), R5, options identity, and log spies with a credential fixture on success and
 on every error path.
 
@@ -596,18 +573,19 @@ on every error path.
 - **Cancellation.** The adapter links the caller's `abortSignal` to an internal controller that
   aborts with a `UserCancelledError` as the reason, so the package's cancellation contract (WI-3
   note) hands back a real `UserCancelledError`.
-- **DNS-server classification** (`dnsServerClass`, `dnsServerIpFamily`) lives in the extension's
+- **DNS-server classification** (`dnsServerClass`) lives in the extension's
   `srvResolutionTelemetry.ts`, not in the package's `report.ts`, so it reuses
   `isLocalOrPrivateHost` (plus an explicit loopback check) instead of duplicating it. The report
   carries the raw `dnsServers` and `srvHost` for local use only; neither reaches telemetry.
-  `isAzureEndpoint` uses `hasAzureDomain`; `isGlobalEndpoint` checks for a `global` DNS label.
+  `isAzureEndpoint` uses `hasAzureDomain`.
 - **Startup summary.** The adapter takes an optional `startupTelemetry` (the enclosing
   `connect.startup` or `worker.startup` context) and sets `srvResolution` (path or `notSrv`) and
   `srvResolutionDurationMs` on it, on failure too. It also returns a `summary`
-  (`srvResolutionSummary.ts`) for WI-10. Neither is in the plan's signature; both are additive.
+  (`srvResolutionSummary.ts`) for the future cluster dashboard (D0021). Neither is in the plan's
+  signature; both are additive.
 - **`fallbackErrorCode` values:** the fallback client's Node code (`ETIMEOUT`, `ESERVFAIL`, …),
   the rewrite kind (`noAddresses`, `parentDomainMismatch`, `txtInvalid`, `optionConflict`),
-  `preflight`, or `txt:<code>` when a TXT failure other than "no record" stopped the fallback.
+  or `txt:<code>` when a TXT failure other than "no record" stopped the fallback.
 - **Forced fallback after a successful probe** writes `forced fallback applied for <host>; …`
   instead of the "rejected by Node.js" line, because nothing was rejected.
 
@@ -642,7 +620,7 @@ await this.connect(startup, prepared.connectionString, prepared.options, credent
 `path=fallback, mongodb://…`, `MongoClient` must receive the rewritten string, while
 `CredentialCache`, `getHostsFromConnectionString` and `connect.staticmetadata` see the original.
 
-**Done.** `d7df1147` `feat(srv): wire ClustersClient and show fallback use in the cluster tooltip`.
+**Done.** `d7df1147` `feat(srv): wire ClustersClient`.
 `initializeClient` calls `prepareDriverConnectionString` after `connect.staticmetadata`, passing
 `startup.telemetry` so `connect.startup` gets `srvResolution` and `srvResolutionDurationMs`.
 `connect()` gets the original string as a separate parameter for the TLS-exception (`isLocalish`)
@@ -663,8 +641,7 @@ and inside the open `worker.startup` telemetry context:
   `initMsg.persistent`), the startup and session correlation IDs, and the options. For
   `authMechanism` set to `MicrosoftEntraID` or `ManagedIdentity`, pass
   `options.authMechanism = 'MONGODB-OIDC'` so the `$external` rule applies (the worker sets this
-  itself today). There is no `OIDC_CALLBACK` on the host. The helper's fallback-only preflight adds
-  its own non-invoked stub (WI-4 step 3, R1), so the options passed here stay serializable.
+  itself today). There is no `OIDC_CALLBACK` on the host.
 - Post `{ ...initMsg, connectionString: prepared.connectionString, clientOptions: <serializable
 subset of prepared.options>, oidcAllowedHosts }`, where
   `oidcAllowedHosts = getOidcAllowedHosts(initMsg.connectionString)` is computed from the
@@ -695,8 +672,6 @@ review:
   Assert that no `Worker` was constructed, no `init` and no `eval` message was posted, and
   `ensureWorker` rejected with `UserCancelledError`. Run it for the playground (`evaluate`) and the
   shell.
-- **R1:** an Entra ID and a managed identity SRV startup on the Node.js path and on the forced
-  fallback path both reach `new Worker(...)`; the host never throws an OIDC argument error.
 
 **Done.** `e5c67354` `feat(srv): resolve SRV on the host for the shell and query playground`.
 `initializeWorker` calls `prepareDriverConnectionString` before `new Worker(...)`, with
@@ -704,16 +679,15 @@ review:
 identity, as the worker does itself. It posts a copy of `initMsg` with the prepared string, the
 `SerializableMongoClientOptions` fields from the prepared options (the whole serializable type, so
 nothing the worker used before is dropped, and no functions), and `oidcAllowedHosts` computed from
-the original. The worker uses them through `getWorkerOidcAllowedHosts`
-(`workerOidcAllowedHosts.ts`), a small pure helper that the worker bundle imports without pulling
-in any resolver code. Each startup has its own `AbortController`; `terminateWorker`, which
+the original. The worker reads `msg.oidcAllowedHosts` inline, falling back to
+`getOidcAllowedHosts(msg.connectionString)`, so the worker bundle pulls in no resolver code. Each startup has its own `AbortController`; `terminateWorker`, which
 `killWorker`, `dispose` and `shutdown` reach, aborts it, and the signal is checked after
 preparation and again right before `new Worker(...)`. `sendRequest` still gets the full
 `initTimeoutMs` after preparation (D0018). `ShellSessionManager.extractHosts` and the banner read
 the caller's original `initMsg`. No startup stage was added or renamed; preparation time is the
 adapter's `srvResolutionDurationMs` on `worker.startup`. 20 new tests, including pending-DNS
 cancellation through the playground and shell paths, shutdown before a worker exists, and the real
-adapter and resolver with injected DNS plus the real driver preflight for both OIDC methods on the
+adapter and resolver with mocked DNS for both OIDC methods on the
 Node.js and forced-fallback paths. Bundle check (M5/M6 gate, `webpack-dev-ext`): `dns-packet`,
 `rewriteSrvUri`, `resolveSrvFallback` and `prepareDriverConnectionString` occur in `dist/main.js`
 and not in `dist/playgroundWorker.js` (D0008).
@@ -812,94 +786,11 @@ and the release-notes index, written with the `writing-release-notes` skill.
 - `how-to-construct-url.md` is about `vscode://` deep links, not connection strings, so the page is
   also listed in the user-manual index under "Connecting to Databases", where users will find it.
 - No release-notes screenshots: the skill asks whether to include any, and the operator was not
-  available (autopilot). A screenshot of the tooltip line can be added once the operator provides
-  one.
+  available (autopilot).
 
-**Not done / deferred.** `npm run l10n` for the new strings (WI-4 has none; WI-7 and WI-10 do) is a
+**Not done / deferred.** `npm run l10n` for the new strings (WI-4 has none; WI-7 does) is a
 Case 2 step and runs when the PR is prepared for review. The feature README is updated at
 hand-over (M8), together with the final code map.
-
----
-
-## WI-10: Show in the cluster tooltip whether the fallback was used (D0019)
-
-Operator requirement (2026-10-09): the UI must be able to show whether the fallback was used. This
-increment shows it **in the cluster tooltip only**. The cluster dashboard follows later (FW-2), so
-the data shape must already serve both.
-
-- **The flag.** `ClustersClient` keeps the last `SrvResolutionSummary` of its own connection, in
-  memory: `{ path, nodeErrorCode?, fallbackTransport?, srvTargetCount?, resolvedAt }`. It contains no
-  hostnames and no connection string. Expose it as
-  `ClustersClient.getSrvResolution(clusterId): SrvResolutionSummary | undefined`, keyed by
-  **`clusterId`**, never `treeId` (copilot-instructions, dual ID). It is never persisted (same
-  rule as D0001), and it disappears with the client (`deleteClient`, reload).
-- **The tooltip.** When the summary's path is `fallback`, add one localized line to the cluster
-  tooltip, for example: "DNS: SRV record resolved by the extension's fallback resolver, because
-  VS Code's resolver rejected the DNS reply (`EBADRESP`)." Nothing is shown for `node`,
-  `nodeErrorPassthrough` or `notSrv`. Places that build the tooltip:
-  - Connections view: `buildClusterTooltip` in `src/tree/connections-view/clusterItemPresentation.ts`
-    (also used by the Local Quick Start item);
-  - discovery and Azure views: the default tooltip in `ClusterItemBase.getTreeItem()`, plus the
-    `tooltipOverride` setters in `KubernetesResourceItem` and `AzureVMResourceItem`.
-
-  Put the line in one shared helper that every place calls, so a future view cannot miss it.
-
-- **Refresh.** The tooltip is built in `getTreeItem()`, which runs before the first connection. The
-  row must be re-rendered after a connection whose path is `fallback`, or the line never appears.
-  Check during implementation which mechanism re-renders the cluster row itself, not only its
-  children. Candidates: an item refresh through the existing tree state manager, or implementing
-  `resolveTreeItem` in `BaseExtendedTreeDataProvider` so the tooltip is computed lazily on hover.
-  The project does not use `resolveTreeItem` yet.
-- **Scope.** The flag describes the tree's connection (`ClustersClient`). The shell and playground
-  resolve independently in their own startup (WI-6). Their result goes to trace and telemetry only
-  in this increment. The summary type is shared, so the dashboard can later show every surface.
-
-**Tests:** the summary is set for each path and contains no host; it is keyed by `clusterId` (move
-a connection into a folder: the tooltip still shows the line); the tooltip contains the line only
-for `fallback`; it is gone after `deleteClient`.
-
-**Done.** `d7df1147` (same commit as WI-5). `ClustersClient.getSrvResolution(clusterId)` returns the
-in-memory `SrvResolutionSummary` from the client instance in `_clients`, so it is keyed by
-`clusterId` and disappears with `deleteClient` and on reload. One helper,
-`src/documentdb/srv/srvResolutionTooltip.ts`, renders the line as
-`**DNS:** SRV record resolved by the extension's fallback resolver, because VS Code's DNS resolver
-could not use the reply (`EBADRESP`).` (label and message localized separately; no hostnames), and
-only for `path === 'fallback'`. It is called from `buildClusterTooltip` (Connections view and
-Local Quick Start; `clusterId` added to `ClusterPresentationModel`), from
-`ClusterItemBase.getTreeItem`, and from `BaseExtendedTreeDataProvider.getTreeItem` for every
-`ClusterItemBase`. The provider is the choke point that also covers subclasses that replace the
-tooltip (Kubernetes, Azure VM and the Atlas item, which the plan did not list). A dedupe guard stops
-the line from appearing twice.
-
-**Refresh mechanism.** After a successful connection whose path is `fallback`, `getClient` fires
-`onDidChangeSrvResolution(clusterId)`. Each `BaseExtendedTreeDataProvider` keeps a map from
-`clusterId` to the rows it has rendered (cleared on `clearParentCache`, on a subtree `refresh`, and
-on dispose) and fires `onDidChangeTreeData` for each row, so VS Code calls `getTreeItem` again.
-
-**Deviation.** Approved by the coordinator (confidence ≥ 85 %):
-
-- **One extra `listDatabases` per fallback connection is accepted.** For an expanded row, VS Code
-  also asks for the children again. The coding agent first added a one-shot children-reuse cache to
-  `BaseExtendedTreeDataProvider` to avoid that second listing. It was removed in review: it put
-  stateful caching into the provider every tree uses, and if the row was collapsed when the event
-  fired, the cached promise stayed and the next expansion would have returned old children, even
-  after a disconnect. Only affected users pay the extra listing.
-- **No refresh on `deleteClient`.** Firing on an expanded row would make VS Code call
-  `getChildren`, which reconnects silently after a disconnect. The summary disappears with the
-  client, so the next render omits the line.
-- **Lazy `resolveTreeItem` was rejected**: VS Code calls it only when `tooltip` is undefined, and
-  caches the result per item, so a hover before the first connection would hide the line.
-- `SrvResolutionTelemetry`'s property and measurement types were widened to
-  `ITelemetryContext['properties']` and `['measurements']`, so the startup contexts (which can hold
-  `TelemetryTrustedValue`) type-check.
-
-**Reverted (operator, 2026-10-09).** After reviewing the refresh mechanism, the operator dropped the
-tooltip line: "the price of workarounds is too high". The tooltip helper, the change event, the
-row redraw and every change to `BaseExtendedTreeDataProvider`, `ClusterItemBase`,
-`clusterItemPresentation` and their tests are removed; those files match `v0.11.0` again. Kept:
-`ClustersClient.getSrvResolution(clusterId)` and the host-free `SrvResolutionSummary`, for the
-future cluster dashboard (FW-2). Fallback use is visible in the `[SrvResolution]` trace and in
-telemetry. Recorded as D0021, which supersedes D0019, with the alternatives the operator rejected.
 
 ---
 
@@ -924,9 +815,9 @@ telemetry. Recorded as D0021, which supersedes D0019, with the alternatives the 
    `forcedFallback=true`).
 3. **A real compressing resolver.** Use a Linux dev container whose `resolv.conf` points at a small
    forwarding stub that re-encodes SRV targets with compression, or a known affected router. Run
-   unforced. Expect `path=fallback`, `nodeErrorCode=EBADRESP` and `targetCompressed=true`.
+   unforced. Expect `path=fallback` and `nodeErrorCode=EBADRESP`.
 4. **Nothing persisted.** After a fallback connection, "Copy Connection String", "Update Connection
-   String…" and export still show `mongodb+srv://`. (The tooltip line was dropped, D0021.) Inspect connection storage and secret storage.
+   String…" and export still show `mongodb+srv://`. Inspect connection storage and secret storage.
 5. **Unaffected path.** On a normal network, check `path=node`, that the driver receives the
    original string (trace line), and the `nodeProbeDurationMs` overhead.
 6. **Remote.** Remote-SSH or WSL: resolution runs in the remote extension host and uses its DNS
@@ -938,13 +829,13 @@ telemetry. Recorded as D0021, which supersedes D0019, with the alternatives the 
    dev container). The fallback should still succeed within the D0016 limits.
 
 **Done (automated).** Every milestone gate ran `npm run build` and the touched tests; the last one
-(M8, after the review fix) passed with 38 suites and 684 tests. The WI-2 differential test, the
-WI-3 stub tests and the WI-4 to WI-7 and WI-10 unit tests are listed under their work items.
+(M8) passed with 38 suites and 684 tests. The WI-2 differential test, the
+WI-3 stub tests and the WI-4 to WI-7 unit tests are listed under their work items.
 
 **Done (manual step 1).** Run by the coordinator on 2026-10-09 with VS Code's own runtime
 (`Code.exe` with `ELECTRON_RUN_AS_NODE=1`: Node.js 24.21.0, c-ares 1.34.8) against a local UDP stub
 that sends the hand-built compressed-target reply: `dns.promises.Resolver.resolveSrv` failed with
-`querySrv EBADRESP`, and `resolveSrvFallback` decoded both targets with `targetCompressed=true`.
+`querySrv EBADRESP`, and `resolveSrvFallback` decoded both targets.
 The same script on Node.js 22.21.1 (c-ares 1.34.5) succeeds on both paths, which confirms the
 regression is in c-ares 1.34.7+.
 
@@ -965,7 +856,6 @@ but the operator was not available, so they are **pending**. None of them is cla
 | Credential leak through logs or telemetry                                | Never log URIs; a log-spy test; `maskEntireErrorMessage`; no host or IP in properties                                |
 | Fallback slower than the driver's own failure                            | Overall timeout cap within the connection timeout (Q7)                                                               |
 | Cancelled playground code still runs after DNS preparation (R2)          | Per-startup `AbortController`; no `Worker` is created after abort; tests hold DNS pending and then cancel            |
-| Host-side preflight rejects OIDC options (R1)                            | Preflight only on the fallback path, with a non-invoked stub callback; tests use the real constructor                |
 | The rewrite accepts what the driver rejects (R3)                         | Validate on the full target list before sampling; sanitized options; cross-product fixtures                          |
 | With dead DNS, the probe adds about 27 s before the driver fails (D0017) | Accepted; measured as `nodeProbeDurationMs` on `path=nodeErrorPassthrough`; bounded probe (Q2 D) is the known remedy |
 
@@ -1121,15 +1011,14 @@ including the four release steps the operator confirmed afterwards.
 
 | Option                                                                                                | Pros                                                                                                                                                                                                          | Cons                                                                                                                                    |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Measure only** (D0006, proposed)                                                                 | No extra attempt when the server list is wrong (the c-ares 1.34.6 bug, where the fallback would ask `127.0.0.1` too). Clean telemetry: `fallbackOutcome` only covers the reply-parsing case.                  | Any `ECONNREFUSED` that is _not_ the 1.34.6 bug, where our UDP/TCP client would succeed, goes unfixed and unnoticed.                    |
+| **A. Measure only** (proposed)                                                                        | No extra attempt when the server list is wrong (the c-ares 1.34.6 bug, where the fallback would ask `127.0.0.1` too). Clean telemetry: `fallbackOutcome` only covers the reply-parsing case.                  | Any `ECONNREFUSED` that is _not_ the 1.34.6 bug, where our UDP/TCP client would succeed, goes unfixed and unnoticed.                    |
 | **B. Include it**                                                                                     | Covers unknown socket-level differences between c-ares and our client. Refusals fail fast (ICMP port unreachable), so a useless attempt costs little. Telemetry measures directly whether the fallback helps. | Mixes two root causes under `path=fallback`; dashboards must split them by `nodeErrorCode`. Slightly longer failure in the 1.34.6 case. |
 | **C. Include it unless the server list looks like the 1.34.6 bug** (only loopback servers on Windows) | Targets the attempt where it can help.                                                                                                                                                                        | A heuristic; a real local DNS stub on Windows would be misclassified.                                                                   |
 
-**Recommendation:** B. I had proposed A in D0006, but a refusal fails within milliseconds, so an
-extra attempt is cheap and the telemetry shows whether the fallback helps. If accepted, mark D0006
-`Superseded` and add a new decision.
+**Recommendation:** B. I had proposed A, but a refusal fails within milliseconds, so an
+extra attempt is cheap and the telemetry shows whether the fallback helps.
 
-**Operator (2026-10-09): B.** Recorded as D0012; D0006 is superseded.
+**Operator (2026-10-09): B.** Recorded as D0012.
 
 ### Q7: What timeout budget should the fallback use?
 
@@ -1187,18 +1076,17 @@ pushed, no PR, no `release/0.11.1` branch, the npm package not published (D0015,
 
 ## Commits
 
-| Milestone | Work items  | Commit     | Subject                                                                     |
-| --------- | ----------- | ---------- | --------------------------------------------------------------------------- |
-| M1        | WI-0, WI-1  | `406b5f73` | feat(srv): scaffold @documentdb-js/srv-resolver workspace package           |
-| M2        | WI-2        | `855b9093` | feat(srv-resolver): pure SRV URI rewrite mirroring the driver               |
-| M3        | WI-3        | `023e7446` | feat(srv-resolver): fallback DNS client over UDP and TCP                    |
-| M4        | WI-4        | `be0337b4` | feat(srv): core SRV resolve function, extension adapter and telemetry       |
-| M5        | WI-5, WI-10 | `d7df1147` | feat(srv): wire ClustersClient and show fallback use in the cluster tooltip |
-| M6        | WI-6        | `e5c67354` | feat(srv): resolve SRV on the host for the shell and query playground       |
-| M7        | WI-7, WI-8  | `cbd711d6` | feat(srv): SRV DNS diagnostics, troubleshooting page and 0.11.1 notes       |
-| M8        | review fix  | `2855dcc9` | fix(srv): keep the full cluster tooltip when adding the DNS line            |
+| Milestone | Work items | Commit     | Subject                                                               |
+| --------- | ---------- | ---------- | --------------------------------------------------------------------- |
+| M1        | WI-0, WI-1 | `406b5f73` | feat(srv): scaffold @documentdb-js/srv-resolver workspace package     |
+| M2        | WI-2       | `855b9093` | feat(srv-resolver): pure SRV URI rewrite mirroring the driver         |
+| M3        | WI-3       | `023e7446` | feat(srv-resolver): fallback DNS client over UDP and TCP              |
+| M4        | WI-4       | `be0337b4` | feat(srv): core SRV resolve function, extension adapter and telemetry |
+| M5        | WI-5       | `d7df1147` | feat(srv): wire ClustersClient                                        |
+| M6        | WI-6       | `e5c67354` | feat(srv): resolve SRV on the host for the shell and query playground |
+| M7        | WI-7, WI-8 | `cbd711d6` | feat(srv): SRV DNS diagnostics, troubleshooting page and 0.11.1 notes |
 
-The hand-over commit after `2855dcc9` adds this chapter and the feature README update.
+The hand-over commit adds this chapter and the feature README update.
 
 ## Verified
 
@@ -1211,8 +1099,7 @@ The hand-over commit after `2855dcc9` adds this chapter and the feature README u
   2023 and 2024.
 - **Regression in the real runtime (WI-9 manual step 1):** VS Code's Node.js 24.21.0 with c-ares
   1.34.8 rejects the compressed-target replay with `EBADRESP`, and the fallback client decodes it.
-- **Code review (M8):** one medium finding (C1, tooltip content lost in real VS Code), fixed in
-  `2855dcc9`; triage in [code-review.md](./code-review.md).
+- **Code review (M8):** one end-of-work review; triage in [code-review.md](./code-review.md).
 - **Case 2 checks (2026-10-09, at the operator's request after hand-over):** the first run passed
   `l10n` (5 new strings), `prettier-fix`, full `jest`, `build` and `package`, and failed `lint`
   with 75 errors, all in this branch's files (mostly import style). The fix was mechanical, with two
@@ -1229,30 +1116,11 @@ The hand-over commit after `2855dcc9` adds this chapter and the feature README u
   persisted, the unaffected path and its `nodeProbeDurationMs`, Remote, the off switch following the
   user-manual page, and a slow network. The steps are in WI-9 and in the hand-over message.
 
-## Developer-preview build (operator request, 2026-10-09)
-
-For feedback from an affected user before the release review, the operator asked for a
-`0.11.1-preview` build with a modal dialog that explains the workaround when it was applied.
-`src/documentdb/srv/srvFallbackPreviewNotice.ts` shows "Developer Preview: DNS workaround applied
-for <host>" after a **successful fallback on a tree connection** only (the operator: "only on the
-tree expansion"), once per SRV host per window. It is non-blocking (never awaited), and its
-"Copy Details" summary has no credentials, connection string or resolved target hosts. It sits
-behind `SHOW_SRV_FALLBACK_PREVIEW_NOTICE`.
-
-The preview VSIX was built from `72d3d019` and shared with the affected user. **Removed
-(operator, 2026-10-12):** "that experimental phase has completed". The notice module, its tests,
-its call site in `prepareDriverConnectionString` and its localized strings are gone; the adapter
-is back to its `3024e370` state. Fallback use stays visible in the `[SrvResolution]` trace and in
-telemetry (D0021).
-
 ## Open items
-
-- **Before the `0.11.1` release:** set the version from `0.11.1-preview` to `0.11.1`.
 
 - Run the pending manual checks and record the results here.
 - The AI pre-review file required by CONTRIBUTING §6, the `0.11.1` version bump, the PR into `release/0.11.1` (created by a maintainer from `v0.11.0`), and the
   forward-merge into `main` (D0015).
 - Final package name and the publish workflow entry before the first npm publish (D0020).
-- Deviations recorded under WI-0 to WI-10 were approved by the coordinator at ≥ 80 % confidence;
-  none changed a decision in `decisions.md`. The operator reviewed the tree refresh mechanism
-  (WI-10) and dropped the tooltip line altogether (D0021).
+- Deviations recorded under WI-0 to WI-9 were approved by the coordinator at ≥ 80 % confidence;
+  none changed a decision in `decisions.md`.
