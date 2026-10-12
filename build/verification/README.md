@@ -131,13 +131,14 @@ initializer, and the result must be `undefined`. Both run in `npm run test:verif
 These probes build and run bundles instead of inspecting the packaged artifact, so they are not part of L1,
 which stays offline and build-free for the ADO release build.
 
-The JSON result includes `manifestReport`: current `vsixBytes.bytes`, `graphAssetBytes` sums and
-`graphSizes`, the per-graph measurements below. A short summary goes to stderr;
+The JSON result includes `manifestReport`: current `vsixBytes.bytes`, `graphAssetBytes` sums,
+`graphSizes`, the per-graph measurements below, and `graphPackages`. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
 GitHub Actions publishes `Bundle-reports-<run_id>` from the package job and
 `L1-manifest-report-<run_id>` from L1, including on inspection failure. L1's PR comment reads the
 report's `graphSizes`, not the thin `views.js` entry. Push builds and manual cache
-seeding use `{version: 2, vsixSize, graphSizes}` in the existing `build-sizes-<ref>-<sha>` cache;
+seeding use `{version: 3, vsixSize, graphSizes, graphPackages}` in the existing `build-sizes-<ref>-<sha>` cache;
+`{version: 2, vsixSize, graphSizes}` entries compare sizes without packages, and
 legacy `{vsixSize, webviewSize}` baselines compare only the VSIX and mark graph deltas unavailable.
 The shared [`build-size-report.cjs`](./build-size-report.cjs) formats those measurements and writes
 the cache without recalculating graph closures. It is also covered by `test:verification`.
@@ -191,7 +192,8 @@ and `SIZE_CHANGE_BYTES` in [`build-size-report.cjs`](./build-size-report.cjs)). 
 
 - one line when nothing was flagged, with the VSIX size;
 - otherwise a table of the flagged graphs only (human-readable sizes and percentages), growth marked
-  ⚠, decreases listed without it, and a pointer to the bundle reports;
+  ⚠, decreases listed without it, one line per flagged graph naming its three biggest package
+  changes when the base has package data (below), and a pointer to the bundle reports;
 - an explicit "No size data for `<base>` yet; sizes only." when the base has no cache entry, and a
   VSIX-only comparison for a legacy `{vsixSize, webviewSize}` entry;
 - always, every graph in exact bytes inside a collapsed `<details>` block, with the artifact links.
@@ -201,8 +203,14 @@ Rows list the pages (`collectionView`, `documentView`, `localQuickStart`, `atlas
 the other graphs. Each flagged growth also emits a GitHub warning annotation, so it shows in the
 checks UI. Shared chunks count in every graph that loads them, so rows do not add up.
 
-To find out why a graph moved, download `Bundle-reports-<run_id>` from the PR run and from a base
-build and compare the chunks' `bytes` and `moduleIds` in `host.json` and `views.json`.
+To show why a graph moved, the bundle reports record each chunk's `moduleBytes` (Rolldown's
+`renderedLength` per module, before minification), and L1 sums them per npm package, `src/<folder>`
+or `packages/<name>` into `manifestReport.graphPackages` (largest packages up to 99% of the graph, at
+most 60, the rest as `(other)`; graphs without chunks are omitted). Under a flagged graph, the comment
+lists the three packages that changed most (at least 1 KiB, marked new or removed, approximate
+because unminified); a v2 base, or a package that may be hidden in `(other)`, gives no package line.
+For more detail, compare the chunks' `bytes`, `moduleIds` and `moduleBytes` in `host.json` and
+`views.json` from `Bundle-reports-<run_id>` of the PR run and of a base build.
 
 ### Host class names (`keepNames`, review item F17)
 

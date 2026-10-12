@@ -15,7 +15,9 @@
 //   assetHashes  { <file relative to outDir>: <sha256 of the bytes on disk> } for every emitted
 //                file, including the Monaco worker scripts and the entry after inline-css changed it
 //   chunks       [{ fileName, name, isEntry, isDynamicEntry, facadeModuleId, imports,
-//                   dynamicImports, moduleIds, bytes }]  (module IDs repository-relative, '/')
+//                   dynamicImports, moduleIds, moduleBytes, bytes }]  (module IDs repository-relative, '/')
+//                `moduleBytes` { <module ID>: Rolldown's `renderedLength` }: each module's code before
+//                minification, so only good for comparing packages, not for packaged sizes
 //   assets       [{ fileName, bytes }] for emitted files that are not chunks (workers, fonts)
 
 import { createHash } from 'node:crypto';
@@ -88,6 +90,12 @@ export function bundleReport({ outFile, append = false }) {
                     imports: chunk.imports,
                     dynamicImports: chunk.dynamicImports,
                     moduleIds: chunk.moduleIds.map(normalizeModuleId),
+                    moduleBytes: Object.fromEntries(
+                        Object.entries(chunk.modules).map(([id, module]) => [
+                            normalizeModuleId(id),
+                            module.renderedLength,
+                        ]),
+                    ),
                     bytes: read(chunk.fileName).length,
                 })),
                 assets: fileNames

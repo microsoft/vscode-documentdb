@@ -49,6 +49,35 @@ function visible(body) {
     return body.split('<details>')[0].trim();
 }
 
+// Approximate package bytes for collectionView: the base, and a PR that adds `acorn` and
+// `lumped-new`, drops `left-pad` and `lumped-gone`, and moves three others by different amounts.
+// `lumped-*` are no larger than the other side's smallest named package, so they may sit in its
+// `(other)`; their change is unknown.
+const basePackages = {
+    collectionView: {
+        'monaco-editor': 3_000_000,
+        'src/webviews': 500_000,
+        '@fluentui/react-combobox': 200_000,
+        react: 100_000,
+        'left-pad': 40_000,
+        'lumped-gone': 15_000,
+        '(other)': 30_000,
+    },
+};
+const v3Base = cacheSizes({ ...report, graphPackages: basePackages });
+const prPackages = {
+    collectionView: {
+        'monaco-editor': 3_000_000 - 4_096,
+        'src/webviews': 500_000,
+        acorn: 169 * 1024,
+        '@fluentui/react-combobox': 200_000 + 9_318,
+        react: 100_000 + 1_000,
+        'lumped-new': 15_000,
+        '(other)': 30_000,
+    },
+};
+const packageLine = /^- .*biggest package changes.*$/gm;
+
 test('No change gives a single quiet line, with every graph in the collapsed details', () => {
     const body = buildSizeComment(report, base, options);
     assert.equal(
@@ -164,8 +193,8 @@ test('Graphs present on one side only show n/a and are never flagged', () => {
     assert.ok(body.includes('| `renamedView` | 1,000 | n/a | n/a | n/a |'));
 });
 
-test('The v2 cache keeps the L1 graph names, and the CLI writes it', () => {
-    assert.deepEqual(base, { version: 2, vsixSize: 8_000_000, graphSizes });
+test('The v3 cache keeps the L1 graph names and package totals, and the CLI writes it', () => {
+    assert.deepEqual(base, { version: 3, vsixSize: 8_000_000, graphSizes, graphPackages: {} });
     assert.deepEqual(Object.keys(base.graphSizes), [
         'main',
         'mainStartup',
@@ -186,11 +215,11 @@ test('The v2 cache keeps the L1 graph names, and the CLI writes it', () => {
     try {
         const reportFile = path.join(directory, 'l1.json');
         const cacheFile = path.join(directory, 'build-sizes.json');
-        fs.writeFileSync(reportFile, JSON.stringify(report));
+        fs.writeFileSync(reportFile, JSON.stringify({ ...report, graphPackages: basePackages }));
         const env = { ...process.env };
         delete env.GITHUB_STEP_SUMMARY;
         execFileSync(process.execPath, [path.join(__dirname, 'build-size-report.cjs'), reportFile, cacheFile], { env });
-        assert.deepEqual(JSON.parse(fs.readFileSync(cacheFile, 'utf8')), base);
+        assert.deepEqual(JSON.parse(fs.readFileSync(cacheFile, 'utf8')), { ...base, graphPackages: basePackages });
     } finally {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -209,4 +238,48 @@ test('Malformed L1 and base data fail explicitly', () => {
     assert.throws(() => cacheSizes({ ...report, vsixBytes: { bytes: 9000 } }), /measurements disagree/);
     assert.throws(() => cacheSizes(withSizes({ main: -1 })), /Invalid L1 bytes for main/);
     assert.throws(() => buildSizeComment(report, { vsixSize: 'bad' }, options), /Invalid base bytes/);
+    assert.throws(
+        () => cacheSizes({ ...report, graphPackages: { main: { acorn: 1.5 } } }),
+        /Invalid L1 package bytes for main: acorn/,
+    );
+    const flagged = { ...withSizes({ collectionView: 6_200_000 }), graphPackages: basePackages };
+    assert.throws(
+        () => buildSizeComment(flagged, { ...v3Base, graphPackages: { collectionView: { acorn: -1 } } }, options),
+        /Invalid base package bytes for collectionView: acorn/,
+    );
+});
+
+test('A flagged graph with a v3 base names its three biggest package changes, marking new and removed', () => {
+    const grown = { ...withSizes({ collectionView: 6_000_000 + 180_000 }), graphPackages: prPackages };
+    const body = visible(buildSizeComment(grown, v3Base, options));
+    assert.deepEqual(body.match(packageLine), [
+        '- Collection View page (`collectionView`), biggest package changes (approx., before minification): `acorn` +169.0 KiB (new), `left-pad` -39.1 KiB (removed), `@fluentui/react-combobox` +9.1 KiB',
+    ]);
+    // Below the table, above the pointer to the bundle reports.
+    assert.ok(body.indexOf('| Collection View page') < body.indexOf('biggest package changes'));
+    assert.ok(body.indexOf('biggest package changes') < body.indexOf('To find out why'));
+    // Each would outrank `@fluentui/react-combobox`, but may only have moved in or out of `(other)`.
+    assert.ok(!body.includes('lumped-'));
+});
+
+test('No package line without a flagged graph, or for a flagged graph without package data', () => {
+    const quiet = { ...withSizes({ collectionView: 6_000_000 + 1_000 }), graphPackages: prPackages };
+    const body = buildSizeComment(quiet, v3Base, options);
+    assert.ok(visible(body).includes('No page, activation, VSIX or other bundle size changed'));
+    assert.ok(!body.includes('biggest package changes'));
+    const vsixOnly = { ...withSizes({ vsix: 9_000_000 }), graphPackages: prPackages };
+    assert.ok(visible(buildSizeComment(vsixOnly, v3Base, options)).includes('| VSIX (`vsix`) |'));
+    assert.ok(!buildSizeComment(vsixOnly, v3Base, options).includes('biggest package changes'));
+});
+
+test('A v2 base gives the size comparison without a package line', () => {
+    const v2Base = { version: 2, vsixSize: 8_000_000, graphSizes };
+    const grown = { ...withSizes({ collectionView: 6_000_000 + 180_000 }), graphPackages: prPackages };
+    const body = buildSizeComment(grown, v2Base, options);
+    assert.ok(
+        visible(body).includes(
+            '| Collection View page (`collectionView`) | 5.9 MiB | 5.7 MiB | ⚠ +175.8 KiB | +3.0% |',
+        ),
+    );
+    assert.ok(!body.includes('biggest package changes'));
 });

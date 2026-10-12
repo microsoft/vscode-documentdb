@@ -794,11 +794,8 @@ function monacoWorkerAssets(report, files) {
     return workers;
 }
 
-/**
- * Packaged bytes per size graph. Every counted file must be owned by the bundle report its
- * graph comes from; `inspect` checks those reports' hashes against the packaged bytes.
- */
-function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
+/** Report-owned files per size graph, paired with the bundle report each set comes from. */
+function sizeGraphAssets(files, hostReport, viewsReport, graphs) {
     const mainEntry = hostReport.chunks.find((chunk) => chunk.isEntry && chunk.name === 'main');
     assert.ok(mainEntry, 'Bundle report missing host entry main');
     const host = {
@@ -813,11 +810,19 @@ function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
         ...Object.fromEntries(Object.keys(viewModules).map((name) => [name, graphs[name].assets])),
         ...monacoWorkerAssets(viewsReport, files),
     };
-    const measured = {};
-    for (const [report, sizeGraphs] of [
+    return [
         [hostReport, host],
         [viewsReport, views],
-    ]) {
+    ];
+}
+
+/**
+ * Packaged bytes per size graph. Every counted file must be owned by the bundle report its
+ * graph comes from; `inspect` checks those reports' hashes against the packaged bytes.
+ */
+function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
+    const measured = {};
+    for (const [report, sizeGraphs] of sizeGraphAssets(files, hostReport, viewsReport, graphs)) {
         for (const [name, assets] of Object.entries(sizeGraphs)) {
             measured[name] = assets.reduce((bytes, asset) => {
                 assert.ok(
@@ -830,6 +835,70 @@ function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
         }
     }
     measured.vsix = vsixBytes;
+    return measured;
+}
+
+/** The npm package a bundle report module ID belongs to, or a short group for our own code. */
+function packageOf(moduleId) {
+    const id = moduleId.replaceAll('\\', '/').split('?')[0];
+    if (id.startsWith('virtual:')) {
+        return '(virtual)';
+    }
+    const nodeModules = id.lastIndexOf('/node_modules/');
+    if (nodeModules >= 0) {
+        const [first, second] = id.slice(nodeModules + '/node_modules/'.length).split('/');
+        return first.startsWith('@') ? `${first}/${second}` : first;
+    }
+    if (!id.startsWith('./')) {
+        return '(outside the repository)';
+    }
+    const segments = id.slice(2).split('/');
+    return ['src', 'packages'].includes(segments[0]) && segments.length > 2
+        ? `${segments[0]}/${segments[1]}`
+        : segments[0];
+}
+
+const PACKAGE_LIMIT = 60;
+const PACKAGE_SHARE = 0.99;
+
+/**
+ * Approximate bytes per package (bundle report `moduleBytes`, before minification) for every size
+ * graph made of chunks. The largest packages up to 99% of a graph, at most 60, are kept; the rest
+ * add up to `(other)`. Graphs without module data (workers, `viewsAssets`, `vsix`) are omitted.
+ */
+function measurePackageGraphs(files, hostReport, viewsReport, graphs) {
+    const measured = {};
+    for (const [report, sizeGraphs] of sizeGraphAssets(files, hostReport, viewsReport, graphs)) {
+        const chunks = new Map(report.chunks.map((chunk) => [chunk.fileName, chunk]));
+        for (const [name, assets] of Object.entries(sizeGraphs)) {
+            const chunkModules = assets.map((asset) => chunks.get(asset)?.moduleBytes).filter(Boolean);
+            if (chunkModules.length === 0) {
+                continue;
+            }
+            const packages = new Map();
+            for (const [moduleId, bytes] of chunkModules.flatMap((moduleBytes) => Object.entries(moduleBytes))) {
+                assert.ok(Number.isSafeInteger(bytes) && bytes >= 0, `${name}: invalid moduleBytes for ${moduleId}`);
+                const pkg = packageOf(moduleId);
+                packages.set(pkg, (packages.get(pkg) ?? 0) + bytes);
+            }
+            const total = [...packages.values()].reduce((sum, bytes) => sum + bytes, 0);
+            const kept = {};
+            let covered = 0;
+            let other = 0;
+            for (const [pkg, bytes] of [...packages].sort(([a, x], [b, y]) => y - x || (a < b ? -1 : 1))) {
+                if (Object.keys(kept).length < PACKAGE_LIMIT && covered < total * PACKAGE_SHARE) {
+                    kept[pkg] = bytes;
+                    covered += bytes;
+                } else {
+                    other += bytes;
+                }
+            }
+            if (other > 0) {
+                kept['(other)'] = other;
+            }
+            measured[name] = kept;
+        }
+    }
     return measured;
 }
 
@@ -887,6 +956,7 @@ function inspect(filename, options = {}) {
             ]),
         ),
         graphSizes: measureSizeGraphs(files, reports[0], reports[1], graphs, result.vsixBytes),
+        graphPackages: measurePackageGraphs(files, reports[0], reports[1], graphs),
     };
     return result;
 }
@@ -937,6 +1007,8 @@ module.exports = {
     keptClassNames,
     keptClassNameSites,
     measureSizeGraphs,
+    measurePackageGraphs,
+    packageOf,
     babelConfigFileImports,
     babelConfigFileImportLimit,
     viteChunkClosure,

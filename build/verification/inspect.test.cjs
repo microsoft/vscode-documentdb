@@ -26,6 +26,8 @@ const {
     keptClassNames,
     keptClassNameSites,
     measureSizeGraphs,
+    measurePackageGraphs,
+    packageOf,
 } = require('./inspect.cjs');
 const { readVsix, writeVsix, extractVsix } = require('./vsix.cjs');
 
@@ -514,7 +516,14 @@ test('host chunks and the CJS plugin require their own report ownership and matc
         writeReports();
         writeVsix(filename, bundled);
         const { manifestReport } = inspect(filename, { reports: directory });
-        assert.deepEqual(Object.keys(manifestReport).sort(), ['graphAssetBytes', 'graphSizes', 'vsixBytes']);
+        assert.deepEqual(Object.keys(manifestReport).sort(), [
+            'graphAssetBytes',
+            'graphPackages',
+            'graphSizes',
+            'vsixBytes',
+        ]);
+        // These fixture reports predate moduleBytes, so no graph has package data.
+        assert.deepEqual(manifestReport.graphPackages, {});
         assert.deepEqual(manifestReport.vsixBytes, { bytes: fs.statSync(filename).size });
         assert.equal(manifestReport.graphSizes.vsix, manifestReport.vsixBytes.bytes);
         assert.equal(manifestReport.graphSizes.viewsAssets, 100);
@@ -1080,6 +1089,89 @@ test('viewsAssets remains required even when the views report owns no non-script
     const measured = measureSizeGraphs(bundled, host.report, views.report, graphs, 42);
     assert.ok(Object.hasOwn(measured, 'viewsAssets'));
     assert.equal(measured.viewsAssets, 0);
+});
+
+test('package attribution names npm packages, scoped or not, and groups our code by folder', () => {
+    for (const [moduleId, expected] of [
+        ['./node_modules/acorn/dist/acorn.mjs', 'acorn'],
+        ['./node_modules/@fluentui/react-combobox/lib/index.js', '@fluentui/react-combobox'],
+        ['./node_modules/foo/node_modules/@scope/bar/x.js?commonjs-proxy', '@scope/bar'],
+        ['C:/agent/repo/node_modules/react/index.js', 'react'],
+        ['C:\\agent\\repo\\node_modules\\react\\index.js', 'react'],
+        ['./src/webviews/documentdb/collectionView/CollectionView.tsx', 'src/webviews'],
+        ['./src/extension.ts', 'src'],
+        ['./packages/vscode-ext-webview/src/index.ts', 'packages/vscode-ext-webview'],
+        ['./l10n/bundle.l10n.json', 'l10n'],
+        ['virtual:vite/preload-helper.js', '(virtual)'],
+        ['/elsewhere/file.js', '(outside the repository)'],
+    ]) {
+        assert.equal(packageOf(moduleId), expected, moduleId);
+    }
+});
+
+test('package graphs sum moduleBytes per package over the size graphs made of chunks', () => {
+    const host = hostFixture();
+    const views = viteFixture();
+    const chunk = (report, fileName) => report.chunks.find((candidate) => candidate.fileName === fileName);
+    chunk(host.report, 'main.mjs').moduleBytes = { './main.ts': 20 };
+    chunk(host.report, 'extension-AbC12345.mjs').moduleBytes = { './src/extension.ts': 30, './src/tree/a.ts': 10 };
+    chunk(host.report, 'bson.mjs').moduleBytes = { './node_modules/bson/lib/bson.cjs': 40 };
+    chunk(host.report, 'kubernetes.mjs').moduleBytes = {
+        './node_modules/@kubernetes/client-node/dist/index.js': 50,
+        './node_modules/@kubernetes/client-node/dist/api.js': 50,
+    };
+    chunk(views.report, 'views.js').moduleBytes = { './src/webviews/index.tsx': 3 };
+    chunk(views.report, 'shared.js').moduleBytes = { './node_modules/react/index.js': 40 };
+    views.report.assetHashes['editor.worker-Ab_C-12x.js'] = 'fixture';
+    const bundled = new Map([...host.bundled, ...views.bundled]);
+    bundled.set('extension/editor.worker-Ab_C-12x.js', Buffer.alloc(7));
+    const graphs = { ...hostGraphs(host.report, bundled), ...viewGraphs(views.report, bundled) };
+    const packages = measurePackageGraphs(bundled, host.report, views.report, graphs);
+    // Workers, viewsAssets and vsix have no module data; playgroundTsPlugin's chunk has none either.
+    assert.deepEqual(Object.keys(packages), [
+        'main',
+        'mainStartup',
+        'playgroundWorker',
+        'viewsEntry',
+        ...Object.keys(viewModules),
+    ]);
+    assert.deepEqual(packages.main, {
+        '@kubernetes/client-node': 100,
+        bson: 40,
+        src: 30,
+        'main.ts': 20,
+        'src/tree': 10,
+    });
+    assert.deepEqual(packages.mainStartup, { bson: 40, src: 30, 'main.ts': 20, 'src/tree': 10 });
+    assert.deepEqual(packages.collectionView, { react: 40, 'src/webviews': 3 });
+});
+
+test('package graphs keep the largest packages up to 99% or 60 entries and add up the rest as (other)', () => {
+    const host = hostFixture();
+    const views = viteFixture();
+    const bundled = new Map([...host.bundled, ...views.bundled]);
+    const graphs = { ...hostGraphs(host.report, bundled), ...viewGraphs(views.report, bundled) };
+    const main = host.report.chunks.find((chunk) => chunk.fileName === 'main.mjs');
+    const small = Array.from({ length: 10 }, (_, index) => [`./node_modules/small-${index}/index.js`, 1]);
+    main.moduleBytes = Object.fromEntries([['./node_modules/big/index.js', 990], ...small]);
+    assert.deepEqual(measurePackageGraphs(bundled, host.report, views.report, graphs).main, {
+        big: 990,
+        '(other)': 10,
+    });
+    main.moduleBytes = Object.fromEntries(
+        Array.from({ length: 70 }, (_, index) => [`./node_modules/package-${index}/index.js`, 100 + index]),
+    );
+    const bounded = measurePackageGraphs(bundled, host.report, views.report, graphs).main;
+    assert.equal(Object.keys(bounded).length, 61);
+    assert.equal(bounded['package-69'], 169);
+    assert.equal(bounded['package-10'], 110);
+    assert.equal(bounded['package-9'], undefined);
+    assert.equal(bounded['(other)'], 100 + 101 + 102 + 103 + 104 + 105 + 106 + 107 + 108 + 109);
+    main.moduleBytes = { './main.ts': -1 };
+    assert.throws(
+        () => measurePackageGraphs(bundled, host.report, views.report, graphs),
+        /main: invalid moduleBytes for \.\/main\.ts/,
+    );
 });
 
 test('keepNames sites report the runtime class name for every emitted shape', () => {

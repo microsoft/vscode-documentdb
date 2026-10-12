@@ -10,6 +10,10 @@ const fs = require('node:fs');
 const SIZE_CHANGE_FRACTION = 0.05;
 const SIZE_CHANGE_BYTES = 50 * 1024;
 const THRESHOLDS = `${SIZE_CHANGE_FRACTION * 100}% or ${SIZE_CHANGE_BYTES / 1024} KiB`;
+// Per flagged graph, the packages whose approximate size moved most.
+const PACKAGE_CHANGE_BYTES = 1024;
+const PACKAGE_CHANGE_COUNT = 3;
+const OTHER_PACKAGES = '(other)';
 
 // What users wait for, listed first; every other graph follows in L1 report order.
 const PRIMARY_GRAPHS = {
@@ -24,6 +28,17 @@ const PRIMARY_GRAPHS = {
     vsix: 'VSIX',
 };
 
+function validatePackages(graphPackages, source) {
+    for (const [graph, packages] of Object.entries(graphPackages ?? {})) {
+        for (const [name, bytes] of Object.entries(packages)) {
+            assert.ok(
+                Number.isSafeInteger(bytes) && bytes >= 0,
+                `Invalid ${source} package bytes for ${graph}: ${name}`,
+            );
+        }
+    }
+}
+
 function validateReport(report) {
     assert.ok(report.graphSizes && typeof report.graphSizes === 'object', 'Missing L1 graphSizes');
     assert.ok(Object.keys(report.graphSizes).length > 0, 'Missing L1 graphs');
@@ -32,11 +47,17 @@ function validateReport(report) {
     }
     assert.ok(Number.isSafeInteger(report.vsixBytes?.bytes) && report.vsixBytes.bytes >= 0, 'Invalid L1 VSIX bytes');
     assert.equal(report.graphSizes.vsix, report.vsixBytes.bytes, 'L1 VSIX measurements disagree');
+    validatePackages(report.graphPackages, 'L1');
 }
 
 function cacheSizes(report) {
     validateReport(report);
-    return { version: 2, vsixSize: report.vsixBytes.bytes, graphSizes: { ...report.graphSizes } };
+    return {
+        version: 3,
+        vsixSize: report.vsixBytes.bytes,
+        graphSizes: { ...report.graphSizes },
+        graphPackages: { ...report.graphPackages },
+    };
 }
 
 function baseBytes(base, graph) {
@@ -87,6 +108,40 @@ function formatBytes(bytes) {
 
 function label(graph, code = (name) => `\`${name}\``) {
     return Object.hasOwn(PRIMARY_GRAPHS, graph) ? `${PRIMARY_GRAPHS[graph]} (${code(graph)})` : code(graph);
+}
+
+/**
+ * The packages of one graph whose approximate bytes changed most, largest first. Empty when either
+ * side has no package data (a v2 or legacy base). A package missing on one side may be lumped into
+ * that side's `(other)`, where no package is larger than the smallest named one or `(other)` itself;
+ * a package no larger than that cap has an unknown change and is left out.
+ */
+function packageChanges(report, base, graph) {
+    const current = report.graphPackages?.[graph];
+    const previous = base?.graphPackages?.[graph];
+    if (!current || !previous) return [];
+    validatePackages({ [graph]: previous }, 'base');
+    const lumpedCap = (packages) =>
+        Math.min(
+            packages[OTHER_PACKAGES] ?? 0,
+            ...Object.entries(packages)
+                .filter(([name]) => name !== OTHER_PACKAGES)
+                .map(([, bytes]) => bytes),
+        );
+    const changes = [];
+    for (const name of new Set([...Object.keys(current), ...Object.keys(previous)])) {
+        if (name === OTHER_PACKAGES) continue;
+        const now = current[name];
+        const was = previous[name];
+        if (now === undefined && was <= lumpedCap(current)) continue;
+        if (was === undefined && now <= lumpedCap(previous)) continue;
+        const delta = (now ?? 0) - (was ?? 0);
+        if (Math.abs(delta) < PACKAGE_CHANGE_BYTES) continue;
+        changes.push({ name, delta, marker: was === undefined ? 'new' : now === undefined ? 'removed' : null });
+    }
+    return changes
+        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || (a.name < b.name ? -1 : 1))
+        .slice(0, PACKAGE_CHANGE_COUNT);
 }
 
 /** Exact bytes for every graph; without a base, the PR sizes only. */
@@ -140,6 +195,17 @@ function buildSizeComment(report, base, options) {
             lines.push(`The cached ${ref} sizes predate per-graph data; only the VSIX is compared.`, '');
         }
         const moved = compareSizes(report, base).filter((row) => row.change);
+        const packageLines = moved.flatMap((row) => {
+            const changes = packageChanges(report, base, row.graph);
+            if (changes.length === 0) return [];
+            const listed = changes.map(
+                (change) =>
+                    `\`${change.name}\` ${signed(change.delta, formatSize(change.delta))}${change.marker ? ` (${change.marker})` : ''}`,
+            );
+            return [
+                `- ${label(row.graph)}, biggest package changes (approx., before minification): ${listed.join(', ')}`,
+            ];
+        });
         if (moved.length === 0) {
             lines.push(
                 base.graphSizes
@@ -157,6 +223,7 @@ function buildSizeComment(report, base, options) {
                         `| ${label(row.graph)} | ${formatSize(row.bytes)} | ${formatSize(row.base)} | ${row.change === 'growth' ? '⚠ ' : ''}${signed(row.delta, formatSize(row.delta))} | ${formatPercent(row.delta, row.base)} |`,
                 ),
                 '',
+                ...(packageLines.length > 0 ? [...packageLines, ''] : []),
                 `To find out why, compare the chunks (\`bytes\`, \`moduleIds\`) in \`host.json\` and \`views.json\` from ${bundleLink} with the same reports from a ${ref} build.`,
             );
         }
@@ -190,4 +257,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { buildSizeComment, cacheSizes, compareSizes, sizeTable, sizeWarnings };
+module.exports = { buildSizeComment, cacheSizes, compareSizes, packageChanges, sizeTable, sizeWarnings };
