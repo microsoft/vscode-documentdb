@@ -61,7 +61,7 @@ export function getHoverContent(word: string, fieldLookup?: FieldDataLookup): mo
             }
 
             return {
-                contents: [{ value: lines.join('\n\n'), isTrusted: true, supportHtml: true }],
+                contents: [{ value: lines.join('\n\n'), isTrusted: false, supportHtml: true }],
             };
         }
     }

@@ -148,7 +148,7 @@ describe('documentdbQueryCompletionProvider', () => {
     describe('mapOperatorToCompletionItem', () => {
         const mockMonaco = createMockMonaco();
 
-        test('maps a simple operator entry without snippet', () => {
+        test('maps a simple operator entry without snippet', (): void => {
             const entry: OperatorEntry = {
                 value: '$eq',
                 meta: 'query:comparison',
@@ -164,6 +164,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect((item.documentation as { value: string }).value).toContain(
                 'Matches values equal to a specified value.',
             );
+            expect(item.documentation).toEqual({ value: entry.description, isTrusted: false });
             expect(item.range).toBe(testRange);
         });
 
@@ -182,7 +183,7 @@ describe('documentdbQueryCompletionProvider', () => {
             expect(item.insertTextRules).toBe(mockInsertTextRule.InsertAsSnippet);
         });
 
-        test('maps a BSON constructor with link', () => {
+        test('maps a BSON constructor with link', (): void => {
             const entry: OperatorEntry = {
                 value: 'ObjectId',
                 meta: 'bson',
@@ -200,6 +201,10 @@ describe('documentdbQueryCompletionProvider', () => {
             const docValue = (item.documentation as { value: string }).value;
             expect(docValue).toContain('Creates a new ObjectId value.');
             expect(docValue).toContain('https://docs.example.com/objectid');
+            expect(item.documentation).toEqual({
+                value: `${entry.description}\n\n[ⓘ Documentation](${entry.link})`,
+                isTrusted: false,
+            });
         });
 
         test('uses the provided range', () => {
