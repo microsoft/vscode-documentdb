@@ -87,15 +87,16 @@ Increment 1 ([plan](./iterations/01-srv-fallback/plan.md), progress recorded per
 
 ## Timeline
 
-| Date       | PR  | What changed                                                                                                   | Docs                                                                                                                           |
-| ---------- | --- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-10-09 | —   | Feature folder and dev plan                                                                                    | [iterations/01-srv-fallback/plan.md](./iterations/01-srv-fallback/plan.md)                                                     |
-| 2026-10-09 | —   | Operator answers Q1, Q3–Q7 (D0011–D0016); Q2 investigated; future work                                         | [decisions.md](./decisions.md), [future-work.md](./future-work.md)                                                             |
-| 2026-10-09 | —   | Q2 answered (D0017); `v0.11.1` release steps confirmed (D0015)                                                 | [decisions.md](./decisions.md)                                                                                                 |
-| 2026-10-09 | —   | Design review: findings verified and folded into the plan; Q8 added and answered (D0018)                       | [iterations/01-srv-fallback/design-review.md](./iterations/01-srv-fallback/design-review.md)                                   |
-| 2026-10-09 | —   | VS Code-independent logic goes into workspace package `@documentdb-js/srv-resolver` (D0020, WI-0)              | [decisions.md](./decisions.md)                                                                                                 |
-| 2026-10-09 | —   | D0005, D0007–D0010 accepted; `connectToClient` deprecated; iteration 01 moved into a folder                    | [decisions.md](./decisions.md)                                                                                                 |
-| 2026-10-12 | -   | Increment 1 implemented; end-of-work review; simplified per operator review (D0022); manual checks 2-8 pending | [plan.md Outcome](./iterations/01-srv-fallback/plan.md#outcome), [code-review.md](./iterations/01-srv-fallback/code-review.md) |
+| Date       | PR   | What changed                                                                                                   | Docs                                                                                                                           |
+| ---------- | ---- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-10-09 | —    | Feature folder and dev plan                                                                                    | [iterations/01-srv-fallback/plan.md](./iterations/01-srv-fallback/plan.md)                                                     |
+| 2026-10-09 | —    | Operator answers Q1, Q3–Q7 (D0011–D0016); Q2 investigated; future work                                         | [decisions.md](./decisions.md), [future-work.md](./future-work.md)                                                             |
+| 2026-10-09 | —    | Q2 answered (D0017); `v0.11.1` release steps confirmed (D0015)                                                 | [decisions.md](./decisions.md)                                                                                                 |
+| 2026-10-09 | —    | Design review: findings verified and folded into the plan; Q8 added and answered (D0018)                       | [iterations/01-srv-fallback/design-review.md](./iterations/01-srv-fallback/design-review.md)                                   |
+| 2026-10-09 | —    | VS Code-independent logic goes into workspace package `@documentdb-js/srv-resolver` (D0020, WI-0)              | [decisions.md](./decisions.md)                                                                                                 |
+| 2026-10-09 | —    | D0005, D0007–D0010 accepted; `connectToClient` deprecated; iteration 01 moved into a folder                    | [decisions.md](./decisions.md)                                                                                                 |
+| 2026-10-12 | -    | Increment 1 implemented; end-of-work review; simplified per operator review (D0022); manual checks 2-8 pending | [plan.md Outcome](./iterations/01-srv-fallback/plan.md#outcome), [code-review.md](./iterations/01-srv-fallback/code-review.md) |
+| 2026-10-12 | #997 | PR pre-review with the Copilot reviewer's comments cross-checked; proposed solutions, author decisions pending | [pr-997-review.md](./iterations/01-srv-fallback/pr-997-review.md)                                                              |
 
 ## Decisions
 
@@ -126,4 +127,6 @@ driver). D0005 and D0007 to D0010 were accepted by the operator on 2026-10-09 (D
    findings and the evidence behind them
 6. [iterations/01-srv-fallback/code-review.md](./iterations/01-srv-fallback/code-review.md): end-of-work
    code review and its triage
-7. [future-work.md](./future-work.md): deferred items
+7. [iterations/01-srv-fallback/pr-997-review.md](./iterations/01-srv-fallback/pr-997-review.md): PR #997
+   review, Copilot cross-check, proposed solutions and author decisions
+8. [future-work.md](./future-work.md): deferred items
