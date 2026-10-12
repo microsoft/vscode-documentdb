@@ -8,6 +8,7 @@ The package is now ESM-only. No API signatures changed.
 
 - **ESM-only.** The package declares `"type": "module"` and ships ES modules only, with an `exports` map. Deep imports into `dist/` are no longer allowed; import from `@documentdb-js/schema-analyzer`.
 - **Node.js 22.18 or later.** CommonJS consumers can still `require()` the package: Node supports `require()` of ES modules from 20.19 and 22.12, and the package uses no top-level `await`. The package declares `engines.node` `>=22.18.0`, the floor of the extension that develops it.
+- **TypeScript (tested with 6.0.3).** Static imports from CommonJS-format `.ts` files fail with TS1479 under `module: node16` or `node18`. The same imports compile under `node20` and `nodenext`. Under `node16`, `await import()` inside an async function also compiles. Use that dynamic import or convert the consumer to ESM (`.mts` or `"type": "module"`).
 
 ### Changed
 

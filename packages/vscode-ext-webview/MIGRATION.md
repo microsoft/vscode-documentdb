@@ -47,6 +47,12 @@ The package is now **ESM-only**. No API, wire-protocol or behaviour changes.
   TypeScript must keep that `import()`: compile with `module` `node16` or
   `nodenext`, because `module: commonjs` rewrites it to `require()`.
 
+- **TypeScript (tested with 6.0.3).** Static imports from CommonJS-format `.ts`
+  files fail with TS1479 under `module: node16` or `node18`. The same imports
+  compile under `node20` and `nodenext`. Under `node16`, `await import()` inside
+  an async function also compiles. Use that dynamic import or convert the
+  consumer to ESM (`.mts` or `"type": "module"`). These compiler modes do not
+  remove the `./host` runtime restriction above.
 - Bundlers resolve it as before. `./host` imports `vscode` with a static
   `import`, so keep `vscode` external in the extension-host bundle.
 - Test runners: the host entry is no longer CommonJS, so a `vscode` alias in

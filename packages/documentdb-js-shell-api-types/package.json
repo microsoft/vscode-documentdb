@@ -15,7 +15,8 @@
   },
   "files": [
     "dist",
-    "typeDefs"
+    "typeDefs",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p . && tsc -p scripts --noEmit",
