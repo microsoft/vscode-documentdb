@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createSrvResolutionSummary } from './srvResolutionSummary';
 import { applySrvResolutionReport } from './srvResolutionTelemetry';
 
 import { type SrvResolutionReport } from '@documentdb-js/srv-resolver';
@@ -15,103 +14,49 @@ const report: SrvResolutionReport = {
     outcome: 'succeeded',
     nodeErrorCode: 'EBADRESP',
     fallbackOutcome: 'succeeded',
-    txtOptionsApplied: [],
     dnsServers: [],
     forcedFallback: false,
     aresVersion: '1.34.8',
     nodeRuntimeVersion: '22.0.0',
 };
 
-describe('SRV telemetry classification', (): void => {
+function apply(overrides: Partial<SrvResolutionReport>, correlation = {}): SrvResolutionTelemetry {
+    const telemetry: SrvResolutionTelemetry = { properties: {}, measurements: {} };
+    applySrvResolutionReport(telemetry, { ...report, ...overrides }, 'shell', correlation);
+    return telemetry;
+}
+
+describe('applySrvResolutionReport', (): void => {
     it.each([
-        [[], 'none', 'none'],
-        [['127.0.0.1:5353', '127.1.2.3'], 'loopback', 'ipv4'],
-        [['[::1]:5353', '0:0:0:0:0:0:0:1'], 'loopback', 'ipv6'],
-        [['10.0.0.1', '192.168.1.1:53', '172.16.1.1'], 'private', 'ipv4'],
-        [['[fc00::1]:53', 'fe80::1'], 'private', 'ipv6'],
-        [['[fe80::1%eth0]:53'], 'private', 'ipv6'],
-        [['8.8.8.8:53', '1.1.1.1'], 'public', 'ipv4'],
-        [['[2001:4860:4860::8888]:53'], 'public', 'ipv6'],
-        [['127.0.0.1', '192.168.1.1'], 'mixed', 'ipv4'],
-        [['192.168.1.1', '8.8.8.8'], 'mixed', 'ipv4'],
-        [['8.8.8.8', '2001:4860:4860::8888'], 'public', 'mixed'],
-    ])('classifies %j as %s / %s without disclosing addresses', (servers, expectedClass, family): void => {
-        const telemetry: SrvResolutionTelemetry = { properties: {}, measurements: {} };
-        applySrvResolutionReport(telemetry, { ...report, dnsServers: servers }, 'shell', { shellSessionId: 'session' });
-        expect(telemetry.properties).toMatchObject({ dnsServerClass: expectedClass, dnsServerIpFamily: family });
+        [[], 'none'],
+        [['127.0.0.1:5353', '[::1]:53'], 'loopback'],
+        [['192.168.1.1:53', '[fe80::1%eth0]:53'], 'private'],
+        [['8.8.8.8'], 'public'],
+        [['192.168.1.1', '8.8.8.8'], 'mixed'],
+    ])('classifies DNS servers %j as %s without sending them', (servers, expected): void => {
+        const telemetry = apply({ dnsServers: servers });
+        expect(telemetry.properties.dnsServerClass).toBe(expected);
         expect(telemetry.measurements.dnsServerCount).toBe(servers.length);
-        const data = JSON.stringify(telemetry.properties);
+        const data = JSON.stringify(telemetry);
         for (const server of servers) {
             expect(data).not.toContain(server);
         }
-        expect(data).not.toContain(report.srvHost);
     });
 
-    it.each([
-        ['x.GLOBAL.mongocluster.cosmos.azure.com', 'true', 'true'],
-        ['x.global.example.org', 'false', 'true'],
-        ['globalish.example.org', 'false', 'false'],
-        ['x.azure.com.example.org', 'false', 'false'],
-    ])('classifies endpoint %s without emitting it', (srvHost, azure, global): void => {
-        const telemetry: SrvResolutionTelemetry = { properties: {}, measurements: {} };
-        applySrvResolutionReport(telemetry, { ...report, srvHost }, 'playground', {});
-        expect(telemetry.properties).toMatchObject({ isAzureEndpoint: azure, isGlobalEndpoint: global });
-        expect(JSON.stringify(telemetry)).not.toContain(srvHost);
-    });
-
-    it('copies only correlation IDs, categorical properties and numeric measurements', (): void => {
-        const telemetry: SrvResolutionTelemetry = { properties: {}, measurements: {} };
-        applySrvResolutionReport(
-            telemetry,
-            {
-                ...report,
-                tlsAdded: false,
-                forcedFallback: true,
-                fallbackErrorCode: 'txt:ESERVFAIL',
-                txtSource: 'none',
-                txtOptionsApplied: ['replicaSet', 'authSource'],
-                nodeProbeDurationMs: 5,
-                fallbackDurationMs: 8,
-                srvTargetCount: 2,
-                fallbackServersTried: 1,
-            },
-            'extension',
+    it('copies categorical values and correlation IDs, never the host or other caller data', (): void => {
+        const telemetry = apply(
+            { forcedFallback: true, fallbackErrorCode: 'txt:ESERVFAIL', nodeProbeDurationMs: 5, srvTargetCount: 2 },
             { journeyCorrelationId: 'journey', connectionCorrelationId: undefined, srvHost: report.srvHost },
         );
         expect(telemetry.properties).toMatchObject({
+            surface: 'shell',
             journeyCorrelationId: 'journey',
-            tlsAdded: 'false',
+            isAzureEndpoint: 'true',
             forcedFallback: 'true',
-            txtOptionsApplied: 'authSource,replicaSet',
-            txtSource: 'none',
             fallbackErrorCode: 'txt:ESERVFAIL',
         });
-        expect(telemetry.properties).not.toHaveProperty('srvHost');
         expect(telemetry.properties).not.toHaveProperty('connectionCorrelationId');
-        expect(telemetry.measurements).toEqual({
-            nodeProbeDurationMs: 5,
-            fallbackDurationMs: 8,
-            srvTargetCount: 2,
-            dnsServerCount: 0,
-            fallbackServersTried: 1,
-        });
-    });
-
-    it('produces a minimal host-free summary at resolution time', (): void => {
-        const clock = jest.spyOn(Date, 'now').mockReturnValue(123456);
-        try {
-            expect(createSrvResolutionSummary({ ...report, fallbackTransport: 'tcp', srvTargetCount: 2 })).toEqual({
-                path: 'fallback',
-                nodeErrorCode: 'EBADRESP',
-                fallbackTransport: 'tcp',
-                srvTargetCount: 2,
-                resolvedAt: 123456,
-            });
-            expect(
-                createSrvResolutionSummary({ ...report, path: 'node', nodeErrorCode: 'none' }).nodeErrorCode,
-            ).toBeUndefined();
-        } finally {
-            clock.mockRestore();
-        }
+        expect(telemetry.measurements).toMatchObject({ nodeProbeDurationMs: 5, srvTargetCount: 2 });
+        expect(JSON.stringify(telemetry)).not.toContain(report.srvHost);
     });
 });

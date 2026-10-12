@@ -23,8 +23,8 @@ import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
 import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
+import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
-import { getWorkerOidcAllowedHosts } from './workerOidcAllowedHosts';
 import { type MainToWorkerMessage, type WorkerStartupStage, type WorkerToMainMessage } from './workerTypes';
 
 if (!parentPort) {
@@ -149,7 +149,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         options.authMechanism = 'MONGODB-OIDC';
         options.tls = true;
         options.authMechanismProperties = {
-            ALLOWED_HOSTS: getWorkerOidcAllowedHosts(msg),
+            ALLOWED_HOSTS: [...(msg.oidcAllowedHosts ?? getOidcAllowedHosts(msg.connectionString))],
             OIDC_CALLBACK: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
                 const requestId = randomUUID();
                 const tokenPromise = new Promise<string>((resolve, reject) => {

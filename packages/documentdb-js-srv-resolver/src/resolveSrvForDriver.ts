@@ -79,7 +79,6 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
         outcome: 'failed',
         nodeErrorCode: 'none',
         fallbackOutcome: 'notAttempted',
-        txtOptionsApplied: [],
         dnsServers: [],
         forcedFallback: mode === 'force',
         aresVersion: process.versions.ares ?? 'unknown',
@@ -163,8 +162,6 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
         });
         report.outcome = 'succeeded';
         report.fallbackOutcome = 'succeeded';
-        report.txtOptionsApplied = rewritten.txtApplied;
-        report.tlsAdded = rewritten.tlsAdded;
         report.fallbackDurationMs = Date.now() - fallbackStartedAt;
         trace(
             `rewrite targets=[${rewritten.targets.join(',')}] tlsAdded=${rewritten.tlsAdded} txtSource=${report.txtSource} txtApplied=[${rewritten.txtApplied.join(',')}]`,

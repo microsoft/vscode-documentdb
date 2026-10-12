@@ -68,7 +68,6 @@ const baseReport: SrvResolutionReport = {
     fallbackOutcome: 'succeeded',
     fallbackTransport: 'tcp',
     txtSource: 'fallback',
-    txtOptionsApplied: [],
     dnsServers: ['192.168.1.1:53'],
     srvTargetCount: 2,
     forcedFallback: false,
