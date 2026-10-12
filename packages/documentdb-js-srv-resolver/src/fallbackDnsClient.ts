@@ -24,24 +24,7 @@ export interface DnsServerAddress {
     readonly display: string;
 }
 
-/** Skips invalid addresses/ports without resolving hostnames through another resolver. */
-export function parseDnsServers(servers: readonly string[]): DnsServerAddress[] {
-    return parseDnsServerEntries(servers);
-}
-
-function parseDnsServerEntries(servers: readonly string[], onInvalid?: () => void): DnsServerAddress[] {
-    const parsed: DnsServerAddress[] = [];
-    for (const entry of servers) {
-        const server = parseDnsServer(entry);
-        if (server) {
-            parsed.push(server);
-        } else {
-            onInvalid?.();
-        }
-    }
-    return parsed;
-}
-
+/** Returns undefined for invalid entries, without resolving hostnames through another resolver. */
 function parseDnsServer(server: string): DnsServerAddress | undefined {
     let host = server;
     let port = DNS_DEFAULT_PORT;
@@ -67,18 +50,6 @@ function parseDnsServer(server: string): DnsServerAddress | undefined {
     return { host, port, family, display: `${family === 6 ? `[${host}]` : host}:${port}` };
 }
 
-export interface FallbackDnsAttempt {
-    readonly server: string;
-    readonly transport: DnsTransport;
-    readonly id: number;
-    readonly rcode?: string;
-    readonly tc?: boolean;
-    readonly answers?: number;
-    readonly bytes?: number;
-    readonly durationMs: number;
-    readonly errorCode?: string;
-}
-
 export interface FallbackDnsOptions {
     readonly deadlineAt: number;
     readonly signal?: AbortSignal;
@@ -93,13 +64,7 @@ export interface FallbackDnsResult<T> {
     readonly records: T[];
     readonly server: string;
     readonly transport: DnsTransport;
-    readonly attempts: readonly FallbackDnsAttempt[];
     readonly serversTried: number;
-    readonly replyBytes: number;
-}
-
-export interface FallbackSrvResult extends FallbackDnsResult<SrvRecord> {
-    readonly targetCompressed: boolean;
 }
 
 export class FallbackDnsError extends Error {
@@ -108,7 +73,6 @@ export class FallbackDnsError extends Error {
         public readonly syscall: 'querySrv' | 'queryTxt',
         public readonly hostname: string,
         public readonly serversTried: number,
-        public readonly attempts: readonly FallbackDnsAttempt[],
     ) {
         super(`${syscall} ${code} ${hostname}`);
         this.name = 'FallbackDnsError';
@@ -126,10 +90,6 @@ interface AttemptReply extends Reply {
     readonly errorCode?: string;
 }
 
-interface Resolution<T> extends FallbackDnsResult<T> {
-    readonly targetCompressed: boolean;
-}
-
 class AttemptError extends Error {
     constructor(public readonly code: string) {
         super(code);
@@ -137,7 +97,10 @@ class AttemptError extends Error {
 }
 
 /** Targets are returned as dns-packet decodes them: without a trailing dot, with no further stripping. */
-export async function resolveSrvFallback(name: string, options: FallbackDnsOptions): Promise<FallbackSrvResult> {
+export async function resolveSrvFallback(
+    name: string,
+    options: FallbackDnsOptions,
+): Promise<FallbackDnsResult<SrvRecord>> {
     return resolveFallback(name, 'SRV', options, (answers): SrvRecord[] =>
         answers.flatMap((answer): SrvRecord[] =>
             answer.type === 'SRV'
@@ -158,21 +121,15 @@ export async function resolveTxtFallback(
     name: string,
     options: FallbackDnsOptions,
 ): Promise<FallbackDnsResult<string[]>> {
-    const { targetCompressed: _targetCompressed, ...result } = await resolveFallback(
-        name,
-        'TXT',
-        options,
-        (answers): string[][] =>
-            answers.flatMap((answer): string[][] => {
-                if (answer.type !== 'TXT') {
-                    return [];
-                }
-                const chunks = Array.isArray(answer.data) ? answer.data : [answer.data];
-                return [chunks.map((chunk): string => (Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk))];
-            }),
+    return resolveFallback(name, 'TXT', options, (answers): string[][] =>
+        answers.flatMap((answer): string[][] => {
+            if (answer.type !== 'TXT') {
+                return [];
+            }
+            const chunks = Array.isArray(answer.data) ? answer.data : [answer.data];
+            return [chunks.map((chunk): string => (Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk))];
+        }),
     );
-    void _targetCompressed;
-    return result;
 }
 
 async function resolveFallback<T>(
@@ -180,18 +137,23 @@ async function resolveFallback<T>(
     type: QueryType,
     options: FallbackDnsOptions,
     recordsFromAnswers: (answers: readonly dnsPacket.Answer[]) => T[],
-): Promise<Resolution<T>> {
+): Promise<FallbackDnsResult<T>> {
     throwIfCancelled(options.signal);
-    const servers = parseDnsServerEntries(options.servers ?? dns.getServers(), (): void => {
-        (options.logger ?? noopLogger).trace(
-            `${options.logPrefix ?? '[SrvResolution]'} fallback skipping unparseable DNS server entry`,
-        );
-    });
-    const attempts: FallbackDnsAttempt[] = [];
+    const servers: DnsServerAddress[] = [];
+    for (const entry of options.servers ?? dns.getServers()) {
+        const server = parseDnsServer(entry);
+        if (server) {
+            servers.push(server);
+        } else {
+            (options.logger ?? noopLogger).trace(
+                `${options.logPrefix ?? '[SrvResolution]'} fallback skipping unparseable DNS server entry`,
+            );
+        }
+    }
     let serversTried = 0;
     let lastCode: string = dns.CONNREFUSED;
     const failure = (code: string): FallbackDnsError =>
-        new FallbackDnsError(code, type === 'SRV' ? 'querySrv' : 'queryTxt', name, serversTried, [...attempts]);
+        new FallbackDnsError(code, type === 'SRV' ? 'querySrv' : 'queryTxt', name, serversTried);
 
     for (const server of servers) {
         throwIfCancelled(options.signal);
@@ -210,10 +172,10 @@ async function resolveFallback<T>(
         let transport: DnsTransport = 'udp';
         let reply: AttemptReply;
         try {
-            reply = await runAttempt(server, transport, id, question, query, options, attempts);
+            reply = await runAttempt(server, transport, id, question, query, options);
             if (reply.packet.flag_tc) {
                 transport = 'tcp';
-                reply = await runAttempt(server, transport, id, question, query, options, attempts);
+                reply = await runAttempt(server, transport, id, question, query, options);
             }
         } catch (error) {
             throwIfCancelled(options.signal);
@@ -232,10 +194,7 @@ async function resolveFallback<T>(
             records: recordsFromAnswers(reply.packet.answers ?? []),
             server: server.display,
             transport,
-            attempts: [...attempts],
             serversTried,
-            replyBytes: reply.bytes.length,
-            targetCompressed: type === 'SRV' && hasCompressedSrvTarget(reply.bytes),
         };
     }
     throwIfCancelled(options.signal);
@@ -283,7 +242,6 @@ async function runAttempt(
     question: dnsPacket.Question,
     query: Buffer,
     options: FallbackDnsOptions,
-    attempts: FallbackDnsAttempt[],
 ): Promise<AttemptReply> {
     throwIfCancelled(options.signal);
     const startedAt = Date.now();
@@ -313,23 +271,6 @@ async function runAttempt(
                 ? undefined
                 : (['NOERROR', 'FORMERR', 'SERVFAIL', 'NXDOMAIN', 'NOTIMP', 'REFUSED'][rcodeNumber] ??
                   `RCODE_${rcodeNumber}`);
-        const attempt: FallbackDnsAttempt = {
-            server: server.display,
-            transport,
-            id,
-            ...(reply
-                ? {
-                      rcode,
-                      tc: reply.packet.flag_tc,
-                      answers: (reply.packet.answers ?? []).filter((answer): boolean => answer.type === question.type)
-                          .length,
-                      bytes: reply.bytes.length,
-                  }
-                : {}),
-            durationMs: Date.now() - startedAt,
-            ...(errorCode ? { errorCode } : {}),
-        };
-        attempts.push(attempt);
         const fields = [
             `${options.logPrefix ?? '[SrvResolution]'} fallback ${question.type}`,
             `server=${server.display}`,
@@ -337,10 +278,13 @@ async function runAttempt(
             `id=0x${id.toString(16).padStart(4, '0')}`,
         ];
         if (reply) {
-            fields.push(`rcode=${rcode}`, `tc=${attempt.tc}`, `answers=${attempt.answers}`, `bytes=${attempt.bytes}`);
-            if (question.type === 'SRV') {
-                fields.push(`targetCompressed=${hasCompressedSrvTarget(reply.bytes)}`);
-            }
+            const answers = (reply.packet.answers ?? []).filter((answer): boolean => answer.type === question.type);
+            fields.push(
+                `rcode=${rcode}`,
+                `tc=${reply.packet.flag_tc}`,
+                `answers=${answers.length}`,
+                `bytes=${reply.bytes.length}`,
+            );
         }
         if (errorCode) {
             fields.push(`error=${errorCode}`);
@@ -348,7 +292,7 @@ async function runAttempt(
         if (cancelled) {
             fields.push('cancelled=true');
         }
-        fields.push(`durationMs=${attempt.durationMs}`);
+        fields.push(`durationMs=${Date.now() - startedAt}`);
         (options.logger ?? noopLogger).trace(fields.join(' '));
     }
 }
@@ -421,15 +365,10 @@ function exchange(
                 finish(cancellationError(options.signal));
             }
         };
-        const onTimeout = (): void => {
-            const remainingMs = attemptDeadlineAt - Date.now();
-            if (remainingMs > 0) {
-                timer = setTimeout(onTimeout, remainingMs);
-            } else {
-                finish(new AttemptError(dns.TIMEOUT));
-            }
-        };
-        let timer = setTimeout(onTimeout, Math.max(0, attemptDeadlineAt - Date.now()));
+        const timer = setTimeout(
+            (): void => finish(new AttemptError(dns.TIMEOUT)),
+            Math.max(0, attemptDeadlineAt - Date.now()),
+        );
         options.signal?.addEventListener('abort', onAbort, { once: true });
         if (options.signal?.aborted) {
             onAbort();
@@ -437,10 +376,6 @@ function exchange(
         }
         const accept = (bytes: Buffer): void => {
             if (settled) {
-                return;
-            }
-            if (Date.now() >= attemptDeadlineAt) {
-                finish(new AttemptError(dns.TIMEOUT));
                 return;
             }
             try {
@@ -506,96 +441,4 @@ function exchange(
             finish(error);
         }
     });
-}
-
-interface WireName {
-    readonly nextOffset: number;
-    readonly compressed: boolean;
-}
-
-function scanWireName(reply: Uint8Array, start: number, end: number): WireName | undefined {
-    let offset = start;
-    let nextOffset: number | undefined;
-    let compressed = false;
-    let expandedLength = 0;
-    const visited = new Set<number>();
-    while (offset < (nextOffset === undefined ? end : reply.length)) {
-        if (visited.has(offset)) {
-            return undefined;
-        }
-        visited.add(offset);
-        const length = reply[offset];
-        if ((length & 0xc0) === 0xc0) {
-            if (offset + 1 >= (nextOffset === undefined ? end : reply.length)) {
-                return undefined;
-            }
-            const pointer = ((length & 0x3f) << 8) | reply[offset + 1];
-            if (pointer < 12 || pointer >= offset) {
-                return undefined;
-            }
-            nextOffset ??= offset + 2;
-            compressed = true;
-            offset = pointer;
-        } else if (length === 0) {
-            return { nextOffset: nextOffset ?? offset + 1, compressed };
-        } else {
-            expandedLength += length + 1;
-            if (
-                length > 63 ||
-                expandedLength > 254 ||
-                offset + length + 1 >= (nextOffset === undefined ? end : reply.length)
-            ) {
-                return undefined;
-            }
-            offset += length + 1;
-        }
-    }
-    return undefined;
-}
-
-/** Inspects only SRV target names, not owner names or pointer-looking bytes inside label contents. */
-export function hasCompressedSrvTarget(reply: Uint8Array): boolean {
-    try {
-        if (reply.length < 12) {
-            return false;
-        }
-        const uint16 = (offset: number): number => (reply[offset] << 8) | reply[offset + 1];
-        let offset = 12;
-        let compressed = false;
-        for (let i = 0; i < uint16(4); i++) {
-            const name = scanWireName(reply, offset, reply.length);
-            if (!name || name.nextOffset + 4 > reply.length) {
-                return false;
-            }
-            offset = name.nextOffset + 4;
-        }
-        for (let i = 0; i < uint16(6); i++) {
-            const name = scanWireName(reply, offset, reply.length);
-            if (!name || name.nextOffset + 10 > reply.length) {
-                return false;
-            }
-            offset = name.nextOffset;
-            const type = uint16(offset);
-            const length = uint16(offset + 8);
-            offset += 10;
-            const end = offset + length;
-            if (end > reply.length) {
-                return false;
-            }
-            if (type === 33) {
-                if (length < 7) {
-                    return false;
-                }
-                const target = scanWireName(reply, offset + 6, end);
-                if (!target || target.nextOffset !== end) {
-                    return false;
-                }
-                compressed ||= target.compressed;
-            }
-            offset = end;
-        }
-        return compressed;
-    } catch {
-        return false;
-    }
 }

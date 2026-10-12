@@ -12,7 +12,7 @@ import { cancellationError, noopLogger, SrvResolutionCancelledError, throwIfCanc
 
 import { type MongoClientOptions } from 'mongodb';
 import { type SrvRecord } from 'node:dns';
-import { type FallbackSrvResult } from './fallbackDnsClient';
+import { type FallbackDnsResult } from './fallbackDnsClient';
 import { type SrvFallbackMode, type SrvResolutionPath, type SrvResolutionReport } from './report';
 import { type SrvResolverLogger } from './types';
 
@@ -231,14 +231,13 @@ export async function resolveSrvForDriver(input: ResolveSrvForDriverInput): Prom
             logger,
             logPrefix: input.logPrefix,
         };
-        const [srv, txt] = await cancellable(async (): Promise<[FallbackSrvResult, string[][] | undefined]> => {
-            const srvPromise = (async (): Promise<FallbackSrvResult> => {
+        const [srv, txt] = await cancellable(async (): Promise<[FallbackDnsResult<SrvRecord>, string[][] | undefined]> => {
+            const srvPromise = (async (): Promise<FallbackDnsResult<SrvRecord>> => {
                 const result = await fallback.resolveSrv(target.srvQueryName, dnsOptions);
                 throwIfCancelled(input.signal);
                 report = {
                     ...report,
                     fallbackTransport: result.transport,
-                    targetCompressed: result.targetCompressed,
                     fallbackServersTried: result.serversTried,
                     srvTargetCount: result.records.length,
                 };

@@ -475,9 +475,7 @@ describe('WorkerSessionManager', () => {
                 const dnsMetadata = {
                     server: '192.168.1.1:53',
                     transport: 'udp' as const,
-                    attempts: [],
                     serversTried: 1,
-                    replyBytes: 100,
                 };
                 jest.mocked(resolveSrvForDriver).mockImplementation((input) =>
                     resolver.resolveSrvForDriver({
@@ -485,7 +483,7 @@ describe('WorkerSessionManager', () => {
                         fallback: resolution === 'fallback' ? 'force' : 'auto',
                         createProbeResolver: () => ({ resolveSrv: async () => records, cancel: (): void => undefined }),
                         fallbackDns: {
-                            resolveSrv: async () => ({ ...dnsMetadata, records, targetCompressed: true }),
+                            resolveSrv: async () => ({ ...dnsMetadata, records }),
                             resolveTxt: async () => ({ ...dnsMetadata, records: [['authSource=admin']] }),
                         },
                         getServers: () => ['192.168.1.1'],

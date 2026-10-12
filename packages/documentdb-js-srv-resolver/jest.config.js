@@ -1,6 +1,6 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} **/
 module.exports = {
-    displayName: 'shell-runtime',
+    displayName: 'srv-resolver',
     // Limit workers to avoid OOM kills on machines with many cores.
     // Each ts-jest worker loads the TypeScript compiler and consumes ~500MB+.
     maxWorkers: '50%',

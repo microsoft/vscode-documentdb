@@ -64,8 +64,6 @@ export function applySrvResolutionReport(
         fallbackOutcome: report.fallbackOutcome,
         fallbackErrorCode: report.fallbackErrorCode,
         fallbackTransport: report.fallbackTransport,
-        targetCompressed:
-            report.targetCompressed === undefined ? 'unknown' : report.targetCompressed ? 'true' : 'false',
         txtSource: report.txtSource,
         txtOptionsApplied: report.txtOptionsApplied.length ? [...report.txtOptionsApplied].sort().join(',') : 'none',
         tlsAdded: report.tlsAdded === undefined ? undefined : report.tlsAdded ? 'true' : 'false',

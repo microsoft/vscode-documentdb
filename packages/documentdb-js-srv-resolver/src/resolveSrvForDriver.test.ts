@@ -13,10 +13,12 @@ import { SrvResolutionCancelledError } from './types';
 
 import { type MongoClientOptions } from 'mongodb';
 import { type SrvRecord } from 'node:dns';
-import { type FallbackDnsResult, type FallbackSrvResult } from './fallbackDnsClient';
+import { type FallbackDnsResult } from './fallbackDnsClient';
 import { type SrvResolutionReport } from './report';
 import { type ResolveSrvForDriverInput } from './resolveSrvForDriver';
 import { type RewriteSrvUriResult } from './srvUriRewrite';
+
+type FallbackSrvResult = FallbackDnsResult<SrvRecord>;
 
 const host = 'x.global.mongocluster.cosmos.azure.com';
 const uri = `mongodb+srv://user:S3cr3t%40pw@${host}/?appName=@x@`;
@@ -28,18 +30,13 @@ const srvReply: FallbackSrvResult = {
     records,
     server: '192.168.1.1:53',
     transport: 'udp',
-    attempts: [],
     serversTried: 1,
-    replyBytes: 100,
-    targetCompressed: true,
 };
 const txtReply: FallbackDnsResult<string[]> = {
     records: [['authSource=admin&replicaSet=globaldb']],
     server: srvReply.server,
     transport: 'udp',
-    attempts: [],
     serversTried: 1,
-    replyBytes: 50,
 };
 
 function probeError(code = 'EBADRESP'): Error & { code: string } {
@@ -47,7 +44,7 @@ function probeError(code = 'EBADRESP'): Error & { code: string } {
 }
 
 function dnsError(code: string, syscall: 'querySrv' | 'queryTxt' = 'querySrv'): FallbackDnsError {
-    return new FallbackDnsError(code, syscall, host, 2, []);
+    return new FallbackDnsError(code, syscall, host, 2);
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
@@ -194,7 +191,6 @@ describe('resolveSrvForDriver paths and reports', (): void => {
             nodeErrorCode: code,
             fallbackOutcome: 'succeeded',
             fallbackTransport: 'udp',
-            targetCompressed: true,
             txtSource: 'fallback',
             txtOptionsApplied: ['authSource', 'replicaSet'],
             tlsAdded: true,

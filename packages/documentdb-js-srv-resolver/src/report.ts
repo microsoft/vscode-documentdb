@@ -17,7 +17,6 @@ export interface SrvResolutionReport {
     readonly fallbackOutcome: SrvFallbackOutcome;
     readonly fallbackErrorCode?: string;
     readonly fallbackTransport?: 'udp' | 'tcp';
-    readonly targetCompressed?: boolean;
     readonly txtSource?: 'fallback' | 'none';
     readonly txtOptionsApplied: readonly string[];
     readonly tlsAdded?: boolean;

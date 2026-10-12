@@ -66,7 +66,6 @@ describe('SRV telemetry classification', (): void => {
             telemetry,
             {
                 ...report,
-                targetCompressed: false,
                 tlsAdded: false,
                 forcedFallback: true,
                 fallbackErrorCode: 'txt:ESERVFAIL',
@@ -82,7 +81,6 @@ describe('SRV telemetry classification', (): void => {
         );
         expect(telemetry.properties).toMatchObject({
             journeyCorrelationId: 'journey',
-            targetCompressed: 'false',
             tlsAdded: 'false',
             forcedFallback: 'true',
             txtOptionsApplied: 'authSource,replicaSet',
