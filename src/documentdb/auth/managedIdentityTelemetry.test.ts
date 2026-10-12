@@ -35,4 +35,16 @@ describe('managed identity telemetry', () => {
             managedIdentityTokenCorrelationId: 'correlation-id',
         });
     });
+
+    it('links token failure to its startup while preserving the token ID', (): void => {
+        reportManagedIdentityFailureReason('endpointUnreachable', undefined, 'token-id', {
+            startupCorrelationId: 'startup-id',
+            surface: 'shell',
+        });
+        expect(emittedProperties).toMatchObject({
+            managedIdentityTokenCorrelationId: 'token-id',
+            startupCorrelationId: 'startup-id',
+            surface: 'shell',
+        });
+    });
 });

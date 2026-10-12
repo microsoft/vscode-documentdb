@@ -6,6 +6,7 @@
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
+import { type AuthTraceContext } from '../../utils/authTrace';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
@@ -548,6 +549,8 @@ describe('WorkerSessionManager', () => {
 
         it('logs one successful startup summary, ignoring stale progress', async () => {
             const { manager, initPromise, requestId, worker } = await startWorker();
+            worker._emit('message', { type: 'log', level: 'debug', message: 'Initializing worker' });
+            expect(callbacks.onLog).toHaveBeenCalledWith('debug', 'Initializing worker', requestId);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
             jest.advanceTimersByTime(150);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
@@ -577,6 +580,8 @@ describe('WorkerSessionManager', () => {
             trace.mockClear();
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
             expect(trace).not.toHaveBeenCalled();
+            worker._emit('message', { type: 'log', level: 'debug', message: 'Evaluating query' });
+            expect(callbacks.onLog).toHaveBeenCalledWith('debug', 'Evaluating query', requestId);
             manager.dispose();
         });
 
@@ -815,9 +820,39 @@ describe('WorkerSessionManager', () => {
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
 
-            expect(startupEvent().telemetry.properties).toMatchObject({ ...telemetryContext, surface });
+            expect(startupEvent().telemetry.properties).toMatchObject({
+                ...telemetryContext,
+                surface,
+                startupCorrelationId: requestId,
+            });
+            expect(requestId).not.toBe(startupEvent().telemetry.properties.connectionCorrelationId);
+            expect(prepareDriverConnectionString).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    correlation: expect.objectContaining({
+                        ...telemetryContext,
+                        startupCorrelationId: requestId,
+                    }),
+                }),
+            );
             expect(startupEvent().telemetry.suppressIfSuccessful).not.toBe(true);
             expect(startupEvent().telemetry.suppressAll).not.toBe(true);
+            manager.dispose();
+        });
+
+        it('ties token requests to the startup ID of the worker that sent them', async (): Promise<void> => {
+            const contexts: (AuthTraceContext | undefined)[] = [];
+            callbacks.onTokenRequest = jest.fn(async (_message, _postResponse, _timings, context): Promise<void> => {
+                contexts.push(context);
+            });
+            const { manager, initPromise, requestId, worker } = await startWorker();
+            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: [] });
+            worker._emit('message', { type: 'initResult', requestId, success: true });
+            await initPromise;
+            worker._emit('message', { type: 'tokenRequest', requestId: 'refresh-request', scopes: [] });
+            expect(contexts).toEqual([
+                { startupCorrelationId: requestId, surface: 'shell' },
+                { startupCorrelationId: requestId, surface: 'shell' },
+            ]);
             manager.dispose();
         });
 

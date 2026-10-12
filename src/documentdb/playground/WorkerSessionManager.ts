@@ -14,6 +14,7 @@ import * as path from 'path';
 import type * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
+import { type AuthTraceContext } from '../../utils/authTrace';
 import { settingsKeys } from '../../settingsKeys';
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
 import { SettingsHintError } from '../shell/SettingsHintError';
@@ -50,6 +51,7 @@ export interface WorkerStartupTelemetryContext {
 
 interface WorkerStartup {
     readonly requestId: string;
+    readonly surface: 'shell' | 'playground';
     readonly startedAt: number;
     readonly telemetry: ITelemetryContext;
     readonly costTimings: ConnectionStartupTimings;
@@ -68,8 +70,12 @@ interface WorkerStartup {
 export interface WorkerSessionCallbacks {
     /** Called when user code produces console output (console.log, print, printjson). */
     onConsoleOutput?: (output: string) => void;
-    /** Called for internal log messages from the worker. */
-    onLog?: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string) => void;
+    /** Called for internal log messages from the worker, with that worker's startup ID. */
+    onLog?: (
+        level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
+        message: string,
+        startupCorrelationId?: string,
+    ) => void;
     /**
      * Called when the worker requests an OIDC token (Entra ID auth).
      * The implementation must acquire the token via VS Code auth APIs
@@ -79,6 +85,7 @@ export interface WorkerSessionCallbacks {
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
         timings?: ConnectionStartupTimings,
+        traceContext?: AuthTraceContext,
     ) => Promise<void>;
     /** Called when the worker exits (crash or termination). */
     onWorkerExit?: (exitCode: number) => void;
@@ -248,6 +255,7 @@ export class WorkerSessionManager implements vscode.Disposable {
                 const startedAt = Date.now();
                 const startup: WorkerStartup = {
                     requestId: randomUUID(),
+                    surface: initMsg.persistent ? 'shell' : 'playground',
                     startedAt,
                     stage: 'startingWorker',
                     stageStartedAt: startedAt,
@@ -258,7 +266,7 @@ export class WorkerSessionManager implements vscode.Disposable {
                 };
                 this._startup = startup;
                 context.telemetry.properties.startupCorrelationId = startup.requestId;
-                context.telemetry.properties.surface = initMsg.persistent ? 'shell' : 'playground';
+                context.telemetry.properties.surface = startup.surface;
                 context.telemetry.properties.authMethod = initMsg.authMechanism;
                 context.telemetry.measurements.timeoutMs = initTimeoutMs;
                 for (const key of ['shellSessionId', 'sessionId', 'connectionCorrelationId'] as const) {
@@ -351,15 +359,17 @@ export class WorkerSessionManager implements vscode.Disposable {
         }
         this._worker = new Worker(workerPath);
         this._workerClusterId = clusterId;
+        // Everything this worker reports stays tied to the startup that created it.
+        const connection: AuthTraceContext = { startupCorrelationId: startup.requestId, surface: startup.surface };
 
         // Listen for messages from the worker
         this._worker.on('message', (msg: WorkerToMainMessage) => {
-            this.handleWorkerMessage(msg);
+            this.handleWorkerMessage(msg, connection);
         });
 
         // Listen for worker exit (crash or termination)
         this._worker.on('exit', (exitCode: number) => {
-            this._callbacks.onLog?.('debug', `Worker exited with code ${String(exitCode)}`);
+            this._callbacks.onLog?.('debug', `Worker exited with code ${String(exitCode)}`, startup.requestId);
             if (!this._terminatingIntentionally) {
                 this._callbacks.onWorkerExit?.(exitCode);
             }
@@ -367,7 +377,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         });
 
         this._worker.on('error', (error: Error) => {
-            this._callbacks.onLog?.('error', error.message);
+            this._callbacks.onLog?.('error', error.message, startup.requestId);
 
             // Reject all pending requests with the actual error so callers
             // get an immediate, meaningful failure instead of waiting for
@@ -515,7 +525,7 @@ export class WorkerSessionManager implements vscode.Disposable {
     /**
      * Handle an incoming message from the worker.
      */
-    private handleWorkerMessage(msg: WorkerToMainMessage): void {
+    private handleWorkerMessage(msg: WorkerToMainMessage, connection: AuthTraceContext): void {
         switch (msg.type) {
             case 'initTiming': {
                 const startup = this._startup;
@@ -603,13 +613,14 @@ export class WorkerSessionManager implements vscode.Disposable {
                             }
                         },
                         this._startup?.costTimings,
+                        connection,
                     );
                 }
                 break;
             }
 
             case 'log': {
-                this._callbacks.onLog?.(msg.level, msg.message);
+                this._callbacks.onLog?.(msg.level, msg.message, connection.startupCorrelationId);
                 break;
             }
 

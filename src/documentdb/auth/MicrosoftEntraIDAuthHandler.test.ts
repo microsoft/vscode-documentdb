@@ -67,6 +67,29 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(JSON.stringify(mockOutputChannel.error.mock.calls)).not.toContain('secret-token');
     });
 
+    it('labels every auth message with the startup ID of its connection', async (): Promise<void> => {
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
+        await handler.configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension' });
+
+        const messages = mockOutputChannel.info.mock.calls.map((call) => String(call[0]));
+        expect(messages).toHaveLength(3);
+        for (const message of messages) {
+            expect(message).toMatch(/^\[Authentication\] startup=startup-id surface=extension interactiveEntra\./);
+        }
+    });
+
+    it('labels authentication failure with its startup ID without exposing secrets', async (): Promise<void> => {
+        getSessionFromVSCode.mockRejectedValueOnce(new Error('secret-token'));
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
+        await expect(
+            handler.configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension' }),
+        ).rejects.toThrow('secret-token');
+        expect(mockOutputChannel.error).toHaveBeenCalledWith(
+            expect.stringContaining('[Authentication] startup=startup-id surface=extension'),
+        );
+        expect(JSON.stringify(mockOutputChannel.error.mock.calls)).not.toContain('secret-token');
+    });
+
     it('measures the actual session request separately from database connection work', async () => {
         let now = 0;
         const timings = new ConnectionStartupTimings(() => now);

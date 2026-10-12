@@ -51,8 +51,10 @@ specific behaviors:
 Each fresh `ClustersClient` initialization produces one `connect.startup` telemetry event and one
 `ext.outputChannel` timing summary. This is the regular extension client used by trees and webviews,
 not the dedicated Shell/Playground worker. Cached-client reuse emits neither; a fresh retry gets a
-new `connectionCorrelationId`. The ID is assigned before auth setup, so early failures can be
-identified, and is shared with the existing connection metadata events.
+new UUID published as both `startupCorrelationId` and `connectionCorrelationId`.
+The ID is assigned before auth setup, so early failures can be identified, and is shared with
+the existing connection metadata events. Shell and Playground workers get their own startup ID;
+see the [connection IDs](../../telemetry-correlation-ids.md#connection-ids-2026-10-12).
 
 Reported names have stable numbers so sorting preserves their order:
 
@@ -67,7 +69,8 @@ Only visited stages are reported. Timings do not separately measure DNS, TCP, TL
 authentication. Metadata collection remains asynchronous and is not awaited as part of startup.
 Existing authentication, connection timeout, cancellation, and caching behavior is unchanged.
 
-The event carries `surface=extension`, `authMethod` when known, `connectionCorrelationId`, `lastStage`,
+The event carries `surface=extension`, `authMethod` when known, `startupCorrelationId`,
+`connectionCorrelationId`, `lastStage`,
 and `startupOutcome` (`succeeded`, `failed`, or `canceled`). The framework supplies `result` and
 `duration` in seconds. `<stage>DurationMs` and `lastStageDurationMs` are milliseconds. The log's
 `stageDurationsMs` contains those same stage timings, with a total `elapsedMs`. Success and cancellation

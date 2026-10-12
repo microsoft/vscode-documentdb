@@ -91,6 +91,18 @@ describe('getManagedIdentityAccessToken', () => {
         expect(output()).toContain('tokenTenantUnavailable');
     });
 
+    it('labels every nested token diagnostic with the startup ID of its connection', async (): Promise<void> => {
+        await getManagedIdentityAccessToken(['scope'], undefined, undefined, 'token-id', {
+            startupCorrelationId: 'startup-id',
+            surface: 'shell',
+        });
+        const messages = mockOutputChannel.info.mock.calls.map((call) => String(call[0]));
+        expect(messages.length).toBeGreaterThan(3);
+        for (const message of messages) {
+            expect(message).toContain('[Authentication] startup=startup-id surface=shell managedIdentity.');
+        }
+    });
+
     it.each([
         ['Multiple user assigned identities exist', 'multipleIdentities'],
         ['Network unreachable', 'endpointUnreachable'],

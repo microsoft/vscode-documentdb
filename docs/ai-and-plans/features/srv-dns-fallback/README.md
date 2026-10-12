@@ -59,6 +59,11 @@ They are not duplicated here.
 - **Every SRV connection is observable.** One telemetry event per `+srv` connection records which
   path resolved it and why. Trace-level output in the extension output channel shows each step,
   for support and local debugging.
+- **The ID identifies the current connection, not its source.** SRV output uses
+  `[SrvResolution] startup=<UUID>`, matching the enclosing extension or worker startup summary,
+  and the SRV event carries the same `startupCorrelationId`. A shell's metadata link or session ID
+  is never logged in its place. See the
+  [connection IDs](../../telemetry-correlation-ids.md#connection-ids-2026-10-12).
 - **Visible in the trace, later on the dashboard.** The `[SrvResolution]` trace says when the
   fallback resolved a connection; the cluster dashboard will show it (D0021).
 - **Ships as `v0.11.1`**, which is `v0.11.0` plus this fix, from `release/0.11.1`. It is then

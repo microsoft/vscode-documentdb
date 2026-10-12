@@ -7,6 +7,7 @@ import { type IActionContext, type ITelemetryContext, UserCancelledError } from 
 import type * as Mongodb from 'mongodb';
 import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
+import { type AuthTraceContext } from '../utils/authTrace';
 import { AuthMethodId } from './auth/AuthMethod';
 import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
@@ -165,6 +166,7 @@ describe('regular connection startup diagnostics', () => {
             maskEntireErrorMessage: true,
             properties: {
                 connectionCorrelationId: client.connectionCorrelationId,
+                startupCorrelationId: client.connectionCorrelationId,
                 surface: 'extension',
                 authMethod,
                 lastStage: 'stage05InitializingApis',
@@ -188,6 +190,14 @@ describe('regular connection startup diagnostics', () => {
             ),
         );
         expect(ext.outputChannel.error).not.toHaveBeenCalled();
+        expect(prepareDriverConnectionString).toHaveBeenCalledWith(
+            expect.objectContaining({
+                correlation: {
+                    startupCorrelationId: client.connectionCorrelationId,
+                    connectionCorrelationId: client.connectionCorrelationId,
+                },
+            }),
+        );
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
         expect(jest.mocked(ext.outputChannel.trace).mock.calls.flat().join('\n')).not.toContain('private-');
         expect(
@@ -206,6 +216,18 @@ describe('regular connection startup diagnostics', () => {
         startupEvent();
         expect(ext.outputChannel.trace).toHaveBeenCalledTimes(1);
         expect(jest.mocked(MongoClient)).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes its startup ID to auth configuration', async (): Promise<void> => {
+        let traceContext: AuthTraceContext | undefined;
+        jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(
+            async (_timings, context) => {
+                traceContext = context;
+                return { connectionString: 'mongodb://private-host:27017', options: {} };
+            },
+        );
+        const client = await ClustersClient.getClient(clusterId);
+        expect(traceContext).toEqual({ startupCorrelationId: client.connectionCorrelationId, surface: 'extension' });
     });
 
     it('preserves auth failures and records their partial stage without private error data', async () => {
@@ -308,6 +330,10 @@ describe('regular connection startup diagnostics', () => {
         expect(mockClose).toHaveBeenCalled();
         expect(ext.outputChannel.error).not.toHaveBeenCalled();
         expect(ClustersClient._clients.has(clusterId)).toBe(false);
+        const startupId = startupEvent().telemetry.properties.startupCorrelationId;
+        expect(ext.outputChannel.debug).toHaveBeenCalledWith(
+            `[ClustersClient] startup=${startupId} canceled by user surface=extension`,
+        );
     });
 
     it('records a credentials failure before auth configuration', async () => {

@@ -80,7 +80,7 @@ function input(overrides: Partial<PrepareDriverConnectionStringInput> = {}): Pre
         connectionString: uri,
         options: {},
         surface: 'extension',
-        correlation: { connectionCorrelationId: 'connect-id' },
+        correlation: { startupCorrelationId: 'connect-id', connectionCorrelationId: 'connect-id' },
         ...overrides,
     };
 }
@@ -164,8 +164,40 @@ describe('prepareDriverConnectionString', (): void => {
         await prepareDriverConnectionString(input());
         expect(jest.mocked(resolveSrvForDriver).mock.calls[0][0]).toMatchObject({
             deadlineMs: 5000,
-            logPrefix: '[SrvResolution] connect-id',
+            logPrefix: '[SrvResolution] startup=connect-id',
         });
+    });
+
+    it('logs the worker startup ID while keeping the metadata link and shell session', async (): Promise<void> => {
+        await prepareDriverConnectionString(
+            input({
+                surface: 'shell',
+                correlation: {
+                    startupCorrelationId: 'worker-startup-id',
+                    connectionCorrelationId: 'connect-id',
+                    shellSessionId: 'shell-id',
+                },
+            }),
+        );
+        expect(jest.mocked(resolveSrvForDriver).mock.calls[0][0]).toMatchObject({
+            logPrefix: '[SrvResolution] startup=worker-startup-id',
+            logContext: 'surface=shell',
+        });
+        expect(mockEvents[0].context.telemetry.properties).toMatchObject({
+            startupCorrelationId: 'worker-startup-id',
+            connectionCorrelationId: 'connect-id',
+            shellSessionId: 'shell-id',
+        });
+    });
+
+    it('never logs a metadata link or session ID as the startup ID', async (): Promise<void> => {
+        await prepareDriverConnectionString(
+            input({
+                surface: 'shell',
+                correlation: { connectionCorrelationId: 'source-id', shellSessionId: 'shell-id' },
+            }),
+        );
+        expect(jest.mocked(resolveSrvForDriver).mock.calls[0][0].logPrefix).toBe('[SrvResolution] startup=unknown');
     });
 
     it('rethrows the original failure and records a masked failed event', async (): Promise<void> => {

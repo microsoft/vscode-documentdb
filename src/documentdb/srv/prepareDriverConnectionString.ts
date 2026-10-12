@@ -74,11 +74,7 @@ export async function prepareDriverConnectionString(
         }
         return { connectionString: input.connectionString, options: input.options, srvResolution: 'notSrv' };
     }
-    const correlationId =
-        input.correlation.connectionCorrelationId ??
-        input.correlation.startupCorrelationId ??
-        input.correlation.shellSessionId ??
-        'unknown';
+    const correlationId = input.correlation.startupCorrelationId ?? 'unknown';
     const startedAt = Date.now();
     // Widened so control flow does not narrow it to undefined; onReport assigns it.
     let report = undefined as SrvResolutionReport | undefined;
@@ -90,7 +86,7 @@ export async function prepareDriverConnectionString(
             deadlineMs: Math.min(FALLBACK_MAX_DEADLINE_MS, getConnectionTimeoutMs()),
             signal: input.abortSignal,
             logger: { trace: (message: string): void => ext.outputChannel?.trace(message) },
-            logPrefix: `[SrvResolution] ${correlationId}`,
+            logPrefix: `[SrvResolution] startup=${correlationId}`,
             logContext: `surface=${input.surface}`,
             onReport: (resolved): void => {
                 report = resolved;

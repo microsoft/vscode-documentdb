@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { type AuthTraceContext } from '../../utils/authTrace';
 import { classifyManagedIdentityError, type ManagedIdentityFailureReason } from './managedIdentityErrors';
 
 /**
@@ -20,8 +21,9 @@ export function reportManagedIdentityTokenFailure(
     error: unknown,
     clientId: string | undefined,
     correlationId: string,
+    traceContext?: AuthTraceContext,
 ): void {
-    reportManagedIdentityFailureReason(classifyManagedIdentityError(error), clientId, correlationId);
+    reportManagedIdentityFailureReason(classifyManagedIdentityError(error), clientId, correlationId, traceContext);
 }
 
 /** Reports a failure whose cause is already known, without going through error classification. */
@@ -29,6 +31,7 @@ export function reportManagedIdentityFailureReason(
     reason: ManagedIdentityFailureReason,
     clientId: string | undefined,
     correlationId: string,
+    traceContext?: AuthTraceContext,
 ): void {
     void callWithTelemetryAndErrorHandling('connect.managedIdentityToken', (context) => {
         context.errorHandling.suppressDisplay = true;
@@ -36,5 +39,9 @@ export function reportManagedIdentityFailureReason(
         context.telemetry.properties.managedIdentityFailureReason = reason;
         context.telemetry.properties.managedIdentityKind = clientId ? 'user' : 'system';
         context.telemetry.properties.managedIdentityTokenCorrelationId = correlationId;
+        if (traceContext) {
+            context.telemetry.properties.startupCorrelationId = traceContext.startupCorrelationId;
+            context.telemetry.properties.surface = traceContext.surface;
+        }
     });
 }
