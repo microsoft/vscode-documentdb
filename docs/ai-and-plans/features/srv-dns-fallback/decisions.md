@@ -625,7 +625,9 @@ edge cases to code all trees share.
 
 - The rewrite applies the D0004 rules and nothing more. Option conflicts (for example
   `loadBalanced` with several hosts) are rejected by the driver when it parses the rewritten
-  `mongodb://` string, in its `mongodb://` wording.
+  `mongodb://` string, in its `mongodb://` wording. Exception: `srvMaxHosts` is removed before the
+  driver sees the string, so `srvMaxHosts` combined with `replicaSet` or `loadBalanced` is accepted
+  on the fallback path, where the `+srv` path rejects it (PR #997 review, P6).
 - `srvMaxHosts` takes the first N targets, not the driver's random sample.
 - Rewrite rejections are `SrvRewriteError` with a `kind`, and never contain the connection string.
 - `connect.srvResolution` carries only what sizes the problem: path, error codes, transport, TXT
