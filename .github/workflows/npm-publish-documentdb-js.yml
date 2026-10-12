@@ -28,6 +28,10 @@ on:
                 description: 'Publish @documentdb-js/shell-runtime'
                 type: boolean
                 default: false
+            publish_srv_resolver:
+                description: 'Publish @documentdb-js/srv-resolver'
+                type: boolean
+                default: false
 
 concurrency:
     group: publish-documentdb-js-packages
@@ -48,7 +52,8 @@ jobs:
                     !inputs.publish_operator_registry &&
                     !inputs.publish_schema_analyzer &&
                     !inputs.publish_shell_api_types &&
-                    !inputs.publish_shell_runtime
+                    !inputs.publish_shell_runtime &&
+                    !inputs.publish_srv_resolver
                   }}
               run: |
                   echo "::error::No package selected. Enable at least one publish_* input before running this workflow."
@@ -89,3 +94,7 @@ jobs:
             - name: 🚀 Publish @documentdb-js/shell-runtime
               if: ${{ inputs.publish_shell_runtime }}
               run: npm publish --provenance --workspace @documentdb-js/shell-runtime
+
+            - name: 🚀 Publish @documentdb-js/srv-resolver
+              if: ${{ inputs.publish_srv_resolver }}
+              run: npm publish --provenance --workspace @documentdb-js/srv-resolver

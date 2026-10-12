@@ -6,8 +6,9 @@
 // eslint-disable-next-line import/no-internal-modules
 import { getSessionFromVSCode } from '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
-import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
+import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
@@ -22,7 +23,11 @@ import { getOidcAllowedHosts } from './oidcAllowedHosts';
 export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
-    public async configureAuth(timings?: ConnectionStartupTimings): Promise<AuthHandlerResponse> {
+    public async configureAuth(
+        timings?: ConnectionStartupTimings,
+        traceContext?: AuthTraceContext,
+    ): Promise<AuthHandlerResponse> {
+        const authCorrelationId = randomUUID();
         // Get Microsoft Entra ID token
         const session = await traceAuthOperation(
             'interactiveEntra.getSession',
@@ -33,10 +38,17 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                     }),
                 ),
             { tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId, createIfNone: true },
+            authCorrelationId,
+            traceContext,
         );
 
         if (!session) {
-            traceAuthFlow('interactiveEntra.sessionUnavailable', { reason: 'noSessionReturned' });
+            traceAuthFlow(
+                'interactiveEntra.sessionUnavailable',
+                { reason: 'noSessionReturned' },
+                authCorrelationId,
+                traceContext,
+            );
             throw new Error(l10n.t('Failed to obtain Entra ID token.'));
         }
 
@@ -75,7 +87,12 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             options.tlsAllowInvalidCertificates = true;
         }
 
-        traceAuthFlow('interactiveEntra.oidcConfigured', { sessionAvailable: true, tls: true });
+        traceAuthFlow(
+            'interactiveEntra.oidcConfigured',
+            { sessionAvailable: true, tls: true },
+            authCorrelationId,
+            traceContext,
+        );
         return {
             connectionString: dbConnectionString.toString(),
             options,

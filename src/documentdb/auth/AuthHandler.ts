@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type MongoClientOptions } from 'mongodb';
+import { type AuthTraceContext } from '../../utils/authTrace';
 import { type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 
 /**
@@ -18,7 +19,7 @@ export interface AuthHandler {
      * @param connectionString The base connection string without authentication
      * @returns Connection string and MongoDB client options
      */
-    configureAuth(timings?: ConnectionStartupTimings): Promise<AuthHandlerResponse>;
+    configureAuth(timings?: ConnectionStartupTimings, traceContext?: AuthTraceContext): Promise<AuthHandlerResponse>;
 }
 
 export interface AuthHandlerResponse {
