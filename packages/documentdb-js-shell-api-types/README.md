@@ -80,7 +80,7 @@ const serverCommands = getRequiredServerCommands();
 | Script           | Description                                                          |
 | ---------------- | -------------------------------------------------------------------- |
 | `npm run build`  | Compile TypeScript sources                                           |
-| `npm run test`   | Run unit tests (method registry)                                     |
+| `npm run test`   | Run unit tests (method registry, `getShellApiDtsContent()` loading)  |
 | `npm run verify` | Check method registry against official DocumentDB compatibility docs |
 
 ### Verification (`npm run verify`)
