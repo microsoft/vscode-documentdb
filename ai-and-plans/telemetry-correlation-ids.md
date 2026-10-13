@@ -4,11 +4,66 @@ status: active
 created: 2026-09-29
 ---
 
-# Telemetry correlation ids (future work)
+# Telemetry correlation IDs
 
 > Which id a telemetry event should carry so related events can be joined, and what each name
 > means. Written after #979, where two Quick Start ids with overlapping names were easy to confuse.
-> Nothing here is agreed yet: this collects the inventory and the open questions for a later pass.
+> The connection IDs section below is implemented. The wider inventory and proposed rule
+> remain evidence and draft proposals for a later pass, not a repository-wide migration.
+
+## Connection IDs (2026-10-12)
+
+Three questions, three IDs.
+
+| Question                                          | Property                                 | Meaning                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How long did a connection take, and did it fail?  | `startupCorrelationId`                   | One database client: the extension's `ClustersClient`, or one shell or playground worker. New for every attempt, retry, and worker restart. Cached reuse creates none.                                                                                                                             |
+| Which cluster is this?                            | `connectionCorrelationId`                | The extension client whose `connect.staticmetadata` and `connect.getmetadata` events describe the cluster. On extension events it equals `startupCorrelationId`. Shell and playground events carry it only as a pointer to that metadata, and only when an extension client was already connected. |
+| What did the user do in this shell or playground? | `shellSessionId`, playground `sessionId` | One terminal (stable across worker restarts), or one playground worker session.                                                                                                                                                                                                                    |
+
+`startupCorrelationId` appears on `connect.startup`, `worker.startup`, `connect.srvResolution`,
+`connect.staticmetadata`, `connect.getmetadata`, and `connect.managedIdentityToken` failures.
+A shell captures `connectionCorrelationId` once, when it is created, and puts it on its
+`worker.startup`, SRV, and `shell.sessionStart` events.
+
+### Output channel
+
+Every line about a database connection carries `startup=<id>`: the startup summaries
+(`[ClustersClient]`, `[WorkerSessionManager]`), `[SrvResolution]`, `[Authentication]`,
+`[Shell Worker]`, and `[Playground Worker]`. The ID stays with that client for its lifetime, so
+later token refreshes and worker messages show the startup ID that created the client. To follow
+one connection, search the output for its ID.
+
+Authentication steps outside a connection (pickers, wizards) show their own `authId=<id>`.
+`auth=<method>` in a startup summary is the authentication method, not an ID.
+`[SrvResolution] startup=unknown` means a caller did not pass the ID, which is a bug.
+
+### Counting
+
+- **Attempts and outcomes:** each `connect.startup` and `worker.startup` event is one attempt.
+  Count them by `surface` and `startupOutcome`.
+- **Time:** the same events carry `<stage>DurationMs`, `tokenAcquireDurationMs`,
+  `databaseConnectDurationMs`, and `srvResolution`. Join `connect.srvResolution` on
+  `startupCorrelationId` only when DNS detail is needed.
+- **Success rate:** `succeeded` / (`succeeded` + `failed` + `timedOut` + `exited`). Report
+  `canceled` separately.
+- **Journeys (best effort):** group shell events and `worker.startup` by `shellSessionId`. Join to
+  cluster metadata through `connectionCorrelationId` when present. A shell without that link is
+  still a valid attempt.
+- **Not covered:** cached-client reuse, driver reconnects, and events lost to crashes. None of these
+  IDs identifies a user or a cluster.
+
+Example: the user expands a cluster in the tree, then opens a shell. That is two attempts (two
+startup IDs), one shell session, and one metadata link from the shell to the extension client.
+
+```kusto
+RawEventsVSCodeExt
+| where EventName endswith "connect.startup" or EventName endswith "worker.startup"
+| summarize attempts = count()
+    by surface = tostring(Properties.surface), outcome = tostring(Properties.startupoutcome)
+```
+
+Scope the query to this extension and a time range. Ingested property names are lowercase.
 
 ## Why this needs a convention
 
@@ -25,7 +80,10 @@ The confusion in #979: the Quick Start wizard's panel id (`quickStartSessionId`)
 id, while the existing Quick Start `journeyCorrelationId` actually identified one setup run. The run
 id was renamed to `provisionCorrelationId` in the same PR.
 
-## Inventory (2026-09-29)
+## Inventory (2026-09-29, historical)
+
+This inventory predates the connection IDs section above, which supersedes it for connection
+startup. Shell and worker events carry `connectionCorrelationId` only as a metadata link.
 
 The ids fall into three scopes.
 
