@@ -286,9 +286,9 @@ describe('script source layout selection', () => {
     }
 
     it('loads the bundled file from the dev server when bundled in development (regression: index.js 404)', () => {
-        // A webpack-bundled extension running in Development with the dev server
+        // A bundled extension running in Development with the dev server
         // on must ask the dev server for the *bundled* asset name (views.js),
-        // because `webpack serve` emits that name. Keying the layout off the mode
+        // because the dev server serves that name. Keying the layout off the mode
         // alone would request the tsc `index.js` and 404.
         const html = htmlFor({ mode: vscode.ExtensionMode.Development, isBundled: true, devServer: true });
 

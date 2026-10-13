@@ -14,11 +14,11 @@ import { consoleProcedureLogger, type ProcedureLogger } from './middleware/loggi
 
 /**
  * Describes where the bundled webview JavaScript lives on disk relative to the
- * extension root, both when the extension is shipped as a webpack bundle
- * (production) and when it is loaded from `tsc` output (development).
+ * extension root, both when the extension runs from its bundler output and when
+ * it is loaded from unbundled `tsc` output.
  *
- * The framework picks the appropriate entry based on the extension's mode
- * (`vscode.ExtensionMode.Production` selects `bundled`, otherwise `dev`). In
+ * The controller picks the entry from {@link WebviewControllerOptions.isBundled}
+ * (`bundled` when `true`, otherwise `dev`). In
  * development, if the `DEVSERVER` environment variable is set, the controller
  * serves the script from {@link WebviewControllerOptions.devServerHost} instead
  * of the on-disk location.
@@ -119,14 +119,14 @@ export interface WebviewControllerOptions<
     devServerHost?: string;
 
     /**
-     * Whether the running extension is a **webpack bundle** rather than raw
+     * Whether the running extension is **bundled** (by any bundler) rather than raw
      * `tsc` output. This selects which {@link WebviewSourceLayout} entry is used
      * (`bundled` when `true`, `dev` when `false`) and therefore which script the
      * webview loads.
      *
      * This is deliberately separate from the extension **mode** (the package can
      * derive the mode from `extensionContext`, but it cannot know how the
-     * consumer built its code). The dev server (`webpack serve`) emits the
+     * consumer built its code). A bundler's dev server serves the
      * *bundled* asset name (e.g. `views.js`), so a bundled extension running in
      * development (mode `Development`, dev server on) must still pick the
      * `bundled` layout; keying the layout off the mode alone would ask the dev
@@ -303,7 +303,7 @@ export class WebviewController<
         const nonce = randomBytes(16).toString('base64');
 
         // The layout (which script the webview loads) is chosen by whether the
-        // running extension is a webpack bundle, not by the extension mode: the
+        // running extension is bundled, not by the extension mode: the
         // dev server serves the bundled asset name, so a bundled extension in
         // development must still resolve the `bundled` layout. `isProduction` is
         // used only for CSP hardening and the disk-vs-dev-server choice below.
