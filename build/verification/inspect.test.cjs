@@ -519,11 +519,13 @@ test('host chunks and the CJS plugin require their own report ownership and matc
         assert.deepEqual(Object.keys(manifestReport).sort(), [
             'graphAssetBytes',
             'graphPackages',
+            'graphPackagesLimit',
             'graphSizes',
             'vsixBytes',
         ]);
         // These fixture reports predate moduleBytes, so no graph has package data.
         assert.deepEqual(manifestReport.graphPackages, {});
+        assert.equal(manifestReport.graphPackagesLimit, 60);
         assert.deepEqual(manifestReport.vsixBytes, { bytes: fs.statSync(filename).size });
         assert.equal(manifestReport.graphSizes.vsix, manifestReport.vsixBytes.bytes);
         assert.equal(manifestReport.graphSizes.viewsAssets, 100);
@@ -1146,18 +1148,19 @@ test('package graphs sum moduleBytes per package over the size graphs made of ch
     assert.deepEqual(packages.collectionView, { react: 40, 'src/webviews': 3 });
 });
 
-test('package graphs keep the largest packages up to 99% or 60 entries and add up the rest as (other)', () => {
+test('package graphs keep exactly the 60 largest packages and add up the rest as (other)', () => {
     const host = hostFixture();
     const views = viteFixture();
     const bundled = new Map([...host.bundled, ...views.bundled]);
     const graphs = { ...hostGraphs(host.report, bundled), ...viewGraphs(views.report, bundled) };
     const main = host.report.chunks.find((chunk) => chunk.fileName === 'main.mjs');
+    // No share cut-off: a tiny package stays tracked while there is room.
     const small = Array.from({ length: 10 }, (_, index) => [`./node_modules/small-${index}/index.js`, 1]);
     main.moduleBytes = Object.fromEntries([['./node_modules/big/index.js', 990], ...small]);
-    assert.deepEqual(measurePackageGraphs(bundled, host.report, views.report, graphs).main, {
-        big: 990,
-        '(other)': 10,
-    });
+    const few = measurePackageGraphs(bundled, host.report, views.report, graphs).main;
+    assert.equal(Object.keys(few).length, 11);
+    assert.equal(few['small-9'], 1);
+    assert.equal(few['(other)'], undefined);
     main.moduleBytes = Object.fromEntries(
         Array.from({ length: 70 }, (_, index) => [`./node_modules/package-${index}/index.js`, 100 + index]),
     );

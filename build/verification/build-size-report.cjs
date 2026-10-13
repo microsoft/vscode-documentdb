@@ -48,6 +48,12 @@ function validateReport(report) {
     assert.ok(Number.isSafeInteger(report.vsixBytes?.bytes) && report.vsixBytes.bytes >= 0, 'Invalid L1 VSIX bytes');
     assert.equal(report.graphSizes.vsix, report.vsixBytes.bytes, 'L1 VSIX measurements disagree');
     validatePackages(report.graphPackages, 'L1');
+    if (report.graphPackages) {
+        assert.ok(
+            Number.isSafeInteger(report.graphPackagesLimit) && report.graphPackagesLimit > 0,
+            'Invalid L1 graphPackagesLimit',
+        );
+    }
 }
 
 function cacheSizes(report) {
@@ -112,35 +118,28 @@ function label(graph, code = (name) => `\`${name}\``) {
 
 /**
  * The packages of one graph whose approximate bytes changed most, largest first. Empty when either
- * side has no package data (a v2 or legacy base). A package missing on one side may be lumped into
- * that side's `(other)`, where no package is larger than the smallest named one or `(other)` itself;
- * a package no larger than that cap has an unknown change and is left out.
+ * side has no package data (a v2 or legacy base). A package tracked on one side only is marked
+ * `entered` or `left`; its delta is known only when the other side has no `(other)` (it is then 0
+ * there), otherwise `bytes` is its size on the side that tracks it and `delta` is null.
  */
 function packageChanges(report, base, graph) {
     const current = report.graphPackages?.[graph];
     const previous = base?.graphPackages?.[graph];
     if (!current || !previous) return [];
     validatePackages({ [graph]: previous }, 'base');
-    const lumpedCap = (packages) =>
-        Math.min(
-            packages[OTHER_PACKAGES] ?? 0,
-            ...Object.entries(packages)
-                .filter(([name]) => name !== OTHER_PACKAGES)
-                .map(([, bytes]) => bytes),
-        );
     const changes = [];
     for (const name of new Set([...Object.keys(current), ...Object.keys(previous)])) {
         if (name === OTHER_PACKAGES) continue;
-        const now = current[name];
-        const was = previous[name];
-        if (now === undefined && was <= lumpedCap(current)) continue;
-        if (was === undefined && now <= lumpedCap(previous)) continue;
-        const delta = (now ?? 0) - (was ?? 0);
-        if (Math.abs(delta) < PACKAGE_CHANGE_BYTES) continue;
-        changes.push({ name, delta, marker: was === undefined ? 'new' : now === undefined ? 'removed' : null });
+        const now = current[name] ?? (Object.hasOwn(current, OTHER_PACKAGES) ? undefined : 0);
+        const was = previous[name] ?? (Object.hasOwn(previous, OTHER_PACKAGES) ? undefined : 0);
+        const delta = now === undefined || was === undefined ? null : now - was;
+        const bytes = now ?? was;
+        if (Math.abs(delta ?? bytes) < PACKAGE_CHANGE_BYTES) continue;
+        const marker = !Object.hasOwn(previous, name) ? 'entered' : !Object.hasOwn(current, name) ? 'left' : null;
+        changes.push({ name, delta, bytes, marker });
     }
     return changes
-        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || (a.name < b.name ? -1 : 1))
+        .sort((a, b) => Math.abs(b.delta ?? b.bytes) - Math.abs(a.delta ?? a.bytes) || (a.name < b.name ? -1 : 1))
         .slice(0, PACKAGE_CHANGE_COUNT);
 }
 
@@ -195,17 +194,24 @@ function buildSizeComment(report, base, options) {
             lines.push(`The cached ${ref} sizes predate per-graph data; only the VSIX is compared.`, '');
         }
         const moved = compareSizes(report, base).filter((row) => row.change);
+        const top = `top ${report.graphPackagesLimit}`;
         const packageLines = moved.flatMap((row) => {
             const changes = packageChanges(report, base, row.graph);
             if (changes.length === 0) return [];
             const listed = changes.map(
                 (change) =>
-                    `\`${change.name}\` ${signed(change.delta, formatSize(change.delta))}${change.marker ? ` (${change.marker})` : ''}`,
+                    `\`${change.name}\` ${change.delta === null ? formatSize(change.bytes) : signed(change.delta, formatSize(change.delta))}${change.marker ? ` (${change.marker} ${top})` : ''}`,
             );
             return [
                 `- ${label(row.graph)}, biggest package changes (approx., before minification): ${listed.join(', ')}`,
             ];
         });
+        if (packageLines.length > 0) {
+            packageLines.push(
+                '',
+                `_Only each graph's ${report.graphPackagesLimit} largest packages are tracked; the rest are counted as \`${OTHER_PACKAGES}\`, so "entered/left ${top}" can mean a package crossed that line, not that it was added or removed._`,
+            );
+        }
         if (moved.length === 0) {
             lines.push(
                 base.graphSizes

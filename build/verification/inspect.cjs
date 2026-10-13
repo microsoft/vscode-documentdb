@@ -858,13 +858,13 @@ function packageOf(moduleId) {
         : segments[0];
 }
 
+// Stored as `graphPackagesLimit`, so the size comment's "top 60" wording follows the data.
 const PACKAGE_LIMIT = 60;
-const PACKAGE_SHARE = 0.99;
 
 /**
  * Approximate bytes per package (bundle report `moduleBytes`, before minification) for every size
- * graph made of chunks. The largest packages up to 99% of a graph, at most 60, are kept; the rest
- * add up to `(other)`. Graphs without module data (workers, `viewsAssets`, `vsix`) are omitted.
+ * graph made of chunks. The 60 largest packages of a graph are kept; the rest add up to `(other)`.
+ * Graphs without module data (workers, `viewsAssets`, `vsix`) are omitted.
  */
 function measurePackageGraphs(files, hostReport, viewsReport, graphs) {
     const measured = {};
@@ -881,14 +881,11 @@ function measurePackageGraphs(files, hostReport, viewsReport, graphs) {
                 const pkg = packageOf(moduleId);
                 packages.set(pkg, (packages.get(pkg) ?? 0) + bytes);
             }
-            const total = [...packages.values()].reduce((sum, bytes) => sum + bytes, 0);
             const kept = {};
-            let covered = 0;
             let other = 0;
             for (const [pkg, bytes] of [...packages].sort(([a, x], [b, y]) => y - x || (a < b ? -1 : 1))) {
-                if (Object.keys(kept).length < PACKAGE_LIMIT && covered < total * PACKAGE_SHARE) {
+                if (Object.keys(kept).length < PACKAGE_LIMIT) {
                     kept[pkg] = bytes;
-                    covered += bytes;
                 } else {
                     other += bytes;
                 }
@@ -957,6 +954,7 @@ function inspect(filename, options = {}) {
         ),
         graphSizes: measureSizeGraphs(files, reports[0], reports[1], graphs, result.vsixBytes),
         graphPackages: measurePackageGraphs(files, reports[0], reports[1], graphs),
+        graphPackagesLimit: PACKAGE_LIMIT,
     };
     return result;
 }

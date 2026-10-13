@@ -133,7 +133,7 @@ These probes build and run bundles instead of inspecting the packaged artifact, 
 which stays offline and build-free for the ADO release build.
 
 The JSON result includes `manifestReport`: current `vsixBytes.bytes`, `graphAssetBytes` sums,
-`graphSizes`, the per-graph measurements below, and `graphPackages`. A short summary goes to stderr;
+`graphSizes`, the per-graph measurements below, `graphPackages` and `graphPackagesLimit`. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
 GitHub Actions publishes `Bundle-reports-<run_id>` from the package job and
 `L1-manifest-report-<run_id>` from L1, including on inspection failure. L1's PR comment reads the
@@ -206,10 +206,13 @@ checks UI. Shared chunks count in every graph that loads them, so rows do not ad
 
 To show why a graph moved, the bundle reports record each chunk's `moduleBytes` (Rolldown's
 `renderedLength` per module, before minification), and L1 sums them per npm package, `src/<folder>`
-or `packages/<name>` into `manifestReport.graphPackages` (largest packages up to 99% of the graph, at
-most 60, the rest as `(other)`; graphs without chunks are omitted). Under a flagged graph, the comment
-lists the three packages that changed most (at least 1 KiB, marked new or removed, approximate
-because unminified); a v2 base, or a package that may be hidden in `(other)`, gives no package line.
+or `packages/<name>` into `manifestReport.graphPackages` (each graph's 60 largest packages, the
+rest as `(other)`; graphs without chunks are omitted; the 60 is `graphPackagesLimit`). Under a
+flagged graph, the comment lists the three packages that changed most (at least 1 KiB, approximate
+because unminified). A package tracked on one side only is marked "entered top 60" or "left top
+60", with its delta when the other side has no `(other)`, otherwise its size where tracked; one
+italic note then says this can mean crossing the line rather than being added or removed. A v2
+base gives no package line.
 For more detail, compare the chunks' `bytes`, `moduleIds` and `moduleBytes` in `host.json` and
 `views.json` from `Bundle-reports-<run_id>` of the PR run and of a base build.
 
