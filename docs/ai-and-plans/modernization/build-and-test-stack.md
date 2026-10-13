@@ -4276,17 +4276,46 @@ Stage 0 must also be made.
         `4144bc23`. This is their first Windows run.
       - The archive reader hardening (`4cc5b0f2`) and the size-report change (`d6c2aa4b`) came
         after `4144bc23`; neither changes product code.
+  - **G8 answers, third round (operator, 2026-10-13), verbatim:**
+    - **F5 check:** "passed, it starts the tasks, and then launches the debugger".
+    - **7 (S8-N01):** "fine, when neeeded one can run mpx rimraf dist" (accepted).
+    - **8 (S8-N02):** "align with the tests." Done in `2b320f24`: `check.cjs` exports
+      `proveAliasRemovedRejected()`, used by both `--prove` and `identity.test.cjs`; with the
+      worker's dynamic route removed, both now fail, where the old `--prove` passed.
+    - **9 (S8-N03):** "yes fix". Done in `e26e8ad4`.
+    - **10 (S8-N04):** "I worked in parallel, kill whatever is there if it's still there and
+      finalize checks if needed." The `network-issues` server was gone; port 18080 was held by
+      a Vite views server of this tree (started 10:32, the operator's F5 Watch), so the
+      coordinator did not stop it and ran L2-dev against it: `routes=42 ready=42 errors=0
+      assertions=60/60`, **`L2-DEV PASS`**. The fail-fast idea still goes to Stage 10.
+    - **S8-N05:** "fix". Done in `f9c5210b`: a second archive of the same package, paths that
+      differ only in case, and a missing end-of-archive block are rejected; each test failed
+      with its fix reverted; real `npm pack` tarballs and `verify:packages` pass.
+    - **S8-N06:** "remove that config, it's a forgotten artifact from an older version." Done in
+      `620c3a33`.
+    - **The "(other)" rule:** "just post a note in italic that briefly states the fact that
+      packages smaller than xx aren't tracked so they can appear as new ... also, instead of
+      saying "new" just say new in top 60? and then "left the top 60" / "entered top 60"".
+      Done in `7726f2c2`: each graph tracks exactly its 60 largest packages (the limit is in
+      the report), the suppression rule is gone, one-sided packages say "entered top 60" or
+      "left top 60", and one italic sentence explains the bucket whenever a package line is
+      shown. `prove:vsix` 22 PASS.
+    - **Checks for this round:** build; `test:verification` **139 Node**, 79 browser
+      (re-run by the coordinator); `check.cjs --prove` passes (re-run by the coordinator);
+      lint and Prettier. All five commits by one Claude Opus 5.5 subagent; no product code
+      changed. The operator's editor left whitespace-only changes in `.vscode/tasks.json` and
+      three package changelogs; they were not committed.
 - **Stage 8 commits:** `5124c392` (W1), `46c1b0b7` (W7), `550eff6b` (W2), `b69422b6` (W3),
   `20e11e14` (W4), `1750d40e` (W5), `7f6dd66f` (W6), `960c2b57` (W8), `01051ca8` (W9),
   `78e46f03` (W11), `55af1a67` (W10), `4cabe7d8` (W12), `77b5d702` (W13), `21b0da12` (W16),
   `8e27139d` (W14), `7e7f543c` (the review), and the `S8: record …` documentation commits
   `276163e0`, `df7eb036` and `ebd68c15`. W15 and W17 made no commit. After the G8 list:
   `6c5eb435` (item 22, the size report), `4cc5b0f2` (S8-F01 to S8-F03), `e396a92d` (S8-F04),
-  `d6c2aa4b` (item 22, package changes) and their record commits.
-  **Status: Stage 8 work complete; at G8 (2026-10-12).** Answered: 1 to 6, 11 to 22. Open: 7
-  to 10 (S8-N01 to S8-N04, plus S8-N05 below) and the F5 check after `e396a92d`.
-  `prove:vsix` now prints 22 PASS (item 22), not the 25 of the final verification above.
-  Case 1 applied throughout; the Case 2 list runs in Stage 9.
+  `d6c2aa4b` (item 22, package changes), `2b320f24` (S8-N02), `e26e8ad4` (S8-N03), `f9c5210b`
+  (S8-N05), `620c3a33` (S8-N06), `7726f2c2` (the top-60 wording) and their record commits.
+  **Status: Stage 8 work complete; every G8 item answered (2026-10-13).** Awaiting the
+  operator's "G8 passed". `prove:vsix` now prints 22 PASS (item 22), not the 25 of the final
+  verification above. Case 1 applied throughout; the Case 2 list runs in Stage 9.
 
 ### Stage 9: ready for review, merge and release
 
