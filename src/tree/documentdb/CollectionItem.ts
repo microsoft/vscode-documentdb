@@ -12,7 +12,7 @@ import { ext } from '../../extensionVariables';
 import { createConcurrencyLimiter, type LimitedRunner } from '../../utils/concurrencyLimiter';
 import { getCountPrefix } from '../../utils/countPrefix';
 import { formatDocumentCount } from '../../utils/formatDocumentCount';
-import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
+import { escapeMarkdown, formatInlineCode } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -208,7 +208,7 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
                 const entries = shardKeyEntries
                     .map(([k, v]) => {
                         const valueText = typeof v === 'string' ? `"${v}"` : String(v);
-                        return `\`${k}: ${valueText}\``; // e.g. `userId: 1`
+                        return formatInlineCode(`${k}: ${valueText}`); // e.g. `userId: 1`
                     })
                     .join(', '); // e.g. `userId: 1`, `tenantId: "hashed"`
                 md.appendMarkdown(`**${l10n.t('Shard Key')}:** ${entries}\n\n`);

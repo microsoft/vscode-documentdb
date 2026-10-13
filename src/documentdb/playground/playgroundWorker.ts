@@ -149,7 +149,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         options.authMechanism = 'MONGODB-OIDC';
         options.tls = true;
         options.authMechanismProperties = {
-            ALLOWED_HOSTS: getOidcAllowedHosts(msg.connectionString),
+            ALLOWED_HOSTS: [...(msg.oidcAllowedHosts ?? getOidcAllowedHosts(msg.connectionString))],
             OIDC_CALLBACK: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
                 const requestId = randomUUID();
                 const tokenPromise = new Promise<string>((resolve, reject) => {

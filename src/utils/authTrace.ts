@@ -66,9 +66,28 @@ export function describeAuthError(error: unknown): string {
 
 type AuthTraceDetails = Readonly<Record<string, string | number | boolean>>;
 
-export function traceAuthFlow(operation: string, details: AuthTraceDetails, correlationId?: string): void {
+/** The database connection an auth step belongs to. */
+export interface AuthTraceContext {
+    readonly startupCorrelationId: string;
+    readonly surface: string;
+}
+
+/** Connection-bound steps show the connection's startup ID; other steps show their own auth ID. */
+function authLogIds(correlationId: string | undefined, context?: AuthTraceContext): string {
+    if (context) {
+        return ` startup=${context.startupCorrelationId} surface=${context.surface}`;
+    }
+    return correlationId ? ` authId=${correlationId}` : '';
+}
+
+export function traceAuthFlow(
+    operation: string,
+    details: AuthTraceDetails,
+    correlationId?: string,
+    context?: AuthTraceContext,
+): void {
     ext.outputChannel.info(
-        l10n.t('[Authentication {0}] {1}: {2}', correlationId ?? 'flow', operation, JSON.stringify(details)),
+        l10n.t('[Authentication]{0} {1}: {2}', authLogIds(correlationId, context), operation, JSON.stringify(details)),
     );
 }
 
@@ -77,18 +96,19 @@ export async function traceAuthOperation<T>(
     action: () => Promise<T>,
     details: AuthTraceDetails = {},
     correlationId: string = randomUUID(),
+    context?: AuthTraceContext,
 ): Promise<T> {
     const startedAt = Date.now();
-    traceAuthFlow(operation, { ...details, outcome: 'started' }, correlationId);
+    traceAuthFlow(operation, { ...details, outcome: 'started' }, correlationId, context);
     try {
         const result = await action();
-        traceAuthFlow(operation, { outcome: 'completed', durationMs: Date.now() - startedAt }, correlationId);
+        traceAuthFlow(operation, { outcome: 'completed', durationMs: Date.now() - startedAt }, correlationId, context);
         return result;
     } catch (error) {
         ext.outputChannel.error(
             l10n.t(
-                '[Authentication {0}] {1}: failed or cancelled after {2} ms; {3}.',
-                correlationId,
+                '[Authentication]{0} {1}: failed or cancelled after {2} ms; {3}.',
+                authLogIds(correlationId, context),
                 operation,
                 Date.now() - startedAt,
                 describeAuthError(error),

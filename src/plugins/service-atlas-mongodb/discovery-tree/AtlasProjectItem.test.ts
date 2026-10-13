@@ -111,7 +111,7 @@ describe('AtlasProjectItem tooltip', () => {
     it('escapes link-like organization names so they cannot render as links', () => {
         const value = tooltipValue(buildProject(), '[click me](https://example.invalid)');
 
-        expect(value).toContain('\\[click me\\]\\(https://example\\.invalid\\)');
+        expect(value).toContain('\\[click me\\]\\(https\\://example\\.invalid\\)');
         expect(value).not.toContain('](https://example.invalid)');
     });
 

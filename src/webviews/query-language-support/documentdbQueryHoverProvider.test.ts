@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { getAllCompletions } from '@documentdb-js/operator-registry';
 import { type FieldCompletionData } from '../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { getHoverContent, type FieldDataLookup } from './documentdbQueryHoverProvider';
 
@@ -65,12 +66,58 @@ describe('documentdbQueryHoverProvider', () => {
             expect(content).toContain('Documentation]');
         });
 
-        test('operator hover has isTrusted set for clickable links', () => {
+        test('operator hover is untrusted with HTML support and a documentation link', (): void => {
             const hover = getHoverContent('$gt');
             expect(hover).not.toBeNull();
 
-            const hoverContent = hover!.contents[0] as { isTrusted?: boolean };
-            expect(hoverContent.isTrusted).toBe(true);
+            const hoverContent = hover!.contents[0] as { value: string; isTrusted?: boolean; supportHtml?: boolean };
+            expect(hoverContent.isTrusted).toBe(false);
+            expect(hoverContent.supportHtml).toBe(true);
+            expect(hoverContent.value).toMatch(/\[ⓘ Documentation\]\(https?:\/\/[^)]+\)/);
+            const entry = getAllCompletions().find((candidate): boolean => candidate.value === '$gt');
+            expect(entry).toBeDefined();
+            expect(hoverContent.value).toContain(entry!.description);
+            expect(hoverContent.value).toContain(`[ⓘ Documentation](${entry!.link})`);
+        });
+
+        const describeWithDom = typeof document === 'undefined' ? describe.skip : describe;
+        describeWithDom('real Monaco renderer', (): void => {
+            test('retains HTTP(S) links without command trust', (): void => {
+                const { renderMarkdown } = jest.requireActual<{
+                    renderMarkdown(markdown: { value: string; isTrusted?: boolean; supportHtml?: boolean }): {
+                        element: HTMLElement;
+                        dispose(): void;
+                    };
+                }>('monaco-editor/esm/vs/base/browser/markdownRenderer.js');
+                const hover = getHoverContent('$gt');
+                expect(hover).not.toBeNull();
+                const hoverContent = hover!.contents[0] as {
+                    value: string;
+                    isTrusted?: boolean;
+                    supportHtml?: boolean;
+                };
+                expect(hoverContent.isTrusted).toBe(false);
+                const entry = getAllCompletions().find((candidate): boolean => candidate.value === '$gt');
+                expect(entry!.link).toMatch(/^https:\/\//);
+
+                const rendered = renderMarkdown({
+                    ...hoverContent,
+                    value: `${hoverContent.value}\n\n[HTTP reference](http://docs.example.invalid/reference)\n\n[Inspect](command:example.inspect)`,
+                });
+                try {
+                    const hrefs = Array.from(
+                        rendered.element.querySelectorAll('a[data-href]'),
+                        (anchor): string | null => anchor.getAttribute('data-href'),
+                    );
+                    expect(hrefs).toContain(entry!.link);
+                    expect(hrefs).toContain('http://docs.example.invalid/reference');
+                    expect(hrefs).not.toContain('command:example.inspect');
+                    expect(rendered.element.textContent).toContain('Inspect');
+                    expect(rendered.element.querySelector('br')).not.toBeNull();
+                } finally {
+                    rendered.dispose();
+                }
+            });
         });
 
         test('returns hover for UUID constructor', () => {

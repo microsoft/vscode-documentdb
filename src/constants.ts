@@ -12,6 +12,8 @@ export const modifierKey: string = isMacOS ? '⌘' : 'Ctrl';
 
 export namespace Links {
     export const LocalConnectionDebuggingTips: string = 'https://aka.ms/vscode-documentdb-local-connections';
+    export const SrvDnsTroubleshooting: string =
+        'https://microsoft.github.io/vscode-documentdb/user-manual/troubleshooting-srv-dns';
 }
 
 export const doubleClickDebounceDelay = 500; //milliseconds

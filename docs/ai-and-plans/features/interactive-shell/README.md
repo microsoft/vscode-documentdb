@@ -66,13 +66,18 @@ program-level narrative, and the sibling areas
   The framework supplies `result` and total `duration` in seconds. Measurements `timeoutMs`,
   `lastStageDurationMs` (the last visit), and `<stage>DurationMs` (accumulated across visits) are
   milliseconds. Shell events carry the existing `shellSessionId` and, when already cached at shell
-  creation, the parent `connectionCorrelationId`; Playground carries its existing `sessionId`.
+  creation, the parent `connectionCorrelationId` as a link to that client's cluster metadata. It is
+  captured once at shell creation and is not the worker's attempt ID; that is
+  `startupCorrelationId`. Playground carries its existing `sessionId`.
   Successful events are retained for rate/latency analysis. Tracking summaries contain no connection
   strings, tokens, hostnames, account details, database names, or raw errors. The telemetry wrapper
   receives only a fixed failure with no original stack, and masks error fields; the original error
   is preserved for the caller. Existing worker/session lifecycle events remain separate.
   Regular extension clients use the related
   [`connect.startup` diagnostics](../connections-tree/README.md#connection-startup-diagnostics).
+  SRV, authentication, and worker log lines carry the worker's `startup=<UUID>` for its whole
+  lifetime, including later token refreshes. See the
+  [connection IDs](../../telemetry-correlation-ids.md#connection-ids-2026-10-12).
 - **Entra and database costs are measured separately in that same event.**
   `tokenAcquireDurationMs` measures the actual host-side token-provider call, including its cache,
   refresh, SDK setup, and any interactive wait. `databaseConnectDurationMs` measures the connect

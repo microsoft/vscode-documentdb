@@ -65,6 +65,8 @@ export type MainToWorkerMessage =
           /** Connection string (with embedded credentials for SCRAM, without for Entra ID) */
           readonly connectionString: string;
           readonly clientOptions: SerializableMongoClientOptions;
+          /** OIDC security allowlist computed on the host from the original connection string. */
+          readonly oidcAllowedHosts?: readonly string[];
           readonly databaseName: string;
           readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth';
           /** Tenant ID for Entra ID clusters */

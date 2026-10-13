@@ -39,6 +39,12 @@ module.exports = {
                         },
                     },
                 ],
+                // The ESM-only workspace package is linked outside node_modules; Jest cannot
+                // load ESM through require(), so compile its built output to CommonJS.
+                '/packages/documentdb-js-srv-resolver/dist/.+\\.js$': [
+                    '@swc/jest',
+                    { swcrc: false, jsc: { target: 'es2022' }, module: { type: 'commonjs' } },
+                ],
             },
         },
         // React components in the webviews need a DOM. Kept as its own project rather than
@@ -55,6 +61,7 @@ module.exports = {
         '<rootDir>/packages/documentdb-js-schema-analyzer',
         '<rootDir>/packages/documentdb-js-operator-registry',
         '<rootDir>/packages/documentdb-js-shell-runtime',
+        '<rootDir>/packages/documentdb-js-srv-resolver',
         '<rootDir>/packages/vscode-ext-webview',
         '<rootDir>/packages/vscode-ext-webview-fluentui',
     ],
