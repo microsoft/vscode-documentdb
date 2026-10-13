@@ -211,6 +211,8 @@ try {
         if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`);
         tarballFiles = JSON.parse(pack.stdout).map((entry) => path.join(tarballs, entry.filename));
     }
+    // Two archives with one name would install into one folder, the later overwriting the earlier.
+    const tarballByName = new Map();
     const packed = tarballFiles.map((tarball) => {
         const archive = readTarball(tarball);
         const manifestFile = archive.files.find((file) => file.path === 'package.json');
@@ -222,6 +224,13 @@ try {
                     `package of this repository (${[...workspaceNames].join(', ')})`,
             );
         }
+        if (tarballByName.has(manifest.name)) {
+            throw new Error(
+                `${path.basename(tarball)}: package ${manifest.name} is also in ${path.basename(tarballByName.get(manifest.name))}; ` +
+                    'pass one archive per package',
+            );
+        }
+        tarballByName.set(manifest.name, tarball);
         return { name: manifest.name, version: manifest.version, manifest, tarball, ...archive };
     });
     const ours = new Set(packed.map((entry) => entry.name));

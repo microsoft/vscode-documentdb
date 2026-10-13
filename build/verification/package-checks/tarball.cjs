@@ -16,8 +16,9 @@ const BLOCK = 512;
 
 /**
  * Reads a `.tgz`. File paths are relative to the archive's top folder (`package/` for npm).
- * Rejects a member whose size field is not octal or overruns the archive, and a path that
- * occurs twice: npm installs the last copy, so reading the first could check other bytes.
+ * Rejects a member whose size field is not octal or overruns the archive, a path that occurs
+ * twice ignoring case (npm installs the last copy, and Windows extracts case-insensitively), and
+ * an archive without the all-zero end-of-archive block (`npm pack` writes two).
  * @param {string} file
  * @returns {{ sha256: string, bytes: number, files: { path: string, data: Buffer }[] }}
  */
@@ -27,9 +28,13 @@ function readTarball(file) {
     const files = [];
     const seen = new Set();
     let longPath;
+    let terminated = false;
     for (let offset = 0; offset + BLOCK <= data.length; ) {
         const header = data.subarray(offset, offset + BLOCK);
-        if (header.every((byte) => byte === 0)) break;
+        if (header.every((byte) => byte === 0)) {
+            terminated = true;
+            break;
+        }
         const field = (start, length) => header.toString('utf8', start, start + length).replace(/\0[\s\S]*$/, '');
         const sizeField = header
             .toString('latin1', 124, 136)
@@ -59,7 +64,7 @@ function readTarball(file) {
             const name = longPath ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
             longPath = undefined;
             const member = name.slice(name.indexOf('/') + 1);
-            const key = path.posix.normalize(member.replaceAll('\\', '/'));
+            const key = path.posix.normalize(member.replaceAll('\\', '/')).toLowerCase();
             if (seen.has(key)) throw new Error(`${path.basename(file)}: duplicate tar member ${member}`);
             seen.add(key);
             files.push({ path: member, data: Buffer.from(body) });
@@ -67,6 +72,7 @@ function readTarball(file) {
             throw new Error(`${path.basename(file)}: unsupported tar entry type '${type}'`);
         }
     }
+    if (!terminated) throw new Error(`${path.basename(file)}: no end-of-archive block after the last tar member`);
     return { sha256: createHash('sha256').update(archive).digest('hex'), bytes: archive.length, files };
 }
 

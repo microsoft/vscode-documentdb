@@ -97,6 +97,26 @@ describe('package archives: tarball reader and writer', () => {
             );
         }
     });
+
+    it('rejects paths that differ only in case, as Windows extracts them into one file', () => {
+        const file = path.join(dir, 'case.tgz');
+        writeTarball(file, [
+            { path: 'package.json', data: '{"name":"x"}' },
+            { path: 'dist/A.js', data: '' },
+            { path: 'dist/a.js', data: '' },
+        ]);
+        assert.throws(() => readTarball(file), /case\.tgz: duplicate tar member dist\/a\.js$/);
+    });
+
+    it('requires an end-of-archive block after the last member', () => {
+        const file = path.join(dir, 'truncated.tgz');
+        writeTarball(file, [{ path: 'package.json', data: '{"name":"x"}' }]);
+        const tar = zlib.gunzipSync(fs.readFileSync(file));
+        fs.writeFileSync(file, zlib.gzipSync(tar.subarray(0, tar.length - 512)));
+        assert.equal(readTarball(file).files.length, 1);
+        fs.writeFileSync(file, zlib.gzipSync(tar.subarray(0, tar.length - 1024)));
+        assert.throws(() => readTarball(file), /truncated\.tgz: no end-of-archive block after the last tar member/);
+    });
 });
 
 describe('package archives: package.json targets', () => {
@@ -228,5 +248,20 @@ describe('package archives: check-packages.mjs --archives', () => {
             );
             assert.deepEqual(fs.readdirSync(sandbox), [], name);
         }
+    });
+
+    it('rejects two archives of one package, naming both', () => {
+        const copy = variant('second-copy', (files) => files);
+        const result = spawnSync(process.execPath, [CHECK, '--archives', good, '--archives', copy], {
+            cwd: REPO,
+            encoding: 'utf8',
+        });
+        assert.equal(result.status, 1);
+        assert.ok(
+            result.stderr.includes(
+                `second-copy.tgz: package @microsoft/vscode-ext-webview is also in ${path.basename(good)}`,
+            ),
+            result.stderr,
+        );
     });
 });
