@@ -4286,8 +4286,9 @@ Stage 0 must also be made.
     - **10 (S8-N04):** "I worked in parallel, kill whatever is there if it's still there and
       finalize checks if needed." The `network-issues` server was gone; port 18080 was held by
       a Vite views server of this tree (started 10:32, the operator's F5 Watch), so the
-      coordinator did not stop it and ran L2-dev against it: `routes=42 ready=42 errors=0
-      assertions=60/60`, **`L2-DEV PASS`**. The fail-fast idea still goes to Stage 10.
+      coordinator did not stop it and ran L2-dev against it:
+      `routes=42 ready=42 errors=0 assertions=60/60`, **`L2-DEV PASS`**. The fail-fast idea
+      still goes to Stage 10.
     - **S8-N05:** "fix". Done in `f9c5210b`: a second archive of the same package, paths that
       differ only in case, and a missing end-of-archive block are rejected; each test failed
       with its fix reverted; real `npm pack` tarballs and `verify:packages` pass.
