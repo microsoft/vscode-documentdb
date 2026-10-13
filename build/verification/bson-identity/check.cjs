@@ -77,6 +77,25 @@ async function checkBsonIdentity({ withoutAlias = false } = {}) {
     }
 }
 
+// Shared with identity.test.cjs so the CLI --prove mode and the test cannot drift apart.
+function expectAliasRemovedFailure(error) {
+    for (const name of Object.keys(probes)) {
+        for (const route of ['ES module', 'dynamic import']) {
+            assert.match(
+                error.message,
+                new RegExp(
+                    `${name}: ObjectId via bson \\(${route}\\) is not the same constructor[^\\n]*bson/lib/bson\\.node\\.mjs`,
+                ),
+            );
+        }
+    }
+    return true;
+}
+
+async function proveAliasRemovedRejected() {
+    await assert.rejects(checkBsonIdentity({ withoutAlias: true }), expectAliasRemovedFailure);
+}
+
 async function main(args) {
     const results = await checkBsonIdentity({ withoutAlias: args.includes('--without-alias') });
     for (const [name, result] of Object.entries(results)) {
@@ -85,8 +104,10 @@ async function main(args) {
         );
     }
     if (args.includes('--prove')) {
-        await assert.rejects(checkBsonIdentity({ withoutAlias: true }), /bson\/lib\/bson\.node\.mjs/);
-        console.log('PASS: bson-alias-removed rejected for the expected reason');
+        await proveAliasRemovedRejected();
+        console.log(
+            `PASS: bson-alias-removed rejected: ES-module and dynamic-import bson routes split in ${Object.keys(probes).join(' and ')}`,
+        );
     }
 }
 
@@ -97,4 +118,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { checkBsonIdentity };
+module.exports = { checkBsonIdentity, proveAliasRemovedRejected };

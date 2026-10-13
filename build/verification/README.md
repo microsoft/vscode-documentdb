@@ -113,7 +113,8 @@ and requires every route to `ObjectId` to be one constructor, separately for the
 packages would import them); and, in the host, a value parsed by `@mongodb-js/shell-bson-parser`.
 `npm run test:verification` runs it together with a negative control that removes the alias and
 must fail on the ES-module and dynamic-import `bson` routes in both graphs (the TypeScript route
-splits too). Standalone:
+splits too). `--prove` runs that same control with the same expectation (one shared function).
+Standalone:
 
 ```bash
 node build/verification/bson-identity/check.cjs            # identity
