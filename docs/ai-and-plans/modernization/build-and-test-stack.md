@@ -4390,6 +4390,9 @@ Stage 0 must also be made.
   `@microsoft/vscode-azext-azureauth` and remove the G5-I01 alias.
 - [#991](https://github.com/microsoft/vscode-documentdb/issues/991): align the Node.js and npm
   toolchain versions with VS Code's extension host.
+- [#1006](https://github.com/microsoft/vscode-documentdb/issues/1006): generalize L1's `bson`
+  rule to any package bundled twice from different entry points (operator, G8, 2026-10-13:
+  "yes, add an enhance ment issue").
 - **Dependency refresh (operator, G7, 2026-10-12):** a work item right after the modernization
   that "just focues on the refresh of our dependencies". It also reviews the remaining
   `overrides` (`glob ~12.0.0`, and `vite: $vite` with #991).
