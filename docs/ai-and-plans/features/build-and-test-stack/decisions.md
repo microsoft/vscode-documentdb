@@ -26,6 +26,7 @@ created: 2026-10-14
 | 0011 | Keep L2-dev runner-free in this iteration                       | Accepted            | CI wiring stays with the E2E iteration                                                   | 2026-10-05 | #880 |
 | 0012 | Use one branch and one PR, merging `main`                       | Accepted (modified) | The 2026-10-07 decision restored a merge from `main` before the PR merges                | 2026-10-01 | #880 |
 | 0013 | The required check passes only when every expected layer passed | Accepted            | Accepted as proposed by the Stage 8.5 review (S85-F01)                                   | 2026-10-14 | #880 |
+| 0014 | CI jobs run in parallel where safe, under descriptive names     | Accepted            | Accepted as proposed; prompted by the operator's comparison with PR #963                 | 2026-10-14 | #880 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
@@ -550,3 +551,69 @@ result, and keeps the ruleset to one stable name as E2E jobs are added.
 
 - E2E jobs join the gate's `needs` and are expected in the full tier only, so a requested full
   run that fails E2E fails the required check on that commit.
+
+---
+
+## 0014: CI jobs run in parallel where safe, under descriptive names
+
+**Status:** Accepted · **Date:** 2026-10-14 · **Raised by:** the operator, comparing this branch's
+CI with PR #963 ("I have gates so that I don't waste resources when one fails, but maybe that's
+not so smart")
+
+### Question
+
+The first standard-tier run on #880 took 12.5 minutes of wall time for about 15 minutes of runner
+time, because the jobs form a chain: L0 (7.1 min, with Vitest capped at one worker by
+`maxWorkers: '25%'` on a 4-vCPU runner), then packaging, then L1 and L3. PR #963 runs every check
+as its own parallel job and finishes in about 4 minutes. Should the chain stay, and should the job
+names keep the plan's L-numbers?
+
+### Decision
+
+The hybrid structure (operator: "agreed, structure as in '1'"):
+
+- L0 becomes two parallel jobs, static checks (l10n, ESLint, Prettier, type checks) and unit
+  tests. Packaging no longer waits for them; L1 and L3 still follow packaging, which they need.
+- Vitest uses every CPU in CI (`maxWorkers` 100% when `CI` is set; 25% locally), after checking
+  the flaky Docker kill tests PR #963 fixed for four workers.
+- A composite setup action restores `node_modules` from the Actions cache and runs `npm ci` only
+  on a miss, as in PR #963.
+- The merge gate (decision 0013) stays the only required check, so parallel jobs cannot weaken
+  what blocks a merge.
+
+The job names (operator: "names, as shown"), with no L-numbers in what people see:
+
+| Before                         | After                                       |
+| ------------------------------ | ------------------------------------------- |
+| Plan CI tier                   | `Plan: choose checks`                       |
+| Code Quality & Tests           | `Static checks` and `Unit tests`            |
+| Package checks                 | `npm packages: verify tarballs`             |
+| Package VSIX                   | `VSIX: build`                               |
+| VSIX inspection (L1)           | `VSIX: inspect contents`                    |
+| Installed VSIX activation (L3) | `VSIX: activate in VS Code`                 |
+| (step) unbundled `/host` probe | `Webview host in unbundled extensions`      |
+| CI report                      | `PR report`                                 |
+| Build & Package (gate)         | `Merge gate` (after #880 merges, see below) |
+
+Steps and report rows use the same words, and "self-test" replaces "negative control" (for
+example "Self-test: inspection rejects broken VSIXs"). The L-numbers stay in the docs.
+
+### Reasoning
+
+The chain only saves runner time when a run fails, and draft PRs already run the cheap tier
+first; on every passing ready PR it costs about 7 minutes of waiting. Standard runners are free for
+this public repository, so wait time is the cost that matters. Expected: about 5 minutes of wall
+time for about the same 15 minutes of runner time. The names say what each job checks without the
+plan's vocabulary.
+
+### Rejected alternatives
+
+- **Keep the chain:** about 12.5 minutes per ready PR to save runner time on rare failures.
+- **Every check its own job, as in PR #963:** about 4 minutes, but more jobs repeat setup (about 17
+  runner-minutes) and occupy more concurrent runners; the hybrid gets most of the gain.
+
+### Order
+
+The structure, the names and the report wording change together on #880 after the G8.5 runs, so
+the names change once. `Merge gate` follows after #880 merges, because the ruleset requires
+`Build & Package` until then (see future-work.md).
