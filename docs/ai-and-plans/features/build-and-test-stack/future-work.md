@@ -53,6 +53,20 @@ wording in the grid plan), and the Stage 6 reviewer part of F20.
 - **Revisit when:** preparing the first release build after Stage 6, or if network isolation is
   turned on for our pipeline.
 
+### Rename the required check to `Merge gate` (operator, 2026-10-14)
+
+- **What:** the `gate` job in `main.yml` (decision 0013) keeps the name `Build & Package` only
+  because the branch ruleset requires that name. Rename it to `Merge gate`, and its unrelated-label
+  variant to `Merge gate (label event, not run)`; switch the ruleset's required check to
+  `Merge gate`. Name chosen by the operator over `Required checks`, `CI gate` (reads "CI / CI
+  gate"), `Ready to merge` and `Verdict`.
+- **Order:** after #880 merges, in a one-line PR. The operator switches the ruleset just before
+  merging that PR. Earlier, every other open PR still runs `main`'s workflow and would be blocked
+  by a ruleset that requires the new name, and #880 itself must pass `Build & Package`.
+- **Why deferred:** the G8.5 runs on #880 come first (operator: "we'll just do it once other tests
+  are done").
+- **Revisit when:** #880 has merged.
+
 ## Verification depth
 
 ### Platform checks before G6 (F12)
