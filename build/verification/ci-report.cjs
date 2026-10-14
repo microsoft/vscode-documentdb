@@ -7,7 +7,11 @@
 const MARKER = '<!-- ci-report -->';
 const OLD_MARKERS = ['<!-- code-quality-report -->', '<!-- build-size-report -->'];
 const FULL_LABEL = 'ci:full-requested';
-const LAST_FULL = /<!-- last-full: ([0-9a-f]{7,40}) ([a-z ]+) -->/;
+// `by=` and `run=` are optional so a marker written before they existed still parses.
+const LAST_FULL =
+    /<!-- last-full: ([0-9a-f]{7,40}) ([a-z]+)(?: by=([A-Za-z0-9-]+))?(?: run=(https:\/\/[\w.:/-]+))? -->/;
+const LOGIN = /^[A-Za-z0-9-]+$/;
+const RUN_URL = /^https:\/\/[\w.:/-]+$/;
 const FULL_LINE = /^\*\*Full run:\*\*.*$/m;
 
 const ICONS = {
@@ -81,14 +85,34 @@ function layers({ tier, flags, jobs, steps }) {
     ];
 }
 
+/** Drops a requester or URL that could break the hidden marker or the Markdown link. */
+function fullRun({ sha, result, requester, runUrl }) {
+    return {
+        sha,
+        result,
+        ...(LOGIN.test(requester ?? '') && { requester }),
+        ...(RUN_URL.test(runUrl ?? '') && { runUrl }),
+    };
+}
+
 function parseLastFull(body) {
     const match = LAST_FULL.exec(body ?? '');
-    return match ? { sha: match[1], result: match[2] } : null;
+    return match ? fullRun({ sha: match[1], result: match[2], requester: match[3], runUrl: match[4] }) : null;
+}
+
+function lastFullMarker(lastFull) {
+    const by = lastFull.requester ? ` by=${lastFull.requester}` : '';
+    const run = lastFull.runUrl ? ` run=${lastFull.runUrl}` : '';
+    return `<!-- last-full: ${lastFull.sha} ${lastFull.result}${by}${run} -->`;
 }
 
 function fullRunLine(lastFull) {
     const last = lastFull
-        ? `Last full run: ${ICONS[lastFull.result] ?? ''} ${lastFull.result} on \`${short(lastFull.sha)}\`.`
+        ? [
+              `Last full run: ${ICONS[lastFull.result] ?? ''} ${lastFull.result} on \`${short(lastFull.sha)}\``,
+              ...(lastFull.requester ? [`requested by @${lastFull.requester}`] : []),
+              ...(lastFull.runUrl ? [`[run](${lastFull.runUrl})`] : []),
+          ].join(', ') + '.'
         : 'No full run yet.';
     return `**Full run:** add the \`${FULL_LABEL}\` label to run every layer once on the current commit. ${last}`;
 }
@@ -96,6 +120,7 @@ function fullRunLine(lastFull) {
 /**
  * The comment for one run: `input.flags` and `input.steps` come from the plan and the job outputs,
  * `input.jobs` from the job results, `input.lastFull` from the existing comment.
+ * `fullRun` is this run's record when it is a full run.
  */
 function ciReport(input) {
     const rows = layers(input);
@@ -106,14 +131,18 @@ function ciReport(input) {
             : results.includes('cancelled')
               ? 'cancelled'
               : 'passed';
-    const lastFull = input.tier === 'full' ? { sha: input.headSha, result } : input.lastFull;
+    const thisRun =
+        input.tier === 'full'
+            ? fullRun({ sha: input.headSha, result, requester: input.requester, runUrl: input.runUrl })
+            : null;
+    const lastFull = thisRun ?? input.lastFull;
     const l1 = rows.find((row) => row.layer === 'L1 VSIX inspection');
     const size =
         input.sizeSection?.trim() ||
         `### Build size\n\nNot measured: ${l1.result === 'skipped' ? l1.why : 'L1 did not write a size section; see the workflow run'}.`;
     const lines = [
         MARKER,
-        ...(lastFull ? [`<!-- last-full: ${lastFull.sha} ${lastFull.result} -->`] : []),
+        ...(lastFull ? [lastFullMarker(lastFull)] : []),
         `## ${ICONS[result]} CI ${result}: ${input.tier} tier (${input.reason})`,
         '',
         `Commit \`${short(input.headSha)}\`, [workflow run](${input.runUrl}).`,
@@ -137,16 +166,27 @@ function ciReport(input) {
         '',
         '_Updated in place on every run._',
     ];
-    return { body: lines.join('\n'), result };
+    return { body: lines.join('\n'), result, fullRun: thisRun };
 }
 
 /** A full run that finished after the PR moved on records itself without replacing the newer report. */
 function withLastFull(body, lastFull) {
-    const marker = `<!-- last-full: ${lastFull.sha} ${lastFull.result} -->`;
+    const marker = lastFullMarker(fullRun(lastFull));
     const marked = LAST_FULL.test(body)
         ? body.replace(LAST_FULL, () => marker)
         : body.replace(MARKER, () => `${MARKER}\n${marker}`);
-    return marked.replace(FULL_LINE, () => fullRunLine(lastFull));
+    return marked.replace(FULL_LINE, () => fullRunLine(fullRun(lastFull)));
 }
 
-module.exports = { MARKER, OLD_MARKERS, ciReport, parseLastFull, withLastFull };
+/**
+ * The comment body to post, or null for none. A run for an older commit never posts its report:
+ * a full run records only itself, in a minimal comment if there is none yet.
+ */
+function commentBody(report, existingBody, stale) {
+    if (!stale) return report.body;
+    if (!report.fullRun) return null;
+    if (existingBody) return withLastFull(existingBody, report.fullRun);
+    return [MARKER, lastFullMarker(report.fullRun), '', fullRunLine(report.fullRun)].join('\n');
+}
+
+module.exports = { MARKER, OLD_MARKERS, ciReport, commentBody, parseLastFull, withLastFull };

@@ -5,7 +5,7 @@
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { MARKER, OLD_MARKERS, ciReport, parseLastFull, withLastFull } = require('./ci-report.cjs');
+const { MARKER, OLD_MARKERS, ciReport, commentBody, parseLastFull, withLastFull } = require('./ci-report.cjs');
 
 const headSha = 'abcdef0123456789abcdef0123456789abcdef01';
 const passedSteps = {
@@ -120,8 +120,38 @@ test('A full run runs every layer, records itself and drops the request line', (
             .map((row) => row.split(' | ').slice(1).join(' | ')),
         ['✅ passed | runs on every push |', ...Array.from({ length: 6 }, () => '✅ passed | full run requested |')],
     );
-    assert.deepEqual(parseLastFull(body), { sha: headSha, result: 'passed' });
+    assert.deepEqual(parseLastFull(body), { sha: headSha, result: 'passed', runUrl: input().runUrl });
     assert.ok(!body.includes('**Full run:**'));
+});
+
+test('A standard run after a full run keeps its requester and link, and the old marker still parses', () => {
+    const fullRunUrl = 'https://github.com/example/project/actions/runs/7';
+    const full = ciReport(
+        input({
+            tier: 'full',
+            reason: 'full run requested by @octocat for abcdef0',
+            requester: 'octocat',
+            runUrl: fullRunUrl,
+            flags: allFlags,
+            jobs: allJobs('success'),
+            steps: passedSteps,
+        }),
+    );
+    const lastFull = parseLastFull(full.body);
+    assert.deepEqual(lastFull, { sha: headSha, result: 'passed', requester: 'octocat', runUrl: fullRunUrl });
+    const { body } = ciReport(input({ headSha: 'feedface'.repeat(5), lastFull }));
+    assert.ok(body.includes(`<!-- last-full: ${headSha} passed by=octocat run=${fullRunUrl} -->`));
+    assert.ok(body.includes(`Last full run: ✅ passed on \`abcdef0\`, requested by @octocat, [run](${fullRunUrl}).`));
+    assert.deepEqual(parseLastFull(body), lastFull);
+
+    assert.deepEqual(parseLastFull(`${MARKER}\n<!-- last-full: ${headSha} failed -->`), {
+        sha: headSha,
+        result: 'failed',
+    });
+    const unsafe = ciReport(
+        input({ tier: 'full', requester: 'x --> y', runUrl: 'https://example.com/a) <b>', jobs: allJobs('success') }),
+    );
+    assert.ok(unsafe.body.includes(`<!-- last-full: ${headSha} passed -->`));
 });
 
 test('Failures show the fix hint, and a check after a failed step is reported as not run', () => {
@@ -181,4 +211,28 @@ test('A full run that finished after a newer push updates only the last full run
     assert.equal(again.match(/<!-- last-full:/g).length, 1);
     assert.deepEqual(parseLastFull(again), { sha: 'feedface'.repeat(5), result: 'passed' });
     assert.equal(parseLastFull('no marker'), null);
+});
+
+test('A run for an older commit posts only a full run record, and nothing else', () => {
+    const fullInput = input({ tier: 'full', requester: 'octocat', flags: allFlags, jobs: allJobs('success') });
+    const full = ciReport({ ...fullInput, steps: passedSteps });
+    const standard = ciReport(input());
+    assert.equal(commentBody(standard, undefined, false), standard.body);
+    assert.equal(commentBody(standard, undefined, true), null);
+    assert.equal(commentBody(standard, standard.body, true), null);
+
+    const minimal = commentBody(full, undefined, true);
+    assert.equal(
+        minimal,
+        [
+            MARKER,
+            `<!-- last-full: ${headSha} passed by=octocat run=${fullInput.runUrl} -->`,
+            '',
+            '**Full run:** add the `ci:full-requested` label to run every layer once on the current commit. ' +
+                `Last full run: ✅ passed on \`abcdef0\`, requested by @octocat, [run](${fullInput.runUrl}).`,
+        ].join('\n'),
+    );
+    assert.equal(commentBody(full, standard.body, true), withLastFull(standard.body, full.fullRun));
+    const next = ciReport(input({ headSha: 'feedface'.repeat(5), lastFull: parseLastFull(minimal) }));
+    assert.deepEqual(parseLastFull(next.body), full.fullRun);
 });
