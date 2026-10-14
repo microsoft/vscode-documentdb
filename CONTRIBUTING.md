@@ -27,7 +27,7 @@ See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the forc
 
 ### 1.2 GitHub Actions
 
-CI runs in tiers (see [decision 0002](docs/ai-and-plans/modernization/decisions.md)):
+CI runs in tiers (see [decision 0002](docs/ai-and-plans/features/build-and-test-stack/decisions.md)):
 
 - **Draft pull requests** (to `main`, `release/**` or `feature/**`): build, lint, formatting, type checks and unit tests.
 - **Ready pull requests, and pushes to `main` or a release branch** (`release/**`): the above, plus packaging, VSIX inspection and activation. Checks of the workspace packages and of the verification tooling run when their files change. Pushes cache build sizes for PR comparisons.

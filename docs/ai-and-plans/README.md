@@ -40,16 +40,9 @@ treat `status: historical` or `status: superseded` as current.
 | [copy-paste-collections](./features/copy-paste-collections/README.md)     | Collection copy/paste tasks, document streaming, conflict handling, and optional index copying | active            |
 | [cluster-dashboard](./features/cluster-dashboard/README.md)               | Cluster-wide inventory and resilience facts                                                    | POC, unmerged     |
 | [settings](./features/settings/README.md)                                 | Settings editor grouping, setting ID naming, and how a setting is renamed safely               | active            |
-| [modernization](./modernization/build-and-test-stack.md)                  | Build, bundling and test stack; the plan is the decision record                                | active            |
-
-Decisions taken while executing the modernization stages stay in
-[build-and-test-stack.md](./modernization/build-and-test-stack.md). Standing decisions that later
-work builds on, such as ESM-only packages and the CI tiers, are in
-[decisions.md](./modernization/decisions.md). Its other active documents cover
-[pipelines](./modernization/pipelines-readme.md),
-[end-to-end testing](./modernization/e2e-testing-strategy.md),
-[SlickGrid removal](./modernization/slickgrid-removal.md) and
-[future work](./modernization/future-work.md).
+| [build-and-test-stack](./features/build-and-test-stack/README.md)         | Vite host and webview builds, Vitest, packaged checks, CI tiers, and modernization history     | active            |
+| [e2e-testing](./features/e2e-testing/README.md)                           | The planned installed-workbench and webview end-to-end test iteration                          | planned           |
+| [data-grid](./features/data-grid/README.md)                               | The Collection View table and tree, including the planned SlickGrid replacement                | planned           |
 
 Everything else is a single file at this root, such as:
 

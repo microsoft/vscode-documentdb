@@ -6,7 +6,7 @@ status: active
 
 # Modernization Catch-Up: Build, Bundling, and Test Stack
 
-> Moved here on 2026-10-14. The feature README is the current entry point.
+> Moved here on 2026-10-14. The [feature README](../../README.md) is the current entry point.
 > This plan remains active while Stages 9 and 10 are pending.
 
 **Research date:** 2026-08-07

@@ -194,13 +194,13 @@ which is the failure mode tiering otherwise introduces.
 - E2E jobs join the full tier; nothing E2E runs on draft PRs.
 - Every E2E job adds its row to the layer report, including the skip reason.
 - Tags or lanes inside the suite (see
-  [e2e-testing-strategy.md §5.8](../e2e-testing/strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery))
+  [E2E strategy §5.8](../e2e-testing/strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery))
   select tests within the full tier; they do not decide whether E2E runs.
 - A job that should have produced results and did not is reported as a failure, not as skipped.
 - E2E is not a required check: with a one-shot request, the merged commit may not have had a
   full run. Making it required later needs a sticky label or a merge queue, as a new decision.
 - A failing nightly run must notify someone (an issue or a message); see
-  [e2e-testing-strategy.md §5.8](../e2e-testing/strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery).
+  [E2E strategy §5.8](../e2e-testing/strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery).
 
 ---
 

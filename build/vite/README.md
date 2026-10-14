@@ -2,7 +2,7 @@
 
 This is the rationale for both [views](../../vite.config.views.mjs) and
 [extension-host](../../vite.config.ext.mjs) configs and their local plugins. The configs are the
-source of truth for settings; the [Stage 4 and 5 record](../../docs/ai-and-plans/modernization/build-and-test-stack.md#stage-4-webviews-to-vite-split-per-view)
+source of truth for settings; the [Stage 4 and 5 record](../../docs/ai-and-plans/features/build-and-test-stack/iterations/01-modernization/build-and-test-stack.md#stage-4-webviews-to-vite-split-per-view)
 records the experiments and rejected alternatives.
 
 ## Shared build contract

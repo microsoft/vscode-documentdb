@@ -221,7 +221,7 @@ unchanged; only the `typesVersions` clause was wrong.
 **Status:** Superseded · **Date:** 2026-08-18
 
 > Superseded by the modernization's Stage 2 (Jest to Vitest; see
-> [build-and-test-stack.md](../../modernization/build-and-test-stack.md)). The package's tests now
+> [build-and-test-stack.md](../build-and-test-stack/iterations/01-modernization/build-and-test-stack.md)). The package's tests now
 > run as the `vscode-ext-webview-fluentui` project of the root `vitest.config.ts`, under jsdom,
 > transformed by Vite; `jest.config.cjs` and `@swc/jest` were removed. The record below is history.
 

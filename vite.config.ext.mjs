@@ -19,7 +19,7 @@
 //             plugin loader `require`s the module and calls it as the plugin factory. Rolldown
 //             emits one format per output, so it cannot share the host build.
 //
-// See docs/ai-and-plans/modernization/build-and-test-stack.md (Stage 5).
+// See docs/ai-and-plans/features/build-and-test-stack/iterations/01-modernization/build-and-test-stack.md (Stage 5).
 
 import fs from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';

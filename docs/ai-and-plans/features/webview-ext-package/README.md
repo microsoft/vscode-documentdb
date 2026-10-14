@@ -21,7 +21,7 @@ extension's webview stack: tRPC over `postMessage`, the `WebviewController` life
 middleware seams around them. This extension consumes it through `src/webviews/_integration/`.
 The package is ESM only. An unbundled CommonJS extension must load `/host` with `await import()`,
 not `require()`; see the [package loading rule](../../../../packages/vscode-ext-webview/README.md#loading-host-in-the-extension-host)
-and [decision 0001](../../modernization/decisions.md#0001-workspace-packages-ship-esm-only).
+and [decision 0001](../build-and-test-stack/decisions.md#0001-workspace-packages-ship-esm-only).
 
 ## Code map
 

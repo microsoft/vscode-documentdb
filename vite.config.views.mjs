@@ -5,7 +5,7 @@
 
 // Vite build of the webviews (`src/webviews/index.tsx` -> `dist/views.js` + lazy chunks).
 // Settings and rationale: build/vite/README.md.
-// See docs/ai-and-plans/modernization/build-and-test-stack.md (Stage 4).
+// See docs/ai-and-plans/features/build-and-test-stack/iterations/01-modernization/build-and-test-stack.md (Stage 4).
 //
 //   npm run vite-prod-wv    production build, writes build/verification/reports/views.json
 //   npm run vite-dev-wv     unminified build with source maps, no report

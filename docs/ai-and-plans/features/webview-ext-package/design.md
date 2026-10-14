@@ -659,8 +659,9 @@ with `tsc` emitting ES modules and declarations into `dist/`. The extension host
 and webviews are built with Vite. Vite also serves development webviews on port 18080. An
 unbundled CommonJS extension must load `/host` with `await import()`, not `require()`; see the
 [package loading rule](../../../../packages/vscode-ext-webview/README.md#loading-host-in-the-extension-host)
-and [decision 0001](../../modernization/decisions.md#0001-workspace-packages-ship-esm-only). These
-independent changes are recorded in the [modernization plan](../../modernization/build-and-test-stack.md).
+and [decision 0001](../build-and-test-stack/decisions.md#0001-workspace-packages-ship-esm-only). These
+independent changes are recorded in the
+[modernization plan](../build-and-test-stack/iterations/01-modernization/build-and-test-stack.md).
 The table and conclusion below describe the toolchain at the time of the API
 rework, not the current build architecture. The later "No Vite" passage in
 section 13.9 has the same historical scope.

@@ -1,6 +1,7 @@
 # Packaged-artifact checks
 
-Stage 0 tooling for the [modernization plan](../../docs/ai-and-plans/modernization/build-and-test-stack.md).
+Stage 0 tooling for the
+[modernization plan](../../docs/ai-and-plans/features/build-and-test-stack/iterations/01-modernization/build-and-test-stack.md).
 All harness files and bundle reports are excluded from the VSIX.
 
 ## Default build and dev loop
@@ -21,7 +22,7 @@ because Vite reports development build errors in the browser overlay.
 ## CI
 
 `.github/workflows/main.yml` runs these checks in tiers
-([decision 0002](../../docs/ai-and-plans/modernization/decisions.md)). Its `plan` job picks the
+([decision 0002](../../docs/ai-and-plans/features/build-and-test-stack/decisions.md)). Its `plan` job picks the
 tier, and the path-scoped checks from the whole PR diff (for a push, the pushed range).
 
 | Check                                                                 | Fast (draft PR) | Standard (ready PR, push to `main` or `release/**`)                    | Full (`ci:full-requested` label) |
@@ -170,7 +171,7 @@ The shared [`build-size-report.cjs`](./build-size-report.cjs) formats those meas
 the cache without recalculating graph closures. It is also covered by `test:verification`.
 ADO passes `--manifest-report` before signing and stages the L1 JSON with the bundle reports in
 its existing OneBranch pipeline artifact, even if inspection fails. See the
-[pipeline guide](../../docs/ai-and-plans/modernization/pipelines-readme.md#31-reports-artifacts-and-pr-size-feedback-stage-6)
+[pipeline guide](../../docs/ai-and-plans/features/build-and-test-stack/pipelines.md#31-reports-artifacts-and-pr-size-feedback-stage-6)
 for job conditions, artifact paths and the merge-ref checkout policy.
 The proof has eight original rejection controls (including missing contributed grammar and runtime shell declarations;
 the CommonJS `import.meta` control now mutates `playgroundTsPlugin.cjs`). Vite adds

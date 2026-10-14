@@ -19,7 +19,8 @@
 // Inlining these packages (`server.deps.inline`) or pre-bundling them (`deps.optimizer.ssr`) was
 // measured and does not work: Node still resolves their `require`, and pre-bundling embeds a second
 // copy of the mock. Newer, dual-format azext releases would make this hook unnecessary (see the
-// Stage 2 record in docs/ai-and-plans/modernization/build-and-test-stack.md).
+// Stage 2 record in
+// docs/ai-and-plans/features/build-and-test-stack/iterations/01-modernization/build-and-test-stack.md).
 //
 // A test-level `vi.mock('vscode', factory)` replaces the module for ESM importers only. CommonJS
 // dependencies keep seeing the shared default mock below. src/vscodeMockIdentity.test.ts checks

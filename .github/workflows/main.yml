@@ -1,6 +1,6 @@
 name: CI
 
-# CI runs in tiers (decision 0002 in docs/ai-and-plans/modernization/decisions.md). The `plan` job
+# CI runs in tiers (decision 0002 in docs/ai-and-plans/features/build-and-test-stack/decisions.md). The `plan` job
 # picks the tier and the path-scoped checks; every other job has one `if:` on its outputs.
 #
 # - fast: draft PRs, and manual runs without `enforce_full_run`. L0 only: build, l10n, lint,

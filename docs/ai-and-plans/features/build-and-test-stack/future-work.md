@@ -38,7 +38,7 @@ wording in the grid plan), and the Stage 6 reviewer part of F20.
   justified list of allowed differences (for example the regenerated `NOTICE.html` and signature
   files).
 - **Why deferred:** the plan instead runs L1, L3 and the L2 pass on the ADO artifact itself at release
-  time (Stage 6 release steps, `pipelines-readme.md` §4), which tests the shipped bytes directly.
+  time (Stage 6 release steps, [`pipelines.md` §4](./pipelines.md#4-the-gap-between-the-two-vsixs-and-how-to-close-it)), which tests the shipped bytes directly.
 - **Revisit when:** the release-time check becomes a burden, or builds turn out to be reproducible
   enough that the comparison is cheap.
 
@@ -46,7 +46,8 @@ wording in the grid plan), and the Stage 6 reviewer part of F20.
 
 - **What:** before relying on the new toolchain in a release build, run a non-official ADO build to
   confirm that Vite, Rolldown and esbuild install and build from the internal feed, with no
-  postinstall download. Today this is marked `[INFERRED]` in `pipelines-readme.md` §2.2.
+  postinstall download. Today this is marked `[INFERRED]` in
+  [`pipelines.md` §2.2](./pipelines.md#22-network-isolation-on-the-official-build).
 - **Why deferred:** the first release after the modernization will exercise it anyway, and there is
   no release until G6.
 - **Revisit when:** preparing the first release build after Stage 6, or if network isolation is
