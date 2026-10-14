@@ -4320,6 +4320,58 @@ Stage 0 must also be made.
   operator's "G8 passed". `prove:vsix` now prints 22 PASS (item 22), not the 25 of the final
   verification above. Case 1 applied throughout; the Case 2 list runs in Stage 9.
 
+### Stage 8.5: act on the complexity review (on this PR)
+
+- **Added by the operator (2026-10-14).** After Stage 8, the operator reviewed the branch for
+  complexity rather than defects: the build, dependencies and product code got simpler, while
+  `build/verification/` grew to about 7.5k lines plus 4.6k lines of tests, part of it
+  migration-time evidence or checks of checks. The decisions are
+  [0001 to 0003 in decisions.md](./decisions.md). Stage 8.5 runs before the remaining Stage 9
+  tasks; Stage 9 task 1 (the Copilot pass) stays done, and task 2 (Case 2) covers this stage.
+- **Models:** not yet chosen by the operator. Proposal: as Stage 8, a Claude Opus 5.5
+  coordinator with sequential subagents, and a GPT-6 Sol review written to
+  `iterations/08.5-stage8.5-review.md`.
+- **How to run it:** one commit per work item, subject `S8.5: …`; record each item inline under
+  it (ground rule 8). When an item changes a check, run its proof controls; never weaken a check
+  or a control to get a pass.
+- **Work items,** in order:
+  - **W1** (decisions 0002, 0003): CI tiers and the merged report in `main.yml`.
+    - A `plan` job decides the tier (fast, standard, full) and the path-scoped checks from the
+      whole PR diff, each with a reason. Triggers gain `ready_for_review` and `labeled`; every
+      other job has one `if:` on the plan's outputs.
+    - The one-shot `ci:full-requested` label: the plan job removes it, ignores other labels, and
+      the full run's concurrency group includes the tier.
+    - One report comment replaces the Code Quality and Build Size comments: layer table first,
+      then both detail sections; size changes carry ⬆️, ⬇️ or ✅ next to the signed value.
+    - `probe:host-unbundled` leaves `main.yml` and runs, path-scoped, in the publish workflow;
+      `verify:packages` and the `prove:*` controls become path-scoped.
+    - Verify on #880 itself: draft push (fast), ready (standard), request label (full), a push
+      after the request, and an unrelated label.
+  - **W2** (approved 2026-10-14): slim `inspect.cjs` before the dependency bump. Replace the Babel
+    `import_` shape match and the Monaco loader filename and count allowlists with one
+    per-chunk budget for non-literal dynamic imports; review `keptClassNames`. Keep the `render`
+    export, chunk existence, dev-server strings, one `bson` per graph and the required files.
+    Update `inspect.test.cjs` and the `prove:vsix` controls to match.
+  - **W3** (decision 0001): state the `await import()` rule for CommonJS extensions that do not
+    bundle in the `vscode-ext-webview` README and its feature docs.
+  - **W4:** cleanups. Delete the codemods `build/test-migration/jest-to-vitest.mjs` and
+    `build/esm-migration/add-js-extensions.mjs`; delete `ext.isBundle` and the `IS_BUNDLE`
+    define; fix the stale node10 comment and structural logger type in `vitest.config.ts`; keep
+    `measure:activation` but drop its test suite.
+  - **W5** (operator, 2026-10-14: "this should be rewritten"): restructure the modernization
+    docs as a feature folder per CONTRIBUTING.md, `features/build-and-test-stack/`: a short
+    README (the stack, where things live, which checks run in which tier, how to add a webview,
+    a dependency or a test), `design.md` (the invariants), `decisions.md` (this folder's, plus
+    standing decisions taken from the plan), `pipelines.md` and `future-work.md`. This plan and
+    the stage reviews move to `iterations/01-modernization/` as history. The E2E strategy moves
+    to `features/e2e-testing/`; the SlickGrid plan moves to the feature that owns the grid.
+    Update every link. Last, so it describes the state after W1 to W4.
+  - **W6:** the stage review, then Stage 9 task 2.
+- **Not in this stage:** retiring the L2 production harness. Decision 0002 retires it into E2E;
+  Stage 9 task 6 still uses it on the signed VSIX.
+- **Operator gate G8.5:** the operator accepts the W1 verification on #880 and the restructured
+  docs.
+
 ### Stage 9: ready for review, merge and release
 
 - **Added by the operator (2026-10-07).** These are G6's former steps 1 to 6.

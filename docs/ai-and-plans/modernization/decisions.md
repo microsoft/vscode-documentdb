@@ -10,11 +10,11 @@ created: 2026-10-14
 > E2E iteration in particular. Decisions taken while executing the stages stay in
 > [build-and-test-stack.md](./build-and-test-stack.md), next to the stage they shaped.
 
-| #    | Decision                                                      | Status   | Changed from the proposal?                                | Date       | PR   |
-| ---- | ------------------------------------------------------------- | -------- | --------------------------------------------------------- | ---------- | ---- |
-| 0001 | Workspace packages ship ESM only                              | Accepted | Accepted as proposed                                      | 2026-10-14 | #880 |
-| 0002 | CI runs verification in tiers and reports what it ran and why | Accepted | **Operator added the layer report comment** and E2E scope | 2026-10-14 | #880 |
-| 0003 | Negative controls run when their check changes, not every PR  | Accepted | Accepted as proposed                                      | 2026-10-14 | #880 |
+| #    | Decision                                                      | Status   | Changed from the proposal?                                                             | Date       | PR   |
+| ---- | ------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Workspace packages ship ESM only                              | Accepted | Accepted as proposed                                                                   | 2026-10-14 | #880 |
+| 0002 | CI runs verification in tiers and reports what it ran and why | Accepted | **Operator added the layer report, the one-shot request label and the merged comment** | 2026-10-14 | #880 |
+| 0003 | Negative controls run when their check changes, not every PR  | Accepted | Accepted as proposed                                                                   | 2026-10-14 | #880 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
@@ -94,11 +94,11 @@ example "e2e requested or full test requested".
 CI picks a tier per run and runs only that tier's layers. Path-scoped checks run inside the
 standard and full tiers when their paths change.
 
-| Tier     | When                                                                     | Layers                                                         |
-| -------- | ------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| fast     | Draft PR                                                                 | L0: build, lint, formatting, type checks, unit tests           |
-| standard | Ready PR (including the `ready_for_review` event), push to `main`        | fast + package the VSIX + L1 inspection + L3 activation + size |
-| full     | A full-run label on the PR, `release/**`, scheduled runs once E2E exists | standard + E2E + every path-scoped check                       |
+| Tier     | When                                                                                         | Layers                                                         |
+| -------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| fast     | Draft PR                                                                                     | L0: build, lint, formatting, type checks, unit tests           |
+| standard | Ready PR (including the `ready_for_review` event), push to `main`                            | fast + package the VSIX + L1 inspection + L3 activation + size |
+| full     | `ci:full-requested` label (one run), push to `release/**`, nightly on `main` once E2E exists | standard + E2E + every path-scoped check                       |
 
 | Path-scoped check                                     | Runs when these change                                     |
 | ----------------------------------------------------- | ---------------------------------------------------------- |
@@ -106,17 +106,39 @@ standard and full tiers when their paths change.
 | `probe:host-unbundled`                                | `packages/vscode-ext-webview/**`, and when publishing      |
 | `prove:vsix`, `prove:activation`, `test:verification` | `build/verification/**`, the Vite configs, `build/vite/**` |
 
+Nightly runs cover `main` only: scheduled workflows run from the default branch, and open PRs get
+the full tier on request. `release/**` branches are short-lived, so every push to one runs the
+full tier.
+
+**Requesting a full run on a PR** is a one-shot label, the operator's proposal ("a label that
+says that something is requested, then a job kicks in and removes that label and posts
+comments"):
+
+1. Adding `ci:full-requested` starts the full tier for the PR's current head commit.
+2. The workflow removes the label at once and records in the report who requested the run, for
+   which commit, with a link to the run. Removing it with `GITHUB_TOKEN` starts no new run.
+3. The next push runs the tier the PR is in again. The report then says the last full run was on
+   an earlier commit, and how to request another.
+
+The `plan` job ignores every other label, so adding an unrelated label does not rerun CI. A full
+run is not cancelled by a later push (its concurrency group includes the tier). On fork PRs the
+read-only token cannot remove the label; the run still happens.
+
 **Every run reports itself** (operator: "there should be a comment posted explaining what test
 layers were run and why. for example L1: vsix inspection - not running on draft PRs"). One PR
-comment, updated in place, lists every layer with its result or the reason it was skipped, for
-example:
+comment, updated in place, replaces the existing Code Quality and Build Size comments (operator:
+"yes, let's merge them"). It shows the layer table first, then the code quality and build size
+details. Size changes carry an arrow next to the signed value, as the original size comment did
+(operator: "add some emoji as well like this ⬆️"): ⬆️ for growth, ⬇️ for a reduction, ✅ for
+no change; ⚠️ stays on growth past the warning threshold. The layer table lists every layer with
+its result or the reason it was skipped, for example:
 
 | Layer              | Result  | Why                              |
 | ------------------ | ------- | -------------------------------- |
 | L0 build and tests | passed  | runs on every push               |
 | L1 VSIX inspection | skipped | draft PR; runs when marked ready |
 | Package checks     | skipped | no changes under `packages/**`   |
-| E2E                | skipped | needs the full-run label         |
+| E2E                | skipped | add `ci:full-requested` to run   |
 
 The minimal layer set behind the tiers: L0, L1, L3 and (next iteration) E2E are CI layers. L2-dev
 is a development tool, not a CI layer. The L2 production harness is not wired into CI and is
@@ -138,6 +160,10 @@ which is the failure mode tiering otherwise introduces.
 - **Comment commands (`/run e2e`) through `issue_comment`:** runs in the default branch's
   context, needs its own permission checks, PR-head checkout and status reporting, and is a
   known security pitfall.
+- **A sticky label** (full tier on every push while the label is on): makes every later push
+  expensive until someone remembers to remove it. The operator chose a one-shot request.
+- **Nightly runs on open PRs:** needs a job that dispatches one run per open PR, and those runs
+  do not show as PR checks without more plumbing.
 - **Merge queue for the expensive tier:** fits larger PR volumes; heavier than this repo needs.
 - **`workflow_dispatch` as the on-demand mechanism:** kept for manual runs, but its runs do not
   show as PR checks.
@@ -150,6 +176,10 @@ which is the failure mode tiering otherwise introduces.
   [e2e-testing-strategy.md §5.8](./e2e-testing-strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery))
   select tests within the full tier; they do not decide whether E2E runs.
 - A job that should have produced results and did not is reported as a failure, not as skipped.
+- E2E is not a required check: with a one-shot request, the merged commit may not have had a
+  full run. Making it required later needs a sticky label or a merge queue, as a new decision.
+- A failing nightly run must notify someone (an issue or a message); see
+  [e2e-testing-strategy.md §5.8](./e2e-testing-strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery).
 
 ---
 
@@ -160,7 +190,7 @@ modernization branch after Stage 8
 
 ### Question
 
-Ground rule "prove that each check can fail" produced `prove:vsix` (21 controls) and
+Ground rule "prove that each check can fail" produced `prove:vsix` (22 controls) and
 `prove:activation`, which run in CI on every PR next to the unit tests of the same checks.
 Should they keep running on every PR?
 
