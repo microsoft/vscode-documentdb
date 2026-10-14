@@ -39,8 +39,9 @@ const packageRoot = (name: string): string => path.join(repoRoot, 'packages', na
 
 export default defineConfig({
     test: {
-        // Same worker cap as the former Jest root config, so wall times stay comparable.
-        maxWorkers: '25%',
+        // Every CPU in CI, where the Unit tests job has the runner to itself (decision 0014); a
+        // quarter locally, the former Jest cap, so the machine stays usable.
+        maxWorkers: process.env.CI ? '100%' : '25%',
         projects: [
             {
                 plugins: [quietMissingDependencySourceMaps],
