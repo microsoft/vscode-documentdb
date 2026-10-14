@@ -37,6 +37,7 @@ import {
     type QuickStartStatus,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
+import { recordSurveyActivity } from '../../../services/survey/SurveyService';
 import { revealQuickStartInstance } from '../../../tree/connections-view/LocalQuickStart/revealQuickStartInstance';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
@@ -124,8 +125,11 @@ function sessionContext(ctx: unknown): WithTelemetry<RouterContext> {
 }
 
 function recordSetupResult(session: QuickStartWizardSession | undefined, event: StageEvent): void {
-    if (session && event.stage === 'done' && event.status === 'done') {
-        session.setupSucceeded = true;
+    if (event.stage === 'done' && event.status === 'done') {
+        if (session) {
+            session.setupSucceeded = true;
+        }
+        recordSurveyActivity('connection');
     }
 }
 

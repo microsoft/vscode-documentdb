@@ -8,9 +8,8 @@ import { EJSON } from 'bson';
 import { type Document } from 'mongodb';
 import { z } from 'zod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { recordSurveyActivity } from '../../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
-import { promptAfterActionEventually } from '../../../utils/survey';
-import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
@@ -110,8 +109,7 @@ export const documentsViewRouter = router({
 
             showConfirmationAsInSettings(l10n.t('The document with the _id "{0}" has been saved.', newDocumentId));
 
-            void promptAfterActionEventually(UsageImpact.High);
-
+            recordSurveyActivity('dataBrowsing');
             return { documentStringified: newDocumentStringified, documentId: newDocumentId };
         }),
 });

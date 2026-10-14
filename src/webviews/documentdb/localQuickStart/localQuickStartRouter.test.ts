@@ -16,6 +16,8 @@ const mockCanReuseExistingData = vi.fn();
 const mockSuggestPort = vi.fn();
 const mockProvision = vi.fn();
 
+vi.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: vi.fn() }));
+
 /** Drives `QuickStartService.onDidChangeStatus` so a test can push status changes at the router. */
 const statusListeners = new Set<() => void>();
 const fireStatusChange = (): void => statusListeners.forEach((listener) => listener());

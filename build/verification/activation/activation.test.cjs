@@ -16,6 +16,7 @@ const { randomInt } = require('node:crypto');
 const {
     TARGET_ID,
     LATE_COMMANDS,
+    LAZY_COMMANDS,
     INJECTION_MARKER,
     minimumVSCodeVersion,
     assertInstalledPath,
@@ -36,6 +37,8 @@ const {
 } = require('./runner.cjs');
 
 const DECLARED_COMMAND = 'vscode-documentdb.command.fixture.declared';
+// Fixture manifests declare the real lazy commands too, so the stale-exclusion rule holds.
+const FIXTURE_DECLARED_COMMANDS = [DECLARED_COMMAND, ...Object.keys(LAZY_COMMANDS)].map((command) => ({ command }));
 
 /** @param {import('node:test').TestContext} context @returns {string} */
 function temporaryDirectory(context) {
@@ -126,7 +129,7 @@ test('requires every declared command unless it is excluded with a reason', () =
         () => assertDeclaredCommands(manifest, ['ext.open', 'ext.refresh'], { 'ext.removed': 'gone' }),
         /exclusions for commands that are not declared: ext\.removed/,
     );
-    assert.doesNotThrow(() => assertDeclaredCommands({ name: 'no-commands' }, []));
+    assert.doesNotThrow(() => assertDeclaredCommands({ name: 'no-commands' }, [], {}));
     assert.throws(() => assertDeclaredCommands(undefined, []), /no package\.json/);
     const product = require('../../../package.json');
     assert.ok(declaredCommands(product).length > 0);
@@ -349,7 +352,7 @@ test('actual probe writes a receipt only after installed-path, active-state, lat
     const target = {
         extensionPath: installed,
         isActive: false,
-        packageJSON: { contributes: { commands: [{ command: DECLARED_COMMAND }] } },
+        packageJSON: { contributes: { commands: FIXTURE_DECLARED_COMMANDS } },
         activate: async () => {
             events.push('activate');
             target.isActive = true;
@@ -489,7 +492,7 @@ function fixture(context, behavior = {}) {
                             publisher: 'ms-azuretools',
                             name: 'vscode-documentdb',
                             main: './main',
-                            contributes: { commands: [{ command: DECLARED_COMMAND }] },
+                            contributes: { commands: FIXTURE_DECLARED_COMMANDS },
                         }),
                     );
                     fs.writeFileSync(

@@ -224,9 +224,25 @@
           "title": "DocumentDB",
           "icon": "resources/vscode-documentdb-sidebar-icon.svg"
         }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "documentdb-survey",
+          "title": "%survey.containerTitle%",
+          "icon": "resources/vscode-documentdb-sidebar-icon.svg"
+        }
       ]
     },
     "views": {
+      "documentdb-survey": [
+        {
+          "id": "documentdb-survey-invitation",
+          "name": "%survey.viewTitle%",
+          "type": "webview",
+          "when": "documentdb-survey-invitation-active",
+          "icon": "resources/vscode-documentdb-sidebar-icon.svg"
+        }
+      ],
       "documentDB": [
         {
           "id": "connectionsView",
@@ -315,6 +331,23 @@
       }
     ],
     "commands": [
+      {
+        "command": "vscode-documentdb.debug.survey.showInvitation",
+        "title": "_DocumentDB: Survey: Show Invitation"
+      },
+      {
+        "command": "vscode-documentdb.debug.survey.simulateMilestone",
+        "title": "_DocumentDB: Survey: Simulate Milestone"
+      },
+      {
+        "command": "vscode-documentdb.debug.survey.resetState",
+        "title": "_DocumentDB: Survey: Reset State"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.giveFeedback",
+        "title": "%survey.giveFeedbackTitle%"
+      },
       {
         "//": "[ConnectionsView] New Connection",
         "category": "DocumentDB",
@@ -1516,6 +1549,18 @@
       ],
       "explorer/context": [],
       "commandPalette": [
+        {
+          "command": "vscode-documentdb.debug.survey.showInvitation",
+          "when": "documentdb-development-mode"
+        },
+        {
+          "command": "vscode-documentdb.debug.survey.simulateMilestone",
+          "when": "documentdb-development-mode"
+        },
+        {
+          "command": "vscode-documentdb.debug.survey.resetState",
+          "when": "documentdb-development-mode"
+        },
         {
           "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
           "when": "never"

@@ -5,12 +5,12 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
+import { isFeedbackPermitted } from '../../utils/feedbackPermission';
 import { openCollectionWebview } from '../../webviews/documentdb/collectionView/collectionViewController';
 
 export async function openCollectionView(context: IActionContext, node: CollectionItem) {
@@ -65,16 +65,8 @@ export async function openCollectionViewInternal(
      */
     const sessionId = await ClusterSession.initNewSession(props.clusterId);
 
-    // Enable feedback signals only when telemetry level is set to "all"
-    // See: https://code.visualstudio.com/docs/setup/enterprise#_configure-telemetry-level
-    let feedbackSignalsEnabled = false;
-    try {
-        const telemetryLevel = vscode.workspace.getConfiguration('telemetry').get<string>('telemetryLevel');
-        feedbackSignalsEnabled = telemetryLevel === 'all';
-    } catch {
-        // If we fail to read telemetry settings, default to false
-        feedbackSignalsEnabled = false;
-    }
+    // isFeedbackPermitted gates feedback on telemetry level "all" and fails closed.
+    const feedbackSignalsEnabled = isFeedbackPermitted();
 
     const view = openCollectionWebview({
         sessionId: sessionId,

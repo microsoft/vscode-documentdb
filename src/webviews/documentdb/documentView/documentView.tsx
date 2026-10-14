@@ -10,7 +10,6 @@ import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
-import { UsageImpact } from '../../../utils/surveyTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { MonacoEditor } from '../../components/MonacoEditor';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
@@ -228,8 +227,6 @@ export const DocumentView = (): JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     }
 
     function handleOnSaveRequest(): void {
