@@ -1,6 +1,6 @@
 ---
 name: documentation-screenshots
-description: Frames and annotates DocumentDB for VS Code screenshots for release notes, documentation and blog posts, so every image shares one visual style (brand background, Fluent 2 shadow, rounded corners, consistent text size). Use when adding or replacing screenshots in docs/release-notes, docs/user-manual or docs/blog-posts, when the operator provides raw captures, or when asked to frame, beautify, annotate (numbered steps, arrows) or unify images.
+description: Frames and annotates DocumentDB for VS Code screenshots for release notes, documentation and blog posts, so every image shares one visual style (brand background, Fluent 2 shadow, rounded corners, consistent text size), in a light theme for this repo or a dark theme for dark sites such as documentdb.io. Use when adding or replacing screenshots in docs/release-notes, docs/user-manual or docs/blog-posts, when preparing images for the documentdb.io blog, when the operator provides raw captures, or when asked to frame, beautify, annotate (numbered steps, arrows) or unify images.
 ---
 
 # Documentation and Release Notes Screenshots
@@ -20,12 +20,17 @@ Generated graphics (hero images, diagrams) are not framed, but they get the same
 
 ## Workflow
 
-1. **Collect captures.** Capture VS Code in the light theme at about **1920 px wide** (Windows at 125% scaling gives about 1920 x 1160). Cropped captures of a tree, dialog or quick pick are fine. Blue highlight rectangles drawn in the capture are kept as captured.
-2. **Name them** `{version}_{feature_name}.png` (snake_case), using the version of the release that shows them, for example `1.0.0_query_playground.png`. Never reuse a name that already exists in the target `images/` folder: older release notes link to those files.
+0. **Ask which theme the images are for**, unless the operator already said so:
+   - **Light** (default): this repo's release notes, user manual, blog posts, README and Marketplace page. This is the style of every image committed here.
+   - **Dark**: dark-themed sites, such as the documentdb.io blog. See [Dark Theme](#dark-theme).
+   - **Both**: render each image twice, from the same originals.
+
+1. **Collect captures.** Capture VS Code in the light theme at about **1920 px wide** (Windows at 125% scaling gives about 1920 x 1160). Cropped captures of a tree, dialog or quick pick are fine. Blue highlight rectangles drawn in the capture are kept as captured. Use light-theme captures for both themes.
+2. **Name them** `{version}_{feature_name}.png` (snake_case), using the version of the release that shows them, for example `1.0.0_query_playground.png`. Never reuse a name that already exists in the target `images/` folder: older release notes link to those files. Dark-theme output gets a `_dark` suffix automatically (`1.0.0_query_playground_dark.png`), so both versions can live side by side.
 3. **Keep the originals.** Put untouched captures in an `originals/` folder next to the jobs file, outside the committed `images/` folder (keep them locally or in a gitignored scratch folder such as `docs/plan/`). Only framed output is committed. Never edit originals.
 4. **Write a jobs file** (see [references/example-jobs.json](./references/example-jobs.json)). `src` and `out` are relative to the jobs file.
 5. **Pilot one image**, show it to the operator, and agree on the look before running the rest. Ask for approval image by image for small crops and annotated images.
-6. **Run** `python .github/skills/documentation-screenshots/scripts/frame.py path/to/jobs.json` (or add file names to run a subset). Each image takes about 5 seconds.
+6. **Run** `python .github/skills/documentation-screenshots/scripts/frame.py path/to/jobs.json` (or add file names to run a subset). Each image takes about 5 seconds. For the dark theme, add `--theme dark` before the jobs file, or set `"theme": "dark"` in the jobs file.
 7. **Reference the images** in Markdown. Every framed image is 1920 px wide, so all use the same display width:
 
    ```markdown
@@ -48,6 +53,8 @@ All values are output pixels on the 1920 px canvas. They are defined as constant
 - No titles or captions inside images. They don't localize; text belongs in the Markdown.
 
 ### Background
+
+Light theme (for the dark theme, see [Dark Theme](#dark-theme)):
 
 - Diagonal gradient, position `t = 0.6 * x / width + 0.4 * y / height`, with three stops: `#EEF5FD` at 0, `#EBF3FC` at 0.45, `#E9F8FE` at 1.
 - Dot grid: 32 px pitch starting at 16 px, 2 px dot radius, brand blue `#0070E0` at alpha 26 (about 10%).
@@ -93,6 +100,51 @@ A scale above **1.0** enlarges the capture. Resampling can't add detail, so text
 
 Values used for 1.0 (see the example jobs file): tree crop 0.96, Kubernetes tree 0.81 with pad `[16, 14, 0, 6]` (captured at a higher zoom, text touched the top and left edges), quick picks 0.9333. Cluster Dashboard 1.12 is an **approved exception**: it was captured at a lower zoom and couldn't be recaptured in time. Recapture it before reusing it for a new image.
 
+## Dark Theme
+
+For sites with a dark design, such as the documentdb.io blog, bright framed images glare against the page. The dark theme keeps everything in the recipe above and changes only the background, so the screenshots read as light windows on a dark desktop.
+
+### What changes
+
+- Background gradient stops: `#273452` at 0, `#212D48` at 0.45, `#1F314F` at 1 (same direction as the light theme). This is a step lighter than the documentdb.io content cards (`#111827` to `#0A0A0B`), so each image keeps a visible edge.
+- Dot grid: brand blue `#0070E0` at alpha **62** (about 24%), so the grid still reads on navy.
+- File names get the `_dark` suffix.
+
+### What stays the same
+
+- Screenshots are **not** dimmed, tinted or inverted. Tests showed that lowering the white point turns white UI into a dull grey and the result looks washed out, while a light screenshot on a dark frame looks natural.
+- Card radius, hairline border, shadow, badges, arrows and the white legend cards.
+- Captures are still taken in the light VS Code theme.
+
+### Illustrations with their own background
+
+Some illustrations (for example AI-generated ones) already sit on their own pale background with a rounded white panel. Framing them as they are produces two frames. Instead:
+
+1. Start from the **original** illustration, not a previously framed or rounded copy.
+2. Crop it to its own panel, just inside the panel edge, so none of the pale background remains.
+3. Frame it with `"scale": 1.0` and `"radius"` set to the panel's own corner radius (in output pixels), so the card corners match the panel. For the 1.0 roadmap, the crop was `[45, 39, 1627, 900]` of the 1672 x 941 original with `"radius": 32`.
+
+### Generated graphics (hero images)
+
+Re-render the HTML source with dark tokens instead of framing the light version:
+
+| Role                    | Light                     | Dark                                                                        |
+| ----------------------- | ------------------------- | --------------------------------------------------------------------------- |
+| Background              | `#EEF5FD` to `#E9F8FE`    | `#273452`, `#212D48`, `#1F314F`                                             |
+| Dot grid                | `#0070E0` at 10%          | `#0070E0` at 24%                                                            |
+| Title                   | `#252F3E`                 | `#F5F7FB`                                                                   |
+| Body text               | `#424242`                 | `#C3CBD9`                                                                   |
+| Gradient text (version) | `#0070E0` to `#3CCBF4`    | `#2E8BFF` to `#3CCBF4` (through `#3AA8F5`)                                  |
+| Tint badges             | `#EBF3FC` fill, `#0070E0` | `rgba(0,112,224,.18)` fill, `#8CC8FF` text, `rgba(140,200,255,.35)` outline |
+| DocumentDB logo         | Official logo             | Icon only, followed by "DocumentDB" as white text                           |
+
+The official DocumentDB logo has a dark wordmark that disappears on navy. Use the icon on its own (`public/images/DocumentDB Logo - background removed.png` in the documentdb.io repo) with the product name as live white text, as the documentdb.io site header does.
+
+### Publishing on documentdb.io
+
+- The blog CSS stretches every image to the content width (about 776 CSS px), rounds it and adds its own border. Use plain Markdown images there, not the centered `<img width="800">` markup.
+- Large illustrations can be saved as **JPEG, quality 85, at 1552 px wide** (2x the content width). Flatten transparent corners onto the site's card color first; the site's own rounding hides them. Keep screenshots as PNG so text stays sharp.
+
 ## Annotations
 
 Use annotations only when they explain a sequence. By default, add none.
@@ -127,7 +179,8 @@ To show that one choice leads to the next screen:
 | Mid blue (gradients in graphics)      | `#2892DF`                       |
 | Azure cyan (gradient end in graphics) | `#3CCBF4`                       |
 | Navy (legend text, headings)          | `#252F3E`                       |
-| Background gradient stops             | `#EEF5FD`, `#EBF3FC`, `#E9F8FE` |
+| Background gradient stops (light)     | `#EEF5FD`, `#EBF3FC`, `#E9F8FE` |
+| Background gradient stops (dark)      | `#273452`, `#212D48`, `#1F314F` |
 
 Fonts: Segoe UI and Segoe UI Semibold, read from the Windows fonts folder. On other systems, set `DOCS_FONT_DIR` to a folder containing `segoeui.ttf` and `seguisb.ttf`.
 
@@ -137,14 +190,16 @@ Hero images, diagrams and other rendered graphics are not framed. After renderin
 
 - Check the outermost 1 px rows and columns for capture artifacts (a grey line appeared on HTML renders) and crop them.
 - Round the outer corners: `python frame.py --round graphic.png`. The radius scales with the image width. Skip images that already have their own shape, such as the install button.
+- For the dark theme, re-render with the dark tokens (see [Generated graphics (hero images)](#generated-graphics-hero-images)).
 
 ## Validation Checklist
 
+- [ ] Theme agreed with the operator (light, dark or both)
 - [ ] Originals kept outside the committed `images/` folder
-- [ ] File names follow `{version}_{feature_name}.png` and don't overwrite existing images
+- [ ] File names follow `{version}_{feature_name}.png` and don't overwrite existing images; dark versions end in `_dark`
 - [ ] Every framed image is 1920 px wide, with transparent rounded corners
 - [ ] Text size matches full captures (no blown-up crops)
 - [ ] No job scales above 1.0 unless the operator approved it
 - [ ] Badges and arrows don't cover UI text or icons
-- [ ] All images referenced with `width="800"` and descriptive alt text
+- [ ] All images referenced with `width="800"` and descriptive alt text (plain Markdown images on documentdb.io)
 - [ ] Every image reference resolves; preview files deleted

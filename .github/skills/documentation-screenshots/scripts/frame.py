@@ -12,14 +12,20 @@ Frames tool screenshots in the DocumentDB release-notes style:
 
 Requires Python 3 with Pillow and numpy (pip install pillow numpy).
 
+Two background themes:
+  - light (default): for the repo docs, release notes, README and Marketplace
+  - dark: navy background for dark-themed sites such as documentdb.io; output files get
+    a "_dark" suffix (1.0.0_cluster_dashboard.png -> 1.0.0_cluster_dashboard_dark.png)
+
 Usage:
-  python frame.py jobs.json [name ...]       run all jobs (or only the named ones)
+  python frame.py [--theme light|dark] jobs.json [name ...]   run all jobs (or only the named ones)
   python frame.py --round <file.png> [...]    only round the outer corners of finished graphics
   python frame.py --measure <file.png>        print row spacing hints to choose a scale
 
-jobs.json: a "src" folder, an "out" folder (both relative to the jobs file) and one entry per
-image with optional keys: scale, pad, pad_color, mode ("frame" or "panels"), panels, badges,
-legend, arrows. A complete, working example is ../references/example-jobs.json.
+jobs.json: a "src" folder, an "out" folder (both relative to the jobs file), an optional "theme"
+("light" or "dark"; --theme overrides it) and one entry per image with optional keys: scale, pad,
+pad_color, radius, mode ("frame" or "panels"), panels, badges, legend, arrows.
+A complete, working example is ../references/example-jobs.json.
 All coordinates (badges, panels, arrows) are in SOURCE pixels of the original capture.
 """
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -38,9 +44,24 @@ SS = 4                   # supersampling for anti-aliased shapes
 
 BLUE = (0x00, 0x70, 0xE0)        # DocumentDB brand blue: badges, arrows
 NAVY = (0x25, 0x2F, 0x3E)        # text in legend cards
-BG_STOPS = ((0xEE, 0xF5, 0xFD), (0xEB, 0xF3, 0xFC), (0xE9, 0xF8, 0xFE))
-DOT_ALPHA = 26                   # dot grid: BLUE at ~10% opacity
+THEMES = {
+    # background gradient stops, dot grid alpha (BLUE), output file suffix
+    "light": {"stops": ((0xEE, 0xF5, 0xFD), (0xEB, 0xF3, 0xFC), (0xE9, 0xF8, 0xFE)), "dots": 26, "suffix": ""},
+    "dark": {"stops": ((0x27, 0x34, 0x52), (0x21, 0x2D, 0x48), (0x1F, 0x31, 0x4F)), "dots": 62, "suffix": "_dark"},
+}
+BG_STOPS = THEMES["light"]["stops"]
+DOT_ALPHA = THEMES["light"]["dots"]   # light: ~10% opacity, dark: ~24% so the grid still reads
 DOT_STEP, DOT_R = 32, 2
+
+
+def set_theme(name):
+    global BG_STOPS, DOT_ALPHA
+    if name not in THEMES:
+        sys.exit(f"ERROR: unknown theme '{name}' (use {' or '.join(THEMES)})")
+    BG_STOPS, DOT_ALPHA = THEMES[name]["stops"], THEMES[name]["dots"]
+    return THEMES[name]["suffix"]
+
+
 def _font(*names):
     """Segoe UI matches the VS Code UI on Windows. Override with DOCS_FONT_DIR on other systems."""
     dirs = [os.environ.get("DOCS_FONT_DIR", ""), os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")]
@@ -207,8 +228,9 @@ def opaque(img):
     return img
 
 
-def frame(src, dst, scale=BASE_SCALE, badges=(), legend=None, pad=0, pad_color=None, arrows=()):
-    """Standard layout: whole capture as one card, centred on a 1920 wide background."""
+def frame(src, dst, scale=BASE_SCALE, badges=(), legend=None, pad=0, pad_color=None, arrows=(), radius=RADIUS):
+    """Standard layout: whole capture as one card, centred on a 1920 wide background.
+    radius: card corner radius; match it to an illustration's own rounded panel."""
     check_upscale(src, scale)
     img = opaque(Image.open(src).convert("RGBA"))
     if pad:   # extend tight crops with the capture's own background colour (l, t, r, b)
@@ -228,11 +250,11 @@ def frame(src, dst, scale=BASE_SCALE, badges=(), legend=None, pad=0, pad_color=N
     cw, ch = CANVAS_W, h + 2 * MARGIN + (leg_h + 32 if legend else 0)
     ox, oy = (cw - w) // 2, MARGIN
     canvas = background(cw, ch)
-    shadow(canvas, (ox, oy, ox + w, oy + h), RADIUS)
-    canvas.paste(shot, (ox, oy), rounded_mask(w, h, RADIUS))
+    shadow(canvas, (ox, oy, ox + w, oy + h), radius)
+    canvas.paste(shot, (ox, oy), rounded_mask(w, h, radius))
     border = Image.new("RGBA", (cw * SS, ch * SS), (0, 0, 0, 0))
     ImageDraw.Draw(border).rounded_rectangle((ox * SS, oy * SS, (ox + w) * SS - 1, (oy + h) * SS - 1),
-                                             RADIUS * SS, outline=(0, 0, 0, 30), width=2 * SS)
+                                             radius * SS, outline=(0, 0, 0, 30), width=2 * SS)
     canvas.alpha_composite(border.resize((cw, ch), Image.LANCZOS))
     to_c = lambda x, y: (ox + x * scale, oy + y * scale)
     for pts in arrows:
@@ -292,9 +314,10 @@ def measure(path):
           f"median row spacing {np.median(gaps) if len(gaps) else 'n/a'} px")
 
 
-def run_jobs(jobs_path, only=()):
+def run_jobs(jobs_path, only=(), theme=None):
     base = os.path.dirname(os.path.abspath(jobs_path))
     cfg = json.load(open(jobs_path, encoding="utf-8"))
+    suffix = set_theme(theme or cfg.get("theme", "light"))
     src_dir = os.path.join(base, cfg.get("src", "originals"))
     out_dir = os.path.join(base, cfg.get("out", "."))
     unknown = [n for n in only if n not in cfg["jobs"]]
@@ -311,7 +334,8 @@ def run_jobs(jobs_path, only=()):
         kw["arrows"] = [[tuple(p) for p in a] for a in kw.get("arrows", [])]
         if "legend" in kw:
             kw["legend"] = [(l, [(t, bool(b)) for t, b in parts]) for l, parts in kw["legend"]]
-        src, dst = os.path.join(src_dir, name), os.path.join(out_dir, kw.pop("out", name))
+        stem, ext = os.path.splitext(kw.pop("out", name))
+        src, dst = os.path.join(src_dir, name), os.path.join(out_dir, stem + suffix + ext)
         fn = frame_panels if mode == "panels" else frame
         print(fn(src, dst, **kw))
 
@@ -327,4 +351,9 @@ if __name__ == "__main__":
         for f in args[1:]:
             measure(f)
     else:
-        run_jobs(args[0], args[1:])
+        theme = None
+        if args[0] == "--theme":
+            if len(args) < 3:
+                sys.exit("ERROR: usage: frame.py --theme light|dark jobs.json [name ...]")
+            theme, args = args[1], args[2:]
+        run_jobs(args[0], args[1:], theme)
