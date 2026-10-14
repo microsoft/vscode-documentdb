@@ -2,7 +2,7 @@
 
 > Also published on the DocumentDB blog at documentdb.io: tracked in [documentdb/documentdb.github.io#214](https://github.com/documentdb/documentdb.github.io/pull/214). Keep both versions in sync.
 
-_October 10, 2026, by Tomasz Naumowicz and the DocumentDB for VS Code team_
+_October 16, 2026, by Tomasz Naumowicz and the DocumentDB for VS Code team_
 
 _The free, open-source DocumentDB GUI for VS Code reaches 1.0. Start DocumentDB Local in a few clicks, bring your data with copy and paste, and understand it with the Cluster Dashboard and Query Insights._
 
