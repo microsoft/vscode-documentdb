@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { ThemeIcon, TreeItemCollapsibleState } from 'vscode';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { InstanceState, type QuickStartStatus } from '../../../services/localQuickStart/quickStartTypes';
@@ -10,13 +12,13 @@ import { LocalQuickStartItem } from './LocalQuickStartItem';
 
 // The root node's iconPath initializer calls getResourcesPath() (needs ext.context); stub it so the
 // item constructs without a real extension host.
-jest.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
+vi.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
 
 describe('LocalQuickStartItem — lazy hydration', () => {
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     it('starts collapsed and performs no Docker work while only the root row is rendered', () => {
-        const ensureHydrated = jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        const ensureHydrated = vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
         const item = new LocalQuickStartItem('connectionsView/root');
 
         expect(item.getTreeItem().collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
@@ -25,12 +27,12 @@ describe('LocalQuickStartItem — lazy hydration', () => {
     });
 
     it('awaits first hydration without starting a redundant background probe', async () => {
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
-        const ensureHydrated = jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        const backgroundRefresh = jest
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        const ensureHydrated = vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        const backgroundRefresh = vi
             .spyOn(QuickStartService, 'refreshLiveStateInBackground')
             .mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.NotInstalled,
             metadata: undefined,
             missing: false,
@@ -44,12 +46,12 @@ describe('LocalQuickStartItem — lazy hydration', () => {
     });
 
     it('uses the background live-state probe after initial hydration', async () => {
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        const backgroundRefresh = jest
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        const backgroundRefresh = vi
             .spyOn(QuickStartService, 'refreshLiveStateInBackground')
             .mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.NotInstalled,
             metadata: undefined,
             missing: false,
@@ -62,10 +64,10 @@ describe('LocalQuickStartItem — lazy hydration', () => {
     });
 
     it('still renders the set-up row when hydration fails because Docker is unavailable', async () => {
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockRejectedValue(new Error('Docker unavailable'));
-        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockRejectedValue(new Error('Docker unavailable'));
+        vi.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.NotInstalled,
             metadata: undefined,
             missing: false,
@@ -83,13 +85,13 @@ describe('LocalQuickStartItem — lazy hydration', () => {
 });
 
 describe('LocalQuickStartItem — action states', () => {
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     it('opens Quick Start to review setup without offering deletion in the tree', async () => {
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
-        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        vi.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.CredentialsMissing,
             metadata: undefined,
             missing: false,
@@ -107,10 +109,10 @@ describe('LocalQuickStartItem — action states', () => {
     });
 
     it('offers recreate and delete actions when the managed container is missing', async () => {
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
-        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        vi.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.Stopped,
             metadata: {
                 containerId: 'c1',
@@ -133,7 +135,7 @@ describe('LocalQuickStartItem — action states', () => {
 });
 
 describe('LocalQuickStartItem — configured instance description', () => {
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     const metadata = {
         containerId: 'c1',
@@ -145,10 +147,10 @@ describe('LocalQuickStartItem — configured instance description', () => {
     };
 
     async function getInstanceTreeItem(state: InstanceState): Promise<ReturnType<LocalQuickStartItem['getTreeItem']>> {
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
-        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        vi.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state,
             metadata,
             missing: false,
@@ -174,15 +176,15 @@ describe('LocalQuickStartItem — configured instance description', () => {
 // `Missing` / `CredentialsMissing` are service states with their own rows and are deliberately NOT
 // treated this way (I2-Q5) — the test above pins that contract.
 describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     async function children(
         status: Partial<QuickStartStatus>,
     ): Promise<Awaited<ReturnType<LocalQuickStartItem['getChildren']>>> {
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
-        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        vi.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.Error,
             errorMessage: 'boom',
             missing: false,

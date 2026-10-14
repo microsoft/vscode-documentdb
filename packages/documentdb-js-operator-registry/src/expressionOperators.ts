@@ -12,8 +12,8 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
-import { getDocLink } from './docLinks';
-import { registerOperators } from './getFilteredCompletions';
+import { getDocLink } from './docLinks.js';
+import { registerOperators } from './getFilteredCompletions.js';
 import {
     META_EXPR_ARITH,
     META_EXPR_ARRAY,
@@ -32,8 +32,8 @@ import {
     META_EXPR_TRIG,
     META_EXPR_TYPE,
     META_EXPR_VARIABLE,
-} from './metaTags';
-import { type OperatorEntry } from './types';
+} from './metaTags.js';
+import { type OperatorEntry } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Arithmetic Expression Operators

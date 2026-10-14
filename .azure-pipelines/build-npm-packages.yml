@@ -130,6 +130,18 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: PowerShell@2
+                          displayName: 'Type-check package tests (strict, no emit)'
+                          condition: succeeded()
+                          inputs:
+                              targetType: 'inline'
+                              workingDirectory: '$(Build.SourcesDirectory)'
+                              script: |
+                                  npm run typecheck:tests
+                                  if ($LASTEXITCODE -ne 0) {
+                                      throw "Package test type-check failed with exit code $LASTEXITCODE"
+                                  }
+
+                        - task: PowerShell@2
                           displayName: 'Pack npm packages'
                           condition: succeeded()
                           inputs:
@@ -138,6 +150,19 @@ extends:
                               arguments: >-
                                   -SourcesDirectory '$(Build.SourcesDirectory)'
                                   -OutputDirectory '$(ob_outputDirectory)'
+
+                        # Offline: checks the tarballs just packed, without npm, npx or downloads.
+                        - task: PowerShell@2
+                          displayName: 'Verify packed npm packages (offline)'
+                          condition: succeeded()
+                          inputs:
+                              targetType: 'inline'
+                              workingDirectory: '$(Build.SourcesDirectory)'
+                              script: |
+                                  node build/verification/package-checks/check-packages.mjs --archives "$(ob_outputDirectory)\npm-packages"
+                                  if ($LASTEXITCODE -ne 0) {
+                                      throw "Package archive verification failed with exit code $LASTEXITCODE"
+                                  }
 
                         - task: CopyFiles@2
                           displayName: 'Copy package metadata to staging'

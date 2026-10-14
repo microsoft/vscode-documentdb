@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockEnsureKubernetesPortForward = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mockEnsureKubernetesPortForward = vi.fn();
 
 // The provider imports ./ensureKubernetesPortForward lazily; mock it so the test never touches
 // the real tunnel machinery (and its @kubernetes/client-node dependency).
-jest.mock('./ensureKubernetesPortForward', () => ({
+vi.mock('./ensureKubernetesPortForward', () => ({
     ensureKubernetesPortForward: (...args: unknown[]) => mockEnsureKubernetesPortForward(...args),
 }));
 

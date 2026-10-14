@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext, openUrl } from '@microsoft/vscode-azext-utils';
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
+import { openUrl, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { CopyPasteBufferService } from '../../services/CopyPasteBufferService';
 import { type TreeElement } from '../../tree/TreeElement';
@@ -11,18 +13,18 @@ import { IndexItem } from '../../tree/documentdb/IndexItem';
 import { type IndexesItem } from '../../tree/documentdb/IndexesItem';
 import { copyIndex, copyIndexes } from './copyIndexes';
 
-const showInformationMessage = vscode.window.showInformationMessage as unknown as jest.MockedFunction<
+const showInformationMessage = vscode.window.showInformationMessage as unknown as MockedFunction<
     (message: string, ...items: string[]) => Thenable<string | undefined>
 >;
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    openUrl: jest.fn().mockResolvedValue(undefined),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    openUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../../services/CopyPasteBufferService', () => ({
+vi.mock('../../services/CopyPasteBufferService', () => ({
     CopyPasteBufferService: {
-        setIndexes: jest.fn().mockResolvedValue(undefined),
-        clearIndexes: jest.fn().mockResolvedValue(undefined),
+        setIndexes: vi.fn().mockResolvedValue(undefined),
+        clearIndexes: vi.fn().mockResolvedValue(undefined),
     },
 }));
 
@@ -57,7 +59,7 @@ function createIndexesNode(): IndexesItem {
 
 describe('copyIndexes commands', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         showInformationMessage.mockResolvedValue(undefined);
     });
 
@@ -88,7 +90,7 @@ describe('copyIndexes commands', () => {
             const regionIndex = createIndexNode({ name: 'region_1', type: 'traditional', key: { region: 1 } });
             const idIndex = createIndexNode({ name: '_id_', type: 'traditional', key: { _id: 1 } });
             const searchIndex = createIndexNode({ name: 'search', type: 'search' });
-            const expandedField = { id: `${emailIndex.id}/email`, getTreeItem: jest.fn() } as unknown as TreeElement;
+            const expandedField = { id: `${emailIndex.id}/email`, getTreeItem: vi.fn() } as unknown as TreeElement;
             const clickedNode = clickedIndexType === 'built-in _id' ? idIndex : searchIndex;
 
             await copyIndex(context, clickedNode, [emailIndex, expandedField, idIndex, regionIndex, searchIndex]);
@@ -125,7 +127,7 @@ describe('copyIndexes commands', () => {
     it('stores an all-indexes scope without expanding the parent', async () => {
         const context = createContext();
         const node = createIndexesNode();
-        const getChildren = jest.fn();
+        const getChildren = vi.fn();
         Object.assign(node, { getChildren });
 
         await copyIndexes(context, node);

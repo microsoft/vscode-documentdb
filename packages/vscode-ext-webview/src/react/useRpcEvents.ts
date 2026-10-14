@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { useContext } from 'react';
-import { type RpcEventChannel } from '../webview/events';
-import { getWebviewConnection } from './connection';
-import { WebviewContext } from './WebviewContext';
+import { type RpcEventChannel } from '../webview/events.js';
+import { getWebviewConnection } from './connection.js';
+import { WebviewContext } from './WebviewContext.js';
 
 /**
  * React hook returning the webview's RPC event channel.

@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { type AuthenticateWizardContext } from '../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { type AtlasDatabaseUserCandidate } from './atlasDatabaseUsers';
 import { SelectAtlasDatabaseUserStep } from './SelectAtlasDatabaseUserStep';
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string, values?: Record<string, string>) => {
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string, values?: Record<string, string>) => {
         if (!values) {
             return message;
         }
@@ -18,28 +20,28 @@ jest.mock('@vscode/l10n', () => ({
     }),
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     QuickPickItemKind: { Separator: -1, Default: 0 },
     ProgressLocation: { Window: 10, Notification: 15 },
     l10n: {
-        t: jest.fn((message: string) => message),
+        t: vi.fn((message: string) => message),
     },
     window: {
         withProgress: async (_options: unknown, task: () => Promise<unknown>) => task(),
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class AzureWizardPromptStep {},
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-jest.mock('../atlasTrace', () => ({
-    atlasTrace: jest.fn(),
-    atlasWarn: jest.fn(),
+vi.mock('../atlasTrace', () => ({
+    atlasTrace: vi.fn(),
+    atlasWarn: vi.fn(),
 }));
 
 interface PickItem {
@@ -49,8 +51,8 @@ interface PickItem {
     isCustomOption?: boolean;
 }
 
-const showQuickPick = jest.fn();
-const showWarningMessage = jest.fn();
+const showQuickPick = vi.fn();
+const showWarningMessage = vi.fn();
 
 function createContext(): AuthenticateWizardContext {
     return {

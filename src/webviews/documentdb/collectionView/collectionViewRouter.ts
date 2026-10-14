@@ -23,14 +23,13 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
+import { recordSurveyActivity } from '../../../services/survey/SurveyService';
 import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
-import { promptAfterActionEventually } from '../../../utils/survey';
-import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { queryInsightsRouter } from './queryInsights/queryInsightsRouter';
 
@@ -253,8 +252,9 @@ export const collectionsViewRouter = router({
                 telemetryCtx.telemetry.measurements.documentCount = size;
             });
 
-            void promptAfterActionEventually(UsageImpact.High);
-
+            if (executionIntent === 'initial' && !myCtx.signal?.aborted) {
+                recordSurveyActivity('dataBrowsing');
+            }
             return { documentCount: size };
         }),
     getFieldCompletionData: publicProcedureWithTelemetry

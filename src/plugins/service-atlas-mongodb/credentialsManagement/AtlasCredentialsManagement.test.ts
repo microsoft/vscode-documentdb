@@ -3,35 +3,37 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock, type Mocked } from 'vitest';
+
 const globalStateBacking = new Map<string, unknown>();
 const secretStorageBacking = new Map<string, string>();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     QuickPickItemKind: { Separator: -1, Default: 0 },
     ProgressLocation: { Notification: 15 },
-    Uri: { parse: jest.fn((value: string) => ({ toString: () => value })) },
-    env: { openExternal: jest.fn().mockResolvedValue(true) },
+    Uri: { parse: vi.fn((value: string) => ({ toString: () => value })) },
+    env: { openExternal: vi.fn().mockResolvedValue(true) },
     window: {
-        showInformationMessage: jest.fn(),
-        withProgress: jest.fn(async (_options: unknown, task: () => Promise<unknown>) => task()),
+        showInformationMessage: vi.fn(),
+        withProgress: vi.fn(async (_options: unknown, task: () => Promise<unknown>) => task()),
     },
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((m, value, index) => m.replace(`{${String(index)}}`, value), message),
         ),
     },
 }));
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string, ...args: string[]) =>
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string, ...args: string[]) =>
         args.reduce<string>((m, value, index) => m.replace(`{${String(index)}}`, value), message),
     ),
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => {
+vi.mock('@microsoft/vscode-azext-utils', () => {
     class UserCancelledErrorMock extends Error {}
     class GoBackErrorMock extends Error {}
     return {
@@ -41,7 +43,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         context: {
             extension: { id: 'test-extension' },
@@ -61,7 +63,7 @@ jest.mock('../../../extensionVariables', () => ({
                 keys: () => Array.from(globalStateBacking.keys()),
             },
         },
-        discoveryBranchDataProvider: { refresh: jest.fn(), resetNodeErrorState: jest.fn() },
+        discoveryBranchDataProvider: { refresh: vi.fn(), resetNodeErrorState: vi.fn() },
         secretStorage: {
             get: async (key: string): Promise<string | undefined> =>
                 secretStorageBacking.has(key) ? secretStorageBacking.get(key) : undefined,
@@ -73,12 +75,12 @@ jest.mock('../../../extensionVariables', () => ({
             },
             onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
-        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
+        outputChannel: { trace: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
     },
 }));
 
-const mockOpenWebview = jest.fn();
-jest.mock('../../../webviews/documentdb/atlasCredentials/atlasCredentialsController', () => ({
+const mockOpenWebview = vi.fn();
+vi.mock('../../../webviews/documentdb/atlasCredentials/atlasCredentialsController', () => ({
     openAtlasCredentialsWebview: (...args: unknown[]) => mockOpenWebview(...args) as unknown,
 }));
 
@@ -125,17 +127,17 @@ function buildContext(
     pick: (items: QuickPickLike[]) => QuickPickLike,
     snapshot: AtlasDiscoverySnapshot = emptySnapshot(),
 ): AtlasCredentialsManagementWizardContext & {
-    discoveryService: jest.Mocked<
+    discoveryService: Mocked<
         Pick<AtlasDiscoveryService, 'listAll' | 'refreshAll' | 'invalidate' | 'reset' | 'retryCredential'>
     >;
 } {
-    const sessionRegistry = { invalidate: jest.fn(), invalidateAll: jest.fn() };
+    const sessionRegistry = { invalidate: vi.fn(), invalidateAll: vi.fn() };
     const discoveryService = {
-        listAll: jest.fn().mockResolvedValue(snapshot),
-        refreshAll: jest.fn().mockResolvedValue(snapshot),
-        invalidate: jest.fn(),
-        reset: jest.fn(),
-        retryCredential: jest.fn().mockResolvedValue(snapshot),
+        listAll: vi.fn().mockResolvedValue(snapshot),
+        refreshAll: vi.fn().mockResolvedValue(snapshot),
+        invalidate: vi.fn(),
+        reset: vi.fn(),
+        retryCredential: vi.fn().mockResolvedValue(snapshot),
         sessionRegistry,
     };
 
@@ -144,15 +146,15 @@ function buildContext(
         errorHandling: { issueProperties: {} },
         valuesToMask: [],
         ui: {
-            showQuickPick: jest.fn(async (items: QuickPickLike[] | Promise<QuickPickLike[]>) => pick(await items)),
-            showWarningMessage: jest.fn().mockResolvedValue({ title: 'ok' }),
+            showQuickPick: vi.fn(async (items: QuickPickLike[] | Promise<QuickPickLike[]>) => pick(await items)),
+            showWarningMessage: vi.fn().mockResolvedValue({ title: 'ok' }),
         },
         discoveryService,
         credentials: [],
         selectedCredentialId: undefined,
         changed: false,
     } as unknown as AtlasCredentialsManagementWizardContext & {
-        discoveryService: jest.Mocked<
+        discoveryService: Mocked<
             Pick<AtlasDiscoveryService, 'listAll' | 'refreshAll' | 'invalidate' | 'reset' | 'retryCredential'>
         >;
     };
@@ -164,8 +166,8 @@ beforeEach(() => {
     StorageService._resetForTests();
     resetAtlasCredentialStoreCache();
     mockOpenWebview.mockReset();
-    (vscode.window.showInformationMessage as jest.Mock).mockReset();
-    (vscode.env.openExternal as jest.Mock).mockClear();
+    (vscode.window.showInformationMessage as Mock).mockReset();
+    (vscode.env.openExternal as Mock).mockClear();
 });
 
 describe('addAtlasCredential', () => {

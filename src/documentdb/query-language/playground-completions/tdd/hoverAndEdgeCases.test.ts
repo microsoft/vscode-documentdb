@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeAll, describe, expect, test } from 'vitest';
+
 /**
  * TDD Behavior Tests — HoverProvider + Edge Cases (WI-4)
  *
@@ -18,11 +20,45 @@
  */
 
 import { getAllCompletions, loadOperators } from '@documentdb-js/operator-registry';
+import { type FieldEntry } from '@documentdb-js/schema-analyzer';
 import { getPlaygroundHoverContent } from '../PlaygroundHoverProvider';
+import { detectMethodArgContext, detectPlaygroundContext } from '../playgroundContextDetector';
 
 // Ensure operators are loaded before tests
 beforeAll(() => {
     loadOperators();
+});
+
+describe('Playground hover Markdown policy', (): void => {
+    test('operator documentation is untrusted with its authored body, HTML, and link intact', (): void => {
+        const entry = getAllCompletions().find((candidate): boolean => candidate.value === '$gt');
+        expect(entry).toBeDefined();
+        expect(entry!.link).toMatch(/^https?:\/\//);
+
+        const hover = getPlaygroundHoverContent('$gt');
+        expect(hover).not.toBeNull();
+        expect(hover!.contents[0]).toEqual({
+            value: [`**${entry!.value}**`, '---', '<br>', entry!.description, `[ⓘ Documentation](${entry!.link})`].join(
+                '\n\n',
+            ),
+            isTrusted: false,
+            supportHtml: true,
+        });
+    });
+
+    test('field text remains escaped with omitted trust and existing HTML support', (): void => {
+        const field: FieldEntry = {
+            path: 'field[note]',
+            bsonType: 'string',
+            type: 'string',
+            isSparse: false,
+        };
+        const hover = getPlaygroundHoverContent(field.path, (): FieldEntry => field);
+        expect(hover).not.toBeNull();
+        expect(hover!.contents[0].value).toContain('**field\\[note\\]**');
+        expect(hover!.contents[0].isTrusted).toBeUndefined();
+        expect(hover!.contents[0].supportHtml).toBe(true);
+    });
 });
 
 // =====================================================================
@@ -165,9 +201,7 @@ describe('TDD: Completion Edge Cases', () => {
     // We test context detection for edge cases (E1–E5 from the plan)
     // Context detection is a pure function so it can be tested without VS Code
 
-    // Using the context detector directly
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { detectPlaygroundContext, detectMethodArgContext } = require('../playgroundContextDetector');
+    // Using the context detector directly (imported at the top of the file)
 
     describe('E1: After comment', () => {
         test('cursor after comment line → top-level', () => {

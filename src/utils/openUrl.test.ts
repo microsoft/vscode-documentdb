@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import * as vscode from 'vscode';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from './openUrl';
 
-jest.mock('vscode', () => ({
-    env: { openExternal: jest.fn() },
+vi.mock('vscode', () => ({
+    env: { openExternal: vi.fn() },
     Uri: { parse: (value: string): { toString: () => string } => ({ toString: () => value }) },
 }));
 
@@ -22,7 +24,7 @@ describe('isSupportedExternalUrl', () => {
 });
 
 describe('openUrl', () => {
-    const openExternal = vscode.env.openExternal as jest.Mock;
+    const openExternal = vscode.env.openExternal as Mock;
 
     beforeEach(() => openExternal.mockReset());
 

@@ -3,20 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockExistsSync = jest.fn();
-const mockOutputError = jest.fn();
-const mockShowWarningMessage = jest.fn();
-const mockShowErrorMessage = jest.fn();
-const mockOpenTextDocument = jest.fn();
-const mockShowTextDocument = jest.fn();
-const mockResolveExistingDefaultKubeconfigPath = jest.fn();
-const mockDescribeDefaultKubeconfigPath = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-jest.mock('fs', () => ({
+const mockExistsSync = vi.fn();
+const mockOutputError = vi.fn();
+const mockShowWarningMessage = vi.fn();
+const mockShowErrorMessage = vi.fn();
+const mockOpenTextDocument = vi.fn();
+const mockShowTextDocument = vi.fn();
+const mockResolveExistingDefaultKubeconfigPath = vi.fn();
+const mockDescribeDefaultKubeconfigPath = vi.fn();
+
+vi.mock('fs', () => ({
     existsSync: (...args: unknown[]) => mockExistsSync(...args),
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     Uri: {
         file: (p: string) => ({ scheme: 'file', fsPath: p }),
     },
@@ -29,13 +31,13 @@ jest.mock('vscode', () => ({
         openTextDocument: (...args: unknown[]) => mockOpenTextDocument(...args),
     },
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((acc, value, index) => acc.replace(`{${String(index)}}`, value), message),
         ),
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
             error: (...args: unknown[]) => mockOutputError(...args),
@@ -43,11 +45,11 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../config', () => ({
+vi.mock('../config', () => ({
     DISCOVERY_PROVIDER_ID: 'kubernetes-discovery',
 }));
 
-jest.mock('../kubernetesClient', () => ({
+vi.mock('../kubernetesClient', () => ({
     resolveExistingDefaultKubeconfigPath: (...args: unknown[]) => mockResolveExistingDefaultKubeconfigPath(...args),
     describeDefaultKubeconfigPath: (...args: unknown[]) => mockDescribeDefaultKubeconfigPath(...args),
 }));
@@ -70,7 +72,7 @@ function makeNode(source: Record<string, unknown>): { source: Record<string, unk
 
 describe('editKubeconfig', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockDescribeDefaultKubeconfigPath.mockReturnValue('~/.kube/config');
     });
 

@@ -3,14 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import type * as ConnectionStorageModule from '../../services/connectionStorageService';
 import { ExecuteStep } from './ExecuteStep';
 
-const mockGet = jest.fn();
-const mockSave = jest.fn();
+const mockGet = vi.fn();
+const mockSave = vi.fn();
 
-jest.mock('../../services/connectionStorageService', () => {
-    const actual = jest.requireActual('../../services/connectionStorageService');
+vi.mock('../../services/connectionStorageService', async () => {
+    const actual = await vi.importActual<typeof ConnectionStorageModule>('../../services/connectionStorageService');
     return {
         ...actual,
         ConnectionStorageService: {
@@ -20,18 +23,18 @@ jest.mock('../../services/connectionStorageService', () => {
     };
 });
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            error: jest.fn(),
-            trace: jest.fn(),
-            warn: jest.fn(),
+            error: vi.fn(),
+            trace: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../utils/dialogs/showConfirmation', () => ({
-    showConfirmationAsInSettings: jest.fn(),
+vi.mock('../../utils/dialogs/showConfirmation', () => ({
+    showConfirmationAsInSettings: vi.fn(),
 }));
 
 const HOST = 'a11y-reviews-documentdb-vscode.mongocluster.cosmos.azure.com';
@@ -80,7 +83,7 @@ function savedSecrets(): StoredSecrets {
 
 describe('updateCredentials ExecuteStep — clearing stale secrets on auth-method change', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockSave.mockResolvedValue(undefined);
     });
 

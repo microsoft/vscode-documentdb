@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test, vi } from 'vitest';
+
 import { Binary, Decimal128, Int32, Long, ObjectId, Timestamp } from 'bson';
 import { MaxKey, MinKey } from 'mongodb';
 import { QueryError } from '../errors/QueryError';
 import { toFilterQueryObj } from './toFilterQuery';
 
 // Mock vscode
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
         t: (message: string, ...args: unknown[]) => {
             let result = message;
@@ -22,10 +24,10 @@ jest.mock('vscode', () => ({
 }));
 
 // Mock extensionVariables
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            trace: jest.fn(),
+            trace: vi.fn(),
         },
     },
 }));

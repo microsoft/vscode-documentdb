@@ -8,7 +8,7 @@ The escapes that tokens cannot express, and the machinery that gets them onto th
 | `generated.ts`         | compiled from it by `scripts/build-styles.mjs`. **Do not edit** |
 | `injectStyles.ts`      | appends a single `<style>` element, idempotently                |
 
-`generated.ts` is committed rather than gitignored. `npx jest` does not run the repo's `prebuild`
+`generated.ts` is committed rather than gitignored. `npx vitest run` does not run the repo's `prebuild`
 fan-out, so on a fresh clone an absent module would fail the package's tests with a message that
 has nothing to do with the cause.
 

@@ -3,15 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import * as vscode from 'vscode';
 import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
 import { ConfirmPasteIndexesStep } from './ConfirmPasteIndexesStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 
-const showInformationMessage = vscode.window.showInformationMessage as unknown as jest.MockedFunction<
+const showInformationMessage = vscode.window.showInformationMessage as unknown as MockedFunction<
     (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
 >;
-const showWarningMessage = vscode.window.showWarningMessage as unknown as jest.MockedFunction<
+const showWarningMessage = vscode.window.showWarningMessage as unknown as MockedFunction<
     (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
 >;
 
@@ -39,7 +41,7 @@ function createContext(scope: PasteIndexesWizardContext['scope']): PasteIndexesW
 
 describe('ConfirmPasteIndexesStep', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         showInformationMessage.mockResolvedValue('Paste Indexes');
         showWarningMessage.mockResolvedValue('Paste Indexes');
     });

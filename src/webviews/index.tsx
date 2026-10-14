@@ -8,6 +8,7 @@ import { type WebviewState, WithWebviewContext } from '@microsoft/vscode-ext-web
 import * as l10n from '@vscode/l10n';
 import { type l10nJsonFormat } from '@vscode/l10n';
 import type * as React from 'react';
+import { Suspense } from 'react';
 import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { type WebviewApi } from 'vscode-webview';
 import { reportObserverError } from './_integration/observability/reportObserverError';
@@ -31,14 +32,16 @@ export function render<V extends ViewKey>(key: V, vscodeApi: WebviewApi<WebviewS
         throw new Error(l10n.t('Element with id of {rootId} not found.', { rootId }));
     }
 
-    const Component: React.ComponentType = WebviewRegistry[key];
+    const Component: React.LazyExoticComponent<React.ComponentType> = WebviewRegistry[key];
 
     const root = createRoot(container);
 
     root.render(
         <VSCodeFluentProvider>
             <WithWebviewContext vscodeApi={vscodeApi} onObserverError={reportObserverError}>
-                <Component />
+                <Suspense fallback={null}>
+                    <Component />
+                </Suspense>
             </WithWebviewContext>
         </VSCodeFluentProvider>,
     );

@@ -29,7 +29,7 @@ These differ from the upstream skill this was adapted from — follow the values
 | Release branches       | `release/<X.Y.Z>`, named for the version it ships (e.g. `release/0.10.1`) — never `rel/*`      |
 | Backport branch prefix | `dev/<user>/…` per [CONTRIBUTING §1.1](../../../CONTRIBUTING.md#11-branch-overview)            |
 | Build command          | `npm run build` — **never `npm run compile`**, which is `tsc -watch` and never exits           |
-| Tests                  | `npm run jesttest`                                                                             |
+| Tests                  | `npm test` (Vitest); on a release branch cut before the Vitest migration, `npm run jesttest`   |
 | Localization           | English only: `l10n/bundle.l10n.json` + `package.nls.json`. No translated language files exist |
 | Force pushes           | Never here. `main` is protected; `release/*` force pushes require coordination (§1.6)          |
 
@@ -112,7 +112,7 @@ A cherry-pick onto an older release branch often compiles on the source's base b
    npm run l10n
    npm run prettier-fix
    npm run lint
-   npm run jesttest
+   npm test               # `npm run jesttest` on a release branch that predates Vitest
    npm run build
    npm run package
    ```

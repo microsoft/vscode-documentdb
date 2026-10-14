@@ -7,7 +7,6 @@ import { Dropdown, Label, Option, Toolbar, ToolbarButton, Tooltip } from '@fluen
 import { ArrowLeftFilled, ArrowPreviousFilled, ArrowRightFilled } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext } from 'react';
-import { UsageImpact } from '../../../../../utils/surveyTypes';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
@@ -47,8 +46,6 @@ export const ToolbarViewNavigation = (): React.JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     }
 
     function goToPreviousPage() {
@@ -78,8 +75,6 @@ export const ToolbarViewNavigation = (): React.JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     }
 
     function goToFirstPage() {

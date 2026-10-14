@@ -22,6 +22,7 @@ import {
     type RawCommandDiagnostic,
 } from '../../../documentdb/utils/getClusterHealth';
 import { SettingsService } from '../../../services/SettingsService';
+import { recordSurveyActivity } from '../../../services/survey/SurveyService';
 import { settingsKeys } from '../../../settingsKeys';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
@@ -246,6 +247,9 @@ export const clusterDashboardRouter = router({
             myCtx.actionContext.telemetry.measurements.omittedDatabaseCount = stats.omittedDatabaseCount;
             myCtx.actionContext.telemetry.measurements.statsErrorCount = stats.errors.length;
 
+            if ((input?.loadReason ?? 'initial') === 'initial' && stats.databases !== null && !myCtx.signal?.aborted) {
+                recordSurveyActivity('clusterDashboard');
+            }
             return stats;
         }),
 

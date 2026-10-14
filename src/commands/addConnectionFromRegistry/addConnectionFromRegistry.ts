@@ -5,7 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import vscode from 'vscode';
+import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { getConnectionAuthIdentity } from '../../documentdb/auth/connectionAuthIdentity';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';

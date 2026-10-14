@@ -6,6 +6,7 @@
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { recordSurveyActivity } from '../survey/SurveyService';
 import {
     hasResourceConflict,
     type ResourceDefinition,
@@ -338,6 +339,9 @@ export abstract class Task {
                 } else {
                     context.telemetry.properties.task_final_state = 'completed';
                     this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'), 100);
+                    if (this.type === 'copy-paste-collection' || this.type === 'copy-paste-indexes') {
+                        recordSurveyActivity('dataManagement');
+                    }
                 }
             } catch (error) {
                 // Suppress the default error notification from callWithTelemetryAndErrorHandling

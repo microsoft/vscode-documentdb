@@ -15,9 +15,10 @@
  */
 
 import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
-// Must stay a static import. `await import('bson')` resolves the package's ESM entry and
-// loads a second copy, whose classes fail every `instanceof` check against the driver's —
-// silently corrupting schema inference. Re-verify during the ESM migration (#687).
+// Static or `await import('bson')`, this is the driver's CommonJS copy: vite.config.ext.mjs and
+// vitest.config.ts alias `bson` to it. Without the alias an ES-module importer gets bson's ESM
+// entry, a second copy whose classes fail `instanceof` against the driver's and silently corrupt
+// schema inference. build/verification/bson-identity checks both routes.
 import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
@@ -149,7 +150,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         options.authMechanism = 'MONGODB-OIDC';
         options.tls = true;
         options.authMechanismProperties = {
-            ALLOWED_HOSTS: getOidcAllowedHosts(msg.connectionString),
+            ALLOWED_HOSTS: [...(msg.oidcAllowedHosts ?? getOidcAllowedHosts(msg.connectionString))],
             OIDC_CALLBACK: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
                 const requestId = randomUUID();
                 const tokenPromise = new Promise<string>((resolve, reject) => {

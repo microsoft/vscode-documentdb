@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { registerOperators } from './getFilteredCompletions';
-import { META_BSON } from './metaTags';
-import { type OperatorEntry } from './types';
+import { registerOperators } from './getFilteredCompletions.js';
+import { META_BSON } from './metaTags.js';
+import { type OperatorEntry } from './types.js';
 
 // ---------------------------------------------------------------------------
 // BSON Constructor Functions

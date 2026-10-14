@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { SSRProvider } from '@fluentui/react-components';
 import { type MongoClient } from 'mongodb';
 import { createElement } from 'react';
@@ -20,7 +22,7 @@ import {
 } from './InventoryPanel';
 import { NamespaceTableSkeleton } from './NamespaceTableSkeleton';
 
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string, ...args: unknown[]): string => {
         const substitutions = args[0];
         if (typeof substitutions === 'object' && substitutions !== null) {
@@ -33,14 +35,14 @@ jest.mock('@vscode/l10n', () => ({
     },
 }));
 
-jest.mock('../../collectionView/queryInsightsTab/components/metricsRow', () => ({
+vi.mock('../../collectionView/queryInsightsTab/components/metricsRow', () => ({
     formatCount: (value: number): string => String(value),
 }));
 
-jest.mock('../../../_integration/useTrpcClient', () => ({
+vi.mock('../../../_integration/useTrpcClient', () => ({
     useTrpcClient: () => ({
-        clusterDashboard: { openCollectionView: { mutate: jest.fn() } },
-        common: { displayErrorMessage: { mutate: jest.fn() } },
+        clusterDashboard: { openCollectionView: { mutate: vi.fn() } },
+        common: { displayErrorMessage: { mutate: vi.fn() } },
     }),
 }));
 
@@ -61,12 +63,12 @@ function renderInventory(overrides: Partial<InventoryPanelProps> = {}): string {
             isLoading: false,
             isTableLoading: false,
             error: null,
-            reload: jest.fn(),
+            reload: vi.fn(),
         },
         viewState: createInventoryViewState(),
-        onViewStateChange: jest.fn(),
-        onCreateNamespace: jest.fn(),
-        onRetryStorage: jest.fn(),
+        onViewStateChange: vi.fn(),
+        onCreateNamespace: vi.fn(),
+        onRetryStorage: vi.fn(),
         isCreatingNamespace: false,
         busyNamespaces: [],
         ...overrides,
@@ -104,14 +106,14 @@ describe('InventoryPanel mouse navigation', () => {
         return {
             type,
             button,
-            preventDefault: jest.fn(),
-            stopPropagation: jest.fn(),
+            preventDefault: vi.fn(),
+            stopPropagation: vi.fn(),
         };
     }
 
     it('handles mouse button 3 as Back on mousedown', () => {
         const event = mouseEvent('mousedown', 3);
-        const goBack = jest.fn();
+        const goBack = vi.fn();
 
         handleMouseBackNavigation(event, goBack);
 
@@ -122,7 +124,7 @@ describe('InventoryPanel mouse navigation', () => {
 
     it('suppresses the matching mouseup without navigating twice', () => {
         const event = mouseEvent('mouseup', 3);
-        const goBack = jest.fn();
+        const goBack = vi.fn();
 
         handleMouseBackNavigation(event, goBack);
 
@@ -133,7 +135,7 @@ describe('InventoryPanel mouse navigation', () => {
 
     it('ignores other mouse buttons', () => {
         const event = mouseEvent('mousedown', 0);
-        const goBack = jest.fn();
+        const goBack = vi.fn();
 
         handleMouseBackNavigation(event, goBack);
 
@@ -143,8 +145,8 @@ describe('InventoryPanel mouse navigation', () => {
     });
 
     it('records the mouse Back source in inventory navigation telemetry', () => {
-        const report = jest.fn();
-        const onViewStateChange = jest.fn();
+        const report = vi.fn();
+        const onViewStateChange = vi.fn();
 
         navigateBackFromCollections('mouseBackButton', report, onViewStateChange);
 
@@ -157,7 +159,7 @@ describe('InventoryPanel mouse navigation', () => {
     });
 
     it('returns from the breadcrumb using the shared state reset and existing telemetry', () => {
-        const report = jest.fn();
+        const report = vi.fn();
         let state = { ...databaseViewState('orders'), filterText: 'recent' };
         const onViewStateChange: InventoryPanelProps['onViewStateChange'] = (update) => {
             state = update(state);
@@ -242,7 +244,7 @@ describe('InventoryPanel empty states', () => {
                 isLoading: false,
                 isTableLoading: false,
                 error: null,
-                reload: jest.fn(),
+                reload: vi.fn(),
             },
         });
 
@@ -259,7 +261,7 @@ describe('InventoryPanel empty states', () => {
                 isLoading: false,
                 isTableLoading: false,
                 error: 'request timed out',
-                reload: jest.fn(),
+                reload: vi.fn(),
             },
         });
 
@@ -298,7 +300,7 @@ describe('InventoryPanel empty states', () => {
                     isLoading: false,
                     isTableLoading: false,
                     error: null,
-                    reload: jest.fn(),
+                    reload: vi.fn(),
                 },
             });
 
@@ -328,7 +330,7 @@ describe('InventoryPanel empty states', () => {
                 isLoading: false,
                 isTableLoading: false,
                 error: null,
-                reload: jest.fn(),
+                reload: vi.fn(),
             },
         });
 

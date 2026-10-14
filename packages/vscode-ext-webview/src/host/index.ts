@@ -16,7 +16,7 @@
  */
 
 export { type AnyRouter } from '@trpc/server';
-export { attachTrpc, type ActiveSubscription, type AttachTrpcResult, type WebviewCallerFactory } from './attachTrpc';
+export { attachTrpc, type ActiveSubscription, type AttachTrpcResult, type WebviewCallerFactory } from './attachTrpc.js';
 export {
     consoleProcedureLogger,
     getInvocationSignal,
@@ -32,6 +32,6 @@ export {
     type ProcedureType,
     type TelemetryMiddlewareOptions,
     type TelemetryRunner,
-} from './middleware';
-export { openWebview } from './openWebview';
-export { WebviewController, type WebviewControllerOptions, type WebviewSourceLayout } from './WebviewController';
+} from './middleware/index.js';
+export { openWebview } from './openWebview.js';
+export { WebviewController, type WebviewControllerOptions, type WebviewSourceLayout } from './WebviewController.js';

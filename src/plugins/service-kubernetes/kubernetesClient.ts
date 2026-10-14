@@ -34,7 +34,7 @@ type KubernetesClientModule = typeof import('@kubernetes/client-node');
 /**
  * Lazily imports `@kubernetes/client-node` with defensive interop and diagnostics.
  *
- * The library is bundled into a lazily-loaded webpack chunk. If that chunk fails
+ * The library is bundled into a lazily loaded chunk. If that chunk fails
  * to resolve, or the ESM/CJS interop yields an unexpected shape, a bare
  * `await import('@kubernetes/client-node')` can surface as a confusing
  * `Cannot read properties of undefined (reading 'KubeConfig')` TypeError far from

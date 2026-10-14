@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ExecuteStep } from './ExecuteStep';
 
-const mockGetAll = jest.fn();
-const mockSave = jest.fn();
+const mockGetAll = vi.fn();
+const mockSave = vi.fn();
 
-jest.mock('../../services/connectionStorageService', () => {
-    const actual = jest.requireActual('../../services/connectionStorageService');
+vi.mock('../../services/connectionStorageService', async () => {
+    const actual = await vi.importActual<object>('../../services/connectionStorageService');
     return {
         ...actual,
         ConnectionStorageService: {
@@ -20,28 +22,28 @@ jest.mock('../../services/connectionStorageService', () => {
     };
 });
 
-jest.mock('../../tree/connections-view/connectionsViewHelpers', () => ({
+vi.mock('../../tree/connections-view/connectionsViewHelpers', () => ({
     withConnectionsViewProgress: (callback: () => Promise<unknown>) => callback(),
-    buildFullTreePath: jest.fn().mockResolvedValue('connectionsView/existing-id'),
-    buildConnectionsViewTreePath: jest.fn().mockReturnValue('connectionsView/new-id'),
-    focusAndRevealInConnectionsView: jest.fn().mockResolvedValue(undefined),
-    refreshParentInConnectionsView: jest.fn(),
+    buildFullTreePath: vi.fn().mockResolvedValue('connectionsView/existing-id'),
+    buildConnectionsViewTreePath: vi.fn().mockReturnValue('connectionsView/new-id'),
+    focusAndRevealInConnectionsView: vi.fn().mockResolvedValue(undefined),
+    refreshParentInConnectionsView: vi.fn(),
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            trace: jest.fn(),
-            warn: jest.fn(),
+            trace: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../utils/dialogs/showConfirmation', () => ({
-    showConfirmationAsInSettings: jest.fn(),
+vi.mock('../../utils/dialogs/showConfirmation', () => ({
+    showConfirmationAsInSettings: vi.fn(),
 }));
 
-jest.mock('../../plugins/service-kubernetes/portForwardMetadata', () => ({
+vi.mock('../../plugins/service-kubernetes/portForwardMetadata', () => ({
     getKubernetesPortForwardMetadata: () => undefined,
     getKubernetesPortForwardIdentity: () => undefined,
 }));
@@ -146,7 +148,7 @@ function savedSecrets(): StoredSecrets {
 
 describe('newConnection ExecuteStep — credential-free auth methods', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockSave.mockResolvedValue(undefined);
     });
 
@@ -243,7 +245,7 @@ describe('newConnection ExecuteStep — duplicate detection compares the authent
     const CLIENT_ID_B = '99999999-8888-7777-6666-555555555555';
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockSave.mockResolvedValue(undefined);
     });
 

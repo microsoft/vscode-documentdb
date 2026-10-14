@@ -220,18 +220,18 @@ export type ConnectionItem = StoredItem;
  * Slots are append-only: never reuse or reorder an assigned index. Older extension versions safely
  * ignore unknown trailing slots, which lets additive fields remain compatible with storage v3.0.
  */
-const enum SecretIndex {
-    ConnectionString = 0,
+const SecretIndex = {
+    ConnectionString: 0,
     // Native auth config fields (consolidated from legacy UserName/Password)
-    NativeAuthConnectionUser = 1,
-    NativeAuthConnectionPassword = 2,
+    NativeAuthConnectionUser: 1,
+    NativeAuthConnectionPassword: 2,
     // Entra ID auth config fields
-    EntraIdTenantId = 3,
-    EntraIdSubscriptionId = 4,
+    EntraIdTenantId: 3,
+    EntraIdSubscriptionId: 4,
     // Managed identity: the client ID of a user-assigned identity, or the system-assigned sentinel
-    ManagedIdentityClientId = 5,
-    ManagedIdentityTenantId = 6,
-}
+    ManagedIdentityClientId: 5,
+    ManagedIdentityTenantId: 6,
+} as const;
 
 /**
  * Marks a managed identity connection that uses the system-assigned identity, which has no client ID.

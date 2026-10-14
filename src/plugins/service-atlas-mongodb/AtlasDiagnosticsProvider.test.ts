@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { AtlasDiagnosticsProvider } from './AtlasDiagnosticsProvider';
 
@@ -11,14 +13,14 @@ const TLS_REJECTION = new Error(
 );
 
 function mockConnectionString(connectionString: string | undefined): void {
-    jest.spyOn(CredentialCache, 'getCredentials').mockReturnValue(
+    vi.spyOn(CredentialCache, 'getCredentials').mockReturnValue(
         connectionString ? ({ clusterId: 'c1', connectionString } as never) : undefined,
     );
 }
 
 describe('AtlasDiagnosticsProvider', () => {
     afterEach(() => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     it('explains a TLS handshake rejection on an Atlas host', async () => {
@@ -41,7 +43,7 @@ describe('AtlasDiagnosticsProvider', () => {
     });
 
     it('stays silent for an authentication failure on an Atlas host', async () => {
-        const getCredentials = jest.spyOn(CredentialCache, 'getCredentials');
+        const getCredentials = vi.spyOn(CredentialCache, 'getCredentials');
 
         await expect(
             new AtlasDiagnosticsProvider().explain({

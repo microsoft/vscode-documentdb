@@ -3,7 +3,70 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getMethodsByTarget, getRequiredServerCommands, SHELL_API_METHODS } from './methodRegistry';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { getShellApiDtsContent } from './index.js';
+import { getMethodsByTarget, getRequiredServerCommands, SHELL_API_METHODS } from './methodRegistry.js';
+
+describe('getShellApiDtsContent', () => {
+    const temporaryDirectories: string[] = [];
+
+    afterEach(() => {
+        for (const directory of temporaryDirectories.splice(0)) {
+            fs.rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    function createDeclarations(content: string): string {
+        const outputDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-shell-api-types-'));
+        temporaryDirectories.push(outputDirectory);
+        const typeDefsDirectory = path.join(outputDirectory, 'typeDefs');
+        fs.mkdirSync(typeDefsDirectory);
+        fs.writeFileSync(path.join(typeDefsDirectory, 'documentdb-shell-api.d.ts'), content);
+        return typeDefsDirectory;
+    }
+
+    it('reads the real package typeDefs file by default', () => {
+        const declarationsPath = path.resolve(import.meta.dirname, '..', 'typeDefs', 'documentdb-shell-api.d.ts');
+        const expected = fs.readFileSync(declarationsPath, 'utf8');
+
+        expect(getShellApiDtsContent()).toBe(expected);
+        expect(expected.length).toBeGreaterThan(10_000);
+        expect(expected).toContain('declare');
+    });
+
+    it('reads an explicit output-root typeDefs directory after reading the package default', () => {
+        const packageContent = getShellApiDtsContent();
+        const content = 'declare const bundledDocumentDB: string;\n';
+        const typeDefsDirectory = createDeclarations(content);
+
+        expect(getShellApiDtsContent(typeDefsDirectory)).toBe(content);
+        expect(getShellApiDtsContent()).toBe(packageContent);
+    });
+
+    it('keeps declarations from different explicit directories separate', () => {
+        const firstContent = 'declare const firstDocumentDB: string;\n';
+        const secondContent = 'declare const secondDocumentDB: number;\n';
+        const firstDirectory = createDeclarations(firstContent);
+        const secondDirectory = createDeclarations(secondContent);
+
+        expect(getShellApiDtsContent(firstDirectory)).toBe(firstContent);
+        expect(getShellApiDtsContent(secondDirectory)).toBe(secondContent);
+        expect(getShellApiDtsContent(firstDirectory)).toBe(firstContent);
+    });
+
+    it('caches the content of each resolved declarations file', () => {
+        const content = 'declare const cachedDocumentDB: string;\n';
+        const typeDefsDirectory = createDeclarations(content);
+
+        expect(getShellApiDtsContent(typeDefsDirectory)).toBe(content);
+        fs.unlinkSync(path.join(typeDefsDirectory, 'documentdb-shell-api.d.ts'));
+        expect(getShellApiDtsContent(typeDefsDirectory)).toBe(content);
+    });
+});
 
 describe('methodRegistry', () => {
     it('should have methods for all target types', () => {

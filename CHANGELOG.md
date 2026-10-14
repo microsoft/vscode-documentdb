@@ -1,5 +1,24 @@
 # Change Log
 
+## 0.11.2
+
+### Improvements
+
+- **Webview Code Splitting**: Separates webview code by panel and loads it on demand. Local Quick Start and Atlas Credentials no longer load the Monaco editor or SlickGrid dependencies. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
+- **Build and Test Tooling**: Replaces webpack with Vite for the extension host and webviews, moves unit tests from Jest to Vitest, and removes the legacy Mocha harness. Uses TypeScript 6 and ES modules for the extension and six workspace packages. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
+- **ESM Package Releases**: Makes `@documentdb-js/operator-registry`, `@documentdb-js/shell-api-types`, and `@documentdb-js/shell-runtime` 0.9.0, plus `@documentdb-js/schema-analyzer` 2.0.0, ESM-only releases requiring Node.js 22.18.0 or later. Package consumers should review the migration notes before upgrading. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
+- **Packaged Artifact Checks**: Adds CI inspection of the packaged VSIX with per-graph size reporting and installed-VSIX activation checks. Verifies npm packages in CI and the Azure DevOps npm build. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
+
+## 0.11.1
+
+### Fixes
+
+- **SRV Connections on Affected Networks**: Fixes `mongodb+srv://` connections that fail with `querySrv EBADRESP` on networks returning compressed SRV replies. An in-memory fallback uses the system's configured DNS servers across the tree, Collection View, Interactive Shell, and Query Playground. [#993](https://github.com/microsoft/vscode-documentdb/issues/993), [#997](https://github.com/microsoft/vscode-documentdb/pull/997)
+
+### Security
+
+- **Tooltip and Documentation Hardening**: Escapes database-derived index and shard-key metadata so special characters render literally, and disables command links in index tooltips, operator hovers, and completion documentation. Preserves stored names, regular documentation links, and completion behavior. [#996](https://github.com/microsoft/vscode-documentdb/pull/996)
+
 ## 0.11.0
 
 ### New Features

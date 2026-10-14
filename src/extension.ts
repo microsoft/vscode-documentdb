@@ -18,6 +18,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { registerDebugCommands } from './debug/registerDebugCommands';
 import { ClustersExtension } from './documentdb/ClustersExtension';
 import { PlaygroundDiagnostics } from './documentdb/playground/PlaygroundDiagnostics';
 import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
@@ -29,7 +30,10 @@ import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../api/src';
+import { registerGiveFeedbackCommand } from './commands/giveFeedback/giveFeedback';
 import { MigrationService } from './services/migrationServices';
+import { initializeSurveyInvitation } from './services/survey/invitation/SurveyInvitationView';
+import { initializeSurveyService } from './services/survey/SurveyService';
 import { settingsKeys } from './settingsKeys';
 
 export async function activateInternal(
@@ -37,7 +41,6 @@ export async function activateInternal(
     perfStats: { loadStartTime: number; loadEndTime: number },
 ): Promise<apiUtils.AzureExtensionApiProvider | DocumentDBExtensionApi> {
     ext.context = context;
-    ext.isBundle = !!process.env.IS_BUNDLE;
 
     // getAzureResourcesExtensionApi provides a way to get the Azure Resources extension's API V2
     // and is used to work with the tree view structure, as an improved alternative to the
@@ -74,9 +77,22 @@ export async function activateInternal(
 
         ext.secretStorage = context.secrets;
 
+        registerGiveFeedbackCommand(context);
+        try {
+            const surveyService = initializeSurveyService(context);
+            await initializeSurveyInvitation(context, surveyService);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(vscode.l10n.t('Failed to initialize the DocumentDB survey: {0}', errorMessage));
+        }
+
+        if (context.extensionMode === vscode.ExtensionMode.Development) {
+            await registerDebugCommands(context);
+        }
+
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
-        context.subscriptions.push(SchemaStore.getInstance());
+        SchemaStore.registerForDisposal(context.subscriptions, ext.outputChannel);
         await clustersSupport.activateClustersSupport();
 
         context.subscriptions.push(

@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const reportManagedIdentityFailureReason = jest.fn();
-jest.mock('../../extensionVariables', () => ({
-    ext: { outputChannel: { info: jest.fn(), error: jest.fn() } },
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const reportManagedIdentityFailureReason = vi.fn();
+vi.mock('../../extensionVariables', () => ({
+    ext: { outputChannel: { info: vi.fn(), error: vi.fn() } },
 }));
-jest.mock('./managedIdentityTelemetry', () => ({
+vi.mock('./managedIdentityTelemetry', () => ({
     reportManagedIdentityFailureReason: (...args: unknown[]) => reportManagedIdentityFailureReason(...args),
 }));
 
@@ -81,7 +83,12 @@ describe('verifyManagedIdentityTenant', () => {
             ),
         ).toThrow();
 
-        expect(reportManagedIdentityFailureReason).toHaveBeenCalledWith('tenantMismatch', CLIENT_ID, CORRELATION_ID);
+        expect(reportManagedIdentityFailureReason).toHaveBeenCalledWith(
+            'tenantMismatch',
+            CLIENT_ID,
+            CORRELATION_ID,
+            undefined,
+        );
     });
 
     it('accepts a matching tenant', () => {

@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { type MongoClient } from 'mongodb';
 
 import {
@@ -34,7 +36,7 @@ function createFakeClient(options: FakeClientOptions): {
     const adminCommands: Array<Record<string, unknown>> = [];
 
     const admin = {
-        command: jest.fn((command: Record<string, unknown>): Promise<unknown> => {
+        command: vi.fn((command: Record<string, unknown>): Promise<unknown> => {
             adminCommands.push(command);
             if (!options.adminCommand) {
                 return Promise.reject(new Error('command not supported'));
@@ -45,7 +47,7 @@ function createFakeClient(options: FakeClientOptions): {
                 return Promise.reject(error instanceof Error ? error : new Error(String(error)));
             }
         }),
-        listDatabases: jest.fn((): Promise<unknown> => {
+        listDatabases: vi.fn((): Promise<unknown> => {
             if (!options.listDatabases) {
                 return Promise.reject(new Error('listDatabases not supported'));
             }

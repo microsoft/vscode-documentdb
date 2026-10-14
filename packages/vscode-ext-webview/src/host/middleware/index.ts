@@ -16,17 +16,17 @@ export {
     type ProcedureLogEntry,
     type ProcedureLogger,
     type ProcedureStartEntry,
-} from './logging';
+} from './logging.js';
 export {
     telemetryMiddlewareBody,
     type ProcedureTelemetry,
     type TelemetryMiddlewareOptions,
     type TelemetryRunner,
-} from './telemetry';
+} from './telemetry.js';
 export {
     getInvocationSignal,
     type MiddlewareResultLike,
     type ProcedureErrorLike,
     type ProcedureInvocation,
     type ProcedureType,
-} from './types';
+} from './types.js';

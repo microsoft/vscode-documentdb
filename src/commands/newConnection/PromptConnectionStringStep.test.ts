@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES } from '../../documentdb/auth/managedIdentityConnectionString';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptConnectionStringStep } from './PromptConnectionStringStep';
 
-const mockInfo = jest.fn();
-jest.mock('../../extensionVariables', () => ({
+const mockInfo = vi.fn();
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
             info: (...args: unknown[]): void => {
@@ -20,7 +22,7 @@ jest.mock('../../extensionVariables', () => ({
 }));
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 });
 function expectPrivateInferenceOutput(): void {
     const output = JSON.stringify(mockInfo.mock.calls);
@@ -40,7 +42,7 @@ function makeContext(connectionString: string): NewConnectionWizardContext {
         telemetry: { properties: {}, measurements: {} },
         errorHandling: {},
         ui: {
-            showInputBox: jest.fn().mockResolvedValue(connectionString),
+            showInputBox: vi.fn().mockResolvedValue(connectionString),
         },
     } as unknown as NewConnectionWizardContext;
 }

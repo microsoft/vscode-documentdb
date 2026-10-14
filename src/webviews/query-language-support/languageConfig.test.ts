@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test } from 'vitest';
+
 import { buildEditorUri, EditorType, LANGUAGE_ID, parseEditorUri, URI_SCHEME } from './languageConfig';
 
 describe('languageConfig', () => {

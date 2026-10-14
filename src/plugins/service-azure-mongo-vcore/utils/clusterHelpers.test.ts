@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('vscode', () => ({
-    l10n: { t: jest.fn((message: string) => message) },
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('vscode', () => ({
+    l10n: { t: vi.fn((message: string) => message) },
 }));
 
 // The module under test imports the Azure management client factory, which drags in the whole
 // azext toolchain. Only the pure credential extraction is exercised here.
-jest.mock('../../../utils/azureClients', () => ({
-    createMongoClustersManagementClient: jest.fn(),
+vi.mock('../../../utils/azureClients', () => ({
+    createMongoClustersManagementClient: vi.fn(),
 }));
 
 import { type MongoCluster } from '@azure/arm-mongocluster';

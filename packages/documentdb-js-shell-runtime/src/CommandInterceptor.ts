@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { HelpProvider } from './HelpProvider';
-import { type ShellEvaluationResult } from './types';
+import { HelpProvider } from './HelpProvider.js';
+import { type ShellEvaluationResult } from './types.js';
 
 /**
  * Pre-eval command routing for shell input.

@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { TRPCClientError } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
-import { vscodeLink, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from './vscodeLink';
+import { vscodeLink, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from './vscodeLink.js';
 
 /**
  * Creates a mock Operation object for testing.
@@ -36,14 +38,14 @@ function createMockOp(
  */
 function createTestHarness(op: ReturnType<typeof createMockOp>) {
     const sentMessages: VsCodeLinkRequestMessage[] = [];
-    const send = jest.fn((msg: VsCodeLinkRequestMessage) => {
+    const send = vi.fn((msg: VsCodeLinkRequestMessage) => {
         sentMessages.push(msg);
     });
 
     // Capture the callback registered via onReceive so we can simulate server responses
     let receiveCallback: ((message: VsCodeLinkResponseMessage) => void) | null = null;
-    const unsubscribeFn = jest.fn();
-    const onReceive = jest.fn((cb: (message: VsCodeLinkResponseMessage) => void) => {
+    const unsubscribeFn = vi.fn();
+    const onReceive = vi.fn((cb: (message: VsCodeLinkResponseMessage) => void) => {
         receiveCallback = cb;
         return unsubscribeFn;
     });
@@ -56,9 +58,9 @@ function createTestHarness(op: ReturnType<typeof createMockOp>) {
     const observable = linkRuntime({ op, next: (() => {}) as never } as never);
 
     // Observer callbacks
-    const onNext = jest.fn();
-    const onError = jest.fn();
-    const onComplete = jest.fn();
+    const onNext = vi.fn();
+    const onError = vi.fn();
+    const onComplete = vi.fn();
 
     // Subscribe to the observable
     const subscription = observable.subscribe({
@@ -285,19 +287,19 @@ describe('vscodeLink', () => {
             const op2 = createMockOp('query', 'path.two', 'concurrent-2');
 
             const sentMessages: VsCodeLinkRequestMessage[] = [];
-            const send = jest.fn((msg: VsCodeLinkRequestMessage) => sentMessages.push(msg));
+            const send = vi.fn((msg: VsCodeLinkRequestMessage) => sentMessages.push(msg));
 
             const receiveCallbacks: Array<(message: VsCodeLinkResponseMessage) => void> = [];
-            const onReceive = jest.fn((cb: (message: VsCodeLinkResponseMessage) => void) => {
+            const onReceive = vi.fn((cb: (message: VsCodeLinkResponseMessage) => void) => {
                 receiveCallbacks.push(cb);
-                return jest.fn();
+                return vi.fn();
             });
 
             const link = vscodeLink<AnyRouter>({ send, onReceive });
             const linkRuntime = link({} as never);
 
-            const onNext1 = jest.fn();
-            const onNext2 = jest.fn();
+            const onNext1 = vi.fn();
+            const onNext2 = vi.fn();
 
             linkRuntime({ op: op1, next: (() => {}) as never } as never).subscribe({ next: onNext1 });
             linkRuntime({ op: op2, next: (() => {}) as never } as never).subscribe({ next: onNext2 });

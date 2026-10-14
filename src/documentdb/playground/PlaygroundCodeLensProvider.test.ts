@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import type * as vscode from 'vscode';
 import { PlaygroundCodeLensProvider } from './PlaygroundCodeLensProvider';
 import { PlaygroundService } from './PlaygroundService';

@@ -43,6 +43,11 @@ Sibling areas: [query-playground](../query-playground/README.md),
 
 ## Architecture (intent — code is authoritative for behavior)
 
+**Active Markdown policy:** operator hover and completion documentation is untrusted. Authored
+Markdown, HTTP(S) documentation links, existing HTML settings, and completion acceptance commands
+are preserved. Database/user field text remains escaped and untrusted. See the
+[escaping policy](../escaping/README.md); the historical PR #532 trust rationale is not the current policy.
+
 - **Operator metadata is a package, not a constant file.** Every surface reads the same registry, so
   operator documentation, categories, and links cannot drift per surface.
 - **`documentdb-query` is a custom Monaco language** that reuses the JavaScript Monarch tokenizer
@@ -56,6 +61,10 @@ Sibling areas: [query-playground](../query-playground/README.md),
 - **Schema is shared, not per-tab.** `SchemaStore` accumulates documents from the Collection View,
   the Playground, and the Shell against the same key. One surface feeding bad data degrades all of
   them.
+- **Schema teardown precedes output-channel disposal.** Activation registers the store with
+  `SchemaStore.registerForDisposal`, which keeps its logging dependency alive through final
+  statistics reporting and cache/timer cleanup. A closed-channel exception must not interrupt
+  disposal.
 - **`bson` is imported statically, never via `await import('bson')`.** `bson` ships split
   `import`/`require` export conditions, so a dynamic import loads a second copy of the package and
   every `instanceof` check in `SchemaAnalyzer` silently fails. The same applies to anything that

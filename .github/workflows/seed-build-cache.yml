@@ -4,7 +4,7 @@ name: Build Size Cache
 # or to verify that a cache entry already exists.
 #
 # Usage:
-#   - "seed":   Build the selected branch and save its VSIX + webview sizes to the cache.
+#   - "seed":   Build the selected branch and save its L1 graph sizes to the cache.
 #   - "verify": Check whether a cache entry exists for the selected branch (no build needed).
 
 on:
@@ -47,22 +47,31 @@ jobs:
             - name: 📦 Package Distributables
               run: npm run package
 
-            - name: 📐 Collect build sizes
-              id: sizes
+            - name: Inspect production VSIX (L1)
               run: |
-                  VSIX_FILE=$(find . -maxdepth 1 -name '*.vsix' | head -1)
-                  VSIX_SIZE=$(stat --format=%s "$VSIX_FILE")
-                  WEBVIEW_SIZE=$(stat --format=%s dist/views.js 2>/dev/null || echo 0)
-                  CACHE_KEY="build-sizes-${{ github.ref_name }}-${{ github.sha }}"
-                  echo "{\"vsixSize\": $VSIX_SIZE, \"webviewSize\": $WEBVIEW_SIZE}" > build-sizes.json
-                  echo "### 📐 Build Sizes for \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "| Metric | Size |" >> $GITHUB_STEP_SUMMARY
-                  echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
-                  echo "| VSIX (\`$(basename "$VSIX_FILE")\`) | $(numfmt --to=iec --suffix=B $VSIX_SIZE) |" >> $GITHUB_STEP_SUMMARY
-                  echo "| Webview bundle (\`views.js\`) | $(numfmt --to=iec --suffix=B $WEBVIEW_SIZE) |" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "Cache key: \`$CACHE_KEY\`" >> $GITHUB_STEP_SUMMARY
+                  mapfile -t packages < <(find . -maxdepth 1 -name '*.vsix' -type f)
+                  test "${#packages[@]}" -eq 1
+                  npm run verify:vsix -- "${packages[0]}" --manifest-report build/verification/l1-manifest-report.json
+
+            - name: Upload bundle verification reports
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: Bundle-reports-${{ github.run_id }}
+                  path: build/verification/reports/*.json
+                  if-no-files-found: error
+
+            - name: Upload L1 manifest report
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: L1-manifest-report-${{ github.run_id }}
+                  path: build/verification/l1-manifest-report.json
+                  if-no-files-found: warn
+
+            - name: 📐 Collect L1 graph sizes
+              if: always() && hashFiles('build/verification/l1-manifest-report.json') != ''
+              run: node build/verification/build-size-report.cjs build/verification/l1-manifest-report.json build-sizes.json
 
             - name: 💾 Save to cache
               uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -71,7 +80,7 @@ jobs:
                   key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
 
             - name: ✅ Done
-              run: echo "Cache seeded for ${{ github.ref_name }} @ ${{ github.sha }}"
+              run: echo "Cache seeded for $GITHUB_REF_NAME @ $GITHUB_SHA"
 
     verify:
         name: Verify build size cache

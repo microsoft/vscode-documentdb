@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (
             _eventName: string,
             callback: (context: {
@@ -22,24 +24,24 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 const globalStateBacking = new Map<string, unknown>();
 const secretStorageBacking = new Map<string, string>();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((m, value, index) => m.replace(`{${String(index)}}`, value), message),
         ),
     },
 }));
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string, ...args: string[]) =>
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string, ...args: string[]) =>
         args.reduce<string>((m, value, index) => m.replace(`{${String(index)}}`, value), message),
     ),
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         context: {
             extension: { id: 'test-extension' },
@@ -70,15 +72,15 @@ jest.mock('../../../extensionVariables', () => ({
             },
             onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
-        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
+        outputChannel: { trace: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
     },
 }));
 
-const mockListOrganizations = jest.fn();
-const mockListProjects = jest.fn();
-const mockListClusters = jest.fn();
+const mockListOrganizations = vi.fn();
+const mockListProjects = vi.fn();
+const mockListClusters = vi.fn();
 
-jest.mock('../api/AtlasApiClient', () => {
+vi.mock('../api/AtlasApiClient', () => {
     class AtlasApiErrorMock extends Error {
         constructor(
             message: string,
@@ -312,7 +314,7 @@ describe('AtlasDiscoveryService.listAll', () => {
         // The TTL runs on the monotonic clock, not the wall clock, so that an NTP correction or a
         // resume from sleep cannot make a stale snapshot look fresh.
         const realNow = performance.now.bind(performance);
-        const advanced = jest.spyOn(performance, 'now').mockImplementation(() => realNow() + 60_000);
+        const advanced = vi.spyOn(performance, 'now').mockImplementation(() => realNow() + 60_000);
         try {
             await service.listAll();
         } finally {
@@ -331,7 +333,7 @@ describe('AtlasDiscoveryService.listAll', () => {
         mockListProjects.mockResolvedValueOnce([]).mockResolvedValueOnce([project('p1', 'Payments')]);
 
         const registry = new AtlasCredentialSessionRegistry();
-        const refreshSession = jest.spyOn(registry, 'refreshSession');
+        const refreshSession = vi.spyOn(registry, 'refreshSession');
         const service = new AtlasDiscoveryService(registry);
 
         const before = await service.listAll();
@@ -353,7 +355,7 @@ describe('AtlasDiscoveryService.listAll', () => {
         mockListProjects.mockResolvedValue([]);
 
         const registry = new AtlasCredentialSessionRegistry();
-        const refreshSession = jest.spyOn(registry, 'refreshSession');
+        const refreshSession = vi.spyOn(registry, 'refreshSession');
         const service = new AtlasDiscoveryService(registry);
 
         await service.listAll();
@@ -419,7 +421,7 @@ describe('AtlasDiscoveryService.listAll', () => {
         });
 
         const registry = new AtlasCredentialSessionRegistry();
-        jest.spyOn(registry, 'getSession').mockResolvedValue(undefined);
+        vi.spyOn(registry, 'getSession').mockResolvedValue(undefined);
 
         const snapshot = await new AtlasDiscoveryService(registry).listAll();
 

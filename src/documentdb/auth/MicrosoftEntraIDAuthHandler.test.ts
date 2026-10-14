@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const getSessionFromVSCode = jest.fn();
-const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
-jest.mock('../../extensionVariables', () => ({
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const getSessionFromVSCode = vi.fn();
+const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
+vi.mock('../../extensionVariables', () => ({
     ext: {
         get outputChannel(): typeof mockOutputChannel {
             return mockOutputChannel;
@@ -13,7 +15,7 @@ jest.mock('../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
+vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
     getSessionFromVSCode: (...args: unknown[]) => getSessionFromVSCode(...args),
 }));
 
@@ -34,7 +36,7 @@ function buildCredentials(connectionString: string): CachedClusterCredentials {
 
 describe('MicrosoftEntraIDAuthHandler', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         getSessionFromVSCode.mockReset();
         getSessionFromVSCode.mockResolvedValue({ accessToken: 'access-token' });
     });
@@ -64,6 +66,29 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         await expect(handler.configureAuth()).rejects.toThrow('secret-token');
 
         expect(JSON.stringify(mockOutputChannel.error.mock.calls)).toContain('interactiveEntra.getSession');
+        expect(JSON.stringify(mockOutputChannel.error.mock.calls)).not.toContain('secret-token');
+    });
+
+    it('labels every auth message with the startup ID of its connection', async (): Promise<void> => {
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
+        await handler.configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension' });
+
+        const messages = mockOutputChannel.info.mock.calls.map((call) => String(call[0]));
+        expect(messages).toHaveLength(3);
+        for (const message of messages) {
+            expect(message).toMatch(/^\[Authentication\] startup=startup-id surface=extension interactiveEntra\./);
+        }
+    });
+
+    it('labels authentication failure with its startup ID without exposing secrets', async (): Promise<void> => {
+        getSessionFromVSCode.mockRejectedValueOnce(new Error('secret-token'));
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
+        await expect(
+            handler.configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension' }),
+        ).rejects.toThrow('secret-token');
+        expect(mockOutputChannel.error).toHaveBeenCalledWith(
+            expect.stringContaining('[Authentication] startup=startup-id surface=extension'),
+        );
         expect(JSON.stringify(mockOutputChannel.error.mock.calls)).not.toContain('secret-token');
     });
 

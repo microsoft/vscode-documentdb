@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type StorageItem, StorageService } from './storageService';
 
 // In-memory backing stores shared with the mocked `ext` below.
@@ -10,19 +12,19 @@ const globalStateStore = new Map<string, unknown>();
 const secretStore = new Map<string, string>();
 
 // Spy hooks so tests can count how often the underlying storage was actually read.
-const secretGet = jest.fn((key: string): Promise<string | undefined> => Promise.resolve(secretStore.get(key)));
+const secretGet = vi.fn((key: string): Promise<string | undefined> => Promise.resolve(secretStore.get(key)));
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((str: string) => str),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((str: string) => str),
 }));
 
-jest.mock('../extensionVariables', () => ({
+vi.mock('../extensionVariables', () => ({
     ext: {
         context: {
             globalState: {
-                keys: jest.fn(() => Array.from(globalStateStore.keys())),
-                get: jest.fn((key: string) => globalStateStore.get(key)),
-                update: jest.fn((key: string, value: unknown) => {
+                keys: vi.fn(() => Array.from(globalStateStore.keys())),
+                get: vi.fn((key: string) => globalStateStore.get(key)),
+                update: vi.fn((key: string, value: unknown) => {
                     if (value === undefined) {
                         globalStateStore.delete(key);
                     } else {
@@ -37,16 +39,16 @@ jest.mock('../extensionVariables', () => ({
         },
         secretStorage: {
             get: (key: string) => secretGet(key),
-            store: jest.fn((key: string, value: string) => {
+            store: vi.fn((key: string, value: string) => {
                 secretStore.set(key, value);
                 return Promise.resolve();
             }),
-            delete: jest.fn((key: string) => {
+            delete: vi.fn((key: string) => {
                 secretStore.delete(key);
                 return Promise.resolve();
             }),
             // No-op event registration; tests don't exercise cross-window invalidation.
-            onDidChange: jest.fn(() => ({ dispose: () => undefined })),
+            onDidChange: vi.fn(() => ({ dispose: () => undefined })),
         },
     },
 }));
@@ -67,7 +69,7 @@ describe('StorageImpl getItems caching', () => {
         secretGet.mockClear();
         // Use a fresh storage name per test so the singleton/cache from a prior test never leaks.
         uniqueName++;
-        jest.useRealTimers();
+        vi.useRealTimers();
     });
 
     function freshStorage(): ReturnType<typeof StorageService.get> {

@@ -150,6 +150,32 @@ extends:
                               customCommand: run package
                               workingDir: $(Build.SourcesDirectory)
 
+                        - task: PowerShell@2
+                          displayName: 'Inspect unsigned VSIX (offline)'
+                          condition: succeeded()
+                          inputs:
+                              pwsh: true
+                              targetType: 'inline'
+                              script: |
+                                  $vsixFiles = @(Get-ChildItem -Path "$(Build.SourcesDirectory)" -Filter *.vsix -File)
+                                  if ($vsixFiles.Count -ne 1) {
+                                      throw "Expected exactly one unsigned VSIX, found $($vsixFiles.Count)"
+                                  }
+                                  npm run verify:vsix -- "$($vsixFiles[0].FullName)" --manifest-report "$(Build.SourcesDirectory)/build/verification/l1-manifest-report.json"
+                                  if ($LASTEXITCODE -ne 0) {
+                                      throw "VSIX inspection failed with exit code $LASTEXITCODE"
+                                  }
+
+                        - task: CopyFiles@2
+                          displayName: '📂 Stage L1 and bundle verification reports'
+                          condition: succeededOrFailed()
+                          inputs:
+                              SourceFolder: $(Build.SourcesDirectory)/build/verification
+                              Contents: |
+                                  reports/*.json
+                                  l1-manifest-report.json
+                              TargetFolder: $(ob_outputDirectory)/build/verification
+
                         - pwsh: npm i -g @vscode/vsce --userconfig $(Build.SourcesDirectory)/.azure-pipelines/.npmrc
                           displayName: '⬇️ Install vsce'
                           condition: succeeded()
@@ -271,11 +297,3 @@ extends:
                                   !**/node_modules/**
                               TargetFolder: $(ob_outputDirectory)
                           condition: and(succeeded(), ne(variables['System.PullRequest.IsFork'], 'True'))
-
-                        - task: Npm@1
-                          displayName: '🧪 Test'
-                          inputs:
-                              command: custom
-                              customCommand: test
-                              workingDir: $(Build.SourcesDirectory)
-                          condition: succeeded()

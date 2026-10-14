@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
+
 import { Tooltip } from '@fluentui/react-components';
-import { afterEach, beforeAll, describe, expect, jest, test } from '@jest/globals';
 import { cleanupSurfaces, installTestEnvironment, renderSurface } from '../testing/renderSurface.js';
 import { FocusableBadge } from './index.js';
 
@@ -49,7 +50,7 @@ describe('FocusableBadge accessibility contract', () => {
 
 describe('FocusableBadge pass-through', () => {
     test('merges className and passes DOM events and attributes to Badge', async () => {
-        const onClick = jest.fn();
+        const onClick = vi.fn();
         const { root } = await renderSurface(
             <FocusableBadge className="consumerBadge" data-consumer="diagnostic" onClick={onClick}>
                 Index used

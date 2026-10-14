@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockClipboardWriteText = jest.fn();
-const mockShowQuickPick = jest.fn();
-const mockShowInformationMessage = jest.fn();
-const mockShowErrorMessage = jest.fn();
-const mockShowWarningMessage = jest.fn();
-const mockOpenUrl = jest.fn();
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-jest.mock('vscode', () => ({
+const mockClipboardWriteText = vi.fn();
+const mockShowQuickPick = vi.fn();
+const mockShowInformationMessage = vi.fn();
+const mockShowErrorMessage = vi.fn();
+const mockShowWarningMessage = vi.fn();
+const mockOpenUrl = vi.fn();
+
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
@@ -25,19 +27,19 @@ jest.mock('vscode', () => ({
         showWarningMessage: (...args: unknown[]) => mockShowWarningMessage(...args),
     },
     l10n: {
-        t: jest.fn((message: string) => message),
+        t: vi.fn((message: string) => message),
     },
 }));
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string) => message),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string) => message),
 }));
 
-jest.mock('../../utils/openUrl', () => ({
+vi.mock('../../utils/openUrl', () => ({
     openUrl: (...args: unknown[]) => mockOpenUrl(...args),
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         state: {
             // Pass-through wrapper used as runWithTemporaryDescription(_id, _label, callback)
@@ -59,8 +61,8 @@ interface FakeNode {
     id: string;
     contextValue: string;
     experience: { api: string };
-    getCredentials: jest.Mock;
-    getCredentialsForCopy?: jest.Mock;
+    getCredentials: Mock;
+    getCredentialsForCopy?: Mock;
 }
 
 interface FakeContext {
@@ -70,7 +72,7 @@ interface FakeContext {
     };
     valuesToMask: string[];
     ui: {
-        showQuickPick: jest.Mock;
+        showQuickPick: Mock;
     };
     errorHandling: Record<string, unknown>;
 }
@@ -89,7 +91,7 @@ function makeNode(contextValue: string, credentials: unknown): FakeNode {
         id: 'test-node',
         contextValue,
         experience: { api: 'documentdb' },
-        getCredentials: jest.fn().mockResolvedValue(credentials),
+        getCredentials: vi.fn().mockResolvedValue(credentials),
     };
 }
 
@@ -323,7 +325,7 @@ describe('copyConnectionString', () => {
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,
         });
-        node.getCredentialsForCopy = jest.fn().mockResolvedValue({
+        node.getCredentialsForCopy = vi.fn().mockResolvedValue({
             connectionString: 'mongodb://127.0.0.1:10260/?directConnection=true',
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,

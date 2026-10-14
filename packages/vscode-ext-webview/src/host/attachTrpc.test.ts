@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { type WebviewPanel } from 'vscode';
-import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { initWebviewTrpc } from '../shared/initWebviewTrpc';
-import { TypedEventSink } from '../shared/TypedEventSink';
-import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
-import { attachTrpc } from './attachTrpc';
-import { type ProcedureLogEntry, type ProcedureLogger, type ProcedureStartEntry } from './middleware/logging';
+import { type BaseRouterContext } from '../shared/BaseRouterContext.js';
+import { initWebviewTrpc } from '../shared/initWebviewTrpc.js';
+import { TypedEventSink } from '../shared/TypedEventSink.js';
+import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol.js';
+import { attachTrpc } from './attachTrpc.js';
+import { type ProcedureLogEntry, type ProcedureLogger, type ProcedureStartEntry } from './middleware/logging.js';
 
 type PostedMessage = { id: string; result?: unknown; error?: { message: string }; complete?: boolean };
 

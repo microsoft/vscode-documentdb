@@ -59,6 +59,8 @@ import {
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
 import { SchemaStore } from './SchemaStore';
+import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
+import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
@@ -157,6 +159,7 @@ type ClientStartupStage =
     | 'stage05InitializingApis';
 
 interface ClientStartup {
+    readonly id: string;
     readonly startedAt: number;
     readonly costTimings: ConnectionStartupTimings;
     readonly telemetry: ITelemetryContext;
@@ -196,6 +199,7 @@ export class ClustersClient {
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
+    private _srvResolution?: SrvResolutionSummary;
 
     /** In-memory cache for listDatabases results. */
     private _databasesCache: DatabaseItemModel[] | null = null;
@@ -203,8 +207,8 @@ export class ClustersClient {
     private _collectionsCache = new Map<string, CollectionItemModel[]>();
 
     /**
-     * Correlation ID linking the `connect`, `connect.staticmetadata`, and `connect.getmetadata`
-     * telemetry events for the same connection attempt. Generated once per `initClient` call.
+     * This client's startup ID, also published as `startupCorrelationId`. Links `connect.startup`,
+     * `connect.staticmetadata`, `connect.getmetadata` and SRV events. Generated once per `initClient` call.
      */
     public connectionCorrelationId?: string;
 
@@ -247,7 +251,8 @@ export class ClustersClient {
     // }
 
     private async initClient(abortSignal?: AbortSignal): Promise<void> {
-        this.connectionCorrelationId = randomUUID();
+        const startupId = randomUUID();
+        this.connectionCorrelationId = startupId;
         let originalFailure: { error: unknown } | undefined;
 
         try {
@@ -255,10 +260,12 @@ export class ClustersClient {
                 context.errorHandling.suppressDisplay = true;
                 context.errorHandling.rethrow = true;
                 context.telemetry.maskEntireErrorMessage = true;
-                context.telemetry.properties.connectionCorrelationId = this.connectionCorrelationId;
+                context.telemetry.properties.connectionCorrelationId = startupId;
+                context.telemetry.properties.startupCorrelationId = startupId;
                 context.telemetry.properties.surface = 'extension';
                 const startedAt = Date.now();
                 const startup: ClientStartup = {
+                    id: startupId,
                     startedAt,
                     costTimings: new ConnectionStartupTimings(),
                     telemetry: context.telemetry,
@@ -313,7 +320,7 @@ export class ClustersClient {
         Object.assign(startup.telemetry.measurements, costTimingsMs);
         const level = outcome === 'failed' ? 'error' : 'trace';
         ext.outputChannel?.[level](
-            `[ClustersClient] startup=${this.connectionCorrelationId} ${outcome} surface=extension auth=${startup.telemetry.properties.authMethod ?? 'unknown'} lastStage=${startup.stage} elapsedMs=${String(Date.now() - startup.startedAt)} stageDurationsMs=${JSON.stringify(startup.stageDurationsMs)} costTimingsMs=${JSON.stringify(costTimingsMs)}`,
+            `[ClustersClient] startup=${startup.id} ${outcome} surface=extension auth=${startup.telemetry.properties.authMethod ?? 'unknown'} lastStage=${startup.stage} elapsedMs=${String(Date.now() - startup.startedAt)} stageDurationsMs=${JSON.stringify(startup.stageDurationsMs)} costTimingsMs=${JSON.stringify(costTimingsMs)}`,
         );
     }
 
@@ -348,7 +355,10 @@ export class ClustersClient {
 
         // Configure auth and get connection options
         this.advanceClientStartup(startup, 'stage02ConfiguringAuth');
-        const { connectionString, options } = await authHandler.configureAuth(startup.costTimings);
+        const { connectionString, options } = await authHandler.configureAuth(startup.costTimings, {
+            startupCorrelationId: startup.id,
+            surface: 'extension',
+        });
 
         this.advanceClientStartup(startup, 'stage03PreparingClient');
         const hosts = getHostsFromConnectionString(connectionString);
@@ -359,19 +369,38 @@ export class ClustersClient {
 
         // Emit static metadata (domain info) BEFORE the connection attempt.
         // This ensures destination telemetry is available even when connections fail.
-        const correlationId = this.connectionCorrelationId;
+        const correlationId = startup.id;
         void callWithTelemetryAndErrorHandling('connect.staticmetadata', async (context) => {
             const { getDomainMetadata } = await import('./utils/getClusterMetadata');
             const domainMetadata = getDomainMetadata(hosts);
             context.telemetry.properties = {
+                startupCorrelationId: correlationId,
                 connectionCorrelationId: correlationId,
                 ...context.telemetry.properties,
                 ...domainMetadata,
             };
         });
 
-        // Connect with the configured options
-        await this.connect(startup, connectionString, options, credentials.emulatorConfiguration, abortSignal);
+        const prepared = await prepareDriverConnectionString({
+            connectionString,
+            options,
+            surface: 'extension',
+            correlation: {
+                startupCorrelationId: startup.id,
+                connectionCorrelationId: startup.id,
+            },
+            abortSignal,
+            startupTelemetry: startup.telemetry,
+        });
+        this._srvResolution = prepared.summary;
+        await this.connect(
+            startup,
+            prepared.connectionString,
+            prepared.options,
+            credentials.emulatorConfiguration,
+            abortSignal,
+            connectionString,
+        );
 
         // Start metadata collection and store the promise
         this._clusterMetadataPromise = getClusterMetadata(this._mongoClient, hosts);
@@ -381,6 +410,7 @@ export class ClustersClient {
             const metadata: ClusterMetadata = await this._clusterMetadataPromise!;
             context.telemetry.properties = {
                 authmethod: authMethod,
+                startupCorrelationId: correlationId,
                 connectionCorrelationId: correlationId,
                 ...context.telemetry.properties,
                 ...metadata,
@@ -394,13 +424,16 @@ export class ClustersClient {
         options: MongoClientOptions,
         emulatorConfiguration?: EmulatorConfiguration,
         abortSignal?: AbortSignal,
+        originalConnectionString: string = connectionString,
     ): Promise<void> {
         // Create the client instance first so we hold a reference during connection.
         // This allows callers to abort via abortSignal by closing the underlying client.
         this._mongoClient = new MongoClient(connectionString, options);
 
         if (abortSignal?.aborted) {
-            ext.outputChannel.debug('Connection aborted before connecting (already aborted signal).');
+            ext.outputChannel.debug(
+                `[ClustersClient] startup=${startup.id} canceled before connecting (already aborted signal) surface=extension`,
+            );
             await this._mongoClient.close();
             throw new UserCancelledError('abortConnection');
         }
@@ -420,7 +453,9 @@ export class ClustersClient {
                 // connect() already resolved — do not close the connected client.
                 return;
             }
-            ext.outputChannel.debug('AbortSignal fired — closing MongoClient to interrupt connection handshake.');
+            ext.outputChannel.debug(
+                `[ClustersClient] startup=${startup.id} abort requested; closing client to interrupt connection handshake surface=extension`,
+            );
             void this._mongoClient.close().catch(() => {
                 // Ignore close errors during abort cleanup
             });
@@ -449,7 +484,7 @@ export class ClustersClient {
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
             if (abortSignal?.aborted) {
-                ext.outputChannel.debug('Connection attempt was aborted by the user.');
+                ext.outputChannel.debug(`[ClustersClient] startup=${startup.id} canceled by user surface=extension`);
                 throw new UserCancelledError('abortConnection');
             }
 
@@ -460,7 +495,10 @@ export class ClustersClient {
             // ECONNREFUSED/self-signed failure show "local instance" troubleshooting copy.
             const isLocalish =
                 !!emulatorConfiguration?.isEmulator ||
-                !!resolveAllowInvalidCertificates(emulatorConfiguration?.disableEmulatorSecurity, connectionString);
+                !!resolveAllowInvalidCertificates(
+                    emulatorConfiguration?.disableEmulatorSecurity,
+                    originalConnectionString,
+                );
             if (isLocalish && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
@@ -585,6 +623,10 @@ export class ClustersClient {
      */
     public static getExistingClient(clusterId: string): ClustersClient | undefined {
         return ClustersClient._clients.get(clusterId);
+    }
+
+    public static getSrvResolution(clusterId: string): SrvResolutionSummary | undefined {
+        return ClustersClient._clients.get(clusterId)?._srvResolution;
     }
 
     public static async deleteClient(clusterId: string): Promise<void> {

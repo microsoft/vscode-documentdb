@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash } from '@microsoft/vscode-processutils';
 import { Writable } from 'stream';
@@ -50,7 +52,7 @@ function evidence(
 
 describe('DockerReadinessService', () => {
     it('classifies a Linux endpoint EACCES and returns the copyable group command', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             switch (options.probe) {
                 case 'cliVersion':
                     return evidence('cliVersion', { stdout: 'Docker version 27.5.1' });
@@ -103,7 +105,7 @@ describe('DockerReadinessService', () => {
     });
 
     it('refines only a unix-socket permission failure with socket group facts', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             switch (options.probe) {
                 case 'cliVersion':
                     return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
@@ -121,7 +123,7 @@ describe('DockerReadinessService', () => {
                     });
             }
         });
-        const probeSocketGroup = jest.fn().mockResolvedValue({
+        const probeSocketGroup = vi.fn().mockResolvedValue({
             socketGid: 998,
             processHasSocketGroup: false,
             userIsGroupMember: true,
@@ -151,13 +153,13 @@ describe('DockerReadinessService', () => {
     });
 
     it('does not probe socket groups for a named pipe permission failure', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', { exitCode: 1, stderr: 'access denied' });
             }
             return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
         });
-        const probeSocketGroup = jest.fn();
+        const probeSocketGroup = vi.fn();
         const service = new DockerReadinessService({
             client: createClient(),
             shellProvider: new Bash(),
@@ -179,7 +181,7 @@ describe('DockerReadinessService', () => {
 
     it('runs version and info once for concurrent callers', async () => {
         const resolvers = new Map<DockerProbeEvidence['probe'], (value: DockerProbeEvidence) => void>();
-        const runProbe = jest.fn(
+        const runProbe = vi.fn(
             (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
                 new Promise((resolve) => resolvers.set(options.probe, resolve)),
         );
@@ -207,7 +209,7 @@ describe('DockerReadinessService', () => {
     });
 
     it('treats a zero-exit info body with ServerErrors as not ready', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             switch (options.probe) {
                 case 'cliVersion':
                     return evidence('cliVersion', { stdout: 'Docker version 27.5.1' });
@@ -242,7 +244,7 @@ describe('DockerReadinessService', () => {
 
     it('cancels both probes under one deadline and returns an indeterminate timeout', async () => {
         const tokens: vscode.CancellationToken[] = [];
-        const runProbe = jest.fn(
+        const runProbe = vi.fn(
             (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
                 new Promise((resolve) => {
                     if (options.cancellationToken) {
@@ -290,7 +292,7 @@ describe('DockerReadinessService', () => {
                 return { dispose: () => undefined };
             },
         } as vscode.CancellationToken;
-        const runProbe = jest.fn(
+        const runProbe = vi.fn(
             (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
                 new Promise((resolve) => {
                     options.cancellationToken?.onCancellationRequested(() => {
@@ -315,7 +317,7 @@ describe('DockerReadinessService', () => {
     });
 
     it('uses a memoized result unless force refresh is requested', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', {
                     stdout: JSON.stringify({ OSType: 'linux', Architecture: 'aarch64', ServerErrors: [] }),
@@ -340,7 +342,7 @@ describe('DockerReadinessService', () => {
     });
 
     it('returns unsupportedHost without spawning Docker on an unsupported host', async () => {
-        const runProbe = jest.fn();
+        const runProbe = vi.fn();
         const service = new DockerReadinessService({
             client: createClient(),
             shellProvider: new Bash(),
@@ -358,13 +360,13 @@ describe('DockerReadinessService', () => {
     });
 
     it('returns cliMissing without resolving contexts or probing an endpoint', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', { spawnErrorCode: 'ENOENT' });
             }
             return evidence(options.probe, { spawnErrorCode: 'ENOENT' });
         });
-        const probeEndpoint = jest.fn();
+        const probeEndpoint = vi.fn();
         const service = new DockerReadinessService({
             client: createClient(),
             shellProvider: new Bash(),
@@ -381,11 +383,11 @@ describe('DockerReadinessService', () => {
 
     // Probes run through a shell, so a missing binary is the shell's "command not found", not ENOENT.
     it('returns cliMissing when the shell cannot find docker', async () => {
-        const runProbe = jest.fn(
+        const runProbe = vi.fn(
             async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
                 evidence(options.probe, { exitCode: 127, stderr: '/bin/sh: docker: command not found\n' }),
         );
-        const probeEndpoint = jest.fn();
+        const probeEndpoint = vi.fn();
         const service = new DockerReadinessService({
             client: createClient(),
             shellProvider: new Bash(),
@@ -404,7 +406,7 @@ describe('DockerReadinessService', () => {
     });
 
     it('reports the CLI as installed when the info process spawned after a failed version probe', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'cliVersion') {
                 return evidence('cliVersion', { exitCode: 1 });
             }
@@ -429,8 +431,8 @@ describe('DockerReadinessService', () => {
     });
 
     it('classifies an explicitly selected context that is absent', async () => {
-        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', { exitCode: 1 });
             }
@@ -463,8 +465,8 @@ describe('DockerReadinessService', () => {
     });
 
     it('does not claim a selected context is absent when the context probe failed', async () => {
-        const appendDiagnostic = jest.fn();
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const appendDiagnostic = vi.fn();
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence(options.probe, { exitCode: 1, stderr: 'raw daemon error' });
             }
@@ -501,8 +503,8 @@ describe('DockerReadinessService', () => {
     });
 
     it('persists live Docker Desktop facts after a successful info probe', async () => {
-        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', {
                     stdout: JSON.stringify({
@@ -542,10 +544,10 @@ describe('DockerReadinessService', () => {
     });
 
     it('logs a docker info summary instead of piping its JSON to the channel', async () => {
-        const appendDiagnostic = jest.fn();
+        const appendDiagnostic = vi.fn();
         const stdOutPipe = new Writable({ write: (_chunk, _encoding, callback): void => callback() });
         const pipedProbes: string[] = [];
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.stdOutPipe) {
                 pipedProbes.push(options.probe);
             }
@@ -586,8 +588,8 @@ describe('DockerReadinessService', () => {
         ],
         ['a suppressed poll logs no summary', true, []],
     ])('%s', async (_name, suppressCommandEcho, expected) => {
-        const appendDiagnostic = jest.fn();
-        const runProbe = jest.fn(
+        const appendDiagnostic = vi.fn();
+        const runProbe = vi.fn(
             async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
                 options.probe === 'info'
                     ? evidence('info', { stdout: JSON.stringify({ ServerErrors: [] }) })
@@ -608,8 +610,8 @@ describe('DockerReadinessService', () => {
     });
 
     it('logs docker info server errors as diagnostics on failure', async () => {
-        const appendDiagnostic = jest.fn();
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const appendDiagnostic = vi.fn();
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', {
                     exitCode: 1,
@@ -637,7 +639,7 @@ describe('DockerReadinessService', () => {
     });
 
     it('diagnoses a reachable Windows-container daemon', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', {
                     stdout: JSON.stringify({
@@ -674,7 +676,7 @@ describe('DockerReadinessService', () => {
             hostEnvironment: 'linux',
             recordedAtMs: 500,
         };
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', { exitCode: 1 });
             }
@@ -711,13 +713,13 @@ describe('DockerReadinessService', () => {
     });
 
     it('returns the provider capability selected from host launch evidence', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', { exitCode: 1 });
             }
             return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
         });
-        const getStartCapability = jest.fn().mockResolvedValue({
+        const getStartCapability = vi.fn().mockResolvedValue({
             provider: 'dockerDesktop',
             providerEvidence: 'installedApplication',
             startAction: 'startDockerDesktopWindows',
@@ -793,8 +795,8 @@ describe('DockerReadinessService', () => {
             endpoint: 'unix:///var/run/docker.sock',
         },
     ] as const)('discards $name provider memory', async ({ memory, now, platform, remoteName, endpoint }) => {
-        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', { exitCode: 1 });
             }
@@ -829,7 +831,7 @@ describe('DockerReadinessService', () => {
     });
 
     it('preserves remembered state during a forced refresh', async () => {
-        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
         const service = new DockerReadinessService({
             client: createClient(),
             shellProvider: new Bash(),
@@ -845,8 +847,8 @@ describe('DockerReadinessService', () => {
     });
 
     it('clears remembered state before an explicitly reset forced refresh', async () => {
-        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', {
                     stdout: JSON.stringify({ OSType: 'linux', OperatingSystem: 'Ubuntu', ServerErrors: [] }),
@@ -871,7 +873,7 @@ describe('DockerReadinessService', () => {
 
     it('deduplicates concurrent forced refreshes behind an existing check', async () => {
         const initialResolvers: Array<(value: DockerProbeEvidence) => void> = [];
-        const runProbe = jest.fn((options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn((options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (runProbe.mock.calls.length <= 2) {
                 return new Promise((resolve) => initialResolvers.push(resolve));
             }
@@ -910,7 +912,7 @@ describe('DockerReadinessService', () => {
     });
 
     it.each(['notAvailable', 'failed'] as const)('clears remembered state after a %s launch', async (result) => {
-        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
         const service = new DockerReadinessService({ writeProviderMemory });
 
         await service.recordLaunchResult(result);
@@ -919,10 +921,10 @@ describe('DockerReadinessService', () => {
     });
 
     it('suppresses successful poll transcripts and retains failing probe transcripts', async () => {
-        const onCommand = jest.fn();
+        const onCommand = vi.fn();
         const stdout: string[] = [];
         const stderr: string[] = [];
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             options.onCommand?.(`docker ${options.probe}`);
             if (options.probe === 'info') {
                 return evidence('info', { exitCode: 1, stdout: 'failed stdout', stderr: 'failed stderr' });

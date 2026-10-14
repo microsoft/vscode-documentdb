@@ -3,15 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { GoBackError, UserCancelledError, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
+import type * as VerificationUtils from '../verificationUtils';
 import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
 import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
 
 // Mock ConnectionStorageService
-const mockIsNameDuplicateInParent = jest.fn();
-const mockGetChildren = jest.fn();
-jest.mock('../../../services/connectionStorageService', () => ({
+const mockIsNameDuplicateInParent = vi.fn();
+const mockGetChildren = vi.fn();
+vi.mock('../../../services/connectionStorageService', () => ({
     ConnectionStorageService: {
         isNameDuplicateInParent: (...args: unknown[]) => mockIsNameDuplicateInParent(...args),
         getChildren: (...args: unknown[]) => mockGetChildren(...args),
@@ -28,11 +31,10 @@ jest.mock('../../../services/connectionStorageService', () => ({
 
 // Mock TaskService
 // Mock TaskService - use findConflictingTasksForConnections for simpler control
-const mockFindConflictingTasksForConnections = jest.fn<
-    Array<{ taskId: string; taskName: string; taskType: string }>,
-    [string[]]
+const mockFindConflictingTasksForConnections = vi.fn<
+    (...args: [string[]]) => Array<{ taskId: string; taskName: string; taskType: string }>
 >(() => []);
-jest.mock('../../../services/taskService/taskService', () => ({
+vi.mock('../../../services/taskService/taskService', () => ({
     TaskService: {
         findConflictingTasksForConnections: (connectionIds: string[]) =>
             mockFindConflictingTasksForConnections(connectionIds),
@@ -40,11 +42,11 @@ jest.mock('../../../services/taskService/taskService', () => ({
 }));
 
 // Mock enumerateConnectionsInItems to return controlled data
-const mockEnumerateConnectionsInItems = jest.fn();
+const mockEnumerateConnectionsInItems = vi.fn();
 
 // Mock verificationUtils - only mock the enumeration, let findConflictingTasks use real logic
-const mockLogTaskConflicts = jest.fn();
-jest.mock('../verificationUtils', () => ({
+const mockLogTaskConflicts = vi.fn();
+vi.mock('../verificationUtils', async () => ({
     VerificationCompleteError: class VerificationCompleteError extends Error {
         constructor() {
             super('Conflict verification completed successfully');
@@ -52,15 +54,16 @@ jest.mock('../verificationUtils', () => ({
         }
     },
     // findConflictingTasks delegates to TaskService, which is mocked above
-    findConflictingTasks: jest.requireActual('../verificationUtils').findConflictingTasks,
+    findConflictingTasks: (await vi.importActual<typeof VerificationUtils>('../verificationUtils'))
+        .findConflictingTasks,
     enumerateConnectionsInItems: (...args: unknown[]) => mockEnumerateConnectionsInItems(...args),
     logTaskConflicts: (...args: unknown[]) => mockLogTaskConflicts(...args),
 }));
 
 // Mock extensionVariables
-const mockAppendLog = jest.fn();
-const mockShow = jest.fn();
-jest.mock('../../../extensionVariables', () => ({
+const mockAppendLog = vi.fn();
+const mockShow = vi.fn();
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
             get appendLog() {
@@ -74,8 +77,8 @@ jest.mock('../../../extensionVariables', () => ({
 }));
 
 // Mock vscode l10n
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((str: string) => str),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((str: string) => str),
 }));
 
 // Helper to create a mock connection item
@@ -122,12 +125,12 @@ function createMockContext(overrides: Partial<MoveItemsWizardContext> = {}): Mov
         errorHandling: { issueProperties: {} },
         valuesToMask: [],
         ui: {
-            showQuickPick: jest.fn(),
-            showInputBox: jest.fn(),
-            showWarningMessage: jest.fn(),
-            onDidFinishPrompt: jest.fn(),
-            showOpenDialog: jest.fn(),
-            showWorkspaceFolderPick: jest.fn(),
+            showQuickPick: vi.fn(),
+            showInputBox: vi.fn(),
+            showWarningMessage: vi.fn(),
+            onDidFinishPrompt: vi.fn(),
+            showOpenDialog: vi.fn(),
+            showWorkspaceFolderPick: vi.fn(),
         },
         itemsToMove: overrides.itemsToMove ?? [createMockConnectionItem()],
         connectionType: overrides.connectionType ?? ConnectionType.Clusters,
@@ -144,7 +147,7 @@ describe('VerifyNoConflictsStep', () => {
     let step: VerifyNoConflictsStep;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         step = new VerifyNoConflictsStep();
         mockIsNameDuplicateInParent.mockReset();
         mockFindConflictingTasksForConnections.mockReturnValue([]);
@@ -175,7 +178,7 @@ describe('VerifyNoConflictsStep', () => {
 
             // showQuickPick should throw VerificationCompleteError internally, which is caught
             // and causes prompt to return normally
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     // Trigger the async items function which will throw VerificationCompleteError
                     await itemsPromise;
@@ -207,7 +210,7 @@ describe('VerifyNoConflictsStep', () => {
 
             mockIsNameDuplicateInParent.mockResolvedValue(false);
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     await itemsPromise;
                     return { data: 'back' };
@@ -237,7 +240,7 @@ describe('VerifyNoConflictsStep', () => {
             mockIsNameDuplicateInParent.mockResolvedValue(true);
 
             // User selects 'back'
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     const items = await itemsPromise;
                     expect(items).toHaveLength(3); // 'show-output', 'back' and 'exit' options
@@ -259,7 +262,7 @@ describe('VerifyNoConflictsStep', () => {
 
             mockIsNameDuplicateInParent.mockResolvedValue(true);
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     await itemsPromise;
                     return { data: 'exit' };
@@ -281,7 +284,7 @@ describe('VerifyNoConflictsStep', () => {
             // Both items conflict
             mockIsNameDuplicateInParent.mockResolvedValue(true);
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     await itemsPromise;
                     return { data: 'exit' };
@@ -317,7 +320,7 @@ describe('VerifyNoConflictsStep', () => {
                 .mockResolvedValueOnce(false) // No Conflict
                 .mockResolvedValueOnce(true); // Conflict C
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     await itemsPromise;
                     return { data: 'exit' };
@@ -347,7 +350,7 @@ describe('VerifyNoConflictsStep', () => {
 
             mockIsNameDuplicateInParent.mockResolvedValue(false);
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     await itemsPromise;
                     return { data: 'back' };
@@ -370,7 +373,7 @@ describe('VerifyNoConflictsStep', () => {
                 itemsToMove: [],
             });
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     await itemsPromise;
                     return { data: 'back' };
@@ -392,7 +395,7 @@ describe('VerifyNoConflictsStep', () => {
             mockIsNameDuplicateInParent.mockResolvedValue(true);
 
             let callCount = 0;
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     await itemsPromise;
                     callCount++;
@@ -424,7 +427,7 @@ describe('VerifyNoConflictsStep', () => {
             ]);
 
             // Mock showQuickPick to await the items promise and return exit
-            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+            const mockShowQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
                 await itemsPromise;
                 return { data: 'exit' };
             });
@@ -455,7 +458,7 @@ describe('VerifyNoConflictsStep', () => {
             ]);
 
             // Mock showQuickPick to await the items promise and return exit
-            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+            const mockShowQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
                 await itemsPromise;
                 return { data: 'exit' };
             });
@@ -479,7 +482,7 @@ describe('VerifyNoConflictsStep', () => {
             mockFindConflictingTasksForConnections.mockReturnValue([]);
             mockIsNameDuplicateInParent.mockResolvedValue(false);
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(
+            (context.ui.showQuickPick as Mock).mockImplementation(
                 async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     await itemsPromise;
                     return { data: 'back' };
@@ -504,7 +507,7 @@ describe('VerifyNoConflictsStep', () => {
             ]);
 
             // Mock showQuickPick to await the items promise and return exit
-            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+            const mockShowQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
                 await itemsPromise;
                 return { data: 'exit' };
             });
@@ -529,7 +532,7 @@ describe('VerifyNoConflictsStep', () => {
             ]);
 
             let capturedOptions: IAzureQuickPickItem<string>[] = [];
-            const mockShowQuickPick = jest
+            const mockShowQuickPick = vi
                 .fn()
                 .mockImplementation(async (itemsPromise: Promise<IAzureQuickPickItem<string>[]>) => {
                     capturedOptions = await itemsPromise;
@@ -562,7 +565,7 @@ describe('VerifyNoConflictsStep', () => {
             ]);
 
             // Mock showQuickPick to await the items promise and return exit
-            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+            const mockShowQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
                 await itemsPromise;
                 return { data: 'exit' };
             });
@@ -595,7 +598,7 @@ describe('VerifyNoConflictsStep', () => {
             ]);
 
             let callCount = 0;
-            const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+            const mockShowQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
                 await itemsPromise;
                 callCount++;
                 if (callCount === 1) {

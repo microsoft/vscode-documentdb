@@ -227,6 +227,13 @@ first.
 runtime, and so does this package. Your webview CSP needs `style-src 'unsafe-inline'`, which is
 what Fluent already required of you.
 
+**Unit tests under Node.js.** The package imports named exports from `@fluentui/react-components`
+and `@fluentui/react-icons`, as webview bundlers need for tree-shaking. Plain Node.js cannot load
+those imports: it resolves `@fluentui/react-components` to its CommonJS build, whose named exports
+it cannot detect, and the ESM build of `@fluentui/react-icons` uses extensionless imports. Let your
+test runner transform the package instead of handing it to Node, for example Vitest's
+`server.deps.inline: ['@microsoft/vscode-ext-webview-fluentui']`.
+
 ### Component guidance: Skeleton
 
 The one place the theming cannot decide for you, where the choice of Fluent prop determines

@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockHandleKubeconfigFileDrop = jest.fn();
-const mockShowErrorMessage = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-jest.mock('vscode', () => ({
+const mockHandleKubeconfigFileDrop = vi.fn();
+const mockShowErrorMessage = vi.fn();
+
+vi.mock('vscode', () => ({
     Uri: {
         parse: (value: string, _strict?: boolean) => {
             // Minimal URI parser that mimics the shape DiscoveryViewDragAndDropController
@@ -61,17 +63,17 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLine: jest.fn(),
-            trace: jest.fn(),
-            warn: jest.fn(),
+            appendLine: vi.fn(),
+            trace: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../plugins/service-kubernetes/commands/handleKubeconfigFileDrop', () => ({
+vi.mock('../../plugins/service-kubernetes/commands/handleKubeconfigFileDrop', () => ({
     handleKubeconfigFileDrop: (...args: unknown[]) => mockHandleKubeconfigFileDrop(...args),
 }));
 

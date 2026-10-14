@@ -3,19 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as verificationUtils from '../verificationUtils';
+
 // Track deleted items
 const deletedItems: string[] = [];
 const mockChildren = new Map<string, ConnectionItem[]>();
 
 // Create mock functions that can be controlled by tests
-const mockGetChildren = jest.fn();
-const mockEnumerateConnectionsInFolder = jest.fn();
+const mockGetChildren = vi.fn();
+const mockEnumerateConnectionsInFolder = vi.fn();
 
 // Mock ConnectionStorageService
-jest.mock('../../../services/connectionStorageService', () => ({
+vi.mock('../../../services/connectionStorageService', () => ({
     ConnectionStorageService: {
         getChildren: (...args: unknown[]) => mockGetChildren(...args),
-        delete: jest.fn(async (_connectionType: string, itemId: string) => {
+        delete: vi.fn(async (_connectionType: string, itemId: string) => {
             deletedItems.push(itemId);
         }),
     },
@@ -30,11 +33,10 @@ jest.mock('../../../services/connectionStorageService', () => ({
 }));
 
 // Mock TaskService - use findConflictingTasksForConnections for simpler control
-const mockFindConflictingTasksForConnections = jest.fn<
-    Array<{ taskId: string; taskName: string; taskType: string }>,
-    [string[]]
+const mockFindConflictingTasksForConnections = vi.fn<
+    (connectionIds: string[]) => Array<{ taskId: string; taskName: string; taskType: string }>
 >(() => []);
-jest.mock('../../../services/taskService/taskService', () => ({
+vi.mock('../../../services/taskService/taskService', () => ({
     TaskService: {
         findConflictingTasksForConnections: (connectionIds: string[]) =>
             mockFindConflictingTasksForConnections(connectionIds),
@@ -42,7 +44,7 @@ jest.mock('../../../services/taskService/taskService', () => ({
 }));
 
 // Mock verificationUtils - only mock the folder enumeration, let findConflictingTasks use real logic
-jest.mock('../verificationUtils', () => ({
+vi.mock('../verificationUtils', async () => ({
     VerificationCompleteError: class VerificationCompleteError extends Error {
         constructor() {
             super('Conflict verification completed successfully');
@@ -50,18 +52,20 @@ jest.mock('../verificationUtils', () => ({
         }
     },
     // findConflictingTasks delegates to TaskService, which is mocked above
-    findConflictingTasks: jest.requireActual('../verificationUtils').findConflictingTasks,
+    findConflictingTasks: (await vi.importActual<typeof verificationUtils>('../verificationUtils'))
+        .findConflictingTasks,
     enumerateConnectionsInFolder: (...args: unknown[]) => mockEnumerateConnectionsInFolder(...args),
-    logTaskConflicts: jest.fn(),
+    logTaskConflicts: vi.fn(),
 }));
 
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ConnectionType, ItemType, type ConnectionItem } from '../../../services/connectionStorageService';
 import { type DeleteFolderWizardContext } from './DeleteFolderWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 import { VerifyNoConflictsStep } from './VerifyNoConflictsStep';
 
 // Mock vscode-azext-utils
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class {
         // Empty base class mock
     },
@@ -77,36 +81,38 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 }));
 
 // Mock extensionVariables
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         state: {
-            showDeleting: jest.fn(async (_id: string, callback: () => Promise<void>) => {
+            showDeleting: vi.fn(async (_id: string, callback: () => Promise<void>) => {
                 await callback();
             }),
         },
         outputChannel: {
-            appendLog: jest.fn(),
-            show: jest.fn(),
+            appendLog: vi.fn(),
+            show: vi.fn(),
         },
     },
 }));
 
 // Mock connectionsViewHelpers
-jest.mock('../../../tree/connections-view/connectionsViewHelpers', () => ({
-    refreshParentInConnectionsView: jest.fn(),
-    withConnectionsViewProgress: jest.fn(async (callback: () => Promise<void>) => {
+vi.mock('../../../tree/connections-view/connectionsViewHelpers', () => ({
+    refreshParentInConnectionsView: vi.fn(),
+    withConnectionsViewProgress: vi.fn(async (callback: () => Promise<void>) => {
         await callback();
     }),
 }));
 
 // Mock vscode l10n
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((str: string) => str),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((str: string) => str),
 }));
 
 // Mock vscode
-jest.mock('vscode', () => ({
-    ThemeIcon: jest.fn().mockImplementation((name: string) => ({ id: name })),
+vi.mock('vscode', () => ({
+    ThemeIcon: vi.fn().mockImplementation(function (name: string) {
+        return { id: name };
+    }),
 }));
 
 // Helper to create a mock connection item (storage item)
@@ -155,12 +161,12 @@ function createMockContext(
         errorHandling: { issueProperties: {} },
         valuesToMask: [],
         ui: {
-            showWarningMessage: jest.fn(),
-            showQuickPick: jest.fn(),
-            showInputBox: jest.fn(),
-            onDidFinishPrompt: jest.fn(),
-            showOpenDialog: jest.fn(),
-            showWorkspaceFolderPick: jest.fn(),
+            showWarningMessage: vi.fn(),
+            showQuickPick: vi.fn(),
+            showInputBox: vi.fn(),
+            onDidFinishPrompt: vi.fn(),
+            showOpenDialog: vi.fn(),
+            showWorkspaceFolderPick: vi.fn(),
         },
         folderItem: {
             id: folderId,
@@ -182,7 +188,7 @@ const mockFolderConnections = new Map<string, string[]>();
 
 describe('deleteFolder', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         deletedItems.length = 0;
         mockChildren.clear();
         mockFolderConnections.clear();
@@ -374,7 +380,7 @@ describe('deleteFolder', () => {
                 ]);
 
                 // Mock showQuickPick to await the items promise and return the exit action
-                const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                const mockShowQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
                     await itemsPromise;
                     return { data: 'exit' };
                 });
@@ -384,9 +390,6 @@ describe('deleteFolder', () => {
                 } as unknown as typeof context.ui;
 
                 // The step should throw UserCancelledError when conflicts are found
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { UserCancelledError } = require('@microsoft/vscode-azext-utils');
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 await expect(verifyStep.prompt(context)).rejects.toThrow(UserCancelledError);
 
                 // Verify the conflicting task was detected
@@ -406,7 +409,7 @@ describe('deleteFolder', () => {
 
                 // Mock showQuickPick - the verifyNoTaskConflicts will throw VerificationCompleteError
                 // when no conflicts, and showQuickPick should propagate this error
-                const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                const mockShowQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
                     await itemsPromise;
                 });
                 context.ui = {
@@ -447,7 +450,7 @@ describe('deleteFolder', () => {
                 ]);
 
                 // Mock showQuickPick to await the items promise and return the exit action
-                const mockShowQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+                const mockShowQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
                     await itemsPromise;
                     return { data: 'exit' };
                 });
@@ -456,9 +459,6 @@ describe('deleteFolder', () => {
                     showQuickPick: mockShowQuickPick,
                 } as unknown as typeof context.ui;
 
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { UserCancelledError } = require('@microsoft/vscode-azext-utils');
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 await expect(verifyStep.prompt(context)).rejects.toThrow(UserCancelledError);
 
                 // Should detect the conflict with the nested connection
