@@ -79,7 +79,7 @@ test('A draft PR runs static checks and unit tests only, and says why every othe
     assert.ok(body.includes('| Layer | Result | Ran or skipped because |'));
     assert.ok(
         body.includes(
-            '**Full run:** add the `ci:full-requested` label to run every layer once on the current commit. No full run yet.',
+            '**Full run:** add the `ci:full-requested` label to run every layer once on the current commit.<br>No full run yet.',
         ),
     );
     assert.ok(body.includes('| Prettier formatting | ✅ Passed | Nothing to fix |'));
@@ -268,7 +268,7 @@ test('A full run that finished after a newer push updates only the last full run
     assert.deepEqual(parseLastFull(updated), { sha: headSha, result: 'failed' });
     assert.ok(updated.includes('Last full run: ❌ failed on `abcdef0`.'));
     assert.equal(
-        updated.replace(/<!-- last-full: .* -->\n/, '').replace(/ Last full run: .*$/m, ' No full run yet.'),
+        updated.replace(/<!-- last-full: .* -->\n/, '').replace(/<br>Last full run: .*$/m, '<br>No full run yet.'),
         newer,
     );
     const again = withLastFull(updated, { sha: 'feedface'.repeat(5), result: 'passed' });
@@ -292,7 +292,7 @@ test('A run for an older commit posts only a full run record, and nothing else',
             MARKER,
             `<!-- last-full: ${headSha} passed by=octocat run=${fullInput.runUrl} -->`,
             '',
-            '**Full run:** add the `ci:full-requested` label to run every layer once on the current commit. ' +
+            '**Full run:** add the `ci:full-requested` label to run every layer once on the current commit.<br>' +
                 `Last full run: ✅ passed on \`abcdef0\`, requested by @octocat, [run](${fullInput.runUrl}).`,
         ].join('\n'),
     );
