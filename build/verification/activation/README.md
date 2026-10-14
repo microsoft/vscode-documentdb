@@ -106,8 +106,6 @@ and real backend integrations remain outside L3.
 ```sh
 npm run measure:activation -- path/to/production.vsix
 npm run measure:activation -- path/to/production.vsix --runs 5 --json timing.json
-# Offline tests include the timing parsers:
-node --test build/verification/activation/*.test.cjs
 ```
 
 The [timing entry point](./timing.cjs) defaults to five full L3 launches. Each
