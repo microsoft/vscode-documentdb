@@ -4459,26 +4459,27 @@ Stage 0 must also be made.
       changes, L0 or L1 failing, full, plan failing): all as expected.
     - **Pending:** the real runs on #880 (G8.5), and Stage 9 task 2.
   - **Merge of `main` (added 2026-10-14).** After the push of `2d9d0033`, #880 conflicted with
-    `main`, so GitHub ran no `pull_request` CI. A manual fast-tier run on the branch (run 38544963882) passed: plan, L0 and the `Build & Package` gate succeeded and the rest was
+    `main`, so GitHub ran no `pull_request` CI. A manual fast-tier run on the branch passed
+    (run `38544963882`): plan, L0 and the `Build & Package` gate succeeded and the rest was
     skipped as intended. The operator authorized the merge ("we can't move forward without
     merging main into it").
-    - **Merged in `4db5cf14`** (Claude Opus 5.5 subagent): `main` at `4752a67f` (v0.11.1, 54
-      commits since `1380b758`), with a merge commit. Main's lockfiles had 0 versions inside the
-      7-day quarantine (coordinator's scan before the merge). `jest.config.js` stays deleted;
-      main's srv-resolver Jest project became a Vitest project. `package-lock.json` took the
-      branch side and was regenerated with Node 22.18.0 and npm 10.9.3; the result adds exactly
-      main's new entries (the workspace, `dns-packet` 5.6.1, `@types/dns-packet` 5.6.5,
+    - **Merged in `4db5cf14`** (Claude Opus 5.5 subagent): `main` at `4752a67f` (v0.11.1, with
+      54 commits since `1380b758`), with a merge commit. Main's lockfiles had no versions inside
+      the 7-day quarantine (coordinator's scan before the merge). `jest.config.js` stays
+      deleted; main's srv-resolver Jest project became a Vitest project. `package-lock.json`
+      took the branch side and was regenerated with Node 22.18.0 and npm 10.9.3; the result adds
+      exactly main's new entries (the workspace, `dns-packet` 5.6.1, `@types/dns-packet` 5.6.5,
       `@leichtgewicht/ip-codec` 2.0.5). The only code conflict, `WorkerSessionManager.ts`, keeps
-      the branch's worker path and adds main's abort handling. The release notes keep main's
-      0.11.1 and the branch's 0.11.2.
+      the branch's worker path and adds main's abort handling. The release notes keep both
+      main's v0.11.1 and the branch's v0.11.2.
     - **Tests:** the deleted codemod was restored into scratch from history and run on the 23
       test files main added or changed; 7 needed manual ESM fixes (`vi.importActual`, a shared
       `node:dns` mock for the spies, `createRequire` in the differential test, one `vi.waitFor`).
       No `TDD:` suite changed.
-    - **Checks:** `npm ci` left the lockfile unchanged; build; lint; `l10n:check`; Vitest **305
-      files, 4,769 passed, 1 skipped** (298 / 4,612 before); `test:verification`; `npm run
-package`, `verify:vsix` (the SRV code adds `dns-packet` and srv-resolver to the host graph,
-      no findings) and `prove:vsix` 24 PASS; fresh-dependency scan 0 fresh.
+    - **Checks:** `npm ci` left the lockfile unchanged; build; lint; `l10n:check`; Vitest with
+      **305 files, 4,769 passed, 1 skipped** (298 and 4,612 before); `test:verification`;
+      `npm run package`, then `verify:vsix` (the SRV code adds `dns-packet` and srv-resolver to
+      the host graph, no findings) and `prove:vsix` with 24 PASS; fresh-dependency scan clean.
   - **srv-resolver parity (added 2026-10-14).** The new package was born ESM, so it needs no
     ESM migration notes (operator: "that one was never published"), and it is published by
     `npm-publish-documentdb-js.yml`, not ADO (operator). The merge added it to that workflow's
