@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as path from 'path';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 const repoRoot = __dirname;
@@ -11,15 +12,11 @@ const repoRoot = __dirname;
 // Some dependencies (the ESM build of @microsoft/vscode-azext-utils) reference source maps they do
 // not ship, and Vite warns once per inlined file. Vitest replaces `customLogger`, so this plugin
 // wraps the resolved logger instead. It drops only that warning, and only for node_modules files.
-// Typed structurally: under the repo's node10 resolution TypeScript cannot load `vite`'s own types.
-interface WarningLogger {
-    warn(message: string, options?: object): void;
-}
-const quietMissingDependencySourceMaps = {
+const quietMissingDependencySourceMaps: Plugin = {
     name: 'documentdb:quiet-missing-dependency-source-maps',
-    configResolved(config: { logger: WarningLogger }): void {
-        const warn = config.logger.warn.bind(config.logger) as WarningLogger['warn'];
-        config.logger.warn = (message: string, options?: object): void => {
+    configResolved(config): void {
+        const warn = config.logger.warn.bind(config.logger);
+        config.logger.warn = (message, options): void => {
             if (message.startsWith('Failed to load source map for') && message.includes('/node_modules/')) {
                 return;
             }
