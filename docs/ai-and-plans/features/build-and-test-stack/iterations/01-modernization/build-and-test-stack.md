@@ -4499,6 +4499,29 @@ Stage 0 must also be made.
     "Why" column is now "Ran or skipped because" (operator: "the why is confusing as it suggests
     it talks about 'why the result value'"), with the reasons reworded to fit. Code quality rows
     that need no fix say "Nothing to fix". `ci-report` tests 26/26.
+  - **Parallel CI and descriptive names (decision 0014, 2026-10-14).** The first standard run on
+    #880 (run `38555738729`) took 12.5 minutes of wall time for about 15 runner-minutes, with L0
+    alone at 7.1 minutes and Vitest capped at one worker. The operator compared it with PR #963
+    (about 4 minutes, everything parallel) and chose the hybrid structure and the names in
+    decision 0014. From #963 the operator took over now: the every-declared-command check, job
+    timeouts and the read-only default token ("yes, take now"), plus, as recommended, the Docker
+    test fixes, the taskkill and `cmd.exe` quoting tests and the Dependabot entry; the database
+    integration tests, the API report check and Windows unit tests in ADO are scheduled in
+    future-work. The report gets no L2 row (operator: "leave out"); its artifacts line is now
+    always visible (operator request).
+    - **Ported in `0f80ef28` and `b4587569`** (GPT-5.6 Sol Fast subagent): the Docker kill test
+      fix and the quoting tests; local suite 361/361 three times at 4 workers, full suite
+      4,773 passed at 100% workers in repeated runs.
+    - **Implemented** (Claude Opus 5.5 subagent), one commit each: `a00bc22f` composite setup
+      action with a `node_modules` cache and the Dependabot entry; `5eb2fec3` static checks,
+      unit tests and packaging in parallel, Vitest at 100% workers in CI; `bcfa359c` names;
+      `4ba33087` timeouts and read-only default token; `67b3efbc` visible artifacts line;
+      `15a481e6` every declared command must be registered after activation (all 91 are
+      registered eagerly, so the exclusion list is empty); `1a9b37b2` docs. Gate truth table 14
+      cases as expected; `test:verification` 135 Node and 79 browser tests; Vitest 4,773 passed
+      (49 s with `CI=true`, 81 s locally at 25%); build, lint, Prettier. The activation checks
+      could not run locally (no `libatk` for VS Code); the next CI run is their first real run.
+    - **Pending:** the live run on #880 at the next push, including the first cache miss and hit.
 - **Not in this stage:** retiring the L2 production harness. Decision 0002 retires it into E2E;
   Stage 9 task 6 still uses it on the signed VSIX.
 - **Operator gate G8.5:** the operator accepts the W1 verification on #880 and the restructured
