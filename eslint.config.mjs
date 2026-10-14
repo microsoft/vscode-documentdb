@@ -5,10 +5,8 @@
 
 import js from '@eslint/js';
 import importPlugin from 'eslint-plugin-import';
-import jest from 'eslint-plugin-jest';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import licenseHeader from 'eslint-plugin-license-header';
-import mocha from 'eslint-plugin-mocha';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
@@ -25,11 +23,7 @@ export default ts.config(
             '**/dist',
             '**/out',
             '**/node_modules',
-            '**/__mocks__/**/*',
             '**/*.d.ts',
-            '**/jest.config.js',
-            '**/jest.config.cjs',
-            '**/main.js',
         ],
     },
     {
@@ -54,7 +48,9 @@ export default ts.config(
             'import/consistent-type-specifier-style': ['error', 'prefer-inline'],
             'import/no-internal-modules': [
                 'error',
-                { allow: ['antlr4ts/**', 'yaml/types', '**/components/**/*.scss'] },
+                {
+                    allow: ['antlr4ts/**', 'yaml/types', '**/components/**/*.scss'],
+                },
             ],
             'no-case-declarations': 'error',
             'no-constant-condition': 'error',
@@ -70,7 +66,14 @@ export default ts.config(
                                 "Do not import nonNull helpers from '@microsoft/vscode-azext-utils'. Use the local 'src/utils/nonNull' instead.",
                         },
                     ],
-                    patterns: ['**/*/extension.bundle'],
+                },
+            ],
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: "ImportDeclaration[source.value='vscode'] > ImportDefaultSpecifier",
+                    message:
+                        "The extension host runs as an ES module, and VS Code's `vscode` module has no default export. Use `import * as vscode from 'vscode'`.",
                 },
             ],
             'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
@@ -176,21 +179,19 @@ export default ts.config(
             'react/prop-types': 'off', // TypeScript handles prop validation
         },
     },
-    // Jest unit tests in src/
+    // Vitest unit tests in src/ (they import their test API from 'vitest'; no test globals)
     {
-        files: ['src/**/*.test.ts', '**/__mocks__/**/*.js'],
+        files: ['src/**/*.test.ts'],
 
-        extends: [ts.configs.recommendedTypeChecked, jest.configs['flat/recommended']],
+        extends: [ts.configs.recommendedTypeChecked],
 
         plugins: {
             '@typescript-eslint': ts.plugin,
-            jest: jest,
         },
 
         languageOptions: {
             globals: {
                 ...globals.node,
-                ...globals.jest,
             },
 
             parser: ts.parser,
@@ -218,61 +219,6 @@ export default ts.config(
             '@typescript-eslint/unbound-method': 'off',
             'no-dupe-else-if': 'off',
             'no-empty': 'off',
-            'jest/expect-expect': 'off',
-            'jest/no-conditional-expect': 'off',
-        },
-    },
-    // Mocha integration tests in test/
-    {
-        files: ['test/**/*.ts', 'test/**/*.test.ts'],
-
-        extends: [ts.configs.recommendedTypeChecked],
-
-        plugins: {
-            '@typescript-eslint': ts.plugin,
-            mocha,
-        },
-
-        languageOptions: {
-            globals: {
-                ...globals.node,
-                ...globals.mocha,
-            },
-
-            parser: ts.parser,
-            ecmaVersion: 2023,
-            sourceType: 'module',
-
-            parserOptions: {
-                projectService: true,
-                tsconfigRootDir: import.meta.dirname,
-            },
-        },
-
-        rules: {
-            ...mocha.configs.recommended.rules,
-            '@typescript-eslint/no-empty-function': 'off',
-            '@typescript-eslint/no-explicit-any': 'off',
-            '@typescript-eslint/no-floating-promises': 'off',
-            '@typescript-eslint/no-misused-promises': 'off',
-            '@typescript-eslint/no-non-null-assertion': 'off',
-            '@typescript-eslint/no-unsafe-assignment': 'off',
-            '@typescript-eslint/no-unsafe-member-access': 'off',
-            '@typescript-eslint/no-unsafe-return': 'off',
-            '@typescript-eslint/no-unsafe-call': 'off',
-            '@typescript-eslint/no-unsafe-argument': 'off',
-            '@typescript-eslint/require-await': 'off',
-            'no-dupe-else-if': 'off',
-            'no-empty': 'off',
-            'no-restricted-imports': 'off',
-            'mocha/no-mocha-arrows': 'off',
-            'mocha/consistent-spacing-between-blocks': 'off',
-            'mocha/max-top-level-suites': 'off',
-            'mocha/handle-done-callback': 'off',
-            'mocha/no-setup-in-describe': 'off',
-            'mocha/no-identical-title': 'off',
-            'mocha/no-exports': 'off',
-            'mocha/no-async-suite': 'off',
         },
     },
     // The fluentui package keeps its hooks in .ts files — they contain no JSX — so the repo's

@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { Links } from '../../constants';
 import { SrvDnsDiagnosticsProvider } from './SrvDnsDiagnosticsProvider';
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(),
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 

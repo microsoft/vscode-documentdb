@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 function interpolate(message: string, ...args: unknown[]): string {
     return message.replace(/\{(\d+)\}/g, (_match, index: string) => String(args[Number(index)]));
 }
 
-const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
-jest.mock('../../../extensionVariables', () => ({
+const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         get outputChannel(): typeof mockOutputChannel {
             return mockOutputChannel;
@@ -17,7 +19,7 @@ jest.mock('../../../extensionVariables', () => ({
 }));
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 });
 function expectPrivateIdentityOutput(): void {
     const output = JSON.stringify([mockOutputChannel.info.mock.calls, mockOutputChannel.error.mock.calls]);
@@ -27,19 +29,19 @@ function expectPrivateIdentityOutput(): void {
 
 afterEach(expectPrivateIdentityOutput);
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     QuickPickItemKind: { Separator: -1, Default: 0 },
-    l10n: { t: jest.fn(interpolate) },
+    l10n: { t: vi.fn(interpolate) },
 }));
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn(interpolate),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn(interpolate),
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class AzureWizardPromptStep {},
     GoBackError: class GoBackError extends Error {},
 }));
@@ -305,7 +307,7 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
     it('traces cancellation without logging error messages', async () => {
         const context = makeContext({
             ui: {
-                showQuickPick: jest.fn().mockRejectedValue(new Error('secret-token')),
+                showQuickPick: vi.fn().mockRejectedValue(new Error('secret-token')),
             } as unknown as AuthenticateWizardContext['ui'],
         });
 
@@ -319,7 +321,7 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
         const context = makeContext({
             authenticationMethodPrompted: true,
             ui: {
-                showQuickPick: jest.fn().mockResolvedValue({ choice: 'back' }),
+                showQuickPick: vi.fn().mockResolvedValue({ choice: 'back' }),
             } as unknown as AuthenticateWizardContext['ui'],
         });
 
@@ -330,7 +332,7 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },
             ui: {
-                showQuickPick: jest.fn().mockResolvedValue({ choice: 'account' }),
+                showQuickPick: vi.fn().mockResolvedValue({ choice: 'account' }),
             } as unknown as AuthenticateWizardContext['ui'],
         });
 
@@ -354,7 +356,7 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },
             ui: {
-                showQuickPick: jest.fn().mockResolvedValue({ choice: 'systemAssigned' }),
+                showQuickPick: vi.fn().mockResolvedValue({ choice: 'systemAssigned' }),
             } as unknown as AuthenticateWizardContext['ui'],
         });
 
@@ -371,7 +373,7 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
     });
 
     it('selects another authentication family and offers a local return to the identity choices', async () => {
-        const showQuickPick = jest
+        const showQuickPick = vi
             .fn()
             .mockResolvedValueOnce({ choice: 'authMethod' })
             .mockResolvedValueOnce({ authMethod: AuthMethodId.NoAuth });
@@ -399,7 +401,7 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
     });
 
     it('returns from the nested picker to the Microsoft Entra ID identity choices', async () => {
-        const showQuickPick = jest
+        const showQuickPick = vi
             .fn()
             .mockResolvedValueOnce({ choice: 'authMethod' })
             .mockResolvedValueOnce({ returnToIdentityChoices: true })
@@ -415,7 +417,7 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
     });
 
     it('keeps the nested picker Back arrow within the identity step', async () => {
-        const showQuickPick = jest
+        const showQuickPick = vi
             .fn()
             .mockResolvedValueOnce({ choice: 'authMethod' })
             .mockRejectedValueOnce(new GoBackError())
@@ -436,10 +438,10 @@ describe('SelectEntraTokenSourceStep shared telemetry', () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },
             ui: {
-                showQuickPick: jest
+                showQuickPick: vi
                     .fn()
                     .mockResolvedValue({ choice, clientId: choice === 'clientId' ? CLIENT_ID : undefined }),
-                showInputBox: jest.fn().mockResolvedValue(CLIENT_ID),
+                showInputBox: vi.fn().mockResolvedValue(CLIENT_ID),
             } as unknown as AuthenticateWizardContext['ui'],
         });
 
@@ -460,7 +462,7 @@ describe('SelectEntraTokenSourceStep shared telemetry', () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },
             ui: {
-                showQuickPick: jest
+                showQuickPick: vi
                     .fn()
                     .mockResolvedValueOnce({ choice: 'clientId', clientId: CLIENT_ID })
                     .mockResolvedValueOnce({ choice: 'account' }),
@@ -511,8 +513,8 @@ describe('SelectEntraTokenSourceStep shared telemetry', () => {
         const error = new Error('private cancellation detail');
         const context = makeContext({
             ui: {
-                showQuickPick: jest.fn().mockResolvedValue({ choice: 'manual' }),
-                showInputBox: jest.fn().mockRejectedValue(error),
+                showQuickPick: vi.fn().mockResolvedValue({ choice: 'manual' }),
+                showInputBox: vi.fn().mockRejectedValue(error),
             } as unknown as AuthenticateWizardContext['ui'],
         });
         context.telemetry.properties.managedIdentityKind = 'user';

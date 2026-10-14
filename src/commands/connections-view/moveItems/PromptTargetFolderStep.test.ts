@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import {
     ConnectionType,
     FOLDER_PLACEHOLDER_CONNECTION_STRING,
@@ -13,7 +15,7 @@ import { type MoveItemsWizardContext } from './MoveItemsWizardContext';
 import { PromptTargetFolderStep } from './PromptTargetFolderStep';
 
 // Mock vscode-azext-utils FIRST (before imports that use it)
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class {
         // Empty base class mock
     },
@@ -26,9 +28,9 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 }));
 
 // Mock ConnectionStorageService
-const mockGetAllItems = jest.fn();
-const mockGetChildren = jest.fn();
-jest.mock('../../../services/connectionStorageService', () => ({
+const mockGetAllItems = vi.fn();
+const mockGetChildren = vi.fn();
+vi.mock('../../../services/connectionStorageService', () => ({
     ConnectionStorageService: {
         getAllItems: (...args: unknown[]) => mockGetAllItems(...args),
         getChildren: (...args: unknown[]) => mockGetChildren(...args),
@@ -41,12 +43,16 @@ jest.mock('../../../services/connectionStorageService', () => ({
         Connection: 'connection',
         Folder: 'folder',
     },
+    // Preserve the undefined value Jest returned for this omitted mock export.
+    FOLDER_PLACEHOLDER_CONNECTION_STRING: undefined,
 }));
 
 // Mock vscode
-const mockShowWarningMessage = jest.fn();
-jest.mock('vscode', () => ({
-    ThemeIcon: jest.fn().mockImplementation((name) => ({ id: name })),
+const mockShowWarningMessage = vi.fn();
+vi.mock('vscode', () => ({
+    ThemeIcon: vi.fn().mockImplementation(function (name: string) {
+        return { id: name };
+    }),
     window: {
         get showWarningMessage() {
             return mockShowWarningMessage;
@@ -55,8 +61,8 @@ jest.mock('vscode', () => ({
 }));
 
 // Mock vscode l10n
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((str: string) => str),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((str: string) => str),
 }));
 
 // Helper to create a mock folder item
@@ -101,12 +107,12 @@ function createMockContext(overrides: Partial<MoveItemsWizardContext> = {}): Mov
         errorHandling: { issueProperties: {} },
         valuesToMask: [],
         ui: {
-            showQuickPick: jest.fn(),
-            showInputBox: jest.fn(),
-            showWarningMessage: jest.fn(),
-            onDidFinishPrompt: jest.fn(),
-            showOpenDialog: jest.fn(),
-            showWorkspaceFolderPick: jest.fn(),
+            showQuickPick: vi.fn(),
+            showInputBox: vi.fn(),
+            showWarningMessage: vi.fn(),
+            onDidFinishPrompt: vi.fn(),
+            showOpenDialog: vi.fn(),
+            showWorkspaceFolderPick: vi.fn(),
         },
         itemsToMove: overrides.itemsToMove ?? [createMockConnection({ id: 'item-1', name: 'Item 1' })],
         connectionType: overrides.connectionType ?? ConnectionType.Clusters,
@@ -123,7 +129,7 @@ describe('PromptTargetFolderStep', () => {
     let step: PromptTargetFolderStep;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         step = new PromptTargetFolderStep();
         mockGetAllItems.mockReset();
         mockGetChildren.mockReset();
@@ -163,7 +169,7 @@ describe('PromptTargetFolderStep', () => {
 
             // Mock QuickPick to capture the items
             let capturedItems: unknown[] = [];
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (items: unknown[]) => {
+            (context.ui.showQuickPick as Mock).mockImplementation(async (items: unknown[]) => {
                 capturedItems = items;
                 return { label: 'Target', data: targetFolder };
             });
@@ -196,7 +202,7 @@ describe('PromptTargetFolderStep', () => {
             });
 
             let capturedItems: unknown[] = [];
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (items: unknown[]) => {
+            (context.ui.showQuickPick as Mock).mockImplementation(async (items: unknown[]) => {
                 capturedItems = items;
                 return { label: '/', data: undefined };
             });
@@ -224,7 +230,7 @@ describe('PromptTargetFolderStep', () => {
             });
 
             let capturedItems: unknown[] = [];
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (items: unknown[]) => {
+            (context.ui.showQuickPick as Mock).mockImplementation(async (items: unknown[]) => {
                 capturedItems = items;
                 return { label: '/ Folder 1', data: folder };
             });
@@ -252,7 +258,7 @@ describe('PromptTargetFolderStep', () => {
             });
 
             let capturedItems: unknown[] = [];
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (items: unknown[]) => {
+            (context.ui.showQuickPick as Mock).mockImplementation(async (items: unknown[]) => {
                 capturedItems = items;
                 return { label: '/ Target Folder', data: targetFolder };
             });
@@ -282,7 +288,7 @@ describe('PromptTargetFolderStep', () => {
             });
 
             let capturedItems: unknown[] = [];
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(async (items: unknown[]) => {
+            (context.ui.showQuickPick as Mock).mockImplementation(async (items: unknown[]) => {
                 capturedItems = items;
                 return { label: '/ Other Folder', data: otherFolder };
             });
@@ -333,7 +339,7 @@ describe('PromptTargetFolderStep', () => {
                 itemsToMove: [createMockConnection({ id: 'conn-1', name: 'Conn', parentId: 'some-parent' })],
             });
 
-            (context.ui.showQuickPick as jest.Mock).mockImplementation(async () => {
+            (context.ui.showQuickPick as Mock).mockImplementation(async () => {
                 return { label: '/ Cached Folder', data: cachedFolder };
             });
 
@@ -355,7 +361,7 @@ describe('PromptTargetFolderStep', () => {
                 itemsToMove: [createMockConnection({ id: 'conn-1', name: 'Conn', parentId: 'some-parent' })],
             });
 
-            (context.ui.showQuickPick as jest.Mock).mockResolvedValue({
+            (context.ui.showQuickPick as Mock).mockResolvedValue({
                 label: '/ Target Folder',
                 data: targetFolder,
             });
@@ -376,7 +382,7 @@ describe('PromptTargetFolderStep', () => {
                 itemsToMove: [createMockConnection({ id: 'conn-1', name: 'Conn', parentId: 'folder-1' })],
             });
 
-            (context.ui.showQuickPick as jest.Mock).mockResolvedValue({
+            (context.ui.showQuickPick as Mock).mockResolvedValue({
                 label: '/',
                 data: undefined,
             });

@@ -3,39 +3,45 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import { type MongoClient } from 'mongodb';
-import { DocumentDBServiceProvider } from './DocumentDBServiceProvider';
-import { DocumentDBShellRuntime, normalizeDirectCommands } from './DocumentDBShellRuntime';
+import { DocumentDBServiceProvider } from './DocumentDBServiceProvider.js';
+import { DocumentDBShellRuntime, normalizeDirectCommands } from './DocumentDBShellRuntime.js';
 
 // Mock @mongosh modules to avoid needing a real database connection
-jest.mock('@mongosh/shell-api', () => ({
-    ShellInstanceState: jest.fn().mockImplementation(() => ({
-        displayBatchSizeFromDBQuery: 50,
-        setCtx: jest.fn(),
-        setEvaluationListener: jest.fn(),
-        close: jest.fn().mockResolvedValue(undefined),
-    })),
+vi.mock('@mongosh/shell-api', () => ({
+    ShellInstanceState: vi.fn().mockImplementation(function () {
+        return {
+            displayBatchSizeFromDBQuery: 50,
+            setCtx: vi.fn(),
+            setEvaluationListener: vi.fn(),
+            close: vi.fn().mockResolvedValue(undefined),
+        };
+    }),
 }));
 
-jest.mock('@mongosh/shell-evaluator', () => ({
-    ShellEvaluator: jest.fn().mockImplementation(() => ({
-        customEval: jest.fn().mockResolvedValue({
-            type: 'Document',
-            printable: { _id: 1 },
-        }),
-    })),
+vi.mock('@mongosh/shell-evaluator', () => ({
+    ShellEvaluator: vi.fn().mockImplementation(function () {
+        return {
+            customEval: vi.fn().mockResolvedValue({
+                type: 'Document',
+                printable: { _id: 1 },
+            }),
+        };
+    }),
 }));
 
-jest.mock('./DocumentDBServiceProvider', () => ({
+vi.mock('./DocumentDBServiceProvider.js', () => ({
     DocumentDBServiceProvider: {
-        createForDocumentDB: jest.fn().mockReturnValue({
+        createForDocumentDB: vi.fn().mockReturnValue({
             serviceProvider: {},
-            bus: { on: jest.fn(), emit: jest.fn() },
+            bus: { on: vi.fn(), emit: vi.fn() },
         }),
     },
 }));
 
-const mockCreateForDocumentDB = DocumentDBServiceProvider.createForDocumentDB as jest.MockedFunction<
+const mockCreateForDocumentDB = DocumentDBServiceProvider.createForDocumentDB as MockedFunction<
     typeof DocumentDBServiceProvider.createForDocumentDB
 >;
 
@@ -44,7 +50,7 @@ describe('DocumentDBShellRuntime', () => {
 
     beforeEach(() => {
         mockClient = {} as MongoClient;
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     describe('persistent: false (default)', () => {

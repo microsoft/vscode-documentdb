@@ -82,13 +82,12 @@ export function openAppWebview<TConfiguration>(
         trpc,
         context: options.context,
         config: options.config,
-        sourceLayout: WEBVIEW_CONFIG.bundle,
+        sourceLayout: {
+            bundled: WEBVIEW_CONFIG.bundle.bundled,
+            dev: WEBVIEW_CONFIG.bundle.bundled,
+        },
         devServerHost: WEBVIEW_CONFIG.devServerHost,
-        // `ext.isBundle` (from the webpack `IS_BUNDLE` define) selects the bundle
-        // vs tsc layout. It is distinct from the extension mode: the dev server
-        // serves the bundled asset name even in development, so a bundled dev
-        // build must resolve the `bundled` layout to avoid a 404 on the script.
-        isBundled: !!ext.isBundle,
+        isBundled: true,
         // R766-S04: record RPC concurrency (peak / average in-flight operations)
         // so the per-operation listener design can be judged on evidence.
         logger: rpcConcurrencyLogger,

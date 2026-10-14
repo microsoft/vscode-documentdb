@@ -3,29 +3,31 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockGetSource = jest.fn();
-const mockLoadConfiguredKubeConfig = jest.fn();
-const mockCreateCoreApi = jest.fn();
-const mockStartTunnel = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-jest.mock('vscode', () => ({
+const mockGetSource = vi.fn();
+const mockLoadConfiguredKubeConfig = vi.fn();
+const mockCreateCoreApi = vi.fn();
+const mockStartTunnel = vi.fn();
+
+vi.mock('vscode', () => ({
     l10n: {
-        t: jest.fn((message: string, ...values: string[]) =>
+        t: vi.fn((message: string, ...values: string[]) =>
             values.reduce<string>((acc, v, i) => acc.replace(`{${String(i)}}`, v), message),
         ),
     },
 }));
 
-jest.mock('./sources/sourceStore', () => ({
+vi.mock('./sources/sourceStore', () => ({
     getSource: (...args: unknown[]) => mockGetSource(...(args as [string])),
 }));
 
-jest.mock('./kubernetesClient', () => ({
+vi.mock('./kubernetesClient', () => ({
     loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
     createCoreApi: (...args: unknown[]) => mockCreateCoreApi(...args),
 }));
 
-jest.mock('./portForwardTunnel', () => ({
+vi.mock('./portForwardTunnel', () => ({
     PortForwardTunnelManager: {
         getInstance: () => ({
             startTunnel: mockStartTunnel,

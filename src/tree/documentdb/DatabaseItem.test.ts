@@ -3,22 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { COLLECTION_COUNT_LIMIT } from '../../constants';
 import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    createContextValue: jest.fn((values: string[]) => values.join(';')),
-    createGenericElement: jest.fn((opts: Record<string, unknown>) => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    createContextValue: vi.fn((values: string[]) => values.join(';')),
+    createGenericElement: vi.fn((opts: Record<string, unknown>) => ({
         id: opts.id,
         label: opts.label,
     })),
 }));
 
-const notifyChildrenChangedMock = jest.fn();
-jest.mock('../../extensionVariables', () => ({
+const notifyChildrenChangedMock = vi.fn();
+vi.mock('../../extensionVariables', () => ({
     ext: {
         state: {
             notifyChildrenChanged: (...args: unknown[]) => notifyChildrenChangedMock(...args),
@@ -26,13 +28,13 @@ jest.mock('../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../../utils/accumulatingTelemetry', () => ({
-    meterSilentCatch: jest.fn(),
+vi.mock('../../utils/accumulatingTelemetry', () => ({
+    meterSilentCatch: vi.fn(),
 }));
 
-jest.mock('../../documentdb/ClustersClient', () => ({
+vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
-        getClient: jest.fn(),
+        getClient: vi.fn(),
     },
 }));
 
@@ -50,19 +52,19 @@ describe('DatabaseItem - async collection count loading', () => {
         { name: 'products' },
     ] as CollectionItemModel[];
 
-    let listCollectionsMock: jest.Mock;
-    let countCollectionsMock: jest.Mock;
-    let estimateDocumentCountMock: jest.Mock;
+    let listCollectionsMock: Mock;
+    let countCollectionsMock: Mock;
+    let estimateDocumentCountMock: Mock;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         notifyChildrenChangedMock.mockReset();
 
-        listCollectionsMock = jest.fn().mockResolvedValue([...sampleCollections]);
-        countCollectionsMock = jest.fn().mockResolvedValue({ count: 3, hasMore: false });
-        estimateDocumentCountMock = jest.fn().mockResolvedValue(0);
+        listCollectionsMock = vi.fn().mockResolvedValue([...sampleCollections]);
+        countCollectionsMock = vi.fn().mockResolvedValue({ count: 3, hasMore: false });
+        estimateDocumentCountMock = vi.fn().mockResolvedValue(0);
 
-        (ClustersClient.getClient as jest.Mock).mockResolvedValue({
+        (ClustersClient.getClient as Mock).mockResolvedValue({
             listCollections: listCollectionsMock,
             countCollections: countCollectionsMock,
             estimateDocumentCount: estimateDocumentCountMock,

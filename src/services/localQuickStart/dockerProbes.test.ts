@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { Bash, ChildProcessError } from '@microsoft/vscode-processutils';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -37,7 +39,7 @@ describe('runDockerProbe', () => {
             stderr.write('daemon error');
             throw new ChildProcessError('Process exited with code 1', 1, null);
         };
-        const now = jest.fn().mockReturnValueOnce(100).mockReturnValueOnce(112);
+        const now = vi.fn().mockReturnValueOnce(100).mockReturnValueOnce(112);
 
         const result = await runDockerProbe({
             probe: 'info',
@@ -121,7 +123,7 @@ describe('normalizeDaemonArchitecture', () => {
 
 describe('probeDockerEndpoint', () => {
     it('returns EACCES without attempting a socket connection', async () => {
-        const connect = jest.fn<ReturnType<DockerEndpointProbeDependencies['connect']>, []>();
+        const connect = vi.fn<(...args: []) => ReturnType<DockerEndpointProbeDependencies['connect']>>();
         const dependencies: DockerEndpointProbeDependencies = {
             access: async (): Promise<void> => {
                 throw Object.assign(new Error('access denied'), { code: 'EACCES' });

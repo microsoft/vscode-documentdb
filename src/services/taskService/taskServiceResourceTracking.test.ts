@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it } from 'vitest';
+
 import { type ResourceDefinition, hasResourceConflict } from './taskServiceResourceTracking';
 
 describe('ResourceTracking', () => {

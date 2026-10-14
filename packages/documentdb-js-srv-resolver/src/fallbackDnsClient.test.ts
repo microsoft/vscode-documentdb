@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import * as dnsPacket from 'dns-packet';
 import dgram from 'node:dgram';
 import dns from 'node:dns';
@@ -12,6 +14,13 @@ import { DnsStubServer } from './test/dnsStubServer.js';
 
 import { type FallbackDnsOptions } from './fallbackDnsClient.js';
 import { type StubRequest } from './test/dnsStubServer.js';
+
+// ESM namespaces are read-only; one shared object lets `vi.spyOn(dns, ...)` reach the source's `import * as dns`.
+vi.mock('node:dns', async (importOriginal) => {
+    const shared: Record<string, unknown> = { ...(await importOriginal<Record<string, unknown>>()) };
+    shared.default = shared;
+    return shared;
+});
 
 const srvName = '_mongodb._tcp.x.global.mongocluster.cosmos.azure.com';
 const targetName = 'fc-abc-000.global.mongocluster.cosmos.azure.com';
@@ -66,7 +75,7 @@ describe('fallback DNS client', (): void => {
     afterEach(async (): Promise<void> => {
         await Promise.all(stubs.map((stub): Promise<void> => stub.close()));
         stubs.length = 0;
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     async function stub(handler: (request: StubRequest) => void): Promise<DnsStubServer> {
@@ -89,7 +98,7 @@ describe('fallback DNS client', (): void => {
         const server = await stub((request): void => {
             request.send(compressedReply(request.query, ['fc-abc-000', 'fc-abc-001']));
         });
-        const trace = jest.fn<void, [string]>();
+        const trace = vi.fn<(...args: [string]) => void>();
         const result = await resolveSrvFallback(srvName, options([server], { logger: { trace }, logPrefix: '[p]' }));
         expect(result).toEqual({
             records: [0, 1].map(
@@ -149,7 +158,7 @@ describe('fallback DNS client', (): void => {
     ])('moves to the next server after rcode %i', async (rcode, code): Promise<void> => {
         const first = await stub((request): void => request.send(reply(request, [], rcode)));
         const second = await stub((request): void => request.send(reply(request)));
-        const trace = jest.fn<void, [string]>();
+        const trace = vi.fn<(...args: [string]) => void>();
         const result = await resolveSrvFallback(srvName, options([first, second], { logger: { trace } }));
         expect(result).toMatchObject({ server: second.address, serversTried: 2 });
         expect(trace.mock.calls[0][0]).toContain(`error=${code}`);
@@ -232,7 +241,7 @@ describe('fallback DNS client', (): void => {
 
     it('uses the system servers by default and skips unparseable entries', async (): Promise<void> => {
         const server = await stub((request): void => request.send(reply(request)));
-        jest.spyOn(dns, 'getServers').mockReturnValue(['not-an-address', server.address, '127.0.0.1:65536']);
+        vi.spyOn(dns, 'getServers').mockReturnValue(['not-an-address', server.address, '127.0.0.1:65536']);
         const result = await resolveSrvFallback(srvName, { deadlineAt: Date.now() + 500 });
         expect(result).toMatchObject({ server: server.address, serversTried: 1 });
         const [{ query }] = server.queries;

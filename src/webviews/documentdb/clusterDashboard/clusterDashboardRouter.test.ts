@@ -3,49 +3,51 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import { type Document, type MongoClient } from 'mongodb';
 import * as vscode from 'vscode';
 
 import { API } from '../../../DocumentDBExperiences';
 
-const mockResolveClusterNode = jest.fn();
-const mockResolveNamespaceNode = jest.fn();
-const mockUpdateGlobalSetting = jest.fn();
+const mockResolveClusterNode = vi.fn();
+const mockResolveNamespaceNode = vi.fn();
+const mockUpdateGlobalSetting = vi.fn();
 
-jest.mock('vscode', () => ({
-    commands: { executeCommand: jest.fn() },
-    l10n: { t: jest.fn((message: string) => message) },
+vi.mock('vscode', () => ({
+    commands: { executeCommand: vi.fn() },
+    l10n: { t: vi.fn((message: string) => message) },
 }));
 
-jest.mock('../../../commands/openCollectionView/openCollectionView', () => ({
-    openCollectionViewInternal: jest.fn(),
+vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
+    openCollectionViewInternal: vi.fn(),
 }));
 
-jest.mock('../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn() },
+vi.mock('../../../documentdb/ClustersClient', () => ({
+    ClustersClient: { getClient: vi.fn() },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: { settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' } },
 }));
 
-jest.mock('../../../services/SettingsService', () => ({
+vi.mock('../../../services/SettingsService', () => ({
     SettingsService: { updateGlobalSetting: (...args: unknown[]) => mockUpdateGlobalSetting(...args) },
 }));
 
-jest.mock('../../../utils/readOnlyJsonDocumentProvider', () => ({
-    readOnlyJsonDocumentProvider: { openDocument: jest.fn() },
+vi.mock('../../../utils/readOnlyJsonDocumentProvider', () => ({
+    readOnlyJsonDocumentProvider: { openDocument: vi.fn() },
 }));
 
-jest.mock('./resolveNamespaceNode', () => ({
+vi.mock('./resolveNamespaceNode', () => ({
     resolveClusterNode: (...args: unknown[]) => mockResolveClusterNode(...args) as unknown,
     resolveNamespaceNode: (...args: unknown[]) => mockResolveNamespaceNode(...args) as unknown,
     describeMissingNamespace: () => 'missing-namespace-explanation',
 }));
 
-jest.mock('../../_integration/trpc', () => {
-    const { initWebviewTrpc } = jest.requireActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
+vi.mock('../../_integration/trpc', async () => {
+    const { initWebviewTrpc } = await vi.importActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
         '@microsoft/vscode-ext-webview',
     );
     const trpc = initWebviewTrpc();
@@ -85,7 +87,7 @@ function createContext(
 
 describe('collectRawCommandReplies', () => {
     it('keeps each command invocation beside its raw response or error', async () => {
-        const command = jest.fn(async (invocation: Document): Promise<Document> => {
+        const command = vi.fn(async (invocation: Document): Promise<Document> => {
             if (invocation.serverStatus === 1) {
                 throw new Error('not authorized');
             }
@@ -123,7 +125,7 @@ describe('collectRawCommandReplies', () => {
 
 describe('clusterDashboardRouter create actions', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('opens the shell with the default database', async () => {
@@ -201,8 +203,8 @@ describe('clusterDashboardRouter create actions', () => {
     it('runs the existing create-database command against the resolved cluster node', async () => {
         const clusterNode = { id: 'cluster-tree-id' };
         mockResolveClusterNode.mockResolvedValue(clusterNode);
-        const onNamespaceBusy = jest.fn(async () => undefined);
-        jest.mocked(vscode.commands.executeCommand).mockImplementationOnce(async (_command, ...args: unknown[]) => {
+        const onNamespaceBusy = vi.fn(async () => undefined);
+        vi.mocked(vscode.commands.executeCommand).mockImplementationOnce(async (_command, ...args: unknown[]) => {
             const options = args[2] as { onNameResolved: (name: string) => Promise<void> };
             await options.onNameResolved('new-database');
             return 'new-database';
@@ -245,8 +247,8 @@ describe('clusterDashboardRouter create actions', () => {
     it('runs the existing create-collection command against the resolved database node', async () => {
         const databaseNode = { id: 'cluster-tree-id/database' };
         mockResolveNamespaceNode.mockResolvedValue(databaseNode);
-        const onNamespaceBusy = jest.fn(async () => undefined);
-        jest.mocked(vscode.commands.executeCommand).mockImplementationOnce(async (_command, ...args: unknown[]) => {
+        const onNamespaceBusy = vi.fn(async () => undefined);
+        vi.mocked(vscode.commands.executeCommand).mockImplementationOnce(async (_command, ...args: unknown[]) => {
             const options = args[2] as { onNameResolved: (name: string) => Promise<void> };
             await options.onNameResolved('new-collection');
         });

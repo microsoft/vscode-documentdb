@@ -130,5 +130,5 @@ These are exported too, for callers that need only one step:
 
 ```bash
 npm run build    # tsc -p .
-npx jest --config jest.config.cjs
+npm test         # Vitest, through the repository's root config
 ```

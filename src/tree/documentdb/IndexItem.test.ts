@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import * as vscode from 'vscode';
 import { type CollectionItemModel, type DatabaseItemModel, type IndexItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
@@ -10,12 +12,12 @@ import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { IndexItem } from './IndexItem';
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (values: string[]) => values.join(';'),
     createGenericElement: (value: unknown) => value,
 }));
 
-jest.mock('../../documentdb/SchemaStore', () => ({ SchemaStore: jest.fn() }));
+vi.mock('../../documentdb/SchemaStore', () => ({ SchemaStore: vi.fn() }));
 
 const cluster = {
     treeId: 'tree',

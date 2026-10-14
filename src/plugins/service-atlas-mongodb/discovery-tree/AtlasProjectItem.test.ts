@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('vscode', () => ({
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+vi.mock('vscode', () => ({
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
@@ -17,14 +19,14 @@ jest.mock('vscode', () => ({
         }
     },
     l10n: {
-        t: jest.fn((template: string, ...args: unknown[]) =>
+        t: vi.fn((template: string, ...args: unknown[]) =>
             template.replace(/\{(\d+)\}/g, (_match: string, index: string) => String(args[Number(index)])),
         ),
     },
-    window: { showErrorMessage: jest.fn() },
+    window: { showErrorMessage: vi.fn() },
 }));
 
-jest.mock('./AtlasClusterItem', () => ({
+vi.mock('./AtlasClusterItem', () => ({
     AtlasClusterItem: class AtlasClusterItem {
         constructor(
             _journeyCorrelationId: string,
@@ -33,9 +35,9 @@ jest.mock('./AtlasClusterItem', () => ({
     },
 }));
 
-const mockListClusters = jest.fn();
+const mockListClusters = vi.fn();
 
-jest.mock('../api/AtlasApiClient', () => ({
+vi.mock('../api/AtlasApiClient', () => ({
     AtlasApiError: class AtlasApiError extends Error {
         constructor(
             message: string,
@@ -53,19 +55,19 @@ jest.mock('../api/AtlasApiClient', () => ({
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
-        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
-        discoveryBranchDataProvider: { resetNodeErrorState: jest.fn(), refresh: jest.fn() },
+        outputChannel: { trace: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
+        discoveryBranchDataProvider: { resetNodeErrorState: vi.fn(), refresh: vi.fn() },
     },
 }));
 
-jest.mock('../../../utils/accumulatingTelemetry', () => ({
-    meterSilentCatch: jest.fn(),
+vi.mock('../../../utils/accumulatingTelemetry', () => ({
+    meterSilentCatch: vi.fn(),
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(),
 }));
 
 import { window } from 'vscode';
@@ -130,16 +132,16 @@ describe('AtlasProjectItem tooltip', () => {
 });
 
 describe('AtlasProjectItem getChildren failure handling (NEW-3)', () => {
-    const showErrorMessage = window.showErrorMessage as jest.Mock;
-    const mockGetSession = jest.fn();
-    const mockRefreshSession = jest.fn();
+    const showErrorMessage = window.showErrorMessage as Mock;
+    const mockGetSession = vi.fn();
+    const mockRefreshSession = vi.fn();
 
     function makeService(): AtlasDiscoveryService {
         return {
             sessionRegistry: {
                 getSession: mockGetSession,
                 refreshSession: mockRefreshSession,
-                refresherFor: () => ({ tryRefreshIfPossible: jest.fn() }),
+                refresherFor: () => ({ tryRefreshIfPossible: vi.fn() }),
             },
         } as unknown as AtlasDiscoveryService;
     }

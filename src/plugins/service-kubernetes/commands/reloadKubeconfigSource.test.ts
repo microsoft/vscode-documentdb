@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockResetNodeErrorState = jest.fn();
-const mockRefresh = jest.fn();
-const mockOutputError = jest.fn();
-const mockShowInformationMessage = jest.fn();
-const mockLoadConfiguredKubeConfig = jest.fn();
-const mockGetContexts = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-jest.mock('vscode', () => ({
+const mockResetNodeErrorState = vi.fn();
+const mockRefresh = vi.fn();
+const mockOutputError = vi.fn();
+const mockShowInformationMessage = vi.fn();
+const mockLoadConfiguredKubeConfig = vi.fn();
+const mockGetContexts = vi.fn();
+
+vi.mock('vscode', () => ({
     ProgressLocation: { Window: 10 },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
@@ -20,13 +22,13 @@ jest.mock('vscode', () => ({
         withProgress: async <T>(_options: unknown, task: () => Promise<T>): Promise<T> => task(),
     },
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((acc, value, index) => acc.replace(`{${String(index)}}`, value), message),
         ),
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         discoveryBranchDataProvider: {
             resetNodeErrorState: (...args: unknown[]) => mockResetNodeErrorState(...args),
@@ -38,7 +40,7 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../kubernetesClient', () => ({
+vi.mock('../kubernetesClient', () => ({
     loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
     getContexts: (...args: unknown[]) => mockGetContexts(...args),
 }));
@@ -71,7 +73,7 @@ function makeNode(overrides: Record<string, unknown> = {}): {
 
 describe('reloadKubeconfigSource', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('clears the cached error state and refreshes the tree on success', async () => {

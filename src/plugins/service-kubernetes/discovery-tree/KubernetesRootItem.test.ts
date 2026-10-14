@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DEFAULT_SOURCE_ID, type KubeconfigSourceRecord } from '../config';
 
-const mockEnsureMigration = jest.fn(async () => undefined);
-const mockReadSources = jest.fn<Promise<readonly KubeconfigSourceRecord[]>, []>();
+const mockEnsureMigration = vi.fn(async () => undefined);
+const mockReadSources = vi.fn<(...args: []) => Promise<readonly KubeconfigSourceRecord[]>>();
 
 // --- Telemetry mock context ---
 const telemetryContextMock = {
@@ -15,7 +17,7 @@ const telemetryContextMock = {
     valuesToMask: [],
 };
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
@@ -24,27 +26,27 @@ jest.mock('vscode', () => ({
     },
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     l10n: {
-        t: jest.fn((message: string) => message),
+        t: vi.fn((message: string) => message),
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (parts: string[]) => parts.join(';'),
-    callWithTelemetryAndErrorHandling: jest.fn(
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName: string, callback: (context: unknown) => Promise<unknown>) => callback(telemetryContextMock),
     ),
 }));
 
-jest.mock('../sources/migrationV2', () => ({
+vi.mock('../sources/migrationV2', () => ({
     ensureMigration: () => mockEnsureMigration(),
 }));
 
-jest.mock('../sources/sourceStore', () => ({
+vi.mock('../sources/sourceStore', () => ({
     readSources: () => mockReadSources(),
 }));
 
-jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
-    createGenericElementWithContext: jest.fn((opts: Record<string, unknown>) => ({
+vi.mock('../../../tree/api/createGenericElementWithContext', () => ({
+    createGenericElementWithContext: vi.fn((opts: Record<string, unknown>) => ({
         id: opts.id,
         label: opts.label,
         contextValue: opts.contextValue,
@@ -52,15 +54,15 @@ jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
     })),
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            error: jest.fn(),
-            warn: jest.fn(),
-            appendLine: jest.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            appendLine: vi.fn(),
         },
         discoveryBranchDataProvider: {
-            refresh: jest.fn(),
+            refresh: vi.fn(),
         },
     },
 }));

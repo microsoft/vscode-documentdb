@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test, vi } from 'vitest';
+
 import { getAllCompletions } from '@documentdb-js/operator-registry';
 import { type FieldCompletionData } from '../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { getHoverContent, type FieldDataLookup } from './documentdbQueryHoverProvider';
@@ -82,8 +84,8 @@ describe('documentdbQueryHoverProvider', () => {
 
         const describeWithDom = typeof document === 'undefined' ? describe.skip : describe;
         describeWithDom('real Monaco renderer', (): void => {
-            test('retains HTTP(S) links without command trust', (): void => {
-                const { renderMarkdown } = jest.requireActual<{
+            test('retains HTTP(S) links without command trust', async (): Promise<void> => {
+                const { renderMarkdown } = await vi.importActual<{
                     renderMarkdown(markdown: { value: string; isTrusted?: boolean; supportHtml?: boolean }): {
                         element: HTMLElement;
                         dispose(): void;

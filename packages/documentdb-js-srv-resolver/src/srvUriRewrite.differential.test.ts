@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { MongoClient } from 'mongodb';
 import * as dns from 'node:dns';
+import { createRequire } from 'node:module';
 
 import { rewriteSrvUri } from './srvUriRewrite.js';
 
@@ -12,11 +15,11 @@ import { type MongoClientOptions } from 'mongodb';
 import { type SrvRecord } from 'node:dns';
 
 interface DriverResolver {
-    resolveSRVRecord(options: MongoClient['options']): Promise<readonly { toString(): string }[]>;
+    resolveSRVRecord: (options: MongoClient['options']) => Promise<readonly { toString(): string }[]>;
 }
 
-// eslint-disable-next-line import/no-internal-modules, @typescript-eslint/no-require-imports -- differential test against the driver's own SRV resolution
-const { resolveSRVRecord } = require('mongodb/lib/connection_string') as DriverResolver;
+// Differential test against the driver's own SRV resolution, which the package does not export.
+const { resolveSRVRecord } = createRequire(import.meta.url)('mongodb/lib/connection_string') as DriverResolver;
 const srvHost = 'cluster.example.com';
 const baseUri = `mongodb+srv://${srvHost}`;
 const credentialUri = `mongodb+srv://u:p%40ss%3Aw%2Frd%2525@${srvHost}`;
@@ -165,12 +168,12 @@ function rewriteOutcome(fixture: Fixture): Outcome {
 
 describe('SRV rewrite differential against the installed MongoDB API driver', (): void => {
     afterEach((): void => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     it.each(fixtures)('$name', async (fixture): Promise<void> => {
         const srvRecords = fixture.srvRecords ?? twoTargets;
-        jest.spyOn(dns.promises, 'resolve').mockImplementation(
+        vi.spyOn(dns.promises, 'resolve').mockImplementation(
             async (_hostname: string, rrtype?: string): Promise<SrvRecord[] | string[][]> => {
                 if (rrtype === 'SRV') {
                     return srvRecords.map((record): SrvRecord => ({ ...record }));

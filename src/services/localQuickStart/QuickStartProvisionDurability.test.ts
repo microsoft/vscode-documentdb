@@ -3,6 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+    type Mock,
+    type MockInstance,
+} from 'vitest';
+
 /**
  * WP-3 (review 798): provisioning durability + the always-explicit port model.
  *
@@ -15,7 +28,7 @@ import * as fsPromises from 'fs/promises';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
-import { disposeQuickStartOutputChannel, type IContainerRuntime, SETUP_CLEANUP_TIMEOUT_MS } from './ContainerRuntime';
+import { disposeQuickStartOutputChannel, SETUP_CLEANUP_TIMEOUT_MS, type IContainerRuntime } from './ContainerRuntime';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
 import { QuickStartServiceImpl } from './QuickStartService';
 import {
@@ -40,12 +53,12 @@ import {
 let onProbe: () => void | Promise<void> = () => undefined;
 
 // Real fs, with `rm` and `writeFile` spyable so a test can fail one env-file write or delete.
-jest.mock('fs/promises', () => {
-    const actual = jest.requireActual<typeof fsPromises>('fs/promises');
-    return { ...actual, rm: jest.fn(actual.rm), writeFile: jest.fn(actual.writeFile) };
+vi.mock('fs/promises', async () => {
+    const actual = await vi.importActual<typeof fsPromises>('fs/promises');
+    return { ...actual, rm: vi.fn(actual.rm), writeFile: vi.fn(actual.writeFile) };
 });
 
-jest.mock('mongodb', () => ({
+vi.mock('mongodb', () => ({
     MongoClient: class {
         public async connect(): Promise<unknown> {
             // Awaited so a hook can read the durable store, which is async since I3-1.
@@ -63,12 +76,12 @@ jest.mock('mongodb', () => ({
     },
 }));
 
-jest.mock('../../documentdb/ClustersClient', () => ({
+vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: { deleteClient: () => Promise.resolve() },
 }));
 
-jest.mock('../../documentdb/CredentialCache', () => ({
-    CredentialCache: { setAuthCredentials: jest.fn(), deleteCredentials: jest.fn() },
+vi.mock('../../documentdb/CredentialCache', () => ({
+    CredentialCache: { setAuthCredentials: vi.fn(), deleteCredentials: vi.fn() },
 }));
 
 function fakeMemento(): vscode.Memento {
@@ -109,15 +122,15 @@ function fakeSecretStorage(seed: Record<string, string> = {}): vscode.SecretStor
 interface RuntimeOptions {
     readonly portFree?: boolean;
     readonly containers?: Array<{ id: string; labels?: Record<string, string> }>;
-    readonly createAndRunContainer?: jest.Mock;
-    readonly listByLabel?: jest.Mock;
+    readonly createAndRunContainer?: Mock;
+    readonly listByLabel?: Mock;
     readonly volumeExists?: boolean;
     readonly overrides?: Partial<IContainerRuntime>;
 }
 
 function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
     return {
-        isDockerReady: jest.fn().mockResolvedValue({
+        isDockerReady: vi.fn().mockResolvedValue({
             outcome: 'ready',
             environment: 'linux',
             endpointKind: 'unixSocket',
@@ -126,23 +139,23 @@ function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
             cliInstalled: true,
             daemonReachable: true,
         }),
-        isPortFree: jest.fn().mockResolvedValue(options.portFree ?? true),
-        listByLabel: options.listByLabel ?? jest.fn().mockResolvedValue(options.containers ?? []),
-        pullImage: jest.fn().mockResolvedValue(undefined),
-        createAndRunContainer: options.createAndRunContainer ?? jest.fn().mockResolvedValue('c1'),
-        inspectContainer: jest.fn().mockResolvedValue({
+        isPortFree: vi.fn().mockResolvedValue(options.portFree ?? true),
+        listByLabel: options.listByLabel ?? vi.fn().mockResolvedValue(options.containers ?? []),
+        pullImage: vi.fn().mockResolvedValue(undefined),
+        createAndRunContainer: options.createAndRunContainer ?? vi.fn().mockResolvedValue('c1'),
+        inspectContainer: vi.fn().mockResolvedValue({
             id: 'c1',
             status: 'running',
             ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
         }),
-        startContainer: jest.fn().mockResolvedValue(undefined),
-        stopContainer: jest.fn().mockResolvedValue(undefined),
-        removeContainer: jest.fn().mockResolvedValue(undefined),
-        removeVolume: jest.fn().mockResolvedValue(undefined),
-        volumeExists: jest.fn().mockResolvedValue(options.volumeExists ?? false),
-        execShellInContainer: jest.fn().mockResolvedValue(undefined),
-        followLogs: jest.fn().mockResolvedValue(undefined),
-        readRecentLogs: jest.fn().mockResolvedValue(''),
+        startContainer: vi.fn().mockResolvedValue(undefined),
+        stopContainer: vi.fn().mockResolvedValue(undefined),
+        removeContainer: vi.fn().mockResolvedValue(undefined),
+        removeVolume: vi.fn().mockResolvedValue(undefined),
+        volumeExists: vi.fn().mockResolvedValue(options.volumeExists ?? false),
+        execShellInContainer: vi.fn().mockResolvedValue(undefined),
+        followLogs: vi.fn().mockResolvedValue(undefined),
+        readRecentLogs: vi.fn().mockResolvedValue(''),
         ...options.overrides,
     } as unknown as IContainerRuntime;
 }
@@ -177,22 +190,22 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     let globalState: vscode.Memento;
 
     beforeAll(() => {
-        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+        vi.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
             name: 'test',
-            append: jest.fn(),
-            appendLine: jest.fn(),
-            replace: jest.fn(),
-            clear: jest.fn(),
-            show: jest.fn(),
-            hide: jest.fn(),
-            dispose: jest.fn(),
+            append: vi.fn(),
+            appendLine: vi.fn(),
+            replace: vi.fn(),
+            clear: vi.fn(),
+            show: vi.fn(),
+            hide: vi.fn(),
+            dispose: vi.fn(),
         } as unknown as vscode.LogOutputChannel);
         disposeQuickStartOutputChannel();
     });
 
     afterAll(() => {
         disposeQuickStartOutputChannel();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     beforeEach(() => {
@@ -233,7 +246,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     // `reusing` from credentials that no volume was ever initialized with.
     it('restores the previous credential state when the attempt fails (H3)', async () => {
         const service = new QuickStartServiceImpl(
-            runtimeFor({ createAndRunContainer: jest.fn().mockRejectedValue(new Error('create blew up')) }),
+            runtimeFor({ createAndRunContainer: vi.fn().mockRejectedValue(new Error('create blew up')) }),
         );
 
         await collect(service.provision(new AbortController().signal));
@@ -297,7 +310,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
     it('releases its provisioning lease when the attempt fails (H3)', async () => {
         const service = new QuickStartServiceImpl(
-            runtimeFor({ createAndRunContainer: jest.fn().mockRejectedValue(new Error('create blew up')) }),
+            runtimeFor({ createAndRunContainer: vi.fn().mockRejectedValue(new Error('create blew up')) }),
         );
 
         await collect(service.provision(new AbortController().signal));
@@ -319,7 +332,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
         );
         const service = new QuickStartServiceImpl(
-            runtimeFor({ createAndRunContainer: jest.fn().mockRejectedValue(new Error('create blew up')) }),
+            runtimeFor({ createAndRunContainer: vi.fn().mockRejectedValue(new Error('create blew up')) }),
         );
 
         await collect(service.provision(new AbortController().signal));
@@ -330,12 +343,12 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     // H4: the loser of a two-window create race reaches the id-less cleanup branch, where an
     // unscoped by-label sweep would have removed the WINNER's container.
     it('scopes the orphan sweep to this run own operation label (H4)', async () => {
-        const listByLabel = jest.fn().mockResolvedValue([]);
+        const listByLabel = vi.fn().mockResolvedValue([]);
         const service = new QuickStartServiceImpl(
             runtimeFor({
                 listByLabel,
                 // A create that throws leaves no captured id, which is the branch that sweeps.
-                createAndRunContainer: jest
+                createAndRunContainer: vi
                     .fn()
                     .mockRejectedValue(new Error('The container name "/vscode-documentdb-local" is already in use')),
             }),
@@ -352,7 +365,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     });
 
     it('stamps the per-run operation label on the container it creates (H4)', async () => {
-        const createAndRunContainer = jest.fn().mockResolvedValue('c1');
+        const createAndRunContainer = vi.fn().mockResolvedValue('c1');
         const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
 
         await collect(service.provision(new AbortController().signal));
@@ -376,7 +389,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     });
 
     it('binds the requested port rather than the canonical one', async () => {
-        const createAndRunContainer = jest.fn().mockResolvedValue('c1');
+        const createAndRunContainer = vi.fn().mockResolvedValue('c1');
         const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
 
         await collect(service.provision(new AbortController().signal, { port: 10333 }));
@@ -408,7 +421,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
             let seeded = false;
-            jest.spyOn(runtime, 'execShellInContainer').mockImplementation(async () => {
+            vi.spyOn(runtime, 'execShellInContainer').mockImplementation(async () => {
                 await Promise.resolve();
                 expect(service.getStatus().state).not.toBe(InstanceState.Running);
                 seeded = true;
@@ -468,7 +481,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         it('keeps the database usable without retrying a failed sample load', async () => {
             const runtime = runtimeFor();
-            jest.spyOn(runtime, 'execShellInContainer').mockRejectedValue(new Error('initialization failed'));
+            vi.spyOn(runtime, 'execShellInContainer').mockRejectedValue(new Error('initialization failed'));
             const service = new QuickStartServiceImpl(runtime);
 
             const events = await collect(service.provision(new AbortController().signal));
@@ -484,7 +497,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     it('reports a Docker port-allocation failure in the same words as the pre-check (M5)', async () => {
         const service = new QuickStartServiceImpl(
             runtimeFor({
-                createAndRunContainer: jest
+                createAndRunContainer: vi
                     .fn()
                     .mockRejectedValue(new Error('Bind for 127.0.0.1:10260 failed: port is already allocated')),
             }),
@@ -504,7 +517,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         it('recognizes the port bind failure Docker actually prints', async () => {
             const service = new QuickStartServiceImpl(
                 runtimeFor({
-                    createAndRunContainer: jest
+                    createAndRunContainer: vi
                         .fn()
                         .mockRejectedValue(
                             new DockerCommandError(
@@ -523,7 +536,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         it('passes on what Docker said for any other create failure', async () => {
             const service = new QuickStartServiceImpl(
                 runtimeFor({
-                    createAndRunContainer: jest
+                    createAndRunContainer: vi
                         .fn()
                         .mockRejectedValue(
                             new DockerCommandError(
@@ -546,7 +559,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const service = new QuickStartServiceImpl(
                 runtimeFor({
                     overrides: {
-                        pullImage: jest
+                        pullImage: vi
                             .fn()
                             .mockRejectedValue(
                                 new DockerCommandError(1, 'Error response from daemon: manifest unknown\n'),
@@ -569,7 +582,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const service = new QuickStartServiceImpl(
                 runtimeFor({
                     overrides: {
-                        pullImage: jest
+                        pullImage: vi
                             .fn()
                             .mockRejectedValue(
                                 new DockerCommandError(1, 'Error response from daemon: manifest unknown\n'),
@@ -587,7 +600,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const service = new QuickStartServiceImpl(
                 runtimeFor({
                     overrides: {
-                        pullImage: jest
+                        pullImage: vi
                             .fn()
                             .mockRejectedValue(
                                 new DockerCommandError(
@@ -607,11 +620,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         // ERR-3: `docker run` can hang forever on Docker Desktop (e.g. port 65535).
         it('reports a create deadline and removes, within a bound, whatever the killed run left behind', async () => {
-            const listByLabel = jest.fn().mockResolvedValue([]);
-            const removeContainer = jest.fn().mockResolvedValue(undefined);
+            const listByLabel = vi.fn().mockResolvedValue([]);
+            const removeContainer = vi.fn().mockResolvedValue(undefined);
             const service = new QuickStartServiceImpl(
                 runtimeFor({
-                    createAndRunContainer: jest.fn().mockRejectedValue(new DockerCommandTimeoutError(90_000)),
+                    createAndRunContainer: vi.fn().mockRejectedValue(new DockerCommandTimeoutError(90_000)),
                     listByLabel,
                     overrides: { removeContainer },
                 }),
@@ -637,7 +650,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             return runtimeFor({
                 overrides: {
                     // Running when setup confirms the start, exited by the first readiness probe.
-                    inspectContainer: jest.fn(() => {
+                    inspectContainer: vi.fn(() => {
                         inspections += 1;
                         return Promise.resolve({
                             id: 'c1',
@@ -646,7 +659,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                             raw: JSON.stringify({ State: { Status: 'exited', ExitCode: 1 } }),
                         });
                     }) as unknown as IContainerRuntime['inspectContainer'],
-                    readRecentLogs: jest.fn().mockResolvedValue(logs),
+                    readRecentLogs: vi.fn().mockResolvedValue(logs),
                 },
             });
         }
@@ -779,7 +792,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         it('words a rejection after Wait longer around the saved data', async () => {
             const realNow = Date.now.bind(Date);
             let skipped = 0;
-            const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + skipped);
+            const now = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + skipped);
             try {
                 onProbe = () => {
                     skipped += 200_000;
@@ -825,7 +838,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     // nothing could open, "Provisioning…" for the lease TTL, and a setup that refused to run.
     it('stores the credentials before `docker run`, so a crash mid-create leaves an adoptable container', async () => {
         let secretAtCreate: string | undefined;
-        const createAndRunContainer = jest.fn(async () => {
+        const createAndRunContainer = vi.fn(async () => {
             secretAtCreate = await readConnectionString(DEFAULT_ALIAS);
             return 'c1';
         });
@@ -842,7 +855,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         const winner = `mongodb://winner:pw@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
         const service = new QuickStartServiceImpl(
             runtimeFor({
-                createAndRunContainer: jest.fn(async () => {
+                createAndRunContainer: vi.fn(async () => {
                     // The winner renews the lease as its own, then stores its credentials.
                     await upsertInstance({
                         alias: DEFAULT_ALIAS,
@@ -871,7 +884,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         const winner = `mongodb://winner:pw@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
         const service = new QuickStartServiceImpl(
             runtimeFor({
-                createAndRunContainer: jest.fn(async () => {
+                createAndRunContainer: vi.fn(async () => {
                     await writeConnectionString(DEFAULT_ALIAS, winner, {
                         displayName: 'DocumentDB Local',
                         port: QUICK_START_PORT,
@@ -898,7 +911,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         const service = new QuickStartServiceImpl(
             runtimeFor({
                 volumeExists: true,
-                createAndRunContainer: jest.fn().mockRejectedValue(new Error('create blew up')),
+                createAndRunContainer: vi.fn().mockRejectedValue(new Error('create blew up')),
             }),
         );
 
@@ -928,8 +941,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         let phaseAfterReconcile: string | undefined;
         const service = new QuickStartServiceImpl(
             runtimeFor({
-                listByLabel: jest.fn(() => Promise.resolve(live)),
-                createAndRunContainer: jest.fn(() => {
+                listByLabel: vi.fn(() => Promise.resolve(live)),
+                createAndRunContainer: vi.fn(() => {
                     live.push({ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } });
                     return Promise.resolve('c1');
                 }),
@@ -979,7 +992,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         it('keeps the stored credentials when that setup is cancelled', async () => {
             const controller = new AbortController();
             const runtime = runtimeFor({ volumeExists: false });
-            (runtime.pullImage as jest.Mock).mockImplementation(() => {
+            (runtime.pullImage as Mock).mockImplementation(() => {
                 controller.abort();
                 return Promise.reject(new Error('aborted'));
             });
@@ -993,7 +1006,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         it('keeps the stored credentials when a setup with custom ones is cancelled', async () => {
             const controller = new AbortController();
             const runtime = runtimeFor({ volumeExists: false });
-            (runtime.pullImage as jest.Mock).mockImplementation(() => {
+            (runtime.pullImage as Mock).mockImplementation(() => {
                 controller.abort();
                 return Promise.reject(new Error('aborted'));
             });
@@ -1014,14 +1027,14 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     });
 
     describe('after a readiness timeout', () => {
-        let nowSpy: jest.SpyInstance<number, []>;
+        let nowSpy: MockInstance<(...args: []) => number>;
 
         beforeEach(() => {
             // Every probe fails and jumps the clock past the readiness deadline, so the wait times
             // out after one backoff instead of three minutes.
             const realNow = Date.now.bind(Date);
             let offset = 0;
-            nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+            nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
             onProbe = () => {
                 offset += 200_000;
                 throw new Error('connect ECONNREFUSED');
@@ -1041,7 +1054,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         }
 
         it('Start over drops a fresh attempt entirely: credentials, lease and data', async () => {
-            const removeVolume = jest.fn().mockResolvedValue(undefined);
+            const removeVolume = vi.fn().mockResolvedValue(undefined);
             const service = new QuickStartServiceImpl(runtimeFor({ overrides: { removeVolume } }));
             await provisionUntilTimeout(service);
 
@@ -1055,10 +1068,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('Start over warns when it cannot remove the fresh attempt data volume', async () => {
-            const removeVolume = jest.fn().mockRejectedValue(new Error('volume is in use'));
+            const removeVolume = vi.fn().mockRejectedValue(new Error('volume is in use'));
             const service = new QuickStartServiceImpl(runtimeFor({ overrides: { removeVolume } }));
             await provisionUntilTimeout(service);
-            const warning = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+            const warning = vi.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
 
             expect(await service.discardTimedOutInstance()).toBe(true);
 
@@ -1080,7 +1093,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 displayName: 'DocumentDB Local',
                 port: QUICK_START_PORT,
             });
-            const removeVolume = jest.fn().mockResolvedValue(undefined);
+            const removeVolume = vi.fn().mockResolvedValue(undefined);
             const service = new QuickStartServiceImpl(runtimeFor({ volumeExists: true, overrides: { removeVolume } }));
             // A different port, so the attempt's own connection string differs from the stored one.
             await provisionUntilTimeout(service, 10333);
@@ -1099,11 +1112,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const service = new QuickStartServiceImpl(runtime);
             await provisionUntilTimeout(service);
             const stored = await readConnectionString(DEFAULT_ALIAS);
-            (runtime.removeContainer as jest.Mock).mockRejectedValue(new Error('daemon unreachable'));
+            (runtime.removeContainer as Mock).mockRejectedValue(new Error('daemon unreachable'));
             // A failed lookup is no proof the container is gone, even if Docker answers again later.
-            (runtime.listByLabel as jest.Mock).mockRejectedValue(new Error('daemon unreachable'));
+            (runtime.listByLabel as Mock).mockRejectedValue(new Error('daemon unreachable'));
 
-            const error = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+            const error = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
 
             expect(await service.discardTimedOutInstance()).toBe(false);
 
@@ -1119,7 +1132,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
             await provisionUntilTimeout(service);
-            (runtime.removeContainer as jest.Mock).mockRejectedValue(new Error('No such container'));
+            (runtime.removeContainer as Mock).mockRejectedValue(new Error('No such container'));
 
             expect(await service.discardTimedOutInstance()).toBe(true);
 
@@ -1151,8 +1164,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
             await provisionUntilTimeout(service);
-            (runtime.removeContainer as jest.Mock).mockRejectedValue(new Error('No such container: c1'));
-            (runtime.listByLabel as jest.Mock).mockResolvedValue([
+            (runtime.removeContainer as Mock).mockRejectedValue(new Error('No such container: c1'));
+            (runtime.listByLabel as Mock).mockResolvedValue([
                 { id: 'c2', name: DEFAULT_ALIAS, labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } },
             ]);
             await writeConnectionString(DEFAULT_ALIAS, other, {
@@ -1172,22 +1185,22 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             let liveId: string | undefined;
             let hasVolume = false;
             let created = 0;
-            const removeVolume = jest.fn(async () => {
+            const removeVolume = vi.fn(async () => {
                 if (liveId) throw new Error('volume is in use');
                 hasVolume = false;
             });
             const runtime = runtimeFor({
                 overrides: {
-                    listByLabel: jest
+                    listByLabel: vi
                         .fn()
                         .mockImplementation(async () => (liveId ? [{ id: liveId, name: DEFAULT_ALIAS, labels }] : [])),
-                    volumeExists: jest.fn(async () => hasVolume),
-                    createAndRunContainer: jest.fn(async () => {
+                    volumeExists: vi.fn(async () => hasVolume),
+                    createAndRunContainer: vi.fn(async () => {
                         liveId = `c${++created}`;
                         hasVolume = true;
                         return liveId;
                     }),
-                    inspectContainer: jest.fn().mockImplementation(async (id: string) =>
+                    inspectContainer: vi.fn().mockImplementation(async (id: string) =>
                         liveId && (id === liveId || id === DEFAULT_ALIAS)
                             ? {
                                   id: liveId,
@@ -1197,7 +1210,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                               }
                             : undefined,
                     ),
-                    removeContainer: jest.fn(async (id: string) => {
+                    removeContainer: vi.fn(async (id: string) => {
                         if (id !== liveId) throw new Error(`No such container: ${id}`);
                         liveId = undefined;
                     }),
@@ -1270,7 +1283,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         it('walks forward to the first free port', async () => {
             const runtime = runtimeFor();
-            (runtime.isPortFree as unknown as jest.Mock).mockImplementation((port: number) =>
+            (runtime.isPortFree as unknown as Mock).mockImplementation((port: number) =>
                 Promise.resolve(port >= QUICK_START_PORT + 3),
             );
             const service = new QuickStartServiceImpl(runtime);
@@ -1317,7 +1330,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             let envFile: string | undefined;
             let presentDuringRun = false;
             let presentAtProbe: boolean | undefined;
-            const createAndRunContainer = jest.fn(async (options: { environmentFiles?: string[] }) => {
+            const createAndRunContainer = vi.fn(async (options: { environmentFiles?: string[] }) => {
                 envFile = options.environmentFiles?.[0];
                 presentDuringRun = !!envFile && fs.existsSync(envFile);
                 return 'c1';
@@ -1335,11 +1348,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         it('retries a failed env-file delete when provisioning ends', async () => {
             let envFile: string | undefined;
-            const createAndRunContainer = jest.fn(async (options: { environmentFiles?: string[] }) => {
+            const createAndRunContainer = vi.fn(async (options: { environmentFiles?: string[] }) => {
                 envFile = options.environmentFiles?.[0];
                 return 'c1';
             });
-            const rm = jest.mocked(fsPromises.rm);
+            const rm = vi.mocked(fsPromises.rm);
             rm.mockClear();
             rm.mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EPERM' }));
             const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
@@ -1351,14 +1364,14 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('removes a partly written env file when the write fails', async () => {
-            const actual = jest.requireActual<typeof fsPromises>('fs/promises');
+            const actual = await vi.importActual<typeof fsPromises>('fs/promises');
             let envFile: string | undefined;
-            jest.mocked(fsPromises.writeFile).mockImplementationOnce(async (file, _data, options) => {
+            vi.mocked(fsPromises.writeFile).mockImplementationOnce(async (file, _data, options) => {
                 envFile = file as string;
                 await actual.writeFile(envFile, 'USERNAME=admin\nPASSWORD=', options);
                 throw Object.assign(new Error('disk full'), { code: 'ENOSPC' });
             });
-            const createAndRunContainer = jest.fn();
+            const createAndRunContainer = vi.fn();
             const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
 
             await collect(service.provision(new AbortController().signal));
@@ -1369,10 +1382,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('masks the password in the readiness-timeout detail', async () => {
-            const appendLine = vscode.window.createOutputChannel('test').appendLine as jest.Mock;
+            const appendLine = vscode.window.createOutputChannel('test').appendLine as Mock;
             appendLine.mockClear();
             const expired = Date.now() + 10 * 60_000;
-            const clock = jest.spyOn(Date, 'now');
+            const clock = vi.spyOn(Date, 'now');
             // The driver error can echo the connection string; expire the wait after one attempt.
             onProbe = () => {
                 clock.mockReturnValue(expired);

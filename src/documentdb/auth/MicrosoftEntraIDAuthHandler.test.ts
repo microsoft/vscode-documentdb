@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const getSessionFromVSCode = jest.fn();
-const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
-jest.mock('../../extensionVariables', () => ({
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const getSessionFromVSCode = vi.fn();
+const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
+vi.mock('../../extensionVariables', () => ({
     ext: {
         get outputChannel(): typeof mockOutputChannel {
             return mockOutputChannel;
@@ -13,7 +15,7 @@ jest.mock('../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
+vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
     getSessionFromVSCode: (...args: unknown[]) => getSessionFromVSCode(...args),
 }));
 
@@ -34,7 +36,7 @@ function buildCredentials(connectionString: string): CachedClusterCredentials {
 
 describe('MicrosoftEntraIDAuthHandler', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         getSessionFromVSCode.mockReset();
         getSessionFromVSCode.mockResolvedValue({ accessToken: 'access-token' });
     });

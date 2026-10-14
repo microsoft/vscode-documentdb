@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ShellEvaluationResult } from './types';
+import { type ShellEvaluationResult } from './types.js';
 
 /**
  * Transforms raw @mongosh `ShellResult` objects into clean `ShellEvaluationResult` values.

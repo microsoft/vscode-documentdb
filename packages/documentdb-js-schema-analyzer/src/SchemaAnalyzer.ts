@@ -6,9 +6,9 @@
 import Denque from 'denque';
 import { type Document, type WithId } from 'mongodb';
 import assert from 'node:assert/strict';
-import { BSONTypes } from './BSONTypes';
-import { type JSONSchema, type JSONSchemaRef } from './JSONSchema';
-import { type FieldEntry, getKnownFields as getKnownFieldsFromSchema } from './getKnownFields';
+import { BSONTypes } from './BSONTypes.js';
+import { type JSONSchema, type JSONSchemaRef } from './JSONSchema.js';
+import { type FieldEntry, getKnownFields as getKnownFieldsFromSchema } from './getKnownFields.js';
 
 /**
  * Incremental schema analyzer for documents from the MongoDB API / DocumentDB API.

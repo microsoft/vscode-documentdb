@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState, type QuickStartStatus } from '../../services/localQuickStart/quickStartTypes';
 import { openLocalQuickStartWebview } from '../../webviews/documentdb/localQuickStart/localQuickStartController';
 import { openLocalQuickStart } from './openLocalQuickStart';
 
-jest.mock('../../webviews/documentdb/localQuickStart/localQuickStartController', () => ({
-    openLocalQuickStartWebview: jest.fn(),
+vi.mock('../../webviews/documentdb/localQuickStart/localQuickStartController', () => ({
+    openLocalQuickStartWebview: vi.fn(),
 }));
 
 function testContext(): IActionContext {
@@ -18,17 +20,17 @@ function testContext(): IActionContext {
 }
 
 describe('openLocalQuickStart', () => {
-    beforeEach(() => jest.mocked(openLocalQuickStartWebview).mockClear());
-    afterEach(() => jest.restoreAllMocks());
+    beforeEach(() => vi.mocked(openLocalQuickStartWebview).mockClear());
+    afterEach(() => vi.restoreAllMocks());
 
     it.each([
         [undefined, 'commandPalette'],
         [{ activationSource: 'treeReviewSetupRow' as const }, 'treeReviewSetupRow'],
     ])('records where the wizard was opened from (%o)', async (options, expected) => {
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        jest.mocked(openLocalQuickStartWebview).mockReturnValue({
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.mocked(openLocalQuickStartWebview).mockReturnValue({
             panel: { viewColumn: undefined },
-            revealToForeground: jest.fn(),
+            revealToForeground: vi.fn(),
         } as never);
         const context = testContext();
 
@@ -39,14 +41,14 @@ describe('openLocalQuickStart', () => {
 
     it('waits for authoritative hydration before revealing the webview', async () => {
         let finishHydration: (() => void) | undefined;
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockImplementation(
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockImplementation(
             () =>
                 new Promise<void>((resolve) => {
                     finishHydration = resolve;
                 }),
         );
-        const revealToForeground = jest.fn();
-        jest.mocked(openLocalQuickStartWebview).mockReturnValue({
+        const revealToForeground = vi.fn();
+        vi.mocked(openLocalQuickStartWebview).mockReturnValue({
             panel: { viewColumn: undefined },
             revealToForeground,
         } as never);
@@ -62,9 +64,9 @@ describe('openLocalQuickStart', () => {
     });
 
     it('still opens the webview when hydration fails because Docker is unavailable', async () => {
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockRejectedValue(new Error('Docker unavailable'));
-        const revealToForeground = jest.fn();
-        jest.mocked(openLocalQuickStartWebview).mockReturnValue({
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockRejectedValue(new Error('Docker unavailable'));
+        const revealToForeground = vi.fn();
+        vi.mocked(openLocalQuickStartWebview).mockReturnValue({
             panel: { viewColumn: undefined },
             revealToForeground,
         } as never);
@@ -76,13 +78,13 @@ describe('openLocalQuickStart', () => {
     });
 
     it('passes the hydrated instance status so the webview can open on the right step', async () => {
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.CredentialsMissing,
         } as QuickStartStatus);
-        jest.mocked(openLocalQuickStartWebview).mockReturnValue({
+        vi.mocked(openLocalQuickStartWebview).mockReturnValue({
             panel: { viewColumn: undefined },
-            revealToForeground: jest.fn(),
+            revealToForeground: vi.fn(),
         } as never);
 
         const context = testContext();

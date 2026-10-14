@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('../ClustersClient');
-jest.mock('../SchemaStore');
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+vi.mock('../ClustersClient');
+vi.mock('../SchemaStore');
 
 import { ClustersClient } from '../ClustersClient';
 import { SchemaStore } from '../SchemaStore';
@@ -23,12 +25,12 @@ const TEST_CONTEXT: ShellCompletionContext = {
 
 function mockClustersClient(databases: Array<{ name: string }> = [], collections: Array<{ name: string }> = []): void {
     const mockClient = {
-        getCachedDatabases: jest.fn().mockReturnValue(databases),
-        getCachedCollections: jest.fn().mockReturnValue(collections),
-        listDatabases: jest.fn().mockResolvedValue(databases),
-        listCollections: jest.fn().mockResolvedValue(collections),
+        getCachedDatabases: vi.fn().mockReturnValue(databases),
+        getCachedCollections: vi.fn().mockReturnValue(collections),
+        listDatabases: vi.fn().mockResolvedValue(databases),
+        listCollections: vi.fn().mockResolvedValue(collections),
     };
-    (ClustersClient.getExistingClient as jest.Mock).mockReturnValue(mockClient);
+    (ClustersClient.getExistingClient as Mock).mockReturnValue(mockClient);
 }
 
 function mockSchemaStore(
@@ -36,15 +38,15 @@ function mockSchemaStore(
     fields: Array<{ path: string; type: string; bsonType: string }> = [],
 ): void {
     const mockStore = {
-        getStats: jest.fn().mockReturnValue({
+        getStats: vi.fn().mockReturnValue({
             collectionCount: collections.length,
             totalDocuments: 0,
             totalFields: 0,
             collections,
         }),
-        getKnownFields: jest.fn().mockReturnValue(fields),
+        getKnownFields: vi.fn().mockReturnValue(fields),
     };
-    (SchemaStore.getInstance as jest.Mock).mockReturnValue(mockStore);
+    (SchemaStore.getInstance as Mock).mockReturnValue(mockStore);
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -54,7 +56,7 @@ describe('ShellCompletionProvider', () => {
 
     beforeEach(() => {
         provider = new ShellCompletionProvider();
-        jest.clearAllMocks();
+        vi.clearAllMocks();
 
         // Default: empty caches
         mockClustersClient();
@@ -211,8 +213,8 @@ describe('ShellCompletionProvider', () => {
 
     describe('collection prewarming', () => {
         it('should populate the shared cache for the requested database', async () => {
-            const listCollections = jest.fn().mockResolvedValue([]);
-            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
+            const listCollections = vi.fn().mockResolvedValue([]);
+            (ClustersClient.getExistingClient as Mock).mockReturnValue({ listCollections });
 
             await provider.prewarmCollections(TEST_CONTEXT);
 
@@ -226,16 +228,16 @@ describe('ShellCompletionProvider', () => {
             { label: 'stale', cached: [{ name: 'old', type: 'collection' }] },
         ])('refreshes a $label cache through the client and exposes the new names', async ({ cached }) => {
             const { ClustersClient: ActualClustersClient } =
-                jest.requireActual<ClustersClientModule>('../ClustersClient');
-            const toArray = jest.fn().mockResolvedValue([{ name: 'new', type: 'collection' }]);
-            const listCollections = jest.fn().mockReturnValue({ toArray });
-            const database = jest.fn().mockReturnValue({ listCollections });
+                await vi.importActual<ClustersClientModule>('../ClustersClient');
+            const toArray = vi.fn().mockResolvedValue([{ name: 'new', type: 'collection' }]);
+            const listCollections = vi.fn().mockReturnValue({ toArray });
+            const database = vi.fn().mockReturnValue({ listCollections });
             const client = Object.create(ActualClustersClient.prototype) as ClustersClient;
             Object.assign(client, {
                 _mongoClient: { db: database },
                 _collectionsCache: new Map(cached.length > 0 ? [[TEST_CONTEXT.databaseName, cached]] : []),
             });
-            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue(client);
+            (ClustersClient.getExistingClient as Mock).mockReturnValue(client);
 
             await provider.prewarmCollections(TEST_CONTEXT);
 
@@ -253,8 +255,8 @@ describe('ShellCompletionProvider', () => {
         });
 
         it('deduplicates concurrent requests but allows a later refresh', async () => {
-            const listCollections = jest.fn().mockResolvedValue([]);
-            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
+            const listCollections = vi.fn().mockResolvedValue([]);
+            (ClustersClient.getExistingClient as Mock).mockReturnValue({ listCollections });
 
             const firstFetch = provider.prewarmCollections(TEST_CONTEXT);
             const concurrentFetch = provider.prewarmCollections(TEST_CONTEXT);
@@ -266,8 +268,8 @@ describe('ShellCompletionProvider', () => {
         });
 
         it('ignores a rejected fetch and allows the next refresh to retry', async () => {
-            const listCollections = jest.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce([]);
-            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
+            const listCollections = vi.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce([]);
+            (ClustersClient.getExistingClient as Mock).mockReturnValue({ listCollections });
 
             await expect(provider.prewarmCollections(TEST_CONTEXT)).resolves.toBeUndefined();
             await expect(provider.prewarmCollections(TEST_CONTEXT)).resolves.toBeUndefined();
@@ -275,7 +277,7 @@ describe('ShellCompletionProvider', () => {
         });
 
         it('should not create a client when the cluster has no cached client', async () => {
-            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue(undefined);
+            (ClustersClient.getExistingClient as Mock).mockReturnValue(undefined);
 
             await provider.prewarmCollections(TEST_CONTEXT);
 

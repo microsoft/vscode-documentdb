@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
@@ -10,13 +12,13 @@ import { AuthMethodId } from './AuthMethod';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
-const getManagedIdentityAccessToken = jest.fn();
+const getManagedIdentityAccessToken = vi.fn();
 
-jest.mock('../../extensionVariables', () => ({
-    ext: { outputChannel: { info: jest.fn(), error: jest.fn() } },
+vi.mock('../../extensionVariables', () => ({
+    ext: { outputChannel: { info: vi.fn(), error: vi.fn() } },
 }));
 
-jest.mock('./managedIdentityTokenProvider', () => ({
+vi.mock('./managedIdentityTokenProvider', () => ({
     getManagedIdentityAccessToken: (...args: unknown[]) => getManagedIdentityAccessToken(...args),
 }));
 

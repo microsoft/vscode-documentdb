@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash } from '@microsoft/vscode-processutils';
 import { getDockerStartCapability } from './DockerProviderLauncher';
@@ -43,7 +45,7 @@ function evidence(
 
 describe('DockerReadinessService integration scenarios', () => {
     it('keeps native WSL permission evidence ahead of an installed Windows Desktop application', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', { exitCode: 1, stderr: 'permission denied' });
             }
@@ -87,7 +89,7 @@ describe('DockerReadinessService integration scenarios', () => {
     });
 
     it('reports remote daemon architecture and execution target instead of the client architecture', async () => {
-        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', {
                     stdout: JSON.stringify({

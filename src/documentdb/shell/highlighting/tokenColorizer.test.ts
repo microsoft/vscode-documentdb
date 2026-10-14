@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { type TokenSpan } from './monarchRunner';
 import { colorizeInput } from './tokenColorizer';
 

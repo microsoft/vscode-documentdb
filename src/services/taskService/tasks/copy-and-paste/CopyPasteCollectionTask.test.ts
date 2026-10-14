@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
@@ -11,41 +13,43 @@ import { type StreamingDocumentWriter } from '../../data-api/writers/StreamingDo
 import { CopyPasteCollectionTask } from './CopyPasteCollectionTask';
 import { type CopyPasteConfig } from './copyPasteConfig';
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(),
 }));
 
-jest.mock('../../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn() },
+vi.mock('../../../../documentdb/ClustersClient', () => ({
+    ClustersClient: { getClient: vi.fn() },
 }));
 
-jest.mock('../../../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: jest.fn() },
+vi.mock('../../../../documentdb/CredentialCache', () => ({
+    CredentialCache: { hasCredentials: vi.fn() },
 }));
 
-jest.mock('../../../../extensionVariables', () => ({
+vi.mock('../../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLine: jest.fn(),
-            error: jest.fn(),
-            trace: jest.fn(),
-            debug: jest.fn(),
-            warn: jest.fn(),
+            appendLine: vi.fn(),
+            error: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
         t: (message: string, ...args: string[]): string =>
             args.reduce((result, value, index) => result.replace(`{${index}}`, value), message),
     },
-    EventEmitter: jest.fn().mockImplementation(() => ({
-        event: jest.fn(),
-        fire: jest.fn(),
-        dispose: jest.fn(),
-    })),
-    ThemeIcon: jest.fn(),
+    EventEmitter: vi.fn().mockImplementation(function () {
+        return {
+            event: vi.fn(),
+            fire: vi.fn(),
+            dispose: vi.fn(),
+        };
+    }),
+    ThemeIcon: vi.fn(),
 }));
 
 class TestCopyPasteCollectionTask extends CopyPasteCollectionTask {
@@ -82,7 +86,7 @@ function createContext(): IActionContext {
 describe('CopyPasteCollectionTask index phase', () => {
     it('shows a stable index count and traces per-index progress', async () => {
         const indexCopier = {
-            copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
+            copyIndexes: vi.fn().mockImplementation(async (options: CopyIndexesOptions) => {
                 options.onStart?.(20);
                 options.onProgress?.({ completed: 1, total: 20, indexName: 'email_1' });
                 return {
@@ -95,8 +99,8 @@ describe('CopyPasteCollectionTask index phase', () => {
                 };
             }),
         } as unknown as CollectionIndexCopier;
-        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
-        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const reader = { streamDocuments: vi.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: vi.fn() } as unknown as StreamingDocumentWriter;
         const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
         const context = createContext();
 
@@ -116,7 +120,7 @@ describe('CopyPasteCollectionTask index phase', () => {
     it('copies indexes before streaming documents', async () => {
         const calls: string[] = [];
         const indexCopier = {
-            copyIndexes: jest.fn().mockImplementation(async () => {
+            copyIndexes: vi.fn().mockImplementation(async () => {
                 calls.push('indexes');
                 return {
                     selectedIndexCount: 1,
@@ -129,7 +133,7 @@ describe('CopyPasteCollectionTask index phase', () => {
             }),
         } as unknown as CollectionIndexCopier;
         const reader = {
-            streamDocuments: jest.fn().mockImplementation(() => {
+            streamDocuments: vi.fn().mockImplementation(() => {
                 calls.push('documents');
                 return (async function* () {
                     yield { id: '1', documentContent: { _id: '1' } };
@@ -137,7 +141,7 @@ describe('CopyPasteCollectionTask index phase', () => {
             }),
         } as unknown as DocumentReader;
         const writer = {
-            streamDocuments: jest.fn().mockResolvedValue({ totalProcessed: 1, flushCount: 1, insertedCount: 1 }),
+            streamDocuments: vi.fn().mockResolvedValue({ totalProcessed: 1, flushCount: 1, insertedCount: 1 }),
         } as unknown as StreamingDocumentWriter;
         const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
         task.setSourceDocumentCount(1);
@@ -149,13 +153,13 @@ describe('CopyPasteCollectionTask index phase', () => {
 
     it('fails before document streaming when index creation fails', async () => {
         const indexCopier = {
-            copyIndexes: jest.fn().mockRejectedValue(new Error('index creation failed')),
+            copyIndexes: vi.fn().mockRejectedValue(new Error('index creation failed')),
         } as unknown as CollectionIndexCopier;
         const reader = {
-            streamDocuments: jest.fn(),
+            streamDocuments: vi.fn(),
         } as unknown as DocumentReader;
         const writer = {
-            streamDocuments: jest.fn(),
+            streamDocuments: vi.fn(),
         } as unknown as StreamingDocumentWriter;
         const context = createContext();
         const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
@@ -174,13 +178,13 @@ describe('CopyPasteCollectionTask index phase', () => {
         const abortError = new Error('aborted');
         abortError.name = 'AbortError';
         const indexCopier = {
-            copyIndexes: jest.fn().mockImplementation(async () => {
+            copyIndexes: vi.fn().mockImplementation(async () => {
                 controller.abort();
                 throw abortError;
             }),
         } as unknown as CollectionIndexCopier;
-        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
-        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const reader = { streamDocuments: vi.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: vi.fn() } as unknown as StreamingDocumentWriter;
         const context = createContext();
         const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
         task.setSourceDocumentCount(1);
@@ -194,7 +198,7 @@ describe('CopyPasteCollectionTask index phase', () => {
 
     it('copies indexes when the source collection is empty', async () => {
         const indexCopier = {
-            copyIndexes: jest.fn().mockResolvedValue({
+            copyIndexes: vi.fn().mockResolvedValue({
                 selectedIndexCount: 1,
                 createdCount: 1,
                 skippedCount: 0,
@@ -203,8 +207,8 @@ describe('CopyPasteCollectionTask index phase', () => {
                 cancelled: false,
             }),
         } as unknown as CollectionIndexCopier;
-        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
-        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const reader = { streamDocuments: vi.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: vi.fn() } as unknown as StreamingDocumentWriter;
         const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
 
         await task.runWorkForTest(new AbortController().signal, createContext());
@@ -214,9 +218,9 @@ describe('CopyPasteCollectionTask index phase', () => {
     });
 
     it('does not access indexes when index copying is disabled', async () => {
-        const indexCopier = { copyIndexes: jest.fn() } as unknown as CollectionIndexCopier;
-        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
-        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const indexCopier = { copyIndexes: vi.fn() } as unknown as CollectionIndexCopier;
+        const reader = { streamDocuments: vi.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: vi.fn() } as unknown as StreamingDocumentWriter;
         const task = new TestCopyPasteCollectionTask({ ...config, copyIndexes: false }, reader, writer, indexCopier, 0);
 
         await task.runWorkForTest(new AbortController().signal, createContext());

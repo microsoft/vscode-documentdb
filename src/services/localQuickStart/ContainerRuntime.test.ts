@@ -3,21 +3,25 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type * as ContainerClient from '@microsoft/vscode-container-client';
 import {
     ShellStreamCommandRunnerFactory,
     type ShellStreamCommandRunnerOptions,
 } from '@microsoft/vscode-container-client';
 import * as vscode from 'vscode';
 import { ContainerRuntime, disposeQuickStartOutputChannel } from './ContainerRuntime';
+import type * as DockerCommand from './dockerCommand';
 import { runDockerCommand, type DockerCommandOptions } from './dockerCommand';
 
-jest.mock('@microsoft/vscode-container-client', () => ({
-    ...jest.requireActual('@microsoft/vscode-container-client'),
-    ShellStreamCommandRunnerFactory: jest.fn(),
+vi.mock('@microsoft/vscode-container-client', async () => ({
+    ...(await vi.importActual<typeof ContainerClient>('@microsoft/vscode-container-client')),
+    ShellStreamCommandRunnerFactory: vi.fn(),
 }));
-jest.mock('./dockerCommand', () => ({
-    ...jest.requireActual('./dockerCommand'),
-    runDockerCommand: jest.fn(),
+vi.mock('./dockerCommand', async () => ({
+    ...(await vi.importActual<typeof DockerCommand>('./dockerCommand')),
+    runDockerCommand: vi.fn(),
 }));
 
 const PASSWORD = 'hunter2-generated-password';
@@ -32,21 +36,22 @@ describe('ContainerRuntime output channel', () => {
         lines = [];
         stdout = STDOUT_WITH_ENV;
         disposeQuickStartOutputChannel();
-        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+        vi.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
             appendLine: (line: string) => lines.push(line),
             dispose: () => undefined,
         } as unknown as vscode.LogOutputChannel);
-        jest.mocked(ShellStreamCommandRunnerFactory).mockImplementation(
-            (options: ShellStreamCommandRunnerOptions) =>
-                ({
-                    getCommandRunner: () => async () => {
-                        options.onCommand?.('docker …');
-                        options.stdOutPipe?.end(stdout + '\n');
-                        return [];
-                    },
-                }) as unknown as ShellStreamCommandRunnerFactory<ShellStreamCommandRunnerOptions>,
-        );
-        jest.mocked(runDockerCommand).mockImplementation(async (_command, options: DockerCommandOptions) => {
+        vi.mocked(ShellStreamCommandRunnerFactory).mockImplementation(function (
+            options: ShellStreamCommandRunnerOptions,
+        ) {
+            return {
+                getCommandRunner: () => async () => {
+                    options.onCommand?.('docker …');
+                    options.stdOutPipe?.end(stdout + '\n');
+                    return [];
+                },
+            } as unknown as ShellStreamCommandRunnerFactory<ShellStreamCommandRunnerOptions>;
+        });
+        vi.mocked(runDockerCommand).mockImplementation(async (_command, options: DockerCommandOptions) => {
             options.onCommand?.('docker …');
             options.stdOutPipe?.end(stdout + '\n');
             return undefined;
@@ -55,7 +60,7 @@ describe('ContainerRuntime output channel', () => {
 
     afterEach(() => {
         disposeQuickStartOutputChannel();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     it('never echoes inspect stdout, which carries the container env', async () => {

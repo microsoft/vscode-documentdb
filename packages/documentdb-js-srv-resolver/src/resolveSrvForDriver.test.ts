@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
+
 import dns from 'node:dns';
 import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient.js';
 import { resolveSrvForDriver } from './resolveSrvForDriver.js';
@@ -13,11 +15,18 @@ import type * as FallbackDnsClient from './fallbackDnsClient.js';
 import { type SrvResolutionReport } from './report.js';
 import { type ResolveSrvForDriverInput } from './resolveSrvForDriver.js';
 
-jest.mock('./fallbackDnsClient.js', () => ({
-    ...jest.requireActual<typeof FallbackDnsClient>('./fallbackDnsClient.js'),
-    resolveSrvFallback: jest.fn(),
-    resolveTxtFallback: jest.fn(),
+vi.mock('./fallbackDnsClient.js', async () => ({
+    ...(await vi.importActual<typeof FallbackDnsClient>('./fallbackDnsClient.js')),
+    resolveSrvFallback: vi.fn(),
+    resolveTxtFallback: vi.fn(),
 }));
+
+// ESM namespaces are read-only; one shared object lets `vi.spyOn(dns, ...)` reach the source's `import * as dns`.
+vi.mock('node:dns', async (importOriginal) => {
+    const shared: Record<string, unknown> = { ...(await importOriginal<Record<string, unknown>>()) };
+    shared.default = shared;
+    return shared;
+});
 
 const host = 'x.global.mongocluster.cosmos.azure.com';
 const uri = `mongodb+srv://user:S3cr3t%40pw@${host}/db`;
@@ -32,25 +41,25 @@ function probeError(code = 'EBADRESP'): Error & { code: string } {
 }
 
 describe('resolveSrvForDriver', (): void => {
-    let probe: jest.SpyInstance<Promise<SrvRecord[]>, [string]>;
+    let probe: MockInstance<(...args: [string]) => Promise<SrvRecord[]>>;
     let reports: SrvResolutionReport[];
-    let trace: jest.Mock<void, [string]>;
+    let trace: Mock<(...args: [string]) => void>;
 
     beforeEach((): void => {
-        jest.clearAllMocks();
-        probe = jest.spyOn(dns.promises.Resolver.prototype, 'resolveSrv').mockRejectedValue(probeError());
-        jest.spyOn(dns, 'getServers').mockReturnValue(['192.168.1.1']);
-        jest.mocked(resolveSrvFallback).mockResolvedValue({ ...dnsReply, records });
-        jest.mocked(resolveTxtFallback).mockResolvedValue({
+        vi.clearAllMocks();
+        probe = vi.spyOn(dns.promises.Resolver.prototype, 'resolveSrv').mockRejectedValue(probeError());
+        vi.spyOn(dns, 'getServers').mockReturnValue(['192.168.1.1']);
+        vi.mocked(resolveSrvFallback).mockResolvedValue({ ...dnsReply, records });
+        vi.mocked(resolveTxtFallback).mockResolvedValue({
             ...dnsReply,
             records: [['authSource=admin&replicaSet=globaldb']],
         });
         reports = [];
-        trace = jest.fn<void, [string]>();
+        trace = vi.fn<(...args: [string]) => void>();
     });
 
     afterEach((): void => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     function run(overrides: Partial<ResolveSrvForDriverInput> = {}): ReturnType<typeof resolveSrvForDriver> {
@@ -125,7 +134,7 @@ describe('resolveSrvForDriver', (): void => {
     });
 
     it('accepts an absent TXT record', async (): Promise<void> => {
-        jest.mocked(resolveTxtFallback).mockRejectedValue(new FallbackDnsError('ENODATA', 'queryTxt', host, 1));
+        vi.mocked(resolveTxtFallback).mockRejectedValue(new FallbackDnsError('ENODATA', 'queryTxt', host, 1));
         const result = await run();
         expect(result.connectionString).not.toContain('authSource');
         expect(result.report).toMatchObject({ txtSource: 'none', fallbackOutcome: 'succeeded' });
@@ -138,13 +147,13 @@ describe('resolveSrvForDriver', (): void => {
         const original = probeError();
         probe.mockRejectedValue(original);
         const failure = new FallbackDnsError(code, which === 'SRV' ? 'querySrv' : 'queryTxt', host, 2);
-        jest.mocked(which === 'SRV' ? resolveSrvFallback : resolveTxtFallback).mockRejectedValue(failure);
+        vi.mocked(which === 'SRV' ? resolveSrvFallback : resolveTxtFallback).mockRejectedValue(failure);
         await expect(run()).rejects.toBe(original);
         expect(reports[0]).toMatchObject({ outcome: 'failed', fallbackErrorCode: reported, fallbackServersTried: 2 });
     });
 
     it('throws a rewrite rejection itself', async (): Promise<void> => {
-        jest.mocked(resolveSrvFallback).mockResolvedValue({
+        vi.mocked(resolveSrvFallback).mockResolvedValue({
             ...dnsReply,
             records: [{ ...records[0], name: 'evil.example.org' }],
         });
@@ -161,7 +170,7 @@ describe('resolveSrvForDriver', (): void => {
                     rejectProbe = reject;
                 }),
         );
-        const cancel = jest
+        const cancel = vi
             .spyOn(dns.promises.Resolver.prototype, 'cancel')
             .mockImplementation((): void => rejectProbe(probeError('ECANCELLED')));
         const result = run({ signal: controller.signal });
@@ -186,9 +195,9 @@ describe('resolveSrvForDriver', (): void => {
         [5000, 5000],
         [40000, 20000],
     ])('bounds the fallback deadline (deadlineMs=%s)', async (deadlineMs, expected): Promise<void> => {
-        jest.spyOn(Date, 'now').mockReturnValue(100000);
+        vi.spyOn(Date, 'now').mockReturnValue(100000);
         await run({ deadlineMs });
-        expect(jest.mocked(resolveSrvFallback).mock.calls[0][1]).toMatchObject({
+        expect(vi.mocked(resolveSrvFallback).mock.calls[0][1]).toMatchObject({
             deadlineAt: 100000 + expected,
             servers: ['192.168.1.1'],
         });

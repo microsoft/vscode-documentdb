@@ -35,7 +35,7 @@ import { type TRPCClientError, type TRPCLink } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
 // eslint-disable-next-line import/no-internal-modules -- tRPC's own link examples import from /server/observable: https://trpc.io/docs/client/links#example
 import { observable } from '@trpc/server/observable';
-import { type CallInfo, createEventChannel, type RpcEventEmitter } from './events';
+import { type CallInfo, createEventChannel, type RpcEventEmitter } from './events.js';
 
 /**
  * Callback invoked by {@link errorLink} for each query/mutation that errors

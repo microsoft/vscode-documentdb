@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { wellKnownEmulatorPassword } from '../constants';
 import { isCosmosEmulatorConnectionString } from './connectToClient';
 import {

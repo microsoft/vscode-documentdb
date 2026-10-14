@@ -3,19 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 
-const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
-jest.mock('../../extensionVariables', () => ({
+const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
+vi.mock('../../extensionVariables', () => ({
     ext: {
         get outputChannel(): typeof mockOutputChannel {
             return mockOutputChannel;
         },
     },
 }));
-jest.mock('./managedIdentityTelemetry', () => ({
-    reportManagedIdentityTokenFailure: jest.fn(),
-    reportManagedIdentityFailureReason: jest.fn(),
+vi.mock('./managedIdentityTelemetry', () => ({
+    reportManagedIdentityTokenFailure: vi.fn(),
+    reportManagedIdentityFailureReason: vi.fn(),
 }));
 
 function output(): string {
@@ -28,18 +30,26 @@ function expectPrivateTokenOutput(): void {
     }
 }
 
-const mockGetToken = jest.fn();
-const mockManagedIdentityCredential = jest.fn().mockImplementation(() => ({
-    getToken: (...args: unknown[]) => mockGetToken(...args),
-}));
+// The `@azure/identity` factory below reads these eagerly, and `vi.mock` is hoisted above every
+// other statement, so they are created in `vi.hoisted`.
+const { mockGetToken, mockManagedIdentityCredential } = vi.hoisted(() => {
+    const getToken = vi.fn();
+    return {
+        mockGetToken: getToken,
+        // A `function`, not an arrow: Vitest 4 calls the implementation with `new`.
+        mockManagedIdentityCredential: vi.fn().mockImplementation(function () {
+            return { getToken: (...args: unknown[]) => getToken(...args) };
+        }),
+    };
+});
 
-jest.mock('@azure/identity', () => ({
+vi.mock('@azure/identity', () => ({
     ManagedIdentityCredential: mockManagedIdentityCredential,
 }));
 
 describe('getManagedIdentityAccessToken', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockGetToken.mockResolvedValue({
             token: 'token',
             expiresOnTimestamp: Date.now() + 60_000,

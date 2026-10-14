@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type * as SrvResolver from '@documentdb-js/srv-resolver';
 import { resolveSrvForDriver } from '@documentdb-js/srv-resolver';
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
@@ -22,13 +24,13 @@ interface RecordedEvent {
 
 const mockEvents: RecordedEvent[] = [];
 
-jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual<{ UserCancelledError: typeof UserCancelledError }>(
+vi.mock('@microsoft/vscode-azext-utils', async () => {
+    const actual = await vi.importActual<{ UserCancelledError: typeof UserCancelledError }>(
         '@microsoft/vscode-azext-utils',
     );
     return {
         ...actual,
-        callWithTelemetryAndErrorHandling: jest.fn(
+        callWithTelemetryAndErrorHandling: vi.fn(
             async (eventName: string, callback: (context: IActionContext) => Promise<void>): Promise<void> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
@@ -51,12 +53,12 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
-jest.mock('@documentdb-js/srv-resolver', () => ({
-    ...jest.requireActual<typeof SrvResolver>('@documentdb-js/srv-resolver'),
-    resolveSrvForDriver: jest.fn(),
+vi.mock('@documentdb-js/srv-resolver', async () => ({
+    ...(await vi.importActual<typeof SrvResolver>('@documentdb-js/srv-resolver')),
+    resolveSrvForDriver: vi.fn(),
 }));
-jest.mock('../../extensionVariables', () => ({ ext: { outputChannel: { trace: jest.fn() } } }));
-jest.mock('../../utils/workspacUtils', () => ({ getConnectionTimeoutMs: jest.fn().mockReturnValue(30000) }));
+vi.mock('../../extensionVariables', () => ({ ext: { outputChannel: { trace: vi.fn() } } }));
+vi.mock('../../utils/workspacUtils', () => ({ getConnectionTimeoutMs: vi.fn().mockReturnValue(30000) }));
 
 const host = 'x.global.mongocluster.cosmos.azure.com';
 const uri = `mongodb+srv://user:S3cr3t%40pw@${host}/`;
@@ -86,7 +88,7 @@ function input(overrides: Partial<PrepareDriverConnectionStringInput> = {}): Pre
 }
 
 function resolveWith(report: SrvResolutionReport, failure?: Error): void {
-    jest.mocked(resolveSrvForDriver).mockImplementation(async (args): Promise<ResolveSrvForDriverResult> => {
+    vi.mocked(resolveSrvForDriver).mockImplementation(async (args): Promise<ResolveSrvForDriverResult> => {
         args.onReport?.(report);
         if (failure) {
             throw failure;
@@ -97,7 +99,7 @@ function resolveWith(report: SrvResolutionReport, failure?: Error): void {
 
 describe('prepareDriverConnectionString', (): void => {
     beforeEach((): void => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockEvents.length = 0;
         delete process.env.DOCUMENTDB_DISABLE_SRV_FALLBACK;
         delete process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK;
@@ -156,13 +158,13 @@ describe('prepareDriverConnectionString', (): void => {
             process.env.DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK = force;
         }
         await prepareDriverConnectionString(input());
-        expect(jest.mocked(resolveSrvForDriver).mock.calls[0][0].fallback).toBe(expected);
+        expect(vi.mocked(resolveSrvForDriver).mock.calls[0][0].fallback).toBe(expected);
     });
 
     it('bounds the fallback by the connection timeout', async (): Promise<void> => {
-        jest.mocked(getConnectionTimeoutMs).mockReturnValueOnce(5000);
+        vi.mocked(getConnectionTimeoutMs).mockReturnValueOnce(5000);
         await prepareDriverConnectionString(input());
-        expect(jest.mocked(resolveSrvForDriver).mock.calls[0][0]).toMatchObject({
+        expect(vi.mocked(resolveSrvForDriver).mock.calls[0][0]).toMatchObject({
             deadlineMs: 5000,
             logPrefix: '[SrvResolution] startup=connect-id',
         });
@@ -179,7 +181,7 @@ describe('prepareDriverConnectionString', (): void => {
                 },
             }),
         );
-        expect(jest.mocked(resolveSrvForDriver).mock.calls[0][0]).toMatchObject({
+        expect(vi.mocked(resolveSrvForDriver).mock.calls[0][0]).toMatchObject({
             logPrefix: '[SrvResolution] startup=worker-startup-id',
             logContext: 'surface=shell',
         });
@@ -197,7 +199,7 @@ describe('prepareDriverConnectionString', (): void => {
                 correlation: { connectionCorrelationId: 'source-id', shellSessionId: 'shell-id' },
             }),
         );
-        expect(jest.mocked(resolveSrvForDriver).mock.calls[0][0].logPrefix).toBe('[SrvResolution] startup=unknown');
+        expect(vi.mocked(resolveSrvForDriver).mock.calls[0][0].logPrefix).toBe('[SrvResolution] startup=unknown');
     });
 
     it('rethrows the original failure and records a masked failed event', async (): Promise<void> => {
@@ -213,7 +215,7 @@ describe('prepareDriverConnectionString', (): void => {
 
     it('maps an abort to UserCancelledError and a canceled event', async (): Promise<void> => {
         const controller = new AbortController();
-        jest.mocked(resolveSrvForDriver).mockImplementation(async (args): Promise<never> => {
+        vi.mocked(resolveSrvForDriver).mockImplementation(async (args): Promise<never> => {
             controller.abort();
             args.onReport?.({ ...baseReport, outcome: 'cancelled' });
             throw new Error('aborted');

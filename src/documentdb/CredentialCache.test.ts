@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import { API } from '../DocumentDBExperiences';
 import { ItemType } from '../services/connectionStorageService';
 import { AuthMethodId } from './auth/AuthMethod';

@@ -35,8 +35,8 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getDocLink } from '../src/docLinks';
-import * as MetaTags from '../src/metaTags';
+import { getDocLink } from '../src/docLinks.js';
+import * as MetaTags from '../src/metaTags.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -624,12 +624,12 @@ function generateFileContent(specs: FileSpec[], snippets: Map<string, Map<string
 
     // Only import getDocLink if at least one operator uses it in this file
     const needsDocLink = sectionsStr.includes('getDocLink(');
-    const docLinkImport = needsDocLink ? `\nimport { getDocLink } from './docLinks';` : '';
+    const docLinkImport = needsDocLink ? `\nimport { getDocLink } from './docLinks.js';` : '';
 
     let content = `${copyright}
-import { type OperatorEntry } from './types';
-import { ${metaImportsList} } from './metaTags';${docLinkImport}
-import { registerOperators } from './getFilteredCompletions';
+import { type OperatorEntry } from './types.js';
+import { ${metaImportsList} } from './metaTags.js';${docLinkImport}
+import { registerOperators } from './getFilteredCompletions.js';
 
 `;
 
@@ -876,7 +876,7 @@ function generateIndexReferenceContent(index: { types: ParsedIndexEntry[]; prope
     };
 
     return `${copyright}
-import { type IndexReferenceEntry } from './types';
+import { type IndexReferenceEntry } from './types.js';
 
 ${emitArray('INDEX_TYPES', index.types)}
 ${emitArray('INDEX_PROPERTIES', index.properties)}`;
@@ -887,10 +887,10 @@ ${emitArray('INDEX_PROPERTIES', index.properties)}`;
 // ---------------------------------------------------------------------------
 
 function main(): void {
-    const dumpPath = path.join(__dirname, '..', 'resources', 'scraped', 'operator-reference.md');
-    const overridePath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
-    const snippetsPath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-snippets.md');
-    const srcDir = path.join(__dirname, '..', 'src');
+    const dumpPath = path.join(import.meta.dirname, '..', 'resources', 'scraped', 'operator-reference.md');
+    const overridePath = path.join(import.meta.dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
+    const snippetsPath = path.join(import.meta.dirname, '..', 'resources', 'overrides', 'operator-snippets.md');
+    const srcDir = path.join(import.meta.dirname, '..', 'src');
 
     console.log('📖 Reading operator reference dump...');
     const content = fs.readFileSync(dumpPath, 'utf-8');
@@ -949,7 +949,7 @@ function main(): void {
     }
 
     // Generate the index types/properties reference from its scraped dump.
-    const indexDumpPath = path.join(__dirname, '..', 'resources', 'scraped', 'index-reference.md');
+    const indexDumpPath = path.join(import.meta.dirname, '..', 'resources', 'scraped', 'index-reference.md');
     const generatedIndexFiles: string[] = [];
     if (fs.existsSync(indexDumpPath)) {
         console.log('\n📇 Generating indexReference.ts...');

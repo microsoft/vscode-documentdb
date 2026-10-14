@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
@@ -11,15 +13,15 @@ import { DiscoveryService, type DiscoveryProvider } from '../../services/discove
 import { type TreeElement } from '../../tree/TreeElement';
 import { removeDiscoveryRegistry } from './removeDiscoveryRegistry';
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: { t: (message: string) => message },
 }));
 
-const mockGlobalStateGet = jest.fn();
-const mockGlobalStateUpdate = jest.fn();
-const mockRefresh = jest.fn();
+const mockGlobalStateGet = vi.fn();
+const mockGlobalStateUpdate = vi.fn();
+const mockRefresh = vi.fn();
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         context: {
             globalState: {
@@ -31,8 +33,8 @@ jest.mock('../../extensionVariables', () => ({
             refresh: () => mockRefresh(),
         },
         outputChannel: {
-            error: jest.fn(),
-            warn: jest.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
@@ -63,7 +65,7 @@ function createActionContext(): IActionContext {
 
 describe('removeDiscoveryRegistry', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         resetDiscoveryProviderVisibilityCacheForTests();
         mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) =>
             key === 'hiddenDiscoveryProviderIds' ? [] : defaultValue,
@@ -72,7 +74,7 @@ describe('removeDiscoveryRegistry', () => {
     });
 
     it('deactivates provider resources before hiding the provider', async () => {
-        const deactivate = jest.fn().mockResolvedValue(undefined);
+        const deactivate = vi.fn().mockResolvedValue(undefined);
         DiscoveryService.registerProvider(createProvider('provider-with-cleanup', deactivate));
         const context = createActionContext();
 

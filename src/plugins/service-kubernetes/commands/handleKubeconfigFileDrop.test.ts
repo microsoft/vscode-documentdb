@@ -3,25 +3,27 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockLoadKubeConfig = jest.fn();
-const mockGetContexts = jest.fn();
-const mockAddFileSource = jest.fn();
-const mockRefreshKubernetesRoot = jest.fn();
-const mockRevealKubernetesSource = jest.fn();
-const mockShowInformationMessage = jest.fn();
-const mockShowWarningMessage = jest.fn();
-const mockShowTextDocument = jest.fn();
-const mockOutputAppendLine = jest.fn();
-const mockOutputError = jest.fn();
-const mockOutputWarn = jest.fn();
-const mockStat = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-jest.mock('vscode', () => ({
+const mockLoadKubeConfig = vi.fn();
+const mockGetContexts = vi.fn();
+const mockAddFileSource = vi.fn();
+const mockRefreshKubernetesRoot = vi.fn();
+const mockRevealKubernetesSource = vi.fn();
+const mockShowInformationMessage = vi.fn();
+const mockShowWarningMessage = vi.fn();
+const mockShowTextDocument = vi.fn();
+const mockOutputAppendLine = vi.fn();
+const mockOutputError = vi.fn();
+const mockOutputWarn = vi.fn();
+const mockStat = vi.fn();
+
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((acc, value, index) => acc.replace(`{${String(index)}}`, value), message),
         ),
     },
@@ -32,7 +34,7 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('fs', () => ({
+vi.mock('fs', () => ({
     promises: {
         stat: (...args: unknown[]) => mockStat(...args),
     },
@@ -47,8 +49,8 @@ let lastTelemetryContext:
       }
     | undefined;
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_callbackId: string, callback: (ctx: unknown) => Promise<unknown>) => {
             const ctx = {
                 telemetry: {
@@ -65,7 +67,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     ),
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
             appendLine: (...args: unknown[]) => mockOutputAppendLine(...args),
@@ -75,16 +77,16 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../kubernetesClient', () => ({
+vi.mock('../kubernetesClient', () => ({
     loadKubeConfig: (...args: unknown[]) => mockLoadKubeConfig(...args),
     getContexts: (...args: unknown[]) => mockGetContexts(...args),
 }));
 
-jest.mock('../sources/sourceStore', () => ({
+vi.mock('../sources/sourceStore', () => ({
     tryAddFileSource: (...args: unknown[]) => mockAddFileSource(...args),
 }));
 
-jest.mock('./refreshKubernetesRoot', () => ({
+vi.mock('./refreshKubernetesRoot', () => ({
     refreshKubernetesRoot: (...args: unknown[]) => mockRefreshKubernetesRoot(...args),
     revealKubernetesSource: (...args: unknown[]) => mockRevealKubernetesSource(...args),
 }));

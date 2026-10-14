@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
+
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import * as path from 'path';
+import * as workerThreads from 'worker_threads';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { type AuthTraceContext } from '../../utils/authTrace';
@@ -30,13 +34,13 @@ interface RecordedTelemetry {
 
 const mockTelemetryEvents: RecordedTelemetry[] = [];
 
-jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual<{ UserCancelledError: typeof UserCancelledError }>(
+vi.mock('@microsoft/vscode-azext-utils', async () => {
+    const actual = await vi.importActual<{ UserCancelledError: typeof UserCancelledError }>(
         '@microsoft/vscode-azext-utils',
     );
     return {
         ...actual,
-        callWithTelemetryAndErrorHandling: jest.fn(
+        callWithTelemetryAndErrorHandling: vi.fn(
             async (eventName: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
@@ -69,55 +73,58 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
+        context: { extensionPath: '/extension-root' },
         outputChannel: {
-            trace: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
+            trace: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
         },
     },
 }));
 
-jest.mock('../srv/prepareDriverConnectionString', () => ({
-    prepareDriverConnectionString: jest.fn(),
+vi.mock('../srv/prepareDriverConnectionString', () => ({
+    prepareDriverConnectionString: vi.fn(),
 }));
 
-jest.mock('../CredentialCache', () => ({
+vi.mock('../CredentialCache', () => ({
     CredentialCache: {
-        getCredentials: jest.fn(),
-        getConnectionStringWithPassword: jest.fn(),
-        getConnectionUser: jest.fn(),
+        getCredentials: vi.fn(),
+        getConnectionStringWithPassword: vi.fn(),
+        getConnectionUser: vi.fn(),
     },
 }));
 
-jest.mock('../../utils/workspacUtils', () => ({
-    getConnectionTimeoutMs: jest.fn().mockReturnValue(30000),
-    getBatchSizeSetting: jest.fn().mockReturnValue(20),
+vi.mock('../../utils/workspacUtils', () => ({
+    getConnectionTimeoutMs: vi.fn().mockReturnValue(30000),
+    getBatchSizeSetting: vi.fn().mockReturnValue(20),
 }));
 
 // Mock worker_threads — the WorkerSessionManager creates Worker instances
-jest.mock('worker_threads', () => {
-    const mockPostMessage = jest.fn();
-    const mockTerminate = jest.fn().mockResolvedValue(0);
+vi.mock('worker_threads', () => {
+    const mockPostMessage = vi.fn();
+    const mockTerminate = vi.fn().mockResolvedValue(0);
     const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
 
-    const MockWorker = jest.fn().mockImplementation(() => ({
-        postMessage: mockPostMessage,
-        terminate: mockTerminate,
-        on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
-            const existing = listeners.get(event) ?? [];
-            existing.push(handler);
-            listeners.set(event, existing);
-        }),
-        _emit: (event: string, ...args: unknown[]) => {
-            const handlers = listeners.get(event) ?? [];
-            for (const handler of handlers) {
-                handler(...args);
-            }
-        },
-        _listeners: listeners,
-    }));
+    const MockWorker = vi.fn().mockImplementation(function () {
+        return {
+            postMessage: mockPostMessage,
+            terminate: mockTerminate,
+            on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+                const existing = listeners.get(event) ?? [];
+                existing.push(handler);
+                listeners.set(event, existing);
+            }),
+            _emit: (event: string, ...args: unknown[]) => {
+                const handlers = listeners.get(event) ?? [];
+                for (const handler of handlers) {
+                    handler(...args);
+                }
+            },
+            _listeners: listeners,
+        };
+    });
 
     return {
         Worker: MockWorker,
@@ -134,23 +141,22 @@ describe('WorkerSessionManager', () => {
     let callbacks: WorkerSessionCallbacks;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockTelemetryEvents.length = 0;
-        jest.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
+        vi.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
             connectionString: input.connectionString,
             options: input.options,
             srvResolution: 'notSrv',
         }));
         // Reset listeners between tests
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const wt = require('worker_threads') as { _resetListeners: () => void };
+        const wt = workerThreads as unknown as { _resetListeners: () => void };
         wt._resetListeners();
 
         callbacks = {
-            onConsoleOutput: jest.fn(),
-            onLog: jest.fn(),
-            onTokenRequest: jest.fn(),
-            onWorkerExit: jest.fn(),
+            onConsoleOutput: vi.fn(),
+            onLog: vi.fn(),
+            onTokenRequest: vi.fn(),
+            onWorkerExit: vi.fn(),
         };
     });
 
@@ -192,7 +198,7 @@ describe('WorkerSessionManager', () => {
 
     describe('initialization timeout', () => {
         it('explains the failed connection and identifies the timeout setting', async () => {
-            jest.useFakeTimers();
+            vi.useFakeTimers();
             const manager = new WorkerSessionManager(callbacks);
             const initPromise = manager.ensureWorker(
                 'cluster-1',
@@ -208,7 +214,9 @@ describe('WorkerSessionManager', () => {
             );
 
             await Promise.resolve();
-            jest.advanceTimersByTime(1000);
+            expect(vi.mocked(Worker)).toHaveBeenCalledWith(path.join('/extension-root', 'playgroundWorker.mjs'));
+
+            vi.advanceTimersByTime(1000);
 
             await expect(initPromise).rejects.toMatchObject({
                 message:
@@ -216,7 +224,7 @@ describe('WorkerSessionManager', () => {
                 settingKey: 'documentDB.connectionTimeout',
                 settingsHint: 'The connection did not finish in time. You can increase the timeout in Settings:',
             });
-            jest.useRealTimers();
+            vi.useRealTimers();
         });
     });
 
@@ -245,10 +253,10 @@ describe('WorkerSessionManager', () => {
         }
 
         function workerMock(): {
-            postMessage: jest.Mock;
+            postMessage: Mock;
             _emit: (event: string, ...args: unknown[]) => void;
         } {
-            return jest.mocked(Worker).mock.results.at(-1)?.value as ReturnType<typeof workerMock>;
+            return vi.mocked(Worker).mock.results.at(-1)?.value as ReturnType<typeof workerMock>;
         }
 
         function replyInit(): Extract<MainToWorkerMessage, { type: 'init' }> {
@@ -268,12 +276,12 @@ describe('WorkerSessionManager', () => {
                 clientOptions: Object.freeze({ ...initMessage().clientOptions }),
             });
             const snapshot = JSON.parse(JSON.stringify(input)) as unknown;
-            jest.mocked(prepareDriverConnectionString).mockResolvedValue({
+            vi.mocked(prepareDriverConnectionString).mockResolvedValue({
                 connectionString: rewrittenUri,
                 options: {
                     serverSelectionTimeoutMS: 8000,
                     tls: true,
-                    authMechanismProperties: { OIDC_CALLBACK: jest.fn() },
+                    authMechanismProperties: { OIDC_CALLBACK: vi.fn() },
                 },
                 srvResolution: 'fallback',
             });
@@ -290,7 +298,7 @@ describe('WorkerSessionManager', () => {
             });
             expect(() => structuredClone(posted)).not.toThrow();
             expect(input).toEqual(snapshot);
-            expect(jest.mocked(prepareDriverConnectionString).mock.calls[0][0]).toMatchObject({
+            expect(vi.mocked(prepareDriverConnectionString).mock.calls[0][0]).toMatchObject({
                 connectionString: originalUri,
                 surface: 'playground',
                 correlation: { sessionId: 'playground-session', startupCorrelationId: posted.requestId },
@@ -306,14 +314,14 @@ describe('WorkerSessionManager', () => {
             'R2: %s %s during pending DNS rejects startup and never sends code',
             async (surface, method): Promise<void> => {
                 const pending = deferred<PreparedDriverConnectionString>();
-                jest.mocked(prepareDriverConnectionString).mockReturnValue(pending.promise);
-                jest.mocked(CredentialCache.getCredentials).mockReturnValue({
+                vi.mocked(prepareDriverConnectionString).mockReturnValue(pending.promise);
+                vi.mocked(CredentialCache.getCredentials).mockReturnValue({
                     clusterId: 'cluster-id',
                     authMechanism: AuthMethodId.NoAuth,
                     connectionString: originalUri,
                 });
-                const ensureSpy = jest.spyOn(WorkerSessionManager.prototype, 'ensureWorker');
-                const evalSpy = jest.spyOn(WorkerSessionManager.prototype, 'sendEval');
+                const ensureSpy = vi.spyOn(WorkerSessionManager.prototype, 'ensureWorker');
+                const evalSpy = vi.spyOn(WorkerSessionManager.prototype, 'sendEval');
                 const session =
                     surface === 'shell'
                         ? new ShellSessionManager({
@@ -331,7 +339,7 @@ describe('WorkerSessionManager', () => {
                               )
                             : session.evaluate('db.test.insertOne({})');
                     const ensuring = ensureSpy.mock.results.at(-1)?.value as Promise<void>;
-                    const signal = jest.mocked(prepareDriverConnectionString).mock.calls[0][0].abortSignal;
+                    const signal = vi.mocked(prepareDriverConnectionString).mock.calls[0][0].abortSignal;
                     expect(session.workerState).toBe('spawning');
                     expect(Worker).not.toHaveBeenCalled();
                     await session[method]();
@@ -342,7 +350,7 @@ describe('WorkerSessionManager', () => {
                     await expect(evaluation).rejects.toBeInstanceOf(UserCancelledError);
                     expect(Worker).not.toHaveBeenCalled();
                     expect(evalSpy).not.toHaveBeenCalled();
-                    const wt = jest.requireMock<{ _mockPostMessage: jest.Mock }>('worker_threads');
+                    const wt = workerThreads as unknown as { _mockPostMessage: Mock };
                     expect(wt._mockPostMessage).not.toHaveBeenCalled();
                     expect(startupEvent().telemetry.properties).toMatchObject({
                         startupOutcome: 'canceled',
@@ -359,7 +367,7 @@ describe('WorkerSessionManager', () => {
 
         it('does not let a canceled preparation terminate a newer startup', async (): Promise<void> => {
             const pending = deferred<PreparedDriverConnectionString>();
-            jest.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
+            vi.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
             const manager = new WorkerSessionManager(callbacks);
             const canceled = manager.ensureWorker('cluster-id', initMessage());
             manager.killWorker();
@@ -376,7 +384,7 @@ describe('WorkerSessionManager', () => {
 
         it('rejects preparation failure with the same error object before creating a worker', async (): Promise<void> => {
             const error = Object.assign(new Error('querySrv EBADRESP private-host'), { code: 'EBADRESP' });
-            jest.mocked(prepareDriverConnectionString).mockRejectedValue(error);
+            vi.mocked(prepareDriverConnectionString).mockRejectedValue(error);
             const manager = new WorkerSessionManager(callbacks);
             await expect(manager.ensureWorker('cluster-id', initMessage())).rejects.toBe(error);
             expect(Worker).not.toHaveBeenCalled();
@@ -386,18 +394,18 @@ describe('WorkerSessionManager', () => {
         });
 
         it('starts the full init timeout only after preparation completes', async (): Promise<void> => {
-            jest.useFakeTimers();
+            vi.useFakeTimers();
             const pending = deferred<PreparedDriverConnectionString>();
-            jest.mocked(prepareDriverConnectionString).mockReturnValue(pending.promise);
+            vi.mocked(prepareDriverConnectionString).mockReturnValue(pending.promise);
             const manager = new WorkerSessionManager(callbacks);
             try {
                 const initializing = manager.ensureWorker('cluster-id', initMessage(), 1000);
-                jest.advanceTimersByTime(5000);
+                vi.advanceTimersByTime(5000);
                 expect(Worker).not.toHaveBeenCalled();
                 pending.resolve({ connectionString: rewrittenUri, options: {}, srvResolution: 'fallback' });
                 await Promise.resolve();
                 expect(Worker).toHaveBeenCalledTimes(1);
-                jest.advanceTimersByTime(999);
+                vi.advanceTimersByTime(999);
                 expect(manager.workerState).toBe('spawning');
                 replyInit();
                 await initializing;
@@ -405,12 +413,12 @@ describe('WorkerSessionManager', () => {
                 expect(startupEvent().telemetry.measurements.duration).toBe(5.999);
             } finally {
                 manager.dispose();
-                jest.useRealTimers();
+                vi.useRealTimers();
             }
         });
 
         it('passes the OIDC mechanism to preparation but not to the worker', async (): Promise<void> => {
-            jest.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
+            vi.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
                 connectionString: rewrittenUri,
                 options: input.options,
                 srvResolution: 'fallback',
@@ -420,10 +428,10 @@ describe('WorkerSessionManager', () => {
                 ...initMessage(),
                 authMechanism: 'MicrosoftEntraID',
             });
-            await jest.mocked(prepareDriverConnectionString).mock.results[0].value;
+            await vi.mocked(prepareDriverConnectionString).mock.results[0].value;
             const posted = replyInit();
             await initializing;
-            expect(jest.mocked(prepareDriverConnectionString).mock.calls[0][0].options).toMatchObject({
+            expect(vi.mocked(prepareDriverConnectionString).mock.calls[0][0].options).toMatchObject({
                 authMechanism: 'MONGODB-OIDC',
             });
             expect(posted.clientOptions).not.toHaveProperty('authMechanism');
@@ -431,12 +439,12 @@ describe('WorkerSessionManager', () => {
         });
 
         it('keeps the original SRV host in shell connection metadata used by the banner', async (): Promise<void> => {
-            jest.mocked(CredentialCache.getCredentials).mockReturnValue({
+            vi.mocked(CredentialCache.getCredentials).mockReturnValue({
                 clusterId: 'cluster-id',
                 authMechanism: AuthMethodId.NoAuth,
                 connectionString: originalUri,
             });
-            jest.mocked(prepareDriverConnectionString).mockResolvedValue({
+            vi.mocked(prepareDriverConnectionString).mockResolvedValue({
                 connectionString: rewrittenUri,
                 options: {},
                 srvResolution: 'fallback',
@@ -457,16 +465,16 @@ describe('WorkerSessionManager', () => {
     });
 
     describe('startup tracking', () => {
-        let trace: jest.SpyInstance;
+        let trace: MockInstance;
 
         beforeEach(() => {
-            jest.useFakeTimers();
-            trace = jest.spyOn(ext.outputChannel, 'trace');
+            vi.useFakeTimers();
+            trace = vi.spyOn(ext.outputChannel, 'trace');
         });
 
         afterEach(() => {
             trace.mockRestore();
-            jest.useRealTimers();
+            vi.useRealTimers();
         });
 
         function startupEvent(): RecordedTelemetry {
@@ -501,8 +509,8 @@ describe('WorkerSessionManager', () => {
                 telemetryContext,
             );
             await Promise.resolve();
-            const worker = jest.mocked(Worker).mock.results.at(-1)?.value as {
-                postMessage: jest.Mock;
+            const worker = vi.mocked(Worker).mock.results.at(-1)?.value as {
+                postMessage: Mock;
                 _emit: (event: string, ...args: unknown[]) => void;
             };
             const initMessage = worker.postMessage.mock.calls.at(-1)?.[0] as MainToWorkerMessage;
@@ -511,9 +519,9 @@ describe('WorkerSessionManager', () => {
 
         it('reports a stalled token request with total and stage timings without connection details', async () => {
             const { initPromise, requestId, worker } = await startWorker();
-            jest.advanceTimersByTime(200);
+            vi.advanceTimersByTime(200);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
-            jest.advanceTimersByTime(800);
+            vi.advanceTimersByTime(800);
 
             await expect(initPromise).rejects.toMatchObject({
                 message:
@@ -526,7 +534,7 @@ describe('WorkerSessionManager', () => {
             expect(ext.outputChannel.error).toHaveBeenCalledTimes(1);
             expect(trace).not.toHaveBeenCalled();
             expect(trace.mock.calls.map((call) => String(call[0])).join('\n')).not.toMatch(/private-/);
-            expect(jest.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
+            expect(vi.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
             expect(startupEvent().telemetry).toMatchObject({
                 maskEntireErrorMessage: true,
                 properties: {
@@ -552,11 +560,11 @@ describe('WorkerSessionManager', () => {
             worker._emit('message', { type: 'log', level: 'debug', message: 'Initializing worker' });
             expect(callbacks.onLog).toHaveBeenCalledWith('debug', 'Initializing worker', requestId);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
-            jest.advanceTimersByTime(150);
+            vi.advanceTimersByTime(150);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
             expect(trace).not.toHaveBeenCalled();
             worker._emit('message', { type: 'initProgress', requestId: 'stale-request', stage: 'loadingDriver' });
-            jest.advanceTimersByTime(50);
+            vi.advanceTimersByTime(50);
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
             expect(trace).toHaveBeenCalledWith(
@@ -595,7 +603,7 @@ describe('WorkerSessionManager', () => {
                 `[WorkerSessionManager] startup=${requestId} failed surface=shell auth=MicrosoftEntraID lastStage=stage04AcquiringToken elapsedMs=0 timeoutMs=1000 stageDurationsMs={"stage01StartingWorker":0,"stage04AcquiringToken":0} costTimingsMs={}`,
             );
             expect(trace.mock.calls.map((call) => String(call[0])).join('\n')).not.toMatch(/private-/);
-            expect(jest.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
+            expect(vi.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
             const event = startupEvent();
             expect(event.telemetry.properties).toMatchObject({ startupOutcome: 'failed', result: 'Failed' });
             expect(event.error).toMatchObject({ message: 'Worker startup failed', stack: undefined });
@@ -604,7 +612,7 @@ describe('WorkerSessionManager', () => {
 
         it('logs an unexpected startup exit at error level', async () => {
             const { initPromise, requestId, worker } = await startWorker();
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             worker._emit('exit', 1);
 
             await expect(initPromise).rejects.toThrow('Worker exited unexpectedly');
@@ -618,8 +626,7 @@ describe('WorkerSessionManager', () => {
             const first = await startWorker();
             first.worker._emit('message', { type: 'initResult', requestId: first.requestId, success: true });
             await first.initPromise;
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as {
+            const wt = workerThreads as unknown as {
                 _getListeners: () => Map<string, ((...args: unknown[]) => void)[]>;
                 _resetListeners: () => void;
             };
@@ -663,13 +670,13 @@ describe('WorkerSessionManager', () => {
 
         it('accumulates repeated stages and keeps the last visit duration separately', async () => {
             const { initPromise, requestId, worker } = await startWorker();
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
-            jest.advanceTimersByTime(200);
+            vi.advanceTimersByTime(200);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
-            jest.advanceTimersByTime(600);
+            vi.advanceTimersByTime(600);
 
             await expect(initPromise).rejects.toThrow('Waiting for authentication token (0.6 seconds in this stage)');
             expect(startupEvent().telemetry.measurements).toMatchObject({
@@ -694,7 +701,7 @@ describe('WorkerSessionManager', () => {
                 'authenticating',
                 'initializingRuntime',
             ]) {
-                jest.advanceTimersByTime(10);
+                vi.advanceTimersByTime(10);
                 worker._emit('message', { type: 'initProgress', requestId, stage });
             }
             worker._emit('message', { type: 'initResult', requestId, success: true });
@@ -720,21 +727,21 @@ describe('WorkerSessionManager', () => {
             const timing = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
                 worker._emit('message', { type: 'initTiming', requestId, activity, activityId, started });
             };
-            callbacks.onTokenRequest = jest.fn(async (message, postResponse, timings): Promise<void> => {
+            callbacks.onTokenRequest = vi.fn(async (message, postResponse, timings): Promise<void> => {
                 const stop = timings?.startTokenAcquire();
-                jest.advanceTimersByTime(20);
+                vi.advanceTimersByTime(20);
                 stop?.();
                 postResponse({ type: 'tokenResponse', requestId: message.requestId, accessToken: 'private-token' });
             });
             timing('databaseConnect', requestId, true);
-            jest.advanceTimersByTime(10);
+            vi.advanceTimersByTime(10);
             timing('tokenWait', 'token-request', true);
             timing('tokenWait', 'token-request', true);
-            jest.advanceTimersByTime(5);
+            vi.advanceTimersByTime(5);
             worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
-            jest.advanceTimersByTime(5);
+            vi.advanceTimersByTime(5);
             timing('tokenWait', 'token-request', false);
-            jest.advanceTimersByTime(10);
+            vi.advanceTimersByTime(10);
             timing('databaseConnect', requestId, false);
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
@@ -756,7 +763,7 @@ describe('WorkerSessionManager', () => {
 
         it('freezes partial worker timings on timeout and ignores late provider completion', async () => {
             let finishProvider: (() => void) | undefined;
-            callbacks.onTokenRequest = jest.fn((message, postResponse, timings): Promise<void> => {
+            callbacks.onTokenRequest = vi.fn((message, postResponse, timings): Promise<void> => {
                 const stop = timings?.startTokenAcquire();
                 return new Promise<void>((resolve) => {
                     finishProvider = (): void => {
@@ -778,7 +785,7 @@ describe('WorkerSessionManager', () => {
                 activityId: requestId,
                 started: true,
             });
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             worker._emit('message', {
                 type: 'initTiming',
                 requestId,
@@ -786,9 +793,9 @@ describe('WorkerSessionManager', () => {
                 activityId: 'token-request',
                 started: true,
             });
-            jest.advanceTimersByTime(50);
+            vi.advanceTimersByTime(50);
             worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
-            jest.advanceTimersByTime(850);
+            vi.advanceTimersByTime(850);
             await expect(initPromise).rejects.toThrow('Operation timed out');
 
             const event = startupEvent();
@@ -798,7 +805,7 @@ describe('WorkerSessionManager', () => {
                 tokenAcquireDurationMs: 850,
             });
             const snapshot = JSON.stringify(event);
-            jest.advanceTimersByTime(1000);
+            vi.advanceTimersByTime(1000);
             finishProvider?.();
             worker._emit('message', {
                 type: 'initTiming',
@@ -827,7 +834,7 @@ describe('WorkerSessionManager', () => {
                 activityId: requestId,
                 started: true,
             });
-            jest.advanceTimersByTime(40);
+            vi.advanceTimersByTime(40);
             worker._emit('message', {
                 type: 'initTiming',
                 requestId,
@@ -873,7 +880,7 @@ describe('WorkerSessionManager', () => {
 
         it('ties token requests to the startup ID of the worker that sent them', async (): Promise<void> => {
             const contexts: (AuthTraceContext | undefined)[] = [];
-            callbacks.onTokenRequest = jest.fn(async (_message, _postResponse, _timings, context): Promise<void> => {
+            callbacks.onTokenRequest = vi.fn(async (_message, _postResponse, _timings, context): Promise<void> => {
                 contexts.push(context);
             });
             const { manager, initPromise, requestId, worker } = await startWorker();
@@ -890,7 +897,7 @@ describe('WorkerSessionManager', () => {
 
         it('reports worker construction failures while preserving the original error', async () => {
             const originalError = new Error('private-construction-error');
-            jest.mocked(Worker).mockImplementationOnce(() => {
+            vi.mocked(Worker).mockImplementationOnce(function () {
                 throw originalError;
             });
             const manager = new WorkerSessionManager(callbacks);
@@ -962,14 +969,13 @@ describe('WorkerSessionManager', () => {
         }
 
         function getWorkerMock(): {
-            postMessage: jest.Mock;
-            terminate: jest.Mock;
+            postMessage: Mock;
+            terminate: Mock;
             emit: (event: string, ...args: unknown[]) => void;
         } {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as {
-                _mockPostMessage: jest.Mock;
-                _mockTerminate: jest.Mock;
+            const wt = workerThreads as unknown as {
+                _mockPostMessage: Mock;
+                _mockTerminate: Mock;
                 _getListeners: () => Map<string, ((...args: unknown[]) => void)[]>;
             };
             return {
@@ -1017,8 +1023,7 @@ describe('WorkerSessionManager', () => {
             expect(callbacks.onWorkerExit).toHaveBeenCalledWith(1);
 
             // Step 3: Recovery — next ensureWorker should spawn a new worker
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as { _resetListeners: () => void };
+            const wt = workerThreads as unknown as { _resetListeners: () => void };
             wt._resetListeners();
 
             const init2 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
@@ -1076,14 +1081,13 @@ describe('WorkerSessionManager', () => {
         }
 
         function getWorkerMock(): {
-            postMessage: jest.Mock;
-            terminate: jest.Mock;
+            postMessage: Mock;
+            terminate: Mock;
             emit: (event: string, ...args: unknown[]) => void;
         } {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as {
-                _mockPostMessage: jest.Mock;
-                _mockTerminate: jest.Mock;
+            const wt = workerThreads as unknown as {
+                _mockPostMessage: Mock;
+                _mockTerminate: Mock;
                 _getListeners: () => Map<string, ((...args: unknown[]) => void)[]>;
             };
             return {
@@ -1122,8 +1126,7 @@ describe('WorkerSessionManager', () => {
             expect(manager.isConnectedTo('cluster-A')).toBe(true);
 
             // Reset listeners for new worker
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as { _resetListeners: () => void };
+            const wt = workerThreads as unknown as { _resetListeners: () => void };
             wt._resetListeners();
 
             // Switch to cluster-B — should terminate cluster-A's worker
@@ -1142,8 +1145,7 @@ describe('WorkerSessionManager', () => {
 
         it('should not re-spawn when ensureWorker is called with the same cluster', async () => {
             const manager = new WorkerSessionManager(callbacks);
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { Worker: WorkerMock } = require('worker_threads') as { Worker: jest.Mock };
+            const { Worker: WorkerMock } = workerThreads as unknown as { Worker: Mock };
 
             const init1 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
             const worker1 = getWorkerMock();
@@ -1184,8 +1186,7 @@ describe('WorkerSessionManager', () => {
             expect(manager.workerState).toBe('idle');
 
             // Reset listeners for new worker
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as { _resetListeners: () => void };
+            const wt = workerThreads as unknown as { _resetListeners: () => void };
             wt._resetListeners();
 
             // Respawn with cluster-B

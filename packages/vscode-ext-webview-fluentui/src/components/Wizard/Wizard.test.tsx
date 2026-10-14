@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, beforeAll, describe, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
+
 import { act, type ReactElement } from 'react';
 import { ContainerFooter, ContainerHeader } from '../Container/index.js';
 import { cleanupSurfaces, installTestEnvironment, renderSurface } from '../testing/renderSurface.js';
@@ -76,7 +77,7 @@ describe('Wizard', () => {
     });
 
     test('reports a step change instead of navigating itself', async () => {
-        const onStepChange = jest.fn<(value: string) => void>();
+        const onStepChange = vi.fn<(value: string) => void>();
         const { root } = await renderSurface(wizard('setup', onStepChange));
 
         const buttons = Array.from(root.querySelectorAll('button'));
@@ -90,7 +91,7 @@ describe('Wizard', () => {
     });
 
     test('stepsLocked suppresses back-navigation', async () => {
-        const onStepChange = jest.fn<(value: string) => void>();
+        const onStepChange = vi.fn<(value: string) => void>();
         const { root } = await renderSurface(
             <Wizard activeStep="setup" onStepChange={onStepChange} stepsAriaLabel="Setup steps" stepsLocked>
                 <WizardStep value="introduction" label="Introduction" />

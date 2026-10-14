@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { InstanceState, type QuickStartStatus } from '../../../services/localQuickStart/quickStartTypes';
@@ -12,16 +14,16 @@ import { LocalQuickStartItem } from './LocalQuickStartItem';
 import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickStartTreeIdentity';
 import { revealQuickStartInstance } from './revealQuickStartInstance';
 
-jest.mock('../connectionsViewHelpers', () => ({
-    focusAndRevealInConnectionsView: jest.fn().mockResolvedValue(undefined),
+vi.mock('../connectionsViewHelpers', () => ({
+    focusAndRevealInConnectionsView: vi.fn().mockResolvedValue(undefined),
 }));
-jest.mock('../../api/revealConnectionsViewElement', () => ({
-    revealConnectionsViewElement: jest.fn().mockResolvedValue(undefined),
+vi.mock('../../api/revealConnectionsViewElement', () => ({
+    revealConnectionsViewElement: vi.fn().mockResolvedValue(undefined),
 }));
-jest.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
+vi.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
 
-const focusAndReveal = focusAndRevealInConnectionsView as jest.MockedFunction<typeof focusAndRevealInConnectionsView>;
-const reveal = revealConnectionsViewElement as jest.MockedFunction<typeof revealConnectionsViewElement>;
+const focusAndReveal = focusAndRevealInConnectionsView as MockedFunction<typeof focusAndRevealInConnectionsView>;
+const reveal = revealConnectionsViewElement as MockedFunction<typeof revealConnectionsViewElement>;
 
 /**
  * The success screen's "Open Connection" used to run `connectionsView.focus` and nothing else. When
@@ -66,17 +68,17 @@ describe('revealQuickStartInstance', () => {
  * "take me to the instance" action into a no-op.
  */
 describe('Quick Start tree paths match the ids the tree builds', () => {
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     it('matches the root node id', () => {
         expect(new LocalQuickStartItem('connectionsView').id).toBe(buildQuickStartTreeId());
     });
 
     it('matches the managed-instance row id', async () => {
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
-        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
+        vi.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.Running,
             metadata: {
                 containerId: 'c1',

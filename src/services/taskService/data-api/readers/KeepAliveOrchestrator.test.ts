@@ -3,27 +3,29 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type DocumentDetails } from '../types';
 import { KeepAliveOrchestrator } from './KeepAliveOrchestrator';
 
 // Mock extensionVariables (ext) module
-jest.mock('../../../../extensionVariables', () => ({
+vi.mock('../../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLine: jest.fn(),
-            error: jest.fn(),
-            warn: jest.fn(),
-            debug: jest.fn(),
-            trace: jest.fn(),
-            appendLog: jest.fn(),
-            show: jest.fn(),
-            info: jest.fn(),
+            appendLine: vi.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            debug: vi.fn(),
+            trace: vi.fn(),
+            appendLog: vi.fn(),
+            show: vi.fn(),
+            info: vi.fn(),
         },
     },
 }));
 
 // Mock vscode module
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
         t: (key: string, ...args: unknown[]): string => {
             let result = key;
@@ -66,12 +68,12 @@ function createAsyncIterator(documents: DocumentDetails[], delayMs: number = 0):
 
 describe('KeepAliveOrchestrator', () => {
     beforeEach(() => {
-        jest.useFakeTimers({ now: new Date('2024-01-01T00:00:00Z') });
-        jest.clearAllMocks();
+        vi.useFakeTimers({ now: new Date('2024-01-01T00:00:00Z') });
+        vi.clearAllMocks();
     });
 
     afterEach(() => {
-        jest.useRealTimers();
+        vi.useRealTimers();
     });
 
     describe('basic operations', () => {
@@ -151,7 +153,7 @@ describe('KeepAliveOrchestrator', () => {
             expect(first.value.id).toBe('doc1');
 
             // Simulate slow consumption - advance time past interval
-            jest.advanceTimersByTime(150);
+            vi.advanceTimersByTime(150);
             await Promise.resolve(); // Let timer callback execute
 
             // Keep-alive should have buffered a document
@@ -184,7 +186,7 @@ describe('KeepAliveOrchestrator', () => {
 
             // Advance time multiple times to trigger keep-alive reads
             for (let i = 0; i < 5; i++) {
-                jest.advanceTimersByTime(60);
+                vi.advanceTimersByTime(60);
                 await Promise.resolve();
             }
 
@@ -210,7 +212,7 @@ describe('KeepAliveOrchestrator', () => {
             await orchestrator.next();
 
             // Advance time past timeout
-            jest.advanceTimersByTime(6000);
+            vi.advanceTimersByTime(6000);
             await Promise.resolve(); // Let timer callback execute
 
             expect(orchestrator.hasTimedOut()).toBe(true);
@@ -307,14 +309,14 @@ describe('KeepAliveOrchestrator', () => {
             await orchestrator.next();
 
             // Advance time less than default interval (10s)
-            jest.advanceTimersByTime(5000);
+            vi.advanceTimersByTime(5000);
             await Promise.resolve();
 
             // No keep-alive should have happened
             expect(orchestrator.getBufferLength()).toBe(0);
 
             // Advance past default interval
-            jest.advanceTimersByTime(6000); // Total: 11 seconds
+            vi.advanceTimersByTime(6000); // Total: 11 seconds
             await Promise.resolve();
 
             // Now keep-alive may have triggered (depending on timing)
@@ -329,13 +331,13 @@ describe('KeepAliveOrchestrator', () => {
             orchestrator.start(iterator);
 
             // Advance time to just under 10 minutes
-            jest.advanceTimersByTime(9 * 60 * 1000);
+            vi.advanceTimersByTime(9 * 60 * 1000);
             await Promise.resolve();
 
             expect(orchestrator.hasTimedOut()).toBe(false);
 
             // Advance past 10 minutes
-            jest.advanceTimersByTime(2 * 60 * 1000);
+            vi.advanceTimersByTime(2 * 60 * 1000);
             await Promise.resolve();
 
             expect(orchestrator.hasTimedOut()).toBe(true);

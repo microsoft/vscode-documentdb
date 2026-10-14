@@ -30,7 +30,7 @@
  */
 
 import { initTRPC } from '@trpc/server';
-import { type BaseRouterContext } from './BaseRouterContext';
+import { type BaseRouterContext } from './BaseRouterContext.js';
 
 /**
  * The set of tRPC builders returned by {@link initWebviewTrpc}, all bound to the

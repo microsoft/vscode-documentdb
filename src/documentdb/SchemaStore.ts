@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 
 import { type Document, type WithId } from 'mongodb';
 import { ext } from '../extensionVariables';
+import { nonNullValue } from '../utils/nonNull';
 
 export interface SchemaChangeEvent {
     readonly clusterId: string;
@@ -78,6 +79,19 @@ export class SchemaStore implements vscode.Disposable {
             SchemaStore._instance = new SchemaStore();
         }
         return SchemaStore._instance;
+    }
+
+    public static registerForDisposal(subscriptions: vscode.Disposable[], outputChannel: vscode.Disposable): void {
+        const outputChannelIndex = subscriptions.indexOf(outputChannel);
+        const registeredOutputChannel = nonNullValue(
+            subscriptions[outputChannelIndex],
+            'outputChannel subscription',
+            'SchemaStore.ts',
+        );
+        const store = SchemaStore.getInstance();
+        // Schema teardown logs its final statistics before the output channel is disposed.
+        subscriptions.splice(outputChannelIndex, 1);
+        subscriptions.push(store, registeredOutputChannel);
     }
 
     // ── Key construction ──

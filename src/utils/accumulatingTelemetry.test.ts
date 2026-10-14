@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import {
     AUTO_DURATION_DISTRIBUTION_KEY,
@@ -19,8 +21,8 @@ const emitted: Array<Record<string, number | undefined>> = [];
 // immediately after a synchronous `flushAccumulatedTelemetry(...)` call (no
 // microtask hop). The real helper's flush callback is synchronous, so this is a
 // faithful stand-in.
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn((_eventName: string, callback: (context: IActionContext) => unknown) => {
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn((_eventName: string, callback: (context: IActionContext) => unknown) => {
         const ctx = {
             telemetry: { properties: {}, measurements: {}, suppressAll: false },
             errorHandling: { suppressDisplay: false },
@@ -37,13 +39,13 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     }),
 }));
 
-const mockCallWith = callWithTelemetryAndErrorHandling as jest.Mock;
+const mockCallWith = callWithTelemetryAndErrorHandling as Mock;
 
 describe('accumulateTelemetry', () => {
     beforeEach(() => {
         emitted.length = 0;
         // Clears recorded calls between tests but keeps the mock implementation.
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     function findFlush(measurementKey: string): Record<string, number | undefined> | undefined {

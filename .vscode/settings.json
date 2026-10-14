@@ -12,7 +12,6 @@
   "files.insertFinalNewline": true,
   "files.trimTrailingWhitespace": true,
   "search.exclude": {
-    "out": true,
     "**/node_modules": true,
     ".vscode-test": true
   },
@@ -27,7 +26,6 @@
   "vscode-nmake-tools.workspaceBuildDirectories": ["."],
   "vscode-nmake-tools.installOsRepoRustHelperExtension": false,
   "sarif-viewer.connectToGithubCodeScanning": "off",
-  "jest.runMode": "deferred",
   "testing.automaticallyOpenTestResults": "neverOpen"
   // "eslint.workingDirectories": [
   //     ".", "src"

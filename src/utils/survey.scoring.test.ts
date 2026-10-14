@@ -3,32 +3,34 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { countUsageForSurvey, getSurveyConfig, getSurveyState } from './survey';
 
 // Mock vscode-azext-utils module
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName, callback: (context: IActionContext) => Promise<void>) => {
             await callback({
                 telemetry: { properties: {}, measurements: {} },
                 errorHandling: { issueProperties: {} },
                 ui: {
-                    showWarningMessage: jest.fn(),
-                    onDidFinishPrompt: jest.fn(),
-                    showQuickPick: jest.fn(),
-                    showInputBox: jest.fn(),
-                    showOpenDialog: jest.fn(),
-                    showWorkspaceFolderPick: jest.fn(),
+                    showWarningMessage: vi.fn(),
+                    onDidFinishPrompt: vi.fn(),
+                    showQuickPick: vi.fn(),
+                    showInputBox: vi.fn(),
+                    showOpenDialog: vi.fn(),
+                    showWorkspaceFolderPick: vi.fn(),
                 },
                 valuesToMask: [],
             });
         },
     ),
-    AzExtTreeDataProvider: jest.fn(),
-    AzExtTreeItem: jest.fn(),
-    createAzExtOutputChannel: jest.fn(),
-    parseError: jest.fn((err) => err),
+    AzExtTreeDataProvider: vi.fn(),
+    AzExtTreeItem: vi.fn(),
+    createAzExtOutputChannel: vi.fn(),
+    parseError: vi.fn((err) => err),
     DialogResponses: {
         yes: { title: 'Yes' },
         no: { title: 'No' },
@@ -37,12 +39,12 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 }));
 
 // Mock vscode module
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     env: {
-        openExternal: jest.fn(() => Promise.resolve(true)),
+        openExternal: vi.fn(() => Promise.resolve(true)),
     },
     Uri: {
-        parse: jest.fn((url) => ({ toString: () => url })),
+        parse: vi.fn((url) => ({ toString: () => url })),
     },
 }));
 
@@ -60,11 +62,11 @@ describe('Survey Scoring', () => {
         surveyConfig.settings.DISABLE_SURVEY = false;
 
         // Clear mock calls between tests
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     afterEach(() => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     describe('countExperienceUsageForSurvey', () => {

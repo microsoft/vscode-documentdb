@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockSave = jest.fn();
-const mockGetAll = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-jest.mock('vscode', () => {
+const mockSave = vi.fn();
+const mockGetAll = vi.fn();
+
+vi.mock('vscode', () => {
     const vscode = {
         l10n: { t: (message: string): string => message },
         ThemeIcon: class ThemeIcon {
@@ -15,28 +17,28 @@ jest.mock('vscode', () => {
         ThemeColor: class ThemeColor {
             constructor(public readonly id: string) {}
         },
-        window: { showInformationMessage: jest.fn() },
+        window: { showInformationMessage: vi.fn() },
     };
 
     return { __esModule: true, ...vscode, default: vscode };
 });
 
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string): string => message,
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         state: {
-            runWithTemporaryDescription: jest.fn(
+            runWithTemporaryDescription: vi.fn(
                 async (_id: string, _description: string, callback: () => Promise<unknown>) => callback(),
             ),
         },
-        connectionsBranchDataProvider: { refresh: jest.fn() },
+        connectionsBranchDataProvider: { refresh: vi.fn() },
     },
 }));
 
-jest.mock('../../services/connectionStorageService', () => ({
+vi.mock('../../services/connectionStorageService', () => ({
     ConnectionStorageService: {
         getAll: (...args: unknown[]) => mockGetAll(...args),
         save: (...args: unknown[]) => mockSave(...args),
@@ -45,19 +47,19 @@ jest.mock('../../services/connectionStorageService', () => ({
     ItemType: { Connection: 'connection' },
 }));
 
-jest.mock('../../tree/connections-view/connectionsViewHelpers', () => ({
-    buildConnectionsViewTreePath: jest.fn(() => 'connections/path'),
-    buildFullTreePath: jest.fn(),
-    focusAndRevealInConnectionsView: jest.fn(),
-    withConnectionsViewProgress: jest.fn(async (callback: () => Promise<unknown>) => callback()),
+vi.mock('../../tree/connections-view/connectionsViewHelpers', () => ({
+    buildConnectionsViewTreePath: vi.fn(() => 'connections/path'),
+    buildFullTreePath: vi.fn(),
+    focusAndRevealInConnectionsView: vi.fn(),
+    withConnectionsViewProgress: vi.fn(async (callback: () => Promise<unknown>) => callback()),
 }));
 
-jest.mock('../../utils/dialogs/showConfirmation', () => ({
-    showConfirmationAsInSettings: jest.fn(),
+vi.mock('../../utils/dialogs/showConfirmation', () => ({
+    showConfirmationAsInSettings: vi.fn(),
 }));
 
-jest.mock('../../utils/storageUtils', () => ({
-    generateDocumentDBStorageId: jest.fn(() => 'storage-id'),
+vi.mock('../../utils/storageUtils', () => ({
+    generateDocumentDBStorageId: vi.fn(() => 'storage-id'),
 }));
 
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
@@ -65,7 +67,7 @@ import { addConnectionFromRegistry } from './addConnectionFromRegistry';
 
 describe('addConnectionFromRegistry authentication secrets', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockGetAll.mockResolvedValue([]);
         mockSave.mockResolvedValue(undefined);
     });
@@ -81,7 +83,7 @@ describe('addConnectionFromRegistry authentication secrets', () => {
             contextValue: 'discoveryCluster',
             cluster: { name: 'Azure cluster' },
             experience: { api: 'DocumentDB' },
-            getCredentials: jest.fn().mockResolvedValue({
+            getCredentials: vi.fn().mockResolvedValue({
                 connectionString: 'mongodb://example.test:27017/',
                 availableAuthMethods: [AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity],
                 selectedAuthMethod: AuthMethodId.MicrosoftEntraID,

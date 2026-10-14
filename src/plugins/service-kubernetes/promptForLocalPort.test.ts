@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockShowInputBox = jest.fn();
-const mockGetConfiguration = jest.fn();
-const mockCreateServer = jest.fn();
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-jest.mock('vscode', () => ({
+const mockShowInputBox = vi.fn();
+const mockGetConfiguration = vi.fn();
+const mockCreateServer = vi.fn();
+
+vi.mock('vscode', () => ({
     window: {
         showInputBox: (...args: unknown[]) => mockShowInputBox(...args),
     },
@@ -15,13 +17,13 @@ jest.mock('vscode', () => ({
         getConfiguration: (...args: unknown[]) => mockGetConfiguration(...args),
     },
     l10n: {
-        t: jest.fn((message: string, ...values: string[]) =>
+        t: vi.fn((message: string, ...values: string[]) =>
             values.reduce<string>((acc, value, index) => acc.replace(`{${String(index)}}`, value), message),
         ),
     },
 }));
 
-jest.mock('net', () => ({
+vi.mock('net', () => ({
     createServer: (...args: unknown[]) => mockCreateServer(...args),
 }));
 
@@ -56,17 +58,17 @@ function setConfiguration(values: Record<string, unknown>): void {
 }
 
 function createMockServer(portAvailability: ReadonlyMap<number, boolean>): {
-    once: jest.Mock;
-    listen: jest.Mock;
-    close: jest.Mock;
+    once: Mock;
+    listen: Mock;
+    close: Mock;
 } {
     let errorListener: ErrorListener | undefined;
     const server = {
-        once: jest.fn((_event: 'error', listener: ErrorListener) => {
+        once: vi.fn((_event: 'error', listener: ErrorListener) => {
             errorListener = listener;
             return server;
         }),
-        listen: jest.fn((port: number, _host: string, callback: () => void) => {
+        listen: vi.fn((port: number, _host: string, callback: () => void) => {
             if (portAvailability.get(port) === false) {
                 errorListener?.();
                 return server;
@@ -75,7 +77,7 @@ function createMockServer(portAvailability: ReadonlyMap<number, boolean>): {
             callback();
             return server;
         }),
-        close: jest.fn((callback: () => void) => {
+        close: vi.fn((callback: () => void) => {
             callback();
             return server;
         }),
@@ -89,7 +91,7 @@ function getInputOptions(): InputBoxOptions {
 
 describe('promptForLocalPort', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         setConfiguration({});
         mockShowInputBox.mockResolvedValue('10260');
         mockCreateServer.mockImplementation(() => createMockServer(new Map()));
