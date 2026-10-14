@@ -104,6 +104,10 @@ function signed(delta, text) {
     return delta > 0 ? `+${text}` : text;
 }
 
+function arrow(delta, text) {
+    return `${delta > 0 ? '⬆️' : delta < 0 ? '⬇️' : '✅'} ${signed(delta, text)}`;
+}
+
 function formatPercent(delta, base) {
     return base > 0 ? signed(delta, `${((delta / base) * 100).toFixed(1)}%`) : 'n/a';
 }
@@ -158,7 +162,7 @@ function sizeTable(report, base, currentLabel = 'PR bytes') {
         '|-------|------:|------:|------:|------:|',
         ...rows.map(
             (row) =>
-                `| ${label(row.graph)} | ${formatBytes(row.bytes)} | ${formatBytes(row.base)} | ${row.delta === null ? 'n/a' : signed(row.delta, formatBytes(row.delta))} | ${row.delta === null ? 'n/a' : formatPercent(row.delta, row.base)} |`,
+                `| ${label(row.graph)} | ${formatBytes(row.bytes)} | ${formatBytes(row.base)} | ${row.delta === null ? 'n/a' : arrow(row.delta, formatBytes(row.delta))} | ${row.delta === null ? 'n/a' : formatPercent(row.delta, row.base)} |`,
         ),
     ].join('\n');
 }
@@ -174,11 +178,12 @@ function sizeWarnings(report, base, baseRef) {
         }));
 }
 
+/** The build size section of the CI report comment, also written to the L1 job summary. */
 function buildSizeComment(report, base, options) {
     const ref = `\`${options.baseRef}\``;
     const bundleLink = `[Bundle-reports-${options.runId}](${options.bundleUrl || options.runUrl})`;
     const artifacts = `Artifacts: [VSIX](${options.vsixUrl || options.runUrl}) | ${bundleLink} | [L1-manifest-report-${options.runId}](${options.l1Url || options.runUrl})`;
-    const lines = ['<!-- build-size-report -->', '## Build Size Report', ''];
+    const lines = ['### Build size', ''];
     if (options.outcome !== 'success') {
         lines.push(`L1 inspection: **${options.outcome}**; see the job log.`, '');
     }
@@ -226,7 +231,7 @@ function buildSizeComment(report, base, options) {
                 '|-------|---:|-----:|------:|--------:|',
                 ...moved.map(
                     (row) =>
-                        `| ${label(row.graph)} | ${formatSize(row.bytes)} | ${formatSize(row.base)} | ${row.change === 'growth' ? '⚠ ' : ''}${signed(row.delta, formatSize(row.delta))} | ${formatPercent(row.delta, row.base)} |`,
+                        `| ${label(row.graph)} | ${formatSize(row.bytes)} | ${formatSize(row.base)} | ${row.change === 'growth' ? '⚠️ ' : ''}${arrow(row.delta, formatSize(row.delta))} | ${formatPercent(row.delta, row.base)} |`,
                 ),
                 '',
                 ...(packageLines.length > 0 ? [...packageLines, ''] : []),

@@ -18,6 +18,29 @@ checks guard it.
 The `watch:views` VS Code task waits for Vite's ready line; its diagnostic pattern intentionally never matches,
 because Vite reports development build errors in the browser overlay.
 
+## CI
+
+`.github/workflows/main.yml` runs these checks in tiers
+([decision 0002](../../docs/ai-and-plans/modernization/decisions.md)). Its `plan` job picks the
+tier, and the path-scoped checks from the whole PR diff (for a push, the pushed range).
+
+| Check                                                                 | Fast (draft PR) | Standard (ready PR, push to `main` or `release/**`)                    | Full (`ci:full-requested` label) |
+| --------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------- | -------------------------------- |
+| L0: build, `l10n:check`, lint, Prettier, type checks, unit tests      | yes             | yes                                                                    | yes                              |
+| `verify:packages`                                                     | no              | when `packages/**` changes                                             | yes                              |
+| Package the VSIX, `verify:vsix` (L1) with sizes, `test:vsix` (L3)     | no              | yes                                                                    | yes                              |
+| `prove:vsix`, `test:verification`, `prove:activation` (decision 0003) | no              | when `build/verification/**`, `build/vite/**` or a Vite config changes | yes                              |
+| `probe:host-unbundled`                                                | no              | when `packages/vscode-ext-webview/**` changes                          | yes                              |
+
+`package-lock.json` and `main.yml` count as changes for every path-scoped check. Any other label
+runs nothing. A manual run is full with `enforce_full_run`, fast without it.
+
+Same-repository PRs get one `<!-- ci-report -->` comment, updated in place and composed by
+[`ci-report.cjs`](./ci-report.cjs): every layer with its result or the reason it was skipped, then
+code quality and the [build size section](#size-report-warning-only). Adding `ci:full-requested`
+starts one full run on the current commit; the workflow removes the label, and the comment keeps
+the last full run's commit and result.
+
 ## L1: offline inspection
 
 Production Vite host and views builds generate hash-bound reports in `reports/` (`host.json`
@@ -136,8 +159,8 @@ The JSON result includes `manifestReport`: current `vsixBytes.bytes`, `graphAsse
 `graphSizes`, the per-graph measurements below, `graphPackages` and `graphPackagesLimit`. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
 GitHub Actions publishes `Bundle-reports-<run_id>` from the package job and
-`L1-manifest-report-<run_id>` from L1, including on inspection failure. L1's PR comment reads the
-report's `graphSizes`, not the thin `views.js` entry. Push builds and manual cache
+`L1-manifest-report-<run_id>` from L1, including on inspection failure. The build size section of the
+CI report reads the report's `graphSizes`, not the thin `views.js` entry. Push builds and manual cache
 seeding use `{version: 3, vsixSize, graphSizes, graphPackages}` in the existing `build-sizes-<ref>-<sha>` cache;
 `{version: 2, vsixSize, graphSizes}` entries compare sizes without packages, and
 legacy `{vsixSize, webviewSize}` baselines compare only the VSIX and mark graph deltas unavailable.
@@ -188,12 +211,13 @@ those of the files inside the VSIX. `manifestReport.graphSizes` holds one byte c
 
 On same-repository PRs, L1 compares these sizes with the base branch's cached sizes and flags a
 graph that changed by **at least 5% of its base or at least 50 KiB** (`SIZE_CHANGE_FRACTION`
-and `SIZE_CHANGE_BYTES` in [`build-size-report.cjs`](./build-size-report.cjs)). The
-`<!-- build-size-report -->` comment, also written to the job summary, is:
+and `SIZE_CHANGE_BYTES` in [`build-size-report.cjs`](./build-size-report.cjs)). L1 writes the
+build size section to its job summary and hands it to the `<!-- ci-report -->` comment
+([CI](#ci)). Every delta carries ⬆️ (growth), ⬇️ (reduction) or ✅ (no change). The section is:
 
 - one line when nothing was flagged, with the VSIX size;
-- otherwise a table of the flagged graphs only (human-readable sizes and percentages), growth marked
-  ⚠, decreases listed without it, one line per flagged graph naming its three biggest package
+- otherwise a table of the flagged graphs only (human-readable sizes and percentages), growth also
+  marked ⚠️, decreases listed without it, one line per flagged graph naming its three biggest package
   changes when the base has package data (below), and a pointer to the bundle reports;
 - an explicit "No size data for `<base>` yet; sizes only." when the base has no cache entry, and a
   VSIX-only comparison for a legacy `{vsixSize, webviewSize}` entry;
@@ -406,11 +430,11 @@ archive's SHA-256. [`package-archives.test.cjs`](./package-checks/package-archiv
 
 Where it runs:
 
-| Route                                                           | Command                                                           |
-| --------------------------------------------------------------- | ----------------------------------------------------------------- |
-| GitHub Actions CI, Code Quality & Tests (every PR and push)     | `npm run verify:packages -- --no-build` after the workspace build |
-| `npm-publish-documentdb-js.yml` verify job (`@documentdb-js/*`) | `npm run verify:packages`                                         |
-| ADO `build-npm-packages.yml` (`@microsoft/vscode-ext-webview*`) | archive mode on the `npm-packages` tarballs it just packed        |
+| Route                                                                                        | Command                                                    |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| GitHub Actions CI, Package checks job (when `packages/**` changes; full runs; see [CI](#ci)) | `npm run verify:packages` (builds the workspaces first)    |
+| `npm-publish-documentdb-js.yml` verify job (`@documentdb-js/*`)                              | `npm run verify:packages`                                  |
+| ADO `build-npm-packages.yml` (`@microsoft/vscode-ext-webview*`)                              | archive mode on the `npm-packages` tarballs it just packed |
 
 ### Unbundled `vscode-ext-webview/host` in VS Code (S3-F02)
 
@@ -444,5 +468,5 @@ that thread. The probe locates the hang through a trace file (the receipt is nev
 VS Code's `is unresponsive` message, with a 40-second timeout for that variant. A change in either
 direction (for example a VS Code fix that makes `require()` work) fails the run so the package
 README and MIGRATION.md can be updated. The whole run takes about 70 seconds; GitHub Actions runs it
-in the L3 job. Linux only so far, one VS Code version per run, and the probe is a development
+in the L3 job when `packages/vscode-ext-webview/**` changes, and in full runs ([CI](#ci)). Linux only so far, one VS Code version per run, and the probe is a development
 extension rather than an installed VSIX.

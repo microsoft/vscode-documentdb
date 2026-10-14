@@ -83,15 +83,15 @@ test('No change gives a single quiet line, with every graph in the collapsed det
     assert.equal(
         visible(body),
         [
-            '<!-- build-size-report -->',
-            '## Build Size Report',
+            '### Build size',
             '',
             'No page, activation, VSIX or other bundle size changed by 5% or 50 KiB or more against `main`. VSIX: 7.6 MiB.',
         ].join('\n'),
     );
     assert.ok(!body.includes('⚠'));
-    assert.ok(body.includes('| Collection View page (`collectionView`) | 6,000,000 | 6,000,000 | 0 | 0.0% |'));
-    assert.ok(body.includes('| `jsonWorker` | 390,000 | 390,000 | 0 | 0.0% |'));
+    assert.ok(!body.includes('<!--'));
+    assert.ok(body.includes('| Collection View page (`collectionView`) | 6,000,000 | 6,000,000 | ✅ 0 | 0.0% |'));
+    assert.ok(body.includes('| `jsonWorker` | 390,000 | 390,000 | ✅ 0 | 0.0% |'));
     assert.equal(body.match(/^\| (?!Graph|-)/gm).length, 14);
     assert.ok(body.includes('[Bundle-reports-123](https://example.test/bundle)'));
     assert.deepEqual(sizeWarnings(report, base, 'main'), []);
@@ -101,7 +101,7 @@ test('5% growth on a small graph is flagged with a warning sign and an annotatio
     const grown = withSizes({ playgroundTsPlugin: 6_300 });
     const body = buildSizeComment(grown, base, options);
     assert.ok(visible(body).includes('Sizes that changed by 5% or 50 KiB or more against `main` (warning only):'));
-    assert.ok(visible(body).includes('| `playgroundTsPlugin` | 6.2 KiB | 5.9 KiB | ⚠ +300 B | +5.0% |'));
+    assert.ok(visible(body).includes('| `playgroundTsPlugin` | 6.2 KiB | 5.9 KiB | ⚠️ ⬆️ +300 B | +5.0% |'));
     assert.equal(visible(body).match(/^\| (?!Graph|-)/gm).length, 1);
     assert.ok(visible(body).includes('To find out why'));
     assert.ok(visible(body).includes('[Bundle-reports-123](https://example.test/bundle)'));
@@ -118,7 +118,9 @@ test('50 KiB growth on a large graph is flagged even under 5%', () => {
     const grown = withSizes({ collectionView: 6_000_000 + 51_200 });
     const body = buildSizeComment(grown, base, options);
     assert.ok(
-        visible(body).includes('| Collection View page (`collectionView`) | 5.8 MiB | 5.7 MiB | ⚠ +50.0 KiB | +0.9% |'),
+        visible(body).includes(
+            '| Collection View page (`collectionView`) | 5.8 MiB | 5.7 MiB | ⚠️ ⬆️ +50.0 KiB | +0.9% |',
+        ),
     );
     assert.deepEqual(
         sizeWarnings(grown, base, 'main').map((warning) => warning.title),
@@ -135,14 +137,17 @@ test('Growth below both thresholds is not flagged', () => {
     const body = buildSizeComment(grown, base, options);
     assert.ok(visible(body).includes('No page, activation, VSIX or other bundle size changed'));
     assert.ok(!body.includes('⚠'));
-    assert.ok(body.includes('| Collection View page (`collectionView`) | 6,051,199 | 6,000,000 | +51,199 | +0.9% |'));
+    assert.ok(
+        body.includes('| Collection View page (`collectionView`) | 6,051,199 | 6,000,000 | ⬆️ +51,199 | +0.9% |'),
+    );
     assert.deepEqual(sizeWarnings(grown, base, 'main'), []);
 });
 
 test('A decrease beyond the threshold is listed without a warning', () => {
     const shrunk = withSizes({ mainStartup: 2_820_000 });
     const body = buildSizeComment(shrunk, base, options);
-    assert.ok(visible(body).includes('| Activation (`mainStartup`) | 2.7 MiB | 2.9 MiB | -175.8 KiB | -6.0% |'));
+    assert.ok(visible(body).includes('| Activation (`mainStartup`) | 2.7 MiB | 2.9 MiB | ⬇️ -175.8 KiB | -6.0% |'));
+    assert.ok(body.includes('| Activation (`mainStartup`) | 2,820,000 | 3,000,000 | ⬇️ -180,000 | -6.0% |'));
     assert.ok(!body.includes('⚠'));
     assert.deepEqual(sizeWarnings(shrunk, base, 'main'), []);
 });
@@ -171,9 +176,9 @@ test('A legacy cache entry compares only the VSIX and says so', () => {
     assert.ok(visible(body).includes('The cached `main` sizes predate per-graph data; only the VSIX is compared.'));
     assert.ok(visible(body).includes('The VSIX size did not change by 5% or 50 KiB or more against `main`.'));
     assert.ok(body.includes('| Collection View page (`collectionView`) | 6,000,000 | n/a | n/a | n/a |'));
-    assert.ok(body.includes('| VSIX (`vsix`) | 8,000,000 | 8,000,000 | 0 | 0.0% |'));
+    assert.ok(body.includes('| VSIX (`vsix`) | 8,000,000 | 8,000,000 | ✅ 0 | 0.0% |'));
     const grown = buildSizeComment(report, { ...legacy, vsixSize: 7_200_000 }, options);
-    assert.ok(visible(grown).includes('| VSIX (`vsix`) | 7.6 MiB | 6.9 MiB | ⚠ +781.3 KiB | +11.1% |'));
+    assert.ok(visible(grown).includes('| VSIX (`vsix`) | 7.6 MiB | 6.9 MiB | ⚠️ ⬆️ +781.3 KiB | +11.1% |'));
     assert.deepEqual(
         sizeWarnings(report, { ...legacy, vsixSize: 7_200_000 }, 'main').map((warning) => warning.title),
         ['Size grew: vsix'],
@@ -288,7 +293,7 @@ test('A v2 base gives the size comparison without a package line', () => {
     const body = buildSizeComment(grown, v2Base, options);
     assert.ok(
         visible(body).includes(
-            '| Collection View page (`collectionView`) | 5.9 MiB | 5.7 MiB | ⚠ +175.8 KiB | +3.0% |',
+            '| Collection View page (`collectionView`) | 5.9 MiB | 5.7 MiB | ⚠️ ⬆️ +175.8 KiB | +3.0% |',
         ),
     );
     assert.ok(!body.includes('biggest package changes'));

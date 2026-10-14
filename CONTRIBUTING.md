@@ -27,11 +27,14 @@ See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the forc
 
 ### 1.2 GitHub Actions
 
-CI runs automatically on:
+CI runs in tiers (see [decision 0002](docs/ai-and-plans/modernization/decisions.md)):
 
-- **Push to `main` or a release branch** (`release/**`) — full build, tests, and packaging; build sizes cached for PR comparisons.
-- **Pull requests targeting `main`, `release/**`, or `feature/**`** — full build, tests, packaging, and a code-quality report posted as a PR comment.
-- **Manual dispatch** — use `workflow_dispatch` with `enforce_full_run` to run the full pipeline on any branch.
+- **Draft pull requests** (to `main`, `release/**` or `feature/**`): build, lint, formatting, type checks and unit tests.
+- **Ready pull requests, and pushes to `main` or a release branch** (`release/**`): the above, plus packaging, VSIX inspection and activation. Checks of the workspace packages and of the verification tooling run when their files change. Pushes cache build sizes for PR comparisons.
+- **Full run on a pull request:** add the `ci:full-requested` label. It runs every check once on the current commit, and the workflow removes the label.
+- **Manual dispatch:** `workflow_dispatch` runs every check with `enforce_full_run`, and only the first tier without it.
+
+Each same-repository pull request gets one CI report comment, updated on every run: which checks ran and why, code quality and build size.
 
 ### 1.3 Releases
 
