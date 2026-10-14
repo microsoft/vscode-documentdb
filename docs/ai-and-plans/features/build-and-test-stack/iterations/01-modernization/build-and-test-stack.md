@@ -4490,6 +4490,15 @@ Stage 0 must also be made.
     root changelog's "six packages" stays: it describes the six modernized packages. Checks:
     build, `typecheck:tests`, its 78 tests, `verify:packages` all 7 packages (attw only the
     accepted `CJSResolvesToESM`), `test:verification`, lint, Prettier.
+  - **CI report wording (operator, 2026-10-14),** after the first real report on #880. While a
+    run is in progress the comment says so (operator: "when a job starts be replaced with
+    something like 'in progress' ... so then it's clear that we're not looking at 'old
+    content'"): the plan job replaces an existing report with "\u23f3 CI running", the commit, a
+    link to the run, the previous result and the full-run line, keeping the last-full marker.
+    It does not create a comment, and does nothing when the PR has moved on. The layer table's
+    "Why" column is now "Ran or skipped because" (operator: "the why is confusing as it suggests
+    it talks about 'why the result value'"), with the reasons reworded to fit. Code quality rows
+    that need no fix say "Nothing to fix". `ci-report` tests 26/26.
 - **Not in this stage:** retiring the L2 production harness. Decision 0002 retires it into E2E;
   Stage 9 task 6 still uses it on the signed VSIX.
 - **Operator gate G8.5:** the operator accepts the W1 verification on #880 and the restructured
