@@ -11,20 +11,21 @@ created: 2026-10-14
 > E2E iteration in particular. Decisions taken while executing the stages stay in
 > [build-and-test-stack.md](./iterations/01-modernization/build-and-test-stack.md), next to the stage they shaped.
 
-| #    | Decision                                                      | Status              | Changed from the proposal?                                                               | Date       | PR   |
-| ---- | ------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------- | ---------- | ---- |
-| 0001 | Workspace packages ship ESM only                              | Accepted            | Accepted as proposed                                                                     | 2026-10-14 | #880 |
-| 0002 | CI runs verification in tiers and reports what it ran and why | Accepted            | **Operator added the layer report, the one-shot request label and the merged comment**   | 2026-10-14 | #880 |
-| 0003 | Negative controls run when their check changes, not every PR  | Accepted            | Accepted as proposed                                                                     | 2026-10-14 | #880 |
-| 0004 | Use Vite for the host and webviews                            | Accepted            | The documented host-only esbuild fallback was not needed                                 | 2026-09-30 | #880 |
-| 0005 | Replace Jest with Vitest in one sweep                         | Accepted            | Adopted for pipeline and ESM unification, not for speed                                  | 2026-10-02 | #880 |
-| 0006 | Split each view with ordered named groups                     | Accepted            | Rolldown groups replaced planned `manualChunks`; ordering came from the build experiment | 2026-10-05 | #880 |
-| 0007 | Run the extension host as ESM through a thin loader           | Accepted            | Accepted as proposed                                                                     | 2026-10-05 | #880 |
-| 0008 | Keep the TypeScript server plugin CommonJS                    | Accepted            | The shipped bundle moved to the root and a runtime stub supplies the package path        | 2026-10-01 | #880 |
-| 0009 | Keep SlickGrid during modernization                           | Accepted            | Replacement remains a separate later iteration                                           | 2026-09-30 | #880 |
-| 0010 | Run L3 on GitHub Actions only                                 | Accepted            | ADO keeps only offline checks that can run before signing                                | 2026-09-30 | #880 |
-| 0011 | Keep L2-dev runner-free in this iteration                     | Accepted            | CI wiring stays with the E2E iteration                                                   | 2026-10-05 | #880 |
-| 0012 | Use one branch and one PR, merging `main`                     | Accepted (modified) | The 2026-10-07 decision restored a merge from `main` before the PR merges                | 2026-10-01 | #880 |
+| #    | Decision                                                        | Status              | Changed from the proposal?                                                               | Date       | PR   |
+| ---- | --------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Workspace packages ship ESM only                                | Accepted            | Accepted as proposed                                                                     | 2026-10-14 | #880 |
+| 0002 | CI runs verification in tiers and reports what it ran and why   | Accepted            | **Operator added the layer report, the one-shot request label and the merged comment**   | 2026-10-14 | #880 |
+| 0003 | Negative controls run when their check changes, not every PR    | Accepted            | Accepted as proposed                                                                     | 2026-10-14 | #880 |
+| 0004 | Use Vite for the host and webviews                              | Accepted            | The documented host-only esbuild fallback was not needed                                 | 2026-09-30 | #880 |
+| 0005 | Replace Jest with Vitest in one sweep                           | Accepted            | Adopted for pipeline and ESM unification, not for speed                                  | 2026-10-02 | #880 |
+| 0006 | Split each view with ordered named groups                       | Accepted            | Rolldown groups replaced planned `manualChunks`; ordering came from the build experiment | 2026-10-05 | #880 |
+| 0007 | Run the extension host as ESM through a thin loader             | Accepted            | Accepted as proposed                                                                     | 2026-10-05 | #880 |
+| 0008 | Keep the TypeScript server plugin CommonJS                      | Accepted            | The shipped bundle moved to the root and a runtime stub supplies the package path        | 2026-10-01 | #880 |
+| 0009 | Keep SlickGrid during modernization                             | Accepted            | Replacement remains a separate later iteration                                           | 2026-09-30 | #880 |
+| 0010 | Run L3 on GitHub Actions only                                   | Accepted            | ADO keeps only offline checks that can run before signing                                | 2026-09-30 | #880 |
+| 0011 | Keep L2-dev runner-free in this iteration                       | Accepted            | CI wiring stays with the E2E iteration                                                   | 2026-10-05 | #880 |
+| 0012 | Use one branch and one PR, merging `main`                       | Accepted (modified) | The 2026-10-07 decision restored a merge from `main` before the PR merges                | 2026-10-01 | #880 |
+| 0013 | The required check passes only when every expected layer passed | Accepted            | Accepted as proposed by the Stage 8.5 review (S85-F01)                                   | 2026-10-14 | #880 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
@@ -511,3 +512,41 @@ quarantine rule avoids importing versions unavailable to the ADO feed immediatel
   exception after a fresh dependency broke the ADO build.
 - **Merge the newest `main` regardless of dependency age:** rejected after the same-day relaxation
   was reversed because release builds use the quarantined ADO feed.
+
+---
+
+## 0013: The required check passes only when every expected layer passed
+
+**Status:** Accepted · **Date:** 2026-10-14 · **Raised by:** the Stage 8.5 review, S85-F01
+**Evidence:** [08.5-stage8.5-review.md](./iterations/01-modernization/08.5-stage8.5-review.md#s85-f01-the-sole-required-check-can-pass-or-be-skipped-while-expected-ci-fails)
+
+### Question
+
+The branch ruleset requires `license/cla` and `Build & Package`. That job only packaged the VSIX:
+L1, L3 and the package checks could fail without blocking a merge, and when L0 failed the job was
+skipped, which GitHub counts as passed. Should the required check cover every layer?
+
+### Decision
+
+Yes (operator: "yes, update the policy change"). The packaging job is renamed `Package VSIX`. A
+final `gate` job, named `Build & Package` so the ruleset stays unchanged, runs after every layer
+(`if: always()`) and fails unless the plan, L0 and, as the tier and path flags expect, the package
+checks, packaging, L1 and L3 all succeeded. L1, L3 and the package checks therefore block merges.
+In a run for an unrelated label the gate has a different name, so it never posts a skipped
+`Build & Package`.
+
+### Reasoning
+
+Tiering made skipped jobs normal, and a skipped required check passes. One aggregate job that
+knows what the tier expected is the only place that can tell a deliberate skip from a missing
+result, and keeps the ruleset to one stable name as E2E jobs are added.
+
+### Rejected alternatives
+
+- **Require every verification job in the ruleset:** path-scoped jobs and future E2E jobs would
+  make the ruleset brittle, and skipped jobs would still pass.
+
+### For the E2E iteration
+
+- E2E jobs join the gate's `needs` and are expected in the full tier only, so a requested full
+  run that fails E2E fails the required check on that commit.

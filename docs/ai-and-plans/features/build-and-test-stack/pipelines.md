@@ -164,7 +164,7 @@ in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that
 
 ### 3.1 Reports, artifacts and PR size feedback (Stage 6)
 
-On GitHub Actions, **Build & Package** still depends on **Code Quality & Tests** and produces
+On GitHub Actions, **Package VSIX** depends on **Code Quality & Tests** and produces
 `Artifacts-<run_id>` (VSIX/tgz) and `Bundle-reports-<run_id>` (`build/verification/reports/*.json`).
 Bundle-report upload uses `if: always()` and treats missing files as an error. **VSIX inspection
 (L1)** downloads those two artifacts, runs the offline inspection and rejection proofs, and

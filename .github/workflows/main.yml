@@ -17,6 +17,9 @@ name: CI
 #
 # Same-repository PRs get one `<!-- ci-report -->` comment, updated in place: the layers that ran
 # and why, code quality and build size.
+#
+# The ruleset requires `Build & Package`. That is the `gate` job: it fails unless every layer the
+# tier expected passed (decision 0013).
 
 on:
     workflow_dispatch:
@@ -387,8 +390,7 @@ jobs:
 
     # Standard and full tiers; pushes to `main` and `release/**` feed the build size cache.
     build-and-package:
-        # A required check: an unrelated-label run must not post a skipped check under this name.
-        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Build & Package (label event, not run)' || 'Build & Package' }}
+        name: Package VSIX
         runs-on: ubuntu-latest
         needs: [plan, code-quality-and-tests]
         permissions:
@@ -505,3 +507,38 @@ jobs:
                           await github.rest.issues.deleteComment({ ...context.repo, comment_id: old.id });
                         }
                       }
+
+    # The ruleset's required check (decision 0013). An unrelated-label run must not post a skipped
+    # check under this name, because a skipped required check counts as passed.
+    gate:
+        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Build & Package (label event, not run)' || 'Build & Package' }}
+        runs-on: ubuntu-latest
+        needs: [plan, code-quality-and-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
+        if: always() && needs.plan.outputs.tier != 'skip'
+        permissions: {}
+        steps:
+            - name: Require every layer the tier expected
+              env:
+                  TIER: ${{ needs.plan.outputs.tier }}
+                  PACKAGES: ${{ needs.plan.outputs.packages }}
+                  PLAN: ${{ needs.plan.result }}
+                  QUALITY: ${{ needs.code-quality-and-tests.result }}
+                  PACKAGE_CHECKS: ${{ needs.package-checks.result }}
+                  PACKAGE: ${{ needs.build-and-package.result }}
+                  L1: ${{ needs.vsix-inspection.result }}
+                  L3: ${{ needs.vsix-activation.result }}
+              run: |
+                  failed=0
+                  expect() {
+                    echo "$1: $2"
+                    if [[ "$2" != success ]]; then echo "::error::$1 was expected to pass in the ${TIER:-unknown} tier: $2"; failed=1; fi
+                  }
+                  expect 'Plan CI tier' "$PLAN"
+                  expect 'Code Quality & Tests' "$QUALITY"
+                  if [[ "$PACKAGES" == true ]]; then expect 'Package checks' "$PACKAGE_CHECKS"; fi
+                  if [[ "$TIER" == standard || "$TIER" == full ]]; then
+                    expect 'Package VSIX' "$PACKAGE"
+                    expect 'VSIX inspection (L1)' "$L1"
+                    expect 'Installed VSIX activation (L3)' "$L3"
+                  fi
+                  exit "$failed"

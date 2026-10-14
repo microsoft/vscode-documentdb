@@ -4450,13 +4450,14 @@ Stage 0 must also be made.
       stale run never posts a full report for an older commit; `ci-report` tests 25/25.
     - **S85-N02 fixed** in the record commit: this W5 record, and three stale current-state
       statements in `pipelines.md` (G0, L3 in CI, the size cache's version 3).
-    - **S85-F01 open, for the operator:** the only required check, `Build & Package`, does not
-      cover L1, L3 or the package checks, and is skipped (so passes) when L0 fails. Recommended
-      fix: rename the packaging job and add a small final job named `Build & Package` that fails
-      when any layer the tier expected failed, was cancelled or was skipped unexpectedly. That
-      makes L1, L3 and the package checks merge-blocking, a policy change.
-    - **Pending:** pushing the Stage 8.5 commits, the real runs on #880 (G8.5), and Stage 9
-      task 2.
+    - **S85-F01, decided and fixed:** the only required check, `Build & Package`, did not
+      cover L1, L3 or the package checks, and was skipped (so passed) when L0 failed. The
+      operator accepted the policy change ("yes, update the policy change"; decision 0013): the
+      packaging job is now `Package VSIX`, and a final `gate` job named `Build & Package` fails
+      unless every layer the tier and path flags expect succeeded. The coordinator wrote it and
+      ran its script against 8 result combinations (fast, standard with and without package
+      changes, L0 or L1 failing, full, plan failing): all as expected.
+    - **Pending:** the real runs on #880 (G8.5), and Stage 9 task 2.
 - **Not in this stage:** retiring the L2 production harness. Decision 0002 retires it into E2E;
   Stage 9 task 6 still uses it on the signed VSIX.
 - **Operator gate G8.5:** the operator accepts the W1 verification on #880 and the restructured
