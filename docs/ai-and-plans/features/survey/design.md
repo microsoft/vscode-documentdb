@@ -33,7 +33,8 @@ behavior and `decisions.md` wins for intent.
 
 ## Invitation Surface
 
-Stage 2 implements the stable VS Code 1.106.0 Secondary Sidebar contribution (D0018).
+Stage 2 implements the stable Secondary Sidebar contribution, available from VS Code 1.106.0;
+the extension's minimum is now 1.109.0 (D0028, superseding D0018).
 Iteration 4 enables the shared code switch in all modes (D0021).
 The `documentdb.surveyInvitationActive` context is false on activation and true only for a
 live invitation. It gates the view and its otherwise empty container. No HTML or webview

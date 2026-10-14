@@ -30,7 +30,7 @@ created: 2026-10-07
 | 0015 | A "Give Feedback" command, no reset command                  | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
 | 0016 | Kill switch is a code constant with a development override   | Superseded by D0020 | Development override removed; production code switch retained                                                  | 2026-10-07 | -    |
 | 0017 | Telemetry wording in the invitation                          | Accepted (modified) | No anonymity claim; D0023 further replaces the no-rating/answer claim                                          | 2026-10-07 | -    |
-| 0018 | Raise the minimum VS Code version to 1.106.0                 | Accepted            | Raised by the Stage 2 blocker                                                                                  | 2026-10-07 | -    |
+| 0018 | Raise the minimum VS Code version to 1.106.0                 | Superseded by D0028 | Raised by the Stage 2 blocker                                                                                  | 2026-10-07 | -    |
 | 0019 | The cooldown starts when the invitation is first visible     | Accepted            | Raised by the Stage 2 review                                                                                   | 2026-10-07 | -    |
 | 0020 | Normal survey behavior works automatically in development    | Superseded by D0021 | Conservative development-only interpretation corrected before validation                                       | 2026-10-08 | #992 |
 | 0021 | Re-enable surveys in production and development              | Accepted (modified) | One enabled code switch for all modes; no enablement environment override                                      | 2026-10-08 | #992 |
@@ -40,6 +40,7 @@ created: 2026-10-07
 | 0025 | Apply the rendering review to the invitation layout          | Accepted (modified) | Compact left-aligned rating, secondary buttons, one helper size, dark logo; centering/stretch revised by D0027 | 2026-10-09 | #992 |
 | 0026 | Report open failures in a modal; remove Retry UI             | Accepted (modified) | Replaces the Open→Retry relabel, status line, and command retry loop; D0027 extends it to opt-out save         | 2026-10-09 | #992 |
 | 0027 | Centered smaller rating, stretched actions, no save Retry    | Accepted            | 20 px centered stars, symmetric spacing, "Continue to survey", modal opt-out save failure                      | 2026-10-09 | #992 |
+| 0028 | Minimum VS Code version follows the build stack, 1.109.0     | Accepted            | Supersedes D0018; raised by the merge of #880                                                                  | 2026-10-14 | #992 |
 
 > Entries are semantically immutable: append new entries rather than rewriting old ones, and record
 > reversals as a new entry plus a status change above.
@@ -414,3 +415,13 @@ maintain and test.
 **Accepted consequence:** without a Retry, a failed opt-out save applies only until VS Code
 restarts; nothing else writes after opt-out, so the user may be invited again later.
 `SurveyStateStore.retrySave` is removed.
+
+## 0028: Minimum VS Code version follows the build stack, 1.109.0
+
+**Decision (operator):** accept `engines.vscode` `^1.109.0` and `@types/vscode` `~1.109.0` from
+the build and test stack modernization (#880), merged into this branch. This supersedes D0018.
+
+**Reasoning:** #880 raises the minimum for the whole extension. The survey's own requirement is
+unchanged: the stable `viewsContainers.secondarySidebar` contribution needs 1.106.0 or later, so
+D0013 still stands. `SurveyInvitationView.test.ts` now asserts that floor instead of the exact
+`^1.106.0` range, so later raises do not break it.
