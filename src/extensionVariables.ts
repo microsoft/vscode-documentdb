@@ -30,7 +30,6 @@ export interface ExtensionVariables {
     outputChannel: IAzExtLogOutputChannel;
     playgroundOutputChannel: vscode.OutputChannel;
     playgroundResultProvider: PlaygroundResultProvider;
-    isBundle: boolean | undefined;
     secretStorage: vscode.SecretStorage;
     readonly prefix: string;
     fileSystem: DatabasesFileSystem;

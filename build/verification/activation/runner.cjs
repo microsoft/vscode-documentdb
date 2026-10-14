@@ -292,7 +292,6 @@ async function runActivation(options, dependencies) {
         const profileArgs = ['--extensions-dir', extensionsDir, '--user-data-dir', userDataDir];
         const env = { ...dependencies.env, VSCODE_SKIP_PRELAUNCH: '1', DONT_PROMPT_WSL_INSTALL: '1' };
         // Never inherit development flags that could make the product activate differently.
-        delete env.IS_BUNDLE;
         delete env.VSCODE_DEV;
         delete env.VSCODE_IPC_HOOK_CLI;
         delete env.ELECTRON_RUN_AS_NODE;

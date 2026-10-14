@@ -417,7 +417,7 @@ function fixture(context, behavior = {}) {
         dependencies: {
             checkout,
             platform: 'linux',
-            env: { IS_BUNDLE: 'inherited-dev-value', VSCODE_DEV: '1', DONT_PROMPT_WSL_INSTALL: '0' },
+            env: { VSCODE_DEV: '1', DONT_PROMPT_WSL_INSTALL: '0' },
             display: async () => {
                 events.push('display');
                 if (behavior.displayFailure) {
@@ -437,7 +437,6 @@ function fixture(context, behavior = {}) {
                 },
             }),
             process: async (executable, args, options) => {
-                assert.equal(options.env.IS_BUNDLE, undefined);
                 assert.equal(options.env.VSCODE_DEV, undefined);
                 assert.equal(options.env.DONT_PROMPT_WSL_INSTALL, '1');
                 const extensionsDir = args[args.indexOf('--extensions-dir') + 1];

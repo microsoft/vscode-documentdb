@@ -279,7 +279,7 @@ export class MyViewController extends WebviewController<AppRouter, MyConfig, Bas
       config: initialData,
       sourceLayout: WEBVIEW_CONFIG.bundle,
       devServerHost: WEBVIEW_CONFIG.devServerHost,
-      isBundled: !!ext.isBundle, // required: selects the bundle vs tsc layout
+      isBundled: true, // required: selects the bundle vs tsc layout
       icon,
     });
   }
@@ -318,7 +318,7 @@ export function openAppWebview<TConfiguration>(options: {
     config: options.config,
     sourceLayout: WEBVIEW_CONFIG.bundle,
     devServerHost: WEBVIEW_CONFIG.devServerHost,
-    isBundled: !!ext.isBundle,
+    isBundled: true,
     logger: rpcConcurrencyLogger, // optional dispatch-level logger
     icon: options.icon,
     viewColumn: options.viewColumn,

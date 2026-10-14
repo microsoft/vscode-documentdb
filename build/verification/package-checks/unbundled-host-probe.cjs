@@ -479,14 +479,7 @@ async function main(args) {
             cachePath: path.join(CHECKOUT, '.vscode-test'),
         });
         const env = { ...process.env, VSCODE_SKIP_PRELAUNCH: '1', DONT_PROMPT_WSL_INSTALL: '1' };
-        for (const name of [
-            'IS_BUNDLE',
-            'VSCODE_DEV',
-            'VSCODE_IPC_HOOK_CLI',
-            'ELECTRON_RUN_AS_NODE',
-            'NODE_PATH',
-            'NODE_OPTIONS',
-        ]) {
+        for (const name of ['VSCODE_DEV', 'VSCODE_IPC_HOOK_CLI', 'ELECTRON_RUN_AS_NODE', 'NODE_PATH', 'NODE_OPTIONS']) {
             delete env[name];
         }
 

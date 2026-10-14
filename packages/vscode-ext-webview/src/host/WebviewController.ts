@@ -132,8 +132,8 @@ export interface WebviewControllerOptions<
      * `bundled` layout; keying the layout off the mode alone would ask the dev
      * server for the `dev` (tsc) file name and 404.
      *
-     * Consumers pass a flag baked in by their bundler, e.g. an `IS_BUNDLE`
-     * define (`isBundled: !!process.env.IS_BUNDLE`).
+     * Consumers pass whether their extension build is bundled. An extension that
+     * always bundles its host can pass `isBundled: true` directly.
      */
     isBundled: boolean;
 
