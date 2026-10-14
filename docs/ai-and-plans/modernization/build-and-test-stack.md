@@ -4328,9 +4328,10 @@ Stage 0 must also be made.
   migration-time evidence or checks of checks. The decisions are
   [0001 to 0003 in decisions.md](./decisions.md). Stage 8.5 runs before the remaining Stage 9
   tasks; Stage 9 task 1 (the Copilot pass) stays done, and task 2 (Case 2) covers this stage.
-- **Models:** not yet chosen by the operator. Proposal: as Stage 8, a Claude Opus 5.5
-  coordinator with sequential subagents, and a GPT-6 Sol review written to
-  `iterations/08.5-stage8.5-review.md`.
+- **Models (operator, 2026-10-14):** this Claude Opus 5.5 session coordinates, with sequential
+  subagents: Claude Opus 5.5 for CI and verification design (W1, W2), GPT-5.6 Sol Fast for
+  well-specified documentation and cleanup (W3, W4, W5). The review is by GPT-5.6 Sol Fast, a
+  different family from the main author, written to `iterations/08.5-stage8.5-review.md`.
 - **How to run it:** one commit per work item, subject `S8.5: …`; record each item inline under
   it (ground rule 8). When an item changes a check, run its proof controls; never weaken a check
   or a control to get a pass.
@@ -4346,7 +4347,8 @@ Stage 0 must also be made.
     - `probe:host-unbundled` leaves `main.yml` and runs, path-scoped, in the publish workflow;
       `verify:packages` and the `prove:*` controls become path-scoped.
     - Verify on #880 itself: draft push (fast), ready (standard), request label (full), a push
-      after the request, and an unrelated label.
+      after the request, and an unrelated label. The agent checks the draft run; marking #880
+      ready and adding labels are operator actions, so those runs are checked at G8.5.
   - **W2** (approved 2026-10-14): slim `inspect.cjs` before the dependency bump. Replace the Babel
     `import_` shape match and the Monaco loader filename and count allowlists with one
     per-chunk budget for non-literal dynamic imports; review `keptClassNames`. Keep the `render`

@@ -111,6 +111,11 @@ request. `release/**` follows the same rules as PRs, plus the nightly run (opera
 rules as for the PR + nightly"). Scheduled workflows start only from the default branch, so the
 nightly job on `main` dispatches a full run for each `release/**` branch.
 
+A nightly run skips a branch whose tip is the commit of its last successful nightly run, except
+the Sunday-night run, which always runs (operator: "skip when unchanged, but once a week, every..
+sunday night"). The weekly run catches changes outside the repository, such as a new VS Code
+stable, container images or runner images.
+
 **Requesting a full run on a PR** is a one-shot label, the operator's proposal ("a label that
 says that something is requested, then a job kicks in and removes that label and posts
 comments"):
@@ -158,9 +163,14 @@ which is the failure mode tiering otherwise introduces.
 
 - **Workflow-level `on.pull_request.paths` filters:** a workflow that never starts leaves its
   required checks pending. Jobs skipped by `if:` report "skipped", which satisfies them.
-- **Comment commands (`/run e2e`) through `issue_comment`:** runs in the default branch's
-  context, needs its own permission checks, PR-head checkout and status reporting, and is a
-  known security pitfall.
+- **Comment commands (`/ci full`) through `issue_comment`** (operator: "let's stick with the
+  one-shot label"). Their one advantage is arguments, for example a VS Code version or platform
+  for E2E. Against them: the workflow runs from `main`, so a change to it cannot be tested on the
+  PR that makes it; results do not appear as PR checks without extra code; the run has a write
+  token and secrets, so checking out fork code is a known attack ("pwn request"), and the commit
+  must be pinned at comment time; and every comment needs a permission check. A comment that only
+  adds the label would need a GitHub App or personal token, because labels added with
+  `GITHUB_TOKEN` start no run. Revisit in the E2E iteration if runs need arguments.
 - **A sticky label** (full tier on every push while the label is on): makes every later push
   expensive until someone remembers to remove it. The operator chose a one-shot request.
 - **Nightly runs on open PRs:** needs a job that dispatches one run per open PR, and those runs
