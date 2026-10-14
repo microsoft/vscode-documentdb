@@ -398,8 +398,11 @@ finding and one overview that repeats the same finding. There are no other Copil
   0.11.2 and regenerate `package-lock.json` with `npm install`, following CONTRIBUTING §7.4.
   This preserves the repository's release ordering and prevents a 0.11.0 artifact from entering
   the 0.11.2 release path.
-- **Disposition:** no code change in this review pass. The version bump is a mandatory Stage 9
-  release checkpoint. A reply and final thread state are recorded after the GitHub follow-up.
+- **Disposition:** recorded in
+  [`04cb0473`](https://github.com/microsoft/vscode-documentdb/commit/04cb04739d8f18f56eb04e0b93cb225d4eb10b66),
+  with a [reply in the original discussion](https://github.com/microsoft/vscode-documentdb/pull/880#discussion_r4266910909).
+  No code change was made in this review pass. The version bump is a mandatory Stage 9 release
+  checkpoint. The Copilot thread was resolved on 2026-10-14.
 
 ## Step 3: validation gate
 

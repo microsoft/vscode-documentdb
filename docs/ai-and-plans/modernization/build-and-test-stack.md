@@ -4328,6 +4328,12 @@ Stage 0 must also be made.
   1. **The Copilot reviewer pass (CONTRIBUTING.md §6 step 2).** Request it on #880, merge its
      comments into `06-pr-pre-review.md` with links, address them (§6.3, replying in each
      thread), and record the author's decisions.
+     - **Completed 2026-10-14 in `04cb0473`.** Copilot produced one medium finding: the approved
+       0.11.2 release notes precede the extension manifest bump. It is recorded as CPR-F01 in
+       `06-pr-pre-review.md`, reassessed as a release-sequencing check, and answered with the G8
+       decision to keep the notes while making the 0.11.2 manifest and lockfile bump mandatory
+       after merge and before the signed ADO build. The commit-linked reply is in the original
+       discussion, and the sole Copilot thread is resolved.
   2. **The full Case 2 list** on the final tree, with the `prepare-pull-request` skill: milestone,
      description and blockers.
   3. **Mark #880 ready for review** (operator authorization), get the human review, and merge it
