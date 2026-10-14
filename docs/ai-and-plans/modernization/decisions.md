@@ -94,11 +94,11 @@ example "e2e requested or full test requested".
 CI picks a tier per run and runs only that tier's layers. Path-scoped checks run inside the
 standard and full tiers when their paths change.
 
-| Tier     | When                                                                                         | Layers                                                         |
-| -------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| fast     | Draft PR                                                                                     | L0: build, lint, formatting, type checks, unit tests           |
-| standard | Ready PR (including the `ready_for_review` event), push to `main`                            | fast + package the VSIX + L1 inspection + L3 activation + size |
-| full     | `ci:full-requested` label (one run), push to `release/**`, nightly on `main` once E2E exists | standard + E2E + every path-scoped check                       |
+| Tier     | When                                                                                    | Layers                                                         |
+| -------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| fast     | Draft PR                                                                                | L0: build, lint, formatting, type checks, unit tests           |
+| standard | Ready PR (including the `ready_for_review` event), push to `main` or `release/**`       | fast + package the VSIX + L1 inspection + L3 activation + size |
+| full     | `ci:full-requested` label (one run), nightly on `main` and `release/**` once E2E exists | standard + E2E + every path-scoped check                       |
 
 | Path-scoped check                                     | Runs when these change                                     |
 | ----------------------------------------------------- | ---------------------------------------------------------- |
@@ -106,9 +106,10 @@ standard and full tiers when their paths change.
 | `probe:host-unbundled`                                | `packages/vscode-ext-webview/**`, and when publishing      |
 | `prove:vsix`, `prove:activation`, `test:verification` | `build/verification/**`, the Vite configs, `build/vite/**` |
 
-Nightly runs cover `main` only: scheduled workflows run from the default branch, and open PRs get
-the full tier on request. `release/**` branches are short-lived, so every push to one runs the
-full tier.
+Nightly runs cover `main` and the open `release/**` branches; open PRs get the full tier on
+request. `release/**` follows the same rules as PRs, plus the nightly run (operator: "just same
+rules as for the PR + nightly"). Scheduled workflows start only from the default branch, so the
+nightly job on `main` dispatches a full run for each `release/**` branch.
 
 **Requesting a full run on a PR** is a one-shot label, the operator's proposal ("a label that
 says that something is requested, then a job kicks in and removes that label and posts
