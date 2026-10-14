@@ -1,6 +1,6 @@
 # DocumentDB for VS Code 1.0: Run It Locally, Bring Your Data
 
-_🔴 **[Input needed: publish date]**, by Tomasz Naumowicz and the DocumentDB for VS Code team_
+_October 10, 2026, by Tomasz Naumowicz and the DocumentDB for VS Code team_
 
 <p align="center"><img src="./images/1.0.0_hero.png" alt="DocumentDB for VS Code 1.0" width="800" style="max-width:100%;height:auto;"></p>
 
