@@ -1,9 +1,10 @@
 ---
 kind: review
-status: historical
+status: active
 ---
 
 > Re-evaluated against the merged branch in Stage 7: see [07-stage-reviews-reevaluation.md](./07-stage-reviews-reevaluation.md).
+> Reopened for the Stage 9 GitHub Copilot reviewer pass on 2026-10-14; see Step 2 below.
 
 # PR #880 AI pre-review (CONTRIBUTING.md §6)
 
@@ -373,11 +374,32 @@ can skip or deliberately re-check them.
 
 ## Step 2: GitHub Copilot reviewer comments
 
-None to merge (coordinator, 2026-10-06). PR #880 is a draft, and GitHub's Copilot reviewer has
-not reviewed it: `gh api repos/microsoft/vscode-documentdb/pulls/880/comments` returns 0
-review comments, and `gh pr view 880` lists 0 reviews (3 issue comments, none from the
-Copilot reviewer). **Outstanding:** when the operator requests the Copilot review, its
-comments must be merged here, with links, and reassessed before human review.
+The original 2026-10-06 pass found no Copilot comments because PR #880 was still a draft. The
+review was requested for Stage 9 and refreshed from GitHub on 2026-10-14. It produced one inline
+finding and one overview that repeats the same finding. There are no other Copilot threads.
+
+### CPR-F01: synchronize the extension version before building the release artifact
+
+- **Source:** [Copilot reviewer comment](https://github.com/microsoft/vscode-documentdb/pull/880#discussion_r4261396803).
+- **Reviewer severity:** medium.
+- **Reviewer finding:** `CHANGELOG.md` and `docs/index.md` advertise 0.11.2 while `package.json`
+  and `package-lock.json` remain at 0.11.0, so packaging the current draft produces a 0.11.0 VSIX.
+  The reviewer recommends either bumping the manifest and lockfile during Stage 9 or withholding
+  the 0.11.2 entries until the bump lands.
+- **Assessment:** valid as a release-sequencing check, not a defect in the current draft. The
+  version mismatch is intentional at this point. G8 item 17 records the operator's confirmation
+  that W16 labels the approved release-note drafts 0.11.2 without a version bump. CONTRIBUTING
+  §7.3 commits release notes before §7.4 bumps `package.json` and regenerates `package-lock.json`;
+  §7.7 then builds the signed artifact. Stage 9 likewise puts the signed ADO build after merge.
+- **Final severity:** low while the PR remains a draft; medium if the signed release build is
+  allowed to start before the bump.
+- **Author decision:** keep the approved 0.11.2 release notes and do not bump the draft branch.
+  After PR #880 merges and before the Stage 9 signed ADO build, set the extension version to
+  0.11.2 and regenerate `package-lock.json` with `npm install`, following CONTRIBUTING §7.4.
+  This preserves the repository's release ordering and prevents a 0.11.0 artifact from entering
+  the 0.11.2 release path.
+- **Disposition:** no code change in this review pass. The version bump is a mandatory Stage 9
+  release checkpoint. A reply and final thread state are recorded after the GitHub follow-up.
 
 ## Step 3: validation gate
 
