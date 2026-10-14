@@ -548,13 +548,14 @@ jobs:
                       }
 
     # The ruleset's required check (decision 0013). An unrelated-label run must not post a skipped
-    # check under this name, because a skipped required check counts as passed.
+    # check under this name, because a skipped required check counts as passed. It runs (and passes)
+    # under the label-event name instead: a skipped job would show its raw name expression.
     gate:
         name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Merge gate (label event, not run)' || 'Merge gate' }}
         runs-on: ubuntu-latest
         timeout-minutes: 5
         needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
-        if: always() && needs.plan.outputs.tier != 'skip'
+        if: always()
         permissions: {}
         steps:
             - name: Require every check the tier expected
@@ -569,6 +570,10 @@ jobs:
                   L1: ${{ needs.vsix-inspection.result }}
                   L3: ${{ needs.vsix-activation.result }}
               run: |
+                  if [[ "$TIER" == skip && "$PLAN" == success ]]; then
+                    echo 'Label event: nothing to gate; the PR keeps the previous Merge gate result.'
+                    exit 0
+                  fi
                   failed=0
                   expect() {
                     echo "$1: $2"
