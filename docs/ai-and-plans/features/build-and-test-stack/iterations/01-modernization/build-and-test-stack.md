@@ -4430,7 +4430,33 @@ Stage 0 must also be made.
     the stage reviews move to `iterations/01-modernization/` as history. The E2E strategy moves
     to `features/e2e-testing/`; the SlickGrid plan moves to the feature that owns the grid.
     Update every link. Last, so it describes the state after W1 to W4.
+    - **Done** (GPT-5.6 Sol Fast subagent): `517fa47c` moves the files with `git mv` (this plan
+      and the reviews to `iterations/01-modernization/`, the E2E strategy to
+      `features/e2e-testing/strategy.md`, the SlickGrid plan to `features/data-grid/`, which
+      no feature owned) and fixes links; `edc65410` adds the README and `design.md`; `789c4555`
+      appends reconstructed decisions 0004 to 0012 with evidence anchors into this plan;
+      `e9200bc8` updates the index, CONTRIBUTING, build READMEs and code comments. A link check
+      over the repository's Markdown found 280 broken links before and after (none introduced;
+      the old ones include links to files retired in Stage 8). `npm run build` passed.
+    - **Deviation:** the knowledge-base rule "archive is a status, not a location" prefers
+      superseding in place; the operator asked for the feature-folder layout, so the files moved
+      and `git mv` keeps their history.
   - **W6:** the stage review, then Stage 9 task 2.
+    - **Review in `47b473ff`** (GPT-5.6 Sol Fast, fresh session):
+      [08.5-stage8.5-review.md](./08.5-stage8.5-review.md), 2 medium and 2 low findings, overall
+      verdict "reduced complexity overall".
+    - **S85-F02 and S85-N01 fixed in `0f9105ca`** (Claude Opus 5.5 subagent): the last-full
+      marker keeps the requester and the run link (the old two-field marker still parses), and a
+      stale run never posts a full report for an older commit; `ci-report` tests 25/25.
+    - **S85-N02 fixed** in the record commit: this W5 record, and three stale current-state
+      statements in `pipelines.md` (G0, L3 in CI, the size cache's version 3).
+    - **S85-F01 open, for the operator:** the only required check, `Build & Package`, does not
+      cover L1, L3 or the package checks, and is skipped (so passes) when L0 fails. Recommended
+      fix: rename the packaging job and add a small final job named `Build & Package` that fails
+      when any layer the tier expected failed, was cancelled or was skipped unexpectedly. That
+      makes L1, L3 and the package checks merge-blocking, a policy change.
+    - **Pending:** pushing the Stage 8.5 commits, the real runs on #880 (G8.5), and Stage 9
+      task 2.
 - **Not in this stage:** retiring the L2 production harness. Decision 0002 retires it into E2E;
   Stage 9 task 6 still uses it on the signed VSIX.
 - **Operator gate G8.5:** the operator accepts the W1 verification on #880 and the restructured
