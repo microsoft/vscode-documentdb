@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as path from 'path';
-import type { Plugin } from 'vite';
+import { type Logger, type Plugin, type ResolvedConfig } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 const repoRoot = __dirname;
@@ -14,8 +14,8 @@ const repoRoot = __dirname;
 // wraps the resolved logger instead. It drops only that warning, and only for node_modules files.
 const quietMissingDependencySourceMaps: Plugin = {
     name: 'documentdb:quiet-missing-dependency-source-maps',
-    configResolved(config): void {
-        const warn = config.logger.warn.bind(config.logger);
+    configResolved(config: ResolvedConfig): void {
+        const warn = config.logger.warn.bind(config.logger) as Logger['warn'];
         config.logger.warn = (message, options): void => {
             if (message.startsWith('Failed to load source map for') && message.includes('/node_modules/')) {
                 return;
