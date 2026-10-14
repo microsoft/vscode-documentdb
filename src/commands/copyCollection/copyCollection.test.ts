@@ -3,21 +3,23 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext, openUrl } from '@microsoft/vscode-azext-utils';
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
+import { openUrl, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { window } from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { copyCollection } from './copyCollection';
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    openUrl: jest.fn().mockResolvedValue(undefined),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    openUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: { copiedCollectionNode: undefined },
 }));
 
-const showInformationMessage = window.showInformationMessage as unknown as jest.MockedFunction<
+const showInformationMessage = window.showInformationMessage as unknown as MockedFunction<
     (message: string, ...items: string[]) => Thenable<string | undefined>
 >;
 
@@ -32,7 +34,7 @@ const node = {
 
 describe('copyCollection notification', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         ext.copiedCollectionNode = undefined;
     });
 

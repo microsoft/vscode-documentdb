@@ -120,6 +120,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /** Unique session ID for correlating all events within this shell session. */
     private readonly _shellSessionId: string = randomUUID();
+    /** Extension client whose metadata describes this cluster, captured once when the shell is created. */
+    private readonly _connectionCorrelationId?: string;
     /** Running count of commands evaluated in this session (for commandIndex measurement). */
     private _commandCount: number = 0;
     /** Whether the session was successfully initialized (for guarding sessionEnd emission). */
@@ -165,10 +167,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             },
         };
 
+        this._connectionCorrelationId = ClustersClient.getExistingClient(
+            options.connectionInfo.clusterId,
+        )?.connectionCorrelationId;
         this._sessionManager = new ShellSessionManager(options.connectionInfo, sessionCallbacks, {
             shellSessionId: this._shellSessionId,
-            connectionCorrelationId: ClustersClient.getExistingClient(options.connectionInfo.clusterId)
-                ?.connectionCorrelationId,
+            connectionCorrelationId: this._connectionCorrelationId,
         });
 
         this._outputFormatter = new ShellOutputFormatter();
@@ -493,14 +497,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
                 context.telemetry.measurements.activeShellSessionCount = getRegisteredShellTerminals().length;
 
-                // Link to server metadata via connectionCorrelationId
-                try {
-                    const client = ClustersClient.getExistingClient(this._connectionInfo.clusterId);
-                    if (client?.connectionCorrelationId) {
-                        context.telemetry.properties.connectionCorrelationId = client.connectionCorrelationId;
-                    }
-                } catch {
-                    // Best-effort — client may not exist yet
+                if (this._connectionCorrelationId) {
+                    context.telemetry.properties.connectionCorrelationId = this._connectionCorrelationId;
                 }
 
                 // Domain info — privacy-safe hashed host data
@@ -980,9 +978,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._spinner?.stop();
             this._spinner = undefined;
 
-            // Kill the worker to cancel a running evaluation.
-            // The _terminatingIntentionally flag in WorkerSessionManager prevents
-            // the onWorkerExit callback from showing "ended unexpectedly".
+            // Kill the worker to cancel a running evaluation. WorkerSessionManager
+            // ignores exits of killed workers, so no "ended unexpectedly" message appears.
             this._sessionManager.killWorker();
             this._evaluating = false;
             this._inputHandler.setEnabled(true);

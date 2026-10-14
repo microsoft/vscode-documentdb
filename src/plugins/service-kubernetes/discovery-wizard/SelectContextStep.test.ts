@@ -3,19 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { type KubeconfigSourceRecord } from '../config';
 import { type KubeContextInfo } from '../kubernetesClient';
 import { KubernetesWizardProperties } from './SelectContextStep';
 
-const mockReadSources = jest.fn<Promise<KubeconfigSourceRecord[]>, []>();
-const mockLoadConfiguredKubeConfig = jest.fn();
-const mockGetContexts = jest.fn();
-const mockAliasMapForSource = jest.fn();
-const mockAddKubeconfigSource = jest.fn();
-const mockShowInformationMessage = jest.fn();
+const mockReadSources = vi.fn<(...args: []) => Promise<KubeconfigSourceRecord[]>>();
+const mockLoadConfiguredKubeConfig = vi.fn();
+const mockGetContexts = vi.fn();
+const mockAliasMapForSource = vi.fn();
+const mockAddKubeconfigSource = vi.fn();
+const mockShowInformationMessage = vi.fn();
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardExecuteStep: class AzureWizardExecuteStep {},
     AzureWizardPromptStep: class AzureWizardPromptStep {},
     UserCancelledError: class UserCancelledError extends Error {
@@ -26,13 +28,13 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     },
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     QuickPickItemKind: { Separator: 1 },
     l10n: {
-        t: jest.fn((template: string, ...args: unknown[]) =>
+        t: vi.fn((template: string, ...args: unknown[]) =>
             template.replace(/\{(\d+)\}/g, (_match: string, index: string) => String(args[Number(index)])),
         ),
     },
@@ -41,30 +43,30 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLine: jest.fn(),
-            error: jest.fn(),
-            warn: jest.fn(),
+            appendLine: vi.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
-jest.mock('../sources/sourceStore', () => ({
+vi.mock('../sources/sourceStore', () => ({
     readSources: () => mockReadSources(),
 }));
 
-jest.mock('../kubernetesClient', () => ({
+vi.mock('../kubernetesClient', () => ({
     loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
     getContexts: (...args: unknown[]) => mockGetContexts(...args),
 }));
 
-jest.mock('../sources/aliasStore', () => ({
+vi.mock('../sources/aliasStore', () => ({
     aliasMapForSource: (...args: unknown[]) => mockAliasMapForSource(...args),
 }));
 
-jest.mock('../commands/addKubeconfigSource', () => ({
+vi.mock('../commands/addKubeconfigSource', () => ({
     addKubeconfigSource: (...args: unknown[]) => mockAddKubeconfigSource(...args),
 }));
 
@@ -82,22 +84,22 @@ interface CapturedPick {
 }
 
 interface MockUi {
-    readonly showQuickPick: jest.Mock;
-    readonly showInputBox: jest.Mock;
-    readonly onDidFinishPrompt: jest.Mock;
-    readonly showWarningMessage: jest.Mock;
-    readonly showOpenDialog: jest.Mock;
-    readonly showWorkspaceFolderPick: jest.Mock;
+    readonly showQuickPick: Mock;
+    readonly showInputBox: Mock;
+    readonly onDidFinishPrompt: Mock;
+    readonly showWarningMessage: Mock;
+    readonly showOpenDialog: Mock;
+    readonly showWorkspaceFolderPick: Mock;
 }
 
 function createUi(): MockUi {
     return {
-        showQuickPick: jest.fn(),
-        showInputBox: jest.fn(),
-        onDidFinishPrompt: jest.fn(),
-        showWarningMessage: jest.fn(),
-        showOpenDialog: jest.fn(),
-        showWorkspaceFolderPick: jest.fn(),
+        showQuickPick: vi.fn(),
+        showInputBox: vi.fn(),
+        onDidFinishPrompt: vi.fn(),
+        showWarningMessage: vi.fn(),
+        showOpenDialog: vi.fn(),
+        showWorkspaceFolderPick: vi.fn(),
     };
 }
 
@@ -127,7 +129,7 @@ const testContext: KubeContextInfo = {
 };
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockAliasMapForSource.mockResolvedValue(new Map());
 });
 

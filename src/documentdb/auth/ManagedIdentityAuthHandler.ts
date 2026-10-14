@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
-import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
+import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
@@ -30,7 +30,10 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
 
     constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
-    public async configureAuth(timings?: ConnectionStartupTimings): Promise<AuthHandlerResponse> {
+    public async configureAuth(
+        timings?: ConnectionStartupTimings,
+        traceContext?: AuthTraceContext,
+    ): Promise<AuthHandlerResponse> {
         const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
         const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
         traceAuthFlow(
@@ -41,6 +44,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                 tokenAcquisition: 'deferredUntilDriverCallback',
             },
             this.tokenCorrelationId,
+            traceContext,
         );
 
         const dbConnectionString = new DocumentDBConnectionString(this.clusterCredentials.connectionString);
@@ -67,10 +71,12 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                                     clientId,
                                     tenantId,
                                     this.tokenCorrelationId,
+                                    traceContext,
                                 ),
                             ),
                         {},
                         this.tokenCorrelationId,
+                        traceContext,
                     );
 
                     return {

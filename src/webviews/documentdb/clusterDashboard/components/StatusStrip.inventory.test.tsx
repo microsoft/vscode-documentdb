@@ -3,9 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from 'vitest';
+
 import { SSRProvider } from '@fluentui/react-components';
-import type * as ReactModule from 'react';
-import { act, useState, type JSX, type ReactNode } from 'react';
+import { act, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
@@ -14,17 +17,7 @@ import { StatusStrip } from './StatusStrip';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-jest.mock('@microsoft/vscode-ext-webview-fluentui/components', () => {
-    const react = jest.requireActual<typeof ReactModule>('react');
-    return {
-        MetricGrid: ({ children, className }: { children: ReactNode; className: string }): ReactNode =>
-            react.createElement('div', { className }, children),
-        MetricCard: ({ label, value }: { label: string; value: ReactNode }): ReactNode =>
-            react.createElement('div', null, label, value ?? 'N/A'),
-    };
-});
-
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string, ...args: unknown[]): string =>
         args.reduce<string>((result, value, index) => result.replace(`{${index}}`, String(value)), message),
 }));
@@ -56,7 +49,7 @@ describe('Dashboard inventory breadcrumb and metrics', () => {
                 root.render(
                     <SSRProvider>
                         <StatusStrip storageStats={storageStats} currentDatabase={null} />
-                        <DashboardBreadcrumb currentDatabase={null} onNavigateToCluster={jest.fn()} />
+                        <DashboardBreadcrumb currentDatabase={null} onNavigateToCluster={vi.fn()} />
                     </SSRProvider>,
                 );
             });
@@ -81,7 +74,7 @@ describe('Dashboard inventory breadcrumb and metrics', () => {
         const host = document.createElement('div');
         const root = createRoot(host);
         document.body.appendChild(host);
-        const onNavigateToCluster = jest.fn();
+        const onNavigateToCluster = vi.fn();
 
         const DashboardScope = (): JSX.Element => {
             const [currentDatabase, setCurrentDatabase] = useState<string | null>('orders');

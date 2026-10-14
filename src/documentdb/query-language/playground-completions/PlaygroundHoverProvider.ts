@@ -18,6 +18,7 @@
 import { getAllCompletions } from '@documentdb-js/operator-registry';
 import { BSONTypes, type FieldEntry } from '@documentdb-js/schema-analyzer';
 import * as vscode from 'vscode';
+import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { PLAYGROUND_LANGUAGE_ID } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';
 import { SchemaStore } from '../../SchemaStore';
@@ -80,7 +81,7 @@ export function getPlaygroundHoverContent(
             }
 
             return {
-                contents: [{ value: lines.join('\n\n'), isTrusted: true, supportHtml: true }],
+                contents: [{ value: lines.join('\n\n'), isTrusted: false, supportHtml: true }],
             };
         }
     }
@@ -124,13 +125,6 @@ function buildFieldHover(field: FieldEntry): PlaygroundHoverData {
     return {
         contents: [{ value: lines.join('\n\n'), supportHtml: true }],
     };
-}
-
-/**
- * Escapes markdown metacharacters so user data renders as literal text.
- */
-function escapeMarkdown(text: string): string {
-    return text.replace(/[\\*_{}[\]()#+\-.!|<>`~&]/g, '\\$&');
 }
 
 /**

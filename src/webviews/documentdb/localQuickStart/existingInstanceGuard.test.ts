@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { InstanceState } from '../../../services/localQuickStart/quickStartTypes';
 import { getExistingInstanceGuard, guardBlocksSetup, type GuardInput } from './existingInstanceGuard';
 

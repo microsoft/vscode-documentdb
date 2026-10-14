@@ -174,5 +174,6 @@ When you click a DocumentDB for VS Code URL, the following process occurs:
 
 - Ensure the `connectionString` is valid and properly double-encoded to avoid connection errors.
 - The extension will handle authentication and connection establishment automatically.
+- If a `mongodb+srv://` connection fails with `querySrv EBADRESP` or `querySrv ECONNREFUSED`, see [Troubleshoot SRV DNS Lookups](./troubleshooting-srv-dns).
 - Invalid or malformed URLs will display appropriate error messages to help with troubleshooting.
 - A link is untrusted input: the set of actions it can reach is fixed by the extension, not derived from its command list. Adding a new action is a deliberate decision that the action is safe to trigger from someone else's web page.

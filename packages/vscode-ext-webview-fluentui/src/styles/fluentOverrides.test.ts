@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, test } from 'vitest';
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fluentOverridesCss } from './generated.js';

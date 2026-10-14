@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockOpenTextDocument = jest.fn();
-const mockShowTextDocument = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-jest.mock('vscode', () => ({
+const mockOpenTextDocument = vi.fn();
+const mockShowTextDocument = vi.fn();
+
+vi.mock('vscode', () => ({
     Uri: {
-        from: jest.fn((parts: { scheme: string; authority: string; path: string; query: string }) => ({
+        from: vi.fn((parts: { scheme: string; authority: string; path: string; query: string }) => ({
             ...parts,
             toString: () => `${parts.scheme}://${parts.authority}${parts.path}?${parts.query}`,
         })),
@@ -26,7 +28,7 @@ import { READ_ONLY_JSON_SCHEME, readOnlyJsonDocumentProvider } from './readOnlyJ
 
 describe('readOnlyJsonDocumentProvider', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         readOnlyJsonDocumentProvider.dispose();
         mockOpenTextDocument.mockImplementation(async (uri: vscode.Uri) => ({ uri }));
         mockShowTextDocument.mockResolvedValue(undefined);

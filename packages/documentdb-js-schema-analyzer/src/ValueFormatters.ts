@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Binary, type BSONRegExp, type ObjectId } from 'mongodb';
-import { BSONTypes } from './BSONTypes';
+import { BSONTypes } from './BSONTypes.js';
 
 /**
  * Converts a MongoDB API value to its display string representation based on its type.

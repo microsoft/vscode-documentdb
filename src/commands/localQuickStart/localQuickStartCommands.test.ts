@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState } from '../../services/localQuickStart/quickStartTypes';
@@ -10,11 +12,11 @@ import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { buildQuickStartCopyCredentials, deleteQuickStartInstance } from './localQuickStartCommands';
 
-jest.mock('../../services/localQuickStart/QuickStartService', () => ({
-    QuickStartService: { getStatus: jest.fn(), deleteContainer: jest.fn() },
+vi.mock('../../services/localQuickStart/QuickStartService', () => ({
+    QuickStartService: { getStatus: vi.fn(), deleteContainer: vi.fn() },
 }));
-jest.mock('../../utils/dialogs/getConfirmation', () => ({ getConfirmationAsInSettings: jest.fn() }));
-jest.mock('../../utils/dialogs/showConfirmation', () => ({ showConfirmationAsInSettings: jest.fn() }));
+vi.mock('../../utils/dialogs/getConfirmation', () => ({ getConfirmationAsInSettings: vi.fn() }));
+vi.mock('../../utils/dialogs/showConfirmation', () => ({ showConfirmationAsInSettings: vi.fn() }));
 
 // UX review #7: the Quick Start "Copy Connection String" reuses the shared copy flow, which treats
 // credentials.connectionString as a PASSWORD-FREE base (the password lives only in nativeAuthConfig).
@@ -53,10 +55,10 @@ describe('buildQuickStartCopyCredentials (UX review #7)', () => {
 // no-ops when the alias is busy (returns 'busy'); in both cases nothing was removed, so a success
 // toast would be contradictory and the instance would still be in the tree.
 describe('deleteQuickStartInstance — success toast gated on the delete outcome (GPT-5.6 review #1)', () => {
-    const getStatus = QuickStartService.getStatus as jest.Mock;
-    const deleteContainer = QuickStartService.deleteContainer as jest.Mock;
-    const confirm = getConfirmationAsInSettings as unknown as jest.Mock;
-    const showToast = showConfirmationAsInSettings as unknown as jest.Mock;
+    const getStatus = QuickStartService.getStatus as Mock;
+    const deleteContainer = QuickStartService.deleteContainer as Mock;
+    const confirm = getConfirmationAsInSettings as unknown as Mock;
+    const showToast = showConfirmationAsInSettings as unknown as Mock;
 
     const makeContext = () =>
         ({ telemetry: { properties: {} as Record<string, string>, measurements: {} } }) as unknown as Parameters<
@@ -64,7 +66,7 @@ describe('deleteQuickStartInstance — success toast gated on the delete outcome
         >[0];
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         getStatus.mockReturnValue({ state: InstanceState.Stopped });
         confirm.mockResolvedValue(true);
     });

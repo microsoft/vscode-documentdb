@@ -3,7 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+import {
+    type callWithTelemetryAndErrorHandling,
+    type IActionContext,
+    type ITelemetryContext,
+} from '@microsoft/vscode-azext-utils';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -20,12 +26,12 @@ import { envFileName, QuickStartServiceImpl, sweepStaleQuickStartEnvFiles } from
 import { listInstances, PROVISIONING_LEASE_TTL_MS, upsertInstance, writeConnectionString } from './quickStartStore';
 import {
     DEFAULT_ALIAS,
-    type DockerReadiness,
     InstanceState,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_LABEL_KEY,
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
+    type DockerReadiness,
     type StageEvent,
 } from './quickStartTypes';
 
@@ -38,9 +44,11 @@ const STORED_CONN = 'mongodb://u1:p1@localhost:10273/?tls=true&tlsAllowInvalidCe
 const mockTelemetryEvents: Array<{ readonly eventName: string; readonly telemetry: ITelemetryContext }> = [];
 
 // Pass-through, so the service behaves as with the real wrapper while its events can be inspected.
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    ...jest.requireActual<Record<string, unknown>>('@microsoft/vscode-azext-utils'),
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', async () => ({
+    ...(await vi.importActual<{ callWithTelemetryAndErrorHandling: typeof callWithTelemetryAndErrorHandling }>(
+        '@microsoft/vscode-azext-utils',
+    )),
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (eventName: string, callback: (context: IActionContext) => unknown): Promise<unknown> => {
             const context = {
                 telemetry: { properties: {}, measurements: {} },
@@ -99,14 +107,14 @@ function fakeSecretStorage(seed: Record<string, string>): vscode.SecretStorage {
 
 function mockRuntime(overrides: Partial<IContainerRuntime>): IContainerRuntime {
     return {
-        listByLabel: jest.fn().mockResolvedValue([]),
-        inspectContainer: jest.fn().mockResolvedValue(undefined),
+        listByLabel: vi.fn().mockResolvedValue([]),
+        inspectContainer: vi.fn().mockResolvedValue(undefined),
         // Docker answering normally is the default, so an empty inspect means the container is gone.
-        isDockerReady: jest.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true }),
-        removeContainer: jest.fn().mockResolvedValue(undefined),
-        removeVolume: jest.fn().mockResolvedValue(undefined),
-        volumeExists: jest.fn().mockResolvedValue(false),
-        isPortFree: jest.fn().mockResolvedValue(true),
+        isDockerReady: vi.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true }),
+        removeContainer: vi.fn().mockResolvedValue(undefined),
+        removeVolume: vi.fn().mockResolvedValue(undefined),
+        volumeExists: vi.fn().mockResolvedValue(false),
+        isPortFree: vi.fn().mockResolvedValue(true),
         ...overrides,
     } as unknown as IContainerRuntime;
 }
@@ -141,22 +149,22 @@ describe('QuickStartService — stored-credential volume safety', () => {
     // jest-mock-vscode's createOutputChannel returns a channel without `appendLine`; stub it so the
     // reconcile branches that log (credential-unavailable surface, duplicate-winner) don't throw.
     beforeAll(() => {
-        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+        vi.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
             name: 'test',
-            append: jest.fn(),
-            appendLine: jest.fn(),
-            replace: jest.fn(),
-            clear: jest.fn(),
-            show: jest.fn(),
-            hide: jest.fn(),
-            dispose: jest.fn(),
+            append: vi.fn(),
+            appendLine: vi.fn(),
+            replace: vi.fn(),
+            clear: vi.fn(),
+            show: vi.fn(),
+            hide: vi.fn(),
+            dispose: vi.fn(),
         } as unknown as vscode.LogOutputChannel);
         disposeQuickStartOutputChannel();
     });
 
     afterAll(() => {
         disposeQuickStartOutputChannel();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     let originalSecretStorage: vscode.SecretStorage;
@@ -177,12 +185,12 @@ describe('QuickStartService — stored-credential volume safety', () => {
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, STORED_CONN);
 
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const runtime = mockRuntime({
-            listByLabel: jest.fn().mockResolvedValue([{ id: 'c1' }]),
+            listByLabel: vi.fn().mockResolvedValue([{ id: 'c1' }]),
             // Exited container ⇒ adopted as Stopped (skips the running-only credential-cache path).
-            inspectContainer: jest.fn().mockResolvedValue({
+            inspectContainer: vi.fn().mockResolvedValue({
                 id: 'c1',
                 status: 'exited',
                 ports: [{ containerPort: 10260, hostPort: 10273 }],
@@ -216,10 +224,10 @@ describe('QuickStartService — stored-credential volume safety', () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
 
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const runtime = mockRuntime({
-            listByLabel: jest.fn().mockResolvedValue([{ id: 'c1' }]),
+            listByLabel: vi.fn().mockResolvedValue([{ id: 'c1' }]),
             removeContainer,
             removeVolume,
         });
@@ -265,34 +273,34 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     const CONN_2 = 'mongodb://u2:p2@localhost:10261/?tls=true&tlsAllowInvalidCertificates=true';
 
     beforeAll(() => {
-        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+        vi.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
             name: 'test',
-            append: jest.fn(),
-            appendLine: jest.fn(),
-            replace: jest.fn(),
-            clear: jest.fn(),
-            show: jest.fn(),
-            hide: jest.fn(),
-            dispose: jest.fn(),
+            append: vi.fn(),
+            appendLine: vi.fn(),
+            replace: vi.fn(),
+            clear: vi.fn(),
+            show: vi.fn(),
+            hide: vi.fn(),
+            dispose: vi.fn(),
         } as unknown as vscode.LogOutputChannel);
         disposeQuickStartOutputChannel();
     });
 
     afterAll(() => {
         disposeQuickStartOutputChannel();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     let originalSecretStorage: vscode.SecretStorage;
     let originalContext: vscode.ExtensionContext;
     let originalOutputChannel: typeof ext.outputChannel;
-    let trace: jest.Mock;
+    let trace: Mock;
 
     beforeEach(() => {
         originalSecretStorage = ext.secretStorage;
         originalContext = ext.context;
         originalOutputChannel = ext.outputChannel;
-        trace = jest.fn();
+        trace = vi.fn();
         ext.outputChannel = { trace } as unknown as typeof ext.outputChannel;
     });
 
@@ -314,28 +322,28 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     function reconcileRuntime(opts: {
         containers: Array<{ id: string; alias?: string; createdAt?: Date }>;
         inspect?: Record<string, unknown>;
-        isDockerReady?: jest.Mock;
-        removeContainer?: jest.Mock;
-        removeVolume?: jest.Mock;
+        isDockerReady?: Mock;
+        removeContainer?: Mock;
+        removeVolume?: Mock;
         volumeExists?: boolean;
     }): IContainerRuntime {
         const inspect = opts.inspect ?? {};
         return mockRuntime({
-            listByLabel: jest.fn().mockResolvedValue(
+            listByLabel: vi.fn().mockResolvedValue(
                 opts.containers.map((container) => ({
                     id: container.id,
                     createdAt: container.createdAt,
                     labels: container.alias === undefined ? {} : { [QUICK_START_ALIAS_LABEL_KEY]: container.alias },
                 })),
             ),
-            inspectContainer: jest.fn((id: string) =>
+            inspectContainer: vi.fn((id: string) =>
                 Promise.resolve(inspect[id]),
             ) as unknown as IContainerRuntime['inspectContainer'],
             ...(opts.isDockerReady ? { isDockerReady: opts.isDockerReady } : {}),
-            removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
-            removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
+            removeContainer: opts.removeContainer ?? vi.fn().mockResolvedValue(undefined),
+            removeVolume: opts.removeVolume ?? vi.fn().mockResolvedValue(undefined),
             // Unlike the provision helpers: a recorded instance normally still has its data volume.
-            volumeExists: jest.fn().mockResolvedValue(opts.volumeExists ?? true),
+            volumeExists: vi.fn().mockResolvedValue(opts.volumeExists ?? true),
         });
     }
 
@@ -384,7 +392,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             osType: 'linux',
             daemonArchitecture: 'amd64',
         };
-        const isDockerReady = jest.fn().mockResolvedValue(readiness);
+        const isDockerReady = vi.fn().mockResolvedValue(readiness);
         const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [], isDockerReady }));
 
         await service.reconcile();
@@ -396,8 +404,8 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     it('surfaces a credential-unavailable instance as CredentialsMissing without removing it or its volume (R2)', async () => {
         ext.secretStorage = fakeSecretStorage({}); // no secret for ALIAS_2
         ext.context = fakeContext(fakeMemento());
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             reconcileRuntime({
                 containers: [{ id: 'c2', alias: ALIAS_2 }],
@@ -565,7 +573,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
-        const volumeExists = jest.fn().mockResolvedValue(true);
+        const volumeExists = vi.fn().mockResolvedValue(true);
         const service = new QuickStartServiceImpl(mockRuntime({ volumeExists }));
         await service.reconcile();
         expect(service.getStatus().missing).toBe(true);
@@ -580,10 +588,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     it('refreshLiveState() clears CredentialsMissing once its container and volume are both gone', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const listByLabel = jest
+        const listByLabel = vi
             .fn()
             .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]);
-        const volumeExists = jest.fn().mockResolvedValue(true);
+        const volumeExists = vi.fn().mockResolvedValue(true);
         const service = new QuickStartServiceImpl(mockRuntime({ listByLabel, volumeExists }));
         await service.reconcile();
         expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
@@ -627,14 +635,14 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         const inspect: Record<string, unknown> = {
             c1: inspectItem('c1', { running: false, port: 10260, image: 'img:1' }),
         };
-        const volumeExists = jest.fn().mockResolvedValue(true);
-        const startContainer = jest.fn().mockResolvedValue(undefined);
+        const volumeExists = vi.fn().mockResolvedValue(true);
+        const startContainer = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(inspect[id]),
                 ) as unknown as IContainerRuntime['inspectContainer'],
                 volumeExists,
@@ -645,7 +653,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         delete inspect.c1;
         volumeExists.mockResolvedValue(false);
-        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        const info = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
 
         await service.start();
 
@@ -662,24 +670,24 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
-        const startContainer = jest.fn().mockResolvedValue(undefined);
+        const startContainer = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn().mockResolvedValue({
+                inspectContainer: vi.fn().mockResolvedValue({
                     id: 'c1',
                     status: 'exited',
                     ports: [],
                     labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
                 }),
-                isPortFree: jest.fn().mockResolvedValue(false),
+                isPortFree: vi.fn().mockResolvedValue(false),
                 startContainer,
             }),
         );
         await service.reconcile();
-        const error = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        const error = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
 
         await service.start();
 
@@ -696,31 +704,31 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         const calls: string[] = [];
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn().mockResolvedValue({
+                inspectContainer: vi.fn().mockResolvedValue({
                     id: 'c1',
                     status: 'running',
                     ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
                     labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
                 }),
-                stopContainer: jest.fn(() => {
+                stopContainer: vi.fn(() => {
                     calls.push('stop');
                     return Promise.resolve();
                 }),
-                isPortFree: jest.fn(() => {
+                isPortFree: vi.fn(() => {
                     calls.push('portCheck');
                     return Promise.resolve(false);
                 }),
-                startContainer: jest.fn(() => {
+                startContainer: vi.fn(() => {
                     calls.push('start');
                     return Promise.resolve();
                 }),
             }),
         );
         await service.reconcile();
-        const error = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        const error = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
 
         await service.restart();
 
@@ -736,7 +744,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
 
-        const startContainer = jest.fn().mockResolvedValue(undefined);
+        const startContainer = vi.fn().mockResolvedValue(undefined);
         // Mutable inspect map: present during reconcile (adopted as Stopped), then removed to
         // simulate `docker rm` outside VS Code before the user clicks Start.
         const inspect: Record<string, unknown> = {
@@ -744,11 +752,11 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         };
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                volumeExists: jest.fn().mockResolvedValue(true),
-                listByLabel: jest
+                volumeExists: vi.fn().mockResolvedValue(true),
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(inspect[id]),
                 ) as unknown as IContainerRuntime['inspectContainer'],
                 startContainer,
@@ -760,7 +768,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         // The container vanishes (external `docker rm`): every subsequent inspect returns undefined.
         delete inspect.c1;
-        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        const info = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
 
         await service.start();
 
@@ -782,11 +790,11 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         };
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                volumeExists: jest.fn().mockResolvedValue(true),
-                listByLabel: jest
+                volumeExists: vi.fn().mockResolvedValue(true),
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(inspect[id]),
                 ) as unknown as IContainerRuntime['inspectContainer'],
             }),
@@ -820,13 +828,13 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         const inspect: Record<string, unknown> = {
             c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
         };
-        const isDockerReady = jest.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true });
+        const isDockerReady = vi.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true });
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(inspect[id]),
                 ) as unknown as IContainerRuntime['inspectContainer'],
                 isDockerReady: isDockerReady as unknown as IContainerRuntime['isDockerReady'],
@@ -852,7 +860,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.context = fakeContext(fakeMemento());
 
         let finishListing: ((containers: []) => void) | undefined;
-        const listByLabel = jest.fn(
+        const listByLabel = vi.fn(
             () =>
                 new Promise<[]>((resolve) => {
                     finishListing = resolve;
@@ -881,7 +889,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
 
-        const listByLabel = jest.fn().mockRejectedValueOnce(new Error('Docker unavailable')).mockResolvedValue([]);
+        const listByLabel = vi.fn().mockRejectedValueOnce(new Error('Docker unavailable')).mockResolvedValue([]);
         const service = new QuickStartServiceImpl(mockRuntime({ listByLabel }));
 
         await expect(service.ensureHydrated()).rejects.toThrow('Docker unavailable');
@@ -899,7 +907,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.context = fakeContext(fakeMemento());
 
         let finishListing: ((containers: []) => void) | undefined;
-        const listByLabel = jest.fn(
+        const listByLabel = vi.fn(
             () =>
                 new Promise<[]>((resolve) => {
                     finishListing = resolve;
@@ -935,7 +943,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
 
-        const inspectContainer = jest.fn((id: string) =>
+        const inspectContainer = vi.fn((id: string) =>
             Promise.resolve({
                 id,
                 status: 'running',
@@ -946,7 +954,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ) as unknown as IContainerRuntime['inspectContainer'];
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
                 inspectContainer,
@@ -954,7 +962,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         );
 
         await service.ensureHydrated();
-        const inspectsDuringHydration = jest.mocked(inspectContainer).mock.calls.length;
+        const inspectsDuringHydration = vi.mocked(inspectContainer).mock.calls.length;
 
         // The status events fired during reconciliation re-enter getChildren() once hydration is
         // done, so the row would otherwise re-inspect the container it just adopted.
@@ -972,10 +980,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         const inspect: Record<string, unknown> = {
             c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
         };
-        const inspectContainer = jest.fn((id: string) => Promise.resolve(inspect[id]));
+        const inspectContainer = vi.fn((id: string) => Promise.resolve(inspect[id]));
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
                 inspectContainer: inspectContainer as unknown as IContainerRuntime['inspectContainer'],
@@ -1006,7 +1014,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         await seedInstance(DEFAULT_ALIAS, CONN_1);
 
         let finishStop!: () => void;
-        const stopContainer = jest.fn(
+        const stopContainer = vi.fn(
             () =>
                 new Promise<void>((resolve) => {
                     finishStop = resolve;
@@ -1014,10 +1022,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         );
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve({
                         id,
                         status: 'running',
@@ -1057,8 +1065,8 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
 
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         // Three phases for the SAME id/name: (1) ours (adopt), (2) gone (Start marks it Missing),
         // (3) a FOREIGN container now holds the name. This reproduces the exact old bypass:
         // entry.missing === true, so the pre-fix `entry.missing || isManaged(...)` would have removed
@@ -1066,11 +1074,11 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let phase: 'ours' | 'gone' | 'foreign' = 'ours';
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                volumeExists: jest.fn().mockResolvedValue(true),
-                listByLabel: jest
+                volumeExists: vi.fn().mockResolvedValue(true),
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(
                         phase === 'gone'
                             ? undefined
@@ -1088,20 +1096,20 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
                                 },
                     ),
                 ) as unknown as IContainerRuntime['inspectContainer'],
-                startContainer: jest.fn().mockResolvedValue(undefined),
+                startContainer: vi.fn().mockResolvedValue(undefined),
                 removeContainer,
                 removeVolume,
             }),
         );
 
         await service.reconcile(); // adopts as Running (metadata.containerId = 'c1')
-        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        const info = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
         phase = 'gone';
         await service.start(); // container gone ⇒ ensureActionable sets entry.missing = true
         expect(service.getStatus().missing).toBe(true);
 
         phase = 'foreign'; // the id/name now resolves to a container the extension did not create
-        const warn = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+        const warn = vi.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
         const outcome = await service.deleteContainer();
 
         // #9: even with entry.missing === true (the old bypass), never remove a container — or its
@@ -1121,18 +1129,18 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
 
-        const startContainer = jest.fn().mockResolvedValue(undefined);
+        const startContainer = vi.fn().mockResolvedValue(undefined);
         // Adopt as Stopped, then the container is actually running (another window started it).
         // The inspect result carries our labels (as real Docker does) so ensureActionable recognizes
         // it as ours and hits the drift branch rather than the foreign one.
         let running = false;
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                volumeExists: jest.fn().mockResolvedValue(true),
-                listByLabel: jest
+                volumeExists: vi.fn().mockResolvedValue(true),
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve({
                         id,
                         status: running ? 'running' : 'exited',
@@ -1149,7 +1157,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus().state).toBe(InstanceState.Stopped);
 
         running = true; // drift: it's already running
-        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        const info = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
         await service.start();
 
         expect(startContainer).not.toHaveBeenCalled(); // start on an already-running container is a no-op
@@ -1167,11 +1175,11 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
                 // `docker pause` leaves the tree showing Stopped.
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve({
                         id,
                         status: 'paused',
@@ -1179,7 +1187,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
                         labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
                     }),
                 ) as unknown as IContainerRuntime['inspectContainer'],
-                startContainer: jest
+                startContainer: vi
                     .fn()
                     .mockRejectedValue(
                         new DockerCommandError(
@@ -1190,7 +1198,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             }),
         );
         await service.reconcile();
-        const showError = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        const showError = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
 
         await service.start();
 
@@ -1207,15 +1215,15 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
 
-        const stopContainer = jest.fn().mockResolvedValue(undefined);
+        const stopContainer = vi.fn().mockResolvedValue(undefined);
         let running = true;
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                volumeExists: jest.fn().mockResolvedValue(true),
-                listByLabel: jest
+                volumeExists: vi.fn().mockResolvedValue(true),
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve({
                         id,
                         status: running ? 'running' : 'exited',
@@ -1230,7 +1238,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         await service.reconcile();
         running = false;
-        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        const info = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
 
         await service.stop();
 
@@ -1248,10 +1256,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let running = true;
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve({
                         id,
                         status: running ? 'running' : 'exited',
@@ -1278,10 +1286,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve({
                         id,
                         status: 'running',
@@ -1307,11 +1315,11 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let present = true;
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                volumeExists: jest.fn().mockResolvedValue(true),
-                listByLabel: jest
+                volumeExists: vi.fn().mockResolvedValue(true),
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(
                         present
                             ? {
@@ -1345,10 +1353,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let present = true;
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(
                         present
                             ? {
@@ -1369,7 +1377,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         await service.reconcile();
         present = false;
-        const statusChanged = jest.fn();
+        const statusChanged = vi.fn();
         service.onDidChangeStatus(statusChanged);
 
         await expect(service.inspectManagedInstance()).resolves.toBe('missing');
@@ -1385,10 +1393,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let daemonUp = true;
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(
                         daemonUp
                             ? {
@@ -1404,7 +1412,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
                             : undefined,
                     ),
                 ) as unknown as IContainerRuntime['inspectContainer'],
-                isDockerReady: jest
+                isDockerReady: vi
                     .fn()
                     .mockImplementation(() =>
                         Promise.resolve(
@@ -1431,10 +1439,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let owned = true;
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest
+                listByLabel: vi
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve({
                         id,
                         status: 'running',
@@ -1450,7 +1458,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         await service.reconcile();
         owned = false;
-        const warning = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+        const warning = vi.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
 
         await expect(service.prepareForConnection()).resolves.toBe('foreign');
         expect(warning).toHaveBeenCalled();
@@ -1523,8 +1531,8 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     it('deleteContainer() removes a surfaced (no-metadata) instance via a live lookup', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             reconcileRuntime({
                 containers: [{ id: 'c2', alias: ALIAS_2 }],
@@ -1558,8 +1566,8 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // credential-missing ghost.
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeContainer = jest.fn().mockRejectedValue(new Error('docker daemon unavailable'));
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockRejectedValue(new Error('docker daemon unavailable'));
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             reconcileRuntime({
                 containers: [{ id: 'c2', alias: ALIAS_2 }],
@@ -1574,7 +1582,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
                 removeVolume,
             }),
         );
-        const errorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        const errorMessage = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
 
         await service.reconcile();
         const outcome = await service.deleteContainer(ALIAS_2);
@@ -1603,16 +1611,16 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             port: 10273,
             phase: 'ready',
         });
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest.fn().mockRejectedValue(new Error('docker daemon unavailable')),
+                listByLabel: vi.fn().mockRejectedValue(new Error('docker daemon unavailable')),
                 removeContainer,
                 removeVolume,
             }),
         );
-        const errorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        const errorMessage = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
 
         const outcome = await service.deleteContainer();
 
@@ -1635,12 +1643,12 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         let phase: 'adopt' | 'delete' = 'adopt';
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest.fn(() =>
+                listByLabel: vi.fn(() =>
                     Promise.resolve(
                         phase === 'adopt'
                             ? [{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]
@@ -1656,7 +1664,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
                               ],
                     ),
                 ) as unknown as IContainerRuntime['listByLabel'],
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(
                         phase === 'adopt'
                             ? {
@@ -1696,17 +1704,17 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         let phase: 'adopt' | 'delete' = 'adopt';
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest.fn(() =>
+                listByLabel: vi.fn(() =>
                     phase === 'adopt'
                         ? Promise.resolve([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }])
                         : Promise.reject(new Error('docker daemon unavailable')),
                 ) as unknown as IContainerRuntime['listByLabel'],
-                inspectContainer: jest.fn((id: string) =>
+                inspectContainer: vi.fn((id: string) =>
                     Promise.resolve(
                         phase === 'adopt'
                             ? {
@@ -1728,7 +1736,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         );
         await service.reconcile(); // adopts c1 (metadata.containerId = 'c1')
         phase = 'delete';
-        const errorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        const errorMessage = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
 
         const outcome = await service.deleteContainer();
 
@@ -1748,11 +1756,11 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // first would strand a survivor that resurfaces as a credential-missing ghost.
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             mockRuntime({
-                listByLabel: jest.fn().mockResolvedValue([
+                listByLabel: vi.fn().mockResolvedValue([
                     {
                         id: 'dup1',
                         labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
@@ -1799,22 +1807,22 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 // managed container AND no durable `ready` record — may reach the clean-slate wipe.
 describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     beforeAll(() => {
-        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+        vi.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
             name: 'test',
-            append: jest.fn(),
-            appendLine: jest.fn(),
-            replace: jest.fn(),
-            clear: jest.fn(),
-            show: jest.fn(),
-            hide: jest.fn(),
-            dispose: jest.fn(),
+            append: vi.fn(),
+            appendLine: vi.fn(),
+            replace: vi.fn(),
+            clear: vi.fn(),
+            show: vi.fn(),
+            hide: vi.fn(),
+            dispose: vi.fn(),
         } as unknown as vscode.LogOutputChannel);
         disposeQuickStartOutputChannel();
     });
 
     afterAll(() => {
         disposeQuickStartOutputChannel();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     let originalSecretStorage: vscode.SecretStorage;
@@ -1833,14 +1841,14 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     function provisionRuntime(opts: {
         containers?: Array<{ id: string; alias?: string }>;
         portFree?: boolean;
-        removeContainer?: jest.Mock;
-        removeVolume?: jest.Mock;
+        removeContainer?: Mock;
+        removeVolume?: Mock;
         volumeExists?: boolean;
-        pullImage?: jest.Mock;
+        pullImage?: Mock;
         readiness?: DockerReadiness;
     }): IContainerRuntime {
         return mockRuntime({
-            isDockerReady: jest.fn().mockResolvedValue(
+            isDockerReady: vi.fn().mockResolvedValue(
                 opts.readiness ?? {
                     outcome: 'ready',
                     environment: 'linux',
@@ -1851,19 +1859,19 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
                     daemonReachable: true,
                 },
             ),
-            listByLabel: jest.fn().mockResolvedValue(
+            listByLabel: vi.fn().mockResolvedValue(
                 (opts.containers ?? []).map((container) => ({
                     id: container.id,
                     labels: container.alias === undefined ? {} : { [QUICK_START_ALIAS_LABEL_KEY]: container.alias },
                 })),
             ),
-            isPortFree: jest.fn().mockResolvedValue(opts.portFree ?? true),
-            removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
-            removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
-            volumeExists: jest.fn().mockResolvedValue(opts.volumeExists ?? false),
-            pullImage: opts.pullImage ?? jest.fn().mockResolvedValue(undefined),
+            isPortFree: vi.fn().mockResolvedValue(opts.portFree ?? true),
+            removeContainer: opts.removeContainer ?? vi.fn().mockResolvedValue(undefined),
+            removeVolume: opts.removeVolume ?? vi.fn().mockResolvedValue(undefined),
+            volumeExists: vi.fn().mockResolvedValue(opts.volumeExists ?? false),
+            pullImage: opts.pullImage ?? vi.fn().mockResolvedValue(undefined),
             // Fails so a test stops right after the wipe point without driving the readiness wait.
-            createAndRunContainer: jest.fn().mockRejectedValue(new Error('docker run failed')),
+            createAndRunContainer: vi.fn().mockRejectedValue(new Error('docker run failed')),
         } as unknown as Partial<IContainerRuntime>);
     }
 
@@ -1905,17 +1913,17 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
                 cliInstalled: true,
                 daemonReachable: false,
             };
-            const isDockerReady = jest.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(unavailable);
+            const isDockerReady = vi.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(unavailable);
             const runtime = mockRuntime({
                 isDockerReady,
-                listByLabel: jest.fn().mockResolvedValue([]),
-                removeVolume: jest.fn().mockResolvedValue(undefined),
-                isPortFree: jest.fn().mockResolvedValue(true),
+                listByLabel: vi.fn().mockResolvedValue([]),
+                removeVolume: vi.fn().mockResolvedValue(undefined),
+                isPortFree: vi.fn().mockResolvedValue(true),
                 pullImage:
                     failingStage === 'pulling'
-                        ? jest.fn().mockRejectedValue(new Error('daemon disappeared during pull'))
-                        : jest.fn().mockResolvedValue(undefined),
-                createAndRunContainer: jest.fn().mockRejectedValue(new Error('daemon disappeared during run')),
+                        ? vi.fn().mockRejectedValue(new Error('daemon disappeared during pull'))
+                        : vi.fn().mockResolvedValue(undefined),
+                createAndRunContainer: vi.fn().mockRejectedValue(new Error('daemon disappeared during run')),
             });
             const service = new QuickStartServiceImpl(runtime);
             const events: StageEvent[] = [];
@@ -1989,11 +1997,11 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             daemonReachable: true,
         };
         const runtime = mockRuntime({
-            isDockerReady: jest.fn().mockResolvedValue(ready),
-            listByLabel: jest.fn().mockResolvedValue([]),
-            removeVolume: jest.fn().mockResolvedValue(undefined),
-            isPortFree: jest.fn().mockResolvedValue(true),
-            pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
+            isDockerReady: vi.fn().mockResolvedValue(ready),
+            listByLabel: vi.fn().mockResolvedValue([]),
+            removeVolume: vi.fn().mockResolvedValue(undefined),
+            isPortFree: vi.fn().mockResolvedValue(true),
+            pullImage: vi.fn().mockRejectedValue(new Error('manifest unknown')),
         });
         const service = new QuickStartServiceImpl(runtime);
         const events: StageEvent[] = [];
@@ -2038,11 +2046,11 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             daemonReachable: false,
         };
         const runtime = mockRuntime({
-            isDockerReady: jest.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(indeterminate),
-            listByLabel: jest.fn().mockResolvedValue([]),
-            removeVolume: jest.fn().mockResolvedValue(undefined),
-            isPortFree: jest.fn().mockResolvedValue(true),
-            pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
+            isDockerReady: vi.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(indeterminate),
+            listByLabel: vi.fn().mockResolvedValue([]),
+            removeVolume: vi.fn().mockResolvedValue(undefined),
+            isPortFree: vi.fn().mockResolvedValue(true),
+            pullImage: vi.fn().mockRejectedValue(new Error('manifest unknown')),
         });
         const service = new QuickStartServiceImpl(runtime);
         const events: StageEvent[] = [];
@@ -2070,8 +2078,8 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     it('aborts (never removes/wipes) when a managed container exists but no secret is recoverable', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeContainer = jest.fn().mockResolvedValue(undefined);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeContainer = vi.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], removeContainer, removeVolume }),
         );
@@ -2102,7 +2110,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             port: 10260,
             phase: 'ready',
         });
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             provisionRuntime({ containers: [], removeVolume, volumeExists: true }),
         );
@@ -2135,10 +2143,10 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     it('proceeds for a truly-fresh alias and removes the volume its failed create left behind', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const runtime = provisionRuntime({ containers: [], removeVolume });
         // `docker run` created the container before failing, so the operation sweep finds it.
-        (runtime.listByLabel as jest.Mock).mockImplementation(async (labels: Record<string, string>) =>
+        (runtime.listByLabel as Mock).mockImplementation(async (labels: Record<string, string>) =>
             QUICK_START_OPERATION_LABEL_KEY in labels ? [{ id: 'c1', labels: {} }] : [],
         );
         const service = new QuickStartServiceImpl(runtime);
@@ -2149,7 +2157,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         // The failed attempt's cleanup, so a retry doesn't hit the gate.
         expect(removeVolume).toHaveBeenCalledTimes(1);
         expect(removeVolume.mock.invocationCallOrder[0]).toBeGreaterThan(
-            (runtime.createAndRunContainer as jest.Mock).mock.invocationCallOrder[0],
+            (runtime.createAndRunContainer as Mock).mock.invocationCallOrder[0],
         );
         expect(service.getStatus().state).toBe(InstanceState.Error);
     });
@@ -2157,7 +2165,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     it('leaves the volume alone when the failed create left no container (it may not be ours)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const runtime = provisionRuntime({ containers: [], removeVolume });
         const service = new QuickStartServiceImpl(runtime);
 
@@ -2171,9 +2179,9 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     it('leaves alone a data volume that appeared while the image downloaded', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const runtime = provisionRuntime({ containers: [], removeVolume });
-        (runtime.volumeExists as jest.Mock).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        (runtime.volumeExists as Mock).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
         const service = new QuickStartServiceImpl(runtime);
 
         await drain(service.provision(new AbortController().signal));
@@ -2191,7 +2199,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     it('explains a failed volume removal without suggesting that another container be deleted', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeVolume = jest.fn().mockRejectedValue(new Error('volume is in use'));
+        const removeVolume = vi.fn().mockRejectedValue(new Error('volume is in use'));
         const runtime = provisionRuntime({ containers: [], volumeExists: true, removeVolume });
         const service = new QuickStartServiceImpl(runtime);
 
@@ -2211,7 +2219,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     it('never wipes a data volume it has no record or credentials for', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const runtime = provisionRuntime({ containers: [], volumeExists: true, removeVolume });
         const service = new QuickStartServiceImpl(runtime);
 
@@ -2225,12 +2233,12 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     // #946 DATA-2: every check that can fail runs before the wipe.
     it.each([
         ['the port is taken', { portFree: false }],
-        ['the image pull fails', { pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')) }],
+        ['the image pull fails', { pullImage: vi.fn().mockRejectedValue(new Error('manifest unknown')) }],
     ])('keeps the data volume when "Start fresh" fails because %s', async (_label, failure) => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, STORED_CONN);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             provisionRuntime({
                 containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
@@ -2251,7 +2259,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, STORED_CONN);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], portFree: false, removeVolume }),
         );
@@ -2265,7 +2273,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, STORED_CONN);
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const runtime = provisionRuntime({
             containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
             volumeExists: true,
@@ -2276,14 +2284,14 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         await drain(service.provision(new AbortController().signal, { startFresh: true }));
 
         expect(removeVolume.mock.invocationCallOrder[0]).toBeLessThan(
-            (runtime.createAndRunContainer as jest.Mock).mock.invocationCallOrder[0],
+            (runtime.createAndRunContainer as Mock).mock.invocationCallOrder[0],
         );
     });
 
     it('lets an explicit "Start fresh" recover a credential-unavailable instance instead of refusing', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], volumeExists: true, removeVolume }),
         );
@@ -2326,7 +2334,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     it('does not bypass a diagnosed readiness failure', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
-        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = vi.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             provisionRuntime({
                 containers: [],
@@ -2362,22 +2370,22 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
  */
 describe('QuickStartService — likely-installed hint', () => {
     beforeAll(() => {
-        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+        vi.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
             name: 'test',
-            append: jest.fn(),
-            appendLine: jest.fn(),
-            replace: jest.fn(),
-            clear: jest.fn(),
-            show: jest.fn(),
-            hide: jest.fn(),
-            dispose: jest.fn(),
+            append: vi.fn(),
+            appendLine: vi.fn(),
+            replace: vi.fn(),
+            clear: vi.fn(),
+            show: vi.fn(),
+            hide: vi.fn(),
+            dispose: vi.fn(),
         } as unknown as vscode.LogOutputChannel);
         disposeQuickStartOutputChannel();
     });
 
     afterAll(() => {
         disposeQuickStartOutputChannel();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     let originalSecretStorage: vscode.SecretStorage;
@@ -2412,8 +2420,8 @@ describe('QuickStartService — likely-installed hint', () => {
         await seedInstance(DEFAULT_ALIAS, STORED_CONN);
 
         const runtime = mockRuntime({
-            listByLabel: jest.fn().mockResolvedValue([{ id: 'c1' }]),
-            inspectContainer: jest.fn().mockResolvedValue({
+            listByLabel: vi.fn().mockResolvedValue([{ id: 'c1' }]),
+            inspectContainer: vi.fn().mockResolvedValue({
                 id: 'c1',
                 status: 'exited',
                 ports: [{ containerPort: 10260, hostPort: 10273 }],
@@ -2440,8 +2448,8 @@ describe('QuickStartService — likely-installed hint', () => {
 
         const labels = { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS };
         const runtime = mockRuntime({
-            listByLabel: jest.fn().mockResolvedValue([{ id: 'c1', labels }]),
-            inspectContainer: jest.fn().mockResolvedValue({
+            listByLabel: vi.fn().mockResolvedValue([{ id: 'c1', labels }]),
+            inspectContainer: vi.fn().mockResolvedValue({
                 id: 'c1',
                 status: 'exited',
                 ports: [{ containerPort: 10260, hostPort: 10273 }],

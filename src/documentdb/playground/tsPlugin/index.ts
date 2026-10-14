@@ -23,8 +23,8 @@
  * so it cannot import `vscode` or any extension code.
  *
  * Architecture:
- *   1. At load time, reads the `.d.ts` file from disk (same `__dirname`-based
- *      resolution used by the query playground worker — proven cross-platform).
+ *   1. At load time, reads the `.d.ts` file from disk, relative to `__dirname` of the
+ *      CommonJS bundle (the extension root).
  *   2. In `create()`, proxies `languageServiceHost.getScriptSnapshot()` to
  *      prepend the `.d.ts` content to query playground files.
  *   3. Proxies position-based `LanguageService` methods to adjust character
@@ -34,15 +34,15 @@
  * led to this approach.
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 import type ts from 'typescript';
 
 // --- Module-level initialization (runs once when TS server loads the plugin) ---
 
+// This module is bundled as CommonJS (`dist/playgroundTsPlugin.cjs`), so `__dirname` is the
+// extension root at runtime, where `typeDefs/` is copied.
 const dtsPath = path.join(__dirname, 'typeDefs', 'documentdb-shell-api.d.ts');
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-const fs: { readFileSync(path: string, encoding: 'utf8'): string } = require('fs');
 
 let dtsContent = '';
 let prefixLength = 0;
@@ -473,4 +473,6 @@ const pluginModuleFactory: ts.server.PluginModuleFactory = (mod: { typescript: t
     },
 });
 
-export = pluginModuleFactory;
+// TypeScript's plugin loader calls the module itself, so the CommonJS bundle must export the factory
+// as `module.exports` (vite.config.ext.mjs sets `output.exports: 'default'`).
+export default pluginModuleFactory;

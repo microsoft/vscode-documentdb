@@ -9,6 +9,12 @@ import { Links, wellKnownEmulatorPassword } from '../constants';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { resolveAllowInvalidCertificates } from './utils/tlsException';
 
+/**
+ * @deprecated Not used by the extension and scheduled for removal in a future release. Its only
+ * caller, `parseMongoConnectionString`, has no callers in `src/`. It is therefore not wired to the
+ * SRV DNS fallback (`docs/ai-and-plans/features/srv-dns-fallback/decisions.md`, D0007). Do not add
+ * new callers; create clients through `ClustersClient` instead.
+ */
 export async function connectToClient(
     connectionString: string,
     appName: string,

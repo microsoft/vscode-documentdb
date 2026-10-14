@@ -3,16 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type CallInfo, createEventChannel } from './events';
+import { describe, expect, it, vi } from 'vitest';
+
+import { type CallInfo, createEventChannel } from './events.js';
 
 const queryInfo: CallInfo = { type: 'query', path: 'demo.find', id: 1 };
 
 describe('createEventChannel', () => {
     it('routes each outcome only to its own handler kind (abort vs error vs success)', () => {
         const channel = createEventChannel();
-        const onSuccess = jest.fn();
-        const onError = jest.fn();
-        const onAborted = jest.fn();
+        const onSuccess = vi.fn();
+        const onError = vi.fn();
+        const onAborted = vi.fn();
 
         channel.onSuccess(onSuccess);
         channel.onError(onError);
@@ -35,8 +37,8 @@ describe('createEventChannel', () => {
 
     it('an aborted outcome never reaches the error handler and vice versa', () => {
         const channel = createEventChannel();
-        const onError = jest.fn();
-        const onAborted = jest.fn();
+        const onError = vi.fn();
+        const onAborted = vi.fn();
 
         channel.onError(onError);
         channel.onAborted(onAborted);
@@ -52,7 +54,7 @@ describe('createEventChannel', () => {
 
     it('stops invoking a handler after it unsubscribes', () => {
         const channel = createEventChannel();
-        const onError = jest.fn();
+        const onError = vi.fn();
         const unsubscribe = channel.onError(onError);
 
         channel.emitError(new Error('first'), queryInfo);
@@ -65,8 +67,8 @@ describe('createEventChannel', () => {
 
     it('is idempotent when the same unsubscribe runs twice', () => {
         const channel = createEventChannel();
-        const a = jest.fn();
-        const b = jest.fn();
+        const a = vi.fn();
+        const b = vi.fn();
         const unsubscribeA = channel.onSuccess(a);
         channel.onSuccess(b);
 
@@ -83,7 +85,7 @@ describe('createEventChannel', () => {
         const calls: string[] = [];
 
         // `first` unsubscribes `second` while the error is being dispatched.
-        const second = jest.fn(() => calls.push('second'));
+        const second = vi.fn(() => calls.push('second'));
         const unsubscribeSecond = channel.onError(second);
         channel.onError(() => {
             calls.push('first');
@@ -102,7 +104,7 @@ describe('createEventChannel', () => {
 
     it('snapshot-safe: a handler subscribed mid-dispatch is not called for the in-flight event', () => {
         const channel = createEventChannel();
-        const late = jest.fn();
+        const late = vi.fn();
 
         channel.onAborted(() => {
             channel.onAborted(late);
@@ -118,7 +120,7 @@ describe('createEventChannel', () => {
 
     describe('observer isolation (R766-N05)', () => {
         it('isolates a throwing handler: later handlers still run and emit does not throw', () => {
-            const channel = createEventChannel({ onObserverError: jest.fn() });
+            const channel = createEventChannel({ onObserverError: vi.fn() });
             const order: string[] = [];
             channel.onSuccess(() => {
                 order.push('first');
@@ -134,7 +136,7 @@ describe('createEventChannel', () => {
         });
 
         it('routes a thrown observer error to onObserverError with the call info and phase', () => {
-            const onObserverError = jest.fn();
+            const onObserverError = vi.fn();
             const channel = createEventChannel({ onObserverError });
             const boom = new Error('observer boom');
             channel.onError(() => {
@@ -148,7 +150,7 @@ describe('createEventChannel', () => {
         });
 
         it('defaults the sink to console.error when none is provided', () => {
-            const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+            const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
             try {
                 const channel = createEventChannel();
                 channel.onAborted(() => {

@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
@@ -108,19 +109,24 @@ export class ShellSessionManager implements vscode.Disposable {
 
         const workerCallbacks: WorkerSessionCallbacks = {
             onConsoleOutput: callbacks?.onConsoleOutput,
-            onLog: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string) => {
+            onLog: (
+                level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
+                message: string,
+                startupCorrelationId?: string,
+            ) => {
+                const output = `${logPrefix}${startupCorrelationId ? ` startup=${startupCorrelationId}` : ''} surface=shell ${message}`;
                 switch (level) {
                     case 'error':
-                        ext.outputChannel.error(`${logPrefix} ${message}`);
+                        ext.outputChannel.error(output);
                         break;
                     case 'warn':
-                        ext.outputChannel.warn(`${logPrefix} ${message}`);
+                        ext.outputChannel.warn(output);
                         break;
                     case 'debug':
-                        ext.outputChannel.debug(`${logPrefix} ${message}`);
+                        ext.outputChannel.debug(output);
                         break;
                     default:
-                        ext.outputChannel.trace(`${logPrefix} ${message}`);
+                        ext.outputChannel.trace(output);
                         break;
                 }
             },
@@ -128,7 +134,8 @@ export class ShellSessionManager implements vscode.Disposable {
                 msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
                 postResponse: (response: MainToWorkerMessage) => void,
                 timings?: ConnectionStartupTimings,
-            ) => this.handleTokenRequest(msg, postResponse, timings),
+                traceContext?: AuthTraceContext,
+            ) => this.handleTokenRequest(msg, postResponse, timings, traceContext),
             onWorkerExit: callbacks?.onWorkerExit,
         };
 
@@ -348,6 +355,7 @@ export class ShellSessionManager implements vscode.Disposable {
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
         timings?: ConnectionStartupTimings,
+        traceContext?: AuthTraceContext,
     ): Promise<void> {
         try {
             let accessToken: string;
@@ -361,6 +369,7 @@ export class ShellSessionManager implements vscode.Disposable {
                             msg.clientId,
                             msg.tenantId,
                             this._managedIdentityTokenCorrelationId,
+                            traceContext,
                         ),
                     )
                 ).accessToken;
@@ -369,8 +378,15 @@ export class ShellSessionManager implements vscode.Disposable {
                     // eslint-disable-next-line import/no-internal-modules
                     '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
                 );
-                const session = await withTokenAcquisitionTiming(timings, () =>
-                    getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
+                const session = await traceAuthOperation(
+                    'interactiveEntra.getSession',
+                    () =>
+                        withTokenAcquisitionTiming(timings, () =>
+                            getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
+                        ),
+                    { tenantSpecified: !!msg.tenantId, createIfNone: true },
+                    msg.requestId,
+                    traceContext,
                 );
 
                 if (!session) {

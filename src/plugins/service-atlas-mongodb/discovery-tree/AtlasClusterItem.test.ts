@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { Views } from '../../../documentdb/Views';
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { type AtlasClusterModel } from '../models/AtlasClusterModel';
 import { AtlasClusterItem } from './AtlasClusterItem';
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string, values?: Record<string, string>) => {
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string, values?: Record<string, string>) => {
         if (!values) {
             return message;
         }
@@ -19,7 +21,7 @@ jest.mock('@vscode/l10n', () => ({
     }),
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
@@ -46,7 +48,7 @@ jest.mock('vscode', () => ({
         }
     },
     l10n: {
-        t: jest.fn((message: string) => message),
+        t: vi.fn((message: string) => message),
     },
     TreeItemCollapsibleState: {
         None: 0,
@@ -57,18 +59,18 @@ jest.mock('vscode', () => ({
         Notification: 15,
     },
     env: {
-        openExternal: jest.fn(),
+        openExternal: vi.fn(),
     },
     window: {
-        showErrorMessage: jest.fn(),
-        showWarningMessage: jest.fn(),
-        showInformationMessage: jest.fn(),
+        showErrorMessage: vi.fn(),
+        showWarningMessage: vi.fn(),
+        showInformationMessage: vi.fn(),
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (parts: string[]) => parts.join(';'),
-    callWithTelemetryAndErrorHandling: jest.fn(
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName: string, callback: (context: unknown) => Promise<unknown>) =>
             await callback({
                 telemetry: { properties: {}, measurements: {} },
@@ -84,31 +86,31 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            append: jest.fn(),
-            appendLine: jest.fn(),
-            debug: jest.fn(),
+            append: vi.fn(),
+            appendLine: vi.fn(),
+            debug: vi.fn(),
         },
         state: {
-            notifyChildrenChanged: jest.fn(),
+            notifyChildrenChanged: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../../documentdb/CredentialCache', () => ({
+vi.mock('../../../documentdb/CredentialCache', () => ({
     CredentialCache: {
-        hasCredentials: jest.fn(),
-        deleteCredentials: jest.fn(),
-        setAuthCredentials: jest.fn(),
+        hasCredentials: vi.fn(),
+        deleteCredentials: vi.fn(),
+        setAuthCredentials: vi.fn(),
     },
 }));
 
-jest.mock('../../../documentdb/ClustersClient', () => ({
+vi.mock('../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
-        getClient: jest.fn(),
-        deleteClient: jest.fn(),
+        getClient: vi.fn(),
+        deleteClient: vi.fn(),
     },
 }));
 

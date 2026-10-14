@@ -3,39 +3,40 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string) => message),
+import { describe, expect, it, vi, type Mock } from 'vitest';
+
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string) => message),
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ViewColumn: { One: 1 },
-    Uri: { joinPath: jest.fn((base: unknown, ...parts: string[]) => ({ base, parts })) },
-    commands: { registerCommand: jest.fn(), executeCommand: jest.fn() },
-    window: { showErrorMessage: jest.fn() },
+    Uri: { joinPath: vi.fn((base: unknown, ...parts: string[]) => ({ base, parts })) },
+    commands: { registerCommand: vi.fn(), executeCommand: vi.fn() },
+    window: { showErrorMessage: vi.fn() },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
-        async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
-            callback({ telemetry: { properties: {}, measurements: {} } }),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
+        callback({ telemetry: { properties: {}, measurements: {} } }),
     ),
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: { context: { extensionUri: { scheme: 'file', path: '/extension' } } },
 }));
 
-jest.mock('../../_integration/openAppWebview', () => ({
-    openAppWebview: jest.fn(() => createFakeController()),
+vi.mock('../../_integration/openAppWebview', () => ({
+    openAppWebview: vi.fn(() => createFakeController()),
 }));
 
-jest.mock('../../../commands/openCollectionView/openCollectionView', () => ({
-    openCollectionViewInternal: jest.fn(async () => undefined),
+vi.mock('../../../commands/openCollectionView/openCollectionView', () => ({
+    openCollectionViewInternal: vi.fn(async () => undefined),
 }));
 
-jest.mock('./resolveNamespaceNode', () => ({
-    resolveNamespaceNode: jest.fn(async () => ({ id: 'tree-node' })),
-    describeMissingNamespace: jest.fn(() => 'missing-namespace-explanation'),
+vi.mock('./resolveNamespaceNode', () => ({
+    resolveNamespaceNode: vi.fn(async () => ({ id: 'tree-node' })),
+    describeMissingNamespace: vi.fn(() => 'missing-namespace-explanation'),
 }));
 
 import * as vscode from 'vscode';
@@ -51,9 +52,9 @@ import { resolveNamespaceNode } from './resolveNamespaceNode';
 type FakeController = {
     isDisposed: boolean;
     onDisposed: (handler: () => void) => void;
-    revealToForeground: jest.Mock;
+    revealToForeground: Mock;
     dispose: () => void;
-    panel: { webview: { postMessage: jest.Mock } };
+    panel: { webview: { postMessage: Mock } };
 };
 
 function createFakeController(): FakeController {
@@ -61,8 +62,8 @@ function createFakeController(): FakeController {
 
     return {
         isDisposed: false,
-        revealToForeground: jest.fn(),
-        panel: { webview: { postMessage: jest.fn().mockResolvedValue(true) } },
+        revealToForeground: vi.fn(),
+        panel: { webview: { postMessage: vi.fn().mockResolvedValue(true) } },
         onDisposed(handler: () => void): void {
             handlers.push(handler);
         },
@@ -126,11 +127,11 @@ describe('cluster dashboard native context menu commands', () => {
         handlers: Map<string, (context: unknown) => Promise<void>>;
         controller: FakeController;
     } {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         const handlers = new Map<string, (context: unknown) => Promise<void>>();
-        jest.mocked(vscode.commands.registerCommand).mockImplementation((commandId, handler) => {
+        vi.mocked(vscode.commands.registerCommand).mockImplementation((commandId, handler) => {
             handlers.set(commandId, handler as (context: unknown) => Promise<void>);
-            return { dispose: jest.fn() };
+            return { dispose: vi.fn() };
         });
         registerClusterDashboardContextMenuCommands({ subscriptions: [] } as unknown as vscode.ExtensionContext);
 
@@ -258,7 +259,7 @@ describe('cluster dashboard native context menu commands', () => {
 
     it('reports a row whose tree node cannot be found instead of failing silently', async () => {
         const { handlers, controller } = registerAndOpen();
-        jest.mocked(resolveNamespaceNode).mockResolvedValueOnce(undefined);
+        vi.mocked(resolveNamespaceNode).mockResolvedValueOnce(undefined);
 
         await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteDatabase)?.({
             clusterDashboardClusterId: CLUSTER,

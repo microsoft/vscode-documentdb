@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { EJSON, ObjectId } from 'bson';
 
 // Mock vscode l10n so the localized throw message is deterministic.
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
         t: (message: string, ...args: unknown[]) => {
             let result = message;
@@ -19,8 +21,8 @@ jest.mock('vscode', () => ({
 }));
 
 // Capture output-channel diagnostics emitted on failure.
-const outputChannelError = jest.fn();
-jest.mock('../../extensionVariables', () => ({
+const outputChannelError = vi.fn();
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
             error: (...args: unknown[]) => outputChannelError(...args),

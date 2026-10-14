@@ -5,8 +5,8 @@
 
 import { type AnyRouter } from '@trpc/server';
 import type * as vscode from 'vscode';
-import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { WebviewController, type WebviewControllerOptions } from './WebviewController';
+import { type BaseRouterContext } from '../shared/BaseRouterContext.js';
+import { WebviewController, type WebviewControllerOptions } from './WebviewController.js';
 
 /**
  * The greenfield front door: opens a webview panel and returns its
@@ -37,7 +37,7 @@ import { WebviewController, type WebviewControllerOptions } from './WebviewContr
  *   context: { ...myContext },
  *   config: { ...initialConfig },
  *   sourceLayout: { bundled: { dir: 'dist', file: 'views.js' }, dev: { dir: 'out', file: 'views.js' } },
- *   isBundled: !!process.env.IS_BUNDLE,
+ *   isBundled: true,
  * });
  * ```
  */

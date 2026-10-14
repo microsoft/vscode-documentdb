@@ -17,8 +17,6 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
-import * as fs from 'fs';
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { accessDataMigrationServices } from '../commands/accessDataMigrationServices/accessDataMigrationServices';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
@@ -146,12 +144,14 @@ import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
 import { PlaygroundService } from './playground/PlaygroundService';
+import { ensureTsPluginStub } from './playground/tsPluginStub';
 import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
 import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
 import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
 import { PlaygroundSnippetSessionManager } from './query-language/playground-completions/PlaygroundSnippetSessionManager';
 import { ShellCommandIds } from './shell/constants';
 import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
+import { SrvDnsDiagnosticsProvider } from './srv/SrvDnsDiagnosticsProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -182,6 +182,8 @@ export class ClustersExtension implements vscode.Disposable {
         ConnectionDiagnosticsService.registerProvider(new QuickStartDiagnosticsProvider());
         ConnectionDiagnosticsService.registerProvider(new KubernetesDiagnosticsProvider());
         ConnectionDiagnosticsService.registerProvider(new AtlasDiagnosticsProvider());
+        // First explanation wins, so source-specific diagnostics take priority over generic SRV failures.
+        ConnectionDiagnosticsService.registerProvider(new SrvDnsDiagnosticsProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
@@ -402,9 +404,11 @@ export class ClustersExtension implements vscode.Disposable {
                     // from TS server restart failures (timing / api availability).
                     let stage: 'stubInstall' | 'tsActivate' | 'tsWait' | 'tsRestart' | 'complete' = 'stubInstall';
                     let stubCreated = false;
-                    // Disambiguates 'stubCreated=false': either the stub already existed (existed=true)
+                    // Disambiguates 'stubCreated=false': either a stub already existed (existed=true)
                     // or the stub-install branch was never reached at all (existed=false).
                     let stubExisted = false;
+                    // A stub existed but was outdated (for example the CommonJS-era `index.js`) and was rewritten.
+                    let stubReplaced = false;
 
                     await callWithTelemetryAndErrorHandling('playground.tsPluginBootstrap', async (context) => {
                         // We do not want a modal error popup if this best-effort
@@ -416,28 +420,15 @@ export class ClustersExtension implements vscode.Disposable {
                             // TODO: Remove this runtime stub once the TS plugin is published
                             // as a standalone npm package with its own release pipeline.
                             // The official VS Code docs say TS server plugins should be normal
-                            // npm `dependencies`. Our plugin is currently bundled inline by
-                            // webpack, and vsce hardcodes `ignore: 'node_modules/**'` in its
-                            // file collection, so the stub can't ship in the VSIX. We create
+                            // npm `dependencies`. Our plugin is currently bundled inline
+                            // (`playgroundTsPlugin.cjs`), and vsce hardcodes `ignore: 'node_modules/**'`
+                            // in its file collection, so the stub can't ship in the VSIX. We create
                             // it at runtime instead (same pattern as Vue/Volar).
                             // Tracked by: https://github.com/microsoft/vscode-documentdb/issues/548
-                            const stubDir = path.join(
-                                ext.context.extensionPath,
-                                'node_modules',
-                                'documentdb-playground-ts-plugin',
-                            );
-                            const stubEntry = path.join(stubDir, 'index.js');
-                            if (fs.existsSync(stubEntry)) {
-                                stubExisted = true;
-                            } else {
-                                fs.mkdirSync(stubDir, { recursive: true });
-                                // Point to the bundled plugin at the extension root
-                                fs.writeFileSync(
-                                    stubEntry,
-                                    'module.exports = require("../../playgroundTsPlugin.js");\n',
-                                );
-                                stubCreated = true;
-                            }
+                            const stubResult = ensureTsPluginStub(ext.context.extensionPath);
+                            stubExisted = stubResult !== 'created';
+                            stubCreated = stubResult === 'created';
+                            stubReplaced = stubResult === 'replaced';
 
                             stage = 'tsActivate';
                             const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
@@ -529,6 +520,7 @@ export class ClustersExtension implements vscode.Disposable {
                             context.telemetry.properties.stage = stage;
                             context.telemetry.properties.stubCreated = stubCreated ? 'true' : 'false';
                             context.telemetry.properties.stubExisted = stubExisted ? 'true' : 'false';
+                            context.telemetry.properties.stubReplaced = stubReplaced ? 'true' : 'false';
                         }
                     });
                 };

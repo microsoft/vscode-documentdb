@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import { openUrl, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
@@ -11,22 +13,20 @@ import { CountSourceIndexesStep } from './CountSourceIndexesStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
 
-const showErrorMessage = vscode.window.showErrorMessage as unknown as jest.MockedFunction<
+const showErrorMessage = vscode.window.showErrorMessage as unknown as MockedFunction<
     (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
 >;
 
-jest.mock('../../extensionVariables', () => ({
-    ext: { outputChannel: { warn: jest.fn() } },
+vi.mock('../../extensionVariables', () => ({
+    ext: { outputChannel: { warn: vi.fn() } },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    ...jest.requireActual('@microsoft/vscode-azext-utils'),
-    openUrl: jest.fn().mockResolvedValue(undefined),
+vi.mock(import('@microsoft/vscode-azext-utils'), async (importOriginal) => ({
+    ...(await importOriginal()),
+    openUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('vscode');
-
-jest.mock('./createIndexCopier');
+vi.mock('./createIndexCopier');
 
 function createContext(copyIndexes: boolean = true): PasteCollectionWizardContext {
     return {
@@ -35,23 +35,23 @@ function createContext(copyIndexes: boolean = true): PasteCollectionWizardContex
         sourceTtlIndexNames: [],
         telemetry: { properties: {}, measurements: {} },
         ui: {
-            showQuickPick: jest.fn().mockImplementation(async (items: Promise<never>) => items),
+            showQuickPick: vi.fn().mockImplementation(async (items: Promise<never>) => items),
         },
     } as unknown as PasteCollectionWizardContext;
 }
 
 describe('CountSourceIndexesStep', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('shows a loading pick and records a safe source index count', async () => {
-        const getSourceIndexSummary = jest.fn().mockResolvedValue({
+        const getSourceIndexSummary = vi.fn().mockResolvedValue({
             count: 3,
             uniqueIndexNames: [],
             ttlIndexNames: [],
         });
-        jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
+        vi.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
             typeof createIndexCopier
         >);
         const context = createContext();
@@ -73,8 +73,8 @@ describe('CountSourceIndexesStep', () => {
         { uniqueIndexNames: ['email_1'], ttlIndexNames: [], expectedUniqueCount: 1, expectedTtlCount: 0 },
         { uniqueIndexNames: [], ttlIndexNames: ['expiresAt_1'], expectedUniqueCount: 0, expectedTtlCount: 1 },
     ])('refuses document-affecting source indexes', async (summary) => {
-        const getSourceIndexSummary = jest.fn().mockResolvedValue({ count: 2, ...summary });
-        jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
+        const getSourceIndexSummary = vi.fn().mockResolvedValue({ count: 2, ...summary });
+        vi.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
             typeof createIndexCopier
         >);
         const context = createContext();
@@ -98,8 +98,8 @@ describe('CountSourceIndexesStep', () => {
 
     it('opens the collection-paste guidance from Learn More before cancelling', async () => {
         showErrorMessage.mockResolvedValue('Learn More');
-        jest.mocked(createIndexCopier).mockReturnValue({
-            getSourceIndexSummary: jest.fn().mockResolvedValue({
+        vi.mocked(createIndexCopier).mockReturnValue({
+            getSourceIndexSummary: vi.fn().mockResolvedValue({
                 count: 2,
                 uniqueIndexNames: ['email_1'],
                 ttlIndexNames: [],
@@ -114,8 +114,8 @@ describe('CountSourceIndexesStep', () => {
     });
 
     it('aborts with the reason when counting fails', async () => {
-        const getSourceIndexSummary = jest.fn().mockRejectedValue(new Error('count failed'));
-        jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
+        const getSourceIndexSummary = vi.fn().mockRejectedValue(new Error('count failed'));
+        vi.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
             typeof createIndexCopier
         >);
         const context = createContext();
@@ -138,18 +138,18 @@ describe('CountSourceIndexesStep', () => {
 
     it('aborts the count when the loading pick is cancelled', async () => {
         let receivedSignal: AbortSignal | undefined;
-        const getSourceIndexSummary = jest.fn().mockImplementation(
+        const getSourceIndexSummary = vi.fn().mockImplementation(
             (options: GetSourceIndexSummaryOptions) =>
                 new Promise((_resolve, reject) => {
                     receivedSignal = options.signal;
                     options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
                 }),
         );
-        jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
+        vi.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
             typeof createIndexCopier
         >);
         const context = createContext();
-        jest.mocked(context.ui.showQuickPick).mockImplementation(async (items: Promise<never>) => {
+        vi.mocked(context.ui.showQuickPick).mockImplementation(async (items: Promise<never>) => {
             void items.catch(() => undefined);
             throw new Error('cancelled');
         });

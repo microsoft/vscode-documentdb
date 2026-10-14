@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
@@ -10,13 +12,13 @@ import { AuthMethodId } from './AuthMethod';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
-const getManagedIdentityAccessToken = jest.fn();
+const getManagedIdentityAccessToken = vi.fn();
 
-jest.mock('../../extensionVariables', () => ({
-    ext: { outputChannel: { info: jest.fn(), error: jest.fn() } },
+vi.mock('../../extensionVariables', () => ({
+    ext: { outputChannel: { info: vi.fn(), error: vi.fn() } },
 }));
 
-jest.mock('./managedIdentityTokenProvider', () => ({
+vi.mock('./managedIdentityTokenProvider', () => ({
     getManagedIdentityAccessToken: (...args: unknown[]) => getManagedIdentityAccessToken(...args),
 }));
 
@@ -106,6 +108,7 @@ describe('ManagedIdentityAuthHandler', () => {
             undefined,
             undefined,
             expect.any(String),
+            undefined,
         );
     });
 
@@ -123,6 +126,21 @@ describe('ManagedIdentityAuthHandler', () => {
             clientId,
             'cluster-tenant',
             expect.any(String),
+            undefined,
+        );
+    });
+
+    it('passes startup context into the deferred token provider', async (): Promise<void> => {
+        const handler = new ManagedIdentityAuthHandler(buildCredentials());
+        const context = { startupCorrelationId: 'startup-id', surface: 'extension' };
+        const { options } = await handler.configureAuth(undefined, context);
+        await invokeOidcCallback(options);
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledWith(
+            ['https://ossrdbms-aad.database.windows.net/.default'],
+            undefined,
+            undefined,
+            expect.any(String),
+            context,
         );
     });
 

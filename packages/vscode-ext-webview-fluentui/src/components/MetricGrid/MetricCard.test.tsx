@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, beforeAll, describe, expect, test } from '@jest/globals';
+import { afterEach, beforeAll, describe, expect, test } from 'vitest';
+
 import { cleanupSurfaces, installTestEnvironment, renderSurface } from '../testing/renderSurface.js';
 import { MetricCard, MetricGrid } from './index.js';
 

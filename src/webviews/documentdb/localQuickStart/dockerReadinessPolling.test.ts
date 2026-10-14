@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import {
     type DockerDiagnosedReadiness,
     type DockerReadiness,
@@ -54,7 +56,7 @@ describe('pollDockerReadiness', () => {
         const suppressions: boolean[] = [];
         let concurrent = 0;
         let maxConcurrent = 0;
-        const query = jest.fn(async (suppressCommandEcho: boolean): Promise<DockerStatusResult> => {
+        const query = vi.fn(async (suppressCommandEcho: boolean): Promise<DockerStatusResult> => {
             suppressions.push(suppressCommandEcho);
             concurrent++;
             maxConcurrent = Math.max(maxConcurrent, concurrent);
@@ -67,7 +69,7 @@ describe('pollDockerReadiness', () => {
             pollDockerReadiness({
                 signal: new AbortController().signal,
                 query,
-                onResult: jest.fn(),
+                onResult: vi.fn(),
                 wait: async () => undefined,
             }),
         ).resolves.toBe('ready');
@@ -77,13 +79,13 @@ describe('pollDockerReadiness', () => {
 
     it('stops without another probe when cancelled during backoff', async () => {
         const controller = new AbortController();
-        const query = jest.fn();
+        const query = vi.fn();
 
         await expect(
             pollDockerReadiness({
                 signal: controller.signal,
                 query,
-                onResult: jest.fn(),
+                onResult: vi.fn(),
                 wait: async () => controller.abort(),
             }),
         ).resolves.toBe('cancelled');
@@ -92,7 +94,7 @@ describe('pollDockerReadiness', () => {
 
     it('drops a result when cancellation occurs during an active query', async () => {
         const controller = new AbortController();
-        const onResult = jest.fn();
+        const onResult = vi.fn();
 
         await expect(
             pollDockerReadiness({
@@ -118,7 +120,7 @@ describe('pollDockerReadiness', () => {
             pollDockerReadiness({
                 signal: new AbortController().signal,
                 query: async () => status(permissionDenied),
-                onResult: jest.fn(),
+                onResult: vi.fn(),
                 wait: async () => undefined,
             }),
         ).resolves.toBe('stopped');
@@ -126,13 +128,13 @@ describe('pollDockerReadiness', () => {
 
     it('ends at the shared wait deadline', async () => {
         let now = 0;
-        const query = jest.fn(async () => status(waitingReadiness()));
+        const query = vi.fn(async () => status(waitingReadiness()));
 
         await expect(
             pollDockerReadiness({
                 signal: new AbortController().signal,
                 query,
-                onResult: jest.fn(),
+                onResult: vi.fn(),
                 deadlineMs: 2_500,
                 now: () => now,
                 wait: async (durationMs) => {

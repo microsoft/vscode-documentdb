@@ -22,25 +22,30 @@ treat `status: historical` or `status: superseded` as current.
 
 ## Features
 
-| Feature                                                                   | What it covers                                                                                           | Status              |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------- |
-| [local-quickstart](./features/local-quickstart/README.md)                 | Run DocumentDB locally in one click: Docker provisioning, readiness, lifecycle                           | shipped 0.10.0      |
-| [query-insights](./features/query-insights/README.md)                     | Query performance rating, static analysis, and streaming AI recommendations                              | shipped             |
-| [interactive-shell](./features/interactive-shell/README.md)               | The in-terminal REPL, its runtime, completions, and highlighting                                         | shipped             |
-| [query-playground](./features/query-playground/README.md)                 | `.documentdb` files, persistent worker evaluation, per-document connections                              | shipped             |
-| [completions-and-schema](./features/completions-and-schema/README.md)     | Operator registry, schema analyzer, and the shared completion layer                                      | shipped             |
-| [index-management](./features/index-management/README.md)                 | The Indexes tab, the create drawer, and the Collection View chrome redesign                              | shipped             |
-| [atlas-discovery](./features/atlas-discovery/README.md)                   | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                                     | shipped             |
-| [kubernetes-discovery](./features/kubernetes-discovery/README.md)         | Kubernetes service discovery and connect-time reachability providers                                     | shipped             |
-| [webview-ext-package](./features/webview-ext-package/README.md)           | `@microsoft/vscode-ext-webview`: the extracted webview transport package                                 | published preview   |
-| [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews            | 1.1.0 prepared      |
-| [connections-tree](./features/connections-tree/README.md)                 | The Connections view: node item counts, connection load performance                                      | shipped             |
-| [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                           | shipped             |
-| [managed-identities](./features/managed-identities/README.md)             | Explicit managed identity authentication from Azure VMs                                                  | PR #886             |
-| [copy-paste-collections](./features/copy-paste-collections/README.md)     | Collection copy/paste tasks, document streaming, conflict handling, and optional index copying           | active              |
-| [cluster-dashboard](./features/cluster-dashboard/README.md)               | Cluster-wide inventory and resilience facts                                                              | POC, unmerged       |
-| [settings](./features/settings/README.md)                                 | Settings editor grouping, setting ID naming, and how a setting is renamed safely                         | active              |
-| [survey](./features/survey/README.md)                                     | Survey refresh: simpler eligibility, broader activity coverage, cohort telemetry, and invitation surface | draft #992; enabled |
+| Feature                                                                   | What it covers                                                                                           | Status                              |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| [local-quickstart](./features/local-quickstart/README.md)                 | Run DocumentDB locally in one click: Docker provisioning, readiness, lifecycle                           | shipped 0.10.0                      |
+| [query-insights](./features/query-insights/README.md)                     | Query performance rating, static analysis, and streaming AI recommendations                              | shipped                             |
+| [interactive-shell](./features/interactive-shell/README.md)               | The in-terminal REPL, its runtime, completions, and highlighting                                         | shipped                             |
+| [query-playground](./features/query-playground/README.md)                 | `.documentdb` files, persistent worker evaluation, per-document connections                              | shipped                             |
+| [completions-and-schema](./features/completions-and-schema/README.md)     | Operator registry, schema analyzer, and the shared completion layer                                      | shipped                             |
+| [index-management](./features/index-management/README.md)                 | The Indexes tab, the create drawer, and the Collection View chrome redesign                              | shipped                             |
+| [atlas-discovery](./features/atlas-discovery/README.md)                   | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                                     | shipped                             |
+| [kubernetes-discovery](./features/kubernetes-discovery/README.md)         | Kubernetes service discovery and connect-time reachability providers                                     | shipped                             |
+| [webview-ext-package](./features/webview-ext-package/README.md)           | `@microsoft/vscode-ext-webview`: the extracted webview transport package                                 | published preview                   |
+| [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews            | 1.1.1 prepared                      |
+| [connections-tree](./features/connections-tree/README.md)                 | The Connections view: node item counts, connection load performance                                      | shipped                             |
+| [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                           | shipped                             |
+| [managed-identities](./features/managed-identities/README.md)             | Explicit managed identity authentication from Azure VMs                                                  | PR #886                             |
+| [copy-paste-collections](./features/copy-paste-collections/README.md)     | Collection copy/paste tasks, document streaming, conflict handling, and optional index copying           | active                              |
+| [cluster-dashboard](./features/cluster-dashboard/README.md)               | Cluster-wide inventory and resilience facts                                                              | POC, unmerged                       |
+| [settings](./features/settings/README.md)                                 | Settings editor grouping, setting ID naming, and how a setting is renamed safely                         | active                              |
+| [escaping](./features/escaping/README.md)                                 | Safe rendering of user/database content and least-privilege Markdown tooltips                            | active                              |
+| [srv-dns-fallback](./features/srv-dns-fallback/README.md)                 | In-memory SRV fallback for `mongodb+srv://` when c-ares rejects compressed SRV replies (#993)            | implemented (manual checks pending) |
+| [build-and-test-stack](./features/build-and-test-stack/README.md)         | Vite host and webview builds, Vitest, packaged checks, CI tiers, and modernization history               | active                              |
+| [e2e-testing](./features/e2e-testing/README.md)                           | The planned installed-workbench and webview end-to-end test iteration                                    | planned                             |
+| [data-grid](./features/data-grid/README.md)                               | The Collection View table and tree, including the planned SlickGrid replacement                          | planned                             |
+| [survey](./features/survey/README.md)                                     | Survey refresh: simpler eligibility, broader activity coverage, cohort telemetry, and invitation surface | draft #992; enabled                 |
 
 Everything else is a single file at this root, such as:
 
@@ -49,9 +54,9 @@ Everything else is a single file at this root, such as:
   overflow without launching an extension host. It belongs to no feature; it was written after the
   Local Quick Start redesign, where the technique caught real defects. The document describes
   itself as a skill candidate — promoting it into `.github/skills/` is a separate decision.
-- **[telemetry-correlation-ids.md](./telemetry-correlation-ids.md)** - future work: an inventory of
-  the telemetry ids used to join events (lineage, surface session, operation) and a draft rule for
-  which one to use. Written after #979 showed how easily they are confused.
+- **[telemetry-correlation-ids.md](./telemetry-correlation-ids.md)** - the connection IDs
+  (`startupCorrelationId`, `connectionCorrelationId`, shell and playground session IDs) and how
+  to count with them, plus the historical inventory and wider draft naming proposals.
 
 There is no bucket folder for these. See the placement rule below.
 

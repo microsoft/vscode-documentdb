@@ -486,8 +486,7 @@ From the repository root:
 
 ```bash
 npm install
-npm run build
-npm run webpack-dev
+npm run build-dev
 ```
 
 Open the repository in VS Code and press `F5` to launch an Extension Development Host.

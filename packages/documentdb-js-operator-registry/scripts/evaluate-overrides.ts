@@ -372,9 +372,9 @@ function operatorHasSnippet(
 // ---------------------------------------------------------------------------
 
 function main(): void {
-    const dumpPath = path.join(__dirname, '..', 'resources', 'scraped', 'operator-reference.md');
-    const overridePath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
-    const snippetsPath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-snippets.md');
+    const dumpPath = path.join(import.meta.dirname, '..', 'resources', 'scraped', 'operator-reference.md');
+    const overridePath = path.join(import.meta.dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
+    const snippetsPath = path.join(import.meta.dirname, '..', 'resources', 'overrides', 'operator-snippets.md');
 
     if (!fs.existsSync(dumpPath)) {
         console.error(`❌ Scraped dump not found: ${dumpPath}`);

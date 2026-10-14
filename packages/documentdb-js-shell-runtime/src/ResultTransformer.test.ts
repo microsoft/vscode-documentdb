@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ResultTransformer, type ShellResultLike } from './ResultTransformer';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { ResultTransformer, type ShellResultLike } from './ResultTransformer.js';
 
 describe('ResultTransformer', () => {
     let transformer: ResultTransformer;

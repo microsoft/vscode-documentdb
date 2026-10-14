@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ALL_META_TAGS } from './metaTags';
+import { type ALL_META_TAGS } from './metaTags.js';
 
 /**
  * Represents a single operator, stage, accumulator, or BSON constructor

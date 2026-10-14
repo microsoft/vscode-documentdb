@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { InstanceState, type QuickStartStatus } from '../../../services/localQuickStart/quickStartTypes';
 import {
@@ -13,7 +15,7 @@ import {
 } from './quickStartTreeIdentity';
 
 describe('Quick Start tree identity', () => {
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     it('builds the managed tree hierarchy from its parent view', () => {
         expect(buildQuickStartTreeId()).toBe('connectionsView/localQuickStart');
@@ -28,7 +30,7 @@ describe('Quick Start tree identity', () => {
     });
 
     it('resolves the active managed instance by exact stable cluster ID', () => {
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.Running,
             metadata: {
                 containerId: 'container-1',
@@ -49,7 +51,7 @@ describe('Quick Start tree identity', () => {
     });
 
     it('does not resolve when there is no managed instance metadata', () => {
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.NotInstalled,
             metadata: undefined,
             missing: false,

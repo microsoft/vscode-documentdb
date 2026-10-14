@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
 // Mock the telemetry wrapper so the SUT's callWithTelemetryAndErrorHandling
 // callback runs directly. We re-throw on errors so the caller's error path is
 // exercised normally.
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_callbackId: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
             const context = {
                 telemetry: { properties: {}, measurements: {} },
@@ -28,15 +30,15 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     },
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLog: jest.fn(),
-            trace: jest.fn(),
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
+            appendLog: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
         },
     },
 }));
@@ -44,10 +46,10 @@ jest.mock('../../extensionVariables', () => ({
 // Replace the heavy `optimizeQueryStreaming` (which talks to CopilotService,
 // ClusterSession, etc.) with a thin stub that emits the fragments and
 // completion the test wants. We only re-export the symbols the SUT references.
-const optimizeQueryStreamingMock = jest.fn();
-jest.mock('../../commands/llmEnhancedCommands/indexAdvisorCommands', () => ({
+const optimizeQueryStreamingMock = vi.fn();
+vi.mock('../../commands/llmEnhancedCommands/indexAdvisorCommands', () => ({
     CommandType: { Find: 'find', Aggregate: 'aggregate', Count: 'count' },
-    optimizeQuery: jest.fn(),
+    optimizeQuery: vi.fn(),
     optimizeQueryStreaming: (...args: unknown[]): unknown => optimizeQueryStreamingMock(...args),
 }));
 

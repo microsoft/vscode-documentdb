@@ -3,42 +3,46 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
+
 import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { openInteractiveShell } from './openInteractiveShell';
 
 // Mock DocumentDBShellPty
-jest.mock('../../documentdb/shell/DocumentDBShellPty', () => ({
-    DocumentDBShellPty: jest.fn().mockImplementation(() => ({
-        onDidWrite: jest.fn(),
-        onDidClose: jest.fn(),
-        onDidChangeName: jest.fn(),
-        open: jest.fn(),
-        close: jest.fn(),
-        handleInput: jest.fn(),
-        setTerminal: jest.fn(),
-        getTerminalInfo: jest.fn().mockReturnValue({ clusterId: 'test-cluster-id' }),
-    })),
+vi.mock('../../documentdb/shell/DocumentDBShellPty', () => ({
+    DocumentDBShellPty: vi.fn().mockImplementation(function () {
+        return {
+            onDidWrite: vi.fn(),
+            onDidClose: vi.fn(),
+            onDidChangeName: vi.fn(),
+            open: vi.fn(),
+            close: vi.fn(),
+            handleInput: vi.fn(),
+            setTerminal: vi.fn(),
+            getTerminalInfo: vi.fn().mockReturnValue({ clusterId: 'test-cluster-id' }),
+        };
+    }),
 }));
 
 // Mock ShellTerminalLinkProvider registry
-jest.mock('../../documentdb/shell/ShellTerminalLinkProvider', () => ({
-    registerShellTerminal: jest.fn(),
-    unregisterShellTerminal: jest.fn(),
+vi.mock('../../documentdb/shell/ShellTerminalLinkProvider', () => ({
+    registerShellTerminal: vi.fn(),
+    unregisterShellTerminal: vi.fn(),
 }));
 
 // Mock CredentialCache
-jest.mock('../../documentdb/CredentialCache', () => ({
+vi.mock('../../documentdb/CredentialCache', () => ({
     CredentialCache: {
-        hasCredentials: jest.fn().mockReturnValue(true),
+        hasCredentials: vi.fn().mockReturnValue(true),
     },
 }));
 
 describe('openInteractiveShell', () => {
-    let mockCreateTerminal: jest.SpyInstance;
-    let mockShowTerminal: jest.Mock;
-    let mockShowInformationMessage: jest.SpyInstance;
-    let mockShowErrorMessage: jest.SpyInstance;
+    let mockCreateTerminal: MockInstance;
+    let mockShowTerminal: Mock;
+    let mockShowInformationMessage: MockInstance;
+    let mockShowErrorMessage: MockInstance;
 
     const mockContext = {
         telemetry: {
@@ -51,19 +55,19 @@ describe('openInteractiveShell', () => {
     };
 
     beforeEach(() => {
-        jest.clearAllMocks();
-        mockShowTerminal = jest.fn();
-        mockCreateTerminal = jest.spyOn(vscode.window, 'createTerminal').mockReturnValue({
+        vi.clearAllMocks();
+        mockShowTerminal = vi.fn();
+        mockCreateTerminal = vi.spyOn(vscode.window, 'createTerminal').mockReturnValue({
             show: mockShowTerminal,
         } as unknown as vscode.Terminal);
-        mockShowInformationMessage = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
-        mockShowErrorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        mockShowInformationMessage = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        mockShowErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
         mockContext.telemetry.properties = {};
-        (CredentialCache.hasCredentials as jest.Mock).mockReturnValue(true);
+        (CredentialCache.hasCredentials as Mock).mockReturnValue(true);
     });
 
     afterEach(() => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     function makeDatabaseNode(
@@ -198,7 +202,7 @@ describe('openInteractiveShell', () => {
 
     describe('when credentials are missing', () => {
         it('should show error and not create terminal', async () => {
-            (CredentialCache.hasCredentials as jest.Mock).mockReturnValue(false);
+            (CredentialCache.hasCredentials as Mock).mockReturnValue(false);
 
             await openInteractiveShell(mockContext as never, makeDatabaseNode() as never);
 

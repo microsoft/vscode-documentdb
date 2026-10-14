@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { type ProcedureLogEntry } from '@microsoft/vscode-ext-webview/host';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
@@ -12,12 +14,13 @@ import { rpcConcurrencyLogger } from './rpcConcurrencyLogger';
 
 // Mock the two runtime dependencies so the logger can be exercised without
 // pulling in the real package (which imports `vscode`) or the telemetry pipeline.
-const consoleLog = jest.fn();
-jest.mock('@microsoft/vscode-ext-webview/host', () => ({
-    consoleProcedureLogger: { onEnd: (entry: unknown) => consoleLog(entry) },
-}));
-jest.mock('../../../utils/accumulatingTelemetry', () => ({
-    accumulateTelemetry: jest.fn(),
+const consoleLog = vi.fn();
+vi.mock('@microsoft/vscode-ext-webview/host', () => {
+    const consoleProcedureLogger = { onEnd: (entry: unknown) => consoleLog(entry) };
+    return { consoleProcedureLogger };
+});
+vi.mock('../../../utils/accumulatingTelemetry', () => ({
+    accumulateTelemetry: vi.fn(),
 }));
 
 /**
@@ -31,7 +34,7 @@ function setExtensionMode(mode: vscode.ExtensionMode): void {
 
 describe('rpcConcurrencyLogger (R766-S04)', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         // Default to a non-production mode so the console line is exercised.
         setExtensionMode(vscode.ExtensionMode.Development);
     });
@@ -55,7 +58,7 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
         );
 
         // Run the callback against a sample-bag stub to assert what it writes.
-        const callback = (accumulateTelemetry as jest.Mock).mock.calls[0][1] as (sample: unknown) => void;
+        const callback = (accumulateTelemetry as Mock).mock.calls[0][1] as (sample: unknown) => void;
         const sample = {
             properties: {},
             measurements: {} as Record<string, number>,
@@ -112,7 +115,7 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
             WEBVIEW_CONFIG.telemetry.rpcConcurrencyEvent,
             expect.any(Function),
         );
-        const callback = (accumulateTelemetry as jest.Mock).mock.calls[0][1] as (sample: unknown) => void;
+        const callback = (accumulateTelemetry as Mock).mock.calls[0][1] as (sample: unknown) => void;
         const sample = {
             properties: {},
             measurements: {} as Record<string, number>,

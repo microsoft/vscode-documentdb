@@ -10,7 +10,7 @@
  * to generate the resources/scraped/operator-reference.md dump file.
  *
  * Usage:
- *   npx ts-node packages/documentdb-js-operator-registry/scripts/scrape-operator-docs.ts
+ *   npx tsx packages/documentdb-js-operator-registry/scripts/scrape-operator-docs.ts
  *
  * The scraper has three phases:
  *   Phase 1: Fetch and parse the compatibility page (operator list + support status)
@@ -1110,7 +1110,7 @@ async function main(): Promise<void> {
     console.log('  Phase 3: Generating scraped/operator-reference.md...');
     const dump = generateDump(operators);
 
-    const outputDir = path.join(__dirname, '..', 'resources', 'scraped');
+    const outputDir = path.join(import.meta.dirname, '..', 'resources', 'scraped');
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }

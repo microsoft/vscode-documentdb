@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 const emittedProperties: Record<string, string> = {};
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName: string, callback: (context: unknown) => void): Promise<void> => {
             callback({
                 errorHandling: {},
@@ -33,6 +35,18 @@ describe('managed identity telemetry', () => {
             managedIdentityFailureReason: 'endpointUnreachable',
             managedIdentityKind: 'system',
             managedIdentityTokenCorrelationId: 'correlation-id',
+        });
+    });
+
+    it('links token failure to its startup while preserving the token ID', (): void => {
+        reportManagedIdentityFailureReason('endpointUnreachable', undefined, 'token-id', {
+            startupCorrelationId: 'startup-id',
+            surface: 'shell',
+        });
+        expect(emittedProperties).toMatchObject({
+            managedIdentityTokenCorrelationId: 'token-id',
+            startupCorrelationId: 'startup-id',
+            surface: 'shell',
         });
     });
 });

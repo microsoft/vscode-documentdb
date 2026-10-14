@@ -41,7 +41,6 @@ export async function activateInternal(
     perfStats: { loadStartTime: number; loadEndTime: number },
 ): Promise<apiUtils.AzureExtensionApiProvider | DocumentDBExtensionApi> {
     ext.context = context;
-    ext.isBundle = !!process.env.IS_BUNDLE;
 
     // getAzureResourcesExtensionApi provides a way to get the Azure Resources extension's API V2
     // and is used to work with the tree view structure, as an improved alternative to the
@@ -93,7 +92,7 @@ export async function activateInternal(
 
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
-        context.subscriptions.push(SchemaStore.getInstance());
+        SchemaStore.registerForDisposal(context.subscriptions, ext.outputChannel);
         await clustersSupport.activateClustersSupport();
 
         context.subscriptions.push(

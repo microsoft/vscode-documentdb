@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { Views } from '../../../documentdb/Views';
 import { StorageZone } from '../../../services/connectionStorageService';

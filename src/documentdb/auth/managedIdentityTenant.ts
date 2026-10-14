@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { traceAuthFlow } from '../../utils/authTrace';
+import { traceAuthFlow, type AuthTraceContext } from '../../utils/authTrace';
 import { describeManagedIdentityTenantMismatch } from './managedIdentityErrors';
 import { reportManagedIdentityFailureReason } from './managedIdentityTelemetry';
 
@@ -54,12 +54,14 @@ export function verifyManagedIdentityTenant(
     clusterTenantId: string | undefined,
     clientId: string | undefined,
     correlationId: string,
+    traceContext?: AuthTraceContext,
 ): void {
     if (!clusterTenantId) {
         traceAuthFlow(
             'managedIdentity.tenantCheck',
             { outcome: 'skipped', reason: 'clusterTenantUnknown' },
             correlationId,
+            traceContext,
         );
         return;
     }
@@ -73,11 +75,17 @@ export function verifyManagedIdentityTenant(
                 reason: identityTenantId ? 'sameTenant' : 'tokenTenantUnavailable',
             },
             correlationId,
+            traceContext,
         );
         return;
     }
 
-    traceAuthFlow('managedIdentity.tenantCheck', { outcome: 'failed', reason: 'tenantMismatch' }, correlationId);
-    reportManagedIdentityFailureReason('tenantMismatch', clientId, correlationId);
+    traceAuthFlow(
+        'managedIdentity.tenantCheck',
+        { outcome: 'failed', reason: 'tenantMismatch' },
+        correlationId,
+        traceContext,
+    );
+    reportManagedIdentityFailureReason('tenantMismatch', clientId, correlationId, traceContext);
     throw new Error(describeManagedIdentityTenantMismatch(identityTenantId, clusterTenantId));
 }

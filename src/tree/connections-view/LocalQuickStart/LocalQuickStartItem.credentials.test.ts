@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
@@ -17,16 +19,16 @@ import {
 import { CLUSTER_ITEM_CONTEXT_VALUE, type ClusterItemBase } from '../../documentdb/ClusterItemBase';
 import { LocalQuickStartItem } from './LocalQuickStartItem';
 
-jest.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
+vi.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
 
 const mockConnectionEvents: Array<{ properties: IActionContext['telemetry']['properties']; valuesToMask: string[] }> =
     [];
 
-jest.mock('@microsoft/vscode-azext-utils', () => {
+vi.mock('@microsoft/vscode-azext-utils', () => {
     class UserCancelledError extends Error {}
     return {
         UserCancelledError,
-        callWithTelemetryAndErrorHandling: jest.fn(
+        callWithTelemetryAndErrorHandling: vi.fn(
             async (eventName: string, callback: (ctx: IActionContext) => unknown): Promise<unknown> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
@@ -58,30 +60,30 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
-jest.mock('../../../services/connectionDiagnosticsService', () => ({
-    ConnectionDiagnosticsService: { explain: jest.fn().mockResolvedValue(undefined) },
+vi.mock('../../../services/connectionDiagnosticsService', () => ({
+    ConnectionDiagnosticsService: { explain: vi.fn().mockResolvedValue(undefined) },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
-        outputChannel: { appendLine: jest.fn(), debug: jest.fn() },
+        outputChannel: { appendLine: vi.fn(), debug: vi.fn() },
         settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' },
     },
 }));
 
-jest.mock('../../../services/SettingsService', () => ({
-    SettingsService: { getSetting: jest.fn().mockReturnValue(false) },
+vi.mock('../../../services/SettingsService', () => ({
+    SettingsService: { getSetting: vi.fn().mockReturnValue(false) },
 }));
 
-const mockGetClient = jest.fn();
-jest.mock('../../../documentdb/ClustersClient', () => ({
+const mockGetClient = vi.fn();
+vi.mock('../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
-        exists: jest.fn().mockReturnValue(false),
+        exists: vi.fn().mockReturnValue(false),
         getClient: (...args: unknown[]) => mockGetClient(...args),
     },
 }));
 
-jest.mock('../../documentdb/DatabaseItem', () => ({
+vi.mock('../../documentdb/DatabaseItem', () => ({
     DatabaseItem: class {
         public constructor(
             _cluster: unknown,
@@ -136,18 +138,18 @@ async function getClusterItem(): Promise<ClusterItemBase> {
  */
 describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockConnectionEvents.length = 0;
         CredentialCache.deleteCredentials(CLUSTER_ID);
-        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
-        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
-        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
-        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue(runningStatus());
-        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('ready');
+        vi.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
+        vi.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        vi.spyOn(QuickStartService, 'getStatus').mockReturnValue(runningStatus());
+        vi.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('ready');
     });
 
     afterEach(() => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
         CredentialCache.deleteCredentials(CLUSTER_ID);
     });
 
@@ -160,14 +162,14 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('lists databases after the credential cache was emptied (e.g. a window reload)', async () => {
-        const readStored = jest
+        const readStored = vi
             .spyOn(QuickStartService, 'readStoredConnectionString')
             .mockResolvedValue(CONNECTION_STRING);
-        const listDatabases = jest.fn().mockResolvedValue([{ name: 'sampledb' }]);
+        const listDatabases = vi.fn().mockResolvedValue([{ name: 'sampledb' }]);
         mockGetClient.mockResolvedValue({ listDatabases });
-        jest.spyOn(vscode.window, 'withProgress').mockImplementation(
+        vi.spyOn(vscode.window, 'withProgress').mockImplementation(
             (_options: unknown, task: (progress: unknown, token: unknown) => Thenable<unknown>) =>
-                task({ report: jest.fn() }, { onCancellationRequested: jest.fn() }) as Thenable<never>,
+                task({ report: vi.fn() }, { onCancellationRequested: vi.fn() }) as Thenable<never>,
         );
 
         // The cache is empty — exactly the post-reload state that made H5 reproducible.
@@ -183,7 +185,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('exposes the stored credentials via getCredentials()', async () => {
-        jest.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(CONNECTION_STRING);
+        vi.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(CONNECTION_STRING);
 
         const credentials = await (await getClusterItem()).getCredentials();
 
@@ -192,7 +194,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('still reports credential-read failures before client acquisition', async () => {
-        jest.spyOn(QuickStartService, 'readStoredConnectionString').mockRejectedValue(new Error('keyring unavailable'));
+        vi.spyOn(QuickStartService, 'readStoredConnectionString').mockRejectedValue(new Error('keyring unavailable'));
 
         await expect((await getClusterItem()).connect()).resolves.toBeNull();
 
@@ -206,8 +208,8 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
     describe.each([false, true])('connection telemetry with cached credentials=%s', (cached) => {
         beforeEach(() => {
-            jest.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(CONNECTION_STRING);
-            jest.spyOn(QuickStartService, 'wereCredentialsRestored').mockReturnValue(true);
+            vi.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(CONNECTION_STRING);
+            vi.spyOn(QuickStartService, 'wereCredentialsRestored').mockReturnValue(true);
             if (cached) {
                 CredentialCache.setAuthCredentials(CLUSTER_ID, AuthMethodId.NativeAuth, CONNECTION_STRING, {
                     connectionUser: 'qs_user',
@@ -219,7 +221,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         it.each(['tree', 'command'] as const)(
             'reports recovered credentials once for a successful %s connection',
             async (source) => {
-                const client = { listDatabases: jest.fn().mockResolvedValue([{ name: 'sampledb' }]) };
+                const client = { listDatabases: vi.fn().mockResolvedValue([{ name: 'sampledb' }]) };
                 mockGetClient.mockResolvedValue(client);
                 const item = await getClusterItem();
 
@@ -282,7 +284,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         });
 
         it('distinguishes credentials that were not restored', async () => {
-            jest.spyOn(QuickStartService, 'wereCredentialsRestored').mockReturnValue(false);
+            vi.spyOn(QuickStartService, 'wereCredentialsRestored').mockReturnValue(false);
             mockGetClient.mockResolvedValue({});
 
             await (await getClusterItem()).connect();
@@ -293,7 +295,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('does not connect when the authoritative container preflight rejects the stale running row', async () => {
-        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('unavailable');
+        vi.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('unavailable');
 
         const children = await (await getClusterItem()).getChildren();
         const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
@@ -303,8 +305,8 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('offers a Start row instead of a modal when the container is stopped', async () => {
-        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('stopped');
-        const prompt = jest.spyOn(vscode.window, 'showInformationMessage');
+        vi.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('stopped');
+        const prompt = vi.spyOn(vscode.window, 'showInformationMessage');
 
         const children = await (await getClusterItem()).getChildren();
 
@@ -319,7 +321,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('offers to recreate a container that disappeared before expansion', async () => {
-        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('missing');
+        vi.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('missing');
 
         const children = await (await getClusterItem()).getChildren();
         const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
@@ -330,7 +332,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('explains a Docker daemon that is not answering', async () => {
-        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('dockerUnreachable');
+        vi.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('dockerUnreachable');
 
         const children = await (await getClusterItem()).getChildren();
         const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
@@ -340,7 +342,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('shows retained Docker host and container details in the tooltip', async () => {
-        jest.spyOn(QuickStartService, 'getDockerReadinessSnapshot').mockReturnValue({
+        vi.spyOn(QuickStartService, 'getDockerReadinessSnapshot').mockReturnValue({
             outcome: 'ready',
             environment: 'wsl',
             endpointKind: 'unixSocket',
@@ -371,7 +373,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     });
 
     it('returns no credentials and no client when the secret is gone', async () => {
-        jest.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(undefined);
+        vi.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(undefined);
 
         const item = await getClusterItem();
 

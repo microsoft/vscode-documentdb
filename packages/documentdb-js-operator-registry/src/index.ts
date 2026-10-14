@@ -11,7 +11,7 @@
  */
 
 // -- Core types --
-export type { CompletionFilter, IndexReferenceEntry, MetaTag, OperatorEntry } from './types';
+export type { CompletionFilter, IndexReferenceEntry, MetaTag, OperatorEntry } from './types.js';
 
 // -- Meta tag constants and presets --
 export {
@@ -62,26 +62,26 @@ export {
     STAGE_COMPLETION_META,
     UPDATE_COMPLETION_META,
     WINDOW_COMPLETION_META,
-} from './metaTags';
+} from './metaTags.js';
 
 // -- Consumer API --
-export { getAllCompletions, getFilteredCompletions } from './getFilteredCompletions';
+export { getAllCompletions, getFilteredCompletions } from './getFilteredCompletions.js';
 
 // -- Documentation URL helpers --
-export { getDocBase, getDocLink } from './docLinks';
+export { getDocBase, getDocLink } from './docLinks.js';
 
 // -- Index types & properties (scraped from the compatibility page) --
-export { INDEX_PROPERTIES, INDEX_TYPES } from './indexReference';
+export { INDEX_PROPERTIES, INDEX_TYPES } from './indexReference.js';
 
 // -- Operator data modules --
-import { loadAccumulators } from './accumulators';
-import { loadBsonConstructors } from './bsonConstructors';
-import { loadExpressionOperators } from './expressionOperators';
-import { loadQueryOperators } from './queryOperators';
-import { loadStages } from './stages';
-import { loadSystemVariables } from './systemVariables';
-import { loadUpdateOperators } from './updateOperators';
-import { loadWindowOperators } from './windowOperators';
+import { loadAccumulators } from './accumulators.js';
+import { loadBsonConstructors } from './bsonConstructors.js';
+import { loadExpressionOperators } from './expressionOperators.js';
+import { loadQueryOperators } from './queryOperators.js';
+import { loadStages } from './stages.js';
+import { loadSystemVariables } from './systemVariables.js';
+import { loadUpdateOperators } from './updateOperators.js';
+import { loadWindowOperators } from './windowOperators.js';
 
 /**
  * Loads all built-in operator data into the registry.

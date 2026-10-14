@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import {
     getAtlasClusterStateLabel,
     getAtlasPausedExplanation,
@@ -11,8 +13,8 @@ import {
     type AtlasClusterAvailability,
 } from './atlasClusterAvailability';
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string) => message),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string) => message),
 }));
 
 function availability(overrides: Partial<AtlasClusterAvailability> = {}): AtlasClusterAvailability {

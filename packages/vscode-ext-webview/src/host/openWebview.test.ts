@@ -3,16 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/** @jest-environment jsdom */
+import { describe, expect, it } from 'vitest';
 
-import { describe, expect, it } from '@jest/globals';
 import { setImmediate } from 'timers';
 import * as vscode from 'vscode';
-import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { initWebviewTrpc } from '../shared/initWebviewTrpc';
-import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
-import { openWebview } from './openWebview';
-import { WebviewController } from './WebviewController';
+import { type BaseRouterContext } from '../shared/BaseRouterContext.js';
+import { initWebviewTrpc } from '../shared/initWebviewTrpc.js';
+import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol.js';
+import { openWebview } from './openWebview.js';
+import { WebviewController } from './WebviewController.js';
 
 const sourceLayout = {
     bundled: { dir: 'dist', file: 'views.js' },
@@ -287,9 +286,9 @@ describe('script source layout selection', () => {
     }
 
     it('loads the bundled file from the dev server when bundled in development (regression: index.js 404)', () => {
-        // A webpack-bundled extension running in Development with the dev server
+        // A bundled extension running in Development with the dev server
         // on must ask the dev server for the *bundled* asset name (views.js),
-        // because `webpack serve` emits that name. Keying the layout off the mode
+        // because the dev server serves that name. Keying the layout off the mode
         // alone would request the tsc `index.js` and 404.
         const html = htmlFor({ mode: vscode.ExtensionMode.Development, isBundled: true, devServer: true });
 

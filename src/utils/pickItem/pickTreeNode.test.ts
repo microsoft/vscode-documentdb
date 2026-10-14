@@ -3,17 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type TreeItem } from 'vscode';
 import { type TreeElement } from '../../tree/TreeElement';
 import { pickTreeNode, type TreeChildrenProvider } from './pickTreeNode';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const showQuickPickMock = jest.fn();
+const showQuickPickMock = vi.fn();
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class extends Error {},
-    callWithTelemetryAndErrorHandling: jest.fn(
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_id: string, callback: (context: unknown) => unknown): Promise<unknown> => {
             const context = {
                 errorHandling: {},
@@ -25,13 +27,13 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     ),
 }));
 
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string): string => message,
 }));
 
-const showInformationMessageMock = jest.fn();
-const showWarningMessageMock = jest.fn();
-jest.mock('vscode', () => ({
+const showInformationMessageMock = vi.fn();
+const showWarningMessageMock = vi.fn();
+vi.mock('vscode', () => ({
     QuickPickItemKind: { Separator: -1, Default: 0 },
     window: {
         showInformationMessage: (...args: unknown[]) => showInformationMessageMock(...args),
@@ -39,7 +41,7 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('../../extensionVariables', () => ({ ext: {} }));
+vi.mock('../../extensionVariables', () => ({ ext: {} }));
 
 // Make `instanceof UserCancelledError` work with the error our tests throw.
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
@@ -100,7 +102,7 @@ const CLUSTER_CV = 'treeItem_documentdbcluster;experience_MongoDB';
 
 describe('pickTreeNode', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('drills folder → cluster → database and returns the database node', async () => {

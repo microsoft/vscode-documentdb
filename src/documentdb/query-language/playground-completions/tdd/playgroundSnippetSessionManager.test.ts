@@ -3,25 +3,27 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 // ---------------------------------------------------------------------------
-// Mocks — placed before imports per repo convention (Jest hoists these)
+// Mocks — placed before imports per repo convention (Vitest hoists these)
 // ---------------------------------------------------------------------------
 
 // Capture the onDidChangeTextDocument callback registered during construction
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let onDidChangeTextDocumentCallback: ((e: any) => void) | undefined;
 
-const mockOnDidChangeTextDocument = jest.fn(
+const mockOnDidChangeTextDocument = vi.fn(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (listener: (e: any) => any): { dispose: jest.Mock } => {
+    (listener: (e: any) => any): { dispose: Mock } => {
         onDidChangeTextDocumentCallback = listener;
-        return { dispose: jest.fn() };
+        return { dispose: vi.fn() };
     },
 );
 
 const mockActiveTextEditor: { document: unknown } = { document: undefined };
 
-jest.mock('vscode', () => {
+vi.mock('vscode', () => {
     return {
         workspace: {
             get onDidChangeTextDocument() {
@@ -29,7 +31,7 @@ jest.mock('vscode', () => {
             },
         },
         commands: {
-            executeCommand: jest.fn(),
+            executeCommand: vi.fn(),
         },
         window: {
             get activeTextEditor() {
@@ -56,7 +58,9 @@ function makeChangeEvent(languageId: string, text: string): vscode.TextDocumentC
         contentChanges: [
             {
                 text,
-                range: new (jest.fn().mockImplementation(() => ({})))(),
+                range: new (vi.fn().mockImplementation(function () {
+                    return {};
+                }))(),
                 rangeOffset: 0,
                 rangeLength: 0,
             } as unknown as vscode.TextDocumentContentChangeEvent,
@@ -73,7 +77,7 @@ describe('PlaygroundSnippetSessionManager', () => {
     let manager: PlaygroundSnippetSessionManager;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         onDidChangeTextDocumentCallback = undefined;
         manager = new PlaygroundSnippetSessionManager();
     });
@@ -133,7 +137,7 @@ describe('PlaygroundSnippetSessionManager', () => {
     });
 
     it('should dispose the document change listener', () => {
-        const disposeSpy = (mockOnDidChangeTextDocument.mock.results[0]?.value as { dispose: jest.Mock })?.dispose;
+        const disposeSpy = (mockOnDidChangeTextDocument.mock.results[0]?.value as { dispose: Mock })?.dispose;
         manager.dispose();
         expect(disposeSpy).toHaveBeenCalled();
     });

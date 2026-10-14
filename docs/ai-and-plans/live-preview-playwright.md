@@ -2,340 +2,136 @@
 kind: practice
 status: active
 created: 2026-08-04
-verified: 2026-08-19
+verified: 2026-10-05
 ---
 
-# Live webview preview + Playwright checks (future work)
+# Live webview preview + Playwright checks
 
-> How to render a **production** webview in a plain browser, drive it with Playwright, and assert
-> layout / accessibility / overflow without launching an extension host. Written up after the Local
-> Quick Start redesign (PR branch `dev/tnaum/quickstart-ui-redesign`), where the technique caught
-> real defects — a misaligned info icon, a grey code block punching through an error tint, and a
-> footer note that was capped 48 px narrower than the content column it was supposed to align with.
+## Current way: L2-dev
 
-**Status:** working technique, not yet a skill. This document is the recipe. Iterate here.
+Use the committed **L2-dev scenario page**, not a hand-made HTML shim or an untyped host stub.
+Start `npm run watch:views`, then open `http://localhost:18080/scenarios/` (127.0.0.1 also works).
+The index lists every `/<view>/<scenario>/<theme>` route with dark, light and high-contrast palettes.
+The webviews come directly from Vite sources, including the React-refresh preamble at `/views.js`;
+there is no stale `dist/views.js` to rebuild and no `src/webviews/static/` preview page to create.
 
----
+See [build/verification/README.md](../../build/verification/README.md#l2-dev-source-scenarios)
+for the runner recipe. Fetch `/scenarios/run-all.js` from a page on the dev-server origin and
+execute it **outside the page**, passing the Playwright `page`. Subsets use path segments:
+`/scenarios/run-all/localQuickStart.js` or `/scenarios/run-all/localQuickStart/dark.js`.
+No new browser test framework or repository dependency is required.
 
-## Why this exists
+[Typed scenarios](../../build/verification/browser/scenarios.ts) import the five settled L2 defaults
+and add nine Local Quick Start states. Each has initial configuration, router-inferred fixtures,
+readiness, optional click/fill steps and assertions. Direct routes with steps start at their entry
+state; inspect `window.__scenario.data.steps` and drive them, or let the helper do so.
+The helper starts each route from `about:blank`, performs those steps, then polls `data-ready`
+through `page.evaluate`. Do not use `load`, `networkidle` or CSP-blocked `page.waitForFunction`.
 
-The webview bundle served by `watch:views` is the same bundle the extension loads. Point a browser
-at it with a small HTML shim and you get the real component tree — real Fluent styling, real
-`makeStyles` output, real DOM — in a few seconds, with a full DevTools/Playwright surface and no F5
-cycle.
+`data-ready="true"` means the scenario's visible content/selectors have settled, without a visible
+progressbar where appropriate. `data-ready="failed"` means a console error/warning, page error,
+unhandled rejection, CSP violation or unknown RPC occurred. Reasons are in `window.__harnessErrors`;
+the monitor stays active after readiness. Never filter a genuine app diagnostic to make a route pass.
+The helper returns readiness, errors, per-assertion results and `window.__harnessCalls` for every route.
+Escaping actions are recorded, not performed: the Docker install scenarios assert one
+`common.openUrl` call with the expected Windows/macOS Desktop or Linux Engine URL.
 
-That makes it cheap to answer questions that are otherwise guesswork:
-
-- Does anything overflow horizontally at 312 px of content width?
-- Does the breadcrumb collapse into its overflow menu while keeping the current step visible?
-- Does focus land on the new step's `h2` after navigation?
-- Is that icon _actually_ aligned with its text, or does it just look close?
-
----
-
-## Prerequisites
-
-The `watch:views` task must be running. Probe it:
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:18080/views.js   # expect 200
-```
-
-The dev server emits the **bundled** asset name, so `/views.js` is 200 and `/index.js` is 404 —
-requesting the wrong one is the usual cause of a blank preview. Note also that `webpack serve` reads
-`webpack.config.views.js` only at startup: editing it (or a `git checkout` that reverts it) requires
-a full restart of `watch:views`.
-
-Anything dropped in `src/webviews/static/` is served at `/static/<name>.html`.
-
----
-
-## The harness
-
-A minimal page that mounts one registered webview. The view name is the key from
-[`src/webviews/_integration/WebviewRegistry.ts`](../../src/webviews/_integration/WebviewRegistry.ts) —
-`localQuickStart`, `collectionView`, `atlasCredentials`, and so on.
-
-```html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <style>
-      /* Load-bearing — see "The theme variables are not decoration" below. */
-      :root {
-        --vscode-button-background: #0e639c;
-        --vscode-editor-background: #ffffff;
-        --vscode-editor-foreground: #1f1f1f;
-        --vscode-foreground: #3b3b3b;
-        --vscode-sideBar-background: #f8f8f8;
-        --vscode-editorWidget-background: #f3f3f3;
-        --vscode-editorWidget-border: #d4d4d4;
-        --vscode-panel-border: #d4d4d4;
-        --vscode-widget-border: #d4d4d4;
-      }
-      html,
-      body,
-      #root {
-        height: 100%;
-        margin: 0;
-      }
-    </style>
-  </head>
-  <body data-vscode-theme-kind="vscode-light">
-    <div id="root"></div>
-    <script type="module">
-      import { render } from '/views.js';
-      globalThis.l10n_bundle = {};
-      const state = {};
-      render('localQuickStart', {
-        postMessage: () => Promise.resolve(true),
-        getState: () => state,
-        setState: (n) => Object.assign(state, n),
-      });
-    </script>
-  </body>
-</html>
-```
-
-### The theme variables are not decoration
-
-Omit the `--vscode-*` block and the app dies before it renders:
-
-```
-TypeError: Cannot read properties of undefined (reading '0')
-    at snappingPointsForKeyColor
-    at paletteShadesFromCurvePoints
-    at getBrandTokensFromPalette
-    at generateAdaptiveLightTheme
-    at WithTheme
-```
-
-The adaptive theme generator derives a brand palette from the VS Code button colour. No variables,
-no palette, blank page. If you see that stack, it is the harness, not the component.
-
----
-
-## Faking the extension host
-
-The stub above is enough for pages that do not need data, but any view that issues a tRPC call will
-hang on it. To drive real states — a failed Docker check, a populated grid — answer the wire
-protocol directly. The shapes are in
-[`packages/vscode-ext-webview/src/shared/wireProtocol.ts`](../../packages/vscode-ext-webview/src/shared/wireProtocol.ts);
-the host side that produces them is
-[`packages/vscode-ext-webview/src/host/attachTrpc.ts`](../../packages/vscode-ext-webview/src/host/attachTrpc.ts).
-
-The webview sends `{ id, op }` where `op` carries `type`, `path` and `input`. Reply on the `window`
-message bus:
-
-- query / mutation result: `{ id, result }` then `{ id, complete: true }`
-- subscription: one `{ id, result: <event> }` per emission, then `{ id, complete: true }`
-- ignore `op.type === 'subscription.stop'` and `'abort'`
-
-```js
-const reply = (id, result) => window.postMessage({ id, result }, '*');
-const complete = (id) => window.postMessage({ id, complete: true }, '*');
-
-const fakeHost = {
-  postMessage(message) {
-    const { id, op } = message ?? {};
-    if (!id || !op) return;
-    if (op.type === 'subscription.stop' || op.type === 'abort') return;
-    setTimeout(() => {
-      if (op.path === 'localQuickStart.getDockerStatus') {
-        reply(id, { readiness, status: { state: 'NotProvisioned' }, busy: false, willReuse: false });
-        complete(id);
-      } else if (op.path === 'localQuickStart.startQuickStart') {
-        reply(id, { stage: 'checking', status: 'active' });
-        setTimeout(() => {
-          reply(id, { stage: 'checking', status: 'error', error: 'Daemon not reachable.' });
-          complete(id);
-        }, 400);
-      } else {
-        reply(id, null);
-        complete(id);
-      }
-    }, 60);
-  },
-  getState: () => state,
-  setState: (n) => Object.assign(state, n),
-};
-```
-
-Build the payloads from the real types (here `DockerStatusResult` / `StageEvent`) so the fake cannot
-drift into shapes the component never actually receives.
-
----
+L2-dev is the fast development loop. [L2](../../build/verification/README.md#l2-production-webviews-in-the-integrated-browser)
+remains the packaged-VSIX gate: production assets, host template/CSP, styles and rendered-editor
+worker round-trips. Screenshots in either mode are artifacts, **never pixel baselines**.
 
 ## The check loop
 
-1. `open_browser_page` on a cache-busted URL.
-2. `read_page` for the accessibility tree — this is usually more informative than a screenshot,
-   because it shows roles, names and disabled state.
-3. `run_playwright_code` to resize, click through states, and measure.
-4. `screenshot_page` only for questions the tree cannot answer: colour, spacing, weight.
+1. Open a scenario route; run its typed steps or the helper.
+2. Read the accessibility tree for roles, names, disabled state and focus.
+3. Use Playwright for clicks, viewport measurements and computed styles.
+4. Capture a screenshot only for questions the tree cannot answer: colour, spacing and weight.
 
-Steps 3 and 4 do not compose. Resizing is for measuring; a screenshot taken after a resize is of a
-layout that no longer matches what the DOM reports. See Gotchas.
+Useful checks at a normal width and roughly 312 px of content width:
 
-### Assertions worth running
-
-```js
-// No horizontal overflow at any width.
+```javascript
+// Horizontal overflow.
 document.documentElement.scrollWidth <= window.innerWidth;
-
-// Focus moved to the new step heading, not <body>.
+// Focus after step navigation.
 document.activeElement.tagName === 'H2';
-
-// Breadcrumb collapsed but kept the current step.
-Array.from(document.querySelectorAll('nav[aria-label] button')).map((b) => b.textContent);
-
-// Optical alignment, measured rather than eyeballed.
-const ir = icon.getBoundingClientRect();
-const tr = text.getBoundingClientRect();
-// aligned when ir.top === tr.top and ir.bottom === tr.bottom
-
-// What is that background actually painting?
-getComputedStyle(code).backgroundColor;
+// Is the footer inside the scroll region?
+scroll.scrollHeight > scroll.clientHeight;
+// What is an element actually painting?
+getComputedStyle(element).backgroundColor;
 ```
 
-Run at a normal width and at roughly 312 px of content width.
+## Gotchas retained from the manual preview
 
----
+**Theme variables are not decoration.** The Fluent adaptive palette derives from the VS Code
+button colour, and Monaco reads editor tokens. L2-dev supplies representative palettes on `<html>`
+and matching VS Code classes / `data-vscode-theme-kind` on `<body>`. Do not replace them with
+application-style overrides. They are not live values from a user's installed theme.
 
-## Gotchas
+**The integrated browser's default viewport is about 548 px.** It can silently hit narrow-layout
+media queries. For **measurements**, set an explicit viewport and assert `window.innerWidth`.
+Do not assume this advice applies to screenshots.
 
-**The integrated browser's default viewport is ~548 px.** Wide enough to trip `max-width: 560px`
-media queries, so a "desktop" measurement may silently be the narrow layout. Call `setViewportSize`
-explicitly and assert `window.innerWidth` before trusting **a measurement**.
+**Integrated-browser emulation can move the DOM but not the compositor.** After `setViewportSize`
+(or CDP `Emulation.setDeviceMetricsOverride`), DOM geometry can report an emulated viewport while
+the rasterized surface retains the real window size/scale. A locator screenshot can then exclude
+content despite correct DOM-side checks. This was observed in the integrated browser; do not
+assume every headless Chromium runner has that behavior.
 
-Do **not** carry that advice over to a screenshot. See the next entry: for a screenshot it is not
-merely useless, it is the cause.
+For affected screenshot tools:
 
-**`setViewportSize` moves the DOM but not the compositor, and screenshots come from the compositor.**
-This one cost most of a session, so it is worth stating exactly.
+1. Leave the viewport alone and give the measured harness element a fixed CSS width instead.
+2. Capture the whole viewport, not a clipped or locator screenshot.
+3. Crop afterwards using the image's content bounds.
+4. Verify the image itself, not just the DOM.
 
-After `setViewportSize` (or CDP `Emulation.setDeviceMetricsOverride`), `window.innerWidth`,
-`getBoundingClientRect()` and `getComputedStyle()` all report the **emulated** viewport, and media
-queries evaluate against it. The surface that is actually rasterised keeps the **real** window size
-and scale. So the page can report `innerWidth: 880` and `grid-template-columns: 176px 176px 176px
-176px` while the captured image contains a two-column layout.
+Viewport-driven media queries still need the real window in the desired band, or an honest caption
+describing the band that was captured.
 
-Two things follow, and the second is the trap:
+**`box-sizing` may be `content-box`.** A 760 px maximum width plus 24 px padding measures 808 px.
+Match a footer to its content column with the same maximum width, not the measured outer width.
 
-- Every DOM-side check agrees with itself. `window.innerWidth` is the emulated number, so asserting
-  it proves the emulation took, not that the capture matches.
-- `locator.screenshot()` computes its clip rect from DOM pixels and the surface paints at a
-  different scale, so content silently falls **outside** the rect. A four-card row loses its fourth
-  card, with no error and no visible seam.
+**HMR can mislead after hook changes.** A stale hot-patch can report
+`Should have a queue. You are likely calling Hooks conditionally` with a hook-order diff.
+Navigate through `about:blank` to reload before diagnosing. Keep the original failure in the report;
+do not suppress it.
 
-The recipe that works:
+**Remote port forwarding mangles query strings silently.** A query like
+`?view=localQuickStart&t=2` can arrive as one escaped parameter and select a fallback state.
+Use L2-dev's path-only routes and helper subsets. Unknown routes are 404, never a default scenario.
 
-1. **Do not set a viewport at all** before capturing. Let the DOM and the compositor agree on the
-   real window. Fix the layout by giving the harness element a hardcoded CSS `width` instead, which
-   is a property of the page rather than of the emulation.
-2. **Capture the whole viewport** with `page.screenshot()`, never a clip or a locator, because a
-   full-viewport capture cannot exclude something that is on screen.
-3. **Crop afterwards** by finding the content's bounds in the image itself, for example the
-   bounding box of every pixel that is not the background colour.
-4. **Verify the image, not the DOM.** Decode the PNG onto a `<canvas>` and count the ink clusters,
-   or whatever the shot is supposed to contain. This is the only check that can fail when the
-   capture is wrong.
+**Unknown RPCs must fail explicitly.** The old manual stub's blanket null/undefined replies and
+unanswered queries hid fixture drift. The shared core now records the path, sends an error and
+fails the page; add a router-typed fixture rather than inventing a success-shaped fallback.
 
-Viewport-driven media queries are the case with no clean answer: the breakpoint reads the viewport,
-and the viewport is the thing you must not touch. Either arrange for the real window to already sit
-in the band you want, or accept the band it gives you and say so in the caption.
+**The dev-server error overlay can corrupt layout measurements.** It can add an iframe or shadow
+and mimic overflow. Assert the absence of unexpected overlay elements; fix and report the underlying
+diagnostic, then rerun. Do not clear/filter app errors just to obtain a green measurement.
 
-**`box-sizing` is `content-box`.** A `maxWidth: '760px'` element with `padding: '24px'` measures
-808 px. Match a footer or banner to the content column by giving it the same `maxWidth`, not the
-measured width.
+**Vite configuration changes need a restart.** Source edits use HMR, but when changing plugins or
+server behavior, verify the server restarted and `/views.js` and `/scenarios/` are responsive.
+Stop the server after the check.
 
-**HMR will lie to you after a hook change.** Adding a `useRef` and letting the page hot-patch
-produces `Should have a queue. You are likely calling Hooks conditionally` with a hook-order diff.
-It is a stale-module artefact, not a bug in the change. Hard-navigate to a fresh URL.
+## What this does not prove
 
-**`page.goto(..., { waitUntil: 'load' })` can time out** when a stubbed tRPC request never settles.
-The page renders fine; only the load event is pending. Catch the timeout and continue, or wait on a
-selector instead.
-
-**A remote workspace mangles query strings, and it fails silently.** `open_browser_page` rewrites
-the URL when the port is forwarded: `?view=localQuickStart&t=2` arrives as
-`?view%3DlocalQuickStart%26t%3D2` — one escaped parameter, not two. `searchParams.get('view')`
-returns `null`, the harness falls through to its default, and **every page renders the same view**.
-A comparison set up this way compares something against itself and agrees perfectly.
-
-Use **one static page per view**, with the name hardcoded, and no query string. If two pages render
-suspiciously identical measurements, check this before believing them.
-
-**Never invent a reply shape for a path the stub does not know.** A blanket
-`else { reply(id, null); complete(id); }` looks harmless and is not: a subscription handler that
-reads the payload throws (`Cannot read properties of null`), which is a crash in the view under
-test caused entirely by the harness. Reply only to paths you have built a real payload for, and
-**leave everything else pending** — an unanswered query is inert, a wrong answer is not.
-
-**The dev-server error overlay silently corrupts measurements.** It mounts as an `<iframe>` inside
-the page, so it changes layout: in one round the footer reported an elevation border and shadow
-while `scrollHeight === clientHeight`, which reads exactly like a real bug in overflow detection. It
-was the overlay adding height. Assert `!document.querySelector('iframe')` — or whatever the page
-should not contain — alongside the numbers, and re-measure after clearing it.
-
-This is also the argument for measuring rather than screenshotting: the screenshot showed a shadow
-and offered no way to tell defect from artefact. The pair of numbers that disagreed is what pointed
-at a third element.
-
----
-
-## What this does _not_ prove
-
-Be explicit about this when reporting results — the renders are real enough to be persuasive well
-beyond what they actually verify.
-
-- **Light theme only.** Dark and high-contrast are untested. The harness hardcodes one palette.
-- **Not the VS Code webview host.** No real theme variables, no CSP, no host messaging, no panel
-  chrome or sizing behaviour.
-- **Fake backend.** Nothing about service behaviour, cancellation, timeouts or telemetry is
-  exercised.
-- **No real user input devices.** Screen-reader behaviour is inferred from the accessibility tree,
-  not observed.
-
-Layout, overflow, focus order, roles and names are genuinely verified. Everything else is not.
-
----
+- Not a real `vscode-webview://` origin, extension host, panel chrome or host sizing.
+- Fixtures do not exercise Docker probes, storage, backend behavior, cancellation or telemetry.
+- All three representative palettes are covered, not arbitrary installed VS Code themes.
+- Screen-reader behavior is inferred from roles/names, not observed on real assistive devices.
+- Dev-server worker behavior is not production worker bundling; use L2 for that.
 
 ## Future work
 
-**Ship a committed harness instead of a throwaway.** Each round so far has created and deleted a
-temporary page. A permanent `src/webviews/static/preview.html` would remove the
-recreate-and-delete cycle. Needs a decision on whether it is dev-only or excluded from the packaged
-extension — and note that the obvious design, `?view=localQuickStart`, is the one thing that cannot
-work: see the query-string gotcha above. Select the view from `location.pathname`, a hash, or a
-generated page per registry key.
-
-**Theme switching.** Drive `data-vscode-theme-kind` and the `--vscode-*` block from a query string
-so dark and high-contrast get the same coverage. This is the largest current gap.
-
-**A fixture library for host responses.** Fake payloads are hand-written per session and typed only
-by eye. Exported fixtures built from the real types — one per interesting state — would make the
-states reproducible and keep them honest as the types evolve.
-
-**Promote to a skill.** Once the harness is committed and theme switching works, this document is a
-`SKILL.md` with a reference harness. It is deliberately not one yet: the recipe should stabilise
-across a few more features first.
-
-**Consider screenshot regression.** Tempting, and probably premature — Fluent version bumps would
-churn baselines constantly. Revisit only if visual regressions actually start slipping through.
-
----
+CI/browser-image integration and promotion to a dedicated skill remain separate decisions.
+Do not add a second runner or screenshot baselines as part of ordinary scenario work.
 
 ## History
 
-The technique was first written down in the Local Quick Start design lab handoff, which was deleted
-along with the lab once the redesign shipped. Those files were never committed, so this document is
-the only surviving copy. Do not delete it without moving the recipe somewhere else first.
+The original manual technique was written after the Local Quick Start redesign
+(`dev/tnaum/quickstart-ui-redesign`). It caught layout defects including a misaligned info icon,
+a grey code block on an error tint and a footer note 48 px narrower than its content column.
+The design lab pages were temporary and never committed.
 
-Exercised again on 2026-08-19 for the wizard-surface extraction
-([webview-fluentui-package increment 2](./features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md)),
-where it was used to compare a mock built from the new components against the un-migrated view, and
-then the migrated views against the recorded baseline. The measurement half carried that work — the
-chrome was verified by comparing `getBoundingClientRect()` and `getComputedStyle()` element by
-element, with screenshots used only for colour and weight. Three gotchas above came from that round.
+It was exercised again on 2026-08-19 for the wizard-surface extraction
+([webview-fluentui-package increment 2](./features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md)).
+Geometry comparisons, rather than pixel baselines, carried that work and produced several gotchas
+above. L2-dev replaces the hand-made page/stub technique while retaining those lessons.

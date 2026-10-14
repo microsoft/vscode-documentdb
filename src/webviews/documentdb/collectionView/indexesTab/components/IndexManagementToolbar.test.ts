@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { SSRProvider } from '@fluentui/react-components';
 import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- React DOM exposes server rendering through this public subpath.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { IndexManagementToolbar } from './IndexManagementToolbar';
 
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string): string => message,
 }));
 
@@ -20,8 +22,8 @@ describe('IndexManagementToolbar', () => {
                 SSRProvider,
                 null,
                 createElement(IndexManagementToolbar, {
-                    onCreateIndex: jest.fn(),
-                    onRefreshIndexes: jest.fn(),
+                    onCreateIndex: vi.fn(),
+                    onRefreshIndexes: vi.fn(),
                 }),
             ),
         );
@@ -38,8 +40,8 @@ describe('IndexManagementToolbar', () => {
     });
 
     it('wires Create Index and Refresh directly to the supplied handlers', () => {
-        const onCreateIndex = jest.fn();
-        const onRefreshIndexes = jest.fn();
+        const onCreateIndex = vi.fn();
+        const onRefreshIndexes = vi.fn();
         const toolbar = IndexManagementToolbar({ onCreateIndex, onRefreshIndexes });
         const children = Children.toArray((toolbar.props as { children: ReactNode }).children);
         const createButton = children[0];
