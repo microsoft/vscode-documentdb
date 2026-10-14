@@ -4548,11 +4548,11 @@ Stage 0 must also be made.
        `Merge gate` kept its success from the previous run. GitHub named the skipped gate by its
        raw name expression, so `b5044438` lets the gate run in such runs under its label-event
        name and pass at once.
-    - Operator gate G8.5 is ready for the operator's acceptance.
+    - **G8.5 passed (operator, 2026-10-14):** "accepted the stage".
 - **Not in this stage:** retiring the L2 production harness. Decision 0002 retires it into E2E;
   Stage 9 task 6 still uses it on the signed VSIX.
 - **Operator gate G8.5:** the operator accepts the W1 verification on #880 and the restructured
-  docs.
+  docs. **Passed on 2026-10-14.**
 
 ### Stage 9: ready for review, merge and release
 
