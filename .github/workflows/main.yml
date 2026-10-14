@@ -9,8 +9,8 @@ name: CI
 #   `release/**`. Fast, plus packaging, L1 VSIX inspection with sizes and L3 activation. Path-scoped:
 #   package checks when `packages/**` changes; the L1 and L3 negative controls and the verification
 #   tool tests when `build/verification/**`, `build/vite/**` or a Vite config changes; the unbundled
-#   `/host` probe when `packages/vscode-ext-webview/**` changes. `package-lock.json` and this file
-#   count for all three. Pushes cache build sizes for PR comparisons.
+#   `/host` probe when `packages/vscode-ext-webview/**` changes. `package-lock.json`, this file and
+#   `.github/actions/**` count for all three. Pushes cache build sizes for PR comparisons.
 # - full: the `ci:full-requested` label (one run; the plan job removes the label), and manual runs
 #   with `enforce_full_run`. Every layer.
 # - skip: any other label. Nothing runs.
@@ -107,7 +107,7 @@ jobs:
                           core.warning(`Could not list the changed files, so every path-scoped check runs: ${error.message}`);
                         }
                       }
-                      const always = /^(package-lock\.json|\.github\/workflows\/main\.yml)$/;
+                      const always = /^(package-lock\.json|\.github\/workflows\/main\.yml|\.github\/actions\/.+)$/;
                       const touched = (pattern) =>
                         tier === 'full' || (tier === 'standard' && (files === null || files.some((file) => always.test(file) || pattern.test(file))));
                       const outputs = {
@@ -176,15 +176,8 @@ jobs:
             - name: ✅ Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
-
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false --verbose
+            - name: 🛠 Set up Node.js and dependencies
+              uses: ./.github/actions/setup
 
             - name: 🔨 Build Workspace Packages
               run: npm run build --workspaces --if-present
@@ -228,11 +221,7 @@ jobs:
             contents: read
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-            - run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+            - uses: ./.github/actions/setup
             - name: 📦 Verify packed workspace packages (builds them first)
               run: npm run verify:packages
 
@@ -249,11 +238,7 @@ jobs:
             verification-tests: ${{ steps.verification-tests.outcome }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-            - run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+            - uses: ./.github/actions/setup
             - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
               with:
                   name: Artifacts-${{ github.run_id }}
@@ -366,11 +351,7 @@ jobs:
             host-probe: ${{ steps.host-probe.outcome }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-            - run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+            - uses: ./.github/actions/setup
             - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: .vscode-test/
@@ -435,15 +416,8 @@ jobs:
             - name: ✅ Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
-
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+            - name: 🛠 Set up Node.js and dependencies
+              uses: ./.github/actions/setup
 
             - name: 🏗 Build Project
               run: npm run build
