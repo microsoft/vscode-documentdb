@@ -166,7 +166,7 @@ in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that
 
 `Plan: choose checks` runs first. `Static checks`, `Unit tests`, `npm packages: verify tarballs`
 and `VSIX: build` then run in parallel; `VSIX: inspect contents` and `VSIX: activate in VS Code`
-need `VSIX: build`. `PR report` and the `Build & Package` gate need every job and run with
+need `VSIX: build`. `PR report` and the `Merge gate` need every job and run with
 `if: always()` (decision 0013, decision 0014). The gate is the only required check.
 
 Each job has `timeout-minutes`, about 3 to 4 times its duration in the first standard-tier run and

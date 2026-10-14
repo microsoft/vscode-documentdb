@@ -22,8 +22,8 @@ name: CI
 # Same-repository PRs get one `<!-- ci-report -->` comment, updated in place: the checks that ran
 # and why, code quality and build size.
 #
-# The ruleset requires `Build & Package`. That is the `gate` job: it fails unless every check the
-# tier expected passed (decision 0013).
+# The ruleset requires `Merge gate`. That is the `gate` job: it fails unless every check the
+# tier expected passed (decisions 0013, 0015).
 
 on:
     workflow_dispatch:
@@ -548,13 +548,15 @@ jobs:
                       }
 
     # The ruleset's required check (decision 0013). An unrelated-label run must not post a skipped
-    # check under this name, because a skipped required check counts as passed.
+    # check under this name, because a skipped required check counts as passed. It runs (and passes)
+    # under the label-event name instead: a skipped job would show its raw name expression. A manual
+    # fast run checks less than a ready PR needs, so it must not post this name either (S85L-F01).
     gate:
-        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Build & Package (label event, not run)' || 'Build & Package' }}
+        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Merge gate (label event, not run)' || github.event_name == 'workflow_dispatch' && !inputs.enforce_full_run && 'Merge gate (manual fast run)' || 'Merge gate' }}
         runs-on: ubuntu-latest
         timeout-minutes: 5
         needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
-        if: always() && needs.plan.outputs.tier != 'skip'
+        if: always()
         permissions: {}
         steps:
             - name: Require every check the tier expected
@@ -569,6 +571,10 @@ jobs:
                   L1: ${{ needs.vsix-inspection.result }}
                   L3: ${{ needs.vsix-activation.result }}
               run: |
+                  if [[ "$TIER" == skip && "$PLAN" == success ]]; then
+                    echo 'Label event: nothing to gate; the PR keeps the previous Merge gate result.'
+                    exit 0
+                  fi
                   failed=0
                   expect() {
                     echo "$1: $2"

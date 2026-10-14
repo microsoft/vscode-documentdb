@@ -123,7 +123,8 @@ function fullRunLine(lastFull) {
               ...(lastFull.runUrl ? [`[run](${lastFull.runUrl})`] : []),
           ].join(', ') + '.'
         : 'No full run yet.';
-    return `**Full run:** add the \`${FULL_LABEL}\` label to run every layer once on the current commit. ${last}`;
+    // One source line, so withLastFull can replace it with FULL_LINE; <br> breaks it when rendered.
+    return `**Full run:** add the \`${FULL_LABEL}\` label to run every layer once on the current commit.<br>${last}`;
 }
 
 /**

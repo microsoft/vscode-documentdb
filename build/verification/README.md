@@ -41,7 +41,7 @@ After `Plan: choose checks`, the first four jobs above run in parallel; inspecti
 wait for `VSIX: build` ([decision 0014](../../docs/ai-and-plans/features/build-and-test-stack/decisions.md)).
 Vitest uses every CPU when `CI` is set and a quarter of them locally. Each job installs through
 [`.github/actions/setup`](../../.github/actions/setup/action.yml), which restores `node_modules`
-from the Actions cache and runs `npm ci` only on a miss. The required `Build & Package` gate
+from the Actions cache and runs `npm ci` only on a miss. The required `Merge gate`
 fails unless every job the tier expected passed (decision 0013).
 
 Same-repository PRs get one `<!-- ci-report -->` comment, updated in place and composed by
