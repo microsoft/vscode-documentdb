@@ -4349,17 +4349,70 @@ Stage 0 must also be made.
     - Verify on #880 itself: draft push (fast), ready (standard), request label (full), a push
       after the request, and an unrelated label. The agent checks the draft run; marking #880
       ready and adding labels are operator actions, so those runs are checked at G8.5.
+    - **Done in `87c0ac29`** (Claude Opus 5.5 subagent) and **`754910f9`** (coordinator).
+      - A `plan` job (github-script, no checkout) sets the tier and three path flags
+        (`packages`, `webview-package`, `verification`) from the whole PR diff or the push's
+        compare; `package-lock.json`, `main.yml`, an API failure or the API's file limit set all
+        three. A new `package-checks` job runs `verify:packages`. L1 runs `test:verification` and
+        `prove:vsix`, and L3 runs `prove:activation`, only with the `verification` flag; the
+        `/host` probe only with `webview-package`. The full tier sets every flag.
+      - `build/verification/ci-report.cjs` (152 lines, 7 tests) composes the one
+        `<!-- ci-report -->` comment; the first post deletes the old code quality and build size
+        comments, later runs update it in place. A hidden marker keeps the last full run's commit
+        and result. A report for a commit that is no longer the PR head does not overwrite the
+        newer one. Size deltas carry ⬆️, ⬇️ or ✅, and ⚠️ past the threshold.
+      - `754910f9`: the branch ruleset requires `Build & Package` (and `license/cla`). A run for an
+        unrelated label skips every job, and a skipped check under that name would replace a
+        failed one. That job's name now differs in such runs. The Opus subagent flagged the risk;
+        the coordinator read the ruleset and fixed it.
+    - **Deviations:** `probe:host-unbundled` stays in `main.yml`, path-scoped to
+      `packages/vscode-ext-webview/**`, instead of moving to a publish workflow:
+      `@microsoft/vscode-ext-webview` is published from ADO, which may be network isolated and
+      cannot download VS Code. Every change to the package runs the probe before it can be
+      published. Ready PRs to `feature/**` now get the standard tier; before, they never packaged.
+      `verify:packages` runs without `--no-build` in its own job.
+    - **Checks:** the workflows parse; 16 plan and 5 report cases simulated against fake GitHub
+      APIs; `node --test` 23/23 on the two report modules; `test:verification` 146 Node and 79
+      browser tests; Prettier, ESLint, `npm run build`. Not yet run on GitHub.
+    - **Known, not changed:** if L0 fails, `Build & Package` is skipped (`needs`) and a skipped
+      required check passes. This predates Stage 8.5.
   - **W2** (approved 2026-10-14): slim `inspect.cjs` before the dependency bump. Replace the Babel
     `import_` shape match and the Monaco loader filename and count allowlists with one
     per-chunk budget for non-literal dynamic imports; review `keptClassNames`. Keep the `render`
     export, chunk existence, dev-server strings, one `bson` per graph and the required files.
     Update `inspect.test.cjs` and the `prove:vsix` controls to match.
+    - **Done in `d58885f6`** (Claude Opus 5.5 subagent). `nonLiteralImportBudget` replaces both
+      allowlists: Babel's `config/files/import.cjs` (1) and Monaco's `editorSimpleWorker.js` (1),
+      keyed by a module ID in the owning chunk's report entry, and the Monaco worker scripts (2
+      each), keyed by name because Vite's worker builds have no chunk report. An unbudgeted
+      script or one over budget fails; unused budget does not, so a dependency that drops a
+      loader is not a failure. The keepNames check is one constant and one function: some class
+      in the `main` graph must keep the runtime name `UserCancelledError` (a text search was
+      rejected: a `keepNames: false` build still contains the string). Ownership checks stay;
+      the budget and the host-only imports still depend on them.
+    - **Controls:** retired `second-babel-nonliteral-import` and
+      `allowlisted-shape-at-top-level` (the shapes they tested are no longer checked); added
+      three over-budget controls and `import-budget-module-absent`; `keepnames-class-name-lost`
+      now renames the class throughout the graph. `prove:vsix` on one fresh VSIX: 22 PASS with
+      the old checker, **24 PASS** with the new one.
+    - **Checks:** `verify:vsix` on a fresh VSIX; a `keepNames: false` build fails the new check;
+      each budget lowered by one fails; `test:verification` 142 Node and 79 browser tests;
+      Prettier, ESLint, build. Lines: `inspect.cjs` 1,025 to 756, `inspect.test.cjs` 1,218 to
+      1,088, `prove-inspection.cjs` 356 to 347.
   - **W3** (decision 0001): state the `await import()` rule for CommonJS extensions that do not
     bundle in the `vscode-ext-webview` README and its feature docs.
+    - **Done in `74ae4d42`** (GPT-5.6 Sol Fast subagent): the package README, and the
+      `webview-ext-package` README and design. The package has no changelog.
   - **W4:** cleanups. Delete the codemods `build/test-migration/jest-to-vitest.mjs` and
     `build/esm-migration/add-js-extensions.mjs`; delete `ext.isBundle` and the `IS_BUNDLE`
     define; fix the stale node10 comment and structural logger type in `vitest.config.ts`; keep
     `measure:activation` but drop its test suite.
+    - **Done** (GPT-5.6 Sol Fast subagent), one commit each: `5249e046` codemods deleted (no
+      config referenced them); `071e2b88` `isBundle` and `IS_BUNDLE` removed, including the env
+      scrubbing in L3 and the probe and the package's doc examples (now `isBundled: true`);
+      `d77cb50f` and its lint fix `a16951a9`, `vitest.config.ts` typed with Vite's own types;
+      `515a955d` `timing.test.cjs` deleted. Checks: build; Vitest 4,612 tests in 298 files;
+      `test:verification` 130 Node and 79 browser tests; ESLint and Prettier on changed files.
   - **W5** (operator, 2026-10-14: "this should be rewritten"): restructure the modernization
     docs as a feature folder per CONTRIBUTING.md, `features/build-and-test-stack/`: a short
     README (the stack, where things live, which checks run in which tier, how to add a webview,
