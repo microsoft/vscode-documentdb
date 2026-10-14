@@ -4521,7 +4521,34 @@ Stage 0 must also be made.
       cases as expected; `test:verification` 135 Node and 79 browser tests; Vitest 4,773 passed
       (49 s with `CI=true`, 81 s locally at 25%); build, lint, Prettier. The activation checks
       could not run locally (no `libatk` for VS Code); the next CI run is their first real run.
-    - **Pending:** the live run on #880 at the next push, including the first cache miss and hit.
+    - **Live runs:** the push of `cfa8aecc` (G8.5 step 3, run `38571696088`) passed in 5.3
+      minutes of wall time for about 14 runner-minutes, down from 12.5 minutes; `Static checks`
+      was the longest job (3 min 58 s) and the every-declared-command check passed its first real
+      run. The next run (`38573662999`, `9c78858b`, warm `node_modules` cache) took 5.2 minutes
+      with `Unit tests` at 86 s and `npm packages` at 50 s.
+  - **`Merge gate` and the rulesets (decision 0015, 2026-10-14).** After seeing the job graph the
+    operator chose to rename the required check on #880 rather than after the merge. `9c78858b`
+    renames the gate job; `8b259329` puts the last full run on its own line in the report (an
+    operator observation). The coordinator, with the operator's go, then updated every place that
+    required `Build & Package`, after saving each one: the `main`, `release/**` and `feature/**`
+    rulesets, and the classic branch protection on `main` that company policy requires (it cannot
+    be deleted). Each now requires `license/cla` and `Merge gate`; nothing else changed in them.
+    "Branch must be up to date" is now off everywhere (operator: "it's frustrating"); it was on in
+    the classic rule and the `feature/**` ruleset. The write role's bypass on `release/**` and
+    `feature/**` is intended (operator). Known cost: until #880 merges, PRs on the old workflow
+    get no `Merge gate` and need a bypass (operator: "I can always override").
+  - **G8.5 runs on #880** (operator actions, coordinator checks):
+    1. Ready for review (run `38555738729`): standard tier, every path-scoped check ran, all
+       passed in 12.5 minutes; the comment showed the running message, then the report.
+    2. `ci:full-requested` (run `38557603120`): full tier, label removed by the workflow, the
+       report recorded the run with requester and link; passed.
+    3. Push (run `38571696088`): standard tier; the report kept "Last full run: passed on
+       `cba5693`, requested by @tnaum-ms" with the run link.
+    4. Unrelated label `on-hold` (run `38575327044`): every job skipped and the required
+       `Merge gate` kept its success from the previous run. GitHub named the skipped gate by its
+       raw name expression, so `b5044438` lets the gate run in such runs under its label-event
+       name and pass at once.
+    - Operator gate G8.5 is ready for the operator's acceptance.
 - **Not in this stage:** retiring the L2 production harness. Decision 0002 retires it into E2E;
   Stage 9 task 6 still uses it on the signed VSIX.
 - **Operator gate G8.5:** the operator accepts the W1 verification on #880 and the restructured
