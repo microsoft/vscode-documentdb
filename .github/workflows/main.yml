@@ -385,7 +385,8 @@ jobs:
 
     # Standard and full tiers; pushes to `main` and `release/**` feed the build size cache.
     build-and-package:
-        name: Build & Package
+        # A required check: an unrelated-label run must not post a skipped check under this name.
+        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Build & Package (label event, not run)' || 'Build & Package' }}
         runs-on: ubuntu-latest
         needs: [plan, code-quality-and-tests]
         permissions:
