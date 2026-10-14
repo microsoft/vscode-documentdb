@@ -67,6 +67,23 @@ wording in the grid plan), and the Stage 6 reviewer part of F20.
   are done").
 - **Revisit when:** #880 has merged.
 
+### Ideas from PR #963 scheduled for later (operator, 2026-10-14)
+
+PR #963 by @guanzhousongmicrosoft parallelized CI on the old stack. Its gate, parallel jobs,
+`node_modules` cache, job timeouts, read-only default token, every-declared-command check, Docker
+test fixes and Dependabot entry were taken over on #880 (decision 0014). These three wait:
+
+- **Database integration tests** against a DocumentDB Local service container, for
+  `ClustersClient` and the shell runtime. The first CI coverage against a real database. Costs an
+  image pull per run, a flake source and an image tag to keep current. **Revisit in** the E2E
+  iteration, which plans Docker anyway.
+- **Commit the public API report and fail CI when it changes** (api-extractor). Makes every public
+  API change visible in review; API PRs must regenerate the report. Independent of the stack;
+  **revisit** any time, it can land on `main` directly.
+- **Run the unit tests on Windows in the ADO release build**, as a warning until they pass. The
+  first Windows signal, but only at release time; a GitHub `windows-latest` job would be earlier and
+  slower. **Revisit** with the platform checks (F12) below.
+
 ## Verification depth
 
 ### Platform checks before G6 (F12)
