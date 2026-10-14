@@ -11,22 +11,23 @@ created: 2026-10-14
 > E2E iteration in particular. Decisions taken while executing the stages stay in
 > [build-and-test-stack.md](./iterations/01-modernization/build-and-test-stack.md), next to the stage they shaped.
 
-| #    | Decision                                                        | Status              | Changed from the proposal?                                                               | Date       | PR   |
-| ---- | --------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------- | ---------- | ---- |
-| 0001 | Workspace packages ship ESM only                                | Accepted            | Accepted as proposed                                                                     | 2026-10-14 | #880 |
-| 0002 | CI runs verification in tiers and reports what it ran and why   | Accepted            | **Operator added the layer report, the one-shot request label and the merged comment**   | 2026-10-14 | #880 |
-| 0003 | Negative controls run when their check changes, not every PR    | Accepted            | Accepted as proposed                                                                     | 2026-10-14 | #880 |
-| 0004 | Use Vite for the host and webviews                              | Accepted            | The documented host-only esbuild fallback was not needed                                 | 2026-09-30 | #880 |
-| 0005 | Replace Jest with Vitest in one sweep                           | Accepted            | Adopted for pipeline and ESM unification, not for speed                                  | 2026-10-02 | #880 |
-| 0006 | Split each view with ordered named groups                       | Accepted            | Rolldown groups replaced planned `manualChunks`; ordering came from the build experiment | 2026-10-05 | #880 |
-| 0007 | Run the extension host as ESM through a thin loader             | Accepted            | Accepted as proposed                                                                     | 2026-10-05 | #880 |
-| 0008 | Keep the TypeScript server plugin CommonJS                      | Accepted            | The shipped bundle moved to the root and a runtime stub supplies the package path        | 2026-10-01 | #880 |
-| 0009 | Keep SlickGrid during modernization                             | Accepted            | Replacement remains a separate later iteration                                           | 2026-09-30 | #880 |
-| 0010 | Run L3 on GitHub Actions only                                   | Accepted            | ADO keeps only offline checks that can run before signing                                | 2026-09-30 | #880 |
-| 0011 | Keep L2-dev runner-free in this iteration                       | Accepted            | CI wiring stays with the E2E iteration                                                   | 2026-10-05 | #880 |
-| 0012 | Use one branch and one PR, merging `main`                       | Accepted (modified) | The 2026-10-07 decision restored a merge from `main` before the PR merges                | 2026-10-01 | #880 |
-| 0013 | The required check passes only when every expected layer passed | Accepted            | Accepted as proposed by the Stage 8.5 review (S85-F01)                                   | 2026-10-14 | #880 |
-| 0014 | CI jobs run in parallel where safe, under descriptive names     | Accepted            | Accepted as proposed; prompted by the operator's comparison with PR #963                 | 2026-10-14 | #880 |
+| #    | Decision                                                        | Status              | Changed from the proposal?                                                                                     | Date       | PR   |
+| ---- | --------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Workspace packages ship ESM only                                | Accepted            | Accepted as proposed                                                                                           | 2026-10-14 | #880 |
+| 0002 | CI runs verification in tiers and reports what it ran and why   | Accepted            | **Operator added the layer report, the one-shot request label and the merged comment**                         | 2026-10-14 | #880 |
+| 0003 | Negative controls run when their check changes, not every PR    | Accepted            | Accepted as proposed                                                                                           | 2026-10-14 | #880 |
+| 0004 | Use Vite for the host and webviews                              | Accepted            | The documented host-only esbuild fallback was not needed                                                       | 2026-09-30 | #880 |
+| 0005 | Replace Jest with Vitest in one sweep                           | Accepted            | Adopted for pipeline and ESM unification, not for speed                                                        | 2026-10-02 | #880 |
+| 0006 | Split each view with ordered named groups                       | Accepted            | Rolldown groups replaced planned `manualChunks`; ordering came from the build experiment                       | 2026-10-05 | #880 |
+| 0007 | Run the extension host as ESM through a thin loader             | Accepted            | Accepted as proposed                                                                                           | 2026-10-05 | #880 |
+| 0008 | Keep the TypeScript server plugin CommonJS                      | Accepted            | The shipped bundle moved to the root and a runtime stub supplies the package path                              | 2026-10-01 | #880 |
+| 0009 | Keep SlickGrid during modernization                             | Accepted            | Replacement remains a separate later iteration                                                                 | 2026-09-30 | #880 |
+| 0010 | Run L3 on GitHub Actions only                                   | Accepted            | ADO keeps only offline checks that can run before signing                                                      | 2026-09-30 | #880 |
+| 0011 | Keep L2-dev runner-free in this iteration                       | Accepted            | CI wiring stays with the E2E iteration                                                                         | 2026-10-05 | #880 |
+| 0012 | Use one branch and one PR, merging `main`                       | Accepted (modified) | The 2026-10-07 decision restored a merge from `main` before the PR merges                                      | 2026-10-01 | #880 |
+| 0013 | The required check passes only when every expected layer passed | Accepted            | Accepted as proposed by the Stage 8.5 review (S85-F01)                                                         | 2026-10-14 | #880 |
+| 0014 | CI jobs run in parallel where safe, under descriptive names     | Accepted (modified) | Accepted as proposed; prompted by the operator's comparison with PR #963; 0015 changes its `Merge gate` timing | 2026-10-14 | #880 |
+| 0015 | Rename the required check to `Merge gate` on #880               | Accepted            | Operator's call; reverses the order in 0014                                                                    | 2026-10-14 | #880 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
@@ -617,3 +618,32 @@ plan's vocabulary.
 The structure, the names and the report wording change together on #880 after the G8.5 runs, so
 the names change once. `Merge gate` follows after #880 merges, because the ruleset requires
 `Build & Package` until then (see future-work.md).
+
+---
+
+## 0015: Rename the required check to `Merge gate` on #880
+
+**Status:** Accepted · **Date:** 2026-10-14 · **Raised by:** the operator, after the first run with
+the decision 0014 names
+
+### Question
+
+Decision 0014 left the gate named `Build & Package` until #880 merges, then a one-line PR and a
+ruleset switch. After seeing the new job graph, should the rename wait?
+
+### Decision
+
+No (operator: "we can rename the final one and I'll change the config now to expect the Merge
+gate"). The gate job is named `Merge gate`, and `Merge gate (label event, not run)` in runs for an
+unrelated label. The operator switches the branch ruleset's required check from `Build & Package`
+to `Merge gate` at the same time.
+
+### Reasoning
+
+The operator chose to finish the naming in one PR rather than leave one stale name for a follow-up.
+
+### Known cost
+
+Until #880 merges, other open PRs run `main`'s workflow, which has no `Merge gate` job, so they
+cannot satisfy the new required check and are blocked from merging (an admin bypass or the merge
+of #880 releases them). The operator accepted this.

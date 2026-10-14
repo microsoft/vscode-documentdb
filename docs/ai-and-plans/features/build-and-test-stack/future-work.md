@@ -55,6 +55,8 @@ wording in the grid plan), and the Stage 6 reviewer part of F20.
 
 ### Rename the required check to `Merge gate` (operator, 2026-10-14)
 
+- **Done on #880, 2026-10-14 (decision 0015).** The operator switched the ruleset to `Merge gate`
+  during the G8.5 runs instead of waiting for the merge, so this entry is closed.
 - **What:** the `gate` job in `main.yml` (decision 0013) keeps the name `Build & Package` only
   because the branch ruleset requires that name. Rename it to `Merge gate`, and its unrelated-label
   variant to `Merge gate (label event, not run)`; switch the ruleset's required check to

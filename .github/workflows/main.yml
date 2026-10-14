@@ -22,8 +22,8 @@ name: CI
 # Same-repository PRs get one `<!-- ci-report -->` comment, updated in place: the checks that ran
 # and why, code quality and build size.
 #
-# The ruleset requires `Build & Package`. That is the `gate` job: it fails unless every check the
-# tier expected passed (decision 0013).
+# The ruleset requires `Merge gate`. That is the `gate` job: it fails unless every check the
+# tier expected passed (decisions 0013, 0015).
 
 on:
     workflow_dispatch:
@@ -550,7 +550,7 @@ jobs:
     # The ruleset's required check (decision 0013). An unrelated-label run must not post a skipped
     # check under this name, because a skipped required check counts as passed.
     gate:
-        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Build & Package (label event, not run)' || 'Build & Package' }}
+        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Merge gate (label event, not run)' || 'Merge gate' }}
         runs-on: ubuntu-latest
         timeout-minutes: 5
         needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
