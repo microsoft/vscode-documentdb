@@ -1,9 +1,14 @@
 # Change Log
 
-## 0.11.2
+## 1.0.0
+
+### New Features
+
+- **Feedback Survey Invitation**: Restores the in-product satisfaction survey as an optional Secondary Sidebar invitation, shown after three active days of successful use and only when `telemetry.telemetryLevel` is `all`. Adds a `DocumentDB: Give Feedback` command; Don't ask again persists across releases. [#992](https://github.com/microsoft/vscode-documentdb/pull/992)
 
 ### Improvements
 
+- **Minimum VS Code Version**: Raises the minimum supported VS Code version to 1.109.0. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
 - **Webview Code Splitting**: Separates webview code by panel and loads it on demand. Local Quick Start and Atlas Credentials no longer load the Monaco editor or SlickGrid dependencies. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
 - **Build and Test Tooling**: Replaces webpack with Vite for the extension host and webviews, moves unit tests from Jest to Vitest, and removes the legacy Mocha harness. Uses TypeScript 6 and ES modules for the extension and six workspace packages. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
 - **ESM Package Releases**: Makes `@documentdb-js/operator-registry`, `@documentdb-js/shell-api-types`, and `@documentdb-js/shell-runtime` 0.9.0, plus `@documentdb-js/schema-analyzer` 2.0.0, ESM-only releases requiring Node.js 22.18.0 or later. Package consumers should review the migration notes before upgrading. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
