@@ -116,6 +116,22 @@ export const allChecks = {
         return `help ${help.length} chars; DocumentDBShellRuntime.evaluate('help') answered`;
     },
 
+    '@documentdb-js/srv-resolver': async (load) => {
+        const m = await load('@documentdb-js/srv-resolver');
+        const result = m.rewriteSrvUri({
+            connectionString: 'mongodb+srv://cluster.example.com/db?retryWrites=false',
+            srvRecords: [{ name: 'one.example.com', port: 27017, priority: 0, weight: 0 }],
+            txtRecords: [['authSource=admin']],
+        });
+        assert.equal(
+            result.connectionString,
+            'mongodb://one.example.com:27017/db?retryWrites=false&authSource=admin&tls=true',
+        );
+        assert.equal(typeof m.resolveSrvForDriver, 'function');
+        assert.equal(typeof m.resolveSrvFallback, 'function');
+        return 'rewriteSrvUri rewrote SRV and TXT records; resolver functions exported';
+    },
+
     '@microsoft/vscode-ext-webview': async (load) => {
         const m = await load('@microsoft/vscode-ext-webview');
         const { appRouter, createCallerFactory } = greetRouter(m);
