@@ -75,10 +75,12 @@ const prPackages = {
     },
 };
 const packageLine = /^- .*biggest package changes.*$/gm;
+const artifactsLine =
+    'Artifacts: [VSIX](https://example.test/vsix) | [Bundle-reports-123](https://example.test/bundle) | [L1-manifest-report-123](https://example.test/l1)';
 const note =
     '_Only each graph\'s 60 largest packages are tracked; the rest are counted as `(other)`, so "entered/left top 60" can mean a package crossed that line, not that it was added or removed._';
 
-test('No change gives a single quiet line, with every graph in the collapsed details', () => {
+test('No change gives a single quiet line and the artifacts, with every graph in the collapsed details', () => {
     const body = buildSizeComment(report, base, options);
     assert.equal(
         visible(body),
@@ -86,8 +88,11 @@ test('No change gives a single quiet line, with every graph in the collapsed det
             '### Build size',
             '',
             'No page, activation, VSIX or other bundle size changed by 5% or 50 KiB or more against `main`. VSIX: 7.6 MiB.',
+            '',
+            artifactsLine,
         ].join('\n'),
     );
+    assert.equal(body.split(artifactsLine).length, 2);
     assert.ok(!body.includes('⚠'));
     assert.ok(!body.includes('<!--'));
     assert.ok(body.includes('| Collection View page (`collectionView`) | 6,000,000 | 6,000,000 | ✅ 0 | 0.0% |'));
@@ -163,7 +168,7 @@ test('Flagged rows list primary graphs first and include secondary graphs', () =
 
 test('A missing base gives an explicit note and sizes only', () => {
     const body = buildSizeComment(report, null, options);
-    assert.ok(visible(body).endsWith('No size data for `main` yet; sizes only. VSIX: 7.6 MiB.'));
+    assert.ok(visible(body).endsWith(`No size data for \`main\` yet; sizes only. VSIX: 7.6 MiB.\n\n${artifactsLine}`));
     assert.ok(body.includes('| Graph | PR bytes |'));
     assert.ok(body.includes('| Collection View page (`collectionView`) | 6,000,000 |'));
     assert.ok(!body.includes('Base bytes'));
@@ -230,11 +235,15 @@ test('The v3 cache keeps the L1 graph names and package totals, and the CLI writ
     }
 });
 
-test('An L1 failure without a report says no sizes can be compared', () => {
+test('A failed inspection without a report says no sizes can be compared and still links the artifacts', () => {
     const body = buildSizeComment(null, base, { ...options, outcome: 'failure' });
-    assert.ok(body.includes('L1 inspection: **failure**; see the job log.'));
-    assert.ok(body.includes('L1 did not produce a size report, so no sizes can be compared.'));
-    assert.ok(body.includes('[L1-manifest-report-123](https://example.test/l1)'));
+    assert.ok(body.includes('VSIX inspection: **failure**; see the job log.'));
+    assert.ok(body.includes('The VSIX inspection did not produce a size report, so no sizes can be compared.'));
+    assert.ok(body.endsWith(`\n\n${artifactsLine}`));
+    assert.ok(!body.includes('<details>'));
+    const runOnly = buildSizeComment(null, base, { ...options, outcome: 'failure', vsixUrl: '', l1Url: '' });
+    assert.ok(runOnly.includes(`Artifacts: [VSIX](${options.runUrl}) |`));
+    assert.ok(runOnly.includes(`[L1-manifest-report-123](${options.runUrl})`));
     assert.deepEqual(sizeWarnings(null, base, 'main'), []);
 });
 

@@ -185,10 +185,10 @@ function buildSizeComment(report, base, options) {
     const artifacts = `Artifacts: [VSIX](${options.vsixUrl || options.runUrl}) | ${bundleLink} | [L1-manifest-report-${options.runId}](${options.l1Url || options.runUrl})`;
     const lines = ['### Build size', ''];
     if (options.outcome !== 'success') {
-        lines.push(`L1 inspection: **${options.outcome}**; see the job log.`, '');
+        lines.push(`VSIX inspection: **${options.outcome}**; see the job log.`, '');
     }
     if (!report) {
-        lines.push('L1 did not produce a size report, so no sizes can be compared.', '', artifacts);
+        lines.push('The VSIX inspection did not produce a size report, so no sizes can be compared.', '', artifacts);
         return lines.join('\n');
     }
     const vsix = `VSIX: ${formatSize(report.vsixBytes.bytes)}.`;
@@ -241,14 +241,14 @@ function buildSizeComment(report, base, options) {
     }
     lines.push(
         '',
+        artifacts,
+        '',
         '<details>',
         '<summary>All graphs (exact bytes)</summary>',
         '',
         sizeTable(report, base),
         '',
         'Packaged bytes. Shared chunks count in every graph that loads them, so rows do not add up.',
-        '',
-        artifacts,
         '',
         '</details>',
     );
