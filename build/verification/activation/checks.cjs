@@ -16,12 +16,18 @@ const LATE_COMMANDS = [
     'vscode-documentdb.command.testing.startDemoTask',
 ];
 const INJECTION_MARKER = 'L3_INJECTED_SWALLOWED_ACTIVATION_ERROR';
+const SURVEY_DEBUG_REASON =
+    'By design registered only in ExtensionMode.Development (src/debug/registerDebugCommands.ts); hidden from the palette otherwise.';
 /**
- * Contributed commands that are registered only later, by command id, each with the reason. None
- * today: activateClustersSupport registers every contributed command (src/documentdb/ClustersExtension.ts).
+ * Contributed commands that an installed (production) activation does not register, by command id,
+ * each with the reason.
  * @type {Readonly<Record<string, string>>}
  */
-const LAZY_COMMANDS = Object.freeze({});
+const LAZY_COMMANDS = Object.freeze({
+    'vscode-documentdb.debug.survey.showInvitation': SURVEY_DEBUG_REASON,
+    'vscode-documentdb.debug.survey.simulateMilestone': SURVEY_DEBUG_REASON,
+    'vscode-documentdb.debug.survey.resetState': SURVEY_DEBUG_REASON,
+});
 
 /** @param {string} engine @returns {string} */
 function minimumVSCodeVersion(engine) {
