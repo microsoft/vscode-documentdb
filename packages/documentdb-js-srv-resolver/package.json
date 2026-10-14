@@ -1,0 +1,43 @@
+{
+  "name": "@documentdb-js/srv-resolver",
+  "version": "1.0.0",
+  "description": "In-memory SRV DNS fallback for mongodb+srv:// connection strings when Node.js's c-ares resolver rejects a valid DNS reply",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "test": "vitest run --config ../../vitest.config.ts --project documentdb-js-srv-resolver",
+    "prettier-fix": "prettier -w \"src/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb",
+    "directory": "packages/documentdb-js-srv-resolver"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/dns-packet": "^5.6.5",
+    "mongodb": "^7.1.0"
+  },
+  "dependencies": {
+    "dns-packet": "^5.6.1"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

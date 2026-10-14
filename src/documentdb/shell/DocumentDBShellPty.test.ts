@@ -10,10 +10,13 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { AuthMethodId } from '../auth/AuthMethod';
+import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
 import { ShellCompletionProvider } from './ShellCompletionProvider';
 import { ShellSpinner } from './ShellSpinner';
+
+const mockSessionTelemetry: Record<string, string | undefined>[] = [];
 
 // callWithTelemetryAndErrorHandling from @microsoft/vscode-azext-utils silently swallows
 // errors in the test environment because its internal error handling relies on extension
@@ -40,6 +43,9 @@ vi.mock('@microsoft/vscode-azext-utils', async () => {
                     valuesToMask: [] as string[],
                     ui: undefined,
                 };
+                if (_callbackId === 'shell.sessionStart') {
+                    mockSessionTelemetry.push(ctx.telemetry.properties);
+                }
                 return callback(ctx);
             },
         ),
@@ -114,6 +120,7 @@ describe('DocumentDBShellPty', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mockSessionTelemetry.length = 0;
         written = '';
         closeCode = undefined;
         terminalName = undefined;
@@ -165,6 +172,18 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('open', () => {
+        it('keeps the metadata link captured when the shell was created', async (): Promise<void> => {
+            const existingClient = vi.spyOn(ClustersClient, 'getExistingClient');
+            existingClient.mockReturnValue({ connectionCorrelationId: 'original-id' } as ClustersClient);
+            pty = new DocumentDBShellPty(defaultOptions);
+            existingClient.mockReturnValue({ connectionCorrelationId: 'replacement-id' } as ClustersClient);
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(mockSessionTelemetry).toHaveLength(1);
+            expect(mockSessionTelemetry[0]).toMatchObject({ connectionCorrelationId: 'original-id' });
+            pty.close();
+        });
+
         it('should display welcome banner immediately', () => {
             pty.open(undefined);
 

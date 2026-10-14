@@ -7,8 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
-import { MongoClient } from 'mongodb';
+import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
+import { type AuthTraceContext } from '../utils/authTrace';
 import { AuthMethodId } from './auth/AuthMethod';
 import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
@@ -16,6 +17,10 @@ import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { NoAuthHandler } from './auth/NoAuthHandler';
 import { ClustersClient, getIndexExclusionReason, type IndexItemModel } from './ClustersClient';
 import { CredentialCache } from './CredentialCache';
+import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
+import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
+import { getClusterMetadata, getDomainMetadata } from './utils/getClusterMetadata';
+import * as tlsException from './utils/tlsException';
 
 interface RecordedTelemetry {
     readonly eventName: string;
@@ -31,6 +36,7 @@ vi.mock('@microsoft/vscode-azext-utils', async () => {
     );
     return {
         ...actual,
+        appendExtensionUserAgent: vi.fn().mockReturnValue('test-extension'),
         parseError: (error: unknown): { message: string } => ({
             message: error instanceof Error ? error.message : String(error),
         }),
@@ -83,6 +89,11 @@ vi.mock('./utils/getClusterMetadata', () => ({
 
 vi.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: vi.fn() }));
 vi.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: vi.fn() }));
+vi.mock('./srv/prepareDriverConnectionString', () => ({ prepareDriverConnectionString: vi.fn() }));
+vi.mock('./utils/tlsException', async () => {
+    const actual = await vi.importActual<typeof tlsException>('./utils/tlsException');
+    return { ...actual, resolveAllowInvalidCertificates: vi.fn(actual.resolveAllowInvalidCertificates) };
+});
 
 describe('ClustersClient', () => {
     it('should be defined', () => {
@@ -100,8 +111,16 @@ describe('regular connection startup diagnostics', () => {
         vi.useFakeTimers();
         mockTelemetryEvents.length = 0;
         ClustersClient._clients.clear();
+        vi.mocked(prepareDriverConnectionString)
+            .mockReset()
+            .mockImplementation(async (input) => {
+                if (input.startupTelemetry) {
+                    input.startupTelemetry.properties.srvResolution = 'notSrv';
+                }
+                return { connectionString: input.connectionString, options: input.options, srvResolution: 'notSrv' };
+            });
         CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://private-host:27017');
-        mockConnect.mockImplementation(async (): Promise<void> => {
+        mockConnect.mockReset().mockImplementation(async (): Promise<void> => {
             vi.advanceTimersByTime(30);
         });
         mockClose.mockResolvedValue(undefined);
@@ -147,6 +166,7 @@ describe('regular connection startup diagnostics', () => {
             maskEntireErrorMessage: true,
             properties: {
                 connectionCorrelationId: client.connectionCorrelationId,
+                startupCorrelationId: client.connectionCorrelationId,
                 surface: 'extension',
                 authMethod,
                 lastStage: 'stage05InitializingApis',
@@ -170,6 +190,14 @@ describe('regular connection startup diagnostics', () => {
             ),
         );
         expect(ext.outputChannel.error).not.toHaveBeenCalled();
+        expect(prepareDriverConnectionString).toHaveBeenCalledWith(
+            expect.objectContaining({
+                correlation: {
+                    startupCorrelationId: client.connectionCorrelationId,
+                    connectionCorrelationId: client.connectionCorrelationId,
+                },
+            }),
+        );
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
         expect(vi.mocked(ext.outputChannel.trace).mock.calls.flat().join('\n')).not.toContain('private-');
         expect(
@@ -188,6 +216,18 @@ describe('regular connection startup diagnostics', () => {
         startupEvent();
         expect(ext.outputChannel.trace).toHaveBeenCalledTimes(1);
         expect(vi.mocked(MongoClient)).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes its startup ID to auth configuration', async (): Promise<void> => {
+        let traceContext: AuthTraceContext | undefined;
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(
+            async (_timings, context) => {
+                traceContext = context;
+                return { connectionString: 'mongodb://private-host:27017', options: {} };
+            },
+        );
+        const client = await ClustersClient.getClient(clusterId);
+        expect(traceContext).toEqual({ startupCorrelationId: client.connectionCorrelationId, surface: 'extension' });
     });
 
     it('preserves auth failures and records their partial stage without private error data', async () => {
@@ -290,6 +330,11 @@ describe('regular connection startup diagnostics', () => {
         expect(mockClose).toHaveBeenCalled();
         expect(ext.outputChannel.error).not.toHaveBeenCalled();
         expect(ClustersClient._clients.has(clusterId)).toBe(false);
+        const startupId = startupEvent().telemetry.properties.startupCorrelationId as string;
+        expect(startupId).toMatch(/^[0-9a-f-]{36}$/);
+        expect(ext.outputChannel.debug).toHaveBeenCalledWith(
+            `[ClustersClient] startup=${startupId} canceled by user surface=extension`,
+        );
     });
 
     it('records a credentials failure before auth configuration', async () => {
@@ -303,6 +348,63 @@ describe('regular connection startup diagnostics', () => {
         expect(startupEvent().telemetry.measurements.stage02ConfiguringAuthDurationMs).toBeUndefined();
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
         expect(vi.mocked(MongoClient)).not.toHaveBeenCalled();
+    });
+
+    it('hands the transient URI to the driver while metadata and credentials keep the original', async () => {
+        const original = 'mongodb+srv://original.global.mongocluster.cosmos.azure.com/';
+        const rewritten = 'mongodb://resolved.example.com:27017/?tls=true';
+        const preparedOptions: MongoClientOptions = { tls: true };
+        const summary: SrvResolutionSummary = { path: 'fallback', nodeErrorCode: 'EBADRESP', resolvedAt: 1 };
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, original);
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: original,
+            options: {},
+        });
+        vi.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
+            connectionString: rewritten,
+            options: preparedOptions,
+            srvResolution: 'fallback',
+            summary,
+        });
+        const client = await ClustersClient.getClient(clusterId);
+        expect(MongoClient).toHaveBeenCalledWith(rewritten, preparedOptions);
+        expect(CredentialCache.getCredentials(clusterId)?.connectionString).toBe(original);
+        const hosts = ['original.global.mongocluster.cosmos.azure.com'];
+        // The static-metadata event loads its helper with a dynamic import, which takes more ticks under Vitest.
+        await vi.waitFor(() => expect(getDomainMetadata).toHaveBeenCalledWith(hosts));
+        expect(getClusterMetadata).toHaveBeenCalledWith(client.getMongoClient(), hosts);
+        expect(ClustersClient.getSrvResolution(clusterId)).toBe(summary);
+        await ClustersClient.deleteClient(clusterId);
+        expect(ClustersClient.getSrvResolution(clusterId)).toBeUndefined();
+    });
+
+    it('evaluates the TLS exception policy against the original SRV URI on driver failure', async () => {
+        const original = 'mongodb+srv://original.example.com/';
+        const policy = vi.mocked(tlsException.resolveAllowInvalidCertificates).mockReturnValueOnce(undefined);
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: original,
+            options: {},
+        });
+        vi.mocked(prepareDriverConnectionString).mockResolvedValueOnce({
+            connectionString: 'mongodb://resolved.example.com/',
+            options: {},
+            srvResolution: 'fallback',
+        });
+        const failure = new Error('ECONNREFUSED');
+        mockConnect.mockRejectedValueOnce(failure);
+        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
+        expect(policy).toHaveBeenCalledWith(undefined, original);
+    });
+
+    it('rethrows an SRV preparation failure without constructing a driver', async (): Promise<void> => {
+        const failure = new Error('original resolution failure');
+        vi.mocked(prepareDriverConnectionString).mockRejectedValueOnce(failure);
+        await expect(ClustersClient.getClient(clusterId)).rejects.toBe(failure);
+        expect(MongoClient).not.toHaveBeenCalled();
+        expect(startupEvent().telemetry.properties).toMatchObject({
+            startupOutcome: 'failed',
+            lastStage: 'stage03PreparingClient',
+        });
     });
 });
 

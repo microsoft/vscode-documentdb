@@ -5,11 +5,20 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 
-import { type IActionContext, type ITelemetryContext, type UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import * as path from 'path';
 import * as workerThreads from 'worker_threads';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
+import { type AuthTraceContext } from '../../utils/authTrace';
+import { AuthMethodId } from '../auth/AuthMethod';
+import { CredentialCache } from '../CredentialCache';
+import { ShellSessionManager } from '../shell/ShellSessionManager';
+import {
+    prepareDriverConnectionString,
+    type PreparedDriverConnectionString,
+} from '../srv/prepareDriverConnectionString';
+import { PlaygroundEvaluator } from './PlaygroundEvaluator';
 import {
     WorkerSessionManager,
     type WorkerSessionCallbacks,
@@ -75,6 +84,23 @@ vi.mock('../../extensionVariables', () => ({
     },
 }));
 
+vi.mock('../srv/prepareDriverConnectionString', () => ({
+    prepareDriverConnectionString: vi.fn(),
+}));
+
+vi.mock('../CredentialCache', () => ({
+    CredentialCache: {
+        getCredentials: vi.fn(),
+        getConnectionStringWithPassword: vi.fn(),
+        getConnectionUser: vi.fn(),
+    },
+}));
+
+vi.mock('../../utils/workspacUtils', () => ({
+    getConnectionTimeoutMs: vi.fn().mockReturnValue(30000),
+    getBatchSizeSetting: vi.fn().mockReturnValue(20),
+}));
+
 // Mock worker_threads — the WorkerSessionManager creates Worker instances
 vi.mock('worker_threads', () => {
     const mockPostMessage = vi.fn();
@@ -117,6 +143,11 @@ describe('WorkerSessionManager', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockTelemetryEvents.length = 0;
+        vi.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
+            connectionString: input.connectionString,
+            options: input.options,
+            srvResolution: 'notSrv',
+        }));
         // Reset listeners between tests
         const wt = workerThreads as unknown as { _resetListeners: () => void };
         wt._resetListeners();
@@ -182,6 +213,7 @@ describe('WorkerSessionManager', () => {
                 1000,
             );
 
+            await Promise.resolve();
             expect(vi.mocked(Worker)).toHaveBeenCalledWith(path.join('/extension-root', 'playgroundWorker.mjs'));
 
             vi.advanceTimersByTime(1000);
@@ -193,6 +225,242 @@ describe('WorkerSessionManager', () => {
                 settingsHint: 'The connection did not finish in time. You can increase the timeout in Settings:',
             });
             vi.useRealTimers();
+        });
+    });
+
+    describe('host DNS preparation', (): void => {
+        const originalUri = 'mongodb+srv://cluster.mongocluster.cosmos.azure.us/?srvMaxHosts=1';
+        const rewrittenUri = 'mongodb://resolved.mongocluster.cosmos.azure.com:10260/?tls=true';
+
+        function initMessage(persistent = false): Extract<MainToWorkerMessage, { type: 'init' }> {
+            return {
+                type: 'init',
+                requestId: '',
+                connectionString: originalUri,
+                clientOptions: { serverSelectionTimeoutMS: 4000, tlsAllowInvalidCertificates: true },
+                databaseName: 'testdb',
+                authMechanism: 'NoAuth',
+                persistent,
+            };
+        }
+
+        function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+            let resolve!: (value: T) => void;
+            const promise = new Promise<T>((res): void => {
+                resolve = res;
+            });
+            return { promise, resolve };
+        }
+
+        function workerMock(): {
+            postMessage: Mock;
+            _emit: (event: string, ...args: unknown[]) => void;
+        } {
+            return vi.mocked(Worker).mock.results.at(-1)?.value as ReturnType<typeof workerMock>;
+        }
+
+        function replyInit(): Extract<MainToWorkerMessage, { type: 'init' }> {
+            const worker = workerMock();
+            const posted = worker.postMessage.mock.calls.at(-1)?.[0] as Extract<MainToWorkerMessage, { type: 'init' }>;
+            worker._emit('message', { type: 'initResult', requestId: posted.requestId, success: true });
+            return posted;
+        }
+
+        function startupEvent(): RecordedTelemetry {
+            return mockTelemetryEvents.find((event) => event.eventName === 'worker.startup')!;
+        }
+
+        it('posts only serializable prepared options without changing the input', async (): Promise<void> => {
+            const input = Object.freeze({
+                ...initMessage(),
+                clientOptions: Object.freeze({ ...initMessage().clientOptions }),
+            });
+            const snapshot = JSON.parse(JSON.stringify(input)) as unknown;
+            vi.mocked(prepareDriverConnectionString).mockResolvedValue({
+                connectionString: rewrittenUri,
+                options: {
+                    serverSelectionTimeoutMS: 8000,
+                    tls: true,
+                    authMechanismProperties: { OIDC_CALLBACK: vi.fn() },
+                },
+                srvResolution: 'fallback',
+            });
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('cluster-id', input, 1000, { sessionId: 'playground-session' });
+            await Promise.resolve();
+            const posted = replyInit();
+            await initializing;
+
+            expect(posted).toMatchObject({
+                connectionString: rewrittenUri,
+                clientOptions: { serverSelectionTimeoutMS: 8000, tls: true },
+                oidcAllowedHosts: ['*.azure.us'],
+            });
+            expect(() => structuredClone(posted)).not.toThrow();
+            expect(input).toEqual(snapshot);
+            expect(vi.mocked(prepareDriverConnectionString).mock.calls[0][0]).toMatchObject({
+                connectionString: originalUri,
+                surface: 'playground',
+                correlation: { sessionId: 'playground-session', startupCorrelationId: posted.requestId },
+                abortSignal: expect.any(AbortSignal),
+            });
+            manager.dispose();
+        });
+
+        it.each([
+            ['playground', 'shutdown'],
+            ['shell', 'killWorker'],
+        ] as const)(
+            'R2: %s %s during pending DNS rejects startup and never sends code',
+            async (surface, method): Promise<void> => {
+                const pending = deferred<PreparedDriverConnectionString>();
+                vi.mocked(prepareDriverConnectionString).mockReturnValue(pending.promise);
+                vi.mocked(CredentialCache.getCredentials).mockReturnValue({
+                    clusterId: 'cluster-id',
+                    authMechanism: AuthMethodId.NoAuth,
+                    connectionString: originalUri,
+                });
+                const ensureSpy = vi.spyOn(WorkerSessionManager.prototype, 'ensureWorker');
+                const evalSpy = vi.spyOn(WorkerSessionManager.prototype, 'sendEval');
+                const session =
+                    surface === 'shell'
+                        ? new ShellSessionManager({
+                              clusterId: 'cluster-id',
+                              clusterDisplayName: 'Cluster',
+                              databaseName: 'testdb',
+                          })
+                        : new PlaygroundEvaluator();
+                try {
+                    const evaluation =
+                        session instanceof PlaygroundEvaluator
+                            ? session.evaluate(
+                                  { clusterId: 'cluster-id', clusterDisplayName: 'Cluster', databaseName: 'testdb' },
+                                  'db.test.insertOne({})',
+                              )
+                            : session.evaluate('db.test.insertOne({})');
+                    const ensuring = ensureSpy.mock.results.at(-1)?.value as Promise<void>;
+                    const signal = vi.mocked(prepareDriverConnectionString).mock.calls[0][0].abortSignal;
+                    expect(session.workerState).toBe('spawning');
+                    expect(Worker).not.toHaveBeenCalled();
+                    await session[method]();
+                    expect(signal?.aborted).toBe(true);
+                    expect(session.workerState).toBe('idle');
+                    pending.resolve({ connectionString: rewrittenUri, options: {}, srvResolution: 'fallback' });
+                    await expect(ensuring).rejects.toBeInstanceOf(UserCancelledError);
+                    await expect(evaluation).rejects.toBeInstanceOf(UserCancelledError);
+                    expect(Worker).not.toHaveBeenCalled();
+                    expect(evalSpy).not.toHaveBeenCalled();
+                    const wt = workerThreads as unknown as { _mockPostMessage: Mock };
+                    expect(wt._mockPostMessage).not.toHaveBeenCalled();
+                    expect(startupEvent().telemetry.properties).toMatchObject({
+                        startupOutcome: 'canceled',
+                        result: 'Canceled',
+                    });
+                    expect(session.workerState).toBe('idle');
+                } finally {
+                    session.dispose();
+                    ensureSpy.mockRestore();
+                    evalSpy.mockRestore();
+                }
+            },
+        );
+
+        it('does not let a canceled preparation terminate a newer startup', async (): Promise<void> => {
+            const pending = deferred<PreparedDriverConnectionString>();
+            vi.mocked(prepareDriverConnectionString).mockReturnValueOnce(pending.promise);
+            const manager = new WorkerSessionManager(callbacks);
+            const canceled = manager.ensureWorker('cluster-id', initMessage());
+            manager.killWorker();
+            const retry = manager.ensureWorker('cluster-id', initMessage());
+            await Promise.resolve();
+            replyInit();
+            await retry;
+            pending.resolve({ connectionString: rewrittenUri, options: {}, srvResolution: 'fallback' });
+            await expect(canceled).rejects.toBeInstanceOf(UserCancelledError);
+            expect(Worker).toHaveBeenCalledTimes(1);
+            expect(manager.workerState).toBe('ready');
+            manager.dispose();
+        });
+
+        it('rejects preparation failure with the same error object before creating a worker', async (): Promise<void> => {
+            const error = Object.assign(new Error('querySrv EBADRESP private-host'), { code: 'EBADRESP' });
+            vi.mocked(prepareDriverConnectionString).mockRejectedValue(error);
+            const manager = new WorkerSessionManager(callbacks);
+            await expect(manager.ensureWorker('cluster-id', initMessage())).rejects.toBe(error);
+            expect(Worker).not.toHaveBeenCalled();
+            expect(manager.workerState).toBe('idle');
+            expect(startupEvent().telemetry.properties).toMatchObject({ startupOutcome: 'failed', result: 'Failed' });
+            expect(JSON.stringify(startupEvent())).not.toContain('private-host');
+        });
+
+        it('starts the full init timeout only after preparation completes', async (): Promise<void> => {
+            vi.useFakeTimers();
+            const pending = deferred<PreparedDriverConnectionString>();
+            vi.mocked(prepareDriverConnectionString).mockReturnValue(pending.promise);
+            const manager = new WorkerSessionManager(callbacks);
+            try {
+                const initializing = manager.ensureWorker('cluster-id', initMessage(), 1000);
+                vi.advanceTimersByTime(5000);
+                expect(Worker).not.toHaveBeenCalled();
+                pending.resolve({ connectionString: rewrittenUri, options: {}, srvResolution: 'fallback' });
+                await Promise.resolve();
+                expect(Worker).toHaveBeenCalledTimes(1);
+                vi.advanceTimersByTime(999);
+                expect(manager.workerState).toBe('spawning');
+                replyInit();
+                await initializing;
+                expect(startupEvent().telemetry.measurements.timeoutMs).toBe(1000);
+                expect(startupEvent().telemetry.measurements.duration).toBe(5.999);
+            } finally {
+                manager.dispose();
+                vi.useRealTimers();
+            }
+        });
+
+        it('passes the OIDC mechanism to preparation but not to the worker', async (): Promise<void> => {
+            vi.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
+                connectionString: rewrittenUri,
+                options: input.options,
+                srvResolution: 'fallback',
+            }));
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker('cluster-id', {
+                ...initMessage(),
+                authMechanism: 'MicrosoftEntraID',
+            });
+            await vi.mocked(prepareDriverConnectionString).mock.results[0].value;
+            const posted = replyInit();
+            await initializing;
+            expect(vi.mocked(prepareDriverConnectionString).mock.calls[0][0].options).toMatchObject({
+                authMechanism: 'MONGODB-OIDC',
+            });
+            expect(posted.clientOptions).not.toHaveProperty('authMechanism');
+            manager.dispose();
+        });
+
+        it('keeps the original SRV host in shell connection metadata used by the banner', async (): Promise<void> => {
+            vi.mocked(CredentialCache.getCredentials).mockReturnValue({
+                clusterId: 'cluster-id',
+                authMechanism: AuthMethodId.NoAuth,
+                connectionString: originalUri,
+            });
+            vi.mocked(prepareDriverConnectionString).mockResolvedValue({
+                connectionString: rewrittenUri,
+                options: {},
+                srvResolution: 'fallback',
+            });
+            const session = new ShellSessionManager({
+                clusterId: 'cluster-id',
+                clusterDisplayName: 'Cluster',
+                databaseName: 'testdb',
+            });
+            const initializing = session.initialize();
+            await Promise.resolve();
+            const posted = replyInit();
+            const metadata = await initializing;
+            expect(posted.connectionString).toBe(rewrittenUri);
+            expect(metadata).toMatchObject({ host: 'cluster.mongocluster.cosmos.azure.us', additionalHostCount: 0 });
+            session.dispose();
         });
     });
 
@@ -215,16 +483,16 @@ describe('WorkerSessionManager', () => {
             return events[0];
         }
 
-        function startWorker(
+        async function startWorker(
             persistent: boolean = true,
             telemetryContext: WorkerStartupTelemetryContext = {},
             manager: WorkerSessionManager = new WorkerSessionManager(callbacks),
-        ): {
+        ): Promise<{
             manager: WorkerSessionManager;
             initPromise: Promise<void>;
             requestId: string;
             worker: { _emit: (event: string, ...args: unknown[]) => void };
-        } {
+        }> {
             const initPromise = manager.ensureWorker(
                 'test-cluster',
                 {
@@ -240,6 +508,7 @@ describe('WorkerSessionManager', () => {
                 1000,
                 telemetryContext,
             );
+            await Promise.resolve();
             const worker = vi.mocked(Worker).mock.results.at(-1)?.value as {
                 postMessage: Mock;
                 _emit: (event: string, ...args: unknown[]) => void;
@@ -249,7 +518,7 @@ describe('WorkerSessionManager', () => {
         }
 
         it('reports a stalled token request with total and stage timings without connection details', async () => {
-            const { initPromise, requestId, worker } = startWorker();
+            const { initPromise, requestId, worker } = await startWorker();
             vi.advanceTimersByTime(200);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
             vi.advanceTimersByTime(800);
@@ -287,7 +556,9 @@ describe('WorkerSessionManager', () => {
         });
 
         it('logs one successful startup summary, ignoring stale progress', async () => {
-            const { manager, initPromise, requestId, worker } = startWorker();
+            const { manager, initPromise, requestId, worker } = await startWorker();
+            worker._emit('message', { type: 'log', level: 'debug', message: 'Initializing worker' });
+            expect(callbacks.onLog).toHaveBeenCalledWith('debug', 'Initializing worker', requestId);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
             vi.advanceTimersByTime(150);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
@@ -317,11 +588,13 @@ describe('WorkerSessionManager', () => {
             trace.mockClear();
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
             expect(trace).not.toHaveBeenCalled();
+            worker._emit('message', { type: 'log', level: 'debug', message: 'Evaluating query' });
+            expect(callbacks.onLog).toHaveBeenCalledWith('debug', 'Evaluating query', requestId);
             manager.dispose();
         });
 
         it('logs the failed stage at error level without changing or logging the authentication error', async () => {
-            const { initPromise, requestId, worker } = startWorker();
+            const { initPromise, requestId, worker } = await startWorker();
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
             worker._emit('message', { type: 'initResult', requestId, success: false, error: 'private-error' });
 
@@ -338,7 +611,7 @@ describe('WorkerSessionManager', () => {
         });
 
         it('logs an unexpected startup exit at error level', async () => {
-            const { initPromise, requestId, worker } = startWorker();
+            const { initPromise, requestId, worker } = await startWorker();
             vi.advanceTimersByTime(100);
             worker._emit('exit', 1);
 
@@ -349,8 +622,39 @@ describe('WorkerSessionManager', () => {
             expect(startupEvent().telemetry.properties).toMatchObject({ startupOutcome: 'exited', result: 'Failed' });
         });
 
+        it('ignores a killed worker that exits while its replacement starts', async (): Promise<void> => {
+            const first = await startWorker();
+            first.worker._emit('message', { type: 'initResult', requestId: first.requestId, success: true });
+            await first.initPromise;
+            const wt = workerThreads as unknown as {
+                _getListeners: () => Map<string, ((...args: unknown[]) => void)[]>;
+                _resetListeners: () => void;
+            };
+            const staleExit = [...(wt._getListeners().get('exit') ?? [])];
+            const staleError = [...(wt._getListeners().get('error') ?? [])];
+            wt._resetListeners();
+            first.manager.killWorker();
+
+            const second = await startWorker(true, {}, first.manager);
+            staleError.forEach((handler) => handler(new Error('stale worker error')));
+            staleExit.forEach((handler) => handler(1));
+            second.worker._emit('message', { type: 'initResult', requestId: second.requestId, success: true });
+            await second.initPromise;
+
+            expect(callbacks.onLog).toHaveBeenCalledWith('debug', 'Worker exited with code 1', first.requestId);
+            expect(callbacks.onWorkerExit).not.toHaveBeenCalled();
+            expect(first.manager.workerState).toBe('ready');
+            const startups = mockTelemetryEvents.filter((event) => event.eventName === 'worker.startup');
+            expect(startups.map((event) => event.telemetry.properties.startupOutcome)).toEqual([
+                'succeeded',
+                'succeeded',
+            ]);
+            expect(mockTelemetryEvents.some((event) => event.eventName === 'worker.unexpectedExit')).toBe(false);
+            first.manager.dispose();
+        });
+
         it('keeps intentional startup cancellation at trace level', async () => {
-            const { manager, initPromise, requestId } = startWorker();
+            const { manager, initPromise, requestId } = await startWorker();
             manager.dispose();
 
             await expect(initPromise).rejects.toThrow('Worker terminated');
@@ -365,7 +669,7 @@ describe('WorkerSessionManager', () => {
         });
 
         it('accumulates repeated stages and keeps the last visit duration separately', async () => {
-            const { initPromise, requestId, worker } = startWorker();
+            const { initPromise, requestId, worker } = await startWorker();
             vi.advanceTimersByTime(100);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
             vi.advanceTimersByTime(200);
@@ -389,7 +693,7 @@ describe('WorkerSessionManager', () => {
         });
 
         it('keeps all reported stage names in execution order when sorted', async () => {
-            const { manager, initPromise, requestId, worker } = startWorker();
+            const { manager, initPromise, requestId, worker } = await startWorker();
             for (const stage of [
                 'loadingDriver',
                 'connecting',
@@ -419,7 +723,7 @@ describe('WorkerSessionManager', () => {
         });
 
         it('bundles provider, relay, and database cost into the same event and summary', async () => {
-            const { manager, initPromise, requestId, worker } = startWorker();
+            const { manager, initPromise, requestId, worker } = await startWorker();
             const timing = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
                 worker._emit('message', { type: 'initTiming', requestId, activity, activityId, started });
             };
@@ -473,7 +777,7 @@ describe('WorkerSessionManager', () => {
                     };
                 });
             });
-            const { initPromise, requestId, worker } = startWorker();
+            const { initPromise, requestId, worker } = await startWorker();
             worker._emit('message', {
                 type: 'initTiming',
                 requestId,
@@ -515,7 +819,7 @@ describe('WorkerSessionManager', () => {
         });
 
         it('records database-only worker timing without token measurements', async () => {
-            const { manager, initPromise, requestId, worker } = startWorker(false);
+            const { manager, initPromise, requestId, worker } = await startWorker(false);
             worker._emit('message', {
                 type: 'initTiming',
                 requestId: 'stale',
@@ -551,13 +855,43 @@ describe('WorkerSessionManager', () => {
             [true, { shellSessionId: 'shell-session', connectionCorrelationId: 'parent-connection' }, 'shell'],
             [false, { sessionId: 'playground-session' }, 'playground'],
         ] as const)('correlates startup for persistent=%s', async (persistent, telemetryContext, surface) => {
-            const { manager, initPromise, requestId, worker } = startWorker(persistent, telemetryContext);
+            const { manager, initPromise, requestId, worker } = await startWorker(persistent, telemetryContext);
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
 
-            expect(startupEvent().telemetry.properties).toMatchObject({ ...telemetryContext, surface });
+            expect(startupEvent().telemetry.properties).toMatchObject({
+                ...telemetryContext,
+                surface,
+                startupCorrelationId: requestId,
+            });
+            expect(requestId).not.toBe(startupEvent().telemetry.properties.connectionCorrelationId);
+            expect(prepareDriverConnectionString).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    correlation: expect.objectContaining({
+                        ...telemetryContext,
+                        startupCorrelationId: requestId,
+                    }),
+                }),
+            );
             expect(startupEvent().telemetry.suppressIfSuccessful).not.toBe(true);
             expect(startupEvent().telemetry.suppressAll).not.toBe(true);
+            manager.dispose();
+        });
+
+        it('ties token requests to the startup ID of the worker that sent them', async (): Promise<void> => {
+            const contexts: (AuthTraceContext | undefined)[] = [];
+            callbacks.onTokenRequest = vi.fn(async (_message, _postResponse, _timings, context): Promise<void> => {
+                contexts.push(context);
+            });
+            const { manager, initPromise, requestId, worker } = await startWorker();
+            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: [] });
+            worker._emit('message', { type: 'initResult', requestId, success: true });
+            await initPromise;
+            worker._emit('message', { type: 'tokenRequest', requestId: 'refresh-request', scopes: [] });
+            expect(contexts).toEqual([
+                { startupCorrelationId: requestId, surface: 'shell' },
+                { startupCorrelationId: requestId, surface: 'shell' },
+            ]);
             manager.dispose();
         });
 
@@ -589,7 +923,7 @@ describe('WorkerSessionManager', () => {
         });
 
         it('emits another event for a retry, but none for a connected worker reuse', async () => {
-            const first = startWorker();
+            const first = await startWorker();
             first.worker._emit('message', {
                 type: 'initResult',
                 requestId: first.requestId,
@@ -598,11 +932,13 @@ describe('WorkerSessionManager', () => {
             });
             await expect(first.initPromise).rejects.toThrow('failure');
 
-            const retry = startWorker(true, {}, first.manager);
+            const retry = await startWorker(true, {}, first.manager);
             retry.worker._emit('message', { type: 'initResult', requestId: retry.requestId, success: true });
             await retry.initPromise;
             expect(retry.requestId).not.toBe(first.requestId);
-            await startWorker(true, {}, retry.manager).initPromise;
+            await (
+                await startWorker(true, {}, retry.manager)
+            ).initPromise;
 
             const events = mockTelemetryEvents.filter((event) => event.eventName === 'worker.startup');
             expect(events).toHaveLength(2);
@@ -654,7 +990,8 @@ describe('WorkerSessionManager', () => {
             };
         }
 
-        function replyInitSuccess(worker: ReturnType<typeof getWorkerMock>): void {
+        async function replyInitSuccess(worker: ReturnType<typeof getWorkerMock>): Promise<void> {
+            await Promise.resolve();
             const lastCall = worker.postMessage.mock.calls.at(-1) as [MainToWorkerMessage] | undefined;
             if (!lastCall || lastCall[0].type !== 'init') {
                 throw new Error('Expected init message in postMessage calls');
@@ -672,7 +1009,7 @@ describe('WorkerSessionManager', () => {
             // Step 1: Spawn initial worker
             const init1 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
             const worker = getWorkerMock();
-            replyInitSuccess(worker);
+            await replyInitSuccess(worker);
             await init1;
             expect(manager.isAlive).toBe(true);
             expect(manager.workerState).toBe('ready');
@@ -691,7 +1028,7 @@ describe('WorkerSessionManager', () => {
 
             const init2 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
             const worker2 = getWorkerMock();
-            replyInitSuccess(worker2);
+            await replyInitSuccess(worker2);
             await init2;
 
             expect(manager.workerState).toBe('ready');
@@ -707,7 +1044,7 @@ describe('WorkerSessionManager', () => {
             // Spawn worker
             const init = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
             const worker = getWorkerMock();
-            replyInitSuccess(worker);
+            await replyInitSuccess(worker);
             await init;
 
             // Start an eval (will be pending — no reply sent)
@@ -765,7 +1102,8 @@ describe('WorkerSessionManager', () => {
             };
         }
 
-        function replyInitSuccess(worker: ReturnType<typeof getWorkerMock>): void {
+        async function replyInitSuccess(worker: ReturnType<typeof getWorkerMock>): Promise<void> {
+            await Promise.resolve();
             const lastCall = worker.postMessage.mock.calls.at(-1) as [MainToWorkerMessage] | undefined;
             if (!lastCall || lastCall[0].type !== 'init') {
                 throw new Error('Expected init message in postMessage calls');
@@ -783,7 +1121,7 @@ describe('WorkerSessionManager', () => {
             // Connect to cluster-A
             const init1 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
             const worker1 = getWorkerMock();
-            replyInitSuccess(worker1);
+            await replyInitSuccess(worker1);
             await init1;
             expect(manager.isConnectedTo('cluster-A')).toBe(true);
 
@@ -794,7 +1132,7 @@ describe('WorkerSessionManager', () => {
             // Switch to cluster-B — should terminate cluster-A's worker
             const init2 = manager.ensureWorker('cluster-B', makeInitMsg('cluster-B'));
             const worker2 = getWorkerMock();
-            replyInitSuccess(worker2);
+            await replyInitSuccess(worker2);
             await init2;
 
             expect(manager.isConnectedTo('cluster-B')).toBe(true);
@@ -811,7 +1149,7 @@ describe('WorkerSessionManager', () => {
 
             const init1 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
             const worker1 = getWorkerMock();
-            replyInitSuccess(worker1);
+            await replyInitSuccess(worker1);
             await init1;
 
             const spawnCount = WorkerMock.mock.calls.length;
@@ -830,7 +1168,7 @@ describe('WorkerSessionManager', () => {
             // Connect to cluster-A
             const init1 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
             const worker1 = getWorkerMock();
-            replyInitSuccess(worker1);
+            await replyInitSuccess(worker1);
             await init1;
 
             // Graceful shutdown
@@ -854,7 +1192,7 @@ describe('WorkerSessionManager', () => {
             // Respawn with cluster-B
             const init2 = manager.ensureWorker('cluster-B', makeInitMsg('cluster-B'));
             const worker2 = getWorkerMock();
-            replyInitSuccess(worker2);
+            await replyInitSuccess(worker2);
             await init2;
 
             expect(manager.isConnectedTo('cluster-B')).toBe(true);

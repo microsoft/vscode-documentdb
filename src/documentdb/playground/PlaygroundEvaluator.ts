@@ -14,6 +14,7 @@ import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
+import { traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
@@ -129,19 +130,24 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 // Use append(), not appendLine() — the runtime already includes a trailing newline.
                 ext.playgroundOutputChannel.append(output);
             },
-            onLog: (level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string) => {
+            onLog: (
+                level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
+                message: string,
+                startupCorrelationId?: string,
+            ) => {
+                const output = `${logPrefix}${startupCorrelationId ? ` startup=${startupCorrelationId}` : ''} surface=playground ${message}`;
                 switch (level) {
                     case 'error':
-                        ext.outputChannel.error(`${logPrefix} ${message}`);
+                        ext.outputChannel.error(output);
                         break;
                     case 'warn':
-                        ext.outputChannel.warn(`${logPrefix} ${message}`);
+                        ext.outputChannel.warn(output);
                         break;
                     case 'debug':
-                        ext.outputChannel.debug(`${logPrefix} ${message}`);
+                        ext.outputChannel.debug(output);
                         break;
                     default:
-                        ext.outputChannel.trace(`${logPrefix} ${message}`);
+                        ext.outputChannel.trace(output);
                         break;
                 }
             },
@@ -149,7 +155,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
                 postResponse: (response: MainToWorkerMessage) => void,
                 timings?: ConnectionStartupTimings,
-            ) => this.handleTokenRequest(msg, postResponse, timings),
+                traceContext?: AuthTraceContext,
+            ) => this.handleTokenRequest(msg, postResponse, timings, traceContext),
             onWorkerExit: (exitCode: number) => {
                 ext.outputChannel.debug(`${logPrefix} Worker exited with code ${String(exitCode)}`);
                 this.resetSession();
@@ -190,15 +197,29 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         }
 
         onProgress?.(l10n.t('Authenticating…'));
-        await callWithTelemetryAndErrorHandling('playground.connect', async (context) => {
-            context.errorHandling.suppressDisplay = true;
-            context.errorHandling.rethrow = true;
-            context.telemetry.properties.authMethod = initMsg.authMechanism;
-            context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
-            await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs(), {
-                sessionId: this._sessionId,
+        let originalFailure: { error: unknown } | undefined;
+        try {
+            await callWithTelemetryAndErrorHandling('playground.connect', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.errorHandling.rethrow = true;
+                context.telemetry.properties.authMethod = initMsg.authMechanism;
+                context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
+                try {
+                    await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs(), {
+                        sessionId: this._sessionId,
+                    });
+                } catch (error) {
+                    originalFailure = { error };
+                    throw error;
+                }
             });
-        });
+        } catch (error) {
+            throw originalFailure ? originalFailure.error : error;
+        }
+        // The telemetry wrapper swallows cancellation even when rethrow is enabled.
+        if (originalFailure) {
+            throw originalFailure.error;
+        }
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
         // Reset console output counter for this eval run
@@ -350,6 +371,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
         timings?: ConnectionStartupTimings,
+        traceContext?: AuthTraceContext,
     ): Promise<void> {
         try {
             let accessToken: string;
@@ -364,6 +386,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                             msg.clientId,
                             msg.tenantId,
                             this._sessionId,
+                            traceContext,
                         ),
                     )
                 ).accessToken;
@@ -372,8 +395,15 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                     // eslint-disable-next-line import/no-internal-modules
                     '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
                 );
-                const session = await withTokenAcquisitionTiming(timings, () =>
-                    getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
+                const session = await traceAuthOperation(
+                    'interactiveEntra.getSession',
+                    () =>
+                        withTokenAcquisitionTiming(timings, () =>
+                            getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
+                        ),
+                    { tenantSpecified: !!msg.tenantId, createIfNone: true },
+                    msg.requestId,
+                    traceContext,
                 );
 
                 if (!session) {

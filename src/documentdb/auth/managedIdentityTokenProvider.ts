@@ -5,7 +5,7 @@
 
 import { type TokenCredential } from '@azure/identity';
 import { randomUUID } from 'crypto';
-import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
+import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { classifyManagedIdentityError, describeManagedIdentityError } from './managedIdentityErrors';
 import { reportManagedIdentityTokenFailure } from './managedIdentityTelemetry';
 import { verifyManagedIdentityTenant } from './managedIdentityTenant';
@@ -32,12 +32,13 @@ export async function getManagedIdentityAccessToken(
     clientId: string | undefined,
     clusterTenantId?: string,
     correlationId?: string,
+    traceContext?: AuthTraceContext,
 ): Promise<{ accessToken: string; expiresOnTimestamp: number }> {
     const tokenCorrelationId = correlationId ?? randomUUID();
     return await traceAuthOperation(
         'managedIdentity.tokenRequest',
         async () => {
-            const credential = await getCredential(clientId, tokenCorrelationId);
+            const credential = await getCredential(clientId, tokenCorrelationId, traceContext);
 
             let token: { token: string; expiresOnTimestamp: number } | null;
             try {
@@ -46,24 +47,31 @@ export async function getManagedIdentityAccessToken(
                     () => credential.getToken(scopes),
                     { scopeCount: scopes.length },
                     tokenCorrelationId,
+                    traceContext,
                 );
             } catch (error) {
                 traceAuthFlow(
                     'managedIdentity.tokenFailure',
                     { reason: classifyManagedIdentityError(error) },
                     tokenCorrelationId,
+                    traceContext,
                 );
-                reportManagedIdentityTokenFailure(error, clientId, tokenCorrelationId);
+                reportManagedIdentityTokenFailure(error, clientId, tokenCorrelationId, traceContext);
                 throw new Error(describeManagedIdentityError(error, clientId));
             }
 
             if (!token) {
-                traceAuthFlow('managedIdentity.tokenFailure', { reason: 'emptyTokenResponse' }, tokenCorrelationId);
-                reportManagedIdentityTokenFailure(undefined, clientId, tokenCorrelationId);
+                traceAuthFlow(
+                    'managedIdentity.tokenFailure',
+                    { reason: 'emptyTokenResponse' },
+                    tokenCorrelationId,
+                    traceContext,
+                );
+                reportManagedIdentityTokenFailure(undefined, clientId, tokenCorrelationId, traceContext);
                 throw new Error(describeManagedIdentityError(undefined, clientId));
             }
 
-            verifyManagedIdentityTenant(token.token, clusterTenantId, clientId, tokenCorrelationId);
+            verifyManagedIdentityTenant(token.token, clusterTenantId, clientId, tokenCorrelationId, traceContext);
             traceAuthFlow(
                 'managedIdentity.tokenReady',
                 {
@@ -71,6 +79,7 @@ export async function getManagedIdentityAccessToken(
                     expired: token.expiresOnTimestamp <= Date.now(),
                 },
                 tokenCorrelationId,
+                traceContext,
             );
 
             return { accessToken: token.token, expiresOnTimestamp: token.expiresOnTimestamp };
@@ -95,14 +104,19 @@ export async function getManagedIdentityAccessToken(
             noProxyConfigured: !!(process.env.NO_PROXY || process.env.no_proxy),
         },
         tokenCorrelationId,
+        traceContext,
     );
 }
 
-async function getCredential(clientId: string | undefined, correlationId: string): Promise<TokenCredential> {
+async function getCredential(
+    clientId: string | undefined,
+    correlationId: string,
+    traceContext?: AuthTraceContext,
+): Promise<TokenCredential> {
     const key = clientId ?? '';
     const cached = credentialsByClientId.get(key);
     if (cached) {
-        traceAuthFlow('managedIdentity.credential', { outcome: 'reused' }, correlationId);
+        traceAuthFlow('managedIdentity.credential', { outcome: 'reused' }, correlationId, traceContext);
         return cached;
     }
 
@@ -112,15 +126,21 @@ async function getCredential(clientId: string | undefined, correlationId: string
         () => import('@azure/identity'),
         {},
         correlationId,
+        traceContext,
     );
     const cachedAfterImport = credentialsByClientId.get(key);
     if (cachedAfterImport) {
-        traceAuthFlow('managedIdentity.credential', { outcome: 'reusedAfterConcurrentImport' }, correlationId);
+        traceAuthFlow(
+            'managedIdentity.credential',
+            { outcome: 'reusedAfterConcurrentImport' },
+            correlationId,
+            traceContext,
+        );
         return cachedAfterImport;
     }
 
     const credential = clientId ? new ManagedIdentityCredential({ clientId }) : new ManagedIdentityCredential();
     credentialsByClientId.set(key, credential);
-    traceAuthFlow('managedIdentity.credential', { outcome: 'created' }, correlationId);
+    traceAuthFlow('managedIdentity.credential', { outcome: 'created' }, correlationId, traceContext);
     return credential;
 }

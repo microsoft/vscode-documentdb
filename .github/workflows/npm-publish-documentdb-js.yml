@@ -2,7 +2,7 @@ name: Publish @documentdb-js packages
 
 # Verifies the workspace packages and dry-runs publication by default, without
 # deployment approval or OIDC permissions. With no selection, dry-run checks all
-# four @documentdb-js/* packages.
+# five @documentdb-js/* packages.
 #
 # Real publication requires dry_run=false and at least one selected package.
 # Only the publish job uses npm Trusted Publishing (OIDC) and the
@@ -34,6 +34,10 @@ on:
                 description: 'Publish @documentdb-js/shell-runtime'
                 type: boolean
                 default: false
+            publish_srv_resolver:
+                description: 'Publish @documentdb-js/srv-resolver'
+                type: boolean
+                default: false
 
 permissions:
     contents: read
@@ -51,7 +55,8 @@ jobs:
                   !inputs.publish_operator_registry &&
                   !inputs.publish_schema_analyzer &&
                   !inputs.publish_shell_api_types &&
-                  !inputs.publish_shell_runtime
+                  !inputs.publish_shell_runtime &&
+                  !inputs.publish_srv_resolver
                 }}
         steps:
             - name: 🛑 Validate inputs (at least one package selected)
@@ -61,7 +66,8 @@ jobs:
                     !inputs.publish_operator_registry &&
                     !inputs.publish_schema_analyzer &&
                     !inputs.publish_shell_api_types &&
-                    !inputs.publish_shell_runtime
+                    !inputs.publish_shell_runtime &&
+                    !inputs.publish_srv_resolver
                   }}
               run: |
                   echo "::error::No package selected. Enable at least one publish_* input before running this workflow."
@@ -112,6 +118,10 @@ jobs:
               if: ${{ inputs.publish_shell_runtime || env.VERIFY_ALL == 'true' }}
               run: npm publish --dry-run --workspace @documentdb-js/shell-runtime
 
+            - name: 📦 Dry-run @documentdb-js/srv-resolver
+              if: ${{ inputs.publish_srv_resolver || env.VERIFY_ALL == 'true' }}
+              run: npm publish --dry-run --workspace @documentdb-js/srv-resolver
+
     publish:
         name: Publish to npmjs.com
         needs: verify
@@ -161,3 +171,7 @@ jobs:
             - name: 🚀 Publish @documentdb-js/shell-runtime
               if: ${{ inputs.publish_shell_runtime }}
               run: npm publish --provenance --workspace @documentdb-js/shell-runtime
+
+            - name: 🚀 Publish @documentdb-js/srv-resolver
+              if: ${{ inputs.publish_srv_resolver }}
+              run: npm publish --provenance --workspace @documentdb-js/srv-resolver

@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type AuthenticationSession } from 'vscode';
+import { ext } from '../../extensionVariables';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { PlaygroundEvaluator } from '../playground/PlaygroundEvaluator';
@@ -17,6 +18,18 @@ import { ShellSessionManager } from './ShellSessionManager';
 const mockGetSessionFromVSCode = vi.fn();
 const mockGetManagedIdentityAccessToken = vi.fn();
 let workerCallbacks: WorkerSessionCallbacks;
+
+vi.mock('../../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            trace: vi.fn(),
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+        },
+    },
+}));
 
 vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
     getSessionFromVSCode: (...args: unknown[]) => mockGetSessionFromVSCode(...args),
@@ -120,6 +133,21 @@ describe('ShellSessionManager', () => {
     });
 
     it.each([
+        ['shell', '[Shell Worker]'],
+        ['playground', '[Playground Worker]'],
+    ] as const)('labels %s worker diagnostics with startup identity', (surface, component): void => {
+        const manager =
+            surface === 'shell'
+                ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
+                : new PlaygroundEvaluator();
+        workerCallbacks.onLog?.('debug', 'Initializing worker', 'startup-id');
+        expect(ext.outputChannel.debug).toHaveBeenCalledWith(
+            `${component} startup=startup-id surface=${surface} Initializing worker`,
+        );
+        manager.dispose();
+    });
+
+    it.each([
         ['shell', 'vscode'],
         ['shell', 'managedIdentity'],
         ['playground', 'vscode'],
@@ -141,10 +169,12 @@ describe('ShellSessionManager', () => {
         const stopWait = timings.startTokenWait();
         now = 15;
         const postResponse = vi.fn();
+        const traceContext = { startupCorrelationId: 'startup-id', surface };
         await workerCallbacks.onTokenRequest?.(
             { type: 'tokenRequest', requestId: 'token-request', scopes: ['scope'], source },
             postResponse,
             timings,
+            traceContext,
         );
         now = 45;
         stopWait();
@@ -161,6 +191,21 @@ describe('ShellSessionManager', () => {
             tokenAcquireDurationMs: 25,
             tokenRelayDurationMs: 10,
         });
+        if (source === 'managedIdentity') {
+            expect(mockGetManagedIdentityAccessToken).toHaveBeenCalledWith(
+                ['scope'],
+                undefined,
+                undefined,
+                expect.any(String),
+                traceContext,
+            );
+        } else {
+            expect(ext.outputChannel.info).toHaveBeenCalledWith(
+                expect.stringContaining(
+                    `[Authentication] startup=startup-id surface=${surface} interactiveEntra.getSession`,
+                ),
+            );
+        }
         manager.dispose();
     });
 });
