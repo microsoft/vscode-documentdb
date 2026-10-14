@@ -4570,8 +4570,22 @@ Stage 0 must also be made.
     decision to keep the notes while making the 0.11.2 manifest and lockfile bump mandatory
     after merge and before the signed ADO build. The commit-linked reply is in the original
     discussion, and the sole Copilot thread is resolved.
-  2. **Pending: the full Case 2 list** on the final tree, with the `prepare-pull-request` skill:
+  2. **The full Case 2 list** on the final tree, with the `prepare-pull-request` skill:
      milestone, description and blockers.
+     - **Late review (2026-10-14):** the commits after the first Stage 8.5 review (the `main`
+       merge, decision 0014, `Merge gate`) got an independent GPT-5.6 Sol Fast review,
+       [08.5-stage8.5-late-review.md](./08.5-stage8.5-late-review.md) (`efddceb5`): S85L-F01
+       (medium, a manual fast run could post a passing `Merge gate` on a ready PR's commit),
+       fixed by the coordinator in `e4bb1ff1`; S85L-N01 (low, the activation self-test does not
+       prove the declared-command check fails on a real host), awaiting the operator's decision.
+     - **Case 2 on `e4bb1ff1` (coordinator, 2026-10-14):** `npm run l10n` and `prettier-fix`
+       changed nothing; `lint`, full Vitest (305 files, 4,773 passed, 1 skipped), `build` and
+       `package` passed.
+     - **PR description** rewritten for Stage 8.5 and the new documentation paths (the old links
+       pointed at the moved `modernization/` folder).
+     - **Open for the operator:** the milestone is `1.0.0` while the release notes target
+       0.11.2; the author's decisions on the findings of both Stage 8.5 reviews (CONTRIBUTING.md
+       §6.2) are not yet recorded in the review files.
   3. **Mark #880 ready for review** (operator authorization), get the human review, and merge it
      into `main` (operator).
   4. **Publish the package versions decided at G3, from `main`.** `@documentdb-js/*`: dispatch
