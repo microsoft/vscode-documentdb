@@ -549,9 +549,10 @@ jobs:
 
     # The ruleset's required check (decision 0013). An unrelated-label run must not post a skipped
     # check under this name, because a skipped required check counts as passed. It runs (and passes)
-    # under the label-event name instead: a skipped job would show its raw name expression.
+    # under the label-event name instead: a skipped job would show its raw name expression. A manual
+    # fast run checks less than a ready PR needs, so it must not post this name either (S85L-F01).
     gate:
-        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Merge gate (label event, not run)' || 'Merge gate' }}
+        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Merge gate (label event, not run)' || github.event_name == 'workflow_dispatch' && !inputs.enforce_full_run && 'Merge gate (manual fast run)' || 'Merge gate' }}
         runs-on: ubuntu-latest
         timeout-minutes: 5
         needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
