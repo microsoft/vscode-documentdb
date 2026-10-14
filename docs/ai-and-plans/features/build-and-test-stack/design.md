@@ -25,7 +25,7 @@ source of truth for behavior.
 ## Design boundaries
 
 - Vite builds both the extension host and the webviews into `dist/`.
-- Vitest runs extension tests and the tests for all six workspace packages.
+- Vitest runs extension tests and the tests for all seven workspace packages.
 - Production bundle reports bind packaged JavaScript to its source graph and support L1 inspection.
 - Development scenarios, packaged-browser checks, and installed-VSIX activation answer different
   questions. None substitutes for the others.

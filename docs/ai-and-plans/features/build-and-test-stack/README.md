@@ -21,7 +21,7 @@ code:
 
 The extension host and all webviews are built with Vite. Vitest runs the extension and workspace
 package unit tests. The extension host is ESM, with a small CommonJS exception for the TypeScript
-server plugin. All six workspace packages ship ESM only. The repository targets TypeScript 6.
+server plugin. All seven workspace packages ship ESM only. The repository targets TypeScript 6.
 
 Code and tests are authoritative for behavior. This folder records the constraints and why they
 exist. Start with [design.md](./design.md) when changing bundle format, resolution, chunks, assets,
@@ -34,7 +34,7 @@ or test loading.
 | [`vite.config.ext.mjs`](../../../../vite.config.ext.mjs)                               | Builds the ESM extension loader, playground worker, and CommonJS TypeScript server plugin. It also defines host aliases, externals, copied assets, and production bundle reports. |
 | [`vite.config.views.mjs`](../../../../vite.config.views.mjs)                           | Builds `views.js`, lazy view chunks, vendor groups, inlined CSS, Monaco workers, and the source scenario server.                                                                  |
 | [`build/vite/`](../../../../build/vite/README.md)                                      | Local Vite plugins and the detailed rationale for non-obvious build settings.                                                                                                     |
-| [`vitest.config.ts`](../../../../vitest.config.ts)                                     | Defines the extension project and six workspace-package projects, their environments, aliases, isolation, and file patterns.                                                      |
+| [`vitest.config.ts`](../../../../vitest.config.ts)                                     | Defines the extension project and seven workspace-package projects, their environments, aliases, isolation, and file patterns.                                                    |
 | [`test/vitest/`](../../../../test/vitest/)                                             | The shared `vscode` mock and the CommonJS loader hook used by extension tests.                                                                                                    |
 | [`build/verification/`](../../../../build/verification/README.md)                      | Packaged-artifact inspection, activation, browser fixtures, package checks, runtime probes, negative controls, and CI report formatting.                                          |
 | [`build/verification/browser/`](../../../../build/verification/browser/)               | Typed L2 fixtures, the packaged browser harness, and L2-dev scenarios.                                                                                                            |
