@@ -7,7 +7,8 @@ import * as vscode from 'vscode';
 import { getSurveyService, recordSurveyActivity, type SurveyService } from '../services/survey/SurveyService';
 import { SURVEY_FEATURE_AREAS } from '../services/survey/surveyTypes';
 
-export const DEVELOPMENT_MODE_CONTEXT = 'documentdb.isDevelopmentMode';
+// Hyphenated: the VSIX inspection reads bare `name.ext` manifest strings as file paths.
+export const DEVELOPMENT_MODE_CONTEXT = 'documentdb-development-mode';
 export const SHOW_SURVEY_INVITATION_COMMAND = 'vscode-documentdb.debug.survey.showInvitation';
 export const SIMULATE_SURVEY_MILESTONE_COMMAND = 'vscode-documentdb.debug.survey.simulateMilestone';
 export const RESET_SURVEY_STATE_COMMAND = 'vscode-documentdb.debug.survey.resetState';

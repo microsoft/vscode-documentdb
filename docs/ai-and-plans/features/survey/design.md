@@ -36,7 +36,7 @@ behavior and `decisions.md` wins for intent.
 Stage 2 implements the stable Secondary Sidebar contribution, available from VS Code 1.106.0;
 the extension's minimum is now 1.109.0 (D0028, superseding D0018).
 Iteration 4 enables the shared code switch in all modes (D0021).
-The `documentdb.surveyInvitationActive` context is false on activation and true only for a
+The `documentdb-survey-invitation-active` context is false on activation and true only for a
 live invitation. It gates the view and its otherwise empty container. No HTML or webview
 state is restored at startup. The presenter opens the view with `preserveFocus: true`, uses
 `show(true)` once resolved. Presentation relies on the VS Code reveal API without a timeout
@@ -138,7 +138,7 @@ override is ignored outside Development. Telemetry independently requires
 
 Development activation registers `_DocumentDB: Survey: Simulate Milestone` and
 `_DocumentDB: Survey: Reset State`, with no category and palette visibility gated by
-`documentdb.isDevelopmentMode`. Simulation calls the real activity entry point with
+`documentdb-development-mode`. Simulation calls the real activity entry point with
 `connection`. Reset closes the invitation, invalidates pending work, waits for queued writes,
 deletes `SURVEY_STATE_KEY`, and clears local reservation and session suppression. It can
 clear a development opt-out without reloading; there is still no production reset command.

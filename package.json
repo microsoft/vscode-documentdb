@@ -236,10 +236,10 @@
     "views": {
       "documentdb-survey": [
         {
-          "id": "documentdb.surveyInvitation",
+          "id": "documentdb-survey-invitation",
           "name": "%survey.viewTitle%",
           "type": "webview",
-          "when": "documentdb.surveyInvitationActive",
+          "when": "documentdb-survey-invitation-active",
           "icon": "resources/vscode-documentdb-sidebar-icon.svg"
         }
       ],
@@ -1551,15 +1551,15 @@
       "commandPalette": [
         {
           "command": "vscode-documentdb.debug.survey.showInvitation",
-          "when": "documentdb.isDevelopmentMode"
+          "when": "documentdb-development-mode"
         },
         {
           "command": "vscode-documentdb.debug.survey.simulateMilestone",
-          "when": "documentdb.isDevelopmentMode"
+          "when": "documentdb-development-mode"
         },
         {
           "command": "vscode-documentdb.debug.survey.resetState",
-          "when": "documentdb.isDevelopmentMode"
+          "when": "documentdb-development-mode"
         },
         {
           "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",

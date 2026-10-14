@@ -16,8 +16,9 @@ import {
 import { isSurveyRating, type SurveyOpenFormResult } from '../surveyTypes';
 import { buildSurveyInvitationHtml, type SurveyInvitationStrings } from './surveyInvitationHtml';
 
-export const SURVEY_VIEW_ID = 'documentdb.surveyInvitation';
-export const SURVEY_ACTIVE_CONTEXT = 'documentdb.surveyInvitationActive';
+// Hyphenated: the VSIX inspection reads bare `name.ext` manifest strings as file paths.
+export const SURVEY_VIEW_ID = 'documentdb-survey-invitation';
+export const SURVEY_ACTIVE_CONTEXT = 'documentdb-survey-invitation-active';
 const PRIVACY_STATEMENT_URL = 'https://go.microsoft.com/fwlink/?LinkId=521839';
 
 interface Invitation {
