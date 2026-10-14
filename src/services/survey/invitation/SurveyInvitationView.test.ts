@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import * as semver from 'semver';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { SurveyService } from '../SurveyService';
@@ -20,20 +23,20 @@ import {
     SurveyInvitationView,
 } from './SurveyInvitationView';
 
-jest.mock('vscode', (): object => ({
+vi.mock('vscode', (): object => ({
     Uri: {
         joinPath: (...parts: unknown[]): object => ({ toString: (): string => parts.join('/') }),
         parse: (url: string): string => url,
     },
-    commands: { executeCommand: jest.fn() },
+    commands: { executeCommand: vi.fn() },
     window: {
-        registerWebviewViewProvider: jest.fn((): object => ({ dispose: jest.fn() })),
-        showErrorMessage: jest.fn(),
+        registerWebviewViewProvider: vi.fn((): object => ({ dispose: vi.fn() })),
+        showErrorMessage: vi.fn(),
     },
-    env: { language: 'en', openExternal: jest.fn() },
+    env: { language: 'en', openExternal: vi.fn() },
     l10n: { t: (value: string): string => value },
 }));
-jest.mock('@microsoft/vscode-azext-utils', (): object => ({ callWithTelemetryAndErrorHandling: jest.fn() }));
+vi.mock('@microsoft/vscode-azext-utils', (): object => ({ callWithTelemetryAndErrorHandling: vi.fn() }));
 
 function event<T>(): { fire: (value: T) => void; listen: vscode.Event<T> } {
     const listeners = new Set<(value: T) => unknown>();
@@ -57,14 +60,14 @@ function createView(): {
     message: (message: unknown) => void;
     visibility: (visible: boolean) => void;
     close: () => void;
-    postMessage: jest.Mock;
-    show: jest.Mock;
+    postMessage: Mock;
+    show: Mock;
 } {
     const messages = event<unknown>();
     const visibility = event<void>();
     const dispose = event<void>();
-    const postMessage = jest.fn().mockResolvedValue(true);
-    const show = jest.fn();
+    const postMessage = vi.fn().mockResolvedValue(true);
+    const show = vi.fn();
     const view = {
         visible: true,
         show,
@@ -99,9 +102,9 @@ const request: SurveyInvitationRequest = {
 
 function callbacks(): SurveyInvitationCallbacks {
     return {
-        onVisible: jest.fn(),
-        onOpenForm: jest.fn().mockResolvedValue('failed'),
-        onChoice: jest.fn().mockResolvedValue(undefined),
+        onVisible: vi.fn(),
+        onOpenForm: vi.fn().mockResolvedValue('failed'),
+        onChoice: vi.fn().mockResolvedValue(undefined),
     };
 }
 
@@ -116,12 +119,12 @@ function harness(): {
     flags: { permitted: boolean };
     events: SurveyTelemetryEvent[];
     state: () => SurveyPersistedState;
-    open: jest.Mock<Promise<boolean>, [string]>;
+    open: Mock<(...args: [string]) => Promise<boolean>>;
     storage: SurveyStateStorage;
 } {
     const presenter = new SurveyInvitationView(vscode.Uri.parse('extension:'));
     const surface = createView();
-    jest.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+    vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
         if (command === `${SURVEY_VIEW_ID}.open`) presenter.resolveWebviewView(surface.view);
         return undefined;
     });
@@ -130,7 +133,7 @@ function harness(): {
     ]);
     const storage: SurveyStateStorage = {
         get: <T>(key: string): T | undefined => values.get(key) as T | undefined,
-        update: jest.fn(async (key: string, value: unknown): Promise<void> => {
+        update: vi.fn(async (key: string, value: unknown): Promise<void> => {
             values.set(key, value);
         }),
     };
@@ -144,7 +147,7 @@ function harness(): {
             events.push(event);
         },
     });
-    const open = jest.fn<Promise<boolean>, [string]>().mockResolvedValue(false);
+    const open = vi.fn<(...args: [string]) => Promise<boolean>>().mockResolvedValue(false);
     const service = new SurveyService({
         storage,
         machineId: 'test',
@@ -170,16 +173,16 @@ function harness(): {
 
 describe('SurveyInvitationView', (): void => {
     let originalOutputChannel: typeof ext.outputChannel;
-    let trace: jest.Mock<void, [string]>;
+    let trace: Mock<(...args: [string]) => void>;
 
     beforeEach((): void => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         originalOutputChannel = ext.outputChannel;
-        trace = jest.fn<void, [string]>();
+        trace = vi.fn<(...args: [string]) => void>();
         ext.outputChannel = { trace } as unknown as typeof ext.outputChannel;
     });
     afterEach((): void => {
-        jest.useRealTimers();
+        vi.useRealTimers();
         ext.outputChannel = originalOutputChannel;
     });
 
@@ -197,7 +200,8 @@ describe('SurveyInvitationView', (): void => {
             string,
             string
         >;
-        expect(manifest.engines.vscode).toBe('^1.106.0');
+        // The stable secondarySidebar contribution needs VS Code 1.106 or later (D0018).
+        expect(semver.gte(semver.minVersion(manifest.engines.vscode) ?? '0.0.0', '1.106.0')).toBe(true);
         expect(manifest.enabledApiProposals).toBeUndefined();
         expect(manifest.contributes.viewsContainers.secondarySidebar).toContainEqual(
             expect.objectContaining({ id: 'documentdb-survey', title: '%survey.containerTitle%' }),
@@ -225,7 +229,7 @@ describe('SurveyInvitationView', (): void => {
             extensionUri: vscode.Uri.parse('extension:'),
             subscriptions: [],
         } as unknown as vscode.ExtensionContext;
-        const service = { setPresenter: jest.fn() } as unknown as SurveyService;
+        const service = { setPresenter: vi.fn() } as unknown as SurveyService;
         await initializeSurveyInvitation(context, service);
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('setContext', SURVEY_ACTIVE_CONTEXT, false);
         expect(vscode.window.registerWebviewViewProvider).toHaveBeenCalledWith(
@@ -233,7 +237,7 @@ describe('SurveyInvitationView', (): void => {
             expect.any(SurveyInvitationView),
         );
         expect(service.setPresenter).toHaveBeenCalled();
-        const presenter = jest.mocked(service.setPresenter).mock.calls[0][0] as SurveyInvitationView;
+        const presenter = vi.mocked(service.setPresenter).mock.calls[0][0] as SurveyInvitationView;
         const surface = createView();
         presenter.resolveWebviewView(surface.view);
         expect(surface.view.webview.html).toBe('');
@@ -264,16 +268,16 @@ describe('SurveyInvitationView', (): void => {
     });
 
     it('does not wait for view resolution or visibility, and records a late impression only when rendered and visible', async (): Promise<void> => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         const h = harness();
-        jest.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
+        vi.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
         h.service.recordSurveyActivity('connection');
         await h.service.whenIdle();
         expect(h.service.getDebugStatus().invitationActive).toBe(true);
         expect(h.state().nextEligibleAt).toBeUndefined();
         expect(h.events.some((event): boolean => event.name === 'survey.presentationDeferred')).toBe(false);
-        expect(jest.getTimerCount()).toBe(0);
-        jest.advanceTimersByTime(5000);
+        expect(vi.getTimerCount()).toBe(0);
+        vi.advanceTimersByTime(5000);
         h.surface.visibility(false);
         h.presenter.resolveWebviewView(h.surface.view);
         h.surface.message({ type: 'rendered' });
@@ -296,7 +300,7 @@ describe('SurveyInvitationView', (): void => {
             const pendingCommand = new Promise<void>((resolve): void => {
                 complete = resolve;
             });
-            jest.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
                 if (command === delayedCommand) await pendingCommand;
                 return undefined;
             });
@@ -317,7 +321,7 @@ describe('SurveyInvitationView', (): void => {
     it('cleans up a view closed while the reveal command is pending', async (): Promise<void> => {
         const h = harness();
         let complete!: () => void;
-        jest.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
             if (command === `${SURVEY_VIEW_ID}.open`) {
                 h.presenter.resolveWebviewView(h.surface.view);
                 await new Promise<void>((resolve): void => {
@@ -341,7 +345,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('returns undefined when reveal fails', async (): Promise<void> => {
         const h = harness();
-        jest.mocked(vscode.commands.executeCommand).mockRejectedValue(new Error('unavailable'));
+        vi.mocked(vscode.commands.executeCommand).mockRejectedValue(new Error('unavailable'));
         expect(await h.presenter.present(request, callbacks())).toBeUndefined();
         expect(trace.mock.calls).toEqual([['[Survey] Presentation deferred: reveal failed.']]);
         h.presenter.dispose();
@@ -476,7 +480,7 @@ describe('SurveyInvitationView', (): void => {
         await h.service.whenIdle();
         const original = h.storage.update.bind(h.storage);
         let complete!: () => void;
-        jest.mocked(h.storage.update).mockImplementationOnce(async (key, value): Promise<void> => {
+        vi.mocked(h.storage.update).mockImplementationOnce(async (key, value): Promise<void> => {
             await new Promise<void>((resolve): void => {
                 complete = resolve;
             });
@@ -547,7 +551,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('privacy uses openExternal without survey callbacks, telemetry, or URL payloads', async (): Promise<void> => {
         const h = harness();
-        jest.mocked(vscode.env.openExternal).mockResolvedValue(true);
+        vi.mocked(vscode.env.openExternal).mockResolvedValue(true);
         h.service.recordSurveyActivity('connection');
         await h.service.whenIdle();
         const before = h.events.length;
@@ -568,11 +572,11 @@ describe('SurveyInvitationView', (): void => {
         'notifies on privacy opening %s without changing lifecycle or telemetry, and keeps the link usable',
         async (failure): Promise<void> => {
             const h = harness();
-            jest.mocked(vscode.env.openExternal).mockResolvedValue(true);
+            vi.mocked(vscode.env.openExternal).mockResolvedValue(true);
             if (failure === 'false') {
-                jest.mocked(vscode.env.openExternal).mockResolvedValueOnce(false);
+                vi.mocked(vscode.env.openExternal).mockResolvedValueOnce(false);
             } else {
-                jest.mocked(vscode.env.openExternal).mockRejectedValueOnce(new Error('secret-browser-details'));
+                vi.mocked(vscode.env.openExternal).mockRejectedValueOnce(new Error('secret-browser-details'));
             }
             h.service.recordSurveyActivity('connection');
             await h.service.whenIdle();
@@ -580,17 +584,17 @@ describe('SurveyInvitationView', (): void => {
             await flush();
             const before = h.events.length;
             const stateBefore = { ...h.state() };
-            const writesBefore = jest.mocked(h.storage.update).mock.calls.length;
+            const writesBefore = vi.mocked(h.storage.update).mock.calls.length;
             const htmlBefore = h.surface.view.webview.html;
             h.surface.message({ type: 'privacy' });
             await flush();
-            expect(jest.mocked(vscode.window.showErrorMessage).mock.calls).toEqual([
+            expect(vi.mocked(vscode.window.showErrorMessage).mock.calls).toEqual([
                 ["We couldn't open the Privacy Statement in your browser. Please try again."],
             ]);
             expect(h.surface.view.webview.html).toBe(htmlBefore);
             expect(h.service.getDebugStatus().invitationActive).toBe(true);
             expect(h.state()).toEqual(stateBefore);
-            expect(jest.mocked(h.storage.update).mock.calls).toHaveLength(writesBefore);
+            expect(vi.mocked(h.storage.update).mock.calls).toHaveLength(writesBefore);
             expect(h.surface.postMessage).not.toHaveBeenCalled();
             h.surface.message({ type: 'privacy' });
             await flush();

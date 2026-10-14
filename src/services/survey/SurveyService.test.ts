@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import * as vscode from 'vscode';
 import { DEBUG_SURVEY_ALWAYS_INVITE_ENV } from '../../debug/debugOverrides';
 import { ext } from '../../extensionVariables';
@@ -24,14 +26,17 @@ import { EMPTY_SURVEY_STATE, type SurveyStateStorage } from './surveyState';
 import { SurveyTelemetry, SurveyTelemetryProperty, type SurveyTelemetryEvent } from './surveyTelemetry';
 import { SURVEY_FEATURE_AREAS, SURVEY_GATE_ORDER, type SurveyPersistedState } from './surveyTypes';
 
-jest.mock('vscode', (): object => ({
-    ...jest.requireActual<typeof vscode>('../../__mocks__/vscode'),
-    ExtensionMode: { Production: 1, Development: 2, Test: 3 },
-    env: { machineId: 'test-machine', openExternal: jest.fn() },
-}));
+vi.mock(
+    'vscode',
+    async (importOriginal): Promise<object> => ({
+        ...(await importOriginal<typeof vscode>()),
+        ExtensionMode: { Production: 1, Development: 2, Test: 3 },
+        env: { machineId: 'test-machine', openExternal: vi.fn() },
+    }),
+);
 
-jest.mock('@microsoft/vscode-azext-utils', (): object => ({
-    callWithTelemetryAndErrorHandling: jest.fn(async (): Promise<void> => undefined),
+vi.mock('@microsoft/vscode-azext-utils', (): object => ({
+    callWithTelemetryAndErrorHandling: vi.fn(async (): Promise<void> => undefined),
 }));
 
 const INVITATION_ID = '12345678-abcd-4abc-8def-123456789abc';
@@ -40,7 +45,7 @@ const DAY_MS = 86_400_000;
 
 class MemoryStorage implements SurveyStateStorage {
     public readonly values = new Map<string, unknown>();
-    public readonly update = jest.fn<Promise<void>, [string, unknown]>(
+    public readonly update = vi.fn<(...args: [string, unknown]) => Promise<void>>(
         async (key, value): Promise<void> => this.write(key, value),
     );
 
@@ -85,10 +90,12 @@ interface Harness {
     service: SurveyService;
     storage: MemoryStorage;
     flags: { enabled: boolean; permitted: boolean; now: Date };
-    sink: jest.Mock<void, [SurveyTelemetryEvent]>;
-    present: jest.Mock<Promise<vscode.Disposable | undefined>, [SurveyInvitationRequest, SurveyInvitationCallbacks]>;
-    handle: { dispose: jest.Mock<void, []> };
-    openExternal: jest.Mock<Promise<boolean>, [string]>;
+    sink: Mock<(...args: [SurveyTelemetryEvent]) => void>;
+    present: Mock<
+        (...args: [SurveyInvitationRequest, SurveyInvitationCallbacks]) => Promise<vscode.Disposable | undefined>
+    >;
+    handle: { dispose: Mock<(...args: []) => void> };
+    openExternal: Mock<(...args: [string]) => Promise<boolean>>;
     events: () => string[];
     sent: (name: string) => SurveyTelemetryEvent[];
     state: () => SurveyPersistedState;
@@ -98,7 +105,7 @@ interface Harness {
 
 function createHarness(storage = new MemoryStorage(), overrides: Partial<SurveyServiceOptions> = {}): Harness {
     const flags = { enabled: true, permitted: true, now: new Date(2026, 9, 1, 10, 0) };
-    const sink = jest.fn<void, [SurveyTelemetryEvent]>();
+    const sink = vi.fn<(...args: [SurveyTelemetryEvent]) => void>();
     const config = overrides.config ?? DEFAULT_SURVEY_POLICY_CONFIG;
     const telemetry = new SurveyTelemetry({
         campaignId: config.campaignId,
@@ -106,10 +113,10 @@ function createHarness(storage = new MemoryStorage(), overrides: Partial<SurveyS
         isPermitted: (): boolean => flags.permitted,
         sink,
     });
-    const openExternal = jest.fn<Promise<boolean>, [string]>().mockResolvedValue(true);
-    const handle = { dispose: jest.fn<void, []>() };
-    const present = jest
-        .fn<Promise<vscode.Disposable | undefined>, [SurveyInvitationRequest, SurveyInvitationCallbacks]>()
+    const openExternal = vi.fn<(...args: [string]) => Promise<boolean>>().mockResolvedValue(true);
+    const handle = { dispose: vi.fn<(...args: []) => void>() };
+    const present = vi
+        .fn<(...args: [SurveyInvitationRequest, SurveyInvitationCallbacks]) => Promise<vscode.Disposable | undefined>>()
         .mockResolvedValue(handle);
     let invitationNumber = 0;
     const service = new SurveyService({
@@ -328,11 +335,11 @@ describe('SurveyService', (): void => {
     });
 
     beforeEach((): void => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     afterEach((): void => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     it.each([
@@ -356,7 +363,7 @@ describe('SurveyService', (): void => {
         { level: 'bogus', writes: 0 },
         { level: 'throwing', writes: 0 },
     ])('uses default feedback permission end to end for $level', async ({ level, writes }): Promise<void> => {
-        jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration(level, level === 'throwing'));
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration(level, level === 'throwing'));
         const storage = new MemoryStorage();
         const service = new SurveyService({ storage, machineId: 'test-machine', isSurveyEnabled: (): boolean => true });
         service.recordSurveyActivity('connection');
@@ -519,7 +526,7 @@ describe('SurveyService', (): void => {
     });
 
     it('honors a failed opt-out write in memory for the session and reports it once', async (): Promise<void> => {
-        const report = jest.fn<void, []>();
+        const report = vi.fn<(...args: []) => void>();
         const h = createHarness(new MemoryStorage(), { reportOptOutSaveFailure: report });
         await invite(h);
         h.storage.update.mockRejectedValueOnce(new Error('Storage unavailable'));
@@ -539,7 +546,7 @@ describe('SurveyService', (): void => {
     });
 
     it('surfaces a failed opt-out save even when permission is withdrawn during the save, without events', async (): Promise<void> => {
-        const report = jest.fn<void, []>();
+        const report = vi.fn<(...args: []) => void>();
         const h = createHarness(new MemoryStorage(), { reportOptOutSaveFailure: report });
         await invite(h);
         h.callbacks().onVisible();
@@ -564,7 +571,7 @@ describe('SurveyService', (): void => {
         const h = createHarness();
         await invite(h);
         h.storage.update.mockRejectedValueOnce(new Error('Storage unavailable'));
-        const notification = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        const notification = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
         await h.callbacks().onChoice('neverAgain');
         expect(notification).toHaveBeenCalledTimes(1);
         expect(notification).toHaveBeenCalledWith(
@@ -578,9 +585,7 @@ describe('SurveyService', (): void => {
         const h = createHarness();
         await invite(h);
         h.storage.update.mockRejectedValueOnce(new Error('Storage unavailable'));
-        const notification = jest
-            .spyOn(vscode.window, 'showErrorMessage')
-            .mockRejectedValue(new Error('UI unavailable'));
+        const notification = vi.spyOn(vscode.window, 'showErrorMessage').mockRejectedValue(new Error('UI unavailable'));
         await expect(h.callbacks().onChoice('neverAgain')).resolves.toBeUndefined();
         expect(notification).toHaveBeenCalledTimes(1);
         expect(h.handle.dispose).toHaveBeenCalledTimes(1);
@@ -901,7 +906,7 @@ describe('SurveyService', (): void => {
 
     it('never throws for a throwing storage read, telemetry sink, or kill-switch getter', async (): Promise<void> => {
         const storage = new MemoryStorage();
-        jest.spyOn(storage, 'get').mockImplementation((): never => {
+        vi.spyOn(storage, 'get').mockImplementation((): never => {
             throw new Error('Read unavailable');
         });
         const h = createHarness(storage);
@@ -1044,11 +1049,11 @@ describe('SurveyService', (): void => {
 
 describe('survey local diagnostics', (): void => {
     let originalOutputChannel: typeof ext.outputChannel;
-    let trace: jest.Mock<void, [string]>;
+    let trace: Mock<(...args: [string]) => void>;
 
     beforeEach((): void => {
         originalOutputChannel = ext.outputChannel;
-        trace = jest.fn<void, [string]>();
+        trace = vi.fn<(...args: [string]) => void>();
         ext.outputChannel = { trace } as unknown as typeof ext.outputChannel;
     });
 
@@ -1070,7 +1075,7 @@ describe('survey local diagnostics', (): void => {
                 optedOutAt: '2026-09-30T00:00:00Z',
             });
         }
-        const now = jest.fn((): Date => new Date(2026, 9, 1, 10));
+        const now = vi.fn((): Date => new Date(2026, 9, 1, 10));
         const h = createHarness(storage, { now });
         h.flags.enabled = condition !== 'disabled';
         h.flags.permitted = condition !== 'permission';
@@ -1297,7 +1302,7 @@ describe('survey local diagnostics', (): void => {
     });
 
     it('traces opt-out persistence failure without a save retry', async (): Promise<void> => {
-        const reportOptOutSaveFailure = jest.fn<void, []>();
+        const reportOptOutSaveFailure = vi.fn<(...args: []) => void>();
         const h = createHarness(undefined, { reportOptOutSaveFailure });
         await invite(h);
         h.storage.update.mockRejectedValueOnce(new Error('private storage error'));
@@ -1366,8 +1371,8 @@ describe('survey singleton initialization', (): void => {
         subscriptions = [];
         originalAlwaysInvite = process.env[DEBUG_SURVEY_ALWAYS_INVITE_ENV];
         process.env[DEBUG_SURVEY_ALWAYS_INVITE_ENV] = 'false';
-        jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration('all'));
-        jest.spyOn(vscode.workspace, 'onDidChangeConfiguration').mockReturnValue({ dispose: jest.fn() });
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration('all'));
+        vi.spyOn(vscode.workspace, 'onDidChangeConfiguration').mockReturnValue({ dispose: vi.fn() });
     });
 
     afterEach((): void => {
@@ -1379,7 +1384,7 @@ describe('survey singleton initialization', (): void => {
         } else {
             process.env[DEBUG_SURVEY_ALWAYS_INVITE_ENV] = originalAlwaysInvite;
         }
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     function context(storage: MemoryStorage, extensionMode: vscode.ExtensionMode): vscode.ExtensionContext {
@@ -1420,12 +1425,12 @@ describe('survey singleton initialization', (): void => {
         },
         { label: 'feedback permission', overrides: {}, level: 'off', invitations: 0 },
     ])('development default respects $label', async ({ overrides, level, invitations }): Promise<void> => {
-        jest.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration(level));
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration(level));
         const storage = new MemoryStorage();
         const state: SurveyPersistedState = { ...EMPTY_SURVEY_STATE, activeDayCount: 2, ...overrides };
         storage.values.set(SURVEY_STATE_KEY, state);
         const service = initializeSurveyService(context(storage, vscode.ExtensionMode.Development));
-        const present = jest.fn().mockResolvedValue({ dispose: jest.fn() });
+        const present = vi.fn().mockResolvedValue({ dispose: vi.fn() });
         service.setPresenter({ present });
         recordSurveyActivity('connection');
         await service.whenIdle();
@@ -1439,7 +1444,7 @@ describe('survey singleton initialization', (): void => {
         'always-invite enables the real service only in development, mode %s',
         async (mode): Promise<void> => {
             process.env[DEBUG_SURVEY_ALWAYS_INVITE_ENV] = 'true';
-            jest.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration('off'));
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration('off'));
             const storage = new MemoryStorage();
             storage.values.set(SURVEY_STATE_KEY, {
                 ...EMPTY_SURVEY_STATE,
@@ -1447,7 +1452,7 @@ describe('survey singleton initialization', (): void => {
                 nextEligibleAt: '2099-01-01T00:00:00Z',
             });
             const service = initializeSurveyService(context(storage, mode));
-            const present = jest.fn().mockResolvedValue({ dispose: jest.fn() });
+            const present = vi.fn().mockResolvedValue({ dispose: vi.fn() });
             service.setPresenter({ present });
             recordSurveyActivity('connection');
             await service.whenIdle();
@@ -1456,15 +1461,15 @@ describe('survey singleton initialization', (): void => {
     );
 
     it('routes configuration changes to withdrawal only for telemetry.telemetryLevel', (): void => {
-        const listener = jest.mocked(vscode.workspace.onDidChangeConfiguration);
+        const listener = vi.mocked(vscode.workspace.onDidChangeConfiguration);
         const service = initializeSurveyService(context(new MemoryStorage(), vscode.ExtensionMode.Development));
-        const handlePermissionChanged = jest.spyOn(service, 'handlePermissionChanged');
+        const handlePermissionChanged = vi.spyOn(service, 'handlePermissionChanged');
         const callback = listener.mock.calls[listener.mock.calls.length - 1][0];
-        const unrelated = { affectsConfiguration: jest.fn((): boolean => false) };
+        const unrelated = { affectsConfiguration: vi.fn((): boolean => false) };
         callback(unrelated);
         expect(handlePermissionChanged).not.toHaveBeenCalled();
         const relevant = {
-            affectsConfiguration: jest.fn((key: string): boolean => key === 'telemetry.telemetryLevel'),
+            affectsConfiguration: vi.fn((key: string): boolean => key === 'telemetry.telemetryLevel'),
         };
         callback(relevant);
         expect(relevant.affectsConfiguration).toHaveBeenCalledWith('telemetry.telemetryLevel');
@@ -1475,7 +1480,7 @@ describe('survey singleton initialization', (): void => {
         expect(getSurveyService()).toBeUndefined();
         expect((): void => recordSurveyActivity('connection')).not.toThrow();
         const service = initializeSurveyService(context(new MemoryStorage(), vscode.ExtensionMode.Development));
-        jest.spyOn(service, 'recordSurveyActivity').mockImplementation((): never => {
+        vi.spyOn(service, 'recordSurveyActivity').mockImplementation((): never => {
             throw new Error('Unexpected failure');
         });
         expect((): void => recordSurveyActivity('connection')).not.toThrow();

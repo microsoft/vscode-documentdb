@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { ext } from '../../extensionVariables';
 import { traceSurvey } from './surveyDiagnostics';
 
@@ -19,15 +21,15 @@ describe('survey diagnostics safety', (): void => {
 
     it('does not format or throw before the output channel is initialized', (): void => {
         ext.outputChannel = undefined as unknown as typeof ext.outputChannel;
-        const message = jest.fn((): string => '[Survey] Test.');
+        const message = vi.fn((): string => '[Survey] Test.');
         expect((): void => traceSurvey(message)).not.toThrow();
         expect(message).not.toHaveBeenCalled();
     });
 
     it('uses only the trace level on the existing output channel', (): void => {
-        const trace = jest.fn();
-        const info = jest.fn();
-        const error = jest.fn();
+        const trace = vi.fn();
+        const info = vi.fn();
+        const error = vi.fn();
         ext.outputChannel = { trace, info, error } as unknown as typeof ext.outputChannel;
         traceSurvey((): string => '[Survey] Test.');
         expect(trace.mock.calls).toEqual([['[Survey] Test.']]);
@@ -36,7 +38,7 @@ describe('survey diagnostics safety', (): void => {
     });
 
     it('contains formatting and logging failures', (): void => {
-        const trace = jest.fn((): never => {
+        const trace = vi.fn((): never => {
             throw new Error('logger unavailable');
         });
         ext.outputChannel = { trace } as unknown as typeof ext.outputChannel;

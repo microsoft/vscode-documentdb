@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 
 import { isFeedbackPermitted } from '../../utils/feedbackPermission';
@@ -41,16 +43,16 @@ interface FrameworkContext {
 
 let frameworkContext: FrameworkContext;
 
-jest.mock('@microsoft/vscode-azext-utils', (): object => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', (): object => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName: string, callback: (context: FrameworkContext) => void): Promise<void> => {
             callback(frameworkContext);
         },
     ),
 }));
 
-jest.mock('../../utils/feedbackPermission', (): object => ({
-    isFeedbackPermitted: jest.fn(),
+vi.mock('../../utils/feedbackPermission', (): object => ({
+    isFeedbackPermitted: vi.fn(),
 }));
 
 const INVITATION_ID = '12345678-abcd-4abc-8def-123456789abc';
@@ -146,8 +148,8 @@ const EVENT_CASES: readonly EventCase[] = [
 
 describe('SurveyTelemetry', (): void => {
     let permitted: boolean;
-    let permission: jest.MockedFunction<() => boolean>;
-    let sink: jest.MockedFunction<SurveyTelemetrySink>;
+    let permission: MockedFunction<() => boolean>;
+    let sink: MockedFunction<SurveyTelemetrySink>;
     let telemetry: SurveyTelemetry;
 
     function createTelemetry(): SurveyTelemetry {
@@ -160,16 +162,16 @@ describe('SurveyTelemetry', (): void => {
     }
 
     beforeEach((): void => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         permitted = true;
-        permission = jest.fn((): boolean => permitted);
-        sink = jest.fn();
+        permission = vi.fn((): boolean => permitted);
+        sink = vi.fn();
         telemetry = createTelemetry();
         frameworkContext = {
             telemetry: { properties: {}, measurements: {}, suppressIfSuccessful: true },
             errorHandling: { suppressDisplay: false, rethrow: true },
         };
-        jest.mocked(isFeedbackPermitted).mockReturnValue(false);
+        vi.mocked(isFeedbackPermitted).mockReturnValue(false);
     });
 
     it.each(EVENT_CASES)('emits the exact $label schema with campaign and policy', (eventCase): void => {
@@ -584,7 +586,7 @@ describe('SurveyTelemetry', (): void => {
             policyVersion: COMMON_PROPERTIES.surveyPolicyVersion,
             sink,
         });
-        const feedbackPermission = jest.mocked(isFeedbackPermitted);
+        const feedbackPermission = vi.mocked(isFeedbackPermitted);
         expect(instance.reportCohortEntry('connection')).toBe(false);
         feedbackPermission.mockReturnValue(true);
         expect(instance.reportCohortEntry('connection')).toBe(true);
@@ -597,7 +599,7 @@ describe('SurveyTelemetry', (): void => {
     });
 
     it('swallows rejected framework promises from the default sink', async (): Promise<void> => {
-        jest.mocked(callWithTelemetryAndErrorHandling).mockRejectedValueOnce(new Error('Telemetry unavailable'));
+        vi.mocked(callWithTelemetryAndErrorHandling).mockRejectedValueOnce(new Error('Telemetry unavailable'));
         const instance = new SurveyTelemetry({
             campaignId: COMMON_PROPERTIES.surveyCampaignId,
             policyVersion: COMMON_PROPERTIES.surveyPolicyVersion,

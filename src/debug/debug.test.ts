@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import * as vscode from 'vscode';
 import * as packageJson from '../../package.json';
 import { getSurveyService, recordSurveyActivity, type SurveyService } from '../services/survey/SurveyService';
@@ -15,29 +17,27 @@ import {
     SIMULATE_SURVEY_MILESTONE_COMMAND,
 } from './registerDebugCommands';
 
-jest.mock('vscode', (): object => ({
+vi.mock('vscode', (): object => ({
     ExtensionMode: { Production: 1, Development: 2, Test: 3 },
     commands: {
-        executeCommand: jest.fn().mockResolvedValue(undefined),
-        registerCommand: jest.fn((): object => ({ dispose: jest.fn() })),
+        executeCommand: vi.fn().mockResolvedValue(undefined),
+        registerCommand: vi.fn((): object => ({ dispose: vi.fn() })),
     },
-    window: { showInformationMessage: jest.fn(), showWarningMessage: jest.fn() },
+    window: { showInformationMessage: vi.fn(), showWarningMessage: vi.fn() },
 }));
-jest.mock('../services/survey/SurveyService', (): object => ({
-    getSurveyService: jest.fn(),
-    recordSurveyActivity: jest.fn(),
+vi.mock('../services/survey/SurveyService', (): object => ({
+    getSurveyService: vi.fn(),
+    recordSurveyActivity: vi.fn(),
 }));
 
 beforeEach((): void => {
-    jest.clearAllMocks();
-    jest.replaceProperty(process, 'env', {
-        ...process.env,
-        [DEBUG_SURVEY_ALWAYS_INVITE_ENV]: 'true',
-    });
+    vi.clearAllMocks();
+    vi.stubEnv(DEBUG_SURVEY_ALWAYS_INVITE_ENV, 'true');
 });
 
 afterEach((): void => {
-    jest.restoreAllMocks();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
 });
 
 it.each([vscode.ExtensionMode.Production, vscode.ExtensionMode.Test])(
@@ -67,10 +67,10 @@ it('reads development overrides and enables always-invite only for the exact val
 });
 
 it('registers development commands that use the real milestone entry point and service reset', async (): Promise<void> => {
-    const resetState = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
-    const whenIdle = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
-    const showInvitationForDebug = jest.fn<Promise<void>, [string]>().mockResolvedValue(undefined);
-    const getDebugStatus = jest.fn().mockReturnValue({
+    const resetState = vi.fn<(...args: []) => Promise<void>>().mockResolvedValue(undefined);
+    const whenIdle = vi.fn<(...args: []) => Promise<void>>().mockResolvedValue(undefined);
+    const showInvitationForDebug = vi.fn<(...args: [string]) => Promise<void>>().mockResolvedValue(undefined);
+    const getDebugStatus = vi.fn().mockReturnValue({
         alwaysInvite: false,
         enabled: false,
         feedbackPermitted: true,
@@ -78,7 +78,7 @@ it('registers development commands that use the real milestone entry point and s
         presenterRegistered: true,
         invitationActive: false,
     });
-    jest.mocked(getSurveyService).mockReturnValue({
+    vi.mocked(getSurveyService).mockReturnValue({
         resetState,
         whenIdle,
         getDebugStatus,
@@ -91,7 +91,7 @@ it('registers development commands that use the real milestone entry point and s
     await registerDebugCommands(context);
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('setContext', DEVELOPMENT_MODE_CONTEXT, true);
     expect(context.subscriptions).toHaveLength(3);
-    const registrations = jest.mocked(vscode.commands.registerCommand).mock.calls;
+    const registrations = vi.mocked(vscode.commands.registerCommand).mock.calls;
     expect(registrations.map(([command]): string => command)).toEqual([
         SHOW_SURVEY_INVITATION_COMMAND,
         SIMULATE_SURVEY_MILESTONE_COMMAND,

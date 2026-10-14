@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { LEGACY_SURVEY_STATE_KEYS, SURVEY_STATE_KEY } from './surveyConfig';
 import {
     EMPTY_SURVEY_STATE,
@@ -19,7 +21,7 @@ const NEXT_ELIGIBLE_AT = new Date('2026-10-21T12:34:56.789Z');
 class MemorySurveyStorage implements SurveyStateStorage {
     public readonly values = new Map<string, unknown>();
     public readonly getCalls: string[] = [];
-    public readonly update = jest.fn<Promise<void>, [string, unknown]>(
+    public readonly update = vi.fn<(...args: [string, unknown]) => Promise<void>>(
         async (key, value): Promise<void> => this.write(key, value),
     );
 
@@ -168,7 +170,7 @@ describe('SurveyStateStore', (): void => {
 
     it('starts empty when the state read throws', (): void => {
         const storage = new MemorySurveyStorage();
-        const get = jest.spyOn(storage, 'get').mockImplementation((): never => {
+        const get = vi.spyOn(storage, 'get').mockImplementation((): never => {
             throw new Error('Read failed');
         });
 

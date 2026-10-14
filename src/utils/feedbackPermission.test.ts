@@ -3,16 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as vscode from 'vscode';
 
 import { affectsFeedbackPermission, isFeedbackPermitted, TELEMETRY_LEVEL_SETTING } from './feedbackPermission';
 
 describe('isFeedbackPermitted', (): void => {
-    const get = jest.fn<unknown, [string]>();
+    const get = vi.fn<(...args: [string]) => unknown>();
 
     beforeEach((): void => {
         get.mockReset();
-        jest.spyOn(vscode.workspace, 'getConfiguration')
+        vi.spyOn(vscode.workspace, 'getConfiguration')
             .mockClear()
             .mockReturnValue({
                 get,
@@ -20,7 +22,7 @@ describe('isFeedbackPermitted', (): void => {
     });
 
     afterEach((): void => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     it('permits feedback only at telemetry level all', (): void => {
@@ -56,7 +58,7 @@ describe('isFeedbackPermitted', (): void => {
     });
 
     it('denies feedback when getConfiguration throws', (): void => {
-        jest.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((): never => {
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((): never => {
             throw new Error('Configuration unavailable');
         });
 
@@ -85,7 +87,7 @@ describe('isFeedbackPermitted', (): void => {
 
 describe('affectsFeedbackPermission', (): void => {
     it.each([true, false])('passes through affectsConfiguration returning %p', (affected): void => {
-        const affectsConfiguration = jest.fn<boolean, [string]>().mockReturnValue(affected);
+        const affectsConfiguration = vi.fn<(...args: [string]) => boolean>().mockReturnValue(affected);
         const event: vscode.ConfigurationChangeEvent = { affectsConfiguration };
 
         expect(affectsFeedbackPermission(event)).toBe(affected);
@@ -95,7 +97,7 @@ describe('affectsFeedbackPermission', (): void => {
 
     it('requests a permission recheck when affectsConfiguration throws', (): void => {
         const event: vscode.ConfigurationChangeEvent = {
-            affectsConfiguration: jest.fn((): never => {
+            affectsConfiguration: vi.fn((): never => {
                 throw new Error('Configuration change unavailable');
             }),
         };
