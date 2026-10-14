@@ -48,10 +48,16 @@ concurrency:
     group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && format('label-{0}', github.event.label.name) || 'run' }}"
     cancel-in-progress: true
 
+# The default for a job without its own `permissions`; plan and report add the writes they need.
+permissions:
+    contents: read
+
+# Timeouts are about 3 to 4 times the first standard-tier run's durations, at least 5 minutes.
 jobs:
     plan:
         name: 'Plan: choose checks'
         runs-on: ubuntu-latest
+        timeout-minutes: 5
         permissions:
             contents: read
             issues: write
@@ -163,6 +169,7 @@ jobs:
         needs: [plan]
         if: needs.plan.outputs.tier != 'skip'
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         permissions:
             contents: read
         outputs:
@@ -214,6 +221,7 @@ jobs:
         needs: [plan]
         if: needs.plan.outputs.tier != 'skip'
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         permissions:
             contents: read
         steps:
@@ -235,6 +243,7 @@ jobs:
         needs: [plan]
         if: needs.plan.outputs.packages == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 6
         permissions:
             contents: read
         steps:
@@ -246,6 +255,7 @@ jobs:
     vsix-inspection:
         name: 'VSIX: inspect contents'
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         needs: [plan, build-and-package]
         if: needs.plan.outputs.tier == 'standard' || needs.plan.outputs.tier == 'full'
         permissions:
@@ -359,6 +369,7 @@ jobs:
     vsix-activation:
         name: 'VSIX: activate in VS Code'
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         needs: [plan, build-and-package]
         if: needs.plan.outputs.tier == 'standard' || needs.plan.outputs.tier == 'full'
         permissions:
@@ -420,6 +431,7 @@ jobs:
     build-and-package:
         name: 'VSIX: build'
         runs-on: ubuntu-latest
+        timeout-minutes: 5
         needs: [plan]
         permissions:
             contents: read
@@ -467,6 +479,7 @@ jobs:
         needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
         if: always() && needs.plan.result == 'success' && needs.plan.outputs.tier != 'skip' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
+        timeout-minutes: 5
         permissions:
             contents: read
             pull-requests: write
@@ -535,6 +548,7 @@ jobs:
     gate:
         name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Build & Package (label event, not run)' || 'Build & Package' }}
         runs-on: ubuntu-latest
+        timeout-minutes: 5
         needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
         if: always() && needs.plan.outputs.tier != 'skip'
         permissions: {}
