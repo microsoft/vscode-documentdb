@@ -34,8 +34,9 @@ const QUALITY = [
     ['lint', 'ESLint', 'Run `npm run lint` and fix the reported issues.'],
     ['prettier', 'Prettier formatting', 'Run `npm run prettier-fix` to auto-format, then commit.'],
 ];
-const FIX = { success: 'Nothing to fix', missing: 'Did not run; see the L0 row above' };
+const FIX = { success: 'Nothing to fix', missing: 'Did not run; see the Static checks row above' };
 const OUTCOMES = { success: 'passed', failure: 'failed', cancelled: 'cancelled' };
+const INSPECTION = 'VSIX: inspect contents';
 
 const short = (sha) => sha.slice(0, 7);
 
@@ -48,8 +49,8 @@ function fromSteps(outcomes, jobResult) {
 }
 
 /**
- * One row per layer. The plan job sets every path flag in the full tier and none in the fast tier,
- * so a flag alone says whether its check was meant to run.
+ * One row per check, named like its CI job or step. The plan job sets every path flag in the full
+ * tier and none in the fast tier, so a flag alone says whether its check was meant to run.
  */
 function layers({ tier, flags, jobs, steps }) {
     const vsix = tier === 'standard' || tier === 'full';
@@ -61,24 +62,30 @@ function layers({ tier, flags, jobs, steps }) {
         return { layer, result, why: result === 'not run' ? 'an earlier job or step failed' : why };
     };
     return [
-        row('L0 build, lint and unit tests', true, () => fromSteps([jobs.quality]), 'every push'),
-        row('Package checks', flags.packages, () => fromSteps([jobs.packages]), scoped(flags.packages, PACKAGES)),
-        row('L1 VSIX inspection', vsix, () => fromSteps([steps.inspect], jobs.l1), tierWhy ?? 'ready PR'),
+        row('Static checks', true, () => fromSteps([jobs.static]), 'every push'),
+        row('Unit tests', true, () => fromSteps([jobs.unit]), 'every push'),
         row(
-            'L1 negative controls and verification tool tests',
+            'npm packages: verify tarballs',
+            flags.packages,
+            () => fromSteps([jobs.packages]),
+            scoped(flags.packages, PACKAGES),
+        ),
+        row(INSPECTION, vsix, () => fromSteps([steps.inspect], jobs.l1), tierWhy ?? 'ready PR'),
+        row(
+            'VSIX: self-test of the checks',
             flags.verification,
             () => fromSteps([steps.prove, steps['verification-tests']], jobs.l1),
             scoped(flags.verification, VERIFICATION),
         ),
-        row('L3 activation', vsix, () => fromSteps([steps.activation], jobs.l3), tierWhy ?? 'ready PR'),
+        row('VSIX: activate in VS Code', vsix, () => fromSteps([steps.activation], jobs.l3), tierWhy ?? 'ready PR'),
         row(
-            'L3 negative control',
+            'VSIX: self-test of the activation check',
             flags.verification,
             () => fromSteps([steps['prove-activation']], jobs.l3),
             scoped(flags.verification, VERIFICATION),
         ),
         row(
-            'Unbundled `/host` probe',
+            'Webview host in unbundled extensions',
             flags.webviewPackage,
             () => fromSteps([steps['host-probe']], jobs.l3),
             scoped(flags.webviewPackage, WEBVIEW_PACKAGE),
@@ -138,10 +145,10 @@ function ciReport(input) {
             ? fullRun({ sha: input.headSha, result, requester: input.requester, runUrl: input.runUrl })
             : null;
     const lastFull = thisRun ?? input.lastFull;
-    const l1 = rows.find((row) => row.layer === 'L1 VSIX inspection');
+    const inspection = rows.find((row) => row.layer === INSPECTION);
     const size =
         input.sizeSection?.trim() ||
-        `### Build size\n\nNot measured: ${l1.result === 'skipped' ? l1.why : 'L1 did not write a size section; see the workflow run'}.`;
+        `### Build size\n\nNot measured: ${inspection.result === 'skipped' ? inspection.why : 'the VSIX inspection did not write a size section; see the workflow run'}.`;
     const lines = [
         MARKER,
         ...(lastFull ? [lastFullMarker(lastFull)] : []),

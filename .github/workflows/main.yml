@@ -25,7 +25,7 @@ on:
     workflow_dispatch:
         inputs:
             enforce_full_run:
-                description: 'Run every layer (full tier); otherwise L0 only (fast tier)'
+                description: 'Run every check (full tier); otherwise static checks and unit tests only (fast tier)'
                 required: false
                 type: boolean
                 default: false
@@ -50,7 +50,7 @@ concurrency:
 
 jobs:
     plan:
-        name: Plan CI tier
+        name: 'Plan: choose checks'
         runs-on: ubuntu-latest
         permissions:
             contents: read
@@ -133,7 +133,7 @@ jobs:
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   sparse-checkout: build/verification
-            - name: Mark the CI report as running
+            - name: Mark the PR report as running
               if: steps.plan.outputs.tier != 'skip' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
               env:
@@ -231,7 +231,7 @@ jobs:
               run: npm test
 
     package-checks:
-        name: Package checks
+        name: 'npm packages: verify tarballs'
         needs: [plan]
         if: needs.plan.outputs.packages == 'true'
         runs-on: ubuntu-latest
@@ -244,7 +244,7 @@ jobs:
               run: npm run verify:packages
 
     vsix-inspection:
-        name: VSIX inspection (L1)
+        name: 'VSIX: inspect contents'
         runs-on: ubuntu-latest
         needs: [plan, build-and-package]
         if: needs.plan.outputs.tier == 'standard' || needs.plan.outputs.tier == 'full'
@@ -272,18 +272,18 @@ jobs:
                   test "${#packages[@]}" -eq 1
                   echo "VSIX=${packages[0]}" >> "$GITHUB_ENV"
                   npm run verify:vsix -- "${packages[0]}" --manifest-report verification-artifacts/l1-manifest-report.json
-            - name: Prove the inspection's failures (negative controls)
+            - name: 'Self-test: inspection rejects broken VSIXs'
               id: prove
               if: needs.plan.outputs.verification == 'true'
               run: npm run prove:vsix -- "$VSIX"
             - name: Build workspace packages (for the verification tool tests)
               if: needs.plan.outputs.verification == 'true'
               run: npm run build --workspaces --if-present
-            - name: Test verification tooling
+            - name: Test the verification tools
               id: verification-tests
               if: needs.plan.outputs.verification == 'true'
               run: npm run test:verification
-            - name: Upload L1 manifest report
+            - name: Upload the inspection manifest report
               id: l1-report
               if: always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -306,7 +306,7 @@ jobs:
               if: always() && steps.base-cache.outcome == 'success' && steps.base-cache.outputs.cache-matched-key
               run: mv build-sizes.json base-sizes.json
 
-            - name: 📐 Collect L1 graph sizes
+            - name: 📐 Collect graph sizes
               if: always() && hashFiles('verification-artifacts/l1-manifest-report.json') != ''
               run: node build/verification/build-size-report.cjs verification-artifacts/l1-manifest-report.json build-sizes.json
 
@@ -349,7 +349,7 @@ jobs:
                         core.warning(warning.message, { title: warning.title });
                       }
 
-            - name: Upload the build size section for the CI report
+            - name: Upload the build size section for the PR report
               if: always() && hashFiles('size-report.md') != ''
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
@@ -357,7 +357,7 @@ jobs:
                   path: size-report.md
 
     vsix-activation:
-        name: Installed VSIX activation (L3)
+        name: 'VSIX: activate in VS Code'
         runs-on: ubuntu-latest
         needs: [plan, build-and-package]
         if: needs.plan.outputs.tier == 'standard' || needs.plan.outputs.tier == 'full'
@@ -388,14 +388,14 @@ jobs:
                   echo "VSIX=${packages[0]}" >> "$GITHUB_ENV"
                   xvfb-run -a npm run test:vsix -- "${packages[0]}"
 
-            - name: Prove partial-activation failure (negative control)
+            - name: 'Self-test: activation check catches a swallowed error'
               id: prove-activation
               if: needs.plan.outputs.verification == 'true'
               env:
                   TMPDIR: ${{ runner.temp }}
               run: xvfb-run -a npm run prove:activation -- "$VSIX"
 
-            - name: Probe the packed vscode-ext-webview /host in unbundled extensions (S3-F02)
+            - name: Webview host in unbundled extensions
               id: host-probe
               if: needs.plan.outputs.webview-package == 'true'
               env:
@@ -418,7 +418,7 @@ jobs:
 
     # Standard and full tiers; pushes to `main` and `release/**` feed the build size cache.
     build-and-package:
-        name: Package VSIX
+        name: 'VSIX: build'
         runs-on: ubuntu-latest
         needs: [plan]
         permissions:
@@ -463,7 +463,7 @@ jobs:
                   if-no-files-found: error
 
     report:
-        name: CI report
+        name: PR report
         needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
         if: always() && needs.plan.result == 'success' && needs.plan.outputs.tier != 'skip' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
@@ -481,7 +481,7 @@ jobs:
               with:
                   name: Size-report-${{ github.run_id }}
                   path: size-report
-            - name: Post or update the CI report comment
+            - name: Post or update the PR report comment
               uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
               env:
                   NEEDS: ${{ toJSON(needs) }}
@@ -504,7 +504,8 @@ jobs:
                         headSha: pr.head.sha,
                         runUrl: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
                         jobs: {
-                          quality: [needs['static-checks'].result, needs['unit-tests'].result].find((result) => result !== 'success') ?? 'success',
+                          static: needs['static-checks'].result,
+                          unit: needs['unit-tests'].result,
                           packages: needs['package-checks'].result,
                           l1: needs['vsix-inspection'].result,
                           l3: needs['vsix-activation'].result,
@@ -538,7 +539,7 @@ jobs:
         if: always() && needs.plan.outputs.tier != 'skip'
         permissions: {}
         steps:
-            - name: Require every layer the tier expected
+            - name: Require every check the tier expected
               env:
                   TIER: ${{ needs.plan.outputs.tier }}
                   PACKAGES: ${{ needs.plan.outputs.packages }}
@@ -555,13 +556,13 @@ jobs:
                     echo "$1: $2"
                     if [[ "$2" != success ]]; then echo "::error::$1 was expected to pass in the ${TIER:-unknown} tier: $2"; failed=1; fi
                   }
-                  expect 'Plan CI tier' "$PLAN"
+                  expect 'Plan: choose checks' "$PLAN"
                   expect 'Static checks' "$STATIC"
                   expect 'Unit tests' "$UNIT"
-                  if [[ "$PACKAGES" == true ]]; then expect 'Package checks' "$PACKAGE_CHECKS"; fi
+                  if [[ "$PACKAGES" == true ]]; then expect 'npm packages: verify tarballs' "$PACKAGE_CHECKS"; fi
                   if [[ "$TIER" == standard || "$TIER" == full ]]; then
-                    expect 'Package VSIX' "$PACKAGE"
-                    expect 'VSIX inspection (L1)' "$L1"
-                    expect 'Installed VSIX activation (L3)' "$L3"
+                    expect 'VSIX: build' "$PACKAGE"
+                    expect 'VSIX: inspect contents' "$L1"
+                    expect 'VSIX: activate in VS Code' "$L3"
                   fi
                   exit "$failed"

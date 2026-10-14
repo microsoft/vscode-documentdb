@@ -27,7 +27,7 @@ const passedSteps = {
     'prove-activation': 'success',
     'host-probe': 'success',
 };
-const allJobs = (result) => ({ quality: result, packages: result, l1: result, l3: result });
+const allJobs = (result) => ({ static: result, unit: result, packages: result, l1: result, l3: result });
 const noFlags = { packages: false, webviewPackage: false, verification: false };
 const allFlags = { packages: true, webviewPackage: true, verification: true };
 const size = '### Build size\n\nNo page, activation, VSIX or other bundle size changed.';
@@ -48,15 +48,15 @@ function input(overrides) {
 }
 
 function rows(body) {
-    return body.match(/^\| (?!Layer|Check|-).*$/gm).slice(0, 8);
+    return body.match(/^\| (?!Layer|Check|-).*$/gm).slice(0, 9);
 }
 
-test('A draft PR runs L0 only and says why every other layer was skipped', () => {
+test('A draft PR runs static checks and unit tests only, and says why every other check was skipped', () => {
     const { body, result } = ciReport(
         input({
             tier: 'fast',
             reason: 'draft PR',
-            jobs: { quality: 'success', packages: 'skipped', l1: 'skipped', l3: 'skipped' },
+            jobs: { static: 'success', unit: 'success', packages: 'skipped', l1: 'skipped', l3: 'skipped' },
             steps: { l10n: 'success', lint: 'success', prettier: 'success' },
             sizeSection: null,
         }),
@@ -66,13 +66,14 @@ test('A draft PR runs L0 only and says why every other layer was skipped', () =>
         body.startsWith(`${MARKER}\n## ✅ CI passed: fast tier (draft PR)\n\nCommit \`abcdef0\`, [workflow run](`),
     );
     assert.deepEqual(rows(body), [
-        '| L0 build, lint and unit tests | ✅ passed | every push |',
-        '| Package checks | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
-        '| L1 VSIX inspection | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
-        '| L1 negative controls and verification tool tests | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
-        '| L3 activation | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
-        '| L3 negative control | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
-        '| Unbundled `/host` probe | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| Static checks | ✅ passed | every push |',
+        '| Unit tests | ✅ passed | every push |',
+        '| npm packages: verify tarballs | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| VSIX: inspect contents | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| VSIX: self-test of the checks | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| VSIX: activate in VS Code | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| VSIX: self-test of the activation check | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| Webview host in unbundled extensions | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
         '| E2E | ⏭️ not available yet | arrives with the E2E iteration (full tier) |',
     ]);
     assert.ok(body.includes('| Layer | Result | Ran or skipped because |'));
@@ -96,13 +97,13 @@ test('A ready PR names the paths behind each path-scoped check and keeps the las
         }),
     );
     assert.equal(result, 'passed');
-    assert.deepEqual(rows(body).slice(1, 7), [
-        '| Package checks | ✅ passed | `packages/**`, `package-lock.json` or the CI workflow changed |',
-        '| L1 VSIX inspection | ✅ passed | ready PR |',
-        '| L1 negative controls and verification tool tests | ⏭️ skipped | no change to `build/verification/**`, `build/vite/**`, the Vite configs, `package-lock.json` or the CI workflow |',
-        '| L3 activation | ✅ passed | ready PR |',
-        '| L3 negative control | ⏭️ skipped | no change to `build/verification/**`, `build/vite/**`, the Vite configs, `package-lock.json` or the CI workflow |',
-        '| Unbundled `/host` probe | ⏭️ skipped | no change to `packages/vscode-ext-webview/**`, `package-lock.json` or the CI workflow |',
+    assert.deepEqual(rows(body).slice(2, 8), [
+        '| npm packages: verify tarballs | ✅ passed | `packages/**`, `package-lock.json` or the CI workflow changed |',
+        '| VSIX: inspect contents | ✅ passed | ready PR |',
+        '| VSIX: self-test of the checks | ⏭️ skipped | no change to `build/verification/**`, `build/vite/**`, the Vite configs, `package-lock.json` or the CI workflow |',
+        '| VSIX: activate in VS Code | ✅ passed | ready PR |',
+        '| VSIX: self-test of the activation check | ⏭️ skipped | no change to `build/verification/**`, `build/vite/**`, the Vite configs, `package-lock.json` or the CI workflow |',
+        '| Webview host in unbundled extensions | ⏭️ skipped | no change to `packages/vscode-ext-webview/**`, `package-lock.json` or the CI workflow |',
     ]);
     assert.ok(body.includes(`<!-- last-full: ${lastFull.sha} passed -->`));
     assert.ok(body.includes('Last full run: ✅ passed on `1234567`.'));
@@ -125,9 +126,13 @@ test('A full run runs every layer, records itself and drops the request line', (
     assert.ok(body.includes('## ✅ CI passed: full tier (full run requested by @octocat for abcdef0)'));
     assert.deepEqual(
         rows(body)
-            .slice(0, 7)
+            .slice(0, 8)
             .map((row) => row.split(' | ').slice(1).join(' | ')),
-        ['✅ passed | every push |', ...Array.from({ length: 6 }, () => '✅ passed | full run requested |')],
+        [
+            '✅ passed | every push |',
+            '✅ passed | every push |',
+            ...Array.from({ length: 6 }, () => '✅ passed | full run requested |'),
+        ],
     );
     assert.deepEqual(parseLastFull(body), { sha: headSha, result: 'passed', runUrl: input().runUrl });
     assert.ok(!body.includes('**Full run:**'));
@@ -167,45 +172,59 @@ test('Failures show the fix hint, and a check after a failed step is reported as
     const { body, result } = ciReport(
         input({
             flags: { ...noFlags, verification: true },
-            jobs: { ...allJobs('failure'), packages: 'skipped', l3: 'success' },
+            jobs: { ...allJobs('failure'), unit: 'success', packages: 'skipped', l3: 'success' },
             steps: { ...passedSteps, lint: 'failure', inspect: 'failure', prove: '', 'verification-tests': '' },
         }),
     );
     assert.equal(result, 'failed');
     assert.ok(body.startsWith(`${MARKER}\n## ❌ CI failed: standard tier (ready PR)`));
-    assert.deepEqual(rows(body).slice(0, 4), [
-        '| L0 build, lint and unit tests | ❌ failed | every push |',
-        '| Package checks | ⏭️ skipped | no change to `packages/**`, `package-lock.json` or the CI workflow |',
-        '| L1 VSIX inspection | ❌ failed | ready PR |',
-        '| L1 negative controls and verification tool tests | ⚠️ not run | an earlier job or step failed |',
+    assert.deepEqual(rows(body).slice(0, 5), [
+        '| Static checks | ❌ failed | every push |',
+        '| Unit tests | ✅ passed | every push |',
+        '| npm packages: verify tarballs | ⏭️ skipped | no change to `packages/**`, `package-lock.json` or the CI workflow |',
+        '| VSIX: inspect contents | ❌ failed | ready PR |',
+        '| VSIX: self-test of the checks | ⚠️ not run | an earlier job or step failed |',
     ]);
     assert.ok(body.includes('| ESLint | ❌ Failed | Run `npm run lint` and fix the reported issues. |'));
     assert.ok(body.includes('| Localization (`l10n`) | ✅ Passed | Nothing to fix |'));
 });
 
-test('Jobs skipped after an earlier failure are not run, and L1 says why sizes are missing', () => {
+test('Packaging that failed while the other jobs passed leaves the VSIX checks not run, and says why sizes are missing', () => {
     const { body, result } = ciReport(
         input({
-            jobs: { quality: 'failure', packages: 'skipped', l1: 'skipped', l3: 'skipped' },
-            steps: { l10n: 'success', lint: 'success', prettier: 'failure' },
+            jobs: { static: 'success', unit: 'success', packages: 'skipped', l1: 'skipped', l3: 'skipped' },
+            steps: { l10n: 'success', lint: 'success', prettier: 'success' },
             sizeSection: null,
         }),
     );
     assert.equal(result, 'failed');
-    assert.ok(rows(body).includes('| L1 VSIX inspection | ⚠️ not run | an earlier job or step failed |'));
-    assert.ok(body.includes('Not measured: L1 did not write a size section; see the workflow run.'));
+    assert.ok(rows(body).includes('| VSIX: inspect contents | ⚠️ not run | an earlier job or step failed |'));
+    assert.ok(rows(body).includes('| VSIX: activate in VS Code | ⚠️ not run | an earlier job or step failed |'));
+    assert.ok(body.includes('Not measured: the VSIX inspection did not write a size section; see the workflow run.'));
+});
+
+test('A failed unit test run fails the report and leaves the code quality table as it was', () => {
+    const { body, result } = ciReport(input({ jobs: { ...allJobs('success'), unit: 'failure', packages: 'skipped' } }));
+    assert.equal(result, 'failed');
+    assert.deepEqual(rows(body).slice(0, 2), [
+        '| Static checks | ✅ passed | every push |',
+        '| Unit tests | ❌ failed | every push |',
+    ]);
+    assert.ok(body.includes('| ESLint | ✅ Passed | Nothing to fix |'));
+    const missing = ciReport(input({ jobs: { ...allJobs('success'), static: 'cancelled' }, steps: {} })).body;
+    assert.ok(missing.includes('| ESLint | ⏭️ Not run | Did not run; see the Static checks row above |'));
 });
 
 test('A cancelled run reports cancelled layers', () => {
     const { body, result } = ciReport(
         input({
-            jobs: { quality: 'success', packages: 'skipped', l1: 'cancelled', l3: 'cancelled' },
+            jobs: { static: 'success', unit: 'success', packages: 'skipped', l1: 'cancelled', l3: 'cancelled' },
             steps: { l10n: 'success', lint: 'success', prettier: 'success', inspect: 'success' },
         }),
     );
     assert.equal(result, 'cancelled');
     assert.ok(body.includes('## 🚫 CI cancelled: standard tier (ready PR)'));
-    assert.ok(rows(body).includes('| L3 activation | 🚫 cancelled | ready PR |'));
+    assert.ok(rows(body).includes('| VSIX: activate in VS Code | 🚫 cancelled | ready PR |'));
 });
 
 test('A running report hides the previous results, names them and keeps the last full run', () => {
