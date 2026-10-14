@@ -34,6 +34,14 @@ CI runs in tiers (see [decision 0002](docs/ai-and-plans/features/build-and-test-
 - **Full run on a pull request:** add the `ci:full-requested` label. It runs every check once on the current commit, and the workflow removes the label.
 - **Manual dispatch:** `workflow_dispatch` runs every check with `enforce_full_run`, and only the first tier without it.
 
+How to use it:
+
+1. **Open the PR as a draft** while the work is still moving. Every push gets the quick checks, and the automatic Copilot review stays off.
+2. **Click Ready for review** when you hand it over. That run, and every push after it, adds the packaging and VSIX checks. The required `Merge gate` check passes only when every check expected for that run passed.
+3. **Add the `ci:full-requested` label** when you want every check, regardless of which files changed: for example, after changing CI or build configuration, or before a release. The label works on drafts too. Add it again to repeat the run on a later commit.
+
+Other labels (such as `on-hold`) do not run CI, and the PR keeps its last `Merge gate` result.
+
 Each same-repository pull request gets one CI report comment, updated on every run: which checks ran and why, code quality and build size.
 
 ### 1.3 Releases
