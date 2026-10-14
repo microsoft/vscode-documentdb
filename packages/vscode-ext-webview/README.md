@@ -407,7 +407,8 @@ import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/
 
 The package is ESM-only, and `./host` imports `vscode` with a static `import`.
 VS Code supplies `vscode` to ES modules through an asynchronous loader hook, so
-how your extension loads `./host` matters:
+how your extension loads `./host` matters. Bundled extensions using esbuild,
+webpack, or Vite need no special handling.
 
 | How the extension loads `./host`                                                   | Supported                        |
 | ---------------------------------------------------------------------------------- | -------------------------------- |
@@ -424,6 +425,16 @@ unresponsive. In unbundled CommonJS code, load `./host` with `await import()`
 (for example inside `activate`). If TypeScript compiles that code, use `module`
 `node16` or `nodenext`: `module: commonjs` rewrites `import()` to `require()`.
 `require()` of the shared entry (`.`), which does not import `vscode`, works.
+
+```ts
+export async function activate(): Promise<void> {
+  const { openWebview } = await import('@microsoft/vscode-ext-webview/host');
+  // Register or call openWebview here.
+}
+```
+
+The `/webview` and `/react` entries run in the webview and are bundled with the
+webview application.
 
 The unbundled rows were verified on VS Code 1.109.0 and 1.115.0 (Linux) with the
 packed package. DocumentDB for VS Code ships the bundled form and checks it in CI.
