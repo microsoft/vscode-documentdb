@@ -5,17 +5,26 @@ status: active
 created: 2026-10-14
 ---
 
-# Modernization: decisions
+# Build and test stack: decisions
 
 > Standing decisions about the build, bundling and test stack that later work builds on, the
 > E2E iteration in particular. Decisions taken while executing the stages stay in
 > [build-and-test-stack.md](./iterations/01-modernization/build-and-test-stack.md), next to the stage they shaped.
 
-| #    | Decision                                                      | Status   | Changed from the proposal?                                                             | Date       | PR   |
-| ---- | ------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- | ---------- | ---- |
-| 0001 | Workspace packages ship ESM only                              | Accepted | Accepted as proposed                                                                   | 2026-10-14 | #880 |
-| 0002 | CI runs verification in tiers and reports what it ran and why | Accepted | **Operator added the layer report, the one-shot request label and the merged comment** | 2026-10-14 | #880 |
-| 0003 | Negative controls run when their check changes, not every PR  | Accepted | Accepted as proposed                                                                   | 2026-10-14 | #880 |
+| #    | Decision                                                      | Status              | Changed from the proposal?                                                               | Date       | PR   |
+| ---- | ------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Workspace packages ship ESM only                              | Accepted            | Accepted as proposed                                                                     | 2026-10-14 | #880 |
+| 0002 | CI runs verification in tiers and reports what it ran and why | Accepted            | **Operator added the layer report, the one-shot request label and the merged comment**   | 2026-10-14 | #880 |
+| 0003 | Negative controls run when their check changes, not every PR  | Accepted            | Accepted as proposed                                                                     | 2026-10-14 | #880 |
+| 0004 | Use Vite for the host and webviews                            | Accepted            | The documented host-only esbuild fallback was not needed                                 | 2026-09-30 | #880 |
+| 0005 | Replace Jest with Vitest in one sweep                         | Accepted            | Adopted for pipeline and ESM unification, not for speed                                  | 2026-10-02 | #880 |
+| 0006 | Split each view with ordered named groups                     | Accepted            | Rolldown groups replaced planned `manualChunks`; ordering came from the build experiment | 2026-10-05 | #880 |
+| 0007 | Run the extension host as ESM through a thin loader           | Accepted            | Accepted as proposed                                                                     | 2026-10-05 | #880 |
+| 0008 | Keep the TypeScript server plugin CommonJS                    | Accepted            | The shipped bundle moved to the root and a runtime stub supplies the package path        | 2026-10-01 | #880 |
+| 0009 | Keep SlickGrid during modernization                           | Accepted            | Replacement remains a separate later iteration                                           | 2026-09-30 | #880 |
+| 0010 | Run L3 on GitHub Actions only                                 | Accepted            | ADO keeps only offline checks that can run before signing                                | 2026-09-30 | #880 |
+| 0011 | Keep L2-dev runner-free in this iteration                     | Accepted            | CI wiring stays with the E2E iteration                                                   | 2026-10-05 | #880 |
+| 0012 | Use one branch and one PR, merging `main`                     | Accepted (modified) | The 2026-10-07 decision restored a merge from `main` before the PR merges                | 2026-10-01 | #880 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
@@ -225,3 +234,280 @@ every other PR it repeats a proof already made, at the cost of CI time.
 ### Consequences
 
 - The ZIP writer in `build/verification/vsix.cjs` stays; the controls still need it.
+
+---
+
+## 0004: Use Vite for the host and webviews (reconstructed)
+
+**Status:** Accepted · **Date:** 2026-09-30
+**Evidence:** [J.6, the three real options](./iterations/01-modernization/build-and-test-stack.md#j6-the-three-real-options)
+
+### Question
+
+Should the extension standardize on Vite for both build targets, use the Azure Tools esbuild stack,
+or split the host and webviews across two bundlers?
+
+### Decision
+
+Use Vite for both the extension host and the webviews. Keep esbuild as a documented host-only
+fallback if Vite cannot handle the host's entries, externals, or CommonJS interop.
+
+### Reasoning
+
+The measured output reduction came from the Vite build, and the primary product problem was the
+webview bundle. The Azure Tools esbuild stack had no webview story, was an alpha engineering
+package, and carried Mocha choices that conflicted with the Vitest direction. One bundler also keeps
+the migration's "do it once" goal intact. The Vite host implementation later handled the recorded
+fallback triggers, so the fallback was not used.
+
+### Rejected alternatives
+
+- **All esbuild through `@microsoft/vscode-azext-eng`:** no webview solution, an alpha shared
+  package, and an opinionated Mocha-based stack.
+- **esbuild for the host and Vite for webviews:** retained only as a fallback because it creates two
+  configuration surfaces.
+- **Split the Webpack webviews first:** throwaway work because Vite's splitting mechanism was the
+  intended end state.
+
+---
+
+## 0005: Replace Jest with Vitest in one sweep (reconstructed)
+
+**Status:** Accepted · **Date:** 2026-10-02
+**Evidence:** [Stage 2: Jest to Vitest, in one sweep](./iterations/01-modernization/build-and-test-stack.md#stage-2-jest-to-vitest-in-one-sweep)
+
+### Question
+
+Should the repository keep Jest, run Jest and Vitest indefinitely, or convert the full unit-test
+surface before the bundler stages?
+
+### Decision
+
+Convert the extension and all six workspace-package projects to Vitest in one stage, then remove
+Jest and its configuration. Use one root Vitest config with per-project environments and includes.
+
+### Reasoning
+
+Vitest supplied an ESM-native test net before the package and bundler changes and shared Vite's
+transform pipeline. Jest already needed workarounds for an ESM workspace package, and the test
+surface had grown 48 percent in seven weeks. The plan explicitly adopted Vitest for pipeline
+unification, not as a speed claim; the completed suite was slower at the retained worker cap.
+
+### Rejected alternatives
+
+- **Keep a mixed Jest and Vitest end state:** the overlap existed only as migration scaffolding and
+  was removed in the same stage.
+- **Delay conversion until after the bundler:** later conversion would increase the growing sweep
+  and leave weaker ESM coverage during Stages 3 to 5.
+- **Keep Jest and convert later arrivals by hand:** rejected for the migration branch in favor of
+  the recorded mechanical conversion recipe.
+
+---
+
+## 0006: Split each view with ordered named groups (reconstructed)
+
+**Status:** Accepted · **Date:** 2026-10-05
+**Evidence:** [Stage 4: webviews to Vite, split per view](./iterations/01-modernization/build-and-test-stack.md#stage-4-webviews-to-vite-split-per-view)
+
+### Question
+
+How should shared dependencies be split without pulling Monaco or SlickGrid into lightweight
+webviews?
+
+### Decision
+
+Load each registered view through a literal lazy import. Use named Rolldown groups in this order:
+`preload-helper`, `react`, `fluentui`, `slickgrid`, then `monaco`. Do not add a catch-all vendor
+group.
+
+### Reasoning
+
+Rolldown recursively captures dependencies of grouped modules. Capturing the most shared modules
+first prevents a later group from absorbing React or Vite's preload helper. The order preserves the
+lazy boundaries that keep Monaco and SlickGrid out of Local Quick Start and Atlas Credentials.
+
+### Rejected alternatives
+
+- **Keep one `views.js` chunk:** it made every view load Monaco and SlickGrid.
+- **Capture Monaco first:** the experiment absorbed React and the preload helper, which made the
+  entry statically import Monaco.
+- **Add a catch-all vendor group:** a group shared by the entry and a lazy view could hoist the
+  view's dependencies into the entry graph.
+
+---
+
+## 0007: Run the extension host as ESM through a thin loader (reconstructed)
+
+**Status:** Accepted · **Date:** 2026-10-05
+**Evidence:** [Stage 5: extension host to ESM and Vite](./iterations/01-modernization/build-and-test-stack.md#stage-5-extension-host-to-esm-and-vite)
+
+### Question
+
+What module format and entry shape should VS Code load after the host leaves Webpack?
+
+### Decision
+
+Declare the extension package as ESM and point its manifest at `main.mjs`. Keep `main.ts` as a thin
+loader that starts timing, top-level awaits `import('./src/extension')`, and delegates activation
+and deactivation.
+
+### Reasoning
+
+ESM is the direction required by the selected Vite host build. The dynamic boundary keeps the
+extension implementation in its own chunk and makes `mainFileLoad` measure real loading work;
+the old hoisted CommonJS load happened before timing began.
+
+### Rejected alternatives
+
+- **A static import in the loader:** it would evaluate before the timing boundary.
+- **A CommonJS Webpack host fallback:** it could not reproduce the ESM entry, top-level await, and
+  `.mjs` worker without forking product behavior.
+- **An esbuild host fallback:** retained in the plan but not used because Vite handled the host.
+
+---
+
+## 0008: Keep the TypeScript server plugin CommonJS (reconstructed)
+
+**Status:** Accepted · **Date:** 2026-10-01
+**Evidence:** [Stage 5: extension host to ESM and Vite](./iterations/01-modernization/build-and-test-stack.md#stage-5-extension-host-to-esm-and-vite)
+
+### Question
+
+Should the TypeScript server plugin follow the extension host into ESM?
+
+### Decision
+
+No. Build `playgroundTsPlugin.cjs` as CommonJS and export the callable plugin factory directly.
+At activation, create a small CommonJS package under
+`node_modules/documentdb-playground-ts-plugin` that forwards to the root bundle.
+
+### Reasoning
+
+TypeScript loads the contributed plugin with `require()` and calls the module itself as the factory;
+an ESM default export does not provide that shape. The runtime stub is required because vsce omits
+`node_modules/**` from the VSIX.
+
+### Rejected alternatives
+
+- **Emit the plugin as ESM:** TypeScript would receive a namespace or default-export wrapper instead
+  of the callable factory it expects.
+- **Ship the plugin directly at the contributed `node_modules` path:** vsce always excludes that
+  tree, so the path must be created at runtime.
+
+---
+
+## 0009: Keep SlickGrid during modernization (reconstructed)
+
+**Status:** Accepted · **Date:** 2026-09-30
+**Evidence:** [B4: why SlickGrid stays in this iteration](./iterations/01-modernization/build-and-test-stack.md#b4-why-slickgrid-stays-in-this-iteration)
+
+### Question
+
+Should the Collection View grid be replaced while the build and test stack changes?
+
+### Decision
+
+Keep SlickGrid for this iteration. Isolate it in its own JavaScript chunk and measure that chunk,
+then replace the grid in a separate iteration.
+
+### Reasoning
+
+Both changes affect Collection View, so combining them would make regressions difficult to
+attribute. Replacing the grid before Vitest would also require writing its component behavior tests
+twice. Per-view splitting creates a measurable baseline without coupling the migrations.
+
+### Rejected alternatives
+
+- **Replace SlickGrid during the stack migration:** too many simultaneous changes in Collection
+  View to attribute failures.
+- **Replace it before the Vitest stage:** the behavior tests would be written once for Jest and
+  again for Vitest.
+
+---
+
+## 0010: Run L3 on GitHub Actions only (reconstructed)
+
+**Status:** Accepted · **Date:** 2026-09-30
+**Evidence:** [The automated checks](./iterations/01-modernization/build-and-test-stack.md#the-automated-checks)
+
+### Question
+
+Should installed-VSIX activation run in both GitHub Actions and the official ADO build?
+
+### Decision
+
+Run L3 in GitHub Actions only. Keep ADO's pre-signing verification to offline checks such as L1.
+
+### Reasoning
+
+L3 downloads VS Code and launches it under a display. The official ADO build may run under
+`DefaultDeny` network isolation, which blocks VS Code and Marketplace downloads. GitHub Actions can
+provide network access and Xvfb, while ADO still inspects the exact artifact before signing.
+
+### Rejected alternatives
+
+- **Run L3 in ADO:** the equivalent Cosmos DB pipeline failed when network isolation blocked the
+  required downloads.
+
+---
+
+## 0011: Keep L2-dev runner-free in this iteration (reconstructed)
+
+**Status:** Accepted · **Date:** 2026-10-05
+**Evidence:** [The automated checks](./iterations/01-modernization/build-and-test-stack.md#the-automated-checks)
+
+### Question
+
+Should the source-scenario harness add a new Playwright test project and CI lane during the build
+migration?
+
+### Decision
+
+No. Serve typed scenarios through the Vite dev server and let agents and reviewers drive them with
+the integrated browser tools. Add no `@playwright/test` dependency or new test runner in this
+iteration.
+
+### Reasoning
+
+L2-dev exists for rapid access to named UI states without a host, backend, or Docker. Vite removes
+the stale-disk-bundle problem from the parked harness, while the shared typed fixture core prevents
+silent RPC drift. CI wiring and the final browser-runner choice belong to the E2E iteration.
+
+### Rejected alternatives
+
+- **Port the parked standalone Playwright project as-is:** it would retain a second runner and a
+  bespoke page when Vite and Vitest can provide the future home.
+- **Add `@playwright/test` and CI now:** explicitly deferred to the E2E iteration so this iteration
+  does not fragment the test stack again.
+
+---
+
+## 0012: Use one branch and one PR, merging `main` (reconstructed)
+
+**Status:** Accepted (modified) · **Date:** 2026-10-01
+**Evidence:** [Ground rules](./iterations/01-modernization/build-and-test-stack.md#ground-rules)
+
+### Question
+
+Should modernization land stage by stage, and should the long-lived branch rebase or merge when it
+updates from `main`?
+
+### Decision
+
+Keep all stages on `dev/tnaum/modernization` in one draft PR to `main`. Bring in eligible `main`
+commits with merge commits, not rebases, and regenerate conflicted lockfiles with the repository
+Node and npm versions. The 2026-10-07 modification restored a final `main` merge before #880 merges.
+
+### Reasoning
+
+No intermediate stage reaches `main` or users. The combined gates review the integrated migration,
+while normal releases from `main` remain unblocked until the modernization is ready. The lockfile
+quarantine rule avoids importing versions unavailable to the ADO feed immediately before release.
+
+### Rejected alternatives
+
+- **Separate per-stage PRs:** explicitly excluded by the one-branch, one-PR operator decision.
+- **Rebase the branch:** the ground rule requires merge commits; one rebase onto `v0.11.0` was an
+  exception after a fresh dependency broke the ADO build.
+- **Merge the newest `main` regardless of dependency age:** rejected after the same-day relaxation
+  was reversed because release builds use the quarantined ADO feed.
