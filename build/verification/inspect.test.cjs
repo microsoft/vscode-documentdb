@@ -18,13 +18,10 @@ const {
     inspectJavaScript,
     hostGraphs,
     viteChunkClosure,
-    babelConfigFileImports,
     viteViewGraph,
     viewGraphs,
     viewModules,
-    inspectKeptClassNames,
-    keptClassNames,
-    keptClassNameSites,
+    inspectKeptClassName,
     measureSizeGraphs,
     measurePackageGraphs,
     packageOf,
@@ -36,6 +33,8 @@ const files = new Map([
     ['extension/views.js', Buffer.from('export function render() {}')],
 ]);
 const viewReport = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'views.js': 'fixture' }, chunks: [] };
+const babelImportModule = './node_modules/@babel/core/lib/config/files/import.cjs';
+const monacoLoaderModule = './node_modules/monaco-editor/esm/vs/editor/common/services/editorSimpleWorker.js';
 
 test('VSIX round-trip and extraction preserve files and exclude archive metadata', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-inspect-'));
@@ -116,7 +115,7 @@ function hostFixture() {
             isEntry: true,
             imports: ['bson.mjs', 'runtime.mjs'],
             dynamicImports: [],
-            moduleIds: [babelConfigFileImports.moduleId],
+            moduleIds: [babelImportModule],
         },
         {
             name: 'playgroundTsPlugin',
@@ -269,7 +268,6 @@ test('the implementation must be a dynamic import of main, not only statically o
 
 test('dynamic runtime externals are allowed only in host-owned .mjs, not views, CJS or other packages', () => {
     const { report, bundled } = hostFixture();
-    bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
     for (const reference of ['http', 'https', 'fs/promises', 'node:test', 'vscode']) {
         bundled.set('extension/main.mjs', Buffer.from(`import('${reference}');`));
         inspectJavaScript(bundled, [report]);
@@ -296,41 +294,68 @@ test('dynamic runtime externals are allowed only in host-owned .mjs, not views, 
 });
 
 const keptClassSource = 'var UserCancelledError=class extends Error{_isUserCancelledError=!0;stepName};export{};';
-const babelLoaderSource = 'var require_import=__commonJSMin((e,m)=>{m.exports=function import_(t){return import(t)}});';
 
-test('Babel config-file allowance requires host module ownership, exact factory/helper/parameter shape and count', () => {
-    const { report, bundled } = hostFixture();
-    bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
-    inspectJavaScript(bundled, [report]);
-    for (const invalid of [
-        babelLoaderSource.replace('import(t)', 'import(other)'),
-        babelLoaderSource.replace('import(t)', 'import(`${t}`)'),
-        babelLoaderSource.replace('import_', 'loadSomething'),
-        babelLoaderSource.replace('return import(t)', 't="./missing.mjs";return import(t)'),
-        babelLoaderSource.replace('m.exports', 'other.exports'),
-        babelLoaderSource.replace('require_import', 'other_factory'),
-        babelLoaderSource.replace('__commonJSMin', 'other_wrapper'),
-        'function import_(t){return import(t)}',
-        'const t="./missing.mjs";import(t)',
-    ]) {
-        bundled.set('extension/playgroundWorker.mjs', Buffer.from(invalid));
-        assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
+/** Inspects one packaged script, with a report chunk holding `moduleIds` or, if omitted, no chunk. */
+function budgetFixture(fileName, moduleIds) {
+    const report = {
+        bundler: 'vite',
+        chunkFormat: 'module',
+        assetHashes: { [fileName]: 'fixture' },
+        chunks: moduleIds ? [{ fileName, imports: [], dynamicImports: [], moduleIds }] : [],
+    };
+    return (source) => inspectJavaScript(new Map([[`extension/${fileName}`, Buffer.from(source)]]), [report]);
+}
+
+test('nonliteral imports within the budget of a module their chunk contains pass in any shape or chunk name', () => {
+    const check = budgetFixture('any-name.mjs', ['./src/a.ts', babelImportModule]);
+    for (const source of ['import(t)', 'function f(e){return import(`${e}.js`)}', 'import(`${globalThis.x}`)']) {
+        assert.deepEqual(check(source), { 'extension/any-name.mjs': { count: 1, maximum: 1 } });
     }
-    bundled.set(
-        'extension/playgroundWorker.mjs',
-        Buffer.from(babelLoaderSource + `function extra(){${babelLoaderSource}}`),
+    // An unused budget does not fail by itself.
+    assert.deepEqual(check('import("./any-name.mjs")'), { 'extension/any-name.mjs': { count: 0, maximum: 1 } });
+    // A chunk containing several budgeted modules gets their sum.
+    budgetFixture('chunk.js', [babelImportModule, monacoLoaderModule])('import(a);import(b)');
+});
+
+test('nonliteral imports beyond the budget fail with the count and the maximum', () => {
+    assert.throws(
+        () => budgetFixture('chunk.js', [monacoLoaderModule])('import(a);function f(){return import(`${b}`)}'),
+        (error) =>
+            error.message === 'extension/chunk.js: 2 nonliteral dynamic imports exceed its nonLiteralImportBudget of 1',
     );
-    assert.throws(() => inspectJavaScript(bundled, [report]), /exceeds babelConfigFileImports allowlist/);
-    bundled.set('extension/playgroundWorker.mjs', Buffer.from(''));
-    assert.throws(() => inspectJavaScript(bundled, [report]), /expected exactly 1 babelConfigFileImports/);
-    bundled.set('extension/main.mjs', Buffer.from(babelLoaderSource));
-    assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
-    bundled.set('extension/main.mjs', Buffer.from(''));
-    bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
-    const nonHostReport = { ...report, chunks: report.chunks.filter((chunk) => chunk.name !== 'main') };
-    assert.throws(() => inspectJavaScript(bundled, [nonHostReport]), /nonliteral dynamic import cannot be verified/);
-    report.chunks[1].moduleIds = [];
-    assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
+    assert.throws(
+        () => budgetFixture('chunk.js', [babelImportModule, monacoLoaderModule])('import(a);import(b);import(c)'),
+        /chunk\.js: 3 nonliteral dynamic imports exceed its nonLiteralImportBudget of 2/,
+    );
+});
+
+test('a nonliteral import in a script no budget entry covers fails, whatever the script is named', () => {
+    for (const [fileName, moduleIds] of [
+        ['collectionView-AbC12345.js', ['./src/webviews/documentdb/collectionView/CollectionView.tsx']],
+        ['monaco-AbC12345.js', ['./node_modules/monaco-editor/esm/vs/editor/editor.api.js']],
+        // Worker names budget only scripts without a report chunk.
+        ['editor.worker-AbC12345.js', []],
+        ['css.worker-AbC12345.js', undefined],
+        ['assets/editor.worker-AbC12345.js', undefined],
+    ]) {
+        assert.throws(
+            () => budgetFixture(fileName, moduleIds)('import(t)'),
+            (error) =>
+                error.message ===
+                `extension/${fileName}: nonliteral dynamic import cannot be verified; no nonLiteralImportBudget entry covers this script`,
+        );
+    }
+});
+
+test('Monaco worker scripts, which have no report chunk, are budgeted by their packaged name', () => {
+    for (const worker of ['editor', 'json']) {
+        const check = budgetFixture(`${worker}.worker-Ab_C-12x.js`);
+        check('import(`${a}`);import(`${b}`)');
+        assert.throws(
+            () => check('import(a);import(b);import(c)'),
+            /3 nonliteral dynamic imports exceed its nonLiteralImportBudget of 2/,
+        );
+    }
 });
 
 test('manifest assets derive generic local file paths and JSON pointers, including string and object icons', () => {
@@ -483,7 +508,6 @@ test('host chunks and the CJS plugin require their own report ownership and matc
     const { createHash } = require('node:crypto');
     const host = hostFixture();
     const views = viteFixture();
-    host.bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
     host.bundled.set('extension/main.mjs', Buffer.from(keptClassSource));
     views.bundled.set('extension/views.js', Buffer.from('export function render(){}'));
     views.bundled.set('extension/codicon-fixture.ttf', Buffer.alloc(100));
@@ -549,7 +573,7 @@ test('host chunks and the CJS plugin require their own report ownership and matc
         writeVsix(filename, bundled);
         assert.throws(
             () => inspect(filename, { reports: directory }),
-            /main\.mjs: keepNames: class with member _isUserCancelledError is named "e"/,
+            /keepNames: no class named UserCancelledError in the main graph/,
         );
         bundled.set('extension/main.mjs', Buffer.from(keptClassSource));
         host.report.assetHashes['main.mjs'] = createHash('sha256')
@@ -767,157 +791,7 @@ test('Vite-owned numeric .e calls are not webpack chunk loaders', () => {
     inspectJavaScript(bundled, [report]);
 });
 
-test('Monaco module-loader allowlist is scoped to one exact template in a Vite Monaco chunk', () => {
-    const filename = 'extension/monaco-AbC12345.js';
-    const source = '(function(e,r){let t=$s.asBrowserUri(`${e}.js`).toString(!0);r(()=>import(`${t}`));});';
-    const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
-    const bundled = new Map([[filename, Buffer.from(source)]]);
-    inspectJavaScript(bundled, [report]);
-    bundled.set(filename, Buffer.from(source + source));
-    assert.throws(
-        () => inspectJavaScript(bundled, [report]),
-        /nonliteral dynamic import exceeds monacoModuleLoaderImports allowlist/,
-    );
-    for (const invalid of [
-        'import(globalThis.x)',
-        'import(`${globalThis.x}`)',
-        'import(`prefix${globalThis.x}`)',
-        'import(`${globalThis.x}suffix`)',
-        'import(`${globalThis.x}${globalThis.y}`)',
-    ]) {
-        bundled.set(filename, Buffer.from(invalid));
-        assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
-    }
-    bundled.set(filename, Buffer.from(source));
-    assert.throws(
-        () => inspectJavaScript(bundled, [{ ...report, bundler: 'webpack' }]),
-        /non-Vite bundle report; regenerate/,
-    );
-    for (const other of [
-        'extension/monaco.js',
-        'extension/assets/monaco-AbC12345.js',
-        'extension/other-AbC12345.js',
-        'extension/editor.worker-AbC12345.js',
-        'extension/json.worker-AbC12345.js',
-    ]) {
-        assert.throws(
-            () =>
-                inspectJavaScript(new Map([[other, Buffer.from(source)]]), [
-                    { ...report, assetHashes: { [other.slice('extension/'.length)]: 'fixture' } },
-                ]),
-            /nonliteral dynamic import cannot be verified/,
-        );
-    }
-    const entry = new Map(files);
-    entry.set('extension/views.js', Buffer.from('export function render() {}; ' + source));
-    assert.throws(
-        () => inspectJavaScript(entry, [{ ...viewReport, bundler: 'vite' }]),
-        /views\.js: nonliteral dynamic import cannot be verified/,
-    );
-});
-
-for (const worker of ['editor', 'json']) {
-    test(`Monaco ${worker} worker permits two reviewed loader calls, never identifiers or a third import`, () => {
-        const filename = `extension/${worker}.worker-AbC12345.js`;
-        const source = '(function(moduleId){import(`${FileAccess.asBrowserUri(`${moduleId}.js`).toString(!0)}`);});';
-        const report = {
-            bundler: 'vite',
-            chunkFormat: 'module',
-            assetHashes: { [`${worker}.worker-AbC12345.js`]: 'fixture' },
-        };
-        const bundled = new Map([[filename, Buffer.from(source)]]);
-        inspectJavaScript(bundled, [report]);
-        bundled.set(filename, Buffer.from(source.repeat(2)));
-        inspectJavaScript(bundled, [report]);
-        bundled.set(filename, Buffer.from(source.repeat(3)));
-        assert.throws(
-            () => inspectJavaScript(bundled, [report]),
-            /nonliteral dynamic import exceeds monacoModuleLoaderImports allowlist/,
-        );
-        bundled.set(filename, Buffer.from('import(`${t}`);'));
-        assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
-        bundled.set(filename, Buffer.from(source));
-        assert.throws(
-            () => inspectJavaScript(bundled, [{ ...report, bundler: 'webpack' }]),
-            /non-Vite bundle report; regenerate/,
-        );
-        const entry = new Map(files);
-        entry.set('extension/views.js', Buffer.from('export function render() {}; ' + source));
-        assert.throws(
-            () => inspectJavaScript(entry, [{ ...viewReport, bundler: 'vite' }]),
-            /views\.js: nonliteral dynamic import cannot be verified/,
-        );
-    });
-}
-
-test('Monaco loader calls require the reviewed asBrowserUri and toString member-call chain', () => {
-    const filename = 'extension/monaco-AbC12345.js';
-    const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
-    const bundled = new Map([
-        [filename, Buffer.from('function load(n){import(`${FileAccess.asBrowserUri(`${n}.js`).toString(!0)}`);}')],
-    ]);
-    inspectJavaScript(bundled, [report]);
-    for (const source of [
-        'import(`${FileAccess.asBrowserUri(`${n}.js`)}`)',
-        'import(`${FileAccess.other(`${n}.js`).toString(!0)}`)',
-        'import(`${FileAccess.asBrowserUri.toString(!0)}`)',
-        'import(`${FileAccess.asBrowserUri(`${n}.js`).other(!0)}`)',
-        'import(`${FileAccess.asBrowserUri(`${n}.js`)[toString](!0)}`)',
-        'import(`${FileAccess[asBrowserUri](`${n}.js`).toString(!0)}`)',
-        'import(`${loadModule(n)}`)',
-    ]) {
-        bundled.set(filename, Buffer.from(`function load(n){${source}}`));
-        assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
-    }
-});
-
-test('Monaco identifier provenance follows lexical ancestors, including the shipped minified block and callback', () => {
-    const filename = 'extension/monaco-AbC12345.js';
-    const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
-    for (const source of [
-        'function load(e,r){{let t=$s.asBrowserUri(`${e}.js`).toString(!0);r(()=>import(`${t}`).then(o),[],import.meta.url);}}',
-        'function load(e){let t;t=$s.asBrowserUri(`${e}.js`).toString(!0);import(`${t}`);}',
-        'function load(e){t=$s.asBrowserUri(`${e}.js`).toString(!0);import(`${t}`);}',
-        'function load(e){{var t=$s.asBrowserUri(`${e}.js`).toString(!0);}import(`${t}`);}',
-        'class Loader{$loadForeignModule(e){const renamed=Access.asBrowserUri(`${e}.js`).toString(true);return ()=>import(`${renamed}`);}}',
-    ]) {
-        inspectJavaScript(new Map([[filename, Buffer.from(source)]]), [report]);
-    }
-});
-
-test('Monaco rejects top-level shapes, unrelated bindings, shadows, sibling scopes and unreviewed reassignments', () => {
-    const filename = 'extension/monaco-AbC12345.js';
-    const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
-    const worker = '$s.asBrowserUri(`${e}.js`).toString(!0)';
-    for (const source of [
-        'const s4Proof="./missing-proof.js";import(`${s4Proof}`);',
-        `import(\`\${${worker}}\`);`,
-        'function load(){const t="./missing.js";import(`${t}`);}',
-        'function load(){import(`${t}`);}',
-        `function load(e){let t=${worker};return (t)=>import(\`\${t}\`);}`,
-        `function load(e){let t=${worker};{let t="./missing.js";import(\`\${t}\`);}}`,
-        `function load(e){let t=${worker};{let {t}=object;import(\`\${t}\`);}}`,
-        `function load(e){let t=${worker};try{}catch(t){import(\`\${t}\`);}}`,
-        `function load(e){{let t=${worker};}import(\`\${t}\`);}`,
-        `function other(e){let t=${worker};}function load(){import(\`\${t}\`);}`,
-        `function load(e){import(\`\${t}\`);let t=${worker};}`,
-        `function load(e){let t;{t=${worker};}import(\`\${t}\`);}`,
-        `function load(e){let t=${worker};t="./missing.js";import(\`\${t}\`);}`,
-        `function load(e){let t=${worker};r(()=>import(\`\${t}\`));t="./missing.js";}`,
-        `function load(e){let t=${worker};t+=suffix;import(\`\${t}\`);}`,
-        `function load(e){let t=${worker};t++;import(\`\${t}\`);}`,
-        `function load(e){let t;({t}=${worker});import(\`\${t}\`);}`,
-        `let t=${worker};function load(){import(\`\${t}\`);}`,
-    ]) {
-        assert.throws(
-            () => inspectJavaScript(new Map([[filename, Buffer.from(source)]]), [report]),
-            /nonliteral dynamic import cannot be verified/,
-            source,
-        );
-    }
-});
-
-test('Vite expression-free template imports are static references, not allowlisted expressions', () => {
+test('Vite expression-free template imports are static references, not budgeted expressions', () => {
     const report = {
         ...viewReport,
         bundler: 'vite',
@@ -1177,42 +1051,38 @@ test('package graphs keep exactly the 60 largest packages and add up the rest as
     );
 });
 
-test('keepNames sites report the runtime class name for every emitted shape', () => {
-    const [entry] = keptClassNames;
-    const name = (source) => keptClassNameSites(source, entry).map((site) => site.name);
-    const body = '{_isUserCancelledError=!0}';
-    assert.deepEqual(name(`var UserCancelledError=class extends Error${body}`), ['UserCancelledError']);
-    assert.deepEqual(name(`var Ao=class UserCancelledError extends Error${body}`), ['UserCancelledError']);
-    assert.deepEqual(name(`class UserCancelledError extends Error${body}`), ['UserCancelledError']);
-    assert.deepEqual(name(`let W;W=class extends Error${body}`), ['W']);
-    assert.deepEqual(
-        name(`var W=class extends Error{static{__name(this,"UserCancelledError")}_isUserCancelledError=!0}`),
-        ['UserCancelledError'],
-    );
-    assert.deepEqual(name(`var W=class extends Error{constructor(){super(),this._isUserCancelledError=!0}}`), ['W']);
-    assert.deepEqual(name(`var W=class e extends Error${body}`), ['e']);
-    assert.deepEqual(name(`f(class extends Error${body})`), ['']);
-    assert.deepEqual(name(`var W=class extends Error{other=!0};const s="_isUserCancelledError"`), []);
-    assert.deepEqual(name('var W=class extends Error{}'), []);
-});
-
-test('keepNames invariant requires the kept class in the main graph, with its name, in every copy', () => {
-    const check = (sources) =>
-        inspectKeptClassNames(
-            new Map(Object.entries(sources).map(([asset, source]) => [`extension/${asset}`, Buffer.from(source)])),
-            Object.keys(sources),
+test('keepNames check accepts the class name in each form Rolldown emits and fails when it is lost', () => {
+    const check = (source) =>
+        inspectKeptClassName(
+            new Map([
+                ['extension/other.mjs', Buffer.from('export const x = 1;')],
+                ['extension/main.mjs', Buffer.from(source)],
+            ]),
+            ['other.mjs', 'main.mjs'],
         );
-    check({ 'main.mjs': keptClassSource, 'other.mjs': 'export const x = 1;' });
-    assert.throws(
-        () => check({ 'main.mjs': 'export {};' }),
-        /keepNames: no class with member _isUserCancelledError \(UserCancelledError\) in the main graph/,
-    );
-    assert.throws(
-        () => check({ 'a.mjs': keptClassSource, 'b.mjs': keptClassSource.replace('UserCancelledError=', 'W=') }),
-        /extension\/b\.mjs: keepNames: class with member _isUserCancelledError is named "W" at runtime, expected "UserCancelledError"/,
-    );
-    assert.throws(
-        () => check({ 'main.mjs': 'f(class extends Error{_isUserCancelledError=!0})' }),
-        /is named "\(anonymous\)" at runtime/,
-    );
+    for (const source of [
+        keptClassSource,
+        'class UserCancelledError extends Error{}',
+        'var W=class UserCancelledError extends Error{}',
+        'var W=class extends Error{static{__name(this,`UserCancelledError`)}}',
+    ]) {
+        check(source);
+    }
+    for (const source of [
+        // Rolldown output without keepNames; the name survives only as an export alias and strings.
+        'var W=class extends Error{_isUserCancelledError=!0};export{W as UserCancelledError}',
+        'let{UserCancelledError:t}=x;const s=`UserCancelledError`;throw new UserCancelledError',
+        'var UserCancelledError=class e extends Error{}',
+        'f(class extends Error{})',
+        'export {};',
+    ]) {
+        assert.throws(
+            () => check(source),
+            (error) =>
+                error.message.startsWith(
+                    'keepNames: no class named UserCancelledError in the main graph; the host build must keep class names (',
+                ),
+            source,
+        );
+    }
 });

@@ -58,8 +58,9 @@ Inspection reports archive file-list and per-file size drift without failing; pe
 measured for the [size report](#size-report-warning-only), which only warns, and the host's kept class names are enforced by the
 [`keepNames` invariant](#host-class-names-keepnames-review-item-f17). Hard checks cover required
 package files and the resolved `package.json` main entry, exactly one owning bundle report for every packaged
-`.js`, `.cjs` and `.mjs` file under `extension/` (two reports binding the same script are ambiguous), the named `render` export,
-literal dynamic imports, Vite literal `new URL(..., import.meta.url)`
+`.js`, `.cjs` and `.mjs` file under `extension/` (two reports binding the same script are ambiguous; the owner decides
+host-only runtime imports and the import budget), the named `render` export,
+literal dynamic imports, a budget for nonliteral ones, Vite literal `new URL(..., import.meta.url)`
 assets (fonts and workers), development-server strings, `import.meta` in
 CommonJS bundles (including `.cjs`), and reachable BSON implementations. Reports must match the packaged JavaScript
 hashes and record each compilation's `chunkFormat`. `.mjs` files are ES modules; `.cjs` files
@@ -98,28 +99,29 @@ Literal dynamic imports of Node built-ins (`node:`-prefixed or in `module.builti
 `vscode` are accepted only in host-report-owned `.mjs` files. Every other literal import must
 resolve to a packaged file, including imports in views and CommonJS files.
 
-Nonliteral imports fail except for two named, reviewed allowances. `monacoModuleLoaderImports` permits one-expression,
-empty-quasi templates wrapping `asBrowserUri(...).toString(...)` calls in Vite-owned
-`monaco-<hash>.js` (maximum one) or `editor.worker-<hash>.js` / `json.worker-<hash>.js` (maximum two),
-or an Identifier in the Monaco chunk only; both forms must be inside a function.
-The identifier's nearest enclosing function/block binding must come from that same member-call chain
-in a variable initializer or simple assignment, with no unreviewed writes or shadow bindings,
-because our worker entries pass request-handler factories and foreign modules are unused.
-Expression-free template strings, also emitted by Vite's minifier, are resolved as literal strings
-for imports and URL assets; they do not use this allowlist.
+A dynamic import whose specifier is not a string (`import(x)`, or a template with an expression)
+cannot be resolved offline, so it needs an entry in `nonLiteralImportBudget`: a maximum count and
+a reason. L1 counts these imports; it does not match code shapes. An entry names a module ID and
+applies to the packaged script whose bundle report chunk lists that module in `moduleIds`, so it
+follows the module across chunk renames and minifier changes. Vite builds the Monaco workers
+separately and the views report records them as assets without a chunk, so their entry matches
+the packaged name instead, and only for scripts without a chunk. A script's budget is the sum of
+its matching entries. A nonliteral import in a script without a budget fails, and so does a count
+above the budget. An unused budget does not fail by itself: a dependency that drops a loader is
+not a defect, and the budget controls append imports up to one over the budget whatever the
+current count. The JSON result's `nonLiteralImports` lists each budgeted script's count and
+maximum.
 
-`babelConfigFileImports` permits exactly one import per host-owned `.mjs` chunk reporting
-`node_modules/@babel/core/lib/config/files/import.cjs`. In today's build that is
-`playgroundWorker.mjs`, alongside Babel's `module-types.js`. The argument must be the sole
-identifier parameter of the named `function import_`; its entire body must be
-`return import(parameter)`. That function must be assigned to the second CommonJS factory
-parameter's `.exports`, as the factory's only statement, inside the `require_import`
-declarator's `__commonJSMin`/`__commonJS` call. Other functions, wrappers, arguments, writes,
-templates, top-level imports, missing imports and a second matching import fail closed.
-Upstream `module-types.js` calls this helper with a `pathToFileURL(filepath).toString() +
-"?import"` URL when loading native ESM configuration files; the helper's argument is a
-parameter, so L1 validates the exported helper structure rather than claiming interprocedural
-URL provenance. Any Babel/bundler shape change requires re-review, not broadening the allowance.
+| Entry                                                                      | Maximum | Reason                                                                                                                          |
+| -------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `@babel/core/lib/config/files/import.cjs`, today in `playgroundWorker.mjs` | 1       | Babel's loader for native ESM config files; the shell rewriter sets `configFile: false` and `babelrc: false`, so it never runs. |
+| `monaco-editor/esm/vs/editor/common/services/editorSimpleWorker.js`        | 1       | Monaco's foreign-module loader, today in `monaco-<hash>.js`; we never create foreign-module workers.                            |
+| Scripts named `editor.worker-<hash>.js` or `json.worker-<hash>.js`         | 2       | Monaco's request-handler and foreign-module loaders; our worker entries pass request-handler factories.                         |
+
+When a dependency bump adds a loader, the failure names the script, its count and its budget:
+review the new import, then add or raise an entry with its reason. Expression-free template
+strings, also emitted by Vite's minifier, are resolved as literal strings for imports and URL
+assets; they do not count against the budget.
 
 ### `bson` identity (runtime)
 
@@ -173,16 +175,23 @@ for job conditions, artifact paths and the merge-ref checkout policy.
 The proof has eight original rejection controls (including missing contributed grammar and runtime shell declarations;
 the CommonJS `import.meta` control now mutates `playgroundTsPlugin.cjs`). Vite adds
 `missing-lazy-chunk` (the entry's missing dynamic import fires first),
-`monaco-in-local-quick-start`, `duplicate-bson`, `nonliteral-import` and
-`allowlisted-shape-at-top-level`. All controls are mandatory.
+`monaco-in-local-quick-start`, `duplicate-bson` and `nonliteral-import`. All controls are mandatory.
 Report mutations use temporary copies, never the supplied reports.
-Seven host controls additionally reject `missing-host-lazy-chunk`, `duplicate-host-bson`,
-`missing-ts-plugin`, `second-babel-nonliteral-import`, `kubernetes-in-main-static-closure`,
+Six host controls additionally reject `missing-host-lazy-chunk`, `duplicate-host-bson`,
+`missing-ts-plugin`, `kubernetes-in-main-static-closure`,
 `kubernetes-in-extension-static-closure` and `missing-extension-implementation-boundary`.
 Host controls refresh copied hashes to model matching newly built output and assert the intended
 diagnostic, not a stale-report failure. Stage 6 adds `keepnames-class-name-lost` to the host
 controls. Stage 8 adds `ambiguous-script-owner`, which copies
-`views.js`'s entry into the host report and requires the single-owner rejection. The proof prints 22 PASS lines in total.
+`views.js`'s entry into the host report and requires the single-owner rejection. Stage 8.5
+replaces the import shape allowlists with the budget and retires their controls,
+`second-babel-nonliteral-import` (a second copy of Babel's exact factory shape) and
+`allowlisted-shape-at-top-level` (the Monaco loader shape outside a function), because those
+shape rules no longer exist. Four budget controls replace them: `babel-chunk-over-import-budget`
+(host), `monaco-chunk-over-import-budget` and `monaco-worker-over-import-budget` each append
+imports until the script is one over its budget, and `import-budget-module-absent` drops the
+Monaco loader's module ID from its chunk in a copied views report and requires the unbudgeted
+rejection. The proof prints 24 PASS lines in total.
 The unrelated README-image asset-change reporting control was retired because the Stage 0
 manifest-drift report it exercised no longer exists, and the three Stage 6 size-budget controls
 (`size-budget-collection-view`, `size-budget-host-startup`, `size-budget-views-assets`) were retired
@@ -245,16 +254,15 @@ For more detail, compare the chunks' `bytes`, `moduleIds` and `moduleBytes` in `
 The host build sets Rolldown `output.keepNames: true` because runtime code reads
 `constructor.name`: the Query Insights stream path records `err.constructor.name` as the telemetry
 `errorKind`, and throws `@microsoft/vscode-azext-utils`' `UserCancelledError` on cancellation (Azure
-Identity spans and `getClusterMetadata` read class names too). L1 locates every class in the `main`
-graph with a `_isUserCancelledError` member (a property name the minifier does not rename) and
-requires its runtime name to be `UserCancelledError`, by JavaScript naming rules: the class's own
-name, else the binding an anonymous class expression initialises, overridden by a
-`static { __name(this, "...") }` block or a static `name` field. With `keepNames` the packaged chunk
-has `var UserCancelledError=class extends Error{_isUserCancelledError=!0;…`; a build without it
-emitted `var W=class extends Error{…}` (runtime name `W`), and mangled product classes to
-`var ds=class e extends Error`. A missing class also fails, for re-review of `keptClassNames` in
-`inspect.cjs`. The `keepnames-class-name-lost` control gives the packaged class the inner name `W`
-(as the minifier does without `keepNames`), with matching report hashes. The views build keeps
+Identity spans and `getClusterMetadata` read class names too). L1 requires a class whose runtime
+name is `UserCancelledError` somewhere in the `main` graph: the class's own name, else the
+variable an anonymous class expression initialises, or Rolldown's `static { __name(this, "...") }`
+block when it had to rename the binding. With `keepNames` the packaged chunk has
+`var UserCancelledError=class extends Error{_isUserCancelledError=!0;…`; a build without it emits
+`var W=class extends Error{…}` (checked again in Stage 8.5). The name still appears in that build,
+as an export alias, a destructured import and telemetry strings, so L1 looks for the class, not the
+text. The `keepnames-class-name-lost` control renames `UserCancelledError` throughout the main
+graph, as the minifier does without `keepNames`, with matching report hashes. The views build keeps
 `keepNames` off (a Stage 4 decision).
 
 Downloaded artifacts need their matching bundle reports, not reports from an unrelated local build.

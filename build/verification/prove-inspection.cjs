@@ -8,13 +8,7 @@ const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-    inspect,
-    viteChunkClosure,
-    babelConfigFileImports,
-    keptClassNames,
-    keptClassNameSites,
-} = require('./inspect.cjs');
+const { inspect, viteChunkClosure, keptClassName, nonLiteralImportBudget } = require('./inspect.cjs');
 const { readVsix, writeVsix } = require('./vsix.cjs');
 
 const args = process.argv.slice(2);
@@ -28,9 +22,24 @@ while (args.length) {
     assert.ok(reports, '--reports requires a directory');
 }
 const options = { reports };
-inspect(filename, options);
+const { nonLiteralImports } = inspect(filename, options);
 const views = JSON.parse(fs.readFileSync(path.join(reports, 'views.json'), 'utf8'));
 const host = JSON.parse(fs.readFileSync(path.join(reports, 'host.json'), 'utf8'));
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const budgetEntry = (text) => nonLiteralImportBudget.find((entry) => entry.moduleId?.includes(text));
+/** Appends nonliteral imports until `file` is one over its budget, whatever its current use. */
+function overImportBudget(file) {
+    const { count, maximum } = nonLiteralImports[file];
+    return [
+        (files) => {
+            const extra = ';import(globalThis.proof)'.repeat(maximum - count + 1);
+            files.set(file, Buffer.concat([files.get(file), Buffer.from(extra)]));
+        },
+        new RegExp(
+            `: ${escape(file)}: ${maximum + 1} nonliteral dynamic imports exceed its nonLiteralImportBudget of ${maximum}$`,
+        ),
+    ];
+}
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-broken-vsix-'));
 try {
     const variants = [
@@ -131,7 +140,7 @@ try {
         (file) => fullMain.assets.has(file) && !staticMain.assets.has(file),
     );
     assert.ok(lazyHostChunk, 'Proof requires a host chunk reachable only through dynamic imports');
-    const babelChunk = host.chunks.find((chunk) => chunk.moduleIds.includes(babelConfigFileImports.moduleId));
+    const babelChunk = host.chunks.find((chunk) => chunk.moduleIds.includes(budgetEntry('/@babel/').moduleId));
     assert.ok(babelChunk, 'Proof requires Babel config-file loader chunk');
     const kubernetesChunk = host.chunks.find((chunk) =>
         chunk.moduleIds.some((id) => /\/node_modules\/@kubernetes\/client-node\//.test(id)),
@@ -139,14 +148,6 @@ try {
     assert.ok(kubernetesChunk, 'Proof requires Kubernetes SDK chunk');
     const implementation = host.chunks.find((chunk) => chunk.facadeModuleId === './src/extension.ts');
     assert.ok(implementation, 'Proof requires extension implementation facade ./src/extension.ts');
-    const [keptClass] = keptClassNames;
-    const keptClassSites = [...fullMain.assets].sort().flatMap((asset) =>
-        keptClassNameSites(originalFiles.get(`extension/${asset}`).toString('utf8'), keptClass).map((site) => ({
-            asset,
-            ...site,
-        })),
-    );
-    assert.ok(keptClassSites.length > 0, `Proof requires the ${keptClass.name} class in the main graph`);
     const hostControls = [
         [
             'missing-host-lazy-chunk',
@@ -172,22 +173,7 @@ try {
             },
             /missing required file: extension\/playgroundTsPlugin\.cjs/,
         ],
-        [
-            'second-babel-nonliteral-import',
-            (files) => {
-                const file = `extension/${babelChunk.fileName}`;
-                files.set(
-                    file,
-                    Buffer.concat([
-                        files.get(file),
-                        Buffer.from(
-                            ';function s5Proof(){var require_import=__commonJSMin((e,m)=>{m.exports=function import_(t){return import(t)}});}',
-                        ),
-                    ]),
-                );
-            },
-            /nonliteral dynamic import exceeds babelConfigFileImports allowlist/,
-        ],
+        ['babel-chunk-over-import-budget', ...overImportBudget(`extension/${babelChunk.fileName}`)],
         [
             'kubernetes-in-main-static-closure',
             undefined,
@@ -215,19 +201,17 @@ try {
         [
             'keepnames-class-name-lost',
             (files) => {
-                // What the minifier emits without keepNames: the class gets a short inner name.
-                const { asset, node } = keptClassSites[0];
-                const file = `extension/${asset}`;
-                const source = files.get(file).toString('utf8');
-                const mutated = node.id
-                    ? `${source.slice(0, node.id.start)}W${source.slice(node.id.end)}`
-                    : `${source.slice(0, node.start + 'class'.length)} W${source.slice(node.start + 'class'.length)}`;
-                assert.equal(source.slice(node.start, node.start + 'class'.length), 'class');
-                files.set(file, Buffer.from(mutated));
+                // What the minifier emits without keepNames: the class binding gets another name.
+                const name = new RegExp(`\\b${keptClassName.name}\\b`, 'g');
+                const renamed = [...fullMain.assets].filter((asset) => {
+                    const source = files.get(`extension/${asset}`).toString('utf8');
+                    const mutated = source.replace(name, 'KeepNamesLost');
+                    files.set(`extension/${asset}`, Buffer.from(mutated));
+                    return mutated !== source;
+                });
+                assert.ok(renamed.length > 0, `Proof requires ${keptClassName.name} in the main graph`);
             },
-            new RegExp(
-                `keepNames: class with member ${keptClass.member} is named "W" at runtime, expected "${keptClass.name}"`,
-            ),
+            new RegExp(`keepNames: no class named ${keptClassName.name} in the main graph`),
         ],
         [
             'missing-extension-implementation-boundary',
@@ -279,7 +263,15 @@ try {
     const monaco = views.chunks.find((chunk) => /^monaco-[A-Za-z0-9_-]+\.js$/.test(chunk.fileName));
     assert.ok(lazy, 'Proof requires Local Quick Start lazy chunk');
     assert.ok(monaco, 'Proof requires Monaco chunk');
-    const escapedLazyName = lazy.fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const monacoLoader = budgetEntry('/monaco-editor/');
+    const loaderChunk = views.chunks.find((chunk) => chunk.moduleIds.includes(monacoLoader.moduleId));
+    assert.ok(loaderChunk, `Proof requires the chunk containing ${monacoLoader.moduleId}`);
+    const workerBudget = nonLiteralImportBudget.find((entry) => entry.asset);
+    const worker = Object.keys(nonLiteralImports).find((file) =>
+        workerBudget.asset.test(file.slice('extension/'.length)),
+    );
+    assert.ok(worker, 'Proof requires a Monaco worker script with nonliteral imports');
+    const escapedLazyName = escape(lazy.fileName);
     const controls = [
         [
             'missing-lazy-chunk',
@@ -317,21 +309,20 @@ try {
                     Buffer.concat([files.get('extension/views.js'), Buffer.from(';import(`${globalThis.x}`)')]),
                 );
             },
-            /views\.js: nonliteral dynamic import cannot be verified/,
+            /views\.js: nonliteral dynamic import cannot be verified; no nonLiteralImportBudget entry covers this script$/,
         ],
+        ['monaco-chunk-over-import-budget', ...overImportBudget(`extension/${loaderChunk.fileName}`)],
+        ['monaco-worker-over-import-budget', ...overImportBudget(worker)],
         [
-            'allowlisted-shape-at-top-level',
-            (files) => {
-                const filename = `extension/${monaco.fileName}`;
-                files.set(
-                    filename,
-                    Buffer.concat([
-                        files.get(filename),
-                        Buffer.from(';const s4Proof="./missing-proof.js";import(`${s4Proof}`);'),
-                    ]),
-                );
+            'import-budget-module-absent',
+            undefined,
+            new RegExp(
+                `${escape(loaderChunk.fileName)}: nonliteral dynamic import cannot be verified; no nonLiteralImportBudget entry covers this script$`,
+            ),
+            (report) => {
+                const chunk = report.chunks.find((candidate) => candidate.fileName === loaderChunk.fileName);
+                chunk.moduleIds = chunk.moduleIds.filter((id) => id !== monacoLoader.moduleId);
             },
-            /monaco-[A-Za-z0-9_-]+\.js: nonliteral dynamic import cannot be verified/,
         ],
     ];
     for (const [name, mutateFiles, expected, mutateReport] of controls) {

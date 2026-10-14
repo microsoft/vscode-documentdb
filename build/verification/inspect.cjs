@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const { builtinModules } = require('node:module');
 const path = require('node:path');
 const { parse } = require('acorn');
-const { ancestor, fullAncestor, simple } = require('acorn-walk');
+const { ancestor } = require('acorn-walk');
 const { readVsix } = require('./vsix.cjs');
 
 const viewModules = {
@@ -19,16 +19,26 @@ const viewModules = {
     atlasCredentials: './src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx',
     clusterDashboard: './src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx',
 };
-// Monaco's bootstrap loaders are unused: our ESM worker entries pass request-handler factories,
-// and we never use foreign modules. Keep their reviewed import shapes and counts tightly scoped.
-const monacoModuleLoaderImports = [
-    { filename: /^extension\/monaco-[A-Za-z0-9_-]+\.js$/, maximum: 1, allowIdentifier: true },
-    { filename: /^extension\/(?:editor|json)\.worker-[A-Za-z0-9_-]+\.js$/, maximum: 2, allowIdentifier: false },
+// Dynamic imports whose specifier is not a string cannot be resolved offline. A script may have at
+// most the sum of `maximum` over the entries whose `moduleId` its report chunk contains, or, for
+// scripts without a chunk (Vite builds workers separately), whose packaged name matches `asset`.
+const nonLiteralImportBudget = [
+    {
+        moduleId: './node_modules/@babel/core/lib/config/files/import.cjs',
+        maximum: 1,
+        reason: "Babel's loader for native ESM config files; the shell rewriter sets configFile and babelrc to false, so it never runs",
+    },
+    {
+        moduleId: './node_modules/monaco-editor/esm/vs/editor/common/services/editorSimpleWorker.js',
+        maximum: 1,
+        reason: "Monaco's foreign-module loader; we never create foreign-module workers",
+    },
+    {
+        asset: /^(?:editor|json)\.worker-[A-Za-z0-9_-]+\.js$/,
+        maximum: 2,
+        reason: "Monaco's request-handler and foreign-module loaders; our worker entries pass request-handler factories",
+    },
 ];
-const babelConfigFileImports = {
-    moduleId: './node_modules/@babel/core/lib/config/files/import.cjs',
-    maximum: 1,
-};
 const nodeBuiltins = new Set(builtinModules);
 const requiredFiles = [
     'extension.vsixmanifest',
@@ -134,15 +144,12 @@ const runtimeAssets = [
         reason: 'Query Insights reads the stage 2 debug override when present',
     },
 ];
-// The host build sets Rolldown `keepNames` because runtime code reads `constructor.name`. Each entry
-// names one class in the `main` graph, located by a member name the minifier does not rename.
-const keptClassNames = [
-    {
-        name: 'UserCancelledError',
-        member: '_isUserCancelledError',
-        reason: 'Query Insights telemetry records err.constructor.name as errorKind, and its stream path throws @microsoft/vscode-azext-utils UserCancelledError on cancellation',
-    },
-];
+// The host build sets Rolldown `keepNames` because runtime code reads `constructor.name`; without
+// it the minifier renames this class (`var W=class extends Error`).
+const keptClassName = {
+    name: 'UserCancelledError',
+    reason: 'Query Insights telemetry records err.constructor.name as errorKind, and its stream path throws @microsoft/vscode-azext-utils UserCancelledError on cancellation',
+};
 
 function manifest(files) {
     return [...files]
@@ -235,133 +242,11 @@ function literalString(node, allowTemplate = false) {
     }
 }
 
-function isFunction(node) {
-    return ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type);
-}
-
-function isScope(node) {
-    return (
-        isFunction(node) ||
-        [
-            'Program',
-            'BlockStatement',
-            'CatchClause',
-            'ForStatement',
-            'ForInStatement',
-            'ForOfStatement',
-            'SwitchStatement',
-        ].includes(node.type)
-    );
-}
-
-function bindingNames(pattern) {
-    if (!pattern) return [];
-    if (pattern.type === 'Identifier') return [pattern.name];
-    if (pattern.type === 'RestElement') return bindingNames(pattern.argument);
-    if (pattern.type === 'AssignmentPattern') return bindingNames(pattern.left);
-    if (pattern.type === 'ArrayPattern') return pattern.elements.flatMap(bindingNames);
-    if (pattern.type === 'ObjectPattern')
-        return pattern.properties.flatMap((property) =>
-            bindingNames(property.type === 'RestElement' ? property.argument : property.value),
-        );
-    return [];
-}
-
-function workerUriForm(expression) {
-    const callee = expression?.callee;
-    const uri = callee?.object;
-    return (
-        expression?.type === 'CallExpression' &&
-        callee?.type === 'MemberExpression' &&
-        !callee.computed &&
-        callee.property.name === 'toString' &&
-        uri?.type === 'CallExpression' &&
-        uri.callee.type === 'MemberExpression' &&
-        !uri.callee.computed &&
-        uri.callee.property.name === 'asBrowserUri'
-    );
-}
-
-function moduleLoaderBindings(tree) {
-    const bindings = new Map();
-    const assignments = [];
-    function record(scope, pattern, node, value, valueScope = scope) {
-        if (!bindings.has(scope)) bindings.set(scope, new Map());
-        for (const name of bindingNames(pattern)) {
-            const names = bindings.get(scope);
-            if (!names.has(name)) names.set(name, []);
-            names.get(name).push({ node, value, scope: valueScope });
-        }
-    }
-    fullAncestor(tree, (node, _state, ancestors) => {
-        const scopes = ancestors.filter(isScope);
-        const scope = scopes.at(-1);
-        if (node.type === 'VariableDeclarator') {
-            const declaration = ancestors.at(-2);
-            const bindingScope =
-                declaration.kind === 'var'
-                    ? scopes.findLast((entry) => isFunction(entry) || entry.type === 'Program')
-                    : scope;
-            record(bindingScope, node.id, node, node.id.type === 'Identifier' ? node.init : node.id);
-        } else if (isFunction(node)) {
-            for (const parameter of node.params) record(node, parameter, node, parameter);
-            if (node.id) record(node.type === 'FunctionDeclaration' ? scopes.at(-2) : node, node.id, node, node);
-        } else if (node.type === 'ClassDeclaration') {
-            record(scope, node.id, node, node);
-        } else if (node.type === 'CatchClause') {
-            record(scope, node.param, node, node);
-        } else if (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression') {
-            assignments.push({ node, scopes });
-        }
-    });
-    for (const { node, scopes } of assignments) {
-        const target = node.type === 'AssignmentExpression' ? node.left : node.argument;
-        for (const name of bindingNames(target)) {
-            const scope = scopes.findLast((entry) => bindings.get(entry)?.has(name)) || scopes.at(-1);
-            record(
-                scope,
-                { type: 'Identifier', name },
-                node,
-                node.operator === '=' && target.type === 'Identifier' ? node.right : node,
-                scopes.at(-1),
-            );
-        }
-    }
-    return bindings;
-}
-
-function monacoModuleLoaderImportLimit(filename, node, ancestors, bindings) {
-    const source = node.source;
-    const allowance = monacoModuleLoaderImports.find((entry) => entry.filename.test(filename));
-    if (
-        !allowance ||
-        !ancestors.some(isFunction) ||
-        source.type !== 'TemplateLiteral' ||
-        source.expressions.length !== 1 ||
-        source.quasis.length !== 2 ||
-        !source.quasis.every((quasi) => quasi.value.raw === '')
-    ) {
-        return 0;
-    }
-    const expression = source.expressions[0];
-    if (workerUriForm(expression)) return allowance.maximum;
-    if (allowance.allowIdentifier && expression.type === 'Identifier') {
-        for (const scope of ancestors.filter(isScope).reverse()) {
-            if (scope.type === 'Program') break;
-            const writes = bindings.get(scope)?.get(expression.name);
-            if (writes) {
-                // Stop at the nearest binding, including shadows. Reject unreviewed writes even
-                // after the import: a nested loader callback may run after those writes execute.
-                const values = writes.filter((write) => write.value);
-                return values.length > 0 &&
-                    values.every((write) => workerUriForm(write.value)) &&
-                    values.some((write) => write.node.end <= node.start && ancestors.includes(write.scope))
-                    ? allowance.maximum
-                    : 0;
-            }
-        }
-    }
-    return 0;
+function nonLiteralImportMaximum(report, asset) {
+    const chunk = report?.chunks?.find((candidate) => candidate.fileName === asset);
+    return nonLiteralImportBudget
+        .filter((entry) => (chunk ? chunk.moduleIds.includes(entry.moduleId) : entry.asset?.test(asset)))
+        .reduce((sum, entry) => sum + entry.maximum, 0);
 }
 
 function isRuntimeExternal(reference) {
@@ -378,59 +263,12 @@ function bundleReportName(report, index) {
     return `bundle report ${index + 1}`;
 }
 
-function babelConfigFileImportLimit(node, ancestors) {
-    const helper = ancestors.at(-4);
-    const assignment = ancestors.at(-5);
-    const statement = ancestors.at(-6);
-    const block = ancestors.at(-7);
-    const factory = ancestors.at(-8);
-    const call = ancestors.at(-9);
-    const declaration = ancestors.at(-10);
-    // Babel's import.cjs exports only function import_(filepath) { return import(filepath); }.
-    // Its argument is a parameter, not an arbitrary binding/template. The bundled factory and
-    // its exact body prevent another import elsewhere in the owning worker reusing this allowance.
-    return node.source.type === 'Identifier' &&
-        helper?.type === 'FunctionExpression' &&
-        helper.id?.name === 'import_' &&
-        !helper.async &&
-        !helper.generator &&
-        helper.params.length === 1 &&
-        helper.params[0].type === 'Identifier' &&
-        helper.params[0].name === node.source.name &&
-        helper.body.body.length === 1 &&
-        helper.body.body[0].type === 'ReturnStatement' &&
-        helper.body.body[0].argument === node &&
-        assignment?.type === 'AssignmentExpression' &&
-        assignment.operator === '=' &&
-        assignment.right === helper &&
-        assignment.left.type === 'MemberExpression' &&
-        !assignment.left.computed &&
-        assignment.left.property.name === 'exports' &&
-        assignment.left.object.type === 'Identifier' &&
-        factory?.type === 'ArrowFunctionExpression' &&
-        factory.params.length === 2 &&
-        factory.params[1].type === 'Identifier' &&
-        factory.params[1].name === assignment.left.object.name &&
-        block === factory.body &&
-        block.body.length === 1 &&
-        block.body[0] === statement &&
-        statement.type === 'ExpressionStatement' &&
-        call?.type === 'CallExpression' &&
-        call.arguments.length === 1 &&
-        call.arguments[0] === factory &&
-        call.callee.type === 'Identifier' &&
-        ['__commonJSMin', '__commonJS'].includes(call.callee.name) &&
-        declaration?.type === 'VariableDeclarator' &&
-        declaration.id.name === 'require_import' &&
-        declaration.init === call
-        ? babelConfigFileImports.maximum
-        : 0;
-}
-
+/** Checks every packaged script; returns each budgeted script's nonliteral import count and maximum. */
 function inspectJavaScript(files, reports) {
     for (const report of reports) {
         assert.equal(report.bundler, 'vite', 'Obsolete non-Vite bundle report; regenerate with npm run package');
     }
+    const nonLiteralImports = {};
     for (const [filename, data] of files) {
         if (!/\.(?:js|cjs|mjs)$/.test(filename)) {
             continue;
@@ -441,7 +279,7 @@ function inspectJavaScript(files, reports) {
         );
         if (filename.startsWith('extension/')) {
             assert.ok(compilations.length > 0, `${filename}: unowned script; no bundle report assetHashes entry`);
-            // One owner decides the script's permissions (host-only runtime imports, Babel allowance).
+            // One owner decides the script's permissions (host-only runtime imports, import budget).
             if (compilations.length > 1) {
                 const owners = reports.flatMap((report, index) =>
                     compilations.includes(report) ? [bundleReportName(report, index)] : [],
@@ -454,27 +292,10 @@ function inspectJavaScript(files, reports) {
             (!filename.endsWith('.mjs') && compilations.some((report) => report.chunkFormat === 'commonjs'));
         const viteOwned = compilations.some((report) => report.bundler === 'vite');
         const hostOwned = compilations.some(isViteHostReport);
-        const babelOwned =
-            hostOwned &&
-            filename.endsWith('.mjs') &&
-            compilations.some(
-                (report) =>
-                    isViteHostReport(report) &&
-                    report.chunks.some(
-                        (chunk) =>
-                            `extension/${chunk.fileName}` === filename &&
-                            chunk.moduleIds.includes(babelConfigFileImports.moduleId),
-                    ),
-            );
-        let monacoModuleLoaderImportCount = 0;
-        let babelConfigFileImportCount = 0;
+        const maximum = nonLiteralImportMaximum(compilations[0], filename.slice('extension/'.length));
+        let nonLiteralImportCount = 0;
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
-        const bindings =
-            viteOwned &&
-            monacoModuleLoaderImports.some((entry) => entry.allowIdentifier && entry.filename.test(filename))
-                ? moduleLoaderBindings(tree)
-                : new Map();
         if (filename === 'extension/views.js') {
             assert.ok(
                 tree.body.some(
@@ -494,26 +315,16 @@ function inspectJavaScript(files, reports) {
                 // A CommonJS bundle that contains `import.meta` throws a SyntaxError when `require`d.
                 assert.ok(!(commonJs && node.meta.name === 'import'), `${filename}: import.meta in a CommonJS bundle`);
             },
-            ImportExpression(node, _state, ancestors) {
-                if (babelOwned && babelConfigFileImportLimit(node, ancestors) > 0) {
-                    babelConfigFileImportCount++;
-                    assert.ok(
-                        babelConfigFileImportCount <= babelConfigFileImports.maximum,
-                        `${filename}: nonliteral dynamic import exceeds babelConfigFileImports allowlist`,
-                    );
-                    return;
-                }
-                const maximum = viteOwned ? monacoModuleLoaderImportLimit(filename, node, ancestors, bindings) : 0;
-                if (maximum > 0) {
-                    monacoModuleLoaderImportCount++;
-                    assert.ok(
-                        monacoModuleLoaderImportCount <= maximum,
-                        `${filename}: nonliteral dynamic import exceeds monacoModuleLoaderImports allowlist`,
-                    );
-                    return;
-                }
+            ImportExpression(node) {
                 const reference = literalString(node.source, viteOwned);
-                assert.ok(typeof reference === 'string', `${filename}: nonliteral dynamic import cannot be verified`);
+                if (typeof reference !== 'string') {
+                    nonLiteralImportCount++;
+                    assert.ok(
+                        maximum > 0,
+                        `${filename}: nonliteral dynamic import cannot be verified; no nonLiteralImportBudget entry covers this script`,
+                    );
+                    return;
+                }
                 if (hostOwned && filename.endsWith('.mjs') && isRuntimeExternal(reference)) return;
                 resolveAsset(files, filename, reference);
             },
@@ -546,18 +357,19 @@ function inspectJavaScript(files, reports) {
                 }
             },
         });
-        if (babelOwned) {
-            assert.equal(
-                babelConfigFileImportCount,
-                babelConfigFileImports.maximum,
-                `${filename}: expected exactly ${babelConfigFileImports.maximum} babelConfigFileImports allowlisted import`,
-            );
+        assert.ok(
+            nonLiteralImportCount <= maximum,
+            `${filename}: ${nonLiteralImportCount} nonliteral dynamic imports exceed its nonLiteralImportBudget of ${maximum}`,
+        );
+        if (maximum > 0) {
+            nonLiteralImports[filename] = { count: nonLiteralImportCount, maximum };
         }
         // Inspect as a module first to retain the explicit CommonJS import.meta diagnostic.
         if (commonJs && !filename.endsWith('.mjs')) {
             parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowReturnOutsideFunction: true });
         }
     }
+    return nonLiteralImports;
 }
 
 function summarizeGraph(entryName, assets, modules, allowAbsentBson) {
@@ -664,118 +476,38 @@ function viewGraphs(report, files) {
     return graphs;
 }
 
-function classRuntimeName(node, parent) {
-    // Rolldown's keepNames helper form, and an explicit static `name`, override the binding name.
-    for (const element of node.body.body) {
-        if (element.type === 'StaticBlock') {
-            for (const statement of element.body) {
-                const call = statement.type === 'ExpressionStatement' ? statement.expression : undefined;
-                if (
-                    call?.type === 'CallExpression' &&
-                    call.callee.type === 'Identifier' &&
-                    call.callee.name === '__name' &&
-                    call.arguments.length === 2 &&
-                    call.arguments[0].type === 'ThisExpression' &&
-                    typeof literalString(call.arguments[1], true) === 'string'
-                ) {
-                    return literalString(call.arguments[1], true);
-                }
-            }
-        } else if (
-            element.type === 'PropertyDefinition' &&
-            element.static &&
-            !element.computed &&
-            element.key.type === 'Identifier' &&
-            element.key.name === 'name' &&
-            typeof literalString(element.value, true) === 'string'
-        ) {
-            return literalString(element.value, true);
-        }
-    }
-    if (node.id) {
-        return node.id.name;
-    }
-    // Anonymous class expressions take their name from the binding they initialise (NamedEvaluation).
-    if (parent?.type === 'VariableDeclarator' && parent.init === node && parent.id.type === 'Identifier') {
-        return parent.id.name;
-    }
-    if (
-        parent?.type === 'AssignmentExpression' &&
-        parent.operator === '=' &&
-        parent.right === node &&
-        parent.left.type === 'Identifier'
-    ) {
-        return parent.left.name;
-    }
-    if (parent?.type === 'AssignmentPattern' && parent.right === node && parent.left.type === 'Identifier') {
-        return parent.left.name;
-    }
-    if (
-        (parent?.type === 'Property' || parent?.type === 'PropertyDefinition') &&
-        parent.value === node &&
-        !parent.computed
-    ) {
-        return parent.key.type === 'Identifier' ? parent.key.name : String(parent.key.value);
-    }
-    return '';
-}
-
-function hasClassMember(node, member) {
-    let found = node.body.body.some(
-        (element) =>
-            element.type === 'PropertyDefinition' &&
-            !element.computed &&
-            element.key.type === 'Identifier' &&
-            element.key.name === member,
-    );
-    simple(node.body, {
-        AssignmentExpression(assignment) {
-            const target = assignment.left;
-            found ||=
-                target.type === 'MemberExpression' &&
-                target.object.type === 'ThisExpression' &&
-                !target.computed &&
-                target.property.name === member;
+/** Runtime names of the classes in `source`, in the forms Rolldown `keepNames` emits. */
+function classNames(source) {
+    const names = [];
+    const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
+    ancestor(tree, {
+        Class(node, _state, ancestors) {
+            const parent = ancestors.at(-2);
+            // `static { __name(this, "Name") }` when Rolldown had to rename the binding.
+            const helper = node.body.body
+                .filter((element) => element.type === 'StaticBlock')
+                .flatMap((element) => element.body)
+                .map((statement) => statement.expression)
+                .find((call) => call?.type === 'CallExpression' && call.callee.name === '__name');
+            names.push(
+                literalString(helper?.arguments[1], true) ??
+                    node.id?.name ??
+                    (parent?.type === 'VariableDeclarator' && parent.init === node ? parent.id.name : undefined),
+            );
         },
     });
-    return found;
+    return names;
 }
 
-/** Every class in `source` carrying `entry.member`, with the `.name` it has at runtime. */
-function keptClassNameSites(source, entry) {
-    if (!source.includes(entry.member)) {
-        return [];
-    }
-    const sites = [];
-    const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
-    const visit = (node, _state, ancestors) => {
-        if (hasClassMember(node, entry.member)) {
-            sites.push({ node, name: classRuntimeName(node, ancestors.at(-2)) });
-        }
-    };
-    ancestor(tree, { ClassDeclaration: visit, ClassExpression: visit });
-    return sites;
-}
-
-function inspectKeptClassNames(files, assets) {
-    for (const entry of keptClassNames) {
-        let count = 0;
-        for (const asset of [...assets].sort()) {
-            const filename = `extension/${asset}`;
-            for (const site of keptClassNameSites(files.get(filename).toString('utf8'), entry)) {
-                count++;
-                assert.equal(
-                    site.name,
-                    entry.name,
-                    `${filename}: keepNames: class with member ${entry.member} is named "${site.name || '(anonymous)'}" at runtime, expected "${entry.name}"; the host build must keep class names (${entry.reason})`,
-                );
-            }
-        }
-        assert.ok(
-            count > 0,
-            `keepNames: no class with member ${entry.member} (${entry.name}) in the main graph; re-review keptClassNames (${entry.reason})`,
-        );
-    }
+function inspectKeptClassName(files, assets) {
+    const { name, reason } = keptClassName;
+    assert.ok(
+        assets.some((asset) => {
+            const source = files.get(`extension/${asset}`).toString('utf8');
+            return source.includes(name) && classNames(source).includes(name);
+        }),
+        `keepNames: no class named ${name} in the main graph; the host build must keep class names (${reason})`,
+    );
 }
 
 function monacoWorkerAssets(report, files) {
@@ -916,7 +648,7 @@ function inspect(filename, options = {}) {
     }
     assert.equal(reports[0].bundler, 'vite', 'Obsolete non-Vite host bundle report; regenerate with npm run package');
     assert.equal(reports[1].bundler, 'vite', 'Obsolete non-Vite views bundle report; regenerate with npm run package');
-    inspectJavaScript(files, reports);
+    const nonLiteralImports = inspectJavaScript(files, reports);
     const graphs = {
         ...hostGraphs(reports[0], files),
         ...viewGraphs(reports[1], files),
@@ -934,12 +666,13 @@ function inspect(filename, options = {}) {
             );
         }
     }
-    inspectKeptClassNames(files, graphs.main.assets);
+    inspectKeptClassName(files, graphs.main.assets);
     const result = {
         version: 1,
         vsixBytes: fs.statSync(filename).size,
         files: manifest(files),
         graphs,
+        nonLiteralImports,
         requiredAssets: { manifestDeclared: declaredAssets, runtime: runtimeAssets },
     };
     result.manifestReport = {
@@ -1001,14 +734,12 @@ if (require.main === module) {
 }
 
 module.exports = {
-    inspectKeptClassNames,
-    keptClassNames,
-    keptClassNameSites,
+    inspectKeptClassName,
+    keptClassName,
     measureSizeGraphs,
     measurePackageGraphs,
     packageOf,
-    babelConfigFileImports,
-    babelConfigFileImportLimit,
+    nonLiteralImportBudget,
     viteChunkClosure,
     hostGraphs,
     inspect,
