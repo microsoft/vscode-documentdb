@@ -7,7 +7,14 @@
 
 const fs = require('node:fs');
 const vscode = require('vscode');
-const { TARGET_ID, LATE_COMMANDS, assertInstalledPath, assertLateCommands } = require('../checks.cjs');
+const {
+    TARGET_ID,
+    LATE_COMMANDS,
+    assertInstalledPath,
+    assertLateCommands,
+    declaredCommands,
+    assertDeclaredCommands,
+} = require('../checks.cjs');
 
 /** @param {string} name @returns {string} */
 function requiredEnvironment(name) {
@@ -34,7 +41,10 @@ async function run() {
     if (!target.isActive) {
         throw new Error(`${TARGET_ID} did not become active.`);
     }
-    assertLateCommands(await vscode.commands.getCommands(true));
+    const commands = await vscode.commands.getCommands(true);
+    assertLateCommands(commands);
+    assertDeclaredCommands(target.packageJSON, commands);
+    const checked = new Set([...LATE_COMMANDS, ...declaredCommands(target.packageJSON)]);
     // Let fire-and-forget startup work run before Electron exits and flushes the log channels.
     await new Promise((resolve) => setTimeout(resolve, 1500));
     fs.writeFileSync(
@@ -43,7 +53,7 @@ async function run() {
             extensionId: TARGET_ID,
             extensionPath: target.extensionPath,
             active: true,
-            commands: LATE_COMMANDS,
+            commands: commands.filter((command) => checked.has(command)),
         }),
     );
 }

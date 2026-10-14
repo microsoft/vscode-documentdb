@@ -16,6 +16,12 @@ const LATE_COMMANDS = [
     'vscode-documentdb.command.testing.startDemoTask',
 ];
 const INJECTION_MARKER = 'L3_INJECTED_SWALLOWED_ACTIVATION_ERROR';
+/**
+ * Contributed commands that are registered only later, by command id, each with the reason. None
+ * today: activateClustersSupport registers every contributed command (src/documentdb/ClustersExtension.ts).
+ * @type {Readonly<Record<string, string>>}
+ */
+const LAZY_COMMANDS = Object.freeze({});
 
 /** @param {string} engine @returns {string} */
 function minimumVSCodeVersion(engine) {
@@ -55,6 +61,34 @@ function assertLateCommands(commands) {
     const missing = LATE_COMMANDS.filter((command) => !commands.includes(command));
     if (missing.length) {
         throw new Error(`Activation stopped before the final command registrations: ${missing.join(', ')}`);
+    }
+}
+
+/** @param {unknown} manifest @returns {string[]} */
+function declaredCommands(manifest) {
+    if (!manifest || typeof manifest !== 'object') {
+        throw new Error('The installed extension has no package.json to read its declared commands from.');
+    }
+    const contributed = /** @type {{ contributes?: { commands?: { command: string }[] } }} */ (manifest).contributes;
+    return (contributed?.commands ?? []).map((entry) => entry.command);
+}
+
+/**
+ * Every `contributes.commands` entry must be registered once activation finishes, except the listed
+ * lazy ones; an exclusion for a command that is no longer declared fails too, so the list stays current.
+ * @param {unknown} manifest @param {readonly string[]} commands
+ * @param {Readonly<Record<string, string>>} [lazy] @returns {void}
+ */
+function assertDeclaredCommands(manifest, commands, lazy = LAZY_COMMANDS) {
+    const declared = declaredCommands(manifest);
+    const stale = Object.keys(lazy).filter((command) => !declared.includes(command));
+    if (stale.length) {
+        throw new Error(`Lazy-command exclusions for commands that are not declared: ${stale.join(', ')}`);
+    }
+    const registered = new Set(commands);
+    const missing = declared.filter((command) => !registered.has(command) && !Object.hasOwn(lazy, command));
+    if (missing.length) {
+        throw new Error(`Declared commands not registered after activation: ${missing.join(', ')}`);
     }
 }
 
@@ -169,11 +203,14 @@ function assertCleanLogs(report) {
 module.exports = {
     TARGET_ID,
     LATE_COMMANDS,
+    LAZY_COMMANDS,
     INJECTION_MARKER,
     minimumVSCodeVersion,
     isInside,
     assertInstalledPath,
     assertLateCommands,
+    declaredCommands,
+    assertDeclaredCommands,
     recognizeLogs,
     inspectLogs,
     assertCleanLogs,

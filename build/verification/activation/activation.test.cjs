@@ -20,6 +20,8 @@ const {
     minimumVSCodeVersion,
     assertInstalledPath,
     assertLateCommands,
+    declaredCommands,
+    assertDeclaredCommands,
     recognizeLogs,
     inspectLogs,
     assertCleanLogs,
@@ -32,6 +34,8 @@ const {
     runActivation,
     runProof,
 } = require('./runner.cjs');
+
+const DECLARED_COMMAND = 'vscode-documentdb.command.fixture.declared';
 
 /** @param {import('node:test').TestContext} context @returns {string} */
 function temporaryDirectory(context) {
@@ -105,6 +109,28 @@ test('requires late registrations including the non-contributed internal export 
     assert.doesNotThrow(() => assertLateCommands(LATE_COMMANDS));
     assert.throws(() => assertLateCommands(LATE_COMMANDS.slice(1)), /internal.exportDocuments/);
     assert.throws(() => assertLateCommands([]), /final command registrations/);
+});
+
+test('requires every declared command unless it is excluded with a reason', () => {
+    const manifest = {
+        contributes: { commands: [{ command: 'ext.open' }, { command: 'ext.refresh' }, { command: 'ext.lazy' }] },
+    };
+    assert.doesNotThrow(() => assertDeclaredCommands(manifest, ['ext.open', 'ext.refresh', 'ext.lazy'], {}));
+    assert.throws(
+        () => assertDeclaredCommands(manifest, ['ext.open', 'ext.lazy'], {}),
+        /Declared commands not registered after activation: ext\.refresh$/,
+    );
+    const lazy = { 'ext.lazy': 'registered when its view first opens' };
+    assert.doesNotThrow(() => assertDeclaredCommands(manifest, ['ext.open', 'ext.refresh'], lazy));
+    assert.throws(
+        () => assertDeclaredCommands(manifest, ['ext.open', 'ext.refresh'], { 'ext.removed': 'gone' }),
+        /exclusions for commands that are not declared: ext\.removed/,
+    );
+    assert.doesNotThrow(() => assertDeclaredCommands({ name: 'no-commands' }, []));
+    assert.throws(() => assertDeclaredCommands(undefined, []), /no package\.json/);
+    const product = require('../../../package.json');
+    assert.ok(declaredCommands(product).length > 0);
+    assert.doesNotThrow(() => assertDeclaredCommands(product, declaredCommands(product)), 'LAZY_COMMANDS is current');
 });
 
 test('injector resolves the production extensionless main and explicit CommonJS/module entries', (context) => {
@@ -311,7 +337,7 @@ test('process wrapper captures output, reports nonzero exits, missing executable
     );
 });
 
-test('actual probe writes a receipt only after installed-path, active-state, and late-command checks', async (context) => {
+test('actual probe writes a receipt only after installed-path, active-state, late-command and declared-command checks', async (context) => {
     const root = temporaryDirectory(context);
     const checkout = path.join(root, 'checkout');
     const extensions = path.join(root, 'extensions');
@@ -323,13 +349,14 @@ test('actual probe writes a receipt only after installed-path, active-state, and
     const target = {
         extensionPath: installed,
         isActive: false,
+        packageJSON: { contributes: { commands: [{ command: DECLARED_COMMAND }] } },
         activate: async () => {
             events.push('activate');
             target.isActive = true;
         },
     };
     let discovered = true;
-    let commands = LATE_COMMANDS;
+    let commands = [...LATE_COMMANDS, DECLARED_COMMAND, 'workbench.action.unrelated'];
     const probeModule = { exports: {} };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'probe/tests.cjs'), 'utf8'), {
         module: probeModule,
@@ -371,9 +398,13 @@ test('actual probe writes a receipt only after installed-path, active-state, and
     });
     await probeModule.exports.run();
     assert.deepEqual(events, ['activate', 'commands']);
-    assert.equal(JSON.parse(fs.readFileSync(result, 'utf8')).active, true);
+    const receipt = JSON.parse(fs.readFileSync(result, 'utf8'));
+    assert.equal(receipt.active, true);
+    assert.deepEqual(receipt.commands, [...LATE_COMMANDS, DECLARED_COMMAND]);
     fs.unlinkSync(result);
 
+    commands = LATE_COMMANDS;
+    await assert.rejects(probeModule.exports.run(), /Declared commands not registered after activation/);
     commands = [];
     await assert.rejects(probeModule.exports.run(), /final command registrations/);
     target.extensionPath = checkout;
@@ -392,7 +423,7 @@ test('actual probe writes a receipt only after installed-path, active-state, and
  * The fake host evaluates the mutated artifact, not a fabricated log. This exercises real command
  * interception and a telemetry-shaped catch that returns an API despite initialization failure.
  * @param {import('node:test').TestContext} context
- * @param {{ launchFailure?: boolean, missingCommand?: boolean, wrongReceipt?: boolean, missingLogs?: boolean, installFailure?: boolean, displayFailure?: boolean }} [behavior]
+ * @param {{ launchFailure?: boolean, missingCommand?: boolean, missingDeclaredCommand?: boolean, wrongReceipt?: boolean, missingLogs?: boolean, installFailure?: boolean, displayFailure?: boolean }} [behavior]
  * @returns {{ options: import('./runner.cjs').Options, dependencies: import('./runner.cjs').Dependencies, events: string[], messages: string[], artifact: () => string }}
  */
 function fixture(context, behavior = {}) {
@@ -458,6 +489,7 @@ function fixture(context, behavior = {}) {
                             publisher: 'ms-azuretools',
                             name: 'vscode-documentdb',
                             main: './main',
+                            contributes: { commands: [{ command: DECLARED_COMMAND }] },
                         }),
                     );
                     fs.writeFileSync(
@@ -466,7 +498,7 @@ function fixture(context, behavior = {}) {
 const vscode = require("vscode");
 module.exports.activate = async function () {
     try {
-        for (const command of ${JSON.stringify(LATE_COMMANDS)}) {
+        for (const command of ${JSON.stringify([DECLARED_COMMAND, ...LATE_COMMANDS])}) {
             vscode.commands.registerCommand(command, () => {});
         }
     } catch (error) {
@@ -524,7 +556,11 @@ module.exports.activate = async function () {
                         extensionId: TARGET_ID,
                         extensionPath: behavior.wrongReceipt ? checkout : installed,
                         active: true,
-                        commands: behavior.missingCommand ? registered.slice(1) : registered,
+                        commands: behavior.missingCommand
+                            ? registered.filter((command) => command !== LATE_COMMANDS[0])
+                            : behavior.missingDeclaredCommand
+                              ? registered.filter((command) => command !== DECLARED_COMMAND)
+                              : registered,
                     }),
                 );
                 if (behavior.launchFailure) {
@@ -587,7 +623,7 @@ test('negative mutation registers all late commands and returns API, but swallow
     });
     const receipt = JSON.parse(fs.readFileSync(path.join(data.artifact(), 'probe-result.json'), 'utf8'));
     assert.equal(receipt.active, true);
-    assert.deepEqual(receipt.commands, LATE_COMMANDS);
+    assert.deepEqual(receipt.commands, [DECLARED_COMMAND, ...LATE_COMMANDS]);
     assert.ok(fs.existsSync(data.options.vsix));
     assert.deepEqual(data.events, ['display', 'download', 'install', 'launch', 'logs']);
 });
@@ -649,6 +685,7 @@ test('proof rejects absent marker and unrelated DocumentDB failures, not just ar
 test('runner fails on missing commands, dev-path receipt, absent logs, and still inspects after host failure', async (context) => {
     for (const [behavior, expected] of [
         [{ missingCommand: true }, /final command registrations/],
+        [{ missingDeclaredCommand: true }, /Declared commands not registered after activation/],
         [{ wrongReceipt: true }, /not the isolated installed/],
         [{ missingLogs: true }, /produced no logs/],
         [{ launchFailure: true }, /extension host exited 1/],

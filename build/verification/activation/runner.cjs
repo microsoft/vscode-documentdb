@@ -18,6 +18,7 @@ const {
     minimumVSCodeVersion,
     assertInstalledPath,
     assertLateCommands,
+    assertDeclaredCommands,
     inspectLogs,
     assertCleanLogs,
     isInside,
@@ -237,6 +238,7 @@ function verifyProbeResult(resultPath, installed, extensionsDir, checkout) {
     }
     assertInstalledPath(result.extensionPath, installed, extensionsDir, checkout);
     assertLateCommands(result.commands);
+    assertDeclaredCommands(JSON.parse(fs.readFileSync(path.join(installed, 'package.json'), 'utf8')), result.commands);
 }
 
 /** @typedef {{
