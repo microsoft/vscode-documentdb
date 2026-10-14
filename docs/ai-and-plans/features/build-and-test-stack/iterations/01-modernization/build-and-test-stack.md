@@ -1,10 +1,19 @@
+---
+feature: build-and-test-stack
+kind: plan
+status: active
+---
+
 # Modernization Catch-Up: Build, Bundling, and Test Stack
+
+> Moved here on 2026-10-14. The feature README is the current entry point.
+> This plan remains active while Stages 9 and 10 are pending.
 
 **Research date:** 2026-08-07
 **This repo:** `microsoft/vscode-documentdb`, branch `dev/tnaum/modernization`
 **Reference repo:** `microsoft/vscode-cosmosdb`, `main` at `4b1bb6c598230a5e22fd4f09934211bdf0572290`
 
-**Companion document:** [`e2e-testing-strategy.md`](./e2e-testing-strategy.md) — deep dive on their
+**Companion document:** [`e2e-testing-strategy.md`](../../../e2e-testing/strategy.md) — deep dive on their
 Playwright E2E suite and how it relates to our parked PR #867.
 
 **Re-reviewed:** 2026-09-30 against `vscode-cosmosdb` `main` at `07ac7f86` (84 commits after the
@@ -18,13 +27,13 @@ research. It is the evidence base, and the execution plan overrides it on sequen
 
 Related files in this folder:
 
-- [decisions.md](./decisions.md): standing decisions from the review phase (ESM-only packages, CI
+- [decisions.md](../../decisions.md): standing decisions from the review phase (ESM-only packages, CI
   tiers and the layer report, when negative controls run).
-- [pipelines-readme.md](./pipelines-readme.md): GitHub Actions and ADO, network isolation, and where
+- [pipelines-readme.md](../../pipelines.md): GitHub Actions and ADO, network isolation, and where
   each check runs.
-- [slickgrid-removal.md](./slickgrid-removal.md): the later grid replacement.
-- [future-work.md](./future-work.md): deferred items.
-- [e2e-testing-strategy.md](./e2e-testing-strategy.md): input for the next iteration.
+- [slickgrid-removal.md](../../../data-grid/slickgrid-removal.md): the later grid replacement.
+- [future-work.md](../../future-work.md): deferred items.
+- [e2e-testing-strategy.md](../../../e2e-testing/strategy.md): input for the next iteration.
 
 ---
 
@@ -213,7 +222,7 @@ browser at each gate; automated in CI only in the E2E iteration.
   - for Monaco views, a worker round-trip completes (for example a JSON validation marker appears),
     not just worker construction.
 - This extends the dev-server technique in
-  [live-preview-playwright.md](../live-preview-playwright.md) to the production artifact. Its
+  [live-preview-playwright.md](../../../../live-preview-playwright.md) to the production artifact. Its
   gotchas apply: set no viewport before screenshots, and only answer tRPC paths you have a real
   payload for.
 
@@ -252,10 +261,10 @@ Learnings from #867 that shape both:
 
 L2-dev adds no new test runner and no `@playwright/test` dependency in this iteration: agents drive
 it with the integrated browser tools. Wiring its assertions into CI (Vitest browser mode, option B)
-is an E2E-iteration decision; see [e2e-testing-strategy.md](./e2e-testing-strategy.md) §4.
+is an E2E-iteration decision; see [e2e-testing-strategy.md](../../../e2e-testing/strategy.md) §4.
 
 **L3: installed-VSIX activation check.** Runs on GitHub Actions only, because it downloads VS Code,
-which an isolated ADO build may block ([pipelines-readme.md](./pipelines-readme.md)). Locally it
+which an isolated ADO build may block ([pipelines-readme.md](../../pipelines.md)). Locally it
 needs a display; this dev machine has no Xvfb, so the operator installs it once.
 
 - `@vscode/test-electron` downloads VS Code and installs our VSIX into a temporary
@@ -319,9 +328,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       from `npm ls --all --parseable`, excluding the repository root.
     - Measured `dist`: **31,739,702 bytes across 123 files**; `views.js`: **6,490,321 bytes**;
       `main.js`: **4,761,155 bytes**. The complete per-file inventory and raw timings are committed
-      in [measurements.json](../../../build/verification/measurements.json).
+      in [measurements.json](../../../../../../build/verification/measurements.json).
     - The initial baseline production VSIX is **9,606,938 bytes, 124 archive files**; its file/size manifest and
-      entry graphs are committed in [baseline.json](../../../build/verification/baseline.json).
+      entry graphs are committed in [baseline.json](../../../../../../build/verification/baseline.json).
       SHA-256: `aee1a0591f3342adbf439831b007178babd3bc96d8f0cb65c25c0ef2678abe42`.
       Timing runs were sequential, without concurrent production builds/full test suites. The
       workspace lockfile arrived through the preparatory `main` merge (`35622214`); `npm ci`
@@ -426,7 +435,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       superseded that worker evidence**: it did not prove the editors used their configured workers.
       The rendered-editor correction landed in `c1d29535`; the final reliable proof is recorded
       below. This is a static-browser artifact check, not real
-      `vscode-webview://` behavior. See [the stage review](./iterations/00-stage0-review.md).
+      `vscode-webview://` behavior. See [the stage review](./00-stage0-review.md).
     - **Reason/deviation:** construction or a standalone validation reply was insufficient
       evidence of editor integration, so it was replaced rather than retained as a passing proxy.
       Collection View's custom query validator runs on the main thread; its proof uses the actual
@@ -2243,7 +2252,7 @@ Stage 0 must also be made.
     - mutation proof: with `457b913e`'s webview change reverted, exactly the Docker Desktop link
       assertions for `docker-missing-windows` and `docker-missing-mac` fail;
     - document it where agents look: a short note in `.github/copilot-instructions.md` and an
-      update of [live-preview-playwright.md](../live-preview-playwright.md), which describes the
+      update of [live-preview-playwright.md](../../../../live-preview-playwright.md), which describes the
       older hand-made page technique.
     - **Shared core completed in `7384241a` (GPT-6.1 Sol).** `build/verification/browser/core/`
       holds `fakeVsCodeApi` (fake `acquireVsCodeApi`, tRPC answering, unknown path recorded as an
@@ -2298,7 +2307,7 @@ Stage 0 must also be made.
   scenarios in the integrated browser to confirm the agent loop works. Decide whether to close
   PR #867 with credit to its author, now that its goal is covered.
 - **Stage 4 review (`c24216e7`):** GPT-6.1 Sol in a fresh session with no authorship context,
-  [04-stage4-review.md](./iterations/04-stage4-review.md). Departure from this stage's pick (GPT-6
+  [04-stage4-review.md](./04-stage4-review.md). Departure from this stage's pick (GPT-6
   Sol): operator instruction. The review is partly same-family, because GPT-6.1 Sol also wrote
   most Stage 4 tasks; Claude Opus 5.5 wrote the Vite configuration and coordinated.
   - **Findings:** S4-F01 (medium, lost missing-asset coverage) fixed in `dda2734c`. S4-F02 (low,
@@ -2618,7 +2627,7 @@ Stage 0 must also be made.
     comparisons mean anything. `mainFileLoad` was always 0 under webpack (see the loader task).
 
   - **AI review:** GPT-6 Astra, fresh session,
-    [05-stage5-review.md](./iterations/05-stage5-review.md): S5-F01 (medium) and S5-F02 (low), both
+    [05-stage5-review.md](./05-stage5-review.md): S5-F01 (medium) and S5-F02 (low), both
     accepted and fixed by coordinator decision (`555f9def`, `90374fee`). The reviewer
     independently re-ran build, verification tests, L1, the proofs, L3 with its proof, worker and
     TS plugin probes on the packaged files, and L2.
@@ -2864,7 +2873,7 @@ Stage 0 must also be made.
       test the branch head. `pipelines-readme.md` is updated.
   - Write a build-rationale document like Cosmos DB's `docs/webview-build.md`: one place that
     explains every non-obvious Vite setting (`base`, workers, CSS inlining, chunking, CSP).
-    - **Done in `8e2699c0` (GPT-6.1 Sol): [build/vite/README.md](../../../build/vite/README.md),**
+    - **Done in `8e2699c0` (GPT-6.1 Sol): [build/vite/README.md](../../../../../../build/vite/README.md),**
       covering both `vite.config.views.mjs` and `vite.config.ext.mjs`. Location (coordinator
       decision): next to the local Vite plugins it explains, since `docs/` is the published user
       documentation site. Both configs' header comments, `CONTRIBUTING.md` and
@@ -3036,7 +3045,7 @@ Stage 0 must also be made.
 
 - **AI review:** GPT-6 Sol, fresh session, given the plan as of `8472f112`, the Stage 6 diff
   without this record, the earlier findings and the check results, but not the authors'
-  reasoning: [06-stage6-review.md](./iterations/06-stage6-review.md), range
+  reasoning: [06-stage6-review.md](./06-stage6-review.md), range
   `8472f112..ece5acf8`. The reviewer re-ran the build, package, budgets, `prove:vsix`,
   `test:verification`, Vitest, the package checks, L3 with its proof, the `/host` probe, L2,
   L2-dev and the dependency scan in an isolated copy, all passing, and read CI run
@@ -3075,7 +3084,7 @@ Stage 0 must also be made.
     cannot build a merge ref while #880 conflicts, so the merge result is untested (PR-F01). ADO
     has not run.
   - **CONTRIBUTING.md §6 pre-review:**
-    [06-pr-pre-review.md](./iterations/06-pr-pre-review.md), range `v0.11.0..ec7c7ff1`. Step 1
+    [06-pr-pre-review.md](./06-pr-pre-review.md), range `v0.11.0..ec7c7ff1`. Step 1
     was Claude Opus 5.5; steps 3 and 4 (validation and sweep) were GPT-6.1 Sol. Findings: 2
     medium, 4 low, 0 high.
     - **PR-F01:** the lockfile conflict with `main`, which also changes the bundled
@@ -3240,7 +3249,7 @@ Stage 0 must also be made.
     - **For G6 release step 2 (operator):** after the merge, dispatch on `main` with
       `dry_run=false`, select the packages, and approve the environment.
     - **Independent review of `c0fd83c8` and `afda4095`:** Claude Opus 5.5 in a fresh session,
-      appended to [06-stage6-review.md](./iterations/06-stage6-review.md). The reviewer found no
+      appended to [06-stage6-review.md](./06-stage6-review.md). The reviewer found no
       path that publishes by accident, confirmed the diagnoses, and raised two low findings,
       fixed in `dd5b767d` by coordinator decision:
       - **S6-F03:** the pin was npm 11.5.1, the oldest Trusted Publishing release, which had
@@ -3531,7 +3540,7 @@ Stage 0 must also be made.
   - Do not rewrite the original review files. Set each to `status: historical` and add one line
     at the top that links to the re-evaluation.
   - **Done (2026-10-07) in `4ce40970`:**
-    [07-stage-reviews-reevaluation.md](./iterations/07-stage-reviews-reevaluation.md). The eight
+    [07-stage-reviews-reevaluation.md](./07-stage-reviews-reevaluation.md). The eight
     originals are `status: historical`, with one added line linking to it (`00` was already
     historical); nothing else in them changed.
     - **Who:** eight independent, read-only re-evaluators, as in the table above. Claude Opus 5.5
@@ -3593,7 +3602,7 @@ Stage 0 must also be made.
     (currently `0.11.2`); and G5-I01 option 4, an L1 guard against Rolldown's lowered-`import()`
     bug.
   - **G7 list (coordinator, 2026-10-07).** Answer by number. "Rec." is the recommendation in
-    [07-stage-reviews-reevaluation.md](./iterations/07-stage-reviews-reevaluation.md), where every
+    [07-stage-reviews-reevaluation.md](./07-stage-reviews-reevaluation.md), where every
     item has its evidence, and for X7 and SW7 its options.
     - **A. Still-valid findings, already decided at G6 (fix in Stage 8):**
       - **1.** PR-F02 (medium) with X7-F01 (medium): `verify:packages` missing from general CI and the
@@ -3737,7 +3746,7 @@ Stage 0 must also be made.
       (resolved, obsolete or false positive in hindsight): decided as recommended in the
       re-evaluation file, which needs no further action.
     - All decisions are also recorded per finding in
-      [07-stage-reviews-reevaluation.md](./iterations/07-stage-reviews-reevaluation.md).
+      [07-stage-reviews-reevaluation.md](./07-stage-reviews-reevaluation.md).
 - **G7 status: closed** (the coordinator's reading of "next task will be the execution of stage
   8"; the operator did not write "G7 passed"). Stage 8 starts next.
 - **Stage 7 commits:** `946f7961` (merge of `main` `1380b758`), `63a69976` (the `glob`
@@ -3755,7 +3764,7 @@ Stage 0 must also be made.
   reviews.
 - **Defined at G7 (2026-10-12).** The operator decided every G7 item; see "G7 decisions" under
   Stage 7. The finding IDs below refer to
-  [07-stage-reviews-reevaluation.md](./iterations/07-stage-reviews-reevaluation.md), which holds
+  [07-stage-reviews-reevaluation.md](./07-stage-reviews-reevaluation.md), which holds
   each finding's evidence and options.
 - **How to run it:**
   - One commit per work item (CONTRIBUTING.md §6.3), subject `S8: …`. Record each item inline
@@ -4129,7 +4138,7 @@ Stage 0 must also be made.
       which have never run on a Windows agent. See G8 item 21.
 - **Stage 8 review:** GPT-6 Sol in a fresh session, without the authors' reasoning, written to
   `iterations/08-stage8-review.md` in the format of the earlier stage reviews.
-  - **Done in `7e7f543c`:** [08-stage8-review.md](./iterations/08-stage8-review.md)
+  - **Done in `7e7f543c`:** [08-stage8-review.md](./08-stage8-review.md)
     (`kind: review`, `status: active`), range `d9b85811..8e27139d`. It was given the commit
     range, this Stage 8 section, the G7 decisions and the code. Four findings, none critical or
     high: S8-F01 and S8-F02 (medium) and S8-F03 (low), all in W3's archive reader, and S8-F04
@@ -4326,7 +4335,7 @@ Stage 0 must also be made.
   complexity rather than defects: the build, dependencies and product code got simpler, while
   `build/verification/` grew to about 7.5k lines plus 4.6k lines of tests, part of it
   migration-time evidence or checks of checks. The decisions are
-  [0001 to 0003 in decisions.md](./decisions.md). Stage 8.5 runs before the remaining Stage 9
+  [0001 to 0003 in decisions.md](../../decisions.md). Stage 8.5 runs before the remaining Stage 9
   tasks; Stage 9 task 1 (the Copilot pass) stays done, and task 2 (Case 2) covers this stage.
 - **Models (operator, 2026-10-14):** this Claude Opus 5.5 session coordinates, with sequential
   subagents: Claude Opus 5.5 for CI and verification design (W1, W2), GPT-5.6 Sol Fast for
@@ -4477,7 +4486,7 @@ Stage 0 must also be made.
     and the URI handler activation race (#3288). The cold-start URI was not tested manually at
     G6; the operator accepted that risk.
 
-  Its starting point is [e2e-testing-strategy.md](./e2e-testing-strategy.md), plus the findings
+  Its starting point is [e2e-testing-strategy.md](../../../e2e-testing/strategy.md), plus the findings
   that G7 routed to it from the Stage 7 re-evaluation.
   - **Added at G4 (2026-10-05):** L2-dev follow-up: make a scenario route that is opened by hand
     run its typed steps, so it shows its target state instead of the view's entry state.
@@ -4500,7 +4509,7 @@ Stage 0 must also be made.
 
 ### After this iteration
 
-- Replace SlickGrid: [slickgrid-removal.md](./slickgrid-removal.md).
+- Replace SlickGrid: [slickgrid-removal.md](../../../data-grid/slickgrid-removal.md).
 - [#990](https://github.com/microsoft/vscode-documentdb/issues/990): upgrade
   `@microsoft/vscode-azext-azureauth` and remove the G5-I01 alias.
 - [#991](https://github.com/microsoft/vscode-documentdb/issues/991): align the Node.js and npm
@@ -4511,7 +4520,7 @@ Stage 0 must also be made.
 - **Dependency refresh (operator, G7, 2026-10-12):** a work item right after the modernization
   that "just focues on the refresh of our dependencies". It also reviews the remaining
   `overrides` (`glob ~12.0.0`, and `vite: $vite` with #991).
-- Deferred items: [future-work.md](./future-work.md).
+- Deferred items: [future-work.md](../../future-work.md).
 
 ---
 
@@ -4593,7 +4602,7 @@ against it.
 An independent agent (a different model family) reviewed the plan read-only and reported 21
 findings, F01 to F21. Each finding at major or above was re-assessed against the code before it was
 accepted. The accepted changes are written into the stages of the execution plan. Findings that
-ended below major are tracked in [future-work.md](./future-work.md); the ones that were cheap,
+ended below major are tracked in [future-work.md](../../future-work.md); the ones that were cheap,
 contradiction-only fixes were also corrected directly.
 
 **Operator decisions (2026-10-01):**
@@ -4770,7 +4779,7 @@ superseded guidance.
 | **4 — current** | Unchanged on substance: **Vite for both targets**. esbuild evaluated and rejected as the _primary_ stack, retained as a host-only fallback (Part J).                                      | Reviewed `vscode-azuretools/eng/MIGRATION.md`. Their esbuild standardisation is silent on webviews — our actual pain — and ships as an **alpha** eng package that also imposes Mocha. Two of our assumptions improved though: the ESM engine floor is likely a non-issue (Node 22 → VS Code 1.101.0), and `@microsoft/vscode-azext-utils` already ships dual ESM/CJS.                                                                                                                                                                                                                                                                                                                                    |
 | **5 — current** | Unchanged on the stack. **Sequencing amended:** Phase 0 splits into **0a**, one automated installed-VSIX activation check built _before_ the migration, and **0b**, the manual checklist. | A detailed architecture report on **Ref1** (an internal, more mature sibling suite) landed. Its hardest-defended claim is that a bundler migration must be validated against a **packaged artifact continuously**, because packaging-time breakage is invisible to both F5 and source-mode tests. Ref1 has the lane that catches this but runs it on `workflow_dispatch` only, so its own bundler migration was never covered by it. Rev 3's "do not build on the layer you are deleting" logic still holds for the E2E _suite_; it does not apply to 0a, which asserts on a VSIX rather than a build config. Ref1 also supplied four concrete bundler-breakage classes now folded into Phase 0 and K.5. |
 
-| **6 - current** | Stack unchanged. **Execution rewritten as eight sequential stages** (see the execution plan), each ending on an operator gate. Vitest moves **before** the bundler. E2E becomes its own iteration. The legacy Mocha harness is dropped. Our six packages move to **ESM-only**, not dual (Stage 3). The installed-VSIX check (0a, now L3) runs on GitHub Actions only, and L1 runs in both pipelines (pipelines-readme.md). SlickGrid removal gets its own plan ([slickgrid-removal.md](./slickgrid-removal.md)). | Re-review against Cosmos DB `main` at `07ac7f86` (B1): their ADO pipeline adopted `DefaultDeny` network isolation, which blocked `npm test`; both of our packages now carry consumer-side interop costs in their Vitest config; the feed-quarantine constraint on new dependencies; TypeScript 6. In this repo (B2): the Jest surface grew 48 % in seven weeks, which argues for converting it early; there is now a fifth webview. The automated checks (L0 to L3) move most verification from the operator to the agent. |
+| **6 - current** | Stack unchanged. **Execution rewritten as eight sequential stages** (see the execution plan), each ending on an operator gate. Vitest moves **before** the bundler. E2E becomes its own iteration. The legacy Mocha harness is dropped. Our six packages move to **ESM-only**, not dual (Stage 3). The installed-VSIX check (0a, now L3) runs on GitHub Actions only, and L1 runs in both pipelines (pipelines-readme.md). SlickGrid removal gets its own plan ([slickgrid-removal.md](../../../data-grid/slickgrid-removal.md)). | Re-review against Cosmos DB `main` at `07ac7f86` (B1): their ADO pipeline adopted `DefaultDeny` network isolation, which blocked `npm test`; both of our packages now carry consumer-side interop costs in their Vitest config; the feed-quarantine constraint on new dependencies; TypeScript 6. In this repo (B2): the Jest surface grew 48 % in seven weeks, which argues for converting it early; there is now a fifth webview. The automated checks (L0 to L3) move most verification from the operator to the agent. |
 
 **What survived every revision:** the measurements in Parts A, C and I, and the four failure
 classes in the Phase 0 checklist. Those are evidence, not preference.
@@ -5773,7 +5782,7 @@ document.
 
 > **For value / complexity / carrying-cost scores on these items**, and for the option neither
 > reference project chose, see the companion document's
-> [Part 7](./e2e-testing-strategy.md#7-recommendations--scored-and-not-limited-to-copying). This
+> [Part 7](../../../e2e-testing/strategy.md#7-recommendations--scored-and-not-limited-to-copying). This
 > section is the index; Part 7 is the decision artifact.
 
 ### K.1 From Cosmos DB — build & bundling

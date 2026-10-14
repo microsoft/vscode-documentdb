@@ -1,4 +1,5 @@
 ---
+feature: build-and-test-stack
 kind: review
 status: historical
 ---
@@ -16,7 +17,7 @@ status: historical
 - **Range reviewed:** `cb9986f4..9dbb9436`, **21 commits**, all with `S4:` subjects, verified with
   `git rev-list --count cb9986f4..9dbb9436` and `git log --oneline`. The initial HEAD was
   `9dbb9436617230ad583e26adb4cc73aa695a7faa`, on `dev/tnaum/modernization`; the worktree was clean.
-- **Method:** [CONTRIBUTING.md](../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor)
+- **Method:** [CONTRIBUTING.md](../../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor)
   section 6.1 steps 1 to 4: initial edge-case review, fetch PR reviewer comments, validate
   findings against code and artifact probes, then an independent sweep. Steps 1, 3 and 4 were
   performed by this reviewer, not by a second model. PR #880 remains draft and had **0 review
@@ -66,11 +67,11 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
 
 - **Severity:** medium. **Validation:** confirmed by a full L1 run on a mutated copy of the
   packaged VSIX, with the original, unmodified bundle reports.
-- **Where:** [inspect.cjs:27](../../../../build/verification/inspect.cjs#L27),
-  [inspect.cjs:59](../../../../build/verification/inspect.cjs#L59) and
-  [inspect.cjs:76](../../../../build/verification/inspect.cjs#L76); implementation `b47627f1`.
+- **Where:** [inspect.cjs:27](../../../../../../build/verification/inspect.cjs#L27),
+  [inspect.cjs:59](../../../../../../build/verification/inspect.cjs#L59) and
+  [inspect.cjs:76](../../../../../../build/verification/inspect.cjs#L76); implementation `b47627f1`.
   The decision and invariant claim are at
-  [build-and-test-stack.md:1919](../build-and-test-stack.md#L1919), `44d5488e`.
+  [build-and-test-stack.md:1919](./build-and-test-stack.md#L1919), `44d5488e`.
 - **What is wrong.** Making arbitrary file-list/size drift informational is an explicit,
   recorded choice, not itself an accidental bug. But the replacement required-files list is
   not a complete runtime-asset invariant. The webpack host report hashes JavaScript only;
@@ -118,9 +119,9 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
 
 - **Severity:** low (no offending active import in today's output). **Validation:** confirmed
   by AST inspection and a full L1 run on a copied VSIX with matching copied asset hashes.
-- **Where:** [inspect.cjs:23](../../../../build/verification/inspect.cjs#L23),
-  [inspect.cjs:149](../../../../build/verification/inspect.cjs#L149) and
-  [inspect.cjs:212](../../../../build/verification/inspect.cjs#L212); `0e990aef`, following
+- **Where:** [inspect.cjs:23](../../../../../../build/verification/inspect.cjs#L23),
+  [inspect.cjs:149](../../../../../../build/verification/inspect.cjs#L149) and
+  [inspect.cjs:212](../../../../../../build/verification/inspect.cjs#L212); `0e990aef`, following
   `8feb2349`.
 - **What is wrong.** The filename, Vite ownership, empty template quasis and count caps are
   useful restrictions. They reject a third worker import and imports in other chunks. However,
@@ -161,10 +162,10 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
 
 - **Severity:** info. **Validation:** confirmed for the artifact and platform-source facts;
   real `vscode-webview://` execution **not reproduced**.
-- **Where:** [vite.config.views.mjs:60](../../../../vite.config.views.mjs#L60),
-  [monaco.mjs:85](../../../../build/vite/monaco.mjs#L85),
-  [inline-css.mjs:35](../../../../build/vite/inline-css.mjs#L35), `769a2971`;
-  [WebviewController.ts:300](../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L300)
+- **Where:** [vite.config.views.mjs:60](../../../../../../vite.config.views.mjs#L60),
+  [monaco.mjs:85](../../../../../../build/vite/monaco.mjs#L85),
+  [inline-css.mjs:35](../../../../../../build/vite/inline-css.mjs#L35), `769a2971`;
+  [WebviewController.ts:300](../../../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L300)
   supplies the unchanged production policy.
 - **What is right.** Production uses relative script-resource URLs, keeps the named export, keeps
   fonts out of `data:`, rewrites the actual codicon CSS URL against `import.meta.url`, and emits
@@ -205,7 +206,7 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
 
 ## Independent sweep
 
-- **Per-view graph and non-vacuity.** [viteViewGraph](../../../../build/verification/inspect.cjs#L335)
+- **Per-view graph and non-vacuity.** [viteViewGraph](../../../../../../build/verification/inspect.cjs#L335)
   includes the entry's static closure plus the selected direct lazy chunk's static closure,
   not every dynamic child of the entry. Each facade must exist and be a direct entry dynamic
   import; registry-map tests prevent unnoticed name/path drift. Lightweight exclusion is on
@@ -228,7 +229,7 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
   webpack host; there is no actual browser BSON consumer to identity-probe in this stage.
   Vendored/renamed copies outside the detector's known BSON paths remain its acknowledged limit.
 - **L2 changes do not weaken its intended assertions.**
-  [playwright.ts](../../../../build/verification/browser/playwright.ts) retains settling,
+  [playwright.ts](../../../../../../build/verification/browser/playwright.ts) retains settling,
   style, worker and diagnostic failures. `page.evaluate` polling changes how readiness is
   observed, not the CSP delivered to application code. `__name` supplies tsx's external helper
   binding, not a page CSP exemption. `about:blank` isolates successive documents before
@@ -237,8 +238,8 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
   and rejects missing markers in split entries. It is more targeted than removing all styles,
   not a vacuous control: the packaged negative run produced exactly seven failures.
 - **L2-dev contracts and isolation.**
-  [core/fixtures.ts](../../../../build/verification/browser/core/fixtures.ts) and
-  [scenarios.ts](../../../../build/verification/browser/scenarios.ts) type paths, output payloads
+  [core/fixtures.ts](../../../../../../build/verification/browser/core/fixtures.ts) and
+  [scenarios.ts](../../../../../../build/verification/browser/scenarios.ts) type paths, output payloads
   and assertion inputs against the router; defaults reuse L2 fixture objects. Runtime unknown
   paths/type mismatches fail explicitly, escaping calls are logged, and late errors continue
   to set failure after ready. The server plugin is `apply: 'serve'`; scenario modules are not in

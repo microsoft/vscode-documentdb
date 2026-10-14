@@ -1,4 +1,5 @@
 ---
+feature: build-and-test-stack
 kind: review
 status: historical
 ---
@@ -21,7 +22,7 @@ status: historical
   During review, the coordinator separately added an **uncommitted** Stage 5 execution record
   to the plan; its explanations were read, but that change is not part of the commit range
   and was not edited by this reviewer.
-- **Method:** [CONTRIBUTING.md](../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor)
+- **Method:** [CONTRIBUTING.md](../../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor)
   section 6.1 steps 1 to 4: edge-case review; fetch PR review comments with `gh`; validate
   findings against code and artifact/runtime probes; then an independent sweep. Draft
   PR #880 had **0 review comments and 0 reviews**. Read the plan's ground rules, L0-L3,
@@ -73,10 +74,10 @@ test failure. No `npm run package` was run and no default VSIX/report was overwr
 - **Severity:** medium (verification gap; not a demonstrated current eager-load regression).
   **Validation:** confirmed, high confidence, by a full L1 run over mutated packaged bytes
   with matching copied report hashes, edges and chunk sizes.
-- **Where:** [inspect.cjs:717](../../../../build/verification/inspect.cjs#L717), particularly
+- **Where:** [inspect.cjs:717](../../../../../../build/verification/inspect.cjs#L717), particularly
   the static closure rooted at `main` on line 727; the new control in
-  [prove-inspection.cjs](../../../../build/verification/prove-inspection.cjs);
-  [main.ts:22](../../../../main.ts#L22). Introduced in `770446c2`.
+  [prove-inspection.cjs](../../../../../../build/verification/prove-inspection.cjs);
+  [main.ts:22](../../../../../../main.ts#L22). Introduced in `770446c2`.
 - **What is wrong.** `main.mjs` is intentionally a thin loader. Its static imports contain
   only `chunk-B91zb93r.mjs`; it then **top-level-awaits**
   `extension-D6RjgaLh.mjs`. Everything statically imported by that implementation is loaded
@@ -123,9 +124,9 @@ test failure. No `npm run package` was run and no default VSIX/report was overwr
 - **Severity:** low (rare first-install/replacement race; no data loss).
   **Validation:** confirmed, high confidence for the filesystem interleaving; occurrence
   frequency in real multi-window VS Code sessions was not measured.
-- **Where:** [tsPluginStub.ts:57](../../../../src/documentdb/playground/tsPluginStub.ts#L57),
+- **Where:** [tsPluginStub.ts:57](../../../../../../src/documentdb/playground/tsPluginStub.ts#L57),
   especially the snapshot at line 61 and in-place `writeFileSync` at line 77;
-  [ClustersExtension.ts:397](../../../../src/documentdb/ClustersExtension.ts#L397).
+  [ClustersExtension.ts:397](../../../../../../src/documentdb/ClustersExtension.ts#L397).
   Introduced/expanded by the new manifest and replacement writer in `776f3a87`.
 - **What is wrong.** Writing `index.cjs` before `package.json` is correct for a single
   writer, but does not make publication atomic across windows. Each window reads the
@@ -188,9 +189,9 @@ test failure. No `npm run package` was run and no default VSIX/report was overwr
   [ExtensionUrlHandler](https://github.com/microsoft/vscode/blob/1.109.0/src/vs/workbench/services/extensions/browser/extensionUrlHandler.ts#L230)
   buffers the URI **before** `activateByEvent`, and `registerExtensionHandler` drains that
   buffer when registration arrives. In this extension,
-  [activateInternal](../../../../src/extension.ts#L75) awaits cluster-support activation
+  [activateInternal](../../../../../../src/extension.ts#L75) awaits cluster-support activation
   before registering the URI handler, and
-  [activateClustersSupport](../../../../src/documentdb/ClustersExtension.ts#L272) awaits
+  [activateClustersSupport](../../../../../../src/documentdb/ClustersExtension.ts#L272) awaits
   Azure Resources registration before installing the trees/commands. A slower awaited
   module import alone does not make that buffered URI disappear. Reviewed
   [microsoft/vscode-cosmosdb#3288](https://github.com/microsoft/vscode-cosmosdb/pull/3288):

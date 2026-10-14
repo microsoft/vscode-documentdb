@@ -1,4 +1,5 @@
 ---
+feature: build-and-test-stack
 kind: review
 status: historical
 ---
@@ -16,7 +17,7 @@ status: historical
   the current plan's Stage 6 execution record. For intent, used **only** the plan at
   `8472f112`, including its ground rules, L0-L3/L2-dev, G4 manifest decision, G5-I01 and G6.
   Read the earlier stage reviews and F17.
-- **Method:** [CONTRIBUTING.md](../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor)
+- **Method:** [CONTRIBUTING.md](../../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor)
   section 6.1 steps 1-4: edge-case diff review; fetch PR #880 review comments and conversation
   with `gh` (zero review comments/reviews; three issue comments); validate candidates against
   code and isolated artifact probes; independent sweep. All mutations and builds used a copy
@@ -54,10 +55,10 @@ timestamps. Browser checks used the supplied headless Chromium kit without CSP b
 - **Severity:** low (published-tarball hygiene; a clean checkout does not reproduce it).
   **Validation:** confirmed with an isolated incremental build, `npm pack --dry-run` and
   `verify:packages`.
-- **Where:** [shell-runtime tsconfig](../../../../packages/documentdb-js-shell-runtime/tsconfig.json),
-  also the [operator-registry tsconfig](../../../../packages/documentdb-js-operator-registry/tsconfig.json)
-  and [shell-api-types tsconfig](../../../../packages/documentdb-js-shell-api-types/tsconfig.json);
-  [package checks](../../../../build/verification/package-checks/check-packages.mjs).
+- **Where:** [shell-runtime tsconfig](../../../../../../packages/documentdb-js-shell-runtime/tsconfig.json),
+  also the [operator-registry tsconfig](../../../../../../packages/documentdb-js-operator-registry/tsconfig.json)
+  and [shell-api-types tsconfig](../../../../../../packages/documentdb-js-shell-api-types/tsconfig.json);
+  [package checks](../../../../../../build/verification/package-checks/check-packages.mjs).
 - **What is wrong.** Excluding `src/**/*.test.ts` stops TypeScript 6 from emitting new test
   files but does not remove test JavaScript already in `dist/` from an earlier build.
   The package `files` allowlist includes `dist`, and the consumer verifier packs whatever
@@ -90,9 +91,9 @@ timestamps. Browser checks used the supplied headless Chromium kit without CSP b
 - **Severity:** low (size-budget coverage gap; no present oversized or broken font).
   **Validation:** confirmed against full L1 with a copied VSIX and matching copied bundle
   report hash.
-- **Where:** [measureSizeGraphs](../../../../build/verification/inspect.cjs#L865) and
-  [size budget](../../../../build/verification/size-budget.json). The
-  [budget documentation](../../../../build/verification/README.md#size-budget-enforced)
+- **Where:** [measureSizeGraphs](../../../../../../build/verification/inspect.cjs#L865) and
+  [size budget](../../../../../../build/verification/size-budget.json). The
+  [budget documentation](../../../../../../build/verification/README.md#size-budget-enforced)
   describes JavaScript closures and separate worker graphs, but no font graph.
 - **What is wrong.** The view budget sums report-owned **chunk** assets, not CSS-referenced
   assets. The packaged codicon font is report-owned and loaded by the views, yet belongs
@@ -141,8 +142,8 @@ timestamps. Browser checks used the supplied headless Chromium kit without CSP b
   `vite` overrides have recorded non-quarantine reasons. All package projects retain
   `NodeNext`; the root's two exact type-only `paths` aliases have explanations, no
   `baseUrl` or `"*"` mapping is present, and the build and consumer checks pass.
-  S2-F03 remains open: [Vitest config](../../../../vitest.config.ts) still relies on
-  default per-file isolation, and the [CJS `vscode` hook](../../../../test/vitest/setup.ts)
+  S2-F03 remains open: [Vitest config](../../../../../../vitest.config.ts) still relies on
+  default per-file isolation, and the [CJS `vscode` hook](../../../../../../test/vitest/setup.ts)
   does not receive per-file ESM factory mocks. Pin `pool: 'forks'`/`isolate: true` or
   retain this explicitly under #990; a production alias fix is not a test-mock fix.
 - S3-F02 is now characterized, not concealed: the real unbundled `/host` test detects
@@ -174,8 +175,8 @@ timestamps. Browser checks used the supplied headless Chromium kit without CSP b
   it and Claude Opus 5.5 coordinated it, so the coordinator is the same model family as this
   reviewer. No different-vendor validation is claimed.
 - **Range:** `c0fd83c8` (dry-run verification path in
-  [npm-publish-documentdb-js.yml](../../../../.github/workflows/npm-publish-documentdb-js.yml))
-  and `afda4095` (section 3.2 and table rows in [pipelines-readme.md](../pipelines-readme.md)),
+  [npm-publish-documentdb-js.yml](../../../../../../.github/workflows/npm-publish-documentdb-js.yml))
+  and `afda4095` (section 3.2 and table rows in [pipelines-readme.md](../../pipelines.md)),
   read at `858ac6d2`. `build-and-test-stack.md` was deliberately not read.
 - **Method:** read both diffs and the complete resulting workflow. Then checked each dispatch
   path, gating rule, permission and toolchain claim against GitHub run data, npm registry
@@ -234,8 +235,8 @@ timestamps. Browser checks used the supplied headless Chromium kit without CSP b
 - **Severity:** low. A real publish could fail, so the risk is to availability, not to
   safety. **Validation:** confirmed with registry metadata and npm source. That the May
   publishes used npm 11.15.0 is an inference, because their logs have expired.
-- **Where:** [publish workflow](../../../../.github/workflows/npm-publish-documentdb-js.yml),
-  the two `npm install -g npm@11.5.1` steps; [pipelines-readme section 3.2](../pipelines-readme.md).
+- **Where:** [publish workflow](../../../../../../.github/workflows/npm-publish-documentdb-js.yml),
+  the two `npm install -g npm@11.5.1` steps; [pipelines-readme section 3.2](../../pipelines.md).
 - **What is wrong.** The last successful real publications (2026-05-21) ran `npm@latest`,
   and at that time `latest` was npm 11.15.0 (published 2026-05-20; npm 12 had only a
   prerelease). The fix pins 11.5.1, the first release that meets the Trusted Publishing
@@ -265,7 +266,7 @@ timestamps. Browser checks used the supplied headless Chromium kit without CSP b
 - **Severity:** low. The effect is operational and fails closed: nothing publishes
   unintentionally. **Validation:** by reasoning from the workflow and GitHub's documented
   concurrency semantics; not reproduced, because no dispatch was allowed.
-- **Where:** [publish workflow](../../../../.github/workflows/npm-publish-documentdb-js.yml),
+- **Where:** [publish workflow](../../../../../../.github/workflows/npm-publish-documentdb-js.yml),
   the top-level `concurrency: publish-documentdb-js-packages`, `cancel-in-progress: false`.
 - **What is wrong.** Before this change every run was a publication, so one global group
   made sense. Now dry runs are the default and are recommended on any branch before a

@@ -1,14 +1,21 @@
+---
+feature: e2e-testing
+kind: research
+status: active
+created: 2026-08-09
+---
+
 # E2E & Visual Testing Strategy
 
 **Research date:** 2026-08-09
-**Companion to:** [`build-and-test-stack.md`](./build-and-test-stack.md)
+**Companion to:** [`build-and-test-stack.md`](../build-and-test-stack/iterations/01-modernization/build-and-test-stack.md)
 **Subjects:** `microsoft/vscode-cosmosdb` `test/e2e/` (main @ `4b1bb6c`) vs. our parked
 [PR #867 — Webview visual harness + Playwright suite](https://github.com/microsoft/vscode-documentdb/pull/867),
 plus **Ref1** — an internal, more mature sibling suite, distilled and redacted in Part 5
 
 **Binding for the E2E iteration (2026-10-14):** E2E runs in the full CI tier only, never on draft
 PRs, and every E2E job reports itself in the layer report comment, including why it was skipped.
-See [decisions.md 0002](./decisions.md#0002-ci-runs-verification-in-tiers-and-reports-what-it-ran-and-why).
+See [decisions.md 0002](../build-and-test-stack/decisions.md#0002-ci-runs-verification-in-tiers-and-reports-what-it-ran-and-why).
 The L2 production harness is retired into E2E when the suite lands.
 
 ---
@@ -19,7 +26,7 @@ The L2 production harness is retired into E2E when the suite lands.
 > _before_ the migration; the reference project's own timeline disproved that. A later revision then
 > carved out **one** slice that does belong before it — the installed-VSIX activation check — on
 > evidence from Ref1. See Part 6 and the Decision Log in the
-> [companion document](./build-and-test-stack.md#decision-log).
+> [companion document](../build-and-test-stack/iterations/01-modernization/build-and-test-stack.md#decision-log).
 
 > _"I assume #867 is more for quick checks during dev for agents, but maybe the E2E from
 > vscode-cosmosdb has already this built in somehow."_

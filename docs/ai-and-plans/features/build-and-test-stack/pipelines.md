@@ -1,4 +1,5 @@
 ---
+feature: build-and-test-stack
 kind: notes
 status: active
 created: 2026-09-30
@@ -12,7 +13,7 @@ code:
 A catch-up guide to this repo's two CI systems, GitHub Actions and Azure DevOps (ADO). It covers the
 network isolation constraint on the official ADO build, and the rule for deciding where a new check
 belongs. Written during the modernization re-review
-([build-and-test-stack.md, execution plan](./build-and-test-stack.md#execution-plan)).
+([build-and-test-stack.md, execution plan](./iterations/01-modernization/build-and-test-stack.md#execution-plan)).
 
 Marked facts: [MEASURED] was read from the pipeline files on 2026-09-30, with checkout, reporting
 and artifact wiring updated in Stage 6 on 2026-10-06 and the npm dry-run path on 2026-10-07.
@@ -35,15 +36,15 @@ the operator-run ADO build and the G0 manual checklist remain outstanding.
 
 ### GitHub Actions (`.github/workflows/`)
 
-| Workflow                              | Triggers                                                          | What it does                                                                                                                                                                                                                                                              |
-| ------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.yml` ("CI")                     | PRs and pushes: `main`, `release/**`; PRs to `feature/**`; manual | In tiers (decision 0002, [CI](../../../build/verification/README.md#ci)): L0 on draft PRs; ready PRs and pushes add packaging, L1 and L3; package checks, negative controls and the host probe when their paths change; `ci:full-requested` runs all once. One PR comment |
-| `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                              | Extracts the public API typings                                                                                                                                                                                                                                           |
-| `api-publish.yaml`                    | Manual                                                            | Publishes the API typings package to npm                                                                                                                                                                                                                                  |
-| `npm-publish-documentdb-js.yml`       | Manual; `dry_run` defaults to `true`, one checkbox per package    | Builds, type-checks package tests, tests and verifies packages, and dry-runs publication; explicit real publication to npmjs with provenance requires successful verification and environment approval                                                                    |
-| `bump-version-pr.yaml`                | Manual                                                            | Opens the version bump PR after a release                                                                                                                                                                                                                                 |
-| `deploy-documentation-production.yml` | Push to `main` touching `docs/**`; manual                         | Deploys the documentation site                                                                                                                                                                                                                                            |
-| `seed-build-cache.yml`                | Manual (`seed` / `verify`)                                        | Build-size cache                                                                                                                                                                                                                                                          |
+| Workflow                              | Triggers                                                          | What it does                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.yml` ("CI")                     | PRs and pushes: `main`, `release/**`; PRs to `feature/**`; manual | In tiers (decision 0002, [CI](../../../../build/verification/README.md#ci)): L0 on draft PRs; ready PRs and pushes add packaging, L1 and L3; package checks, negative controls and the host probe when their paths change; `ci:full-requested` runs all once. One PR comment |
+| `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                              | Extracts the public API typings                                                                                                                                                                                                                                              |
+| `api-publish.yaml`                    | Manual                                                            | Publishes the API typings package to npm                                                                                                                                                                                                                                     |
+| `npm-publish-documentdb-js.yml`       | Manual; `dry_run` defaults to `true`, one checkbox per package    | Builds, type-checks package tests, tests and verifies packages, and dry-runs publication; explicit real publication to npmjs with provenance requires successful verification and environment approval                                                                       |
+| `bump-version-pr.yaml`                | Manual                                                            | Opens the version bump PR after a release                                                                                                                                                                                                                                    |
+| `deploy-documentation-production.yml` | Push to `main` touching `docs/**`; manual                         | Deploys the documentation site                                                                                                                                                                                                                                               |
+| `seed-build-cache.yml`                | Manual (`seed` / `verify`)                                        | Build-size cache                                                                                                                                                                                                                                                             |
 
 All of them install from **public npmjs**: there is no `.npmrc` at the repository root.
 
@@ -141,7 +142,7 @@ artifact** with checks that need no network. GitHub Actions runs everything that
 or a display, and everything that exists for PR feedback.
 
 The check names L1 to L3 come from the modernization plan
-([build-and-test-stack.md, the automated checks](./build-and-test-stack.md#the-automated-checks)):
+([build-and-test-stack.md, the automated checks](./iterations/01-modernization/build-and-test-stack.md#the-automated-checks)):
 L1 inspects the unzipped VSIX against its invariants and measures per-graph sizes for a warning-only PR report, L2 renders the production webview bundle
 in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that it activates.
 
@@ -180,7 +181,7 @@ unbundled-host probe when `packages/vscode-ext-webview/**` changes, and in full 
 L1 owns size collection, cache save/restore and the build size section of the PR's
 `<!-- ci-report -->` comment, which the CI report job posts (it replaced the separate
 `<!-- build-size-report -->` and `<!-- code-quality-report -->` comments).
-The shared [report formatter](../../../build/verification/build-size-report.cjs) reads L1's
+The shared [report formatter](../../../../build/verification/build-size-report.cjs) reads L1's
 `graphSizes` without reimplementing graph traversal. It flags a graph that changed by at least
 5% of its base or 50 KiB (⚠️ and a GitHub warning annotation on growth; every delta carries ⬆️, ⬇️ or ✅), shows one line when
 nothing moved, and keeps every graph's exact PR bytes, base bytes and delta (all five views, the

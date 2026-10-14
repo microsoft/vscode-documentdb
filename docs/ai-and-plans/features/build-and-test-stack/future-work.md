@@ -1,4 +1,5 @@
 ---
+feature: build-and-test-stack
 kind: plan
 status: active
 created: 2026-10-01
@@ -11,7 +12,7 @@ iteration. They are not scheduled. Each entry says where it came from, why it wa
 would make it worth doing.
 
 The source of most entries is review round 1 (2026-10-01), recorded in
-[build-and-test-stack.md, B5](./build-and-test-stack.md#b5-review-round-1-2026-10-01-findings-operator-decisions-amendments).
+[build-and-test-stack.md, B5](./iterations/01-modernization/build-and-test-stack.md#b5-review-round-1-2026-10-01-findings-operator-decisions-amendments).
 Findings below major that were cheap, contradiction-only fixes were corrected in the plan directly and
 are not repeated here: F14 (N2 and N3 tracked separately), F15 (webpack configs renamed to `.cjs` if
 kept as a fallback), F16 (which checks are CI jobs and which are agent runs), F18 (ARIA header row
@@ -106,7 +107,7 @@ wording in the grid plan), and the Stage 6 reviewer part of F20.
 
 ### Split grid tests between jsdom and the browser harness; agree on budgets (F19)
 
-- **What:** in [slickgrid-removal.md](./slickgrid-removal.md):
+- **What:** in [slickgrid-removal.md](../data-grid/slickgrid-removal.md):
   - **G3:** keep callback and state tests in jsdom; move resizing, virtualization, text selection
     and scrolling to the L2 browser harness. Mocked geometry does not verify them.
   - **G5:** "no horizontal overflow" should mean no **page** overflow. The grid itself may scroll

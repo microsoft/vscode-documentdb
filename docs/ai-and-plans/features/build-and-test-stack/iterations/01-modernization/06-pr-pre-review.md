@@ -1,4 +1,5 @@
 ---
+feature: build-and-test-stack
 kind: review
 status: active
 ---
@@ -9,7 +10,7 @@ status: active
 # PR #880 AI pre-review (CONTRIBUTING.md §6)
 
 - **Reviewer:** Claude Opus 5.5, step 1 of
-  [CONTRIBUTING.md §6.1](../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor)
+  [CONTRIBUTING.md §6.1](../../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor)
   (initial edge-case review). Steps 2 to 4 are left for later passes.
 - **Range:** `v0.11.0..ec7c7ff1` on `dev/tnaum/modernization` (541 files changed). The branch is
   based on the `v0.11.0` tag by operator decision and does not merge `main`. The local head is
@@ -42,7 +43,7 @@ status: active
 ### PR-F01: the validated tree cannot merge as is; resolving the lockfile conflict changes shipped inputs or reverts `main`
 
 - **Severity:** medium
-- **Where:** [package-lock.json](../../../../package-lock.json); PR #880 against `main`.
+- **Where:** [package-lock.json](../../../../../../package-lock.json); PR #880 against `main`.
 - **What is wrong.** PR #880 is `CONFLICTING` with `main`. Since `v0.11.0`, `main` has 12 commits
   touching three files: the two ADO release pipelines (pipeline source names, #988; the PR does
   not touch these, so they merge cleanly) and `package-lock.json` (five Dependabot bumps: #983
@@ -51,7 +52,7 @@ status: active
   resolution of the lockfile conflict either drops `main`'s bumps or changes resolved versions
   after all artifact evidence was gathered. One of them reaches the shipped VSIX: `browserslist`
   is bundled into `playgroundWorker.mjs` (through the `@babel/core` that
-  `@mongosh/async-rewriter2` uses), and [build/vite/README.md](../../../../build/vite/README.md)
+  `@mongosh/async-rewriter2` uses), and [build/vite/README.md](../../../../../../build/vite/README.md)
   ties the recorded worker-size result to how Rolldown treats `browserslist`'s dynamic `require`
   requests. `markdown-it` and `undici` are
   used by `vsce`, which produces the VSIX. The L1 baseline and size budgets, the 25 `prove:vsix`
@@ -110,12 +111,12 @@ status: active
 ### PR-F02: the ESM package checks run in no pipeline, including both publish paths
 
 - **Severity:** medium
-- **Where:** [package.json](../../../../package.json) (`verify:packages`, line 80);
-  [npm-publish-documentdb-js.yml](../../../../.github/workflows/npm-publish-documentdb-js.yml);
-  [build-npm-packages.yml](../../../../.azure-pipelines/build-npm-packages.yml);
-  [pack-npm-packages.ps1](../../../../.azure-pipelines/scripts/pack-npm-packages.ps1);
-  [main.yml](../../../../.github/workflows/main.yml);
-  [build/verification/README.md](../../../../build/verification/README.md) (line 393).
+- **Where:** [package.json](../../../../../../package.json) (`verify:packages`, line 80);
+  [npm-publish-documentdb-js.yml](../../../../../../.github/workflows/npm-publish-documentdb-js.yml);
+  [build-npm-packages.yml](../../../../../../.azure-pipelines/build-npm-packages.yml);
+  [pack-npm-packages.ps1](../../../../../../.azure-pipelines/scripts/pack-npm-packages.ps1);
+  [main.yml](../../../../../../.github/workflows/main.yml);
+  [build/verification/README.md](../../../../../../build/verification/README.md) (line 393).
 - **What is wrong.** This PR makes all six published packages ESM-only, adds `exports` maps and
   `engines`, and bumps their versions (G3). Their correctness is checked by
   `npm run verify:packages`: the packed-test rejection, `publint --strict`,
@@ -166,11 +167,11 @@ status: active
 ### PR-F03: three `@documentdb-js` packages ship the same breaking changes as `schema-analyzer` 2.0.0 with no release note
 
 - **Severity:** low
-- **Where:** [operator-registry package.json](../../../../packages/documentdb-js-operator-registry/package.json),
-  [shell-api-types package.json](../../../../packages/documentdb-js-shell-api-types/package.json),
-  [shell-runtime package.json](../../../../packages/documentdb-js-shell-runtime/package.json);
-  compare [schema-analyzer CHANGELOG.md](../../../../packages/documentdb-js-schema-analyzer/CHANGELOG.md)
-  and [vscode-ext-webview MIGRATION.md](../../../../packages/vscode-ext-webview/MIGRATION.md).
+- **Where:** [operator-registry package.json](../../../../../../packages/documentdb-js-operator-registry/package.json),
+  [shell-api-types package.json](../../../../../../packages/documentdb-js-shell-api-types/package.json),
+  [shell-runtime package.json](../../../../../../packages/documentdb-js-shell-runtime/package.json);
+  compare [schema-analyzer CHANGELOG.md](../../../../../../packages/documentdb-js-schema-analyzer/CHANGELOG.md)
+  and [vscode-ext-webview MIGRATION.md](../../../../../../packages/vscode-ext-webview/MIGRATION.md).
 - **What is wrong.** `operator-registry`, `shell-api-types` and `shell-runtime` go from 0.8.1 to
   0.9.0 with `"type": "module"`, a new `exports` map (so deep imports such as
   `@documentdb-js/operator-registry/dist/queryOperators` now fail with
@@ -207,11 +208,11 @@ status: active
 ### PR-F04: leftovers of the removed CommonJS dev layout and webpack tooling
 
 - **Severity:** low
-- **Where:** [tsconfig.json](../../../../tsconfig.json) (`outDir: "out"`) with
-  [package.json](../../../../package.json) (`"build": "tsc"`, line 63);
-  [configuration.ts](../../../../src/webviews/_integration/configuration.ts) (line 60);
-  [main.yml](../../../../.github/workflows/main.yml) (line 349);
-  [.vscodeignore](../../../../.vscodeignore) (line 35).
+- **Where:** [tsconfig.json](../../../../../../tsconfig.json) (`outDir: "out"`) with
+  [package.json](../../../../../../package.json) (`"build": "tsc"`, line 63);
+  [configuration.ts](../../../../../../src/webviews/_integration/configuration.ts) (line 60);
+  [main.yml](../../../../../../.github/workflows/main.yml) (line 349);
+  [.vscodeignore](../../../../../../.vscodeignore) (line 35).
 - **What is wrong.**
   - `npm run build`, the documented type-check step, still emits the whole project as JavaScript
     with source maps into `out/`. At `v0.11.0`, `main.js` loaded `./out/src/extension`, so `out/`
@@ -256,8 +257,8 @@ status: active
 ### PR-F05: the formatting gate does not cover the new `build/` tooling tree
 
 - **Severity:** low
-- **Where:** [package.json](../../../../package.json) (`prettier` and `prettier-fix`, lines 74 and
-  75); [build/verification/](../../../../build/verification/).
+- **Where:** [package.json](../../../../../../package.json) (`prettier` and `prettier-fix`, lines 74 and
+  75); [build/verification/](../../../../../../build/verification/).
 - **What is wrong.** The PR adds most of `build/` (verification tooling for L1/L2/L3, the package
   checks, the browser harness, the Vite plugins). The `prettier` and `prettier-fix` globs are
   unchanged from `v0.11.0` (`(src|test|l10n|grammar|docs|packages)/**` plus root
@@ -289,8 +290,8 @@ status: active
 ### PR-F06: after merge, the knowledge base does not lead to the build-stack rationale, and one active feature design states the opposite
 
 - **Severity:** low
-- **Where:** [docs/ai-and-plans/modernization/](../); [docs/ai-and-plans/README.md](../../README.md);
-  [webview-ext-package/design.md](../../features/webview-ext-package/design.md) (lines 655 to 680
+- **Where:** [docs/ai-and-plans/modernization/](../../); [docs/ai-and-plans/README.md](../../../../README.md);
+  [webview-ext-package/design.md](../../../webview-ext-package/design.md) (lines 655 to 680
   and 1237).
 - **What is wrong.**
   - The PR adds `docs/ai-and-plans/modernization/` as a root-level folder. It is not under

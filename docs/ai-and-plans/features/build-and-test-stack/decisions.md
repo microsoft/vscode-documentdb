@@ -1,4 +1,5 @@
 ---
+feature: build-and-test-stack
 kind: decisions
 status: active
 created: 2026-10-14
@@ -8,7 +9,7 @@ created: 2026-10-14
 
 > Standing decisions about the build, bundling and test stack that later work builds on, the
 > E2E iteration in particular. Decisions taken while executing the stages stay in
-> [build-and-test-stack.md](./build-and-test-stack.md), next to the stage they shaped.
+> [build-and-test-stack.md](./iterations/01-modernization/build-and-test-stack.md), next to the stage they shaped.
 
 | #    | Decision                                                      | Status   | Changed from the proposal?                                                             | Date       | PR   |
 | ---- | ------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- | ---------- | ---- |
@@ -184,13 +185,13 @@ which is the failure mode tiering otherwise introduces.
 - E2E jobs join the full tier; nothing E2E runs on draft PRs.
 - Every E2E job adds its row to the layer report, including the skip reason.
 - Tags or lanes inside the suite (see
-  [e2e-testing-strategy.md §5.8](./e2e-testing-strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery))
+  [e2e-testing-strategy.md §5.8](../e2e-testing/strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery))
   select tests within the full tier; they do not decide whether E2E runs.
 - A job that should have produced results and did not is reported as a failure, not as skipped.
 - E2E is not a required check: with a one-shot request, the merged commit may not have had a
   full run. Making it required later needs a sticky label or a merge queue, as a new decision.
 - A failing nightly run must notify someone (an issue or a message); see
-  [e2e-testing-strategy.md §5.8](./e2e-testing-strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery).
+  [e2e-testing-strategy.md §5.8](../e2e-testing/strategy.md#58-tags-lanes-and-the-fail-loud-ci-machinery).
 
 ---
 

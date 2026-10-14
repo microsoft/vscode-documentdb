@@ -1,4 +1,5 @@
 ---
+feature: build-and-test-stack
 kind: review
 status: active
 ---
@@ -108,7 +109,7 @@ Stage 9, consistently with that re-evaluator's status-count classification.
 The operator decided every G7 item: "record G7 guar decisions (also the uncanhged ones from the
 propsal)". Unless the operator answered otherwise, each finding is decided as its recommended
 action. The full record, including the operator's words, is under Stage 7 in
-[build-and-test-stack.md](../build-and-test-stack.md); W1 to W17 are Stage 8's work items there.
+[build-and-test-stack.md](./build-and-test-stack.md); W1 to W17 are Stage 8's work items there.
 
 | Findings                                                       | Decision                                                                                                                                                                                                                                                                                                                                               |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

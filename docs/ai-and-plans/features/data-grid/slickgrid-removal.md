@@ -1,4 +1,5 @@
 ---
+feature: data-grid
 kind: plan
 status: active
 created: 2026-09-30
@@ -14,7 +15,7 @@ code:
 # Removing SlickGrid from the Collection View
 
 **Status:** guidance for a future iteration. Not scheduled. Written 2026-09-30 during the
-modernization re-review ([build-and-test-stack.md, execution plan](./build-and-test-stack.md#execution-plan)).
+modernization re-review ([build-and-test-stack.md, execution plan](../build-and-test-stack/iterations/01-modernization/build-and-test-stack.md#execution-plan)).
 
 **When:** after the modernization iteration, and not in parallel with it. The migration and the grid
 swap both change `collectionView`, so doing both at once would make any regression impossible to
@@ -93,7 +94,7 @@ All of these are visible in the current code or in the E2E research.
 - **Testing quirks:** the header row has `role="row"`, which is correct ARIA grid semantics (column
   headers sit inside a `row`), so tests must count data rows separately, not use a bare
   `getByRole('row')`. SlickGrid also needs a synthetic `scroll` event before it renders more rows in a
-  headless browser ([e2e-testing-strategy.md](./e2e-testing-strategy.md), "Copy verbatim" table).
+  headless browser ([e2e-testing-strategy.md](../e2e-testing/strategy.md), "Copy verbatim" table).
 - **Styling is a second theme system.** The grid is themed through a SlickGrid SCSS theme with
   VS Code variable overrides, separately from the Fluent theming that
   `@microsoft/vscode-ext-webview-fluentui` now owns for every other surface.
@@ -115,7 +116,7 @@ Decide at evaluation time, against the contract in §2. What is known now:
 A mixed answer is acceptable: one library for the table view and another for the tree view. The two
 views share nothing but the container. Our own cluster dashboard plan already preferred "a plain
 Fluent `Table` over slickgrid" for a small, static table
-([cluster-dashboard implementation plan](../features/cluster-dashboard/iterations/01-poc/implementation-plan.md)).
+([cluster-dashboard implementation plan](../cluster-dashboard/iterations/01-poc/implementation-plan.md)).
 
 ## 5. The plan, sequential
 
