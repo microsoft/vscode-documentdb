@@ -42,8 +42,10 @@ treat `status: historical` or `status: superseded` as current.
 | [settings](./features/settings/README.md)                                 | Settings editor grouping, setting ID naming, and how a setting is renamed safely               | active            |
 | [modernization](./modernization/build-and-test-stack.md)                  | Build, bundling and test stack; the plan is the decision record                                | active            |
 
-The modernization decisions stay in [build-and-test-stack.md](./modernization/build-and-test-stack.md),
-not a separate `decisions.md`. Its other active documents cover
+Decisions taken while executing the modernization stages stay in
+[build-and-test-stack.md](./modernization/build-and-test-stack.md). Standing decisions that later
+work builds on, such as ESM-only packages and the CI tiers, are in
+[decisions.md](./modernization/decisions.md). Its other active documents cover
 [pipelines](./modernization/pipelines-readme.md),
 [end-to-end testing](./modernization/e2e-testing-strategy.md),
 [SlickGrid removal](./modernization/slickgrid-removal.md) and

@@ -18,6 +18,8 @@ research. It is the evidence base, and the execution plan overrides it on sequen
 
 Related files in this folder:
 
+- [decisions.md](./decisions.md): standing decisions from the review phase (ESM-only packages, CI
+  tiers and the layer report, when negative controls run).
 - [pipelines-readme.md](./pipelines-readme.md): GitHub Actions and ADO, network isolation, and where
   each check runs.
 - [slickgrid-removal.md](./slickgrid-removal.md): the later grid replacement.

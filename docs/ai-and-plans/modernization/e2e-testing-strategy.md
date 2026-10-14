@@ -6,6 +6,11 @@
 [PR #867 — Webview visual harness + Playwright suite](https://github.com/microsoft/vscode-documentdb/pull/867),
 plus **Ref1** — an internal, more mature sibling suite, distilled and redacted in Part 5
 
+**Binding for the E2E iteration (2026-10-14):** E2E runs in the full CI tier only, never on draft
+PRs, and every E2E job reports itself in the layer report comment, including why it was skipped.
+See [decisions.md 0002](./decisions.md#0002-ci-runs-verification-in-tiers-and-reports-what-it-ran-and-why).
+The L2 production harness is retired into E2E when the suite lands.
+
 ---
 
 ## 0. The question this document answers
