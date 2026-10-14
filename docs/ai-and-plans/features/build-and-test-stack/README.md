@@ -40,6 +40,7 @@ or test loading.
 | [`build/verification/browser/`](../../../../build/verification/browser/)               | Typed L2 fixtures, the packaged browser harness, and L2-dev scenarios.                                                                                                            |
 | [`build/verification/package-checks/`](../../../../build/verification/package-checks/) | Packed workspace-package validation and the unbundled `/host` probe.                                                                                                              |
 | [`.github/workflows/main.yml`](../../../../.github/workflows/main.yml)                 | Selects the CI tier, path-scoped checks, artifacts, and the combined PR report.                                                                                                   |
+| [`.github/actions/setup/`](../../../../.github/actions/setup/action.yml)               | Node from `.nvmrc` and `node_modules` from the Actions cache, with `npm ci` on a miss.                                                                                            |
 
 ## Verification layers
 
@@ -47,15 +48,20 @@ or test loading.
 defines the tiers. [Decision 0003](./decisions.md#0003-negative-controls-run-when-their-check-changes-not-every-pr)
 keeps proof controls path-scoped instead of repeating them on every PR.
 
-| Layer or check                                                     | Fast | Standard                                      | Full | Notes                                                                 |
-| ------------------------------------------------------------------ | ---- | --------------------------------------------- | ---- | --------------------------------------------------------------------- |
-| L0: build, localization check, lint, Prettier, type checks, Vitest | yes  | yes                                           | yes  | Fast is used for draft PRs and ordinary manual runs.                  |
-| Workspace package checks                                           | no   | when `packages/**` changes                    | yes  | Runs `verify:packages` against packed artifacts.                      |
-| L1: packaged VSIX inspection and size report                       | no   | yes                                           | yes  | Offline inspection of the built VSIX and its matching bundle reports. |
-| L1 verification-tool tests and negative controls                   | no   | when verification or Vite paths change        | yes  | Includes `test:verification` and `prove:vsix`.                        |
-| L3: installed-VSIX activation                                      | no   | yes                                           | yes  | Runs on GitHub Actions because it downloads and launches VS Code.     |
-| L3 negative control                                                | no   | when verification or Vite paths change        | yes  | `prove:activation` proves an injected activation failure is detected. |
-| Unbundled webview host probe                                       | no   | when `packages/vscode-ext-webview/**` changes | yes  | Characterizes ESM loading from real VS Code.                          |
+| Layer or check                                             | CI job, or step                                                             | Fast | Standard                                      | Full | Notes                                                                                              |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------- | ---- | --------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------- |
+| L0: build, localization check, lint, Prettier, type checks | `Static checks`                                                             | yes  | yes                                           | yes  | Fast is used for draft PRs and ordinary manual runs.                                               |
+| L0: Vitest                                                 | `Unit tests`                                                                | yes  | yes                                           | yes  | Every CPU in CI, a quarter locally.                                                                |
+| Workspace package checks                                   | `npm packages: verify tarballs`                                             | no   | when `packages/**` changes                    | yes  | Runs `verify:packages` against packed artifacts.                                                   |
+| Packaging                                                  | `VSIX: build`                                                               | no   | yes                                           | yes  | Runs in parallel with the jobs above.                                                              |
+| L1: packaged VSIX inspection and size report               | `VSIX: inspect contents`                                                    | no   | yes                                           | yes  | Offline inspection of the built VSIX and its matching bundle reports.                              |
+| L1 verification-tool tests and self-tests                  | `Self-test: inspection rejects broken VSIXs`, `Test the verification tools` | no   | when verification or Vite paths change        | yes  | Includes `test:verification` and `prove:vsix`.                                                     |
+| L3: installed-VSIX activation                              | `VSIX: activate in VS Code`                                                 | no   | yes                                           | yes  | Runs on GitHub Actions because it downloads and launches VS Code. Requires every declared command. |
+| L3 self-test                                               | `Self-test: activation check catches a swallowed error`                     | no   | when verification or Vite paths change        | yes  | `prove:activation` proves an injected activation failure is detected.                              |
+| Unbundled webview host probe                               | `Webview host in unbundled extensions`                                      | no   | when `packages/vscode-ext-webview/**` changes | yes  | Characterizes ESM loading from real VS Code.                                                       |
+
+The CI names and the PR report rows carry no L-numbers ([decision 0014](./decisions.md#0014-ci-jobs-run-in-parallel-where-safe-under-descriptive-names));
+the L-numbers remain the docs' vocabulary.
 
 A ready PR and a push to `main` or `release/**` use the standard tier. The one-shot
 `ci:full-requested` label requests the full tier for a PR commit. The workflow report lists every

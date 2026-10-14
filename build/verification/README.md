@@ -25,22 +25,30 @@ because Vite reports development build errors in the browser overlay.
 ([decision 0002](../../docs/ai-and-plans/features/build-and-test-stack/decisions.md)). Its `plan` job picks the
 tier, and the path-scoped checks from the whole PR diff (for a push, the pushed range).
 
-| Check                                                                 | Fast (draft PR) | Standard (ready PR, push to `main` or `release/**`)                    | Full (`ci:full-requested` label) |
-| --------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------- | -------------------------------- |
-| L0: build, `l10n:check`, lint, Prettier, type checks, unit tests      | yes             | yes                                                                    | yes                              |
-| `verify:packages`                                                     | no              | when `packages/**` changes                                             | yes                              |
-| Package the VSIX, `verify:vsix` (L1) with sizes, `test:vsix` (L3)     | no              | yes                                                                    | yes                              |
-| `prove:vsix`, `test:verification`, `prove:activation` (decision 0003) | no              | when `build/verification/**`, `build/vite/**` or a Vite config changes | yes                              |
-| `probe:host-unbundled`                                                | no              | when `packages/vscode-ext-webview/**` changes                          | yes                              |
+| Job, or step within a job                                             | Runs                                                                         | Fast (draft PR) | Standard (ready PR, push to `main` or `release/**`)                    | Full (`ci:full-requested` label) |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------- | -------------------------------- |
+| `Static checks`                                                       | workspace build, `l10n:check`, lint, Prettier, root `tsc`, `typecheck:tests` | yes             | yes                                                                    | yes                              |
+| `Unit tests`                                                          | Vitest                                                                       | yes             | yes                                                                    | yes                              |
+| `npm packages: verify tarballs`                                       | `verify:packages`                                                            | no              | when `packages/**` changes                                             | yes                              |
+| `VSIX: build`, `VSIX: inspect contents`, `VSIX: activate in VS Code`  | `package`, `verify:vsix` (L1) with sizes, `test:vsix` (L3)                   | no              | yes                                                                    | yes                              |
+| `Self-test: ...` and `Test the verification tools` steps              | `prove:vsix`, `test:verification`, `prove:activation` (decision 0003)        | no              | when `build/verification/**`, `build/vite/**` or a Vite config changes | yes                              |
+| `Webview host in unbundled extensions` step (in `VSIX: activate ...`) | `probe:host-unbundled`                                                       | no              | when `packages/vscode-ext-webview/**` changes                          | yes                              |
 
-`package-lock.json` and `main.yml` count as changes for every path-scoped check. Any other label
-runs nothing. A manual run is full with `enforce_full_run`, fast without it.
+`package-lock.json`, `main.yml` and `.github/actions/**` count as changes for every path-scoped
+check. Any other label runs nothing. A manual run is full with `enforce_full_run`, fast without it.
+
+After `Plan: choose checks`, the first four jobs above run in parallel; inspection and activation
+wait for `VSIX: build` ([decision 0014](../../docs/ai-and-plans/features/build-and-test-stack/decisions.md)).
+Vitest uses every CPU when `CI` is set and a quarter of them locally. Each job installs through
+[`.github/actions/setup`](../../.github/actions/setup/action.yml), which restores `node_modules`
+from the Actions cache and runs `npm ci` only on a miss. The required `Build & Package` gate
+fails unless every job the tier expected passed (decision 0013).
 
 Same-repository PRs get one `<!-- ci-report -->` comment, updated in place and composed by
-[`ci-report.cjs`](./ci-report.cjs): every layer with its result or the reason it was skipped, then
-code quality and the [build size section](#size-report-warning-only). Adding `ci:full-requested`
-starts one full run on the current commit; the workflow removes the label, and the comment keeps
-the last full run's commit and result.
+[`ci-report.cjs`](./ci-report.cjs): every check under its job or step name, with its result or the
+reason it was skipped, then code quality and the [build size section](#size-report-warning-only).
+Adding `ci:full-requested` starts one full run on the current commit; the workflow removes the
+label, and the comment keeps the last full run's commit and result.
 
 ## L1: offline inspection
 
@@ -231,7 +239,8 @@ build size section to its job summary and hands it to the `<!-- ci-report -->` c
   changes when the base has package data (below), and a pointer to the bundle reports;
 - an explicit "No size data for `<base>` yet; sizes only." when the base has no cache entry, and a
   VSIX-only comparison for a legacy `{vsixSize, webviewSize}` entry;
-- always, every graph in exact bytes inside a collapsed `<details>` block, with the artifact links.
+- always, the artifact links (VSIX, bundle reports, manifest report), then every graph in exact
+  bytes inside a collapsed `<details>` block.
 
 Rows list the pages (`collectionView`, `documentView`, `localQuickStart`, `atlasCredentials`,
 `clusterDashboard`), activation (`mainStartup`), `main`, `playgroundWorker` and `vsix` first, then
@@ -377,8 +386,14 @@ npm run test:vsix -- <vsix>
 npm run prove:activation -- <vsix>
 ```
 
+After activation, the probe requires the three registrations at the end of activation
+(`LATE_COMMANDS` in [`activation/checks.cjs`](./activation/checks.cjs)) and every
+`contributes.commands` entry of the installed extension. A command registered later belongs in
+`LAZY_COMMANDS` with the reason; the list is empty, and an entry for an undeclared command fails.
+
 GitHub Actions runs these under Xvfb and caches `.vscode-test/`. The isolated ADO build runs only L1
-before signing; it must not download VS Code. Local L3 requires a display or operator-provided Xvfb.
+before signing; it must not download VS Code. Local L3 requires a display or operator-provided Xvfb,
+and the GUI libraries VS Code links against (for example `libatk-1.0`).
 The operator must still complete G0 using the installed production VSIX.
 
 ## Workspace packages: packed-tarball checks
@@ -439,11 +454,11 @@ archive's SHA-256. [`package-archives.test.cjs`](./package-checks/package-archiv
 
 Where it runs:
 
-| Route                                                                                        | Command                                                    |
-| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| GitHub Actions CI, Package checks job (when `packages/**` changes; full runs; see [CI](#ci)) | `npm run verify:packages` (builds the workspaces first)    |
-| `npm-publish-documentdb-js.yml` verify job (`@documentdb-js/*`)                              | `npm run verify:packages`                                  |
-| ADO `build-npm-packages.yml` (`@microsoft/vscode-ext-webview*`)                              | archive mode on the `npm-packages` tarballs it just packed |
+| Route                                                                                                         | Command                                                    |
+| ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| GitHub Actions CI, `npm packages: verify tarballs` job (when `packages/**` changes; full runs; see [CI](#ci)) | `npm run verify:packages` (builds the workspaces first)    |
+| `npm-publish-documentdb-js.yml` verify job (`@documentdb-js/*`)                                               | `npm run verify:packages`                                  |
+| ADO `build-npm-packages.yml` (`@microsoft/vscode-ext-webview*`)                                               | archive mode on the `npm-packages` tarballs it just packed |
 
 ### Unbundled `vscode-ext-webview/host` in VS Code (S3-F02)
 
@@ -477,5 +492,6 @@ that thread. The probe locates the hang through a trace file (the receipt is nev
 VS Code's `is unresponsive` message, with a 40-second timeout for that variant. A change in either
 direction (for example a VS Code fix that makes `require()` work) fails the run so the package
 README and MIGRATION.md can be updated. The whole run takes about 70 seconds; GitHub Actions runs it
-in the L3 job when `packages/vscode-ext-webview/**` changes, and in full runs ([CI](#ci)). Linux only so far, one VS Code version per run, and the probe is a development
+in the `VSIX: activate in VS Code` job, as the `Webview host in unbundled extensions` step, when
+`packages/vscode-ext-webview/**` changes, and in full runs ([CI](#ci)). Linux only so far, one VS Code version per run, and the probe is a development
 extension rather than an installed VSIX.

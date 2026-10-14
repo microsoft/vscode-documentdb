@@ -3,22 +3,26 @@ name: CI
 # CI runs in tiers (decision 0002 in docs/ai-and-plans/features/build-and-test-stack/decisions.md). The `plan` job
 # picks the tier and the path-scoped checks; every other job has one `if:` on its outputs.
 #
-# - fast: draft PRs, and manual runs without `enforce_full_run`. L0 only: build, l10n, lint,
-#   Prettier, type checks and unit tests.
+# - fast: draft PRs, and manual runs without `enforce_full_run`. Static checks (build, l10n, lint,
+#   Prettier, type checks) and unit tests.
 # - standard: ready PRs to `main`, `release/**` or `feature/**`, and pushes to `main` or
-#   `release/**`. Fast, plus packaging, L1 VSIX inspection with sizes and L3 activation. Path-scoped:
-#   package checks when `packages/**` changes; the L1 and L3 negative controls and the verification
+#   `release/**`. Fast, plus the VSIX build, inspection with sizes and activation. Path-scoped:
+#   the npm package checks when `packages/**` changes; the VSIX self-tests and the verification
 #   tool tests when `build/verification/**`, `build/vite/**` or a Vite config changes; the unbundled
-#   `/host` probe when `packages/vscode-ext-webview/**` changes. `package-lock.json`, this file and
-#   `.github/actions/**` count for all three. Pushes cache build sizes for PR comparisons.
+#   webview host check when `packages/vscode-ext-webview/**` changes. `package-lock.json`, this file
+#   and `.github/actions/**` count for all three. Pushes cache build sizes for PR comparisons.
 # - full: the `ci:full-requested` label (one run; the plan job removes the label), and manual runs
-#   with `enforce_full_run`. Every layer.
+#   with `enforce_full_run`. Every check.
 # - skip: any other label. Nothing runs.
 #
-# Same-repository PRs get one `<!-- ci-report -->` comment, updated in place: the layers that ran
+# After the plan, static checks, unit tests, the npm package checks and the VSIX build run in
+# parallel; inspection and activation wait for the VSIX build (decision 0014). Jobs install with
+# `.github/actions/setup`, which restores `node_modules` from the Actions cache.
+#
+# Same-repository PRs get one `<!-- ci-report -->` comment, updated in place: the checks that ran
 # and why, code quality and build size.
 #
-# The ruleset requires `Build & Package`. That is the `gate` job: it fails unless every layer the
+# The ruleset requires `Build & Package`. That is the `gate` job: it fails unless every check the
 # tier expected passed (decision 0013).
 
 on:
