@@ -1,8 +1,12 @@
 # DocumentDB for VS Code 1.0: Run It Locally, Bring Your Data
 
+> Also published on the DocumentDB blog at documentdb.io: tracked in [documentdb/documentdb.github.io#214](https://github.com/documentdb/documentdb.github.io/pull/214). Keep both versions in sync.
+
 _October 10, 2026, by Tomasz Naumowicz and the DocumentDB for VS Code team_
 
-<p align="center"><img src="./images/1.0.0_hero.png" alt="DocumentDB for VS Code 1.0" width="800" style="max-width:100%;height:auto;"></p>
+_The free, open-source DocumentDB GUI for VS Code reaches 1.0. Start DocumentDB Local in a few clicks, bring your data with copy and paste, and understand it with the Cluster Dashboard and Query Insights._
+
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_hero_dark.png"><img src="./images/1.0.0_hero.png" alt="DocumentDB for VS Code 1.0" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 DocumentDB for VS Code 1.0 is here. Released alongside [DocumentDB 1.0](https://documentdb.io/), the free, open-source extension is a **DocumentDB GUI** and MongoDB GUI, built right into Visual Studio Code. It works with DocumentDB, Azure DocumentDB and other MongoDB-compatible databases, wherever they run.
 
@@ -14,7 +18,7 @@ The quickest way to try DocumentDB 1.0 is **DocumentDB Local**, right from VS Co
 
 The extension does the rest: it pulls the official DocumentDB image, creates a persistent volume so your data survives restarts, generates credentials, picks a free port, loads sample data, and saves a ready-to-use connection. No `docker run` command to assemble. From then on, you start, stop or restart the container from the same place, and if Docker isn't ready, the setup tells you exactly what's wrong and how to fix it.
 
-<p align="center"><img src="./images/1.0.0_documentdb_local.png" alt="DocumentDB Local setup in VS Code with the Introduction, Configure, Set up and Done steps" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_documentdb_local_dark.png"><img src="./images/1.0.0_documentdb_local.png" alt="DocumentDB Local setup in VS Code with the Introduction, Configure, Set up and Done steps" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 ## Bring your data with you
 
@@ -22,7 +26,7 @@ Sample data is a good start, but your own data tells you more. With **copy and p
 
 That means a collection from MongoDB Atlas, Azure or a shared development cluster can land in your DocumentDB Local instance in a few clicks. If the target already has documents, you decide what happens with duplicates: stop, skip, overwrite, or give the pasted documents new IDs. The collection's indexes can come along too.
 
-<p align="center"><img src="./images/1.0.0_copy_and_paste.png" alt="Copy and paste in three steps: copy the source collection, paste it into the target, then choose how to handle conflicts" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_copy_and_paste_dark.png"><img src="./images/1.0.0_copy_and_paste.png" alt="Copy and paste in three steps: copy the source collection, paste it into the target, then choose how to handle conflicts" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 Copy and paste is built for development and small to medium datasets. For large production migrations, use a dedicated migration service.
 
@@ -30,7 +34,7 @@ Copy and paste is built for development and small to medium datasets. For large 
 
 Whether the data came from a sample, a copy or a production cluster, the first question is usually "what's in here?" The **Cluster Dashboard** answers it on one page: whether you're connected, the round-trip time, and an inventory of every database and collection with its storage size, index size and document count. Sort and filter the list, drill into a database, or create and delete databases and collections right there.
 
-<p align="center"><img src="./images/1.0.0_cluster_dashboard.png" alt="Cluster Dashboard showing connection status, storage and document metrics, and a filterable database inventory" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_cluster_dashboard_dark.png"><img src="./images/1.0.0_cluster_dashboard.png" alt="Cluster Dashboard showing connection status, storage and document metrics, and a filterable database inventory" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 ## Understand how it runs
 
@@ -38,7 +42,7 @@ Queries don't always come from you anymore. Whether you wrote one yourself or an
 
 **Index management** sits right next to it, so understanding a query and fixing it happen in the same place. See which indexes are used and which are not, and hide an index first to check the impact before you delete it.
 
-<p align="center"><img src="./images/1.0.0_query_insights_streaming.png" alt="Query Insights streaming an AI performance analysis next to the query plan summary" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_query_insights_streaming_dark.png"><img src="./images/1.0.0_query_insights_streaming.png" alt="Query Insights streaming an AI performance analysis next to the query plan summary" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 ## And there is more
 
@@ -48,7 +52,7 @@ Queries don't always come from you anymore. Whether you wrote one yourself or an
 
 ## A shared milestone, built in the open
 
-<p align="center"><img src="./images/1.0.0_road_to_1.0_illustrated.png" alt="The road to DocumentDB for VS Code 1.0, from v0.2 in May 2025 to 1.0 in October 2026" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_road_to_1.0_illustrated_dark.png"><img src="./images/1.0.0_road_to_1.0_illustrated.png" alt="The road to DocumentDB for VS Code 1.0, from v0.2 in May 2025 to 1.0 in October 2026" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 DocumentDB 1.0 is a milestone for the open-source database. DocumentDB for VS Code 1.0 celebrates the developer experience around it, one that also works with the MongoDB-compatible databases you already run.
 
@@ -58,7 +62,7 @@ We didn't get here alone. Eleven community developers contributed nearly 30 pull
 
 ## Try it
 
-<p align="center"><a href="https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb"><img src="./images/1.0.0_install_button.png" alt="Install DocumentDB for VS Code from the Visual Studio Marketplace" width="400" style="max-width:100%;height:auto;"></a></p>
+**[Install DocumentDB for VS Code from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)**, or search for "DocumentDB" in the VS Code Extensions view.
 
 - [DocumentDB for VS Code 1.0 release notes](https://github.com/microsoft/vscode-documentdb/discussions/1012) (the full tour, with every feature explained)
 - [Documentation](https://microsoft.github.io/vscode-documentdb/)
