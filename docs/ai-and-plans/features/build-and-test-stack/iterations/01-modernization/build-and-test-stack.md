@@ -4458,6 +4458,37 @@ Stage 0 must also be made.
       ran its script against 8 result combinations (fast, standard with and without package
       changes, L0 or L1 failing, full, plan failing): all as expected.
     - **Pending:** the real runs on #880 (G8.5), and Stage 9 task 2.
+  - **Merge of `main` (added 2026-10-14).** After the push of `2d9d0033`, #880 conflicted with
+    `main`, so GitHub ran no `pull_request` CI. A manual fast-tier run on the branch (run 38544963882) passed: plan, L0 and the `Build & Package` gate succeeded and the rest was
+    skipped as intended. The operator authorized the merge ("we can't move forward without
+    merging main into it").
+    - **Merged in `4db5cf14`** (Claude Opus 5.5 subagent): `main` at `4752a67f` (v0.11.1, 54
+      commits since `1380b758`), with a merge commit. Main's lockfiles had 0 versions inside the
+      7-day quarantine (coordinator's scan before the merge). `jest.config.js` stays deleted;
+      main's srv-resolver Jest project became a Vitest project. `package-lock.json` took the
+      branch side and was regenerated with Node 22.18.0 and npm 10.9.3; the result adds exactly
+      main's new entries (the workspace, `dns-packet` 5.6.1, `@types/dns-packet` 5.6.5,
+      `@leichtgewicht/ip-codec` 2.0.5). The only code conflict, `WorkerSessionManager.ts`, keeps
+      the branch's worker path and adds main's abort handling. The release notes keep main's
+      0.11.1 and the branch's 0.11.2.
+    - **Tests:** the deleted codemod was restored into scratch from history and run on the 23
+      test files main added or changed; 7 needed manual ESM fixes (`vi.importActual`, a shared
+      `node:dns` mock for the spies, `createRequire` in the differential test, one `vi.waitFor`).
+      No `TDD:` suite changed.
+    - **Checks:** `npm ci` left the lockfile unchanged; build; lint; `l10n:check`; Vitest **305
+      files, 4,769 passed, 1 skipped** (298 / 4,612 before); `test:verification`; `npm run
+package`, `verify:vsix` (the SRV code adds `dns-packet` and srv-resolver to the host graph,
+      no findings) and `prove:vsix` 24 PASS; fresh-dependency scan 0 fresh.
+  - **srv-resolver parity (added 2026-10-14).** The new package was born ESM, so it needs no
+    ESM migration notes (operator: "that one was never published"), and it is published by
+    `npm-publish-documentdb-js.yml`, not ADO (operator). The merge added it to that workflow's
+    verify job and dry run. GPT-5.6 Sol Fast subagent, one commit each: `c3d56110`
+    `tsconfig.test.json` and `typecheck:tests`; `5118fbac` network-free `verify:packages`
+    calls; `9d162865` a 1.0.0 `CHANGELOG.md` and `files` aligned with the other packages;
+    `8804e811` current package counts in the feature docs (seven); `e25d83ed` formatting. The
+    root changelog's "six packages" stays: it describes the six modernized packages. Checks:
+    build, `typecheck:tests`, its 78 tests, `verify:packages` all 7 packages (attw only the
+    accepted `CJSResolvesToESM`), `test:verification`, lint, Prettier.
 - **Not in this stage:** retiring the L2 production harness. Decision 0002 retires it into E2E;
   Stage 9 task 6 still uses it on the signed VSIX.
 - **Operator gate G8.5:** the operator accepts the W1 verification on #880 and the restructured
