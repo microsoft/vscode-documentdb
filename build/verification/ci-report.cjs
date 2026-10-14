@@ -13,6 +13,7 @@ const LAST_FULL =
 const LOGIN = /^[A-Za-z0-9-]+$/;
 const RUN_URL = /^https:\/\/[\w.:/-]+$/;
 const FULL_LINE = /^\*\*Full run:\*\*.*$/m;
+const PREVIOUS = /^## (\S+) CI ([a-z]+):.*\n\nCommit `([0-9a-f]{7,40})`/m;
 
 const ICONS = {
     passed: '✅',
@@ -22,7 +23,7 @@ const ICONS = {
     'not run': '⚠️',
     'not available yet': '⏭️',
 };
-const DRAFT = 'draft PR; runs when marked ready';
+const DRAFT = 'draft PR; runs once the PR is marked ready';
 const FULL = 'full run requested';
 const PACKAGES = '`packages/**`, `package-lock.json` or the CI workflow';
 const WEBVIEW_PACKAGE = '`packages/vscode-ext-webview/**`, `package-lock.json` or the CI workflow';
@@ -33,6 +34,7 @@ const QUALITY = [
     ['lint', 'ESLint', 'Run `npm run lint` and fix the reported issues.'],
     ['prettier', 'Prettier formatting', 'Run `npm run prettier-fix` to auto-format, then commit.'],
 ];
+const FIX = { success: 'Nothing to fix', missing: 'Did not run; see the L0 row above' };
 const OUTCOMES = { success: 'passed', failure: 'failed', cancelled: 'cancelled' };
 
 const short = (sha) => sha.slice(0, 7);
@@ -52,23 +54,23 @@ function fromSteps(outcomes, jobResult) {
 function layers({ tier, flags, jobs, steps }) {
     const vsix = tier === 'standard' || tier === 'full';
     const tierWhy = tier === 'full' ? FULL : tier === 'fast' ? DRAFT : null;
-    const scoped = (flag, paths) => tierWhy ?? (flag ? `${paths} changed` : `runs when ${paths} change`);
+    const scoped = (flag, paths) => tierWhy ?? (flag ? `${paths} changed` : `no change to ${paths}`);
     const row = (layer, expected, outcome, why) => {
         if (!expected) return { layer, result: 'skipped', why };
         const result = outcome();
         return { layer, result, why: result === 'not run' ? 'an earlier job or step failed' : why };
     };
     return [
-        row('L0 build, lint and unit tests', true, () => fromSteps([jobs.quality]), 'runs on every push'),
+        row('L0 build, lint and unit tests', true, () => fromSteps([jobs.quality]), 'every push'),
         row('Package checks', flags.packages, () => fromSteps([jobs.packages]), scoped(flags.packages, PACKAGES)),
-        row('L1 VSIX inspection', vsix, () => fromSteps([steps.inspect], jobs.l1), tierWhy ?? 'runs on ready PRs'),
+        row('L1 VSIX inspection', vsix, () => fromSteps([steps.inspect], jobs.l1), tierWhy ?? 'ready PR'),
         row(
             'L1 negative controls and verification tool tests',
             flags.verification,
             () => fromSteps([steps.prove, steps['verification-tests']], jobs.l1),
             scoped(flags.verification, VERIFICATION),
         ),
-        row('L3 activation', vsix, () => fromSteps([steps.activation], jobs.l3), tierWhy ?? 'runs on ready PRs'),
+        row('L3 activation', vsix, () => fromSteps([steps.activation], jobs.l3), tierWhy ?? 'ready PR'),
         row(
             'L3 negative control',
             flags.verification,
@@ -81,7 +83,7 @@ function layers({ tier, flags, jobs, steps }) {
             () => fromSteps([steps['host-probe']], jobs.l3),
             scoped(flags.webviewPackage, WEBVIEW_PACKAGE),
         ),
-        { layer: 'E2E', result: 'not available yet', why: 'arrives with the E2E iteration, in the full tier' },
+        { layer: 'E2E', result: 'not available yet', why: 'arrives with the E2E iteration (full tier)' },
     ];
 }
 
@@ -147,8 +149,8 @@ function ciReport(input) {
         '',
         `Commit \`${short(input.headSha)}\`, [workflow run](${input.runUrl}).`,
         '',
-        '| Layer | Result | Why |',
-        '|-------|--------|-----|',
+        '| Layer | Result | Ran or skipped because |',
+        '|-------|--------|------------------------|',
         ...rows.map((row) => `| ${row.layer} | ${ICONS[row.result]} ${row.result} | ${row.why} |`),
         '',
         ...(input.tier === 'full' ? [] : [fullRunLine(lastFull), '']),
@@ -159,7 +161,8 @@ function ciReport(input) {
         ...QUALITY.map(([key, name, hint]) => {
             const outcome = input.steps[key];
             const status = outcome === 'success' ? '✅ Passed' : outcome === 'failure' ? '❌ Failed' : '⏭️ Not run';
-            return `| ${name} | ${status} | ${outcome === 'failure' ? hint : ''} |`;
+            const fix = outcome === 'failure' ? hint : outcome === 'success' ? FIX.success : FIX.missing;
+            return `| ${name} | ${status} | ${fix} |`;
         }),
         '',
         size,
@@ -189,4 +192,27 @@ function commentBody(report, existingBody, stale) {
     return [MARKER, lastFullMarker(report.fullRun), '', fullRunLine(report.fullRun)].join('\n');
 }
 
-module.exports = { MARKER, OLD_MARKERS, ciReport, commentBody, parseLastFull, withLastFull };
+/**
+ * The comment while a run is in progress, so the previous results are not read as current. Keeps
+ * the last-full marker and names the previous result.
+ */
+function runningBody({ tier, reason, headSha, runUrl, existingBody }) {
+    const lastFull = parseLastFull(existingBody);
+    const previous = PREVIOUS.exec(existingBody ?? '');
+    return [
+        MARKER,
+        ...(lastFull ? [lastFullMarker(lastFull)] : []),
+        `## ⏳ CI running: ${tier} tier (${reason})`,
+        '',
+        `Commit \`${short(headSha)}\`. [Follow the workflow run](${runUrl}); the results replace this message when it finishes.`,
+        '',
+        previous
+            ? previous[2] === 'running'
+                ? `The previous run, on \`${short(previous[3])}\`, did not report a result.`
+                : `Previous result: ${previous[1]} ${previous[2]} on \`${short(previous[3])}\`.`
+            : 'No previous result.',
+        ...(tier === 'full' ? [] : ['', fullRunLine(lastFull)]),
+    ].join('\n');
+}
+
+module.exports = { MARKER, OLD_MARKERS, ciReport, commentBody, parseLastFull, runningBody, withLastFull };

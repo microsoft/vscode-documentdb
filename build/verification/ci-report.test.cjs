@@ -5,7 +5,15 @@
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { MARKER, OLD_MARKERS, ciReport, commentBody, parseLastFull, withLastFull } = require('./ci-report.cjs');
+const {
+    MARKER,
+    OLD_MARKERS,
+    ciReport,
+    commentBody,
+    parseLastFull,
+    runningBody,
+    withLastFull,
+} = require('./ci-report.cjs');
 
 const headSha = 'abcdef0123456789abcdef0123456789abcdef01';
 const passedSteps = {
@@ -58,22 +66,23 @@ test('A draft PR runs L0 only and says why every other layer was skipped', () =>
         body.startsWith(`${MARKER}\n## ✅ CI passed: fast tier (draft PR)\n\nCommit \`abcdef0\`, [workflow run](`),
     );
     assert.deepEqual(rows(body), [
-        '| L0 build, lint and unit tests | ✅ passed | runs on every push |',
-        '| Package checks | ⏭️ skipped | draft PR; runs when marked ready |',
-        '| L1 VSIX inspection | ⏭️ skipped | draft PR; runs when marked ready |',
-        '| L1 negative controls and verification tool tests | ⏭️ skipped | draft PR; runs when marked ready |',
-        '| L3 activation | ⏭️ skipped | draft PR; runs when marked ready |',
-        '| L3 negative control | ⏭️ skipped | draft PR; runs when marked ready |',
-        '| Unbundled `/host` probe | ⏭️ skipped | draft PR; runs when marked ready |',
-        '| E2E | ⏭️ not available yet | arrives with the E2E iteration, in the full tier |',
+        '| L0 build, lint and unit tests | ✅ passed | every push |',
+        '| Package checks | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| L1 VSIX inspection | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| L1 negative controls and verification tool tests | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| L3 activation | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| L3 negative control | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| Unbundled `/host` probe | ⏭️ skipped | draft PR; runs once the PR is marked ready |',
+        '| E2E | ⏭️ not available yet | arrives with the E2E iteration (full tier) |',
     ]);
+    assert.ok(body.includes('| Layer | Result | Ran or skipped because |'));
     assert.ok(
         body.includes(
             '**Full run:** add the `ci:full-requested` label to run every layer once on the current commit. No full run yet.',
         ),
     );
-    assert.ok(body.includes('| Prettier formatting | ✅ Passed |  |'));
-    assert.ok(body.includes('### Build size\n\nNot measured: draft PR; runs when marked ready.'));
+    assert.ok(body.includes('| Prettier formatting | ✅ Passed | Nothing to fix |'));
+    assert.ok(body.includes('### Build size\n\nNot measured: draft PR; runs once the PR is marked ready.'));
     assert.ok(OLD_MARKERS.every((marker) => !body.includes(marker)));
 });
 
@@ -89,11 +98,11 @@ test('A ready PR names the paths behind each path-scoped check and keeps the las
     assert.equal(result, 'passed');
     assert.deepEqual(rows(body).slice(1, 7), [
         '| Package checks | ✅ passed | `packages/**`, `package-lock.json` or the CI workflow changed |',
-        '| L1 VSIX inspection | ✅ passed | runs on ready PRs |',
-        '| L1 negative controls and verification tool tests | ⏭️ skipped | runs when `build/verification/**`, `build/vite/**`, the Vite configs, `package-lock.json` or the CI workflow change |',
-        '| L3 activation | ✅ passed | runs on ready PRs |',
-        '| L3 negative control | ⏭️ skipped | runs when `build/verification/**`, `build/vite/**`, the Vite configs, `package-lock.json` or the CI workflow change |',
-        '| Unbundled `/host` probe | ⏭️ skipped | runs when `packages/vscode-ext-webview/**`, `package-lock.json` or the CI workflow change |',
+        '| L1 VSIX inspection | ✅ passed | ready PR |',
+        '| L1 negative controls and verification tool tests | ⏭️ skipped | no change to `build/verification/**`, `build/vite/**`, the Vite configs, `package-lock.json` or the CI workflow |',
+        '| L3 activation | ✅ passed | ready PR |',
+        '| L3 negative control | ⏭️ skipped | no change to `build/verification/**`, `build/vite/**`, the Vite configs, `package-lock.json` or the CI workflow |',
+        '| Unbundled `/host` probe | ⏭️ skipped | no change to `packages/vscode-ext-webview/**`, `package-lock.json` or the CI workflow |',
     ]);
     assert.ok(body.includes(`<!-- last-full: ${lastFull.sha} passed -->`));
     assert.ok(body.includes('Last full run: ✅ passed on `1234567`.'));
@@ -118,7 +127,7 @@ test('A full run runs every layer, records itself and drops the request line', (
         rows(body)
             .slice(0, 7)
             .map((row) => row.split(' | ').slice(1).join(' | ')),
-        ['✅ passed | runs on every push |', ...Array.from({ length: 6 }, () => '✅ passed | full run requested |')],
+        ['✅ passed | every push |', ...Array.from({ length: 6 }, () => '✅ passed | full run requested |')],
     );
     assert.deepEqual(parseLastFull(body), { sha: headSha, result: 'passed', runUrl: input().runUrl });
     assert.ok(!body.includes('**Full run:**'));
@@ -165,12 +174,13 @@ test('Failures show the fix hint, and a check after a failed step is reported as
     assert.equal(result, 'failed');
     assert.ok(body.startsWith(`${MARKER}\n## ❌ CI failed: standard tier (ready PR)`));
     assert.deepEqual(rows(body).slice(0, 4), [
-        '| L0 build, lint and unit tests | ❌ failed | runs on every push |',
-        '| Package checks | ⏭️ skipped | runs when `packages/**`, `package-lock.json` or the CI workflow change |',
-        '| L1 VSIX inspection | ❌ failed | runs on ready PRs |',
+        '| L0 build, lint and unit tests | ❌ failed | every push |',
+        '| Package checks | ⏭️ skipped | no change to `packages/**`, `package-lock.json` or the CI workflow |',
+        '| L1 VSIX inspection | ❌ failed | ready PR |',
         '| L1 negative controls and verification tool tests | ⚠️ not run | an earlier job or step failed |',
     ]);
     assert.ok(body.includes('| ESLint | ❌ Failed | Run `npm run lint` and fix the reported issues. |'));
+    assert.ok(body.includes('| Localization (`l10n`) | ✅ Passed | Nothing to fix |'));
 });
 
 test('Jobs skipped after an earlier failure are not run, and L1 says why sizes are missing', () => {
@@ -195,7 +205,42 @@ test('A cancelled run reports cancelled layers', () => {
     );
     assert.equal(result, 'cancelled');
     assert.ok(body.includes('## 🚫 CI cancelled: standard tier (ready PR)'));
-    assert.ok(rows(body).includes('| L3 activation | 🚫 cancelled | runs on ready PRs |'));
+    assert.ok(rows(body).includes('| L3 activation | 🚫 cancelled | ready PR |'));
+});
+
+test('A running report hides the previous results, names them and keeps the last full run', () => {
+    const lastFull = { sha: headSha, result: 'passed', requester: 'octocat', runUrl: input().runUrl };
+    const previous = ciReport(input({ jobs: { ...allJobs('failure'), packages: 'skipped' }, lastFull })).body;
+    const runUrl = 'https://github.com/example/project/actions/runs/2';
+    const body = runningBody({
+        tier: 'standard',
+        reason: 'ready PR',
+        headSha: 'feedface'.repeat(5),
+        runUrl,
+        existingBody: previous,
+    });
+    assert.ok(body.startsWith(`${MARKER}\n<!-- last-full: ${headSha} passed by=octocat run=`));
+    assert.ok(body.includes('## ⏳ CI running: standard tier (ready PR)'));
+    assert.ok(body.includes(`Commit \`feedfac\`. [Follow the workflow run](${runUrl})`));
+    assert.ok(body.includes('Previous result: ❌ failed on `abcdef0`.'));
+    assert.ok(body.includes('Last full run: ✅ passed on `abcdef0`, requested by @octocat'));
+    assert.ok(!body.includes('| Layer |'));
+    assert.deepEqual(parseLastFull(body), lastFull);
+
+    const full = runningBody({
+        tier: 'full',
+        reason: 'full run requested by @octocat for feedfac',
+        headSha,
+        runUrl,
+        existingBody: undefined,
+    });
+    assert.ok(full.includes('No previous result.'));
+    assert.ok(!full.includes('**Full run:**'));
+    const superseded = runningBody({ tier: 'standard', reason: 'ready PR', headSha, runUrl, existingBody: body });
+    assert.ok(superseded.includes('The previous run, on `feedfac`, did not report a result.'));
+
+    const finished = ciReport(input({ lastFull: parseLastFull(body) })).body;
+    assert.deepEqual(parseLastFull(finished), lastFull);
 });
 
 test('A full run that finished after a newer push updates only the last full run', () => {
