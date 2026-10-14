@@ -200,6 +200,21 @@ src/commands/yourCommand/
 └── yourCommand.ts                # Main orchestration
 ```
 
+## Manifest IDs and context keys
+
+A new view id, view container id, or context key that appears **on its own** as a
+`package.json` value must not have the shape `name.ext` (exactly one dot, no slash). The VSIX
+inspection (`build/verification/inspect.cjs`, `manifestAssets`) reads such strings as file
+paths and fails with "VSIX missing manifest-declared asset". Use dashes instead:
+`documentdb-survey-invitation`, not `documentdb.surveyInvitation`.
+
+Unaffected: command ids with several dots (`vscode-documentdb.command.x`), `%nls.keys%`, and
+dotted context keys used only inside compound `when` expressions (`a && documentdb.flag`).
+
+A contributed command that is intentionally not registered in an installed (production)
+activation, such as a development-only command, must be listed with its reason in
+`LAZY_COMMANDS` in `build/verification/activation/checks.cjs`, or the activation check fails.
+
 ## Security
 
 - Never log passwords, tokens, or connection strings
