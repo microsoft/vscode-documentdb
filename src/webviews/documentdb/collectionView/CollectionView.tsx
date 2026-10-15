@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, ProgressBar, Tab, TabList, Tooltip } from '@fluentui/react-components';
+import { Badge, Button, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import { EmojiRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
@@ -661,20 +661,17 @@ export const CollectionView = (): JSX.Element => {
                         </Tab>
                     </TabList>
                     {configuration.feedbackPermitted === true && (
-                        <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
-                            <Button
-                                appearance="secondary"
-                                icon={<EmojiRegular />}
-                                aria-label={l10n.t('Give Feedback')}
-                                onClick={() =>
-                                    void trpcClient.common.openFeedback.mutate({
-                                        collectionTab: feedbackTab[selectedTab],
-                                    })
-                                }
-                            >
-                                {l10n.t('Give Feedback')}
-                            </Button>
-                        </Tooltip>
+                        <Button
+                            appearance="secondary"
+                            icon={<EmojiRegular />}
+                            onClick={() =>
+                                void trpcClient.common.openFeedback.mutate({
+                                    collectionTab: feedbackTab[selectedTab],
+                                })
+                            }
+                        >
+                            {l10n.t('Give Feedback')}
+                        </Button>
                     )}
                 </div>
 

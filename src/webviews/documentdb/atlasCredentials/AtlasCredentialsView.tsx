@@ -20,7 +20,6 @@ import {
     Radio,
     Text,
     tokens,
-    Tooltip,
 } from '@fluentui/react-components';
 import {
     CloudRegular,
@@ -302,16 +301,13 @@ export const AtlasCredentialsView = (): JSX.Element => {
             )}
             action={
                 configuration.feedbackPermitted === true ? (
-                    <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
-                        <Button
-                            appearance="outline"
-                            icon={<EmojiRegular />}
-                            aria-label={l10n.t('Give Feedback')}
-                            onClick={() => void trpcClient.common.openFeedback.mutate({})}
-                        >
-                            {l10n.t('Give Feedback')}
-                        </Button>
-                    </Tooltip>
+                    <Button
+                        appearance="outline"
+                        icon={<EmojiRegular />}
+                        onClick={() => void trpcClient.common.openFeedback.mutate({})}
+                    >
+                        {l10n.t('Give Feedback')}
+                    </Button>
                 ) : undefined
             }
         />
