@@ -167,6 +167,8 @@ export type SurveyActivationSource =
     | 'automaticInvitation'
     | 'clusterDashboard'
     | 'collectionView'
+    | 'atlasCredentials'
+    | 'localQuickStart'
     | 'giveFeedbackCommand';
 export type SurveyCollectionTab = 'documents' | 'indexes' | 'queryInsights';
 export type SurveyInvitationKind = 'first' | 'returning' | 'unknown';

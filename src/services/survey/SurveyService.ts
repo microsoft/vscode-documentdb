@@ -186,7 +186,7 @@ export class SurveyService implements vscode.Disposable {
 
     /** Opens the sidebar on explicit request, independently of invitation eligibility and opt-out. */
     public async showFeedbackForm(
-        source: 'clusterDashboard' | 'collectionView' = 'clusterDashboard',
+        source: 'clusterDashboard' | 'collectionView' | 'atlasCredentials' | 'localQuickStart' = 'clusterDashboard',
         collectionTab?: SurveyCollectionTab,
     ): Promise<boolean> {
         if (this.manualOpening) {

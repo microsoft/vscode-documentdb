@@ -42,6 +42,8 @@ const ACTIVATION_SOURCES = [
     'automaticInvitation',
     'clusterDashboard',
     'collectionView',
+    'atlasCredentials',
+    'localQuickStart',
     'giveFeedbackCommand',
 ] as const;
 const COLLECTION_TABS = ['documents', 'indexes', 'queryInsights'] as const;

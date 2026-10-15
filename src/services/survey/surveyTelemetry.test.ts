@@ -240,6 +240,14 @@ describe('SurveyTelemetry', (): void => {
                 source: 'giveFeedbackCommand',
             }),
         ).toBe(false);
+        expect(telemetry.reportFeedbackActivated({ source: 'atlasCredentials' }, OTHER_INVITATION_ID)).toBe(true);
+        expect(sink.mock.calls[0][0].properties.activationSource).toBe('atlasCredentials');
+        sink.mockClear();
+        const localTelemetry = createTelemetry();
+        expect(localTelemetry.reportFeedbackActivated({ source: 'localQuickStart' }, INVITATION_ID)).toBe(true);
+        expect(localTelemetry.reportFeedbackActivated({ source: 'localQuickStart' }, INVITATION_ID)).toBe(false);
+        expect(sink.mock.calls[0][0].properties.activationSource).toBe('localQuickStart');
+        sink.mockClear();
         permitted = false;
         expect(telemetry.reportFeedbackActivated({ source: 'clusterDashboard' }, INVITATION_ID)).toBe(false);
         permitted = true;

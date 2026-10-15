@@ -95,7 +95,10 @@ const commonRouter = router({
         .mutation(async ({ input, ctx }): Promise<void> => {
             const viewName = (ctx as BaseRouterContext).webviewName;
             if (
-                (viewName !== 'collectionView' && viewName !== 'clusterDashboard') ||
+                (viewName !== 'collectionView' &&
+                    viewName !== 'clusterDashboard' &&
+                    viewName !== 'atlasCredentials' &&
+                    viewName !== 'localQuickStart') ||
                 (viewName === 'collectionView') !== (input.collectionTab !== undefined)
             ) {
                 throw new Error('Invalid feedback source');

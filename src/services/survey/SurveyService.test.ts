@@ -223,6 +223,24 @@ describe('SurveyService', (): void => {
         expect(h.sent('survey.invitationResolved')).toHaveLength(0);
     });
 
+    it.each(['atlasCredentials', 'localQuickStart'] as const)(
+        'attributes %s wizard feedback through activation and form opening',
+        async (source): Promise<void> => {
+            const h = createHarness();
+            expect(await h.service.showFeedbackForm(source)).toBe(true);
+            h.callbacks().onVisible();
+            expect(h.sent('survey.feedbackActivated')[0].properties).toMatchObject({
+                activationSource: source,
+            });
+            expect(await h.callbacks().onOpenForm()).toBe('opened');
+            expect(h.sent('survey.openForm')[0].properties).toMatchObject({
+                trigger: 'command',
+                activationSource: source,
+            });
+            expect(h.sent('survey.invitationShown')).toHaveLength(0);
+        },
+    );
+
     it('replaces an automatic invitation with a manually opened feedback view', async (): Promise<void> => {
         const h = createHarness();
         await invite(h);
