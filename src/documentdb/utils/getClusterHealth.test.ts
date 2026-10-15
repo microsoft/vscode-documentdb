@@ -107,6 +107,41 @@ describe('sampleClusterHealth', () => {
         expect(sample.uptimeSeconds).toBeNull();
     });
 
+    it('stops sending serverStatus once the server says it is unsupported', async () => {
+        const { client, adminCommands } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.ping === 1) {
+                    return { ok: 1 };
+                }
+                throw Object.assign(new Error("Command 'serverStatus' not supported."), { code: 115 });
+            },
+        });
+
+        await sampleClusterHealth(client);
+        const second = await sampleClusterHealth(client);
+
+        expect(adminCommands.filter((command) => command.serverStatus === 1)).toHaveLength(1);
+        // The dashboard still sees the same reason on every sample.
+        expect(second.errors.join(' ')).toContain('not supported');
+        expect(second.pingLatencyMs).not.toBeNull();
+    });
+
+    it('asks for serverStatus again after a failure that is not "unsupported"', async () => {
+        const { client, adminCommands } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.ping === 1) {
+                    return { ok: 1 };
+                }
+                throw new Error('connection reset');
+            },
+        });
+
+        await sampleClusterHealth(client);
+        await sampleClusterHealth(client);
+
+        expect(adminCommands.filter((command) => command.serverStatus === 1)).toHaveLength(2);
+    });
+
     it('records a null latency and the reason when the ping itself fails', async () => {
         const { client } = createFakeClient({
             adminCommand: () => {

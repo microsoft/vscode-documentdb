@@ -1346,6 +1346,31 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(presentAtProbe).toBe(false);
         });
 
+        it.each([
+            [false, true],
+            [true, false],
+        ])(
+            'with VS Code telemetry enabled=%s, opts the container out of usage telemetry: %s',
+            async (telemetryEnabled, optedOut) => {
+                const env = vscode.env as { isTelemetryEnabled: boolean };
+                env.isTelemetryEnabled = telemetryEnabled;
+                let contents = '';
+                const createAndRunContainer = vi.fn(async (options: { environmentFiles?: string[] }) => {
+                    contents = fs.readFileSync(options.environmentFiles![0], 'utf8');
+                    return 'c1';
+                });
+                const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
+
+                try {
+                    await collect(service.provision(new AbortController().signal));
+                } finally {
+                    env.isTelemetryEnabled = false;
+                }
+
+                expect(contents.includes('DOCUMENTDB_USAGE_TELEMETRY=false\n')).toBe(optedOut);
+            },
+        );
+
         it('retries a failed env-file delete when provisioning ends', async () => {
             let envFile: string | undefined;
             const createAndRunContainer = vi.fn(async (options: { environmentFiles?: string[] }) => {

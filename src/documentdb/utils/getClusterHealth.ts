@@ -9,14 +9,15 @@
  * Resilience model (copied from the sibling `getClusterMetadata.ts`): every server command
  * runs in its own try/catch. A command that fails leaves its fields `null` and records the
  * command name in `errors` — the collector never throws because of an unsupported command.
- * This matters because Azure DocumentDB (vCore) does not support `serverStatus`, while a
- * local emulator or a self-hosted server usually does.
+ * This matters because Azure DocumentDB (vCore) and DocumentDB Local do not support
+ * `serverStatus`, while a self-hosted MongoDB server does.
  *
  * Nothing here reads a command anyone is running: no `currentOp`, and so no command
  * document, query filter or client address ever enters this module. That is what keeps
  * application data out of the diagnostics export.
  *
- * None of these functions cache; the caller decides the sampling cadence.
+ * Nothing here caches results, only that a connection refused `serverStatus`; the caller
+ * decides the sampling cadence.
  */
 
 import { type Document, type MongoClient } from 'mongodb';
@@ -122,6 +123,24 @@ async function mapWithConcurrency<T, R>(
             return budget.run(() => map(item, signal?.aborted === true));
         }),
     );
+}
+
+/**
+ * Connections whose server refused `serverStatus` as unsupported, with the reason it gave.
+ *
+ * The dashboard samples every few seconds, and each refusal is an ERROR line in the server's own
+ * log: DocumentDB Local's View Logs filled up with them. Keyed on the client, like
+ * {@link statsBudgets}, so a reconnect asks again.
+ */
+const unsupportedServerStatus = new WeakMap<MongoClient, string>();
+
+/** CommandNotFound and CommandNotSupported: the server lacks the command, so asking again cannot help. */
+const UNSUPPORTED_COMMAND_CODES: ReadonlySet<number> = new Set([59, 115]);
+
+function isUnsupportedCommandError(error: unknown): boolean {
+    const code = (error as { code?: unknown } | null | undefined)?.code;
+
+    return typeof code === 'number' && UNSUPPORTED_COMMAND_CODES.has(code);
 }
 
 /** Databases excluded from the storage breakdown — they are server-internal. */
@@ -286,13 +305,21 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
             }
         })(),
         (async (): Promise<string | null> => {
+            const knownRefusal = unsupportedServerStatus.get(client);
+            if (knownRefusal !== undefined) {
+                return knownRefusal;
+            }
             try {
                 const serverStatus = await adminDb.command({ serverStatus: 1 });
                 sample.uptimeSeconds = toNumberOrNull(serverStatus.uptime);
                 return null;
             } catch (error) {
-                // Expected on Azure DocumentDB (vCore): `serverStatus` is not supported there.
-                return describeCommandFailure('serverStatus', error);
+                // Expected on Azure DocumentDB (vCore) and DocumentDB Local: neither supports `serverStatus`.
+                const failure = describeCommandFailure('serverStatus', error);
+                if (isUnsupportedCommandError(error)) {
+                    unsupportedServerStatus.set(client, failure);
+                }
+                return failure;
             }
         })(),
     ]);

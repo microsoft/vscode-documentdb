@@ -1734,8 +1734,12 @@ export class QuickStartServiceImpl {
             throw new Error('Credentials must not contain control characters.');
         }
         const filePath = path.join(os.tmpdir(), envFileName(process.pid, crypto.randomBytes(8).toString('hex')));
+        // The image reports usage to its own endpoint unless told not to; honor VS Code's telemetry setting.
+        const usageTelemetry = vscode.env.isTelemetryEnabled ? '' : 'DOCUMENTDB_USAGE_TELEMETRY=false\n';
         try {
-            await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n`, { mode: 0o600 });
+            await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n${usageTelemetry}`, {
+                mode: 0o600,
+            });
         } catch (error) {
             // A write that fails part-way can leave the password behind, and no caller ever learns this path.
             await this.removeEnvFile(filePath);
