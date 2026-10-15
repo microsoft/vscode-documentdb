@@ -355,7 +355,7 @@ export class SurveyService implements vscode.Disposable {
         return ok ? 'opened' : 'failed';
     }
 
-    /** Called when `telemetry.telemetryLevel` may have changed. Handles withdrawal. */
+    /** Called when `telemetry.feedback.enabled` may have changed. Handles withdrawal. */
     public handlePermissionChanged(): void {
         try {
             if (this.isPresentationPermitted()) {

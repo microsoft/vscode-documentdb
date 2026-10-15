@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
-import { affectsFeedbackPermission, isFeedbackPermitted, TELEMETRY_LEVEL_SETTING } from './feedbackPermission';
+import { affectsFeedbackPermission, FEEDBACK_ENABLED_SETTING, isFeedbackPermitted } from './feedbackPermission';
 
 vi.mock('@microsoft/vscode-azext-utils', (): object => ({
     callWithTelemetryAndErrorHandling: vi.fn(async (_name, callback: (context: IActionContext) => Promise<unknown>) =>
@@ -26,7 +26,7 @@ vi.mock('../extensionVariables', (): object => ({
 }));
 
 describe('isFeedbackPermitted', (): void => {
-    const get = vi.fn<(...args: [string]) => unknown>();
+    const get = vi.fn<(...args: [string, unknown?]) => unknown>();
 
     beforeEach((): void => {
         get.mockReset();
@@ -41,33 +41,21 @@ describe('isFeedbackPermitted', (): void => {
         vi.restoreAllMocks();
     });
 
-    it('permits feedback only at telemetry level all', (): void => {
-        get.mockReturnValue('all');
+    it('permits feedback when telemetry.feedback.enabled is true, defaulting to true', (): void => {
+        get.mockImplementation((_key, defaultValue): unknown => defaultValue);
 
         expect(isFeedbackPermitted()).toBe(true);
         expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('telemetry');
-        expect(get).toHaveBeenCalledWith('telemetryLevel');
+        expect(get).toHaveBeenCalledWith('feedback.enabled', true);
     });
 
-    it.each(['error', 'crash', 'off'])('denies feedback at telemetry level %s', (value): void => {
-        get.mockReturnValue(value);
+    it('denies feedback when telemetry.feedback.enabled is false', (): void => {
+        get.mockReturnValue(false);
 
         expect(isFeedbackPermitted()).toBe(false);
     });
 
-    it('denies feedback when the telemetry level is missing', (): void => {
-        get.mockReturnValue(undefined);
-
-        expect(isFeedbackPermitted()).toBe(false);
-    });
-
-    it.each(['ALL', 'everything'])('denies feedback for unrecognized telemetry level %s', (value): void => {
-        get.mockReturnValue(value);
-
-        expect(isFeedbackPermitted()).toBe(false);
-    });
-
-    it.each([true, 1])('denies feedback for non-string telemetry level %p', (value): void => {
+    it.each(['true', 1, 'all', null])('denies feedback for non-boolean value %p', (value): void => {
         get.mockReturnValue(value);
 
         expect(isFeedbackPermitted()).toBe(false);
@@ -83,17 +71,17 @@ describe('isFeedbackPermitted', (): void => {
 
     it('denies feedback when get throws', (): void => {
         get.mockImplementation((): never => {
-            throw new Error('Telemetry level unavailable');
+            throw new Error('Feedback setting unavailable');
         });
 
         expect(isFeedbackPermitted()).toBe(false);
     });
 
     it('reads the current configuration on every call', (): void => {
-        get.mockReturnValue('all');
+        get.mockReturnValue(true);
         expect(isFeedbackPermitted()).toBe(true);
 
-        get.mockReturnValue('off');
+        get.mockReturnValue(false);
         expect(isFeedbackPermitted()).toBe(false);
 
         expect(vscode.workspace.getConfiguration).toHaveBeenCalledTimes(2);
@@ -103,7 +91,7 @@ describe('isFeedbackPermitted', (): void => {
     it.each([true, false])(
         'includes the Help tree survey item only when permission is %s',
         async (permitted): Promise<void> => {
-            get.mockReturnValue(permitted ? 'all' : 'off');
+            get.mockReturnValue(permitted);
             const provider = new HelpAndFeedbackBranchDataProvider();
             const items = await provider.getChildren();
             const feedbackItem = items?.find((item): boolean => item.id === 'helpAndFeedbackView/give-feedback');
@@ -126,8 +114,8 @@ describe('affectsFeedbackPermission', (): void => {
         const event: vscode.ConfigurationChangeEvent = { affectsConfiguration };
 
         expect(affectsFeedbackPermission(event)).toBe(affected);
-        expect(TELEMETRY_LEVEL_SETTING).toBe('telemetry.telemetryLevel');
-        expect(affectsConfiguration).toHaveBeenCalledWith('telemetry.telemetryLevel');
+        expect(FEEDBACK_ENABLED_SETTING).toBe('telemetry.feedback.enabled');
+        expect(affectsConfiguration).toHaveBeenCalledWith('telemetry.feedback.enabled');
     });
 
     it('requests a permission recheck when affectsConfiguration throws', (): void => {

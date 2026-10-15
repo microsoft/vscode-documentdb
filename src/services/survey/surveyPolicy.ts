@@ -28,7 +28,7 @@ import {
 /**
  * Checks the preconditions in `SURVEY_PRECONDITION_ORDER` (kill switch, feedback permission,
  * permanent opt-out) and returns the first that fails. The kill switch is checked on its own:
- * a permitted telemetry level never enables a disabled survey, and vice versa.
+ * an enabled feedback setting never enables a disabled survey, and vice versa.
  */
 export function evaluatePreconditions(input: SurveyPreconditionInput): SurveyPreconditionResult {
     if (input.alwaysInvite) {

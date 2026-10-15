@@ -165,13 +165,13 @@ async function invite(h: Harness): Promise<void> {
     expect(h.present).toHaveBeenCalledTimes(1);
 }
 
-function configuration(level: unknown, throwing = false): vscode.WorkspaceConfiguration {
+function configuration(value: unknown, throwing = false): vscode.WorkspaceConfiguration {
     return {
         get: (): unknown => {
             if (throwing) {
                 throw new Error('Settings unavailable');
             }
-            return level;
+            return value;
         },
     } as unknown as vscode.WorkspaceConfiguration;
 }
@@ -554,15 +554,12 @@ describe('SurveyService', (): void => {
     });
 
     it.each([
-        { level: 'all', writes: 1 },
-        { level: 'error', writes: 0 },
-        { level: 'crash', writes: 0 },
-        { level: 'off', writes: 0 },
-        { level: undefined, writes: 0 },
-        { level: 'bogus', writes: 0 },
-        { level: 'throwing', writes: 0 },
-    ])('uses default feedback permission end to end for $level', async ({ level, writes }): Promise<void> => {
-        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration(level, level === 'throwing'));
+        { value: true, writes: 1 },
+        { value: false, writes: 0 },
+        { value: 'true', writes: 0 },
+        { value: 'throwing', writes: 0 },
+    ])('uses default feedback permission end to end for $value', async ({ value, writes }): Promise<void> => {
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration(value, value === 'throwing'));
         const storage = new MemoryStorage();
         const service = new SurveyService({ storage, machineId: 'test-machine', isSurveyEnabled: (): boolean => true });
         service.recordSurveyActivityWithInvitation('connection');
@@ -1593,7 +1590,7 @@ describe('survey singleton initialization', (): void => {
         subscriptions = [];
         originalAlwaysInvite = process.env[DEBUG_SURVEY_ALWAYS_INVITE_ENV];
         process.env[DEBUG_SURVEY_ALWAYS_INVITE_ENV] = 'false';
-        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration('all'));
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration(true));
         vi.spyOn(vscode.workspace, 'onDidChangeConfiguration').mockReturnValue({ dispose: vi.fn() });
     });
 
@@ -1631,23 +1628,23 @@ describe('survey singleton initialization', (): void => {
     });
 
     it.each([
-        { label: 'eligible', overrides: {}, level: 'all', invitations: 1 },
-        { label: 'insufficient active days', overrides: { activeDayCount: 0 }, level: 'all', invitations: 0 },
+        { label: 'eligible', overrides: {}, feedback: true, invitations: 1 },
+        { label: 'insufficient active days', overrides: { activeDayCount: 0 }, feedback: true, invitations: 0 },
         {
             label: 'cooldown',
             overrides: { nextEligibleAt: '9999-01-01T00:00:00Z' },
-            level: 'all',
+            feedback: true,
             invitations: 0,
         },
         {
             label: 'opt-out',
             overrides: { optedOutAt: '2026-01-01T00:00:00Z' },
-            level: 'all',
+            feedback: true,
             invitations: 0,
         },
-        { label: 'feedback permission', overrides: {}, level: 'off', invitations: 0 },
-    ])('development default respects $label', async ({ overrides, level, invitations }): Promise<void> => {
-        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration(level));
+        { label: 'feedback permission', overrides: {}, feedback: false, invitations: 0 },
+    ])('development default respects $label', async ({ overrides, feedback, invitations }): Promise<void> => {
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration(feedback));
         const storage = new MemoryStorage();
         const state: SurveyPersistedState = { ...EMPTY_SURVEY_STATE, activeDayCount: 2, ...overrides };
         storage.values.set(SURVEY_STATE_KEY, state);
@@ -1657,7 +1654,7 @@ describe('survey singleton initialization', (): void => {
         recordSurveyActivityWithInvitation('connection');
         await service.whenIdle();
         expect(present).toHaveBeenCalledTimes(invitations);
-        if (state.optedOutAt || level !== 'all') {
+        if (state.optedOutAt || !feedback) {
             expect(storage.update).not.toHaveBeenCalled();
         }
     });
@@ -1666,7 +1663,7 @@ describe('survey singleton initialization', (): void => {
         'always-invite enables the real service only in development, mode %s',
         async (mode): Promise<void> => {
             process.env[DEBUG_SURVEY_ALWAYS_INVITE_ENV] = 'true';
-            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration('off'));
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration(false));
             const storage = new MemoryStorage();
             storage.values.set(SURVEY_STATE_KEY, {
                 ...EMPTY_SURVEY_STATE,
@@ -1682,7 +1679,7 @@ describe('survey singleton initialization', (): void => {
         },
     );
 
-    it('routes configuration changes to withdrawal only for telemetry.telemetryLevel', (): void => {
+    it('routes configuration changes to withdrawal only for telemetry.feedback.enabled', (): void => {
         const listener = vi.mocked(vscode.workspace.onDidChangeConfiguration);
         const service = initializeSurveyService(context(new MemoryStorage(), vscode.ExtensionMode.Development));
         const handlePermissionChanged = vi.spyOn(service, 'handlePermissionChanged');
@@ -1691,10 +1688,10 @@ describe('survey singleton initialization', (): void => {
         callback(unrelated);
         expect(handlePermissionChanged).not.toHaveBeenCalled();
         const relevant = {
-            affectsConfiguration: vi.fn((key: string): boolean => key === 'telemetry.telemetryLevel'),
+            affectsConfiguration: vi.fn((key: string): boolean => key === 'telemetry.feedback.enabled'),
         };
         callback(relevant);
-        expect(relevant.affectsConfiguration).toHaveBeenCalledWith('telemetry.telemetryLevel');
+        expect(relevant.affectsConfiguration).toHaveBeenCalledWith('telemetry.feedback.enabled');
         expect(handlePermissionChanged).toHaveBeenCalledTimes(1);
     });
 

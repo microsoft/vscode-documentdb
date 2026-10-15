@@ -42,8 +42,9 @@ created: 2026-10-07
 | 0027 | Centered smaller rating, stretched actions, no save Retry    | Accepted            | 20 px centered stars, symmetric spacing, "Continue to survey", modal opt-out save failure                      | 2026-10-09 | #992  |
 | 0028 | Minimum VS Code version follows the build stack, 1.109.0     | Accepted            | Supersedes D0018; raised by the merge of #880                                                                  | 2026-10-14 | #992  |
 | 0029 | Attribute feedback activation and distinguish true returns   | Accepted            | Adds host-validated source and persisted invitation history; old history is unknown                            | 2026-10-15 | -     |
-| 0030 | Gate feedback controls without live settings sync            | Accepted            | Applies the existing `all` permission rule to buttons and the Help tree; views snapshot it at open             | 2026-10-15 | #1016 |
+| 0030 | Gate feedback controls without live settings sync            | Accepted (modified) | Applies the existing `all` permission rule to buttons and the Help tree; views snapshot it at open; D0032 replaces the setting | 2026-10-15 | #1016 |
 | 0031 | Only Collection View and the Dashboard show the invitation   | Accepted            | Other milestones only count active days; eligibility is evaluated only where the invitation can appear         | 2026-10-15 | #1016 |
+| 0032 | Feedback permission follows `telemetry.feedback.enabled`     | Accepted            | Replaces the `telemetryLevel === 'all'` gate of D0002/D0030; aligns with the `EnableFeedback` policy           | 2026-10-15 | #1016 |
 
 > Entries are semantically immutable: append new entries rather than rewriting old ones, and record
 > reversals as a new entry plus a status change above.
@@ -478,3 +479,23 @@ and updated reports, and "eligible" would no longer imply a chance to be shown).
 enrolled but never evaluated, so they are absent from gate attribution. They can be estimated
 as enrolled installations without any `survey.eligibility` event. An inviting milestone that
 arrives while counting is in flight is evaluated right after it.
+
+## 0032: Feedback permission follows `telemetry.feedback.enabled`
+
+**Decision (operator):** extension-wide, `isFeedbackPermitted()` reads
+`telemetry.feedback.enabled` (default `true`) instead of `telemetry.telemetryLevel === 'all'`.
+It gates the automatic invitation, usage collection, survey events, the webview feedback
+buttons, and the Help and Feedback tree item, and drives permission withdrawal. Only `true`
+permits; `false`, non-boolean values, and read failures fail closed. Survey events also still
+pass through the VS Code telemetry reporter, which drops them unless the telemetry level is
+`all`. Webviews keep snapshotting permission at open (D0030). The Command Palette Give
+Feedback action now follows the same setting: it is hidden from the palette by
+`config.telemetry.feedback.enabled` and does nothing if invoked while feedback is off.
+
+**Reasoning (operator):** `telemetry.feedback.enabled` is the VS Code setting, and the
+`EnableFeedback` enterprise policy, for feedback mechanisms such as surveys; the telemetry
+level is the older, indirect signal. Azure Cosmos DB for VS Code gates its surveys the same way.
+
+**Supersedes:** the `telemetryLevel === 'all'` presentation gate recorded in D0002 and applied
+by D0030. Users with telemetry below `all` but feedback enabled can now see the invitation;
+their survey events are dropped by the reporter, so they are invisible in the funnel reports.

@@ -19,7 +19,7 @@ behavior and `decisions.md` wins for intent.
 
 | Module                                      | Responsibility                                                                                                                                          |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/utils/feedbackPermission.ts`           | `isFeedbackPermitted()`: `telemetry.telemetryLevel === 'all'`, fail closed. Gates automatic invitations and survey telemetry, not explicit user opening |
+| `src/utils/feedbackPermission.ts`           | `isFeedbackPermitted()`: `telemetry.feedback.enabled` (default `true`), fail closed (D0032). Gates automatic invitations and survey telemetry, not explicit user opening |
 | `src/services/survey/surveyTypes.ts`        | Shared types: feature areas, preconditions, gates, eligibility result, persisted state                                                                  |
 | `src/services/survey/surveyConfig.ts`       | Decision values, kill switch, form URL, state keys                                                                                                      |
 | `src/services/survey/surveyPolicy.ts`       | Pure functions: kill switch override, preconditions, ordered gates, local day, cooldowns, sampling value                                                |
@@ -39,7 +39,7 @@ Iteration 4 enables the shared code switch in all modes (D0021).
 The Cluster Dashboard toolbar, Collection View tab header, MongoDB Atlas credentials wizard,
 and DocumentDB Local wizard headers each have a feedback button. They call `common.openFeedback`,
 which opens this sidebar on explicit request even after opt-out. The button is included in a
-webview only when the open-time `telemetry.telemetryLevel` value is `all`; a missing or failed
+webview only when the open-time `telemetry.feedback.enabled` value is `true` (D0032); a failed
 settings read hides it. Changing the setting requires reopening the view or restarting VS Code.
 The host checks permission again when clicked, without subscribing to settings changes.
 Query Insights no longer has its thumbs card or reason dialog, and the dashboard no longer
@@ -194,7 +194,8 @@ so concurrent calls evaluate once; calls that arrive while it is pending are cov
 except that an inviting call arriving during counting-only work is evaluated right after it.
 
 The "DocumentDB: Give Feedback" command (D0015) opens the form whenever the
-user asks, even after "Never again". It sends `survey.openForm` with trigger `command` only when
+user asks, even after "Never again", but only while `telemetry.feedback.enabled` is on (D0032):
+the palette hides it otherwise, and a keybinding invocation does nothing. It sends `survey.openForm` with trigger `command` only when
 the survey is enabled and permitted, applies the 180-day cooldown only when also not opted out,
 and never clears the opt-out.
 The sidebar feedback buttons use the same manual form-opening path and `command` trigger,
@@ -287,7 +288,8 @@ remain excluded from the survey event schema below. Its three-attempt budget bou
 
 Survey telemetry starts fresh (D0001). Events are sent only from `surveyTelemetry.ts`, only when
 `isFeedbackPermitted()` is true at the moment of emission, and never while the kill switch is
-off. Bounds apply per extension host session; an event withheld for lack of permission does not
+off. The VS Code telemetry reporter additionally drops them unless `telemetry.telemetryLevel` is
+`all`. Bounds apply per extension host session; an event withheld for lack of permission does not
 count against its bound. Each `report*` method also rejects any value outside its vocabulary
 and any `invitationSessionId` that is not a UUID.
 
@@ -350,7 +352,7 @@ Privacy Statement link are not recorded.
 
 ### Permission Withdrawal
 
-When `telemetry.telemetryLevel` leaves `all`, the service cancels pending work and disposes any
+When `telemetry.feedback.enabled` becomes `false`, the service cancels pending work and disposes any
 invitation. That closure records no outcome and sends no event, and an invitation that was already
 reserved does not reappear in the same session. If the user had already chosen "Never again" and its save fails,
 the local modal error still appears, because it is not telemetry. Opening the form
@@ -668,7 +670,7 @@ locally; warehouse names, transformations and actual delivered fields still need
 | Submitted rating         | Optional integer 1-5 on an explicit invitation opening, subject to permission and event bounds. No default/zero, no emission on selection alone, no local-state persistence or trace output                                              |
 | Never sent by the survey | Hover, clicked-element identity, keyboard key, external-form answers, name, form URL, exact active-day count/history/dates, sampling value, database/collection names, query text, credentials or connection strings                     |
 | Local only               | Active-day count and dates, opt-out/cooldown state, sampling calculation, eligibility explanation. Event timestamps are transport metadata, not submitted local usage dates                                                              |
-| Permission               | Fresh `telemetry.telemetryLevel === 'all'`, fail closed for `error`, `crash`, `off`, missing/unrecognized values and read failures. Gates activity collection, events and automatic presentation; rechecked before invitation navigation |
+| Permission               | Fresh `telemetry.feedback.enabled === true` (default `true`; D0032), fail closed for `false`, non-boolean values and read failures. Gates activity collection, events and automatic presentation; rechecked before invitation navigation. Events are also subject to `telemetry.telemetryLevel` through the VS Code reporter |
 | Withdrawal               | Cancels pending work, silently closes visible invitation, emits no resolution/outcome after withdrawal. Persisted Never again still applies even if its event is lost                                                                    |
 | Other preconditions      | `SURVEY_ENABLED=true` in all modes (D0021); no enablement launch override. Permanent opt-out stops automatic tracking and invitations before cohort entry                                                                                |
 | Manual command exception | Give Feedback opens the fixed form on explicit request even after opt-out, with the switch off or without telemetry permission; survey events still require enabled/permitted. Never clears opt-out                                      |

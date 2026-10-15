@@ -37,7 +37,7 @@ export interface SurveyPreconditionInput {
     readonly alwaysInvite?: boolean;
     /** Shared code kill switch (D0021). */
     readonly surveyEnabled: boolean;
-    /** Result of `isFeedbackPermitted()`: `telemetry.telemetryLevel === 'all'`, fail closed. */
+    /** Result of `isFeedbackPermitted()`: `telemetry.feedback.enabled`, fail closed. */
     readonly feedbackPermitted: boolean;
     /** The user chose "Never again" (D0002). Permanent. */
     readonly optedOut: boolean;

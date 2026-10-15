@@ -4,7 +4,7 @@
 
 ### New Features
 
-- **Feedback Survey Invitation**: Restores the in-product satisfaction survey as an optional Secondary Sidebar invitation, shown after three active days of successful use and only when `telemetry.telemetryLevel` is `all`. Adds a `DocumentDB: Give Feedback` command; Don't ask again persists across releases. [#992](https://github.com/microsoft/vscode-documentdb/pull/992)
+- **Feedback Survey Invitation**: Restores the in-product satisfaction survey as an optional Secondary Sidebar invitation, shown after three active days of successful use and only when `telemetry.feedback.enabled` is on. Adds a `DocumentDB: Give Feedback` command; Don't ask again persists across releases. [#992](https://github.com/microsoft/vscode-documentdb/pull/992)
 
 ### Improvements
 

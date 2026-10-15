@@ -12,6 +12,9 @@ export const GIVE_FEEDBACK_COMMAND = 'vscode-documentdb.command.giveFeedback';
 export const GIVE_FEEDBACK_VIEW_COMMAND = 'vscode-documentdb.command.internal.helpAndFeedback.openSurvey';
 
 export async function giveFeedback(service?: SurveyService): Promise<void> {
+    if (!isFeedbackPermitted()) {
+        return;
+    }
     let opened = false;
     try {
         opened = service

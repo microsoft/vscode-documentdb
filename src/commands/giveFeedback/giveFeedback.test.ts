@@ -5,6 +5,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import * as vscode from 'vscode';
 import { SurveyService } from '../../services/survey/SurveyService';
 import { SURVEY_FORM_URL, SURVEY_STATE_KEY } from '../../services/survey/surveyConfig';
@@ -117,6 +119,24 @@ describe('Give Feedback', (): void => {
         const open = vi.fn().mockRejectedValue(new Error('boom'));
         await giveFeedback({ openSurveyFormFromCommand: open } as unknown as SurveyService);
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), { modal: true });
+    });
+
+    it('does nothing from a keybinding or stale invocation when feedback is off', async (): Promise<void> => {
+        vi.mocked(isFeedbackPermitted).mockReturnValue(false);
+        const open = vi.fn();
+        await giveFeedback({ openSurveyFormFromCommand: open } as unknown as SurveyService);
+        expect(open).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+    });
+
+    it('hides the command from the Command Palette when telemetry.feedback.enabled is off', (): void => {
+        const manifest = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
+            contributes: { menus: { commandPalette: { command: string; when?: string }[] } };
+        };
+        const entry = manifest.contributes.menus.commandPalette.find(
+            (item): boolean => item.command === GIVE_FEEDBACK_COMMAND,
+        );
+        expect(entry?.when).toBe('config.telemetry.feedback.enabled');
     });
 
     it.each([true, false])('opens the feedback sidebar from the tree, shown=%s', async (shown): Promise<void> => {
