@@ -206,7 +206,8 @@ Explicit opening is not an automatic
 invitation and bypasses automatic eligibility and invitation suppression.
 When an automatic invitation is already visible, a feedback button focuses it instead of
 replacing it, so it keeps its `automaticInvitation` attribution and its own outcome; no
-`survey.feedbackActivated` is added. Otherwise, replacing an automatic invitation waits for any
+`survey.feedbackActivated` is added. A feedback button pressed while a manually opened form is
+open likewise focuses that form and keeps its original source. Otherwise, replacing an automatic invitation waits for any
 pending reveal to settle and its canceled handle to be disposed before presenting manual
 feedback. Each manual presentation owns its
 close state and handle: a late browser result cannot close a replacement, and Close during

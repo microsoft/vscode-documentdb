@@ -363,6 +363,21 @@ describe('SurveyInvitationView', (): void => {
         h.presenter.dispose();
     });
 
+    it('focuses an open feedback form instead of rebuilding it', async (): Promise<void> => {
+        const h = harness();
+        expect(await h.service.showFeedbackForm('clusterDashboard')).toBe(true);
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        const html = h.surface.view.webview.html;
+        h.surface.postMessage.mockClear();
+
+        expect(await h.service.showFeedbackForm('collectionView', 'indexes')).toBe(true);
+        expect(h.surface.view.webview.html).toBe(html);
+        expect(h.surface.postMessage).toHaveBeenCalledWith({ type: 'focus' });
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
     it('focuses a visible automatic invitation instead of replacing it when the user asks for feedback', async (): Promise<void> => {
         const h = harness();
         h.service.recordSurveyActivityWithInvitation('dataBrowsing');

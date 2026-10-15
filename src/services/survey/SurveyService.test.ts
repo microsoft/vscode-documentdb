@@ -272,6 +272,19 @@ describe('SurveyService', (): void => {
         });
     });
 
+    it('focuses an open feedback form instead of rebuilding it', async (): Promise<void> => {
+        const h = createHarness();
+        const focus = vi.fn((): boolean => true);
+        Object.assign(h.handle, { focus });
+        expect(await h.service.showFeedbackForm('collectionView', 'documents')).toBe(true);
+        h.callbacks().onVisible();
+        expect(await h.service.showFeedbackForm('clusterDashboard')).toBe(true);
+        expect(focus).toHaveBeenCalledOnce();
+        expect(h.present).toHaveBeenCalledOnce();
+        expect(h.handle.dispose).not.toHaveBeenCalled();
+        expect(h.sent('survey.feedbackActivated')).toHaveLength(1);
+    });
+
     it('replaces a visible automatic invitation when it cannot be focused', async (): Promise<void> => {
         const h = createHarness();
         Object.assign(h.handle, { focus: (): boolean => false });

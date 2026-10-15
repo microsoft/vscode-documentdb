@@ -116,7 +116,7 @@ export class SurveyService implements vscode.Disposable {
     private needsEvaluation = false;
     private invitationReserved = false;
     private activeInvitation: ActiveInvitation | undefined;
-    private manualHandle: vscode.Disposable | undefined;
+    private manualHandle: SurveyInvitationHandle | undefined;
     private manualOpening: Promise<boolean> | undefined;
     private presenter: SurveyPresenter | undefined;
     private disposed = false;
@@ -262,6 +262,10 @@ export class SurveyService implements vscode.Disposable {
         const shown = this.activeInvitation;
         if (shown && !shown.ended && shown.visible && shown.handle?.focus?.()) {
             traceSurvey((): string => vscode.l10n.t('[Survey] Feedback request focused the visible invitation.'));
+            return true;
+        }
+        if (this.manualHandle?.focus?.()) {
+            traceSurvey((): string => vscode.l10n.t('[Survey] Feedback request focused the open feedback form.'));
             return true;
         }
         const pendingInvitation = this.invitationOpening;
