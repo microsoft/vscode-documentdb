@@ -8,7 +8,7 @@
 
 ### Improvements
 
-- **Unified Feedback Entry Points**: Replaces the Query Insights and Cluster Dashboard thumb dialogs with survey buttons, and adds feedback access from Collection View, setup wizards, and Help and Feedback. Tracks the entry point and distinguishes first invitations from reminders. [#1016](https://github.com/microsoft/vscode-documentdb/pull/1016)
+- **Unified Feedback Entry Points**: Replaces the Query Insights and Cluster Dashboard thumb dialogs with survey buttons, and adds feedback access from Collection View, setup wizards, Help and Feedback, and the `DocumentDB: Give Feedback` command, all opening the same feedback sidebar. Automatic invitations now appear only while you work in Collection View or the Cluster Dashboard. Tracks the entry point and distinguishes first invitations from reminders. [#1016](https://github.com/microsoft/vscode-documentdb/pull/1016)
 - **Wizard Header Layout**: Updates `@microsoft/vscode-ext-webview-fluentui` to 1.2.0 with configurable content width and full-width headers. DocumentDB Local and MongoDB Atlas setup keep their previous content width while accommodating feedback actions. [#1016](https://github.com/microsoft/vscode-documentdb/pull/1016)
 - **Minimum VS Code Version**: Raises the minimum supported VS Code version to 1.109.0. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
 - **Webview Code Splitting**: Separates webview code by panel and loads it on demand. Local Quick Start and Atlas Credentials no longer load the Monaco editor or SlickGrid dependencies. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
