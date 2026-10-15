@@ -101,7 +101,9 @@ const commonRouter = router({
                 throw new Error('Invalid feedback source');
             }
             if (!(await getSurveyService()?.showFeedbackForm(viewName, input.collectionTab))) {
-                void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open the feedback view. Please try again."));
+                void vscode.window.showErrorMessage(
+                    vscode.l10n.t("We couldn't open the feedback view. Please try again."),
+                );
             }
         }),
     reportEvent: publicProcedure

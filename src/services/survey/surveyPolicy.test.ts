@@ -394,26 +394,39 @@ describe('evaluateEligibility', (): void => {
             'opened',
         ];
 
-        it.each(previousOutcomes)('mirrors previous invitation outcome %p in eligible results', (lastInvitationOutcome): void => {
-            const config: SurveyPolicyConfig = { ...DEFAULT_SURVEY_POLICY_CONFIG, requiredActiveDays: 7 };
-            const input = createEligibleInput({ state: createState({ activeDayCount: 10, lastInvitationOutcome, invitationHistory: lastInvitationOutcome ? 'seen' : 'new' }) });
-            const result = evaluateEligibility(input, config);
+        it.each(previousOutcomes)(
+            'mirrors previous invitation outcome %p in eligible results',
+            (lastInvitationOutcome): void => {
+                const config: SurveyPolicyConfig = { ...DEFAULT_SURVEY_POLICY_CONFIG, requiredActiveDays: 7 };
+                const input = createEligibleInput({
+                    state: createState({
+                        activeDayCount: 10,
+                        lastInvitationOutcome,
+                        invitationHistory: lastInvitationOutcome ? 'seen' : 'new',
+                    }),
+                });
+                const result = evaluateEligibility(input, config);
 
-            expect(result.overall).toBe('eligible');
-            expect(result.explanation).toEqual({
-                activeDayCount: 10,
-                requiredActiveDays: 7,
-                previousOutcome: lastInvitationOutcome,
-                isReminder: lastInvitationOutcome !== undefined,
-            });
-        });
+                expect(result.overall).toBe('eligible');
+                expect(result.explanation).toEqual({
+                    activeDayCount: 10,
+                    requiredActiveDays: 7,
+                    previousOutcome: lastInvitationOutcome,
+                    isReminder: lastInvitationOutcome !== undefined,
+                });
+            },
+        );
 
         it.each(previousOutcomes)(
             'produces the same input-based explanation when blocked with outcome %p',
             (lastInvitationOutcome): void => {
                 const config: SurveyPolicyConfig = { ...DEFAULT_SURVEY_POLICY_CONFIG, requiredActiveDays: 7 };
                 const input = createEligibleInput({
-                    state: createState({ activeDayCount: 2, lastInvitationOutcome, invitationHistory: lastInvitationOutcome ? 'seen' : 'new' }),
+                    state: createState({
+                        activeDayCount: 2,
+                        lastInvitationOutcome,
+                        invitationHistory: lastInvitationOutcome ? 'seen' : 'new',
+                    }),
                     samplingValue: 1,
                 });
                 const result = evaluateEligibility(input, config);

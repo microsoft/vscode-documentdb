@@ -707,7 +707,11 @@ describe('parseSurveyState', (): void => {
             activeDayCount: 2,
         });
 
-        expect(parseSurveyState(raw)).toEqual({ ...EMPTY_SURVEY_STATE, activeDayCount: 2, invitationHistory: 'unknown' });
+        expect(parseSurveyState(raw)).toEqual({
+            ...EMPTY_SURVEY_STATE,
+            activeDayCount: 2,
+            invitationHistory: 'unknown',
+        });
     });
 
     it.each(['opened', 'askLater', 'dismissed'] as const)('accepts the %s outcome', (lastOutcome): void => {
@@ -727,7 +731,13 @@ describe('parseSurveyState', (): void => {
                 nextEligibleAt: '',
                 optedOutAt: '',
             }),
-        ).toEqual({ ...EMPTY_SURVEY_STATE, invitationHistory: 'unknown', lastActiveDay: '2026-99-99', nextEligibleAt: '', optedOutAt: '' });
+        ).toEqual({
+            ...EMPTY_SURVEY_STATE,
+            invitationHistory: 'unknown',
+            lastActiveDay: '2026-99-99',
+            nextEligibleAt: '',
+            optedOutAt: '',
+        });
     });
 
     interface InvalidStateCase {

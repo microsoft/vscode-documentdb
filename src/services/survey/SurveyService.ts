@@ -289,7 +289,14 @@ export class SurveyService implements vscode.Disposable {
         const enabled = this.isEnabled();
         const permitted = this.isPermitted();
         if (enabled && permitted) {
-            this.telemetry.reportOpenForm('command', ok ? 'success' : 'failure', 1, undefined, selectedRating, activation);
+            this.telemetry.reportOpenForm(
+                'command',
+                ok ? 'success' : 'failure',
+                1,
+                undefined,
+                selectedRating,
+                activation,
+            );
         }
         if (ok && enabled && permitted && !this.store.isOptedOut) {
             traceSurvey((): string => vscode.l10n.t('[Survey] Command outcome: opened.'));
@@ -534,12 +541,12 @@ export class SurveyService implements vscode.Disposable {
             isReminder: result.explanation.isReminder,
             activation: {
                 source: 'automaticInvitation',
-                                invitationKind:
-                                        state.invitationHistory === 'new'
-                                                ? 'first'
-                                                : state.invitationHistory === 'seen'
-                                                    ? 'returning'
-                                                    : 'unknown',
+                invitationKind:
+                    state.invitationHistory === 'new'
+                        ? 'first'
+                        : state.invitationHistory === 'seen'
+                          ? 'returning'
+                          : 'unknown',
                 ...(state.invitationHistory === 'seen' ? { returnReason: state.lastInvitationOutcome ?? 'none' } : {}),
                 ...(state.invitationHistory === 'unknown' ? { returnReason: 'unknown' } : {}),
             },

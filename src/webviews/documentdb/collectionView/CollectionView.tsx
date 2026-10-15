@@ -665,9 +665,11 @@ export const CollectionView = (): JSX.Element => {
                             appearance="secondary"
                             icon={<EmojiRegular />}
                             aria-label={l10n.t('Give Feedback')}
-                            onClick={() => void trpcClient.common.openFeedback.mutate({
-                                collectionTab: feedbackTab[selectedTab],
-                            })}
+                            onClick={() =>
+                                void trpcClient.common.openFeedback.mutate({
+                                    collectionTab: feedbackTab[selectedTab],
+                                })
+                            }
                         >
                             {l10n.t('Give Feedback')}
                         </Button>

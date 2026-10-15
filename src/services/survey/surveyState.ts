@@ -49,8 +49,15 @@ export function parseSurveyState(raw: unknown): SurveyPersistedState {
         // Read the permanent opt-out first so a failure in another field cannot erase it.
         optedOutAt = object.optedOutAt;
         const prototype: unknown = Object.getPrototypeOf(object);
-        const { version, activeDayCount, lastActiveDay, lastOutcome, nextEligibleAt, invitationHistory, lastInvitationOutcome } =
-            object;
+        const {
+            version,
+            activeDayCount,
+            lastActiveDay,
+            lastOutcome,
+            nextEligibleAt,
+            invitationHistory,
+            lastInvitationOutcome,
+        } = object;
 
         if (
             !Array.isArray(object) &&

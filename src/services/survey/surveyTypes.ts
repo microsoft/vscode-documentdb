@@ -163,7 +163,11 @@ export function isSurveyRating(value: unknown): value is SurveyRating {
 /** Where the request to open the form came from (D0015). */
 export type SurveyOpenFormTrigger = 'invitation' | 'command';
 
-export type SurveyActivationSource = 'automaticInvitation' | 'clusterDashboard' | 'collectionView' | 'giveFeedbackCommand';
+export type SurveyActivationSource =
+    | 'automaticInvitation'
+    | 'clusterDashboard'
+    | 'collectionView'
+    | 'giveFeedbackCommand';
 export type SurveyCollectionTab = 'documents' | 'indexes' | 'queryInsights';
 export type SurveyInvitationKind = 'first' | 'returning' | 'unknown';
 export type SurveyReturnReason = SurveyTimedOutcome | 'none' | 'unknown';

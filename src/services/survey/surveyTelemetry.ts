@@ -38,7 +38,12 @@ const INVITATION_OUTCOMES = ['opened', 'askLater', 'dismissed', 'neverAgain'] as
 const GATE_STATUSES = ['passed', 'blocked', 'notEvaluated'] as const;
 const ELIGIBILITY_OVERALLS = ['eligible', 'blocked'] as const;
 const INVITATION_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTIVATION_SOURCES = ['automaticInvitation', 'clusterDashboard', 'collectionView', 'giveFeedbackCommand'] as const;
+const ACTIVATION_SOURCES = [
+    'automaticInvitation',
+    'clusterDashboard',
+    'collectionView',
+    'giveFeedbackCommand',
+] as const;
 const COLLECTION_TABS = ['documents', 'indexes', 'queryInsights'] as const;
 const INVITATION_KINDS = ['first', 'returning', 'unknown'] as const;
 const RETURN_REASONS = ['opened', 'askLater', 'dismissed', 'none', 'unknown'] as const;
@@ -386,7 +391,8 @@ function activationProperties(activation: SurveyActivation): Record<string, stri
             validReason = returnReason === undefined;
             break;
         case 'returning':
-            validReason = returnReason !== undefined && returnReason !== 'unknown' && RETURN_REASONS.includes(returnReason);
+            validReason =
+                returnReason !== undefined && returnReason !== 'unknown' && RETURN_REASONS.includes(returnReason);
             break;
         case 'unknown':
             validReason = returnReason === 'unknown';

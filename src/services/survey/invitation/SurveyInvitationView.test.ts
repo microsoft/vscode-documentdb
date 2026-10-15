@@ -331,17 +331,21 @@ describe('SurveyInvitationView', (): void => {
     it('waits for a pending hide before activating feedback in a cold sidebar', async (): Promise<void> => {
         const h = harness();
         let finishHide!: () => void;
-        const pendingHide = new Promise<void>((resolve): void => { finishHide = resolve; });
-        const contexts: boolean[] = [];
-        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command, _key, active): Promise<undefined> => {
-            if (command === 'setContext') {
-                if (active === false) await pendingHide;
-                contexts.push(active as boolean);
-            } else if (command === `${SURVEY_VIEW_ID}.open`) {
-                h.presenter.resolveWebviewView(h.surface.view);
-            }
-            return undefined;
+        const pendingHide = new Promise<void>((resolve): void => {
+            finishHide = resolve;
         });
+        const contexts: boolean[] = [];
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(
+            async (command, _key, active): Promise<undefined> => {
+                if (command === 'setContext') {
+                    if (active === false) await pendingHide;
+                    contexts.push(active as boolean);
+                } else if (command === `${SURVEY_VIEW_ID}.open`) {
+                    h.presenter.resolveWebviewView(h.surface.view);
+                }
+                return undefined;
+            },
+        );
         h.presenter.resolveWebviewView(h.surface.view);
         const opening = h.service.showFeedbackForm();
         await flush();
