@@ -4,7 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { getSurveyService, recordSurveyActivityWithInvitation, type SurveyService } from '../services/survey/SurveyService';
+import {
+    getSurveyService,
+    recordSurveyActivityWithInvitation,
+    type SurveyService,
+} from '../services/survey/SurveyService';
 import { SURVEY_FEATURE_AREAS } from '../services/survey/surveyTypes';
 
 // Hyphenated: the VSIX inspection reads bare `name.ext` manifest strings as file paths.

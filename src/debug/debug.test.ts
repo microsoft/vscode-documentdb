@@ -7,7 +7,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import * as vscode from 'vscode';
 import * as packageJson from '../../package.json';
-import { getSurveyService, recordSurveyActivityWithInvitation, type SurveyService } from '../services/survey/SurveyService';
+import {
+    getSurveyService,
+    recordSurveyActivityWithInvitation,
+    type SurveyService,
+} from '../services/survey/SurveyService';
 import { DEBUG_SURVEY_ALWAYS_INVITE_ENV, readDebugOverrides } from './debugOverrides';
 import {
     DEVELOPMENT_MODE_CONTEXT,
