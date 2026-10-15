@@ -10,7 +10,6 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
-import { isFeedbackPermitted } from '../../utils/feedbackPermission';
 import { openCollectionWebview } from '../../webviews/documentdb/collectionView/collectionViewController';
 
 export async function openCollectionView(context: IActionContext, node: CollectionItem) {
@@ -65,9 +64,6 @@ export async function openCollectionViewInternal(
      */
     const sessionId = await ClusterSession.initNewSession(props.clusterId);
 
-    // isFeedbackPermitted gates feedback on telemetry level "all" and fails closed.
-    const feedbackSignalsEnabled = isFeedbackPermitted();
-
     const view = openCollectionWebview({
         sessionId: sessionId,
         clusterId: props.clusterId,
@@ -75,7 +71,6 @@ export async function openCollectionViewInternal(
         viewId: props.viewId,
         databaseName: props.databaseName,
         collectionName: props.collectionName,
-        feedbackSignalsEnabled: feedbackSignalsEnabled,
         initialQuery: props.initialQuery,
         initialTab: props.initialTab,
     });

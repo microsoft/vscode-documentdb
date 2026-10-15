@@ -176,6 +176,67 @@ function configuration(level: unknown, throwing = false): vscode.WorkspaceConfig
 }
 
 describe('SurveyService', (): void => {
+    it('opens feedback explicitly after opt-out and with telemetry permission off without creating an invitation outcome', async (): Promise<void> => {
+        const storage = new MemoryStorage();
+        storage.values.set(SURVEY_STATE_KEY, { ...EMPTY_SURVEY_STATE, optedOutAt: '2026-09-30T00:00:00Z' });
+        const h = createHarness(storage);
+        h.flags.enabled = false;
+        h.flags.permitted = false;
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(h.present.mock.calls[0][0].manuallyOpened).toBe(true);
+        h.callbacks().onVisible();
+        expect(h.storage.update).not.toHaveBeenCalled();
+        expect(await h.callbacks().onOpenForm()).toBe('opened');
+        expect(h.openExternal).toHaveBeenCalledWith(SURVEY_FORM_URL);
+        expect(h.handle.dispose).toHaveBeenCalledOnce();
+        expect(h.sink).not.toHaveBeenCalled();
+        expect(h.state().optedOutAt).toBeDefined();
+    });
+
+    it('lets a user close and reopen feedback without changing survey eligibility', async (): Promise<void> => {
+        const h = createHarness();
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        await h.callbacks().onChoice('askLater');
+        expect(h.handle.dispose).toHaveBeenCalledOnce();
+        expect(h.storage.update).not.toHaveBeenCalled();
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(h.present).toHaveBeenCalledTimes(2);
+        expect(h.sink).not.toHaveBeenCalled();
+    });
+
+    it('reports a selected rating from manually opened feedback when telemetry is permitted', async (): Promise<void> => {
+        const h = createHarness();
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(await h.callbacks().onOpenForm(4)).toBe('opened');
+        expect(h.sent('survey.openForm')[0].properties.trigger).toBe('command');
+        expect(h.sent('survey.openForm')[0].measurements).toEqual({ attempt: 1, selectedRating: 4 });
+        expect(h.sent('survey.invitationShown')).toHaveLength(0);
+        expect(h.sent('survey.invitationResolved')).toHaveLength(0);
+    });
+
+    it('replaces an automatic invitation with a manually opened feedback view', async (): Promise<void> => {
+        const h = createHarness();
+        await invite(h);
+        const invitationEvents = h.events();
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(h.handle.dispose).toHaveBeenCalledOnce();
+        expect(h.present.mock.calls[1][0].manuallyOpened).toBe(true);
+        expect(h.events()).toEqual(invitationEvents);
+        expect(h.sent('survey.invitationResolved')).toHaveLength(0);
+    });
+
+    it('coalesces repeated feedback clicks while presentation is in progress', async (): Promise<void> => {
+        const h = createHarness();
+        const pending = deferred<vscode.Disposable | undefined>();
+        h.present.mockReturnValueOnce(pending.promise);
+        const first = h.service.showFeedbackForm();
+        const second = h.service.showFeedbackForm();
+        pending.resolve(h.handle);
+        expect(await first).toBe(true);
+        expect(await second).toBe(true);
+        expect(h.present).toHaveBeenCalledTimes(1);
+    });
+
     it('reset waits for pending writes and cancels pending presentation', async (): Promise<void> => {
         const storage = new MemoryStorage();
         const started = deferred<void>();

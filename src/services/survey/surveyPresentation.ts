@@ -17,6 +17,8 @@ export interface SurveyInvitationRequest {
     readonly invitationSessionId: string;
     /** From the same eligibility result that triggered the invitation. */
     readonly explanation: SurveyEligibilityExplanation;
+    /** User opened the feedback view explicitly, rather than receiving an invitation. */
+    readonly manuallyOpened?: boolean;
 }
 
 /** Choices that end an invitation without opening the form. `dismissed` = closed without a choice. */

@@ -186,6 +186,26 @@ describe('SurveyInvitationView', (): void => {
         ext.outputChannel = originalOutputChannel;
     });
 
+    it('renders the user-opened explanation and sends the selected rating on explicit form opening', async (): Promise<void> => {
+        const h = harness();
+        h.open.mockResolvedValue(true);
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        expect(h.surface.view.webview.html).not.toContain('days, so');
+        h.surface.message({ type: 'rendered' });
+        h.surface.message({ type: 'openForm', selectedRating: 3 });
+        await flush();
+        expect(h.open).toHaveBeenCalledWith(SURVEY_FORM_URL);
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationShown')).toHaveLength(0);
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationResolved')).toHaveLength(0);
+        expect(h.events.find((event): boolean => event.name === 'survey.openForm')).toMatchObject({
+            properties: { trigger: 'command' },
+            measurements: { attempt: 1, selectedRating: 3 },
+        });
+        h.presenter.dispose();
+        h.service.dispose();
+    });
+
     it('contributes a stable, context-gated Secondary Sidebar webview and localized command', (): void => {
         const manifest = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
             engines: { vscode: string };

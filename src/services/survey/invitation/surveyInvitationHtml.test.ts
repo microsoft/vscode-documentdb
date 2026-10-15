@@ -23,6 +23,9 @@ const strings: SurveyInvitationStrings = {
     neverAgain: 'Never again',
     why: 'Why am I seeing this?',
     usage: "You've used DocumentDB for VS Code on {0} days with meaningful extension use. This count stays on your device.",
+    manuallyOpened: "You're seeing this because you opened the feedback form.",
+    close: 'Close',
+    manualTelemetry: 'We record survey opening only when feedback telemetry is permitted.',
     reminders: {
         opened: 'The waiting period after opening the survey has passed.',
         askLater: 'You asked us to remind you later. The reminder period has passed.',
@@ -83,6 +86,31 @@ function interactiveHtml(): {
 }
 
 describe('survey invitation HTML', (): void => {
+    it('explains user-opened feedback without claiming eligibility or offering invitation choices', (): void => {
+        const page = parseHtml(
+            buildSurveyInvitationHtml({
+                strings,
+                nonce: 'test-nonce',
+                cspSource: 'vscode-webview:',
+                artworkUri: 'vscode-webview://extension/icon.png',
+                artworkDarkUri: 'vscode-webview://extension/icon-dark.svg',
+                explanation: {
+                    activeDayCount: 0,
+                    requiredActiveDays: 3,
+                    isReminder: false,
+                    previousOutcome: undefined,
+                },
+                manuallyOpened: true,
+            }),
+        );
+        const details = page.querySelector('details');
+        expect(details?.textContent).toContain(strings.manuallyOpened);
+        expect(details?.textContent).toContain(strings.manualTelemetry);
+        expect(details?.textContent).not.toContain('days with meaningful extension use');
+        expect(page.querySelector('[data-action="neverAgain"]')).toBeNull();
+        expect(page.querySelector('[data-action="askLater"]')?.textContent).toBe('Close');
+    });
+
     it('uses a nonce CSP, packaged artwork, theme variables, and no remote resource URLs', (): void => {
         const page = parseHtml(html());
         expect(page.querySelector('meta[http-equiv]')?.getAttribute('content')).toContain("default-src 'none'");

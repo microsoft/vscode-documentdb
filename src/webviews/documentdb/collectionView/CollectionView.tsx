@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
+import { Badge, Button, ProgressBar, Tab, TabList, Tooltip } from '@fluentui/react-components';
+import { EmojiRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
@@ -609,50 +610,60 @@ export const CollectionView = (): JSX.Element => {
                     }
                 />
 
-                <TabList
-                    aria-label={l10n.t('Collection views')}
-                    className="collectionTabList"
-                    selectedValue={selectedTab}
-                    onTabSelect={(_event, data) => {
-                        const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
+                <div className="collectionTabHeader">
+                    <TabList
+                        aria-label={l10n.t('Collection views')}
+                        className="collectionTabList"
+                        selectedValue={selectedTab}
+                        onTabSelect={(_event, data) => {
+                            const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
 
-                        // Report tab switching telemetry
-                        trpcClient.common.reportEvent
-                            .mutate({
-                                eventName: 'tabChanged',
-                                properties: {
-                                    previousTab: selectedTab,
-                                    newTab: newTab,
-                                },
-                            })
-                            .catch((error) => {
-                                console.debug('Failed to report tab change:', error);
-                            });
+                            // Report tab switching telemetry
+                            trpcClient.common.reportEvent
+                                .mutate({
+                                    eventName: 'tabChanged',
+                                    properties: {
+                                        previousTab: selectedTab,
+                                        newTab: newTab,
+                                    },
+                                })
+                                .catch((error) => {
+                                    console.debug('Failed to report tab change:', error);
+                                });
 
-                        setSelectedTab(newTab);
-                    }}
-                >
-                    <Tab id="tab.results" value="tab_result" aria-controls="tabpanel.results">
-                        {l10n.t('Documents')}
-                    </Tab>
-                    <Tab id="tab.indexes" value="tab_indexes" aria-controls="tabpanel.indexes">
-                        {l10n.t('Indexes')}
-                    </Tab>
-                    <Tab id="tab.queryInsights" value="tab_queryInsights" aria-controls="tabpanel.queryInsights">
-                        <span className="queryInsightsTabLabel">
-                            {l10n.t('Query Insights')}
-                            <Badge
-                                appearance="tint"
-                                size="small"
-                                shape="rounded"
-                                color="brand"
-                                aria-label={l10n.t('PREVIEW feature')}
-                            >
-                                <span aria-hidden={true}>{l10n.t('PREVIEW')}</span>
-                            </Badge>
-                        </span>
-                    </Tab>
-                </TabList>
+                            setSelectedTab(newTab);
+                        }}
+                    >
+                        <Tab id="tab.results" value="tab_result" aria-controls="tabpanel.results">
+                            {l10n.t('Documents')}
+                        </Tab>
+                        <Tab id="tab.indexes" value="tab_indexes" aria-controls="tabpanel.indexes">
+                            {l10n.t('Indexes')}
+                        </Tab>
+                        <Tab id="tab.queryInsights" value="tab_queryInsights" aria-controls="tabpanel.queryInsights">
+                            <span className="queryInsightsTabLabel">
+                                {l10n.t('Query Insights')}
+                                <Badge
+                                    appearance="tint"
+                                    size="small"
+                                    shape="rounded"
+                                    color="brand"
+                                    aria-label={l10n.t('PREVIEW feature')}
+                                >
+                                    <span aria-hidden={true}>{l10n.t('PREVIEW')}</span>
+                                </Badge>
+                            </span>
+                        </Tab>
+                    </TabList>
+                    <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
+                        <Button
+                            appearance="subtle"
+                            icon={<EmojiRegular />}
+                            aria-label={l10n.t('Give Feedback')}
+                            onClick={() => void trpcClient.common.openFeedback.mutate()}
+                        />
+                    </Tooltip>
+                </div>
 
                 <div
                     id={selectedTabPanelId}

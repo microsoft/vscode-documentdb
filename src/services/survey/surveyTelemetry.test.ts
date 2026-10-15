@@ -423,13 +423,23 @@ describe('SurveyTelemetry', (): void => {
         expect(sink.mock.calls[0][0].measurements).not.toHaveProperty('selectedRating');
     });
 
-    it('rejects invalid ratings and ratings attached to command openings', (): void => {
+    it('rejects invalid ratings on invitation and manual openings', (): void => {
         for (const rating of [0, 6, -1, 1.5, NaN, Infinity, null, '5', { value: 5 }, [5]]) {
             expect(telemetry.reportOpenForm('invitation', 'success', 1, INVITATION_ID, rating)).toBe(false);
+            expect(telemetry.reportOpenForm('command', 'success', 1, undefined, rating)).toBe(false);
         }
-        expect(telemetry.reportOpenForm('command', 'success', 1, undefined, 5)).toBe(false);
         expect(telemetry.reportOpenForm('invitation', 'success', 4, INVITATION_ID, 5)).toBe(false);
         expect(sink).not.toHaveBeenCalled();
+    });
+
+    it('reports an optional rating from a manually opened sidebar without an invitation id', (): void => {
+        expect(telemetry.reportOpenForm('command', 'success', 1, undefined, 4)).toBe(true);
+        expect(sink.mock.calls[0][0].properties).toEqual({
+            ...COMMON_PROPERTIES,
+            trigger: 'command',
+            openResult: 'success',
+        });
+        expect(sink.mock.calls[0][0].measurements).toEqual({ attempt: 1, selectedRating: 4 });
     });
 
     it('never emits eligibility explanation fields or the active-day count', (): void => {

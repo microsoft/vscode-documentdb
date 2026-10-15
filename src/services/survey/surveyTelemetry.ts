@@ -245,7 +245,7 @@ export class SurveyTelemetry {
     /**
      * Once per attempt; attempts above `MAX_OPEN_FORM_TELEMETRY_ATTEMPTS` are not sent.
      * `invitationSessionId` is sent only for the `invitation` trigger.
-     * A selected rating is included only on invitation openings (D0023).
+     * A selected rating is included only when a user selects one in the sidebar.
      */
     public reportOpenForm(
         trigger: SurveyOpenFormTrigger,
@@ -260,7 +260,7 @@ export class SurveyTelemetry {
             !Number.isInteger(attempt) ||
             attempt < 1 ||
             attempt > MAX_OPEN_FORM_TELEMETRY_ATTEMPTS ||
-            (selectedRating !== undefined && (trigger !== 'invitation' || !isSurveyRating(selectedRating)))
+            (selectedRating !== undefined && !isSurveyRating(selectedRating))
         ) {
             return false;
         }

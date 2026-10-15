@@ -25,6 +25,7 @@ import {
     type SurveyLocalDay,
     type SurveyOpenFormResult,
     type SurveyPolicyConfig,
+    type SurveyRating,
     type SurveyTimedOutcome,
 } from './surveyTypes';
 
@@ -100,6 +101,8 @@ export class SurveyService implements vscode.Disposable {
     private needsEvaluation = false;
     private invitationReserved = false;
     private activeInvitation: ActiveInvitation | undefined;
+    private manualHandle: vscode.Disposable | undefined;
+    private manualOpening: Promise<boolean> | undefined;
     private presenter: SurveyPresenter | undefined;
     private disposed = false;
     private forcedInvite = false;
@@ -178,14 +181,76 @@ export class SurveyService implements vscode.Disposable {
         this.presenter = presenter;
     }
 
+    /** Opens the sidebar on explicit request, independently of invitation eligibility and opt-out. */
+    public async showFeedbackForm(): Promise<boolean> {
+        if (this.manualOpening) {
+            return this.manualOpening;
+        }
+        const opening = this.presentFeedbackForm();
+        this.manualOpening = opening;
+        try {
+            return await opening;
+        } finally {
+            if (this.manualOpening === opening) {
+                this.manualOpening = undefined;
+            }
+        }
+    }
+
+    private async presentFeedbackForm(): Promise<boolean> {
+        if (this.disposed || !this.presenter) {
+            return false;
+        }
+        this.generation++;
+        this.inFlight = undefined;
+        this.cancelInvitation();
+        this.needsEvaluation = true;
+        disposeHandle(this.manualHandle);
+        this.manualHandle = undefined;
+        const gen = this.generation;
+        const request = {
+            invitationSessionId: this.createInvitationSessionId(),
+            explanation: { activeDayCount: 0, requiredActiveDays: 0, isReminder: false, previousOutcome: undefined },
+            manuallyOpened: true,
+        };
+        const close = (): void => {
+            disposeHandle(this.manualHandle);
+            this.manualHandle = undefined;
+        };
+        try {
+            const handle = await this.presenter.present(request, {
+                onVisible: (): void => undefined,
+                onOpenForm: async (selectedRating): Promise<SurveyOpenFormResult> => {
+                    const result = await this.openSurveyFormFromCommand(selectedRating);
+                    if (result === 'opened') {
+                        close();
+                    }
+                    return result;
+                },
+                onChoice: async (): Promise<void> => close(),
+            });
+            if (gen !== this.generation || this.disposed) {
+                disposeHandle(handle);
+                return false;
+            }
+            if (!handle) {
+                return false;
+            }
+            this.manualHandle = handle;
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     /**
-     * "DocumentDB: Give Feedback" (D0015). Opens the form because the user asked, even after
+     * User-requested form opening (command or feedback sidebar). Opens even after
      * "Never again" and regardless of the kill switch or permission. Emits `survey.openForm`
      * with trigger `command` only when the survey is enabled and permission is
      * granted. On success, applies the opened cooldown only when the survey is enabled,
      * permission is granted, and the user is not opted out. Never clears the opt-out.
      */
-    public async openSurveyFormFromCommand(): Promise<SurveyOpenFormResult> {
+    public async openSurveyFormFromCommand(selectedRating?: SurveyRating): Promise<SurveyOpenFormResult> {
         const gen = this.generation;
         let ok = false;
         try {
@@ -202,7 +267,7 @@ export class SurveyService implements vscode.Disposable {
         const enabled = this.isEnabled();
         const permitted = this.isPermitted();
         if (enabled && permitted) {
-            this.telemetry.reportOpenForm('command', ok ? 'success' : 'failure', 1, undefined);
+            this.telemetry.reportOpenForm('command', ok ? 'success' : 'failure', 1, undefined, selectedRating);
         }
         if (ok && enabled && permitted && !this.store.isOptedOut) {
             traceSurvey((): string => vscode.l10n.t('[Survey] Command outcome: opened.'));
@@ -289,6 +354,8 @@ export class SurveyService implements vscode.Disposable {
         this.generation++;
         this.inFlight = undefined;
         this.cancelInvitation();
+        disposeHandle(this.manualHandle);
+        this.manualHandle = undefined;
     }
 
     private get alwaysInvite(): boolean {

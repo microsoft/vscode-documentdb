@@ -29,6 +29,7 @@ import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { getSurveyService } from '../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
@@ -89,6 +90,11 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
         measurements?: Record<string, number>
  */
 const commonRouter = router({
+    openFeedback: publicProcedure.mutation(async (): Promise<void> => {
+        if (!(await getSurveyService()?.showFeedbackForm())) {
+            void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open the feedback view. Please try again."));
+        }
+    }),
     reportEvent: publicProcedure
         // This is the input schema of your procedure, two parameters, both strings
         .input(

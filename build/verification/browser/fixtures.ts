@@ -59,7 +59,6 @@ const collectionConfig: CollectionViewWebviewConfigurationType = {
     databaseName: 'stage0_inventory',
     collectionName: 'stage0_documents',
     defaultPageSize: 50,
-    feedbackSignalsEnabled: false,
     enableAIQueryGeneration: false,
 };
 const documentConfig: DocumentsViewWebviewConfigurationType = {
@@ -76,7 +75,6 @@ const dashboardConfig: ClusterDashboardWebviewConfigurationType = {
     clusterDisplayName: 'Stage 0 fixture cluster',
     viewId: 'connectionsView',
     refreshIntervalMs: 60000,
-    feedbackSignalsEnabled: false,
     showDashboardOnConnect: true,
 };
 const quickStartConfig: LocalQuickStartConfigurationType = {

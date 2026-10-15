@@ -134,6 +134,7 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'resources', 'documentdb', file)).toString();
         webview.html = buildSurveyInvitationHtml({
             explanation: invitation.request.explanation,
+            manuallyOpened: invitation.request.manuallyOpened,
             strings: getSurveyInvitationStrings(),
             nonce: randomBytes(16).toString('hex'),
             cspSource: webview.cspSource,
@@ -276,6 +277,11 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
         why: vscode.l10n.t('Why am I seeing this?'),
         usage: vscode.l10n.t(
             "You've used DocumentDB for VS Code on {0} days, so we'd love to hear how it's going. This count stays on your device.",
+        ),
+        manuallyOpened: vscode.l10n.t("You're seeing this because you opened the feedback form."),
+        close: vscode.l10n.t('Close'),
+        manualTelemetry: vscode.l10n.t(
+            "When feedback telemetry is permitted, we record whether you opened the survey and any rating selected here. We don't record your name or answers in the external form.",
         ),
         reminders: {
             opened: vscode.l10n.t("It's been a while since you last opened the survey, so we're checking in again."),

@@ -15,6 +15,12 @@ code:
 The refresh is implemented in draft [PR #992](https://github.com/microsoft/vscode-documentdb/pull/992);
 automatic invitations are enabled in all modes, subject to normal eligibility and feedback
 permission (D0021). The manual Give Feedback command and development preview are available.
+The Cluster Dashboard and Collection View also open the same sidebar on explicit feedback
+clicks. This manual mode explains that the user opened it, rather than claiming survey
+eligibility, and does not offer reminder or opt-out actions. A rating selected there is
+reported on the existing `survey.openForm` event only when feedback telemetry is permitted;
+the command-palette path still opens the browser directly without a rating. This supersedes
+the invitation-only rating restrictions in the historical proposal below, pending privacy review.
 Read [design.md](./design.md) for the implemented
 architecture and [decisions.md](./decisions.md) for binding operator choices.
 

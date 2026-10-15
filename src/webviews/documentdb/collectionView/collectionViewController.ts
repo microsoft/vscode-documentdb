@@ -28,7 +28,6 @@ export type CollectionViewWebviewConfigurationType = {
     databaseName: string;
     collectionName: string;
     defaultPageSize: number;
-    feedbackSignalsEnabled: boolean;
     enableAIQueryGeneration: boolean;
     /** Pre-populated query from cross-feature navigation (e.g., Playground → Collection View). */
     initialQuery?: {

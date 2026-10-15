@@ -5,8 +5,6 @@
 
 export * from './animatedCardList';
 export * from './cardStack';
-export * from './FeedbackCard';
-export * from './FeedbackDialog';
 export * from './optimizationCards';
 export * from './queryPlanSummary';
 export * from './QuickActions';

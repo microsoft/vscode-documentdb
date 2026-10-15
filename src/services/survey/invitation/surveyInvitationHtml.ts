@@ -17,6 +17,9 @@ export interface SurveyInvitationStrings {
     readonly neverAgain: string;
     readonly why: string;
     readonly usage: string;
+    readonly manuallyOpened: string;
+    readonly close: string;
+    readonly manualTelemetry: string;
     readonly reminders: Readonly<Record<'opened' | 'askLater' | 'dismissed', string>>;
     readonly telemetry: string;
     readonly privacy: string;
@@ -24,6 +27,7 @@ export interface SurveyInvitationStrings {
 
 export interface SurveyInvitationHtmlOptions {
     readonly explanation: SurveyEligibilityExplanation;
+    readonly manuallyOpened?: boolean;
     readonly strings: SurveyInvitationStrings;
     readonly nonce: string;
     readonly cspSource: string;
@@ -52,13 +56,18 @@ function escapeHtml(value: string): string {
 }
 
 export function buildSurveyInvitationHtml(options: SurveyInvitationHtmlOptions): string {
-    const { explanation, strings, nonce, cspSource, artworkUri, artworkDarkUri } = options;
+    const { explanation, manuallyOpened, strings, nonce, cspSource, artworkUri, artworkDarkUri } = options;
     const text = escapeHtml;
-    const usage = strings.usage.replaceAll('{0}', String(explanation.activeDayCount));
+    const usage = manuallyOpened
+        ? strings.manuallyOpened
+        : strings.usage.replaceAll('{0}', String(explanation.activeDayCount));
     const reminder =
-        explanation.isReminder && explanation.previousOutcome
+        !manuallyOpened && explanation.isReminder && explanation.previousOutcome
             ? `<p>${text(strings.reminders[explanation.previousOutcome])}</p>`
             : '';
+    const choices = manuallyOpened
+        ? `<button class="secondary" type="button" data-action="askLater">${text(strings.close)}</button>`
+        : `<button class="secondary" type="button" data-action="askLater">${text(strings.askLater)}</button><button class="secondary" type="button" data-action="neverAgain">${text(strings.neverAgain)}</button>`;
     const stars = strings.stars
         .map(
             (label, index): string =>
@@ -123,10 +132,9 @@ button:focus-visible, .star:has(input:focus-visible), summary:focus-visible, a:f
 <div id="rating-label" class="rating-label"></div>
 <button id="open-survey" class="primary" type="button" data-action="openForm">${text(strings.openSurvey)}</button>
 <div class="choices">
-<button class="secondary" type="button" data-action="askLater">${text(strings.askLater)}</button>
-<button class="secondary" type="button" data-action="neverAgain">${text(strings.neverAgain)}</button>
+${choices}
 </div>
-<details><summary>${text(strings.why)}</summary><p>${text(usage)}</p>${reminder}<p>${text(strings.telemetry)}</p><a href="#" data-action="privacy">${text(strings.privacy)}</a></details>
+<details><summary>${text(strings.why)}</summary><p>${text(usage)}</p>${reminder}<p>${text(manuallyOpened ? strings.manualTelemetry : strings.telemetry)}</p><a href="#" data-action="privacy">${text(strings.privacy)}</a></details>
 </div>
 </main>
 <script nonce="${text(nonce)}">

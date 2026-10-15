@@ -23,7 +23,7 @@ $tab-focus-inset: calc(2 * var(--strokeWidthThick));
 
 // =============================================================================
 //  Collection view — layout regions, top to bottom:
-//    .collectionTabList  → tab strip + full-width header band
+//    .collectionTabHeader → tab strip + feedback action in a full-width band
 //    .collectionTabPanel → the active tab's content, which stacks:
 //        .primaryActionBar       → the tab's main toolbar row
 //        .queryEditor            → query editor (Documents / Query Insights)
@@ -67,8 +67,8 @@ $tab-focus-inset: calc(2 * var(--strokeWidthThick));
         overflow-clip-margin: var(--spacingHorizontalSNudge); // 6px
     }
 
-    // ---- Tab strip (also the full-width header band) -----------------------
-    .collectionTabList {
+    // ---- Tab strip and feedback action in the full-width header band -------
+    .collectionTabHeader {
         // Uses Fluent neutral aliases so it tracks the theme. It escapes the
         // view's horizontal content inset with a matching negative margin so the
         // background spans edge-to-edge, then re-applies that inset as padding so
@@ -86,6 +86,15 @@ $tab-focus-inset: calc(2 * var(--strokeWidthThick));
         // for their focus outline to clear the top instead of being cut.
         padding-top: $tab-focus-inset;
         padding-bottom: var(--spacingVerticalXXS); // 2px
+        display: flex;
+        align-items: center;
+        gap: var(--spacingHorizontalS);
+    }
+
+    .collectionTabList {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow-x: auto;
     }
 
     .queryInsightsTabLabel {
