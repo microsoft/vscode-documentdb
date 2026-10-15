@@ -44,6 +44,7 @@ const ACTIVATION_SOURCES = [
     'collectionView',
     'atlasCredentials',
     'localQuickStart',
+    'helpAndFeedbackView',
     'giveFeedbackCommand',
 ] as const;
 const COLLECTION_TABS = ['documents', 'indexes', 'queryInsights'] as const;

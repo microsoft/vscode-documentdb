@@ -11,7 +11,13 @@ import { SURVEY_FORM_URL, SURVEY_STATE_KEY } from '../../services/survey/surveyC
 import { EMPTY_SURVEY_STATE } from '../../services/survey/surveyState';
 import { SurveyTelemetry, type SurveyTelemetryEvent } from '../../services/survey/surveyTelemetry';
 import { type SurveyPersistedState } from '../../services/survey/surveyTypes';
-import { GIVE_FEEDBACK_COMMAND, giveFeedback, registerGiveFeedbackCommand } from './giveFeedback';
+import {
+    GIVE_FEEDBACK_COMMAND,
+    GIVE_FEEDBACK_VIEW_COMMAND,
+    giveFeedback,
+    registerGiveFeedbackCommand,
+    showFeedbackView,
+} from './giveFeedback';
 
 vi.mock('vscode', (): object => ({
     commands: { registerCommand: vi.fn((): object => ({ dispose: vi.fn() })) },
@@ -110,11 +116,19 @@ describe('Give Feedback', (): void => {
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.any(String), { modal: true });
     });
 
+    it.each([true, false])('opens the feedback sidebar from the tree, shown=%s', async (shown): Promise<void> => {
+        const open = vi.fn().mockResolvedValue(shown);
+        await showFeedbackView({ showFeedbackForm: open } as unknown as SurveyService);
+        expect(open).toHaveBeenCalledExactlyOnceWith('helpAndFeedbackView');
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledTimes(shown ? 0 : 1);
+    });
+
     it('registers the contributed command without automatic click or URL telemetry', (): void => {
         const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
-        const service = { openSurveyFormFromCommand: vi.fn() } as unknown as SurveyService;
+        const service = { openSurveyFormFromCommand: vi.fn(), showFeedbackForm: vi.fn() } as unknown as SurveyService;
         registerGiveFeedbackCommand(context, service);
         expect(vscode.commands.registerCommand).toHaveBeenCalledWith(GIVE_FEEDBACK_COMMAND, expect.any(Function));
-        expect(context.subscriptions).toHaveLength(1);
+        expect(vscode.commands.registerCommand).toHaveBeenCalledWith(GIVE_FEEDBACK_VIEW_COMMAND, expect.any(Function));
+        expect(context.subscriptions).toHaveLength(2);
     });
 });

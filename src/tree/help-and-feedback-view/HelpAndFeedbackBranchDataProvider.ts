@@ -110,6 +110,14 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
 
             createGenericElement({
                 contextValue: 'feedbackItem',
+                id: `${parentId}/give-feedback`,
+                label: vscode.l10n.t('Give Feedback'),
+                iconPath: new vscode.ThemeIcon('feedback'),
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openSurvey',
+            }) as TreeElement,
+
+            createGenericElement({
+                contextValue: 'feedbackItem',
                 id: `${parentId}/suggest-feature`,
                 label: vscode.l10n.t('Suggest a Feature'),
                 iconPath: new vscode.ThemeIcon('lightbulb'),
