@@ -41,7 +41,9 @@ and DocumentDB Local wizard headers each have a feedback button. They call `comm
 which opens this sidebar on explicit request even after opt-out. The button is included in a
 webview only when the open-time `telemetry.feedback.enabled` value is `true` (D0032); a failed
 settings read hides it. Changing the setting requires reopening the view or restarting VS Code.
-The host checks permission again when clicked, without subscribing to settings changes.
+The host checks permission again when clicked, without subscribing to settings changes. A
+stale button or Help and Feedback item then shows an information message naming
+`telemetry.feedback.enabled` instead of doing nothing; the hidden command stays silent (D0032).
 Query Insights no longer has its thumbs card or reason dialog, and the dashboard no longer
 sends thumb/reason events.
 The Help and Feedback tree has a separate Give Feedback item that opens this sidebar with

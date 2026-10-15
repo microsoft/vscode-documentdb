@@ -9,7 +9,12 @@ import * as vscode from 'vscode';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
-import { affectsFeedbackPermission, FEEDBACK_ENABLED_SETTING, isFeedbackPermitted } from './feedbackPermission';
+import {
+    affectsFeedbackPermission,
+    FEEDBACK_ENABLED_SETTING,
+    isFeedbackPermitted,
+    showFeedbackDisabledMessage,
+} from './feedbackPermission';
 
 vi.mock('@microsoft/vscode-azext-utils', (): object => ({
     callWithTelemetryAndErrorHandling: vi.fn(async (_name, callback: (context: IActionContext) => Promise<unknown>) =>
@@ -106,6 +111,14 @@ describe('isFeedbackPermitted', (): void => {
             provider.dispose();
         },
     );
+});
+
+describe('showFeedbackDisabledMessage', (): void => {
+    it('names the setting that turned feedback off', (): void => {
+        const show = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        showFeedbackDisabledMessage();
+        expect(show).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(FEEDBACK_ENABLED_SETTING));
+    });
 });
 
 describe('affectsFeedbackPermission', (): void => {

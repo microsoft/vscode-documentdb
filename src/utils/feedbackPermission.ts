@@ -25,6 +25,16 @@ export function isFeedbackPermitted(): boolean {
     }
 }
 
+/** Explains a click on a feedback control that was shown before feedback was turned off. */
+export function showFeedbackDisabledMessage(): void {
+    void vscode.window.showInformationMessage(
+        vscode.l10n.t(
+            'Feedback is turned off by the "{0}" setting or your organization\'s policy.',
+            FEEDBACK_ENABLED_SETTING,
+        ),
+    );
+}
+
 /** Whether a configuration change can change the result of `isFeedbackPermitted()`. */
 export function affectsFeedbackPermission(event: vscode.ConfigurationChangeEvent): boolean {
     try {

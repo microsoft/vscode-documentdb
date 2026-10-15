@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { getSurveyService, type SurveyService } from '../../services/survey/SurveyService';
 import { SURVEY_FORM_URL } from '../../services/survey/surveyConfig';
-import { isFeedbackPermitted } from '../../utils/feedbackPermission';
+import { isFeedbackPermitted, showFeedbackDisabledMessage } from '../../utils/feedbackPermission';
 
 export const GIVE_FEEDBACK_COMMAND = 'vscode-documentdb.command.giveFeedback';
 export const GIVE_FEEDBACK_VIEW_COMMAND = 'vscode-documentdb.command.internal.helpAndFeedback.openSurvey';
@@ -24,6 +24,10 @@ async function openFeedbackView(
     service: SurveyService | undefined,
 ): Promise<void> {
     if (!isFeedbackPermitted()) {
+        // The command is hidden and silent when off (D0032); only a stale tree item explains itself.
+        if (source === 'helpAndFeedbackView') {
+            showFeedbackDisabledMessage();
+        }
         return;
     }
     if (!service) {

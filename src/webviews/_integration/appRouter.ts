@@ -31,7 +31,7 @@ import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { getSurveyService } from '../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { isFeedbackPermitted } from '../../utils/feedbackPermission';
+import { isFeedbackPermitted, showFeedbackDisabledMessage } from '../../utils/feedbackPermission';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
@@ -105,6 +105,7 @@ const commonRouter = router({
                 throw new Error('Invalid feedback source');
             }
             if (!isFeedbackPermitted()) {
+                showFeedbackDisabledMessage();
                 return;
             }
             if (!(await getSurveyService()?.showFeedbackForm(viewName, input.collectionTab))) {

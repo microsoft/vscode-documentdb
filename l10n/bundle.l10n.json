@@ -1150,6 +1150,7 @@
   "Fast execution": "Fast execution",
   "Fast, light build for smaller collections.": "Fast, light build for smaller collections.",
   "Federated": "Federated",
+  "Feedback is turned off by the \"{0}\" setting or your organization's policy.": "Feedback is turned off by the \"{0}\" setting or your organization's policy.",
   "Fetch Overhead": "Fetch Overhead",
   "Field \"{0}\", {1} index": "Field \"{0}\", {1} index",
   "Field name": "Field name",
