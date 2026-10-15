@@ -190,7 +190,7 @@ describe('SurveyInvitationView', (): void => {
         const h = harness();
         h.open.mockResolvedValue(true);
         expect(await h.service.showFeedbackForm()).toBe(true);
-        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
         expect(h.surface.view.webview.html).not.toContain('days, so');
         h.surface.message({ type: 'rendered' });
         h.surface.message({ type: 'openForm', selectedRating: 3 });
@@ -270,7 +270,7 @@ describe('SurveyInvitationView', (): void => {
             finishReveal();
 
             expect(await opening).toBe(true);
-            expect(h.surface.view.webview.html).toContain('opened the feedback form');
+            expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
             expect(h.events.filter((event): boolean => event.name === 'survey.invitationResolved')).toHaveLength(0);
             h.service.dispose();
             h.presenter.dispose();
@@ -299,7 +299,7 @@ describe('SurveyInvitationView', (): void => {
         expect(await opening).toBe(false);
         expect(h.surface.view.webview.html).toBe('');
         expect(await h.service.showFeedbackForm()).toBe(true);
-        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
         h.service.dispose();
         h.presenter.dispose();
     });
@@ -437,7 +437,7 @@ describe('SurveyInvitationView', (): void => {
         });
         expect(await h.service.showFeedbackForm()).toBe(true);
         expect(opens).toBe(2);
-        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
         h.service.dispose();
         h.presenter.dispose();
     });
@@ -467,7 +467,7 @@ describe('SurveyInvitationView', (): void => {
         finishHide();
         expect(await opening).toBe(true);
         expect(contexts).toEqual([false, true]);
-        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
         h.service.dispose();
         h.presenter.dispose();
     });
@@ -493,11 +493,11 @@ describe('SurveyInvitationView', (): void => {
     it('replaces an open feedback form with the debug invitation', async (): Promise<void> => {
         const h = harness();
         expect(await h.service.showFeedbackForm('helpAndFeedbackView')).toBe(true);
-        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
         await h.service.showInvitationForDebug('connection');
         expect(h.service.getDebugStatus().invitationActive).toBe(true);
         expect(h.surface.view.webview.html).toContain('survey-question');
-        expect(h.surface.view.webview.html).not.toContain('opened the feedback form');
+        expect(h.surface.view.webview.html).not.toContain('You opened this with Give Feedback');
         h.service.dispose();
         h.presenter.dispose();
     });

@@ -332,10 +332,12 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
         usage: vscode.l10n.t(
             "You've used DocumentDB for VS Code on {0} days, so we'd love to hear how it's going. This count stays on your device.",
         ),
-        manuallyOpened: vscode.l10n.t("You're seeing this because you opened the feedback form."),
+        manuallyOpened: vscode.l10n.t(
+            "You opened this with Give Feedback. Thank you for taking a moment to tell us how it's going.",
+        ),
         close: vscode.l10n.t('Close'),
         manualTelemetry: vscode.l10n.t(
-            "When feedback telemetry is permitted, we record whether you opened the survey and any rating selected here. We don't record your name or answers in the external form.",
+            "If VS Code telemetry is on, we record whether you continue to the survey and the rating you picked here. We don't record your name or your answers in the survey.",
         ),
         reminders: {
             opened: vscode.l10n.t("It's been a while since you last opened the survey, so we're checking in again."),
@@ -343,7 +345,7 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
             dismissed: vscode.l10n.t('You closed this invitation a while ago, so we are asking once more.'),
         },
         telemetry: vscode.l10n.t(
-            "To improve these invitations, we record whether you qualified, whether the invitation was shown, what you chose, and any rating selected when you open the survey. We don't record your name, answers in the external form, or your usage count.",
+            "If VS Code telemetry is on, we record whether you qualified, whether this invitation was shown, what you chose, and the rating you picked when you continue to the survey. We don't record your name, your answers in the survey, or your usage count.",
         ),
         privacy: vscode.l10n.t('Privacy Statement'),
     };
