@@ -71,21 +71,16 @@ $tab-focus-inset: calc(2 * var(--strokeWidthThick));
     .collectionTabHeader {
         // Uses Fluent neutral aliases so it tracks the theme. It escapes the
         // view's horizontal content inset with a matching negative margin so the
-        // background spans edge-to-edge, then re-applies that inset as padding so
-        // the tabs line up with the panel content below.
+        // background spans edge-to-edge. The tab list owns its focus inset;
+        // the trailing padding keeps the feedback action clear of the edge.
         background-color: var(--colorNeutralBackground2);
         border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
         box-sizing: border-box;
         flex-shrink: 0;
         min-width: 0;
         margin-inline: calc(-1 * #{$tab-focus-inset}); // cancel the view's horizontal inset
-        padding-inline: $tab-focus-inset; // realign the tabs with the content below
+        padding-inline-end: $tab-focus-inset;
         margin-bottom: var(--spacingVerticalS); // 8px gap below the header band
-        // Match the focus inset on top too: the view clips at its top edge (and
-        // nothing renders above the webview), so the tabs must sit this far down
-        // for their focus outline to clear the top instead of being cut.
-        padding-top: $tab-focus-inset;
-        padding-bottom: var(--spacingVerticalXXS); // 2px
         display: flex;
         align-items: center;
         gap: var(--spacingHorizontalS);
@@ -95,6 +90,8 @@ $tab-focus-inset: calc(2 * var(--strokeWidthThick));
         min-width: 0;
         flex: 1 1 auto;
         overflow-x: auto;
+        // Focus rings must fit inside this scrollport, not just its parent.
+        padding: $tab-focus-inset;
     }
 
     .collectionTabHeader > .fui-Button {
