@@ -103,6 +103,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         // Clear the parent cache when retrieving root items
         this.clearParentCache();
         const visibleDiscoveryProviders = await getVisibleDiscoveryProviders();
+        visibleDiscoveryProviders.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
         const rootItems: TreeElement[] = [];
 
@@ -143,8 +144,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
             return null;
         }
 
-        // Sort root items by their id for consistent ordering
-        return rootItems.sort((a, b) => a.id?.localeCompare(b.id ?? '', undefined, { numeric: true }) ?? 0);
+        return rootItems;
     }
 
     /**
