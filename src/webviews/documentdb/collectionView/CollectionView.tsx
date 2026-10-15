@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, ProgressBar, Tab, TabList } from '@fluentui/react-components';
+import { Button, ProgressBar, Tab, TabList } from '@fluentui/react-components';
 import { EmojiRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
@@ -646,18 +646,7 @@ export const CollectionView = (): JSX.Element => {
                             {l10n.t('Indexes')}
                         </Tab>
                         <Tab id="tab.queryInsights" value="tab_queryInsights" aria-controls="tabpanel.queryInsights">
-                            <span className="queryInsightsTabLabel">
-                                {l10n.t('Query Insights')}
-                                <Badge
-                                    appearance="tint"
-                                    size="small"
-                                    shape="rounded"
-                                    color="brand"
-                                    aria-label={l10n.t('PREVIEW feature')}
-                                >
-                                    <span aria-hidden={true}>{l10n.t('PREVIEW')}</span>
-                                </Badge>
-                            </span>
+                            <span className="queryInsightsTabLabel">{l10n.t('Query Insights')}</span>
                         </Tab>
                     </TabList>
                     {configuration.feedbackPermitted === true && (
