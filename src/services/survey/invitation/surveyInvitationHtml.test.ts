@@ -186,6 +186,7 @@ describe('survey invitation HTML', (): void => {
         const h = interactiveHtml();
         const page = h.dom.window.document;
         const label = page.querySelector('#rating-label');
+        const starsContainer = page.querySelector<HTMLElement>('.stars');
         const stars = page.querySelectorAll<HTMLElement>('.star');
         const radios = page.querySelectorAll<HTMLInputElement>('input[type="radio"]');
         expect(page.querySelector('.endpoints')).toBeNull();
@@ -193,12 +194,16 @@ describe('survey invitation HTML', (): void => {
         stars[4].dispatchEvent(new h.dom.window.MouseEvent('mouseenter'));
         expect(label?.textContent).toBe('Very satisfied');
         stars[4].dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
+        expect(label?.textContent).toBe('Very satisfied');
+        stars[3].dispatchEvent(new h.dom.window.MouseEvent('mouseenter'));
+        expect(label?.textContent).toBe('Satisfied');
+        starsContainer?.dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
         expect(label?.textContent).toBe('');
         radios[1].click();
         expect(label?.textContent).toBe('Dissatisfied');
         stars[3].dispatchEvent(new h.dom.window.MouseEvent('mouseenter'));
         expect(label?.textContent).toBe('Satisfied');
-        stars[3].dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
+        starsContainer?.dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
         expect(label?.textContent).toBe('Dissatisfied');
         radios[1].click();
         expect(label?.textContent).toBe('');
@@ -224,24 +229,25 @@ describe('survey invitation HTML', (): void => {
     it('previews hover without changing or submitting the committed rating', (): void => {
         const h = interactiveHtml();
         const page = h.dom.window.document;
+        const starsContainer = page.querySelector<HTMLElement>('.stars');
         const stars = page.querySelectorAll<HTMLElement>('.star');
         const radios = page.querySelectorAll<HTMLInputElement>('input[type="radio"]');
         const hover = (index: number): void => {
             stars[index].dispatchEvent(new h.dom.window.MouseEvent('mouseenter'));
         };
-        const leave = (index: number): void => {
-            stars[index].dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
+        const leave = (): void => {
+            starsContainer?.dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
         };
         hover(4);
         expect(page.querySelectorAll('.lit')).toHaveLength(5);
         expect(page.querySelector(':checked')).toBeNull();
-        leave(4);
+        leave();
         expect(page.querySelectorAll('.lit')).toHaveLength(0);
         radios[1].click();
         hover(3);
         expect(page.querySelectorAll('.lit')).toHaveLength(4);
         expect(radios[1].checked).toBe(true);
-        leave(3);
+        leave();
         expect(page.querySelectorAll('.lit')).toHaveLength(2);
         hover(4);
         expect(h.messages).toEqual([{ type: 'rendered' }]);

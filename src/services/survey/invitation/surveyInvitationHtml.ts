@@ -140,6 +140,7 @@ ${choices}
 <script nonce="${text(nonce)}">
 const vscode = acquireVsCodeApi();
 const controls = [...document.querySelectorAll('button[data-action], input[name="rating"]')];
+const starsContainer = document.querySelector('.stars');
 const stars = [...document.querySelectorAll('.star')];
 const ratingInputs = [...document.querySelectorAll('input[name="rating"]')];
 const ratingLabel = document.getElementById('rating-label');
@@ -160,10 +161,10 @@ stars.forEach((star, index) => {
         hoveredRating = index + 1;
         renderRating();
     });
-    star.addEventListener('mouseleave', () => {
-        hoveredRating = undefined;
-        renderRating();
-    });
+});
+starsContainer.addEventListener('mouseleave', () => {
+    hoveredRating = undefined;
+    renderRating();
 });
 ratingInputs.forEach(input => {
     input.addEventListener('focus', () => {
