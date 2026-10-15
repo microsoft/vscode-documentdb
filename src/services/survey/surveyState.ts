@@ -28,6 +28,8 @@ export const EMPTY_SURVEY_STATE: SurveyPersistedState = {
     lastOutcome: undefined,
     nextEligibleAt: undefined,
     optedOutAt: undefined,
+    invitationHistory: 'new',
+    lastInvitationOutcome: undefined,
 };
 
 /**
@@ -47,7 +49,8 @@ export function parseSurveyState(raw: unknown): SurveyPersistedState {
         // Read the permanent opt-out first so a failure in another field cannot erase it.
         optedOutAt = object.optedOutAt;
         const prototype: unknown = Object.getPrototypeOf(object);
-        const { version, activeDayCount, lastActiveDay, lastOutcome, nextEligibleAt } = object;
+        const { version, activeDayCount, lastActiveDay, lastOutcome, nextEligibleAt, invitationHistory, lastInvitationOutcome } =
+            object;
 
         if (
             !Array.isArray(object) &&
@@ -63,9 +66,26 @@ export function parseSurveyState(raw: unknown): SurveyPersistedState {
                 lastOutcome === 'askLater' ||
                 lastOutcome === 'dismissed') &&
             (nextEligibleAt === undefined || typeof nextEligibleAt === 'string') &&
-            (optedOutAt === undefined || typeof optedOutAt === 'string')
+            (optedOutAt === undefined || typeof optedOutAt === 'string') &&
+            (invitationHistory === undefined ||
+                invitationHistory === 'new' ||
+                invitationHistory === 'seen' ||
+                invitationHistory === 'unknown') &&
+            (lastInvitationOutcome === undefined ||
+                lastInvitationOutcome === 'opened' ||
+                lastInvitationOutcome === 'askLater' ||
+                lastInvitationOutcome === 'dismissed')
         ) {
-            return { version, activeDayCount, lastActiveDay, lastOutcome, nextEligibleAt, optedOutAt };
+            return {
+                version,
+                activeDayCount,
+                lastActiveDay,
+                lastOutcome,
+                nextEligibleAt,
+                optedOutAt,
+                invitationHistory: invitationHistory ?? 'unknown',
+                lastInvitationOutcome,
+            };
         }
     } catch {
         // Storage can contain objects with throwing getters or proxy traps.
@@ -94,6 +114,13 @@ export function mergeSurveyStates(a: SurveyPersistedState, b: SurveyPersistedSta
         lastOutcome: aCooldownTime === bCooldownTime ? (a.lastOutcome ?? b.lastOutcome) : cooldown.lastOutcome,
         nextEligibleAt: cooldown.nextEligibleAt,
         optedOutAt: (validOptOuts.length > 0 ? validOptOuts : optOuts).sort()[0],
+        invitationHistory:
+            a.invitationHistory === 'seen' || b.invitationHistory === 'seen'
+                ? 'seen'
+                : a.invitationHistory === 'unknown' || b.invitationHistory === 'unknown'
+                  ? 'unknown'
+                  : 'new',
+        lastInvitationOutcome: cooldown.lastInvitationOutcome ?? a.lastInvitationOutcome ?? b.lastInvitationOutcome,
     };
 }
 
@@ -155,11 +182,20 @@ export class SurveyStateStore {
     }
 
     /** Records a timed outcome and its cooldown end. */
-    public async recordOutcome(outcome: SurveyTimedOutcome, nextEligibleAt: Date): Promise<SurveyStateWriteResult> {
+    public async recordOutcome(
+        outcome: SurveyTimedOutcome,
+        nextEligibleAt: Date,
+        fromInvitation = false,
+    ): Promise<SurveyStateWriteResult> {
         this.syncFromStorage();
         try {
             this.state = mergeSurveyStates(
-                { ...this.state, lastOutcome: outcome, nextEligibleAt: nextEligibleAt.toISOString() },
+                {
+                    ...this.state,
+                    lastOutcome: outcome,
+                    nextEligibleAt: nextEligibleAt.toISOString(),
+                    lastInvitationOutcome: fromInvitation ? outcome : this.state.lastInvitationOutcome,
+                },
                 this.state,
             );
             return await this.save();
@@ -171,7 +207,10 @@ export class SurveyStateStore {
     public async recordCooldown(nextEligibleAt: Date): Promise<SurveyStateWriteResult> {
         this.syncFromStorage();
         try {
-            this.state = mergeSurveyStates({ ...this.state, nextEligibleAt: nextEligibleAt.toISOString() }, this.state);
+            this.state = mergeSurveyStates(
+                { ...this.state, invitationHistory: 'seen', nextEligibleAt: nextEligibleAt.toISOString() },
+                this.state,
+            );
             return await this.save();
         } catch (error) {
             return { persisted: false, error };

@@ -97,6 +97,10 @@ $tab-focus-inset: calc(2 * var(--strokeWidthThick));
         overflow-x: auto;
     }
 
+    .collectionTabHeader > .fui-Button {
+        flex-shrink: 0;
+    }
+
     .queryInsightsTabLabel {
         display: flex;
         align-items: center;

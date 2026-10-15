@@ -206,9 +206,11 @@ describe('SurveyService', (): void => {
 
     it('reports a selected rating from manually opened feedback when telemetry is permitted', async (): Promise<void> => {
         const h = createHarness();
-        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(await h.service.showFeedbackForm('collectionView', 'indexes')).toBe(true);
+        h.callbacks().onVisible();
+        expect(h.sent('survey.feedbackActivated')[0].properties).toMatchObject({ activationSource: 'collectionView', collectionTab: 'indexes' });
         expect(await h.callbacks().onOpenForm(4)).toBe('opened');
-        expect(h.sent('survey.openForm')[0].properties.trigger).toBe('command');
+        expect(h.sent('survey.openForm')[0].properties).toMatchObject({ trigger: 'command', activationSource: 'collectionView', collectionTab: 'indexes' });
         expect(h.sent('survey.openForm')[0].measurements).toEqual({ attempt: 1, selectedRating: 4 });
         expect(h.sent('survey.invitationShown')).toHaveLength(0);
         expect(h.sent('survey.invitationResolved')).toHaveLength(0);
@@ -223,6 +225,37 @@ describe('SurveyService', (): void => {
         expect(h.present.mock.calls[1][0].manuallyOpened).toBe(true);
         expect(h.events()).toEqual(invitationEvents);
         expect(h.sent('survey.invitationResolved')).toHaveLength(0);
+    });
+
+    it('distinguishes first invitation from a return after Ask me later', async (): Promise<void> => {
+        const first = createHarness();
+        await invite(first);
+        first.callbacks().onVisible();
+        expect(first.sent('survey.feedbackActivated')[0].properties).toMatchObject({ invitationKind: 'first', activationSource: 'automaticInvitation' });
+        await first.callbacks().onChoice('askLater');
+        const returning = createHarness(first.storage);
+        returning.flags.now = new Date(first.flags.now.getTime() + 15 * DAY_MS);
+        await activity(returning);
+        returning.callbacks().onVisible();
+        expect(returning.sent('survey.feedbackActivated')[0].properties).toMatchObject({ invitationKind: 'returning', returnReason: 'askLater' });
+        expect(await returning.callbacks().onOpenForm()).toBe('opened');
+        expect(returning.sent('survey.openForm')[0].properties).toMatchObject({ invitationKind: 'returning', returnReason: 'askLater' });
+    });
+
+    it('does not call the first timed invitation a reminder after a direct command opened the form', async (): Promise<void> => {
+        const first = createHarness();
+        await first.service.openSurveyFormFromCommand();
+        expect(first.state().lastOutcome).toBe('opened');
+        expect(first.state().invitationHistory).toBe('new');
+        const later = createHarness(first.storage);
+        later.flags.now = new Date(first.flags.now.getTime() + 181 * DAY_MS);
+        for (let day = 0; day < 3; day++) {
+            later.flags.now = new Date(first.flags.now.getTime() + (181 + day) * DAY_MS);
+            await activity(later);
+        }
+        expect(later.present).toHaveBeenCalledOnce();
+        later.callbacks().onVisible();
+        expect(later.sent('survey.feedbackActivated')[0].properties).toMatchObject({ invitationKind: 'first' });
     });
 
     it('coalesces repeated feedback clicks while presentation is in progress', async (): Promise<void> => {
@@ -955,7 +988,7 @@ describe('SurveyService', (): void => {
         h.flags.permitted = false;
         pending.resolve(true);
         expect(await command).toBe('opened');
-        expect(h.events()).toEqual([]);
+        expect(h.events()).toEqual(['survey.feedbackActivated']);
         expect(h.stateKeyWrites()).toBe(0);
         h.flags.enabled = true;
         h.flags.permitted = true;
@@ -1093,6 +1126,7 @@ describe('SurveyService', (): void => {
             'survey.eligibility',
             'survey.eligibility',
             'survey.invitationShown',
+            'survey.feedbackActivated',
             'survey.openForm',
             'survey.openForm',
             'survey.invitationResolved',
@@ -1120,6 +1154,21 @@ describe('survey local diagnostics', (): void => {
 
     afterEach((): void => {
         ext.outputChannel = originalOutputChannel;
+    });
+
+    it('traces button feedback request, visibility, and browser attempt locally', async (): Promise<void> => {
+        const h = createHarness();
+        expect(await h.service.showFeedbackForm('clusterDashboard')).toBe(true);
+        h.callbacks().onVisible();
+        h.openExternal.mockResolvedValueOnce(false);
+        expect(await h.callbacks().onOpenForm()).toBe('failed');
+        expect(trace.mock.calls.map(([message]): string => message)).toEqual([
+            '[Survey] Feedback requested from clusterDashboard.',
+            '[Survey] Feedback visible from clusterDashboard.',
+            '[Survey] Form requested from clusterDashboard.',
+            '[Survey] Form opening from clusterDashboard: failure.',
+        ]);
+        h.service.dispose();
     });
 
     it.each([
@@ -1378,7 +1427,7 @@ describe('survey local diagnostics', (): void => {
     it('traces command outcome and persistence without transmitting local usage or dates', async (): Promise<void> => {
         const h = createHarness();
         await h.service.openSurveyFormFromCommand();
-        expect(trace).toHaveBeenCalledWith('[Survey] Form opening from command: success.');
+        expect(trace).toHaveBeenCalledWith('[Survey] Form opening from giveFeedbackCommand: success.');
         expect(trace).toHaveBeenCalledWith('[Survey] Command outcome: opened.');
         expect(trace).toHaveBeenCalledWith('[Survey] Persistence command outcome: succeeded.');
         expect(h.sent('survey.openForm')[0].measurements).toEqual({ attempt: 1 });
@@ -1397,7 +1446,11 @@ describe('survey local diagnostics', (): void => {
             const result =
                 trigger === 'command' ? await h.service.openSurveyFormFromCommand() : await h.callbacks().onOpenForm();
             expect(result).toBe('failed');
-            expect(trace.mock.calls).toEqual([[`[Survey] Form opening from ${trigger}: failure.`]]);
+            expect(trace.mock.calls).toEqual(
+                trigger === 'command'
+                    ? [['[Survey] Form requested from giveFeedbackCommand.'], ['[Survey] Form opening from giveFeedbackCommand: failure.']]
+                    : [['[Survey] Form opening from invitation: failure.']],
+            );
             expect(h.state().lastOutcome).toBeUndefined();
             expect(h.state().nextEligibleAt).toBeUndefined();
             expect(h.sent('survey.invitationResolved')).toHaveLength(0);

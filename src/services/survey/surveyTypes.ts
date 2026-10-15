@@ -145,6 +145,9 @@ export interface SurveyPersistedState {
     readonly nextEligibleAt: string | undefined;
     /** ISO 8601 timestamp of "Never again". When set, the user is permanently opted out. */
     readonly optedOutAt: string | undefined;
+    /** `unknown` for state written before invitation history was tracked. */
+    readonly invitationHistory: 'new' | 'seen' | 'unknown';
+    readonly lastInvitationOutcome: SurveyTimedOutcome | undefined;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -159,6 +162,18 @@ export function isSurveyRating(value: unknown): value is SurveyRating {
 
 /** Where the request to open the form came from (D0015). */
 export type SurveyOpenFormTrigger = 'invitation' | 'command';
+
+export type SurveyActivationSource = 'automaticInvitation' | 'clusterDashboard' | 'collectionView' | 'giveFeedbackCommand';
+export type SurveyCollectionTab = 'documents' | 'indexes' | 'queryInsights';
+export type SurveyInvitationKind = 'first' | 'returning' | 'unknown';
+export type SurveyReturnReason = SurveyTimedOutcome | 'none' | 'unknown';
+
+export interface SurveyActivation {
+    readonly source: SurveyActivationSource;
+    readonly collectionTab?: SurveyCollectionTab;
+    readonly invitationKind?: SurveyInvitationKind;
+    readonly returnReason?: SurveyReturnReason;
+}
 
 /**
  * - `opened`: `openExternal` reported success. Not proof of survey completion.

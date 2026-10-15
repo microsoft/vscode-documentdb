@@ -41,6 +41,7 @@ created: 2026-10-07
 | 0026 | Report open failures in a modal; remove Retry UI             | Accepted (modified) | Replaces the Open→Retry relabel, status line, and command retry loop; D0027 extends it to opt-out save         | 2026-10-09 | #992 |
 | 0027 | Centered smaller rating, stretched actions, no save Retry    | Accepted            | 20 px centered stars, symmetric spacing, "Continue to survey", modal opt-out save failure                      | 2026-10-09 | #992 |
 | 0028 | Minimum VS Code version follows the build stack, 1.109.0     | Accepted            | Supersedes D0018; raised by the merge of #880                                                                  | 2026-10-14 | #992 |
+| 0029 | Attribute feedback activation and distinguish true returns   | Accepted            | Adds host-validated source and persisted invitation history; old history is unknown                            | 2026-10-15 | -    |
 
 > Entries are semantically immutable: append new entries rather than rewriting old ones, and record
 > reversals as a new entry plus a status change above.
@@ -425,3 +426,16 @@ the build and test stack modernization (#880), merged into this branch. This sup
 unchanged: the stable `viewsContainers.secondarySidebar` contribution needs 1.106.0 or later, so
 D0013 still stands. `SurveyInvitationView.test.ts` now asserts that floor instead of the exact
 `^1.106.0` range, so later raises do not break it.
+
+## 0029: Attribute feedback activation and distinguish true returns
+
+**Decision (operator):** distinguish the Dashboard button, Collection View button and tab,
+direct Give Feedback command, and timed invitation from activation through browser opening.
+For timed invitations distinguish first from returning and record why a previous invitation
+returned, including Ask me later. The survey has not shipped, so adjust the schema now.
+
+**Reasoning:** `trigger=command` previously mixed both webview buttons and the command, while
+`isReminder` was derived from `lastOutcome` even when a manual browser opening caused it.
+The service stores whether an invitation was actually shown and its own last outcome. Existing
+local state without that history is classified `unknown`, preserving the opt-out and cooldown
+without inventing a first-invitation claim. Permission gates and bounded survey events remain.

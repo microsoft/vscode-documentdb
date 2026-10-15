@@ -21,6 +21,9 @@ eligibility, and does not offer reminder or opt-out actions. A rating selected t
 reported on the existing `survey.openForm` event only when feedback telemetry is permitted;
 the command-palette path still opens the browser directly without a rating. This supersedes
 the invitation-only rating restrictions in the historical proposal below, pending privacy review.
+Survey activation and form opening now carry a closed source (Dashboard, Collection View
+with tab, command, or timed invitation). Timed invitations distinguish first, returning,
+and unknown legacy history; returning invitations retain the previous invitation outcome.
 Read [design.md](./design.md) for the implemented
 architecture and [decisions.md](./decisions.md) for binding operator choices.
 

@@ -26,6 +26,7 @@ interface Invitation {
     readonly callbacks: SurveyInvitationCallbacks;
     rendered: boolean;
     reported: boolean;
+    revealing: boolean;
     busy: boolean;
     closed: boolean;
 }
@@ -35,6 +36,7 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
     private active: Invitation | undefined;
     private listeners: vscode.Disposable[] = [];
     private disposed = false;
+    private contextUpdate: Promise<void> = Promise.resolve();
 
     public constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -51,12 +53,13 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             callbacks,
             rendered: false,
             reported: false,
+            revealing: true,
             busy: false,
             closed: false,
         };
         this.active = invitation;
         try {
-            await vscode.commands.executeCommand('setContext', SURVEY_ACTIVE_CONTEXT, true);
+            await this.setActiveContext(true);
             if (this.active !== invitation) {
                 return undefined;
             }
@@ -66,7 +69,11 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
                 this.checkVisibility();
             } else {
                 await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus: true });
+                if (!this.view && this.active === invitation) {
+                    await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus: true });
+                }
             }
+            invitation.revealing = false;
             if (this.active !== invitation || invitation.closed) {
                 this.clear(invitation);
                 return undefined;
@@ -92,8 +99,14 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             }),
             view.onDidChangeVisibility((): void => this.checkVisibility()),
             view.onDidDispose((): void => {
+                if (this.view !== view) {
+                    return;
+                }
                 this.view = undefined;
                 const invitation = this.active;
+                if (invitation?.revealing) {
+                    return;
+                }
                 if (invitation) {
                     invitation.closed = true;
                 }
@@ -240,10 +253,18 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
 
     private async hide(): Promise<void> {
         try {
-            await vscode.commands.executeCommand('setContext', SURVEY_ACTIVE_CONTEXT, false);
+            await this.setActiveContext(false);
         } catch {
             return;
         }
+    }
+
+    private setActiveContext(active: boolean): Promise<void> {
+        const update = this.contextUpdate.then(async (): Promise<void> => {
+            await vscode.commands.executeCommand('setContext', SURVEY_ACTIVE_CONTEXT, active);
+        });
+        this.contextUpdate = update.catch((): void => undefined);
+        return update;
     }
 }
 

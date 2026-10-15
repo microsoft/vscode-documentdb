@@ -312,6 +312,66 @@ describe('SurveyInvitationView', (): void => {
         h.presenter.dispose();
     });
 
+    it('re-reveals a cold sidebar if the first open returns before the view resolves', async (): Promise<void> => {
+        const h = harness();
+        let opens = 0;
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            if (command === `${SURVEY_VIEW_ID}.open` && ++opens === 2) {
+                h.presenter.resolveWebviewView(h.surface.view);
+            }
+            return undefined;
+        });
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(opens).toBe(2);
+        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('waits for a pending hide before activating feedback in a cold sidebar', async (): Promise<void> => {
+        const h = harness();
+        let finishHide!: () => void;
+        const pendingHide = new Promise<void>((resolve): void => { finishHide = resolve; });
+        const contexts: boolean[] = [];
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command, _key, active): Promise<undefined> => {
+            if (command === 'setContext') {
+                if (active === false) await pendingHide;
+                contexts.push(active as boolean);
+            } else if (command === `${SURVEY_VIEW_ID}.open`) {
+                h.presenter.resolveWebviewView(h.surface.view);
+            }
+            return undefined;
+        });
+        h.presenter.resolveWebviewView(h.surface.view);
+        const opening = h.service.showFeedbackForm();
+        await flush();
+        expect(contexts).toEqual([]);
+        finishHide();
+        expect(await opening).toBe(true);
+        expect(contexts).toEqual([false, true]);
+        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('shows the debug invitation on a cold sidebar whose first reveal does not resolve the view', async (): Promise<void> => {
+        const h = harness();
+        let opens = 0;
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            if (command === `${SURVEY_VIEW_ID}.open` && ++opens === 2) {
+                h.presenter.resolveWebviewView(h.surface.view);
+            }
+            return undefined;
+        });
+        await h.service.showInvitationForDebug('connection');
+        expect(opens).toBe(2);
+        expect(h.surface.view.webview.html).toContain('survey-question');
+        h.surface.message({ type: 'rendered' });
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationShown')).toHaveLength(1);
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
     it.each(['setContext', `${SURVEY_VIEW_ID}.open`])(
         'ignores late completion of %s after programmatic disposal',
         async (delayedCommand): Promise<void> => {
@@ -338,15 +398,18 @@ describe('SurveyInvitationView', (): void => {
         },
     );
 
-    it('cleans up a view closed while the reveal command is pending', async (): Promise<void> => {
+    it('keeps a cold invitation live when its first view is disposed during reveal', async (): Promise<void> => {
         const h = harness();
         let complete!: () => void;
+        let opens = 0;
         vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
             if (command === `${SURVEY_VIEW_ID}.open`) {
-                h.presenter.resolveWebviewView(h.surface.view);
-                await new Promise<void>((resolve): void => {
-                    complete = resolve;
-                });
+                if (++opens === 1) {
+                    h.presenter.resolveWebviewView(h.surface.view);
+                    await new Promise<void>((resolve): void => {
+                        complete = resolve;
+                    });
+                }
             }
             return undefined;
         });
@@ -355,11 +418,15 @@ describe('SurveyInvitationView', (): void => {
         await flush();
         h.surface.close();
         complete();
-        expect(await pending).toBeUndefined();
-        expect(calls.onChoice).toHaveBeenCalledTimes(1);
-        expect(calls.onChoice).toHaveBeenCalledWith('dismissed');
-        h.presenter.resolveWebviewView(h.surface.view);
-        expect(h.surface.view.webview.html).toBe('');
+        expect(await pending).toBeDefined();
+        expect(calls.onChoice).not.toHaveBeenCalled();
+        const replacement = createView();
+        h.presenter.resolveWebviewView(replacement.view);
+        replacement.message({ type: 'rendered' });
+        expect(replacement.view.webview.html).toContain('survey-question');
+        expect(calls.onVisible).toHaveBeenCalledOnce();
+        h.surface.close();
+        expect(calls.onChoice).not.toHaveBeenCalled();
         h.presenter.dispose();
     });
 
@@ -386,6 +453,7 @@ describe('SurveyInvitationView', (): void => {
         handle?.dispose();
         h.surface.close();
         h.surface.message({ type: 'neverAgain' });
+        await flush();
         expect(calls.onChoice).not.toHaveBeenCalled();
         expect(h.surface.view.webview.html).toBe('');
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('setContext', SURVEY_ACTIVE_CONTEXT, false);

@@ -18,8 +18,10 @@ export const DashboardFeedback = (): JSX.Element => {
             <ToolbarButton
                 icon={<EmojiRegular />}
                 aria-label={l10n.t('Give Feedback')}
-                onClick={() => void trpcClient.common.openFeedback.mutate()}
-            />
+                onClick={() => void trpcClient.common.openFeedback.mutate({})}
+            >
+                {l10n.t('Give Feedback')}
+            </ToolbarButton>
         </Tooltip>
     );
 };

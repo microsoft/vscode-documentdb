@@ -54,7 +54,9 @@ describe('Give Feedback', (): void => {
             expect(openExternal).toHaveBeenCalledWith(SURVEY_FORM_URL);
             expect(state.optedOutAt).toBe('2026-01-01T00:00:00Z');
             expect(update).not.toHaveBeenCalled();
-            expect(events).toHaveLength(enabled ? 1 : 0);
+            expect(events.map((event): string => event.name)).toEqual(
+                enabled ? ['survey.feedbackActivated', 'survey.openForm'] : [],
+            );
             service.dispose();
         },
     );
@@ -85,9 +87,8 @@ describe('Give Feedback', (): void => {
             "We couldn't open the survey in your browser. Please try again.",
             { modal: true },
         );
-        expect(events.map((event): unknown => [event.properties.openResult, event.measurements.attempt])).toEqual([
-            ['failure', 1],
-        ]);
+        expect(events.map((event): string => event.name)).toEqual(['survey.feedbackActivated', 'survey.openForm']);
+        expect(events[1]).toMatchObject({ properties: { openResult: 'failure' }, measurements: { attempt: 1 } });
         expect(update).not.toHaveBeenCalled();
         service.dispose();
     });

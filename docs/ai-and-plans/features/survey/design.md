@@ -44,11 +44,17 @@ Manual opening explains "You're seeing this because you opened the feedback form
 "Why am I seeing this?" and shows Close instead of reminder/opt-out actions. It records no
 invitation shown/resolved outcome or visibility cooldown. The selected star is optional and
 only appears on `survey.openForm` when telemetry is permitted. The command-palette Give Feedback
-path still opens the external form directly and cannot select a star.
+path still opens the external form directly and cannot select a star. Survey-owned
+`survey.feedbackActivated` reports a visible sidebar or direct command invocation, and
+`survey.openForm` carries the same bounded activation source. A Collection View request sends
+only its selected tab; the host derives and checks the view name.
 The `documentdb-survey-invitation-active` context is false on activation and true only for a
 live invitation. It gates the view and its otherwise empty container. No HTML or webview
 state is restored at startup. The presenter opens the view with `preserveFocus: true`, uses
-`show(true)` once resolved. Presentation relies on the VS Code reveal API without a timeout
+`show(true)` once resolved. A cold reveal retries the view's open command once if the first
+call returns before the view resolves. A disposal during reveal, or from an obsolete view
+instance, does not dismiss the invitation; explicit disposal after reveal still does.
+Presentation relies on the VS Code reveal API without a timeout
 or a separate wait for view resolution or visibility. An unavailable presenter or API failure
 still defers the invitation. The rendered message plus current view visibility jointly trigger
 `onVisible` once, even if resolution or visibility occurs after the reveal API completes.
@@ -295,7 +301,9 @@ Cohort queries use the machine ID for installations and the machine and session 
 |                               | `trigger`                                                                      | `sessionStart`, `newActiveDay`, `stateChange`                                                                              |                                                                                      |
 | `survey.presentationDeferred` | `reason`                                                                       | `presenterUnavailable`, `presentationFailed`                                                                               | Once per changed reason; reset when an invitation is shown                           |
 | `survey.invitationShown`      | `isReminder`                                                                   | `true`, `false`                                                                                                            | Once per invitation, only when rendered and visible                                  |
+| `survey.feedbackActivated`   | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | `automaticInvitation`, `clusterDashboard`, `collectionView`, `giveFeedbackCommand`; tabs `documents`, `indexes`, `queryInsights`; kinds `first`, `returning`, `unknown`; reasons `opened`, `askLater`, `dismissed`, `none`, `unknown` | Once per visible sidebar or direct command invocation |
 | `survey.openForm`             | `trigger`                                                                      | `invitation`, `command`                                                                                                    | Once per attempt, at most 3 attempts per invitation or command call                  |
+|                               | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | Same closed values as `survey.feedbackActivated`                                                                            | Present on service-originated openings                                               |
 |                               | `openResult`                                                                   | `success`, `failure`                                                                                                       |                                                                                      |
 |                               | measurement `attempt`                                                          | 1 to 3                                                                                                                     |                                                                                      |
 |                               | measurement `selectedRating`                                                   | Optional integer 1-5 on sidebar openings (invitation or manual), omitted without selection                                 | Same three-attempt event budget; selection itself emits nothing                      |
@@ -303,6 +311,11 @@ Cohort queries use the machine ID for installations and the machine and session 
 |                               | `wasVisible`                                                                   | `true`, `false`                                                                                                            |                                                                                      |
 
 `openResult` is not named `result` because the framework sets `result` on every event.
+The invitation kind and return reason come from local persisted invitation visibility and
+invitation outcomes, not the last browser-opening cooldown. A legacy state without this
+history is `unknown`, even if it has a previous open or dismissal. Manual opening does not
+start invitation history, and an `askLater` outcome is only a return reason for an actually
+shown invitation. No active-day count, URL, database or collection name is added.
 
 `selectedRating` is a numeric measurement, not a string property or a zero sentinel. The
 existing event is emitted after the browser attempt resolves, so ratings can accompany
@@ -608,7 +621,8 @@ An operator request to implement collection is not a claim of independent privac
 | `survey.eligibility`          | `gate_sampling`, `gate_activeDays`, `gate_cooldown`, `gate_sessionSuppression`: each `passed`, `blocked`, `notEvaluated`; `overall`: `eligible`, `blocked`; `firstBlockingGate`: `sampling`, `activeDays`, `cooldown`, `sessionSuppression`, `none`; `trigger`: `sessionStart`, `newActiveDay`, `stateChange` | None                                                                                                                                         |
 | `survey.presentationDeferred` | `reason`: `presenterUnavailable`, `presentationFailed`                                                                                                                                                                                                                                                        | None                                                                                                                                         |
 | `survey.invitationShown`      | `invitationSessionId`: random UUID per invitation, not a closed category; `isReminder`: `true`, `false`                                                                                                                                                                                                       | None                                                                                                                                         |
-| `survey.openForm`             | `trigger`: `invitation`, `command`; `openResult`: `success`, `failure`; `invitationSessionId`: UUID only for `invitation`, absent for `command`                                                                                                                                                               | `attempt`: integer 1, 2 or 3; optional `selectedRating`: integer 1-5 on sidebar openings with a chosen rating. Both are numeric measurements |
+| `survey.feedbackActivated`    | `activationSource`: `automaticInvitation`, `clusterDashboard`, `collectionView`, `giveFeedbackCommand`; `collectionTab`: only for Collection View (`documents`, `indexes`, `queryInsights`); `invitationKind`: `first`, `returning`, `unknown` and `returnReason`: `opened`, `askLater`, `dismissed`, `none`, `unknown` only for automatic invitations | None |
+| `survey.openForm`             | `trigger`: `invitation`, `command`; `openResult`: `success`, `failure`; `invitationSessionId`: UUID only for `invitation`, absent for `command`; the same closed activation fields as above for service-originated opens | `attempt`: integer 1, 2 or 3; optional `selectedRating`: integer 1-5 on sidebar openings with a chosen rating. Both are numeric measurements |
 | `survey.invitationResolved`   | `invitationSessionId`: same invitation UUID; `outcome`: `opened`, `askLater`, `dismissed`, `neverAgain`; `wasVisible`: `true`, `false`                                                                                                                                                                        | None                                                                                                                                         |
 
 `openResult=failure` normally has framework `result=Succeeded`: the wrapper emits an already

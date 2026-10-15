@@ -109,8 +109,8 @@ export function evaluateEligibility(
         explanation: {
             activeDayCount: state.activeDayCount,
             requiredActiveDays: config.requiredActiveDays,
-            previousOutcome: state.lastOutcome,
-            isReminder: state.lastOutcome !== undefined,
+            previousOutcome: state.lastInvitationOutcome,
+            isReminder: state.invitationHistory === 'seen',
         },
     };
 }

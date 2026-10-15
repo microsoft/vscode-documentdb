@@ -90,11 +90,20 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
         measurements?: Record<string, number>
  */
 const commonRouter = router({
-    openFeedback: publicProcedure.mutation(async (): Promise<void> => {
-        if (!(await getSurveyService()?.showFeedbackForm())) {
-            void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open the feedback view. Please try again."));
-        }
-    }),
+    openFeedback: publicProcedure
+        .input(z.object({ collectionTab: z.enum(['documents', 'indexes', 'queryInsights']).optional() }))
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const viewName = (ctx as BaseRouterContext).webviewName;
+            if (
+                (viewName !== 'collectionView' && viewName !== 'clusterDashboard') ||
+                (viewName === 'collectionView') !== (input.collectionTab !== undefined)
+            ) {
+                throw new Error('Invalid feedback source');
+            }
+            if (!(await getSurveyService()?.showFeedbackForm(viewName, input.collectionTab))) {
+                void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open the feedback view. Please try again."));
+            }
+        }),
     reportEvent: publicProcedure
         // This is the input schema of your procedure, two parameters, both strings
         .input(

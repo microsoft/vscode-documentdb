@@ -8,7 +8,7 @@
  * emission time and applies the per-session bounds below. The schema is documented in
  * `docs/ai-and-plans/features/survey/design.md`.
  *
- * Privacy boundary: only an explicitly submitted 1-5 rating may accompany invitation
+ * Privacy boundary: only an explicitly submitted 1-5 rating may accompany sidebar
  * openings. No hovered star, element ID, URL, active-day count, date, or free text is sent.
  */
 
@@ -20,6 +20,7 @@ import {
     isSurveyRating,
     SURVEY_FEATURE_AREAS,
     SURVEY_GATE_ORDER,
+    type SurveyActivation,
     type SurveyEligibilityResult,
     type SurveyFeatureArea,
     type SurveyGateId,
@@ -37,6 +38,10 @@ const INVITATION_OUTCOMES = ['opened', 'askLater', 'dismissed', 'neverAgain'] as
 const GATE_STATUSES = ['passed', 'blocked', 'notEvaluated'] as const;
 const ELIGIBILITY_OVERALLS = ['eligible', 'blocked'] as const;
 const INVITATION_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ACTIVATION_SOURCES = ['automaticInvitation', 'clusterDashboard', 'collectionView', 'giveFeedbackCommand'] as const;
+const COLLECTION_TABS = ['documents', 'indexes', 'queryInsights'] as const;
+const INVITATION_KINDS = ['first', 'returning', 'unknown'] as const;
+const RETURN_REASONS = ['opened', 'askLater', 'dismissed', 'none', 'unknown'] as const;
 
 export const SurveyEventName = {
     /** First meaningful usage in this host session, before any gate. Once per host session. */
@@ -47,6 +52,7 @@ export const SurveyEventName = {
     PresentationDeferred: 'survey.presentationDeferred',
     /** The invitation is rendered and visible. Once per invitation. */
     InvitationShown: 'survey.invitationShown',
+    FeedbackActivated: 'survey.feedbackActivated',
     /** One attempt to open the external form. Only the first `MAX_OPEN_FORM_TELEMETRY_ATTEMPTS` are reported. */
     OpenForm: 'survey.openForm',
     /** How the invitation ended. Once per invitation; never after permission withdrawal. */
@@ -82,6 +88,10 @@ export const SurveyTelemetryProperty = {
     OpenResult: 'openResult',
     Outcome: 'outcome',
     WasVisible: 'wasVisible',
+    ActivationSource: 'activationSource',
+    CollectionTab: 'collectionTab',
+    InvitationKind: 'invitationKind',
+    ReturnReason: 'returnReason',
 } as const;
 
 /** Measurement names. */
@@ -134,6 +144,7 @@ export class SurveyTelemetry {
     private lastSentEligibilitySignature: string | undefined;
     private lastSentDeferralReason: SurveyDeferralReason | undefined;
     private readonly shownInvitationIds = new Set<string>();
+    private readonly activatedIds = new Set<string>();
     private readonly resolvedInvitationIds = new Set<string>();
 
     public constructor(options: SurveyTelemetryOptions) {
@@ -242,6 +253,34 @@ export class SurveyTelemetry {
         return sent;
     }
 
+    /** One visible sidebar per presentation, or one explicit command invocation. */
+    public reportFeedbackActivated(activation: SurveyActivation, invitationSessionId?: string): boolean {
+        const properties = activationProperties(activation);
+        if (
+            !properties ||
+            (activation.source === 'giveFeedbackCommand'
+                ? invitationSessionId !== undefined
+                : !isInvitationSessionId(invitationSessionId)) ||
+            (invitationSessionId !== undefined && this.activatedIds.has(invitationSessionId))
+        ) {
+            return false;
+        }
+        const sent = this.send(
+            SurveyEventName.FeedbackActivated,
+            {
+                ...properties,
+                ...(activation.source === 'automaticInvitation' && invitationSessionId
+                    ? { [SurveyTelemetryProperty.InvitationSessionId]: invitationSessionId }
+                    : {}),
+            },
+            {},
+        );
+        if (sent && invitationSessionId) {
+            this.activatedIds.add(invitationSessionId);
+        }
+        return sent;
+    }
+
     /**
      * Once per attempt; attempts above `MAX_OPEN_FORM_TELEMETRY_ATTEMPTS` are not sent.
      * `invitationSessionId` is sent only for the `invitation` trigger.
@@ -253,20 +292,25 @@ export class SurveyTelemetry {
         attempt: number,
         invitationSessionId: string | undefined,
         selectedRating?: unknown,
+        activation?: SurveyActivation,
     ): boolean {
+        const provenance = activation === undefined ? undefined : activationProperties(activation);
         if (
             !OPEN_FORM_TRIGGERS.includes(trigger) ||
             !OPEN_FORM_RESULTS.includes(openResult) ||
             !Number.isInteger(attempt) ||
             attempt < 1 ||
             attempt > MAX_OPEN_FORM_TELEMETRY_ATTEMPTS ||
-            (selectedRating !== undefined && !isSurveyRating(selectedRating))
+            (selectedRating !== undefined && !isSurveyRating(selectedRating)) ||
+            (activation !== undefined &&
+                (!provenance || (trigger === 'invitation') !== (activation.source === 'automaticInvitation')))
         ) {
             return false;
         }
         const properties: Record<string, string> = {
             [SurveyTelemetryProperty.Trigger]: trigger,
             [SurveyTelemetryProperty.OpenResult]: openResult,
+            ...provenance,
         };
         if (trigger === 'invitation') {
             if (!isInvitationSessionId(invitationSessionId)) {
@@ -332,6 +376,39 @@ export class SurveyTelemetry {
             return false;
         }
     }
+}
+
+function activationProperties(activation: SurveyActivation): Record<string, string> | undefined {
+    const { source, collectionTab, invitationKind, returnReason } = activation;
+    let validReason = false;
+    switch (invitationKind) {
+        case 'first':
+            validReason = returnReason === undefined;
+            break;
+        case 'returning':
+            validReason = returnReason !== undefined && returnReason !== 'unknown' && RETURN_REASONS.includes(returnReason);
+            break;
+        case 'unknown':
+            validReason = returnReason === 'unknown';
+            break;
+    }
+    if (
+        !ACTIVATION_SOURCES.includes(source) ||
+        (source === 'collectionView'
+            ? !collectionTab || !COLLECTION_TABS.includes(collectionTab)
+            : collectionTab !== undefined) ||
+        (source === 'automaticInvitation'
+            ? !invitationKind || !INVITATION_KINDS.includes(invitationKind) || !validReason
+            : invitationKind !== undefined || returnReason !== undefined)
+    ) {
+        return undefined;
+    }
+    return {
+        [SurveyTelemetryProperty.ActivationSource]: source,
+        ...(collectionTab ? { [SurveyTelemetryProperty.CollectionTab]: collectionTab } : {}),
+        ...(invitationKind ? { [SurveyTelemetryProperty.InvitationKind]: invitationKind } : {}),
+        ...(returnReason ? { [SurveyTelemetryProperty.ReturnReason]: returnReason } : {}),
+    };
 }
 
 function isInvitationSessionId(value: string | undefined): value is string {

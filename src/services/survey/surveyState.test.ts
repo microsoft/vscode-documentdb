@@ -130,6 +130,7 @@ describe('mergeSurveyStates', (): void => {
         const valid: SurveyPersistedState = {
             ...EMPTY_SURVEY_STATE,
             lastOutcome: 'opened',
+            invitationHistory: 'seen',
             nextEligibleAt: NEXT_ELIGIBLE_AT.toISOString(),
         };
         expectBothOrders(valid, { ...EMPTY_SURVEY_STATE, lastOutcome: 'askLater' }, valid);
@@ -535,6 +536,7 @@ describe('SurveyStateStore', (): void => {
             activeDayCount: 1,
             lastActiveDay: '2026-10-08',
             lastOutcome: 'opened',
+            invitationHistory: 'seen',
             nextEligibleAt: NEXT_ELIGIBLE_AT.toISOString(),
             optedOutAt: NOW.toISOString(),
         });
@@ -653,7 +655,7 @@ describe('SurveyStateStore', (): void => {
 });
 
 describe('parseSurveyState', (): void => {
-    it('returns a fresh valid v1 state with exactly six fields', (): void => {
+    it('reads a legacy state with unknown invitation history', (): void => {
         const raw = {
             version: 1,
             activeDayCount: 3,
@@ -673,6 +675,8 @@ describe('parseSurveyState', (): void => {
             lastOutcome: 'dismissed',
             nextEligibleAt: NEXT_ELIGIBLE_AT.toISOString(),
             optedOutAt: NOW.toISOString(),
+            invitationHistory: 'unknown',
+            lastInvitationOutcome: undefined,
         });
         expect(parsed).not.toBe(raw);
         expect(Object.keys(parsed)).toEqual(Object.keys(EMPTY_SURVEY_STATE));
@@ -682,8 +686,19 @@ describe('parseSurveyState', (): void => {
         const raw = { version: 1, activeDayCount: 2 };
         const parsed = parseSurveyState(raw);
 
-        expect(parsed).toEqual({ ...EMPTY_SURVEY_STATE, activeDayCount: 2 });
+        expect(parsed).toEqual({ ...EMPTY_SURVEY_STATE, activeDayCount: 2, invitationHistory: 'unknown' });
         expect(Object.keys(parsed)).toEqual(Object.keys(EMPTY_SURVEY_STATE));
+    });
+
+    it('preserves unknown legacy history until a real invitation is shown', async (): Promise<void> => {
+        const storage = new MemorySurveyStorage();
+        storage.values.set(SURVEY_STATE_KEY, { version: 1, activeDayCount: 3, lastOutcome: 'opened' });
+        const store = new SurveyStateStore(storage);
+        expect(store.current.invitationHistory).toBe('unknown');
+        await store.recordCooldown(NEXT_ELIGIBLE_AT);
+        expect(store.current.invitationHistory).toBe('seen');
+        await store.recordOutcome('askLater', NEXT_ELIGIBLE_AT, true);
+        expect(store.current.lastInvitationOutcome).toBe('askLater');
     });
 
     it('accepts a plain object with a null prototype', (): void => {
@@ -692,13 +707,14 @@ describe('parseSurveyState', (): void => {
             activeDayCount: 2,
         });
 
-        expect(parseSurveyState(raw)).toEqual({ ...EMPTY_SURVEY_STATE, activeDayCount: 2 });
+        expect(parseSurveyState(raw)).toEqual({ ...EMPTY_SURVEY_STATE, activeDayCount: 2, invitationHistory: 'unknown' });
     });
 
     it.each(['opened', 'askLater', 'dismissed'] as const)('accepts the %s outcome', (lastOutcome): void => {
         expect(parseSurveyState({ version: 1, activeDayCount: 0, lastOutcome })).toEqual({
             ...EMPTY_SURVEY_STATE,
             lastOutcome,
+            invitationHistory: 'unknown',
         });
     });
 
@@ -711,7 +727,7 @@ describe('parseSurveyState', (): void => {
                 nextEligibleAt: '',
                 optedOutAt: '',
             }),
-        ).toEqual({ ...EMPTY_SURVEY_STATE, lastActiveDay: '2026-99-99', nextEligibleAt: '', optedOutAt: '' });
+        ).toEqual({ ...EMPTY_SURVEY_STATE, invitationHistory: 'unknown', lastActiveDay: '2026-99-99', nextEligibleAt: '', optedOutAt: '' });
     });
 
     interface InvalidStateCase {

@@ -130,6 +130,11 @@ export const CollectionView = (): JSX.Element => {
     const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_indexes' | 'tab_queryInsights'>(
         () => configuration.initialTab ?? 'tab_result',
     );
+    const feedbackTab = {
+        tab_result: 'documents',
+        tab_indexes: 'indexes',
+        tab_queryInsights: 'queryInsights',
+    } as const;
     const selectedTabId = {
         tab_result: 'tab.results',
         tab_indexes: 'tab.indexes',
@@ -657,11 +662,15 @@ export const CollectionView = (): JSX.Element => {
                     </TabList>
                     <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
                         <Button
-                            appearance="subtle"
+                            appearance="secondary"
                             icon={<EmojiRegular />}
                             aria-label={l10n.t('Give Feedback')}
-                            onClick={() => void trpcClient.common.openFeedback.mutate()}
-                        />
+                            onClick={() => void trpcClient.common.openFeedback.mutate({
+                                collectionTab: feedbackTab[selectedTab],
+                            })}
+                        >
+                            {l10n.t('Give Feedback')}
+                        </Button>
                     </Tooltip>
                 </div>
 

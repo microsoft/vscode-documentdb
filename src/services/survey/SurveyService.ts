@@ -21,6 +21,8 @@ import { SurveyStateStore, type SurveyStateStorage, type SurveyStateWriteResult 
 import { SurveyTelemetry } from './surveyTelemetry';
 import {
     SURVEY_FEATURE_AREAS,
+    type SurveyActivation,
+    type SurveyCollectionTab,
     type SurveyFeatureArea,
     type SurveyLocalDay,
     type SurveyOpenFormResult,
@@ -62,6 +64,7 @@ export interface SurveyServiceOptions {
 
 interface ActiveInvitation {
     id: string;
+    activation: SurveyActivation;
     isReminder: boolean;
     visible: boolean;
     openAttempts: number;
@@ -182,11 +185,14 @@ export class SurveyService implements vscode.Disposable {
     }
 
     /** Opens the sidebar on explicit request, independently of invitation eligibility and opt-out. */
-    public async showFeedbackForm(): Promise<boolean> {
+    public async showFeedbackForm(
+        source: 'clusterDashboard' | 'collectionView' = 'clusterDashboard',
+        collectionTab?: SurveyCollectionTab,
+    ): Promise<boolean> {
         if (this.manualOpening) {
             return this.manualOpening;
         }
-        const opening = this.presentFeedbackForm();
+        const opening = this.presentFeedbackForm({ source, collectionTab });
         this.manualOpening = opening;
         try {
             return await opening;
@@ -197,8 +203,10 @@ export class SurveyService implements vscode.Disposable {
         }
     }
 
-    private async presentFeedbackForm(): Promise<boolean> {
+    private async presentFeedbackForm(activation: SurveyActivation): Promise<boolean> {
+        traceSurvey((): string => vscode.l10n.t('[Survey] Feedback requested from {0}.', activation.source));
         if (this.disposed || !this.presenter) {
+            traceSurvey((): string => vscode.l10n.t('[Survey] Feedback presentation unavailable.'));
             return false;
         }
         this.generation++;
@@ -219,9 +227,14 @@ export class SurveyService implements vscode.Disposable {
         };
         try {
             const handle = await this.presenter.present(request, {
-                onVisible: (): void => undefined,
+                onVisible: (): void => {
+                    traceSurvey((): string => vscode.l10n.t('[Survey] Feedback visible from {0}.', activation.source));
+                    if (this.isEnabled()) {
+                        this.telemetry.reportFeedbackActivated(activation, request.invitationSessionId);
+                    }
+                },
                 onOpenForm: async (selectedRating): Promise<SurveyOpenFormResult> => {
-                    const result = await this.openSurveyFormFromCommand(selectedRating);
+                    const result = await this.openSurveyFormFromCommand(selectedRating, activation);
                     if (result === 'opened') {
                         close();
                     }
@@ -234,11 +247,13 @@ export class SurveyService implements vscode.Disposable {
                 return false;
             }
             if (!handle) {
+                traceSurvey((): string => vscode.l10n.t('[Survey] Feedback presentation unavailable.'));
                 return false;
             }
             this.manualHandle = handle;
             return true;
         } catch {
+            traceSurvey((): string => vscode.l10n.t('[Survey] Feedback presentation failed.'));
             return false;
         }
     }
@@ -250,7 +265,14 @@ export class SurveyService implements vscode.Disposable {
      * granted. On success, applies the opened cooldown only when the survey is enabled,
      * permission is granted, and the user is not opted out. Never clears the opt-out.
      */
-    public async openSurveyFormFromCommand(selectedRating?: SurveyRating): Promise<SurveyOpenFormResult> {
+    public async openSurveyFormFromCommand(
+        selectedRating?: SurveyRating,
+        activation: SurveyActivation = { source: 'giveFeedbackCommand' },
+    ): Promise<SurveyOpenFormResult> {
+        traceSurvey((): string => vscode.l10n.t('[Survey] Form requested from {0}.', activation.source));
+        if (activation.source === 'giveFeedbackCommand' && this.isEnabled()) {
+            this.telemetry.reportFeedbackActivated(activation);
+        }
         const gen = this.generation;
         let ok = false;
         try {
@@ -259,7 +281,7 @@ export class SurveyService implements vscode.Disposable {
             // Browser failures are returned to the caller, not recorded as outcomes.
         }
         traceSurvey((): string =>
-            vscode.l10n.t('[Survey] Form opening from command: {0}.', ok ? 'success' : 'failure'),
+            vscode.l10n.t('[Survey] Form opening from {0}: {1}.', activation.source, ok ? 'success' : 'failure'),
         );
         if (gen !== this.generation) {
             return ok ? 'opened' : 'failed';
@@ -267,7 +289,7 @@ export class SurveyService implements vscode.Disposable {
         const enabled = this.isEnabled();
         const permitted = this.isPermitted();
         if (enabled && permitted) {
-            this.telemetry.reportOpenForm('command', ok ? 'success' : 'failure', 1, undefined, selectedRating);
+            this.telemetry.reportOpenForm('command', ok ? 'success' : 'failure', 1, undefined, selectedRating, activation);
         }
         if (ok && enabled && permitted && !this.store.isOptedOut) {
             traceSurvey((): string => vscode.l10n.t('[Survey] Command outcome: opened.'));
@@ -510,6 +532,17 @@ export class SurveyService implements vscode.Disposable {
         const invitation: ActiveInvitation = {
             id: this.createInvitationSessionId(),
             isReminder: result.explanation.isReminder,
+            activation: {
+                source: 'automaticInvitation',
+                                invitationKind:
+                                        state.invitationHistory === 'new'
+                                                ? 'first'
+                                                : state.invitationHistory === 'seen'
+                                                    ? 'returning'
+                                                    : 'unknown',
+                ...(state.invitationHistory === 'seen' ? { returnReason: state.lastInvitationOutcome ?? 'none' } : {}),
+                ...(state.invitationHistory === 'unknown' ? { returnReason: 'unknown' } : {}),
+            },
             visible: false,
             openAttempts: 0,
             ended: false,
@@ -585,6 +618,7 @@ export class SurveyService implements vscode.Disposable {
                 traceSurvey((): string => vscode.l10n.t('[Survey] Invitation rendered and visible.'));
                 void this.recordVisibilityCooldown(computeNextEligibleAt('askLater', this.now(), this.config));
                 this.telemetry.reportInvitationShown(invitation.id, invitation.isReminder);
+                this.telemetry.reportFeedbackActivated(invitation.activation, invitation.id);
             },
             onOpenForm: async (selectedRating): Promise<SurveyOpenFormResult> => {
                 if (!this.isLive(invitation) || !this.isEnabled() || !this.isPresentationPermitted()) {
@@ -610,6 +644,7 @@ export class SurveyService implements vscode.Disposable {
                     attempt,
                     invitation.id,
                     selectedRating,
+                    invitation.activation,
                 );
                 if (!ok) {
                     return 'failed';
@@ -651,7 +686,11 @@ export class SurveyService implements vscode.Disposable {
         const gen = this.generation;
         invitation.ended = true;
         traceSurvey((): string => vscode.l10n.t('[Survey] Invitation outcome: {0}.', outcome));
-        const write = await this.store.recordOutcome(outcome, computeNextEligibleAt(outcome, this.now(), this.config));
+        const write = await this.store.recordOutcome(
+            outcome,
+            computeNextEligibleAt(outcome, this.now(), this.config),
+            invitation.visible,
+        );
         this.tracePersistence('invitation outcome', write);
         if (gen !== this.generation) {
             return;
