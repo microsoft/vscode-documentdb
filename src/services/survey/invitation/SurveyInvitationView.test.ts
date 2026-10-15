@@ -343,7 +343,46 @@ describe('SurveyInvitationView', (): void => {
         h.surface.visibility(true);
         h.surface.message({ type: 'rendered' });
         expect(calls.onVisible).toHaveBeenCalledTimes(1);
+        expect(h.surface.postMessage).not.toHaveBeenCalledWith({ type: 'focus' });
         handle?.dispose();
+        h.presenter.dispose();
+    });
+
+    it('moves focus to Continue to survey when the user opens feedback', async (): Promise<void> => {
+        const h = harness();
+        expect(await h.service.showFeedbackForm('clusterDashboard')).toBe(true);
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(`${SURVEY_VIEW_ID}.open`, { preserveFocus: false });
+        expect(h.surface.show).toHaveBeenCalledWith(false);
+        h.surface.message({ type: 'rendered' });
+        expect(h.surface.postMessage).toHaveBeenCalledWith({ type: 'focus' });
+        await flush();
+        h.surface.postMessage.mockClear();
+        h.surface.message({ type: 'rendered' });
+        expect(h.surface.postMessage).not.toHaveBeenCalled();
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('focuses a visible automatic invitation instead of replacing it when the user asks for feedback', async (): Promise<void> => {
+        const h = harness();
+        h.service.recordSurveyActivityWithInvitation('dataBrowsing');
+        await h.service.whenIdle();
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        const html = h.surface.view.webview.html;
+        expect(html).toContain('days, so');
+        h.surface.show.mockClear();
+
+        expect(await h.service.showFeedbackForm('collectionView', 'documents')).toBe(true);
+        expect(h.surface.view.webview.html).toBe(html);
+        expect(h.surface.show).toHaveBeenCalledWith(false);
+        expect(h.surface.postMessage).toHaveBeenCalledWith({ type: 'focus' });
+        expect(
+            h.events
+                .filter((event): boolean => event.name === 'survey.feedbackActivated')
+                .map((event): string | undefined => event.properties.activationSource),
+        ).toEqual(['automaticInvitation']);
+        h.service.dispose();
         h.presenter.dispose();
     });
 

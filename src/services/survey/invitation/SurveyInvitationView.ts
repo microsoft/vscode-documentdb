@@ -27,6 +27,7 @@ interface Invitation {
     rendered: boolean;
     reported: boolean;
     revealing: boolean;
+    focusPending: boolean;
     busy: boolean;
     closed: boolean;
 }
@@ -54,9 +55,11 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             rendered: false,
             reported: false,
             revealing: true,
+            focusPending: request.manuallyOpened === true,
             busy: false,
             closed: false,
         };
+        const preserveFocus = !invitation.focusPending;
         this.active = invitation;
         try {
             await this.setActiveContext(true);
@@ -65,12 +68,12 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             }
             if (this.view) {
                 this.render(invitation);
-                this.view.show(true);
+                this.view.show(preserveFocus);
                 this.checkVisibility();
             } else {
-                await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus: true });
+                await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus });
                 if (!this.view && this.active === invitation) {
-                    await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus: true });
+                    await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus });
                 }
             }
             invitation.revealing = false;
@@ -78,7 +81,10 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
                 this.clear(invitation);
                 return undefined;
             }
-            return { dispose: (): void => this.clear(invitation) };
+            return {
+                dispose: (): void => this.clear(invitation),
+                focus: (): boolean => this.focus(invitation),
+            };
         } catch {
             traceSurvey((): string => vscode.l10n.t('[Survey] Presentation deferred: reveal failed.'));
             this.clear(invitation);
@@ -118,7 +124,7 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
         ];
         if (this.active && !this.disposed) {
             this.render(this.active);
-            view.show(true);
+            view.show(!this.active.focusPending);
             this.checkVisibility();
         } else {
             view.webview.html = '';
@@ -175,6 +181,9 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
         switch (message.type) {
             case 'rendered':
                 invitation.rendered = true;
+                if (invitation.focusPending) {
+                    this.postFocus(invitation);
+                }
                 this.checkVisibility();
                 return;
             case 'privacy': {
@@ -237,6 +246,30 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
                 ? vscode.l10n.t("We couldn't open the survey in your browser. Please try again.")
                 : vscode.l10n.t("Sorry, the survey can't be opened from here right now."),
             { modal: true },
+        );
+    }
+
+    private focus(invitation: Invitation): boolean {
+        if (this.active !== invitation || invitation.closed || !this.view) {
+            return false;
+        }
+        invitation.focusPending = true;
+        this.view.show(false);
+        if (invitation.rendered) {
+            this.postFocus(invitation);
+        }
+        return true;
+    }
+
+    private postFocus(invitation: Invitation): void {
+        void Promise.resolve(this.view?.webview.postMessage({ type: 'focus' })).then(
+            (delivered): void => {
+                // A webview reloading after being hidden drops the message; its next `rendered` retries.
+                if (delivered && this.active === invitation) {
+                    invitation.focusPending = false;
+                }
+            },
+            (): void => undefined,
         );
     }
 

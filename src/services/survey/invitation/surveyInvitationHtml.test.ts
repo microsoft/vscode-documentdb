@@ -111,6 +111,14 @@ describe('survey invitation HTML', (): void => {
         expect(page.querySelector('[data-action="askLater"]')?.textContent).toBe('Close');
     });
 
+    it('moves focus to Continue to survey when the host asks', (): void => {
+        const h = interactiveHtml();
+        const page = h.dom.window.document;
+        expect(page.activeElement).not.toBe(page.querySelector('#open-survey'));
+        h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
+        expect(page.activeElement).toBe(page.querySelector('#open-survey'));
+    });
+
     it('uses a nonce CSP, packaged artwork, theme variables, and no remote resource URLs', (): void => {
         const page = parseHtml(html());
         expect(page.querySelector('meta[http-equiv]')?.getAttribute('content')).toContain("default-src 'none'");

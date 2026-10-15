@@ -17,19 +17,19 @@ behavior and `decisions.md` wins for intent.
 
 ## Modules
 
-| Module                                      | Responsibility                                                                                                                                          |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/utils/feedbackPermission.ts`           | `isFeedbackPermitted()`: `telemetry.feedback.enabled` (default `true`), fail closed (D0032). Gates automatic invitations and survey telemetry, not explicit user opening |
-| `src/services/survey/surveyTypes.ts`        | Shared types: feature areas, preconditions, gates, eligibility result, persisted state                                                                  |
-| `src/services/survey/surveyConfig.ts`       | Decision values, kill switch, form URL, state keys                                                                                                      |
-| `src/services/survey/surveyPolicy.ts`       | Pure functions: kill switch override, preconditions, ordered gates, local day, cooldowns, sampling value                                                |
-| `src/services/survey/surveyState.ts`        | The versioned state object in `globalState`, write on transition only, in-memory fallback on failed writes                                              |
-| `src/services/survey/surveyTelemetry.ts`    | The only emitter of survey events; permission check and per-session bounds                                                                              |
-| `src/services/survey/surveyDiagnostics.ts`  | Guarded local-only trace formatting through the existing DocumentDB output channel; no telemetry forwarding                                             |
-| `src/services/survey/surveyPresentation.ts` | Contract for the invitation surface (Stage 2)                                                                                                           |
+| Module                                      | Responsibility                                                                                                                                                                      |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/utils/feedbackPermission.ts`           | `isFeedbackPermitted()`: `telemetry.feedback.enabled` (default `true`), fail closed (D0032). Gates automatic invitations and survey telemetry, not explicit user opening            |
+| `src/services/survey/surveyTypes.ts`        | Shared types: feature areas, preconditions, gates, eligibility result, persisted state                                                                                              |
+| `src/services/survey/surveyConfig.ts`       | Decision values, kill switch, form URL, state keys                                                                                                                                  |
+| `src/services/survey/surveyPolicy.ts`       | Pure functions: kill switch override, preconditions, ordered gates, local day, cooldowns, sampling value                                                                            |
+| `src/services/survey/surveyState.ts`        | The versioned state object in `globalState`, write on transition only, in-memory fallback on failed writes                                                                          |
+| `src/services/survey/surveyTelemetry.ts`    | The only emitter of survey events; permission check and per-session bounds                                                                                                          |
+| `src/services/survey/surveyDiagnostics.ts`  | Guarded local-only trace formatting through the existing DocumentDB output channel; no telemetry forwarding                                                                         |
+| `src/services/survey/surveyPresentation.ts` | Contract for the invitation surface (Stage 2)                                                                                                                                       |
 | `src/services/survey/SurveyService.ts`      | Orchestration: `recordSurveyActivity` / `recordSurveyActivityWithInvitation(featureArea)`, the shared in-flight promise, reservation, presentation, outcomes, permission withdrawal |
-| `src/services/survey/invitation/`           | Pure HTML builder, localized copy, Secondary Sidebar presenter, and generic host message handling                                                       |
-| `src/commands/giveFeedback/`                | Explicit user opening through the service, with user-driven retries, bounded survey telemetry, and no automatic command telemetry                       |
+| `src/services/survey/invitation/`           | Pure HTML builder, localized copy, Secondary Sidebar presenter, and generic host message handling                                                                                   |
+| `src/commands/giveFeedback/`                | Explicit user opening through the service, with user-driven retries, bounded survey telemetry, and no automatic command telemetry                                                   |
 
 ## Invitation Surface
 
@@ -56,8 +56,10 @@ path still opens the external form directly and cannot select a star. Survey-own
 only its selected tab; the host derives and checks the view name.
 The `documentdb-survey-invitation-active` context is false on activation and true only for a
 live invitation. It gates the view and its otherwise empty container. No HTML or webview
-state is restored at startup. The presenter opens the view with `preserveFocus: true`, uses
-`show(true)` once resolved. A cold reveal retries the view's open command once if the first
+state is restored at startup. The presenter opens an automatic invitation with
+`preserveFocus: true`, uses `show(true)` once resolved. A user-requested (manual) form, or a
+focus request on an open invitation, reveals with `preserveFocus: false` and, once rendered,
+posts a `focus` message that moves keyboard focus to "Continue to survey". A cold reveal retries the view's open command once if the first
 call returns before the view resolves. A disposal during reveal, or from an obsolete view
 instance, does not dismiss the invitation; explicit disposal after reveal still does.
 Presentation relies on the VS Code reveal API without a timeout
@@ -201,8 +203,11 @@ and never clears the opt-out.
 The sidebar feedback buttons use the same manual form-opening path and `command` trigger,
 but pass the optional rating selected in the sidebar. Explicit opening is not an automatic
 invitation and bypasses automatic eligibility and invitation suppression.
-Replacing an automatic invitation waits for any pending reveal to settle and its canceled
-handle to be disposed before presenting manual feedback. Each manual presentation owns its
+When an automatic invitation is already visible, a feedback button focuses it instead of
+replacing it, so it keeps its `automaticInvitation` attribution and its own outcome; no
+`survey.feedbackActivated` is added. Otherwise, replacing an automatic invitation waits for any
+pending reveal to settle and its canceled handle to be disposed before presenting manual
+feedback. Each manual presentation owns its
 close state and handle: a late browser result cannot close a replacement, and Close during
 reveal disposes the handle as soon as it arrives.
 
@@ -242,17 +247,17 @@ saving failed (D0027). There is no Retry; after a restart the user may be invite
 
 One object under `globalState` key `documentdb.survey.state`:
 
-| Field            | Type                                         | Meaning                                                               |
-| ---------------- | -------------------------------------------- | --------------------------------------------------------------------- |
-| `version`        | `1`                                          | Schema version                                                        |
-| `activeDayCount` | number                                       | Distinct local days with a milestone                                  |
-| `lastActiveDay`  | `YYYY-MM-DD` or absent                       | Last counted day                                                      |
-| `lastOutcome`    | `opened`, `askLater`, `dismissed`, or absent | Outcome associated with the longest cooldown |
-| `nextEligibleAt` | ISO 8601 or absent                           | End of the current cooldown                                           |
-| `optedOutAt`     | ISO 8601 or absent                           | Present means permanently opted out                                   |
-| `invitationHistory` | `new`, `seen`, or `unknown` | Whether an invitation was actually shown; legacy history may be unknown |
-| `lastInvitationOutcome` | `opened`, `askLater`, `dismissed`, or absent | Latest resolved visible invitation outcome; explains returning invitations |
-| `lastInvitationOutcomeAt` | ISO 8601 or absent | Recency of that invitation outcome, independent of its cooldown; absent in older state |
+| Field                     | Type                                         | Meaning                                                                                |
+| ------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `version`                 | `1`                                          | Schema version                                                                         |
+| `activeDayCount`          | number                                       | Distinct local days with a milestone                                                   |
+| `lastActiveDay`           | `YYYY-MM-DD` or absent                       | Last counted day                                                                       |
+| `lastOutcome`             | `opened`, `askLater`, `dismissed`, or absent | Outcome associated with the longest cooldown                                           |
+| `nextEligibleAt`          | ISO 8601 or absent                           | End of the current cooldown                                                            |
+| `optedOutAt`              | ISO 8601 or absent                           | Present means permanently opted out                                                    |
+| `invitationHistory`       | `new`, `seen`, or `unknown`                  | Whether an invitation was actually shown; legacy history may be unknown                |
+| `lastInvitationOutcome`   | `opened`, `askLater`, `dismissed`, or absent | Latest resolved visible invitation outcome; explains returning invitations             |
+| `lastInvitationOutcomeAt` | ISO 8601 or absent                           | Recency of that invitation outcome, independent of its cooldown; absent in older state |
 
 Per D0011, no legacy value is read. The five legacy keys under
 `ms-azuretools.vscode-documentdb.survey/` are deleted after the new state is first saved.
@@ -676,17 +681,17 @@ locally; warehouse names, transformations and actual delivered fields still need
 
 ### Exclusions and Permission
 
-| Boundary                 | Implemented behavior                                                                                                                                                                                                                     |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Submitted rating         | Optional integer 1-5 on an explicit invitation opening, subject to permission and event bounds. No default/zero, no emission on selection alone, no local-state persistence or trace output                                              |
-| Never sent by the survey | Hover, clicked-element identity, keyboard key, external-form answers, name, form URL, exact active-day count/history/dates, sampling value, database/collection names, query text, credentials or connection strings                     |
-| Local only               | Active-day count and dates, opt-out/cooldown state, sampling calculation, eligibility explanation. Event timestamps are transport metadata, not submitted local usage dates                                                              |
+| Boundary                 | Implemented behavior                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Submitted rating         | Optional integer 1-5 on an explicit invitation opening, subject to permission and event bounds. No default/zero, no emission on selection alone, no local-state persistence or trace output                                                                                                                                  |
+| Never sent by the survey | Hover, clicked-element identity, keyboard key, external-form answers, name, form URL, exact active-day count/history/dates, sampling value, database/collection names, query text, credentials or connection strings                                                                                                         |
+| Local only               | Active-day count and dates, opt-out/cooldown state, sampling calculation, eligibility explanation. Event timestamps are transport metadata, not submitted local usage dates                                                                                                                                                  |
 | Permission               | Fresh `telemetry.feedback.enabled === true` (default `true`; D0032), fail closed for `false`, non-boolean values and read failures. Gates activity collection, events and automatic presentation; rechecked before invitation navigation. Events are also subject to `telemetry.telemetryLevel` through the VS Code reporter |
-| Withdrawal               | Cancels pending work, silently closes visible invitation, emits no resolution/outcome after withdrawal. Persisted Never again still applies even if its event is lost                                                                    |
-| Other preconditions      | `SURVEY_ENABLED=true` in all modes (D0021); no enablement launch override. Permanent opt-out stops automatic tracking and invitations before cohort entry                                                                                |
-| Manual command exception | Give Feedback opens the fixed form on explicit request even after opt-out, with the switch off or without telemetry permission; survey events still require enabled/permitted. Never clears opt-out                                      |
-| External navigation      | Only the primary button sends `openForm`, with optional `selectedRating`. Stars select locally. Neither URL gains machine/session/campaign IDs, rating or tracking query parameters. Privacy clicks are unrecorded                       |
-| No answer linkage        | No completion callback, tracking pixel, response event or join to external submissions. The external form owns its consent and answers                                                                                                   |
+| Withdrawal               | Cancels pending work, silently closes visible invitation, emits no resolution/outcome after withdrawal. Persisted Never again still applies even if its event is lost                                                                                                                                                        |
+| Other preconditions      | `SURVEY_ENABLED=true` in all modes (D0021); no enablement launch override. Permanent opt-out stops automatic tracking and invitations before cohort entry                                                                                                                                                                    |
+| Manual command exception | Give Feedback opens the fixed form on explicit request even after opt-out, with the switch off or without telemetry permission; survey events still require enabled/permitted. Never clears opt-out                                                                                                                          |
+| External navigation      | Only the primary button sends `openForm`, with optional `selectedRating`. Stars select locally. Neither URL gains machine/session/campaign IDs, rating or tracking query parameters. Privacy clicks are unrecorded                                                                                                           |
+| No answer linkage        | No completion callback, tracking pixel, response event or join to external submissions. The external form owns its consent and answers                                                                                                                                                                                       |
 
 ### Actual English Invitation Copy
 

@@ -225,6 +225,10 @@ document.querySelectorAll('[data-action]').forEach(control => {
     });
 });
 window.addEventListener('message', event => {
+    if (event.data && event.data.type === 'focus') {
+        openButton.focus();
+        return;
+    }
     if (!event.data || event.data.type !== 'openResult') return;
     busy = false;
     controls.forEach(control => { control.disabled = false; });

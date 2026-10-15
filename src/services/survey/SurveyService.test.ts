@@ -253,6 +253,35 @@ describe('SurveyService', (): void => {
         expect(h.sent('survey.invitationResolved')).toHaveLength(0);
     });
 
+    it('focuses a visible automatic invitation and keeps its attribution', async (): Promise<void> => {
+        const h = createHarness();
+        const focus = vi.fn((): boolean => true);
+        Object.assign(h.handle, { focus });
+        await invite(h);
+        h.callbacks().onVisible();
+        const invitationEvents = h.events();
+        expect(await h.service.showFeedbackForm('collectionView', 'documents')).toBe(true);
+        expect(focus).toHaveBeenCalledOnce();
+        expect(h.present).toHaveBeenCalledOnce();
+        expect(h.handle.dispose).not.toHaveBeenCalled();
+        expect(h.events()).toEqual(invitationEvents);
+        expect(await h.callbacks().onOpenForm()).toBe('opened');
+        expect(h.sent('survey.openForm')[0].properties).toMatchObject({
+            trigger: 'invitation',
+            activationSource: 'automaticInvitation',
+        });
+    });
+
+    it('replaces a visible automatic invitation when it cannot be focused', async (): Promise<void> => {
+        const h = createHarness();
+        Object.assign(h.handle, { focus: (): boolean => false });
+        await invite(h);
+        h.callbacks().onVisible();
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(h.handle.dispose).toHaveBeenCalledOnce();
+        expect(h.present.mock.calls[1][0].manuallyOpened).toBe(true);
+    });
+
     it('does not let an old browser result close replacement feedback', async (): Promise<void> => {
         const h = createHarness();
         const browser = deferred<boolean>();

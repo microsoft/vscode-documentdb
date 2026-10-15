@@ -152,6 +152,7 @@
   "[Survey] Feedback permission withdrawn: canceling pending work and invitation.": "[Survey] Feedback permission withdrawn: canceling pending work and invitation.",
   "[Survey] Feedback presentation failed.": "[Survey] Feedback presentation failed.",
   "[Survey] Feedback presentation unavailable.": "[Survey] Feedback presentation unavailable.",
+  "[Survey] Feedback request focused the visible invitation.": "[Survey] Feedback request focused the visible invitation.",
   "[Survey] Feedback requested from {0}.": "[Survey] Feedback requested from {0}.",
   "[Survey] Feedback visible from {0}.": "[Survey] Feedback visible from {0}.",
   "[Survey] Form opening from {0}: {1}.": "[Survey] Form opening from {0}: {1}.",

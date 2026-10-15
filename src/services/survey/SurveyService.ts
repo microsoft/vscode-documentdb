@@ -16,7 +16,11 @@ import {
     evaluatePreconditions,
     toLocalDay,
 } from './surveyPolicy';
-import { type SurveyInvitationCallbacks, type SurveyPresenter } from './surveyPresentation';
+import {
+    type SurveyInvitationCallbacks,
+    type SurveyInvitationHandle,
+    type SurveyPresenter,
+} from './surveyPresentation';
 import { SurveyStateStore, type SurveyStateStorage, type SurveyStateWriteResult } from './surveyState';
 import { SurveyTelemetry } from './surveyTelemetry';
 import {
@@ -69,7 +73,7 @@ interface ActiveInvitation {
     visible: boolean;
     openAttempts: number;
     ended: boolean;
-    handle: vscode.Disposable | undefined;
+    handle: SurveyInvitationHandle | undefined;
 }
 
 /**
@@ -258,6 +262,11 @@ export class SurveyService implements vscode.Disposable {
         if (this.disposed || !this.presenter) {
             traceSurvey((): string => vscode.l10n.t('[Survey] Feedback presentation unavailable.'));
             return false;
+        }
+        const shown = this.activeInvitation;
+        if (shown && !shown.ended && shown.visible && shown.handle?.focus?.()) {
+            traceSurvey((): string => vscode.l10n.t('[Survey] Feedback request focused the visible invitation.'));
+            return true;
         }
         const pendingInvitation = this.invitationOpening;
         this.generation++;

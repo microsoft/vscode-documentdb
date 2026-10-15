@@ -49,11 +49,15 @@ export interface SurveyInvitationCallbacks {
  * A constructed invitation. `dispose()` closes it silently: it must not call any callback,
  * so a programmatic close is never recorded as `dismissed`.
  */
-export type SurveyInvitationHandle = vscode.Disposable;
+export interface SurveyInvitationHandle extends vscode.Disposable {
+    /** Reveals the invitation and moves focus to "Continue to survey". Returns `false` when it cannot. */
+    focus?(): boolean;
+}
 
 export interface SurveyPresenter {
     /**
      * Requests the invitation be shown without taking focus from the editor or terminal (D0012).
+     * A `manuallyOpened` request is user-initiated, so it moves focus to "Continue to survey".
      * Resolves to `undefined` when the destination is unavailable. May reject on failure.
      * Resolves after the reveal API completes, without waiting for rendering or visibility.
      * Reports actual visibility separately through `onVisible`.
