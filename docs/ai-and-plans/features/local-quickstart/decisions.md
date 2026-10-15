@@ -9,14 +9,15 @@ verified: 2026-08-14
 
 > The decisions that shaped Local Quick Start, and what was rejected on the way.
 
-| #    | Decision                                               | Status              | Changed from the proposal?                | Date       | PR   |
-| ---- | ------------------------------------------------------ | ------------------- | ----------------------------------------- | ---------- | ---- |
-| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                      | 2026-06-25 | —    |
-| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review          | 2026-07-06 | —    |
-| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely | 2026-08-03 | #798 |
-| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                 | 2026-08-09 | #876 |
-| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred             | 2026-09-29 | #979 |
-| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added          | 2026-09-29 | #979 |
+| #    | Decision                                               | Status              | Changed from the proposal?                | Date       | PR    |
+| ---- | ------------------------------------------------------ | ------------------- | ----------------------------------------- | ---------- | ----- |
+| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                      | 2026-06-25 | —     |
+| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review          | 2026-07-06 | —     |
+| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely | 2026-08-03 | #798  |
+| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                 | 2026-08-09 | #876  |
+| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred             | 2026-09-29 | #979  |
+| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added          | 2026-09-29 | #979  |
+| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                      | 2026-10-15 | #1018 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -406,3 +407,36 @@ ids should record that?
   step before it.
 - The ids used across the extension, and a draft rule for choosing one, are collected in
   [telemetry-correlation-ids.md](../../telemetry-correlation-ids.md) for a later pass.
+
+## 0007 - Image usage telemetry follows VS Code's setting
+
+**Status:** Accepted · **Date:** 2026-10-15 · **PR:** #1018 · **Raised by:** the operator after
+testing Quick Start with `documentdb-local:pg17-1.0-rc2`
+**Evidence:** `QuickStartService.ts` (`writeEnvFile`); the image's `usage_telemetry.sh` and
+`/home/documentdb/PRIVACY.md`
+
+### Question
+
+From 1.0-rc2 the documentdb-local image reports its version, platform and CPU architecture to
+`documentdb.gateway.scarf.sh` at startup and hourly, unless `DOCUMENTDB_USAGE_TELEMETRY=false`,
+`NO_ANALYTICS` or `DO_NOT_TRACK` is set. Quick Start set none of them, so a user with VS Code
+telemetry off still got a container that reports. Should Quick Start opt out?
+
+### Decision
+
+Opt out exactly when VS Code telemetry is off: setup writes `DOCUMENTDB_USAGE_TELEMETRY=false` into
+the container's env-file when `vscode.env.isTelemetryEnabled` is false. The user already chose a
+telemetry level in VS Code, and a container the extension creates on their behalf should respect
+that choice rather than ask again.
+
+### Alternatives considered
+
+- **Always opt out.** Not chosen: it ignores users who allow telemetry, and the project would never
+  count Quick Start deployments.
+- **Ask in the wizard.** Not chosen: a second consent prompt for a choice the user already made.
+
+### Consequences
+
+- The setting is read when the container is created. A container keeps it across Stop, Start and
+  Restart, until it is recreated.
+- Images before rc2 ignore the variable.

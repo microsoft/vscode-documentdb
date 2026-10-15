@@ -187,5 +187,6 @@ gaps below remain.
   ([0013](./decisions.md#0013--753-is-abandoned-this-is-the-only-cluster-dashboard)), so the
   surface now has no owner and is the largest functional gap in the feature.
 - **No used-vs-provisioned storage figure**, because there is no Azure Monitor integration.
-- **`Uptime` is a placeholder on vCore**, where `serverStatus` is unavailable.
+- **`Uptime` is a placeholder on vCore and DocumentDB Local**, where `serverStatus` is unavailable.
+  The dashboard stops asking once a connection reports it unsupported (#1018).
 - **No user-manual page.**
