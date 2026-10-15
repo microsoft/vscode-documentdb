@@ -224,8 +224,19 @@ document.querySelectorAll('[data-action]').forEach(control => {
         vscode.postMessage(message);
     });
 });
+// VS Code's delayed reveal focus can pull focus back to its outer frame; reclaim it briefly.
+let reclaimFocusUntil = 0;
+const stopReclaimingFocus = () => { reclaimFocusUntil = 0; };
+window.addEventListener('blur', () => {
+    setTimeout(() => {
+        if (Date.now() <= reclaimFocusUntil) openButton.focus();
+    }, 0);
+});
+window.addEventListener('pointerdown', stopReclaimingFocus, true);
+window.addEventListener('keydown', stopReclaimingFocus, true);
 window.addEventListener('message', event => {
     if (event.data && event.data.type === 'focus') {
+        reclaimFocusUntil = Date.now() + 1000;
         openButton.focus();
         return;
     }

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { JSDOM } from 'jsdom';
 import { buildSurveyInvitationHtml, type SurveyInvitationStrings } from './surveyInvitationHtml';
@@ -117,6 +117,58 @@ describe('survey invitation HTML', (): void => {
         expect(page.activeElement).not.toBe(page.querySelector('#open-survey'));
         h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
         expect(page.activeElement).toBe(page.querySelector('#open-survey'));
+    });
+
+    describe('reclaiming focus after VS Code pulls it away', (): void => {
+        function stealFocus(h: ReturnType<typeof interactiveHtml>): void {
+            (h.dom.window.document.activeElement as HTMLElement | null)?.blur();
+            h.dom.window.dispatchEvent(new h.dom.window.FocusEvent('blur'));
+        }
+
+        afterEach((): void => {
+            vi.useRealTimers();
+        });
+
+        it('reclaims focus shortly after the request', (): void => {
+            vi.useFakeTimers();
+            const h = interactiveHtml();
+            const open = h.dom.window.document.querySelector('#open-survey');
+            h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
+            stealFocus(h);
+            expect(h.dom.window.document.activeElement).not.toBe(open);
+            vi.runAllTimers();
+            expect(h.dom.window.document.activeElement).toBe(open);
+        });
+
+        it('stops reclaiming after a second', (): void => {
+            vi.useFakeTimers();
+            const h = interactiveHtml();
+            const open = h.dom.window.document.querySelector('#open-survey');
+            h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
+            vi.advanceTimersByTime(1001);
+            stealFocus(h);
+            vi.runAllTimers();
+            expect(h.dom.window.document.activeElement).not.toBe(open);
+        });
+
+        it.each(['pointerdown', 'keydown'])('stops reclaiming after user input: %s', (type): void => {
+            vi.useFakeTimers();
+            const h = interactiveHtml();
+            const open = h.dom.window.document.querySelector('#open-survey');
+            h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
+            h.dom.window.dispatchEvent(new h.dom.window.Event(type));
+            stealFocus(h);
+            vi.runAllTimers();
+            expect(h.dom.window.document.activeElement).not.toBe(open);
+        });
+
+        it('does not take focus without a request', (): void => {
+            vi.useFakeTimers();
+            const h = interactiveHtml();
+            stealFocus(h);
+            vi.runAllTimers();
+            expect(h.dom.window.document.activeElement).not.toBe(h.dom.window.document.querySelector('#open-survey'));
+        });
     });
 
     it('uses a nonce CSP, packaged artwork, theme variables, and no remote resource URLs', (): void => {

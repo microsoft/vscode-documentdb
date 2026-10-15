@@ -63,7 +63,12 @@ live invitation. It gates the view and its otherwise empty container. No HTML or
 state is restored at startup. The presenter opens an automatic invitation with
 `preserveFocus: true`, uses `show(true)` once resolved. A user-requested (manual) form, or a
 focus request on an open invitation, reveals with `preserveFocus: false` and, once rendered,
-posts a `focus` message that moves keyboard focus to "Continue to survey". A cold reveal retries the view's open command once if the first
+posts a `focus` message that moves keyboard focus to "Continue to survey". VS Code's delayed
+reveal focus can then pull focus back to its outer webview frame, where keys do nothing, so for
+one second after the request the page re-focuses the button whenever its window loses focus.
+Any pointer press or key press inside the page ends that window. Waiting for the frame's own
+`focus` event instead was tried and rejected: on a cold reveal that event may never come, and
+focus stayed in another view. A cold reveal retries the view's open command once if the first
 call returns before the view resolves. A disposal during reveal, or from an obsolete view
 instance, does not dismiss the invitation; explicit disposal after reveal still does.
 Presentation relies on the VS Code reveal API without a timeout
