@@ -23,6 +23,7 @@ import {
 } from '@fluentui/react-components';
 import {
     CloudRegular,
+    EmojiRegular,
     ErrorCircleFilled,
     EyeOffRegular,
     EyeRegular,
@@ -298,6 +299,17 @@ export const AtlasCredentialsView = (): JSX.Element => {
             subtitle={l10n.t(
                 'Connect MongoDB Atlas to browse, open, and manage your clusters without leaving VS Code.',
             )}
+            action={
+                configuration.feedbackPermitted === true ? (
+                    <Button
+                        appearance="outline"
+                        icon={<EmojiRegular />}
+                        onClick={() => void trpcClient.common.openFeedback.mutate({})}
+                    >
+                        {l10n.t('Give Feedback')}
+                    </Button>
+                ) : undefined
+            }
         />
     );
 
@@ -654,6 +666,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
             <Wizard
                 activeStep={phase}
                 onStepChange={goToStep}
+                contentMaxWidth="760px"
                 headerBehavior="sticky-navigation"
                 stepsAriaLabel={l10n.t('Credential setup progress')}
                 overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}

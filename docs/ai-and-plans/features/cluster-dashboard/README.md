@@ -34,8 +34,9 @@ comes here to get oriented, not to keep vigil — so nothing above the fold move
 - `src/webviews/documentdb/clusterDashboard/**` — the webview: tRPC router, controller, React root,
   health strip and storage inventory
 
-The dashboard borrows shared presentation primitives (`metricsRow`, `summaryCard`, the feedback
-components) from `src/webviews/documentdb/collectionView/queryInsightsTab/components/`.
+The dashboard borrows presentation primitives (`metricsRow`, `summaryCard`) from
+`src/webviews/documentdb/collectionView/queryInsightsTab/components/`. Its toolbar feedback
+button opens the shared survey sidebar rather than collecting thumbs and reasons in a dialog.
 
 ## User docs
 

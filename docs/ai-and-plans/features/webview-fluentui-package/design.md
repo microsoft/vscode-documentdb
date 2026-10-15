@@ -64,6 +64,13 @@ increment 2's root-height question: retain the current behavior rather than requ
 to establish parent-relative heights. The body owns scrolling and the footer stays visible within
 the allocated height; document padding remains consumer-owned.
 
+Content width is unconstrained by default. `ContainerBody.contentMaxWidth` and the matching
+`Wizard` prop accept React CSS `maxWidth` values; omission or `"none"` leaves content uncapped.
+The limit applies to the navigation and main regions independently, including with side navigation.
+The header spans the body's full padded width so its trailing action is unaffected by the cap.
+Local Quick Start and Atlas Credentials explicitly choose `"760px"`; the package does not impose
+that extension-specific design choice on other consumers.
+
 Embedding is an opt-in consumer override, not a change to the default or a new sizing prop.
 Consumers must supply a bounded parent height. `Container` accepts a `style` or `className`
 override; `Wizard` does not forward those props, so its documented workaround uses a dedicated

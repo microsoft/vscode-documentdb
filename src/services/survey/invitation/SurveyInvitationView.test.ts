@@ -186,6 +186,26 @@ describe('SurveyInvitationView', (): void => {
         ext.outputChannel = originalOutputChannel;
     });
 
+    it('renders the user-opened explanation and sends the selected rating on explicit form opening', async (): Promise<void> => {
+        const h = harness();
+        h.open.mockResolvedValue(true);
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
+        expect(h.surface.view.webview.html).not.toContain('days, so');
+        h.surface.message({ type: 'rendered' });
+        h.surface.message({ type: 'openForm', selectedRating: 3 });
+        await flush();
+        expect(h.open).toHaveBeenCalledWith(SURVEY_FORM_URL);
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationShown')).toHaveLength(0);
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationResolved')).toHaveLength(0);
+        expect(h.events.find((event): boolean => event.name === 'survey.openForm')).toMatchObject({
+            properties: { trigger: 'command' },
+            measurements: { attempt: 1, selectedRating: 3 },
+        });
+        h.presenter.dispose();
+        h.service.dispose();
+    });
+
     it('contributes a stable, context-gated Secondary Sidebar webview and localized command', (): void => {
         const manifest = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
             engines: { vscode: string };
@@ -222,6 +242,66 @@ describe('SurveyInvitationView', (): void => {
         expect(titles['survey.giveFeedbackTitle']).toBe('Give Feedback');
         expect(titles['survey.containerTitle']).toBeTruthy();
         expect(titles['survey.viewTitle']).toBeTruthy();
+    });
+
+    it.each([false, true])(
+        'waits for a canceled automatic reveal before showing manual feedback, permission withdrawn=%s',
+        async (withdrawn): Promise<void> => {
+            const h = harness();
+            let finishReveal!: () => void;
+            const reveal = new Promise<void>((resolve): void => {
+                finishReveal = resolve;
+            });
+            vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+                if (command === `${SURVEY_VIEW_ID}.open`) {
+                    h.presenter.resolveWebviewView(h.surface.view);
+                    await reveal;
+                }
+                return undefined;
+            });
+            h.service.recordSurveyActivityWithInvitation('dataBrowsing');
+            await flush();
+            expect(h.surface.view.webview.html).toContain('days, so');
+            if (withdrawn) {
+                h.flags.permitted = false;
+                h.service.handlePermissionChanged();
+            }
+            const opening = h.service.showFeedbackForm('collectionView', 'documents');
+            finishReveal();
+
+            expect(await opening).toBe(true);
+            expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
+            expect(h.events.filter((event): boolean => event.name === 'survey.invitationResolved')).toHaveLength(0);
+            h.service.dispose();
+            h.presenter.dispose();
+        },
+    );
+
+    it('closes manual feedback even when its reveal has not finished', async (): Promise<void> => {
+        const h = harness();
+        let finishReveal!: () => void;
+        const reveal = new Promise<void>((resolve): void => {
+            finishReveal = resolve;
+        });
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            if (command === `${SURVEY_VIEW_ID}.open`) {
+                h.presenter.resolveWebviewView(h.surface.view);
+                await reveal;
+            }
+            return undefined;
+        });
+        const opening = h.service.showFeedbackForm();
+        await flush();
+        h.surface.message({ type: 'askLater' });
+        await flush();
+        finishReveal();
+
+        expect(await opening).toBe(false);
+        expect(h.surface.view.webview.html).toBe('');
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
+        h.service.dispose();
+        h.presenter.dispose();
     });
 
     it('registers a presenter with startup context false and no retained webview state', async (): Promise<void> => {
@@ -263,7 +343,61 @@ describe('SurveyInvitationView', (): void => {
         h.surface.visibility(true);
         h.surface.message({ type: 'rendered' });
         expect(calls.onVisible).toHaveBeenCalledTimes(1);
+        expect(h.surface.postMessage).not.toHaveBeenCalledWith({ type: 'focus' });
         handle?.dispose();
+        h.presenter.dispose();
+    });
+
+    it('moves focus to Continue to survey when the user opens feedback', async (): Promise<void> => {
+        const h = harness();
+        expect(await h.service.showFeedbackForm('clusterDashboard')).toBe(true);
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(`${SURVEY_VIEW_ID}.open`, { preserveFocus: false });
+        expect(h.surface.show).toHaveBeenCalledWith(false);
+        h.surface.message({ type: 'rendered' });
+        expect(h.surface.postMessage).toHaveBeenCalledWith({ type: 'focus' });
+        await flush();
+        h.surface.postMessage.mockClear();
+        h.surface.message({ type: 'rendered' });
+        expect(h.surface.postMessage).not.toHaveBeenCalled();
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('focuses an open feedback form instead of rebuilding it', async (): Promise<void> => {
+        const h = harness();
+        expect(await h.service.showFeedbackForm('clusterDashboard')).toBe(true);
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        const html = h.surface.view.webview.html;
+        h.surface.postMessage.mockClear();
+
+        expect(await h.service.showFeedbackForm('collectionView', 'indexes')).toBe(true);
+        expect(h.surface.view.webview.html).toBe(html);
+        expect(h.surface.postMessage).toHaveBeenCalledWith({ type: 'focus' });
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('focuses a visible automatic invitation instead of replacing it when the user asks for feedback', async (): Promise<void> => {
+        const h = harness();
+        h.service.recordSurveyActivityWithInvitation('dataBrowsing');
+        await h.service.whenIdle();
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        const html = h.surface.view.webview.html;
+        expect(html).toContain('days, so');
+        h.surface.show.mockClear();
+
+        expect(await h.service.showFeedbackForm('collectionView', 'documents')).toBe(true);
+        expect(h.surface.view.webview.html).toBe(html);
+        expect(h.surface.show).toHaveBeenCalledWith(false);
+        expect(h.surface.postMessage).toHaveBeenCalledWith({ type: 'focus' });
+        expect(
+            h.events
+                .filter((event): boolean => event.name === 'survey.feedbackActivated')
+                .map((event): string | undefined => event.properties.activationSource),
+        ).toEqual(['automaticInvitation']);
+        h.service.dispose();
         h.presenter.dispose();
     });
 
@@ -271,7 +405,7 @@ describe('SurveyInvitationView', (): void => {
         vi.useFakeTimers();
         const h = harness();
         vi.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         expect(h.service.getDebugStatus().invitationActive).toBe(true);
         expect(h.state().nextEligibleAt).toBeUndefined();
@@ -288,6 +422,82 @@ describe('SurveyInvitationView', (): void => {
         await flush();
         expect(h.events.filter((event): boolean => event.name === 'survey.invitationShown')).toHaveLength(1);
         expect(h.state().nextEligibleAt).toBe('2026-10-21T12:00:00.000Z');
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('re-reveals a cold sidebar if the first open returns before the view resolves', async (): Promise<void> => {
+        const h = harness();
+        let opens = 0;
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            if (command === `${SURVEY_VIEW_ID}.open` && ++opens === 2) {
+                h.presenter.resolveWebviewView(h.surface.view);
+            }
+            return undefined;
+        });
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(opens).toBe(2);
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('waits for a pending hide before activating feedback in a cold sidebar', async (): Promise<void> => {
+        const h = harness();
+        let finishHide!: () => void;
+        const pendingHide = new Promise<void>((resolve): void => {
+            finishHide = resolve;
+        });
+        const contexts: boolean[] = [];
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(
+            async (command, _key, active): Promise<undefined> => {
+                if (command === 'setContext') {
+                    if (active === false) await pendingHide;
+                    contexts.push(active as boolean);
+                } else if (command === `${SURVEY_VIEW_ID}.open`) {
+                    h.presenter.resolveWebviewView(h.surface.view);
+                }
+                return undefined;
+            },
+        );
+        h.presenter.resolveWebviewView(h.surface.view);
+        const opening = h.service.showFeedbackForm();
+        await flush();
+        expect(contexts).toEqual([]);
+        finishHide();
+        expect(await opening).toBe(true);
+        expect(contexts).toEqual([false, true]);
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('shows the debug invitation on a cold sidebar whose first reveal does not resolve the view', async (): Promise<void> => {
+        const h = harness();
+        let opens = 0;
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            if (command === `${SURVEY_VIEW_ID}.open` && ++opens === 2) {
+                h.presenter.resolveWebviewView(h.surface.view);
+            }
+            return undefined;
+        });
+        await h.service.showInvitationForDebug('connection');
+        expect(opens).toBe(2);
+        expect(h.surface.view.webview.html).toContain('survey-question');
+        h.surface.message({ type: 'rendered' });
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationShown')).toHaveLength(1);
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('replaces an open feedback form with the debug invitation', async (): Promise<void> => {
+        const h = harness();
+        expect(await h.service.showFeedbackForm('helpAndFeedbackView')).toBe(true);
+        expect(h.surface.view.webview.html).toContain('You opened this with Give Feedback');
+        await h.service.showInvitationForDebug('connection');
+        expect(h.service.getDebugStatus().invitationActive).toBe(true);
+        expect(h.surface.view.webview.html).toContain('survey-question');
+        expect(h.surface.view.webview.html).not.toContain('You opened this with Give Feedback');
         h.service.dispose();
         h.presenter.dispose();
     });
@@ -318,15 +528,18 @@ describe('SurveyInvitationView', (): void => {
         },
     );
 
-    it('cleans up a view closed while the reveal command is pending', async (): Promise<void> => {
+    it('keeps a cold invitation live when its first view is disposed during reveal', async (): Promise<void> => {
         const h = harness();
         let complete!: () => void;
+        let opens = 0;
         vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
             if (command === `${SURVEY_VIEW_ID}.open`) {
-                h.presenter.resolveWebviewView(h.surface.view);
-                await new Promise<void>((resolve): void => {
-                    complete = resolve;
-                });
+                if (++opens === 1) {
+                    h.presenter.resolveWebviewView(h.surface.view);
+                    await new Promise<void>((resolve): void => {
+                        complete = resolve;
+                    });
+                }
             }
             return undefined;
         });
@@ -335,11 +548,15 @@ describe('SurveyInvitationView', (): void => {
         await flush();
         h.surface.close();
         complete();
-        expect(await pending).toBeUndefined();
-        expect(calls.onChoice).toHaveBeenCalledTimes(1);
-        expect(calls.onChoice).toHaveBeenCalledWith('dismissed');
-        h.presenter.resolveWebviewView(h.surface.view);
-        expect(h.surface.view.webview.html).toBe('');
+        expect(await pending).toBeDefined();
+        expect(calls.onChoice).not.toHaveBeenCalled();
+        const replacement = createView();
+        h.presenter.resolveWebviewView(replacement.view);
+        replacement.message({ type: 'rendered' });
+        expect(replacement.view.webview.html).toContain('survey-question');
+        expect(calls.onVisible).toHaveBeenCalledOnce();
+        h.surface.close();
+        expect(calls.onChoice).not.toHaveBeenCalled();
         h.presenter.dispose();
     });
 
@@ -366,6 +583,7 @@ describe('SurveyInvitationView', (): void => {
         handle?.dispose();
         h.surface.close();
         h.surface.message({ type: 'neverAgain' });
+        await flush();
         expect(calls.onChoice).not.toHaveBeenCalled();
         expect(h.surface.view.webview.html).toBe('');
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('setContext', SURVEY_ACTIVE_CONTEXT, false);
@@ -374,7 +592,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('withdrawal before navigation opens nothing and emits no new events or outcome', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         const before = h.events.length;
         h.flags.permitted = false;
@@ -396,7 +614,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('reports each failed opening in a modal and keeps the invitation usable until success', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         for (let attempt = 1; attempt <= 4; attempt++) {
             h.surface.message({ type: 'openForm' });
@@ -427,7 +645,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('passes a selected rating through the host only on an explicit opening request', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         expect(h.events.some((event): boolean => 'selectedRating' in event.measurements)).toBe(false);
         h.surface.message({ type: 'openForm', selectedRating: 4 });
@@ -458,7 +676,7 @@ describe('SurveyInvitationView', (): void => {
         { selectedRating: [5] },
     ])('blocks malformed selected rating $selectedRating', async ({ selectedRating }): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         const before = h.events.length;
         h.surface.message({ type: 'openForm', selectedRating });
@@ -476,7 +694,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('Never again saves before the host closes, including a hide during the pending save', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         const original = h.storage.update.bind(h.storage);
         let complete!: () => void;
@@ -503,7 +721,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('explicit hide records dismissed, while collapse or switching containers does not', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         h.surface.visibility(false);
         await flush();
@@ -520,7 +738,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('Ask me later is distinct from closing', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         h.surface.message({ type: 'askLater' });
         await flush();
@@ -531,7 +749,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('closing during a failed browser open still records dismissed', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         let complete!: (result: boolean) => void;
         h.open.mockImplementationOnce(
@@ -552,7 +770,7 @@ describe('SurveyInvitationView', (): void => {
     it('privacy uses openExternal without survey callbacks, telemetry, or URL payloads', async (): Promise<void> => {
         const h = harness();
         vi.mocked(vscode.env.openExternal).mockResolvedValue(true);
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         const before = h.events.length;
         const stateBefore = { ...h.state() };
@@ -578,7 +796,7 @@ describe('SurveyInvitationView', (): void => {
             } else {
                 vi.mocked(vscode.env.openExternal).mockRejectedValueOnce(new Error('secret-browser-details'));
             }
-            h.service.recordSurveyActivity('connection');
+            h.service.recordSurveyActivityWithInvitation('connection');
             await h.service.whenIdle();
             h.surface.message({ type: 'rendered' });
             await flush();

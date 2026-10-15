@@ -8,7 +8,14 @@ import { type JSX } from 'react';
 import { type ContainerMainProps } from './Container.types.js';
 
 const useStyles = makeStyles({
-    main: { gridArea: 'main', display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 },
+    main: {
+        gridArea: 'main',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+        minWidth: 0,
+        maxWidth: 'var(--container-content-max-width, none)',
+    },
 });
 
 /**

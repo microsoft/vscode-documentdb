@@ -29,7 +29,9 @@ import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { getSurveyService } from '../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { isFeedbackPermitted, showFeedbackDisabledMessage } from '../../utils/feedbackPermission';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
@@ -89,6 +91,29 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
         measurements?: Record<string, number>
  */
 const commonRouter = router({
+    openFeedback: publicProcedure
+        .input(z.object({ collectionTab: z.enum(['documents', 'indexes', 'queryInsights']).optional() }))
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const viewName = (ctx as BaseRouterContext).webviewName;
+            if (
+                (viewName !== 'collectionView' &&
+                    viewName !== 'clusterDashboard' &&
+                    viewName !== 'atlasCredentials' &&
+                    viewName !== 'localQuickStart') ||
+                (viewName === 'collectionView') !== (input.collectionTab !== undefined)
+            ) {
+                throw new Error('Invalid feedback source');
+            }
+            if (!isFeedbackPermitted()) {
+                showFeedbackDisabledMessage();
+                return;
+            }
+            if (!(await getSurveyService()?.showFeedbackForm(viewName, input.collectionTab))) {
+                void vscode.window.showErrorMessage(
+                    vscode.l10n.t("We couldn't open the feedback view. Please try again."),
+                );
+            }
+        }),
     reportEvent: publicProcedure
         // This is the input schema of your procedure, two parameters, both strings
         .input(

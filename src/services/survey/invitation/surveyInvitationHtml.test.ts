@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { JSDOM } from 'jsdom';
 import { buildSurveyInvitationHtml, type SurveyInvitationStrings } from './surveyInvitationHtml';
@@ -23,6 +23,9 @@ const strings: SurveyInvitationStrings = {
     neverAgain: 'Never again',
     why: 'Why am I seeing this?',
     usage: "You've used DocumentDB for VS Code on {0} days with meaningful extension use. This count stays on your device.",
+    manuallyOpened: "You're seeing this because you opened the feedback form.",
+    close: 'Close',
+    manualTelemetry: 'We record survey opening only when feedback telemetry is permitted.',
     reminders: {
         opened: 'The waiting period after opening the survey has passed.',
         askLater: 'You asked us to remind you later. The reminder period has passed.',
@@ -83,6 +86,91 @@ function interactiveHtml(): {
 }
 
 describe('survey invitation HTML', (): void => {
+    it('explains user-opened feedback without claiming eligibility or offering invitation choices', (): void => {
+        const page = parseHtml(
+            buildSurveyInvitationHtml({
+                strings,
+                nonce: 'test-nonce',
+                cspSource: 'vscode-webview:',
+                artworkUri: 'vscode-webview://extension/icon.png',
+                artworkDarkUri: 'vscode-webview://extension/icon-dark.svg',
+                explanation: {
+                    activeDayCount: 0,
+                    requiredActiveDays: 3,
+                    isReminder: false,
+                    previousOutcome: undefined,
+                },
+                manuallyOpened: true,
+            }),
+        );
+        const details = page.querySelector('details');
+        expect(details?.textContent).toContain(strings.manuallyOpened);
+        expect(details?.textContent).toContain(strings.manualTelemetry);
+        expect(details?.textContent).not.toContain('days with meaningful extension use');
+        expect(page.querySelector('[data-action="neverAgain"]')).toBeNull();
+        expect(page.querySelector('[data-action="askLater"]')?.textContent).toBe('Close');
+    });
+
+    it('moves focus to Continue to survey when the host asks', (): void => {
+        const h = interactiveHtml();
+        const page = h.dom.window.document;
+        expect(page.activeElement).not.toBe(page.querySelector('#open-survey'));
+        h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
+        expect(page.activeElement).toBe(page.querySelector('#open-survey'));
+    });
+
+    describe('reclaiming focus after VS Code pulls it away', (): void => {
+        function stealFocus(h: ReturnType<typeof interactiveHtml>): void {
+            (h.dom.window.document.activeElement as HTMLElement | null)?.blur();
+            h.dom.window.dispatchEvent(new h.dom.window.FocusEvent('blur'));
+        }
+
+        afterEach((): void => {
+            vi.useRealTimers();
+        });
+
+        it('reclaims focus shortly after the request', (): void => {
+            vi.useFakeTimers();
+            const h = interactiveHtml();
+            const open = h.dom.window.document.querySelector('#open-survey');
+            h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
+            stealFocus(h);
+            expect(h.dom.window.document.activeElement).not.toBe(open);
+            vi.runAllTimers();
+            expect(h.dom.window.document.activeElement).toBe(open);
+        });
+
+        it('stops reclaiming after a second', (): void => {
+            vi.useFakeTimers();
+            const h = interactiveHtml();
+            const open = h.dom.window.document.querySelector('#open-survey');
+            h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
+            vi.advanceTimersByTime(1001);
+            stealFocus(h);
+            vi.runAllTimers();
+            expect(h.dom.window.document.activeElement).not.toBe(open);
+        });
+
+        it.each(['pointerdown', 'keydown'])('stops reclaiming after user input: %s', (type): void => {
+            vi.useFakeTimers();
+            const h = interactiveHtml();
+            const open = h.dom.window.document.querySelector('#open-survey');
+            h.dom.window.dispatchEvent(new h.dom.window.MessageEvent('message', { data: { type: 'focus' } }));
+            h.dom.window.dispatchEvent(new h.dom.window.Event(type));
+            stealFocus(h);
+            vi.runAllTimers();
+            expect(h.dom.window.document.activeElement).not.toBe(open);
+        });
+
+        it('does not take focus without a request', (): void => {
+            vi.useFakeTimers();
+            const h = interactiveHtml();
+            stealFocus(h);
+            vi.runAllTimers();
+            expect(h.dom.window.document.activeElement).not.toBe(h.dom.window.document.querySelector('#open-survey'));
+        });
+    });
+
     it('uses a nonce CSP, packaged artwork, theme variables, and no remote resource URLs', (): void => {
         const page = parseHtml(html());
         expect(page.querySelector('meta[http-equiv]')?.getAttribute('content')).toContain("default-src 'none'");
@@ -158,6 +246,7 @@ describe('survey invitation HTML', (): void => {
         const h = interactiveHtml();
         const page = h.dom.window.document;
         const label = page.querySelector('#rating-label');
+        const starsContainer = page.querySelector<HTMLElement>('.stars');
         const stars = page.querySelectorAll<HTMLElement>('.star');
         const radios = page.querySelectorAll<HTMLInputElement>('input[type="radio"]');
         expect(page.querySelector('.endpoints')).toBeNull();
@@ -165,12 +254,16 @@ describe('survey invitation HTML', (): void => {
         stars[4].dispatchEvent(new h.dom.window.MouseEvent('mouseenter'));
         expect(label?.textContent).toBe('Very satisfied');
         stars[4].dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
+        expect(label?.textContent).toBe('Very satisfied');
+        stars[3].dispatchEvent(new h.dom.window.MouseEvent('mouseenter'));
+        expect(label?.textContent).toBe('Satisfied');
+        starsContainer?.dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
         expect(label?.textContent).toBe('');
         radios[1].click();
         expect(label?.textContent).toBe('Dissatisfied');
         stars[3].dispatchEvent(new h.dom.window.MouseEvent('mouseenter'));
         expect(label?.textContent).toBe('Satisfied');
-        stars[3].dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
+        starsContainer?.dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
         expect(label?.textContent).toBe('Dissatisfied');
         radios[1].click();
         expect(label?.textContent).toBe('');
@@ -196,24 +289,25 @@ describe('survey invitation HTML', (): void => {
     it('previews hover without changing or submitting the committed rating', (): void => {
         const h = interactiveHtml();
         const page = h.dom.window.document;
+        const starsContainer = page.querySelector<HTMLElement>('.stars');
         const stars = page.querySelectorAll<HTMLElement>('.star');
         const radios = page.querySelectorAll<HTMLInputElement>('input[type="radio"]');
         const hover = (index: number): void => {
             stars[index].dispatchEvent(new h.dom.window.MouseEvent('mouseenter'));
         };
-        const leave = (index: number): void => {
-            stars[index].dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
+        const leave = (): void => {
+            starsContainer?.dispatchEvent(new h.dom.window.MouseEvent('mouseleave'));
         };
         hover(4);
         expect(page.querySelectorAll('.lit')).toHaveLength(5);
         expect(page.querySelector(':checked')).toBeNull();
-        leave(4);
+        leave();
         expect(page.querySelectorAll('.lit')).toHaveLength(0);
         radios[1].click();
         hover(3);
         expect(page.querySelectorAll('.lit')).toHaveLength(4);
         expect(radios[1].checked).toBe(true);
-        leave(3);
+        leave();
         expect(page.querySelectorAll('.lit')).toHaveLength(2);
         hover(4);
         expect(h.messages).toEqual([{ type: 'rendered' }]);

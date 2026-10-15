@@ -118,6 +118,7 @@ const useStyles = makeStyles({
 export const Wizard = ({
     activeStep,
     onStepChange,
+    contentMaxWidth,
     navPosition = 'top',
     headerBehavior = 'scroll',
     stepsLocked = false,
@@ -190,6 +191,7 @@ export const Wizard = ({
     return (
         <Container>
             <ContainerBody
+                contentMaxWidth={contentMaxWidth}
                 navPosition={navPosition}
                 className={mergeClasses(
                     stickyNavigation && styles.stickyFocusOffset,

@@ -15,6 +15,21 @@ code:
 The refresh is implemented in draft [PR #992](https://github.com/microsoft/vscode-documentdb/pull/992);
 automatic invitations are enabled in all modes, subject to normal eligibility and feedback
 permission (D0021). The manual Give Feedback command and development preview are available.
+The Cluster Dashboard and Collection View also open the same sidebar on explicit feedback
+clicks. This manual mode explains that the user opened it, rather than claiming survey
+eligibility, and does not offer reminder or opt-out actions. A rating selected there is
+reported on the existing `survey.openForm` event only when feedback telemetry is permitted.
+The command-palette Give Feedback opens the same sidebar (D0033). This supersedes
+the invitation-only rating restrictions in the historical proposal below, pending privacy review.
+Feedback buttons in webviews, the Help and Feedback tree item, and the Give Feedback command appear only when
+`telemetry.feedback.enabled` is `true`, its default (D0032, replacing the earlier
+`telemetry.telemetryLevel === 'all'` gate). Webviews read this permission when they open;
+reopen the view or restart VS Code after changing the setting. There is no live settings sync.
+Survey activation and form opening now carry a closed source (Dashboard, Collection View
+with tab, command, or timed invitation). Timed invitations distinguish first, returning,
+and unknown legacy history; returning invitations retain the previous invitation outcome.
+That outcome is tracked independently of cooldowns: a dismissal updates the next invitation's
+explanation even when a manual survey opening has already set a longer cooldown.
 Read [design.md](./design.md) for the implemented
 architecture and [decisions.md](./decisions.md) for binding operator choices.
 
@@ -385,7 +400,9 @@ path needs it. Do not wrap every command or add a survey event to every existing
 | Query Insights/AI             | First completed user-requested analysis                              | Completion boundary, not pipeline stages, streamed chunks, or automatic reanalysis                                                                           |
 | Cluster Dashboard, if shipped | First useful user-requested inventory load                           | No health polling; the feature index marks this as a POC, so it is not a release dependency                                                                  |
 
-Any one area can mark the day active; feature diversity is not a prerequisite. Once the
+Any one area can mark the day active; feature diversity is not a prerequisite. Only
+Collection View and Cluster Dashboard milestones evaluate eligibility and can show the
+invitation; every other milestone only counts the day (D0031). Once the
 session's initial observation/evaluation and day's count are recorded, repeated completion
 callbacks with unchanged state are cheap no-ops without additional survey events or writes.
 Relevant eligibility/presentation changes still produce the required bounded stage events.

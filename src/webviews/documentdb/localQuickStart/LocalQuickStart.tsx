@@ -32,6 +32,7 @@ import {
     ArrowResetRegular,
     CopyRegular,
     EditRegular,
+    EmojiRegular,
     ErrorCircleFilled,
     RocketRegular,
     WarningRegular,
@@ -1684,6 +1685,17 @@ export const LocalQuickStart = (): JSX.Element => {
             media={<RocketRegular aria-hidden />}
             title={l10n.t('DocumentDB Local')}
             subtitle={l10n.t('Set up DocumentDB locally for development and testing with Docker.')}
+            action={
+                configuration.feedbackPermitted === true ? (
+                    <Button
+                        appearance="outline"
+                        icon={<EmojiRegular />}
+                        onClick={() => void trpcClient.common.openFeedback.mutate({})}
+                    >
+                        {l10n.t('Give Feedback')}
+                    </Button>
+                ) : undefined
+            }
         />
     );
 
@@ -2499,6 +2511,7 @@ export const LocalQuickStart = (): JSX.Element => {
             <Wizard
                 activeStep={step}
                 onStepChange={goToStep}
+                contentMaxWidth="760px"
                 headerBehavior="sticky-navigation"
                 stepsLocked={stepsLocked}
                 stepsAriaLabel={l10n.t('Setup steps')}

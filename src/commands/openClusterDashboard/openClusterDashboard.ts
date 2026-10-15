@@ -135,8 +135,8 @@ export async function openClusterDashboard(
         clusterDisplayName: node.cluster.name,
         viewId: viewId,
         refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
+        feedbackPermitted: isFeedbackPermitted(),
         azure,
-        feedbackSignalsEnabled: isFeedbackPermitted(),
         showDashboardOnConnect,
         selectedDatabaseName,
         journeyCorrelationId:

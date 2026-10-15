@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- Added `contentMaxWidth` to `ContainerBody` and `Wizard`, accepting CSS maximum-width values or pixel numbers. Omit the prop or use `"none"` for no width cap.
+- Removed the default 760px content cap. Set `contentMaxWidth="760px"` to retain the previous navigation and main content width. With side navigation, the cap applies to each region independently.
+- Headers now span the available padded width, keeping header actions at the view's trailing gutter regardless of the content width cap.
+
 ## 1.1.1
 
 - Published sourcemaps embed their sources (`inlineSources`), so tools that load them, such as Vitest, no longer warn about missing source files ([#926](https://github.com/microsoft/vscode-documentdb/issues/926)).
