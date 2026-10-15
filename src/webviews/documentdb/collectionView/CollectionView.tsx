@@ -660,20 +660,22 @@ export const CollectionView = (): JSX.Element => {
                             </span>
                         </Tab>
                     </TabList>
-                    <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
-                        <Button
-                            appearance="secondary"
-                            icon={<EmojiRegular />}
-                            aria-label={l10n.t('Give Feedback')}
-                            onClick={() =>
-                                void trpcClient.common.openFeedback.mutate({
-                                    collectionTab: feedbackTab[selectedTab],
-                                })
-                            }
-                        >
-                            {l10n.t('Give Feedback')}
-                        </Button>
-                    </Tooltip>
+                    {configuration.feedbackPermitted === true && (
+                        <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
+                            <Button
+                                appearance="secondary"
+                                icon={<EmojiRegular />}
+                                aria-label={l10n.t('Give Feedback')}
+                                onClick={() =>
+                                    void trpcClient.common.openFeedback.mutate({
+                                        collectionTab: feedbackTab[selectedTab],
+                                    })
+                                }
+                            >
+                                {l10n.t('Give Feedback')}
+                            </Button>
+                        </Tooltip>
+                    )}
                 </div>
 
                 <div

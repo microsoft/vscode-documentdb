@@ -72,6 +72,7 @@ export type ClusterDashboardWebviewConfigurationType = {
     viewId: string;
     /** Polling cadence of the live health tiles, in milliseconds. */
     refreshIntervalMs: number;
+    feedbackPermitted?: boolean;
     /** Azure resource facts, when the cluster came from an Azure-backed tree node. */
     azure?: ClusterDashboardAzureInfo;
     /** Database selected from the tree when opening the dashboard, if any. */

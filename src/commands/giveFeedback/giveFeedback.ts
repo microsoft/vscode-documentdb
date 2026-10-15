@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { getSurveyService, type SurveyService } from '../../services/survey/SurveyService';
 import { SURVEY_FORM_URL } from '../../services/survey/surveyConfig';
+import { isFeedbackPermitted } from '../../utils/feedbackPermission';
 
 export const GIVE_FEEDBACK_COMMAND = 'vscode-documentdb.command.giveFeedback';
 export const GIVE_FEEDBACK_VIEW_COMMAND = 'vscode-documentdb.command.internal.helpAndFeedback.openSurvey';
@@ -28,6 +29,9 @@ export async function giveFeedback(service?: SurveyService): Promise<void> {
 }
 
 export async function showFeedbackView(service?: SurveyService): Promise<void> {
+    if (!isFeedbackPermitted()) {
+        return;
+    }
     let shown = false;
     try {
         shown = (await (service ?? getSurveyService())?.showFeedbackForm('helpAndFeedbackView')) ?? false;

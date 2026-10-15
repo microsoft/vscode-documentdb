@@ -11,6 +11,7 @@ import { SURVEY_FORM_URL, SURVEY_STATE_KEY } from '../../services/survey/surveyC
 import { EMPTY_SURVEY_STATE } from '../../services/survey/surveyState';
 import { SurveyTelemetry, type SurveyTelemetryEvent } from '../../services/survey/surveyTelemetry';
 import { type SurveyPersistedState } from '../../services/survey/surveyTypes';
+import { isFeedbackPermitted } from '../../utils/feedbackPermission';
 import {
     GIVE_FEEDBACK_COMMAND,
     GIVE_FEEDBACK_VIEW_COMMAND,
@@ -25,10 +26,12 @@ vi.mock('vscode', (): object => ({
     l10n: { t: (value: string): string => value },
 }));
 vi.mock('@microsoft/vscode-azext-utils', (): object => ({ callWithTelemetryAndErrorHandling: vi.fn() }));
+vi.mock('../../utils/feedbackPermission', (): object => ({ isFeedbackPermitted: vi.fn() }));
 
 describe('Give Feedback', (): void => {
     beforeEach((): void => {
         vi.clearAllMocks();
+        vi.mocked(isFeedbackPermitted).mockReturnValue(true);
     });
 
     it.each([true, false])(
@@ -121,6 +124,14 @@ describe('Give Feedback', (): void => {
         await showFeedbackView({ showFeedbackForm: open } as unknown as SurveyService);
         expect(open).toHaveBeenCalledExactlyOnceWith('helpAndFeedbackView');
         expect(vscode.window.showErrorMessage).toHaveBeenCalledTimes(shown ? 0 : 1);
+    });
+
+    it('does not open feedback from a stale tree item when permission is off', async (): Promise<void> => {
+        vi.mocked(isFeedbackPermitted).mockReturnValue(false);
+        const open = vi.fn();
+        await showFeedbackView({ showFeedbackForm: open } as unknown as SurveyService);
+        expect(open).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
     });
 
     it('registers the contributed command without automatic click or URL telemetry', (): void => {

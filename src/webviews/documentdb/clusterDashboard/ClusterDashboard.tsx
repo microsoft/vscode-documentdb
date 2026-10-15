@@ -653,12 +653,14 @@ export const ClusterDashboard = (): JSX.Element => {
                         openDataMigration={() => void openDataMigration()}
                         isExporting={isExporting}
                     />
-                    <OverflowItem id="feedback" pinned>
-                        <div className="dashboardToolbarFeedback">
-                            <ToolbarDivider />
-                            <DashboardFeedback />
-                        </div>
-                    </OverflowItem>
+                    {configuration.feedbackPermitted === true && (
+                        <OverflowItem id="feedback" pinned>
+                            <div className="dashboardToolbarFeedback">
+                                <ToolbarDivider />
+                                <DashboardFeedback />
+                            </div>
+                        </OverflowItem>
+                    )}
                 </Toolbar>
             </Overflow>
 

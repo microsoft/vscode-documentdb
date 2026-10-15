@@ -301,16 +301,18 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 'Connect MongoDB Atlas to browse, open, and manage your clusters without leaving VS Code.',
             )}
             action={
-                <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
-                    <Button
-                        appearance="outline"
-                        icon={<EmojiRegular />}
-                        aria-label={l10n.t('Give Feedback')}
-                        onClick={() => void trpcClient.common.openFeedback.mutate({})}
-                    >
-                        {l10n.t('Give Feedback')}
-                    </Button>
-                </Tooltip>
+                configuration.feedbackPermitted === true ? (
+                    <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
+                        <Button
+                            appearance="outline"
+                            icon={<EmojiRegular />}
+                            aria-label={l10n.t('Give Feedback')}
+                            onClick={() => void trpcClient.common.openFeedback.mutate({})}
+                        >
+                            {l10n.t('Give Feedback')}
+                        </Button>
+                    </Tooltip>
+                ) : undefined
             }
         />
     );

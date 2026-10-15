@@ -59,8 +59,7 @@ export const ContainerBody = ({
 }: ContainerBodyProps): JSX.Element => {
     const styles = useStyles();
     const contentStyle: CSSProperties & { '--container-content-max-width'?: CSSProperties['maxWidth'] } = {
-        '--container-content-max-width':
-            typeof contentMaxWidth === 'number' ? `${contentMaxWidth}px` : contentMaxWidth,
+        '--container-content-max-width': typeof contentMaxWidth === 'number' ? `${contentMaxWidth}px` : contentMaxWidth,
     };
     const { setOverflowing } = useContainerContext();
     const { scrollRef, contentRef, handleScroll } = useOverflowState(setOverflowing);

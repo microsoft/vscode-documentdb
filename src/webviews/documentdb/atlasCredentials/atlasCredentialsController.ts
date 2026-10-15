@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
+import { isFeedbackPermitted } from '../../../utils/feedbackPermission';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './atlasCredentialsRouter';
 
@@ -24,6 +25,7 @@ export type AtlasCredentialsWebviewConfig = {
     readonly authMethod?: AtlasAuthMethod;
     /** `edit` renders "update" wording; the host replaces the secret of an existing credential. */
     readonly mode: 'add' | 'edit';
+    readonly feedbackPermitted?: boolean;
     /** Friendly name of the credential being updated, shown in the edit header. */
     readonly credentialLabel?: string;
     /** Existing Public Key or Client ID. Shown read-only while its paired secret is rotated. */
@@ -106,6 +108,7 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             config: {
                 authMethod: options.authMethod,
                 mode,
+                feedbackPermitted: isFeedbackPermitted(),
                 credentialLabel: options.credentialLabel,
                 credentialIdentity: options.credentialIdentity,
             },

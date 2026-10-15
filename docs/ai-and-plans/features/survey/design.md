@@ -38,11 +38,14 @@ the extension's minimum is now 1.109.0 (D0028, superseding D0018).
 Iteration 4 enables the shared code switch in all modes (D0021).
 The Cluster Dashboard toolbar, Collection View tab header, MongoDB Atlas credentials wizard,
 and DocumentDB Local wizard headers each have a feedback button. They call `common.openFeedback`,
-which opens this sidebar on explicit request,
-even after opt-out or with feedback telemetry disabled. Query Insights no longer has its
-thumbs card or reason dialog, and the dashboard no longer sends thumb/reason events.
+which opens this sidebar on explicit request even after opt-out. The button is included in a
+webview only when the open-time `telemetry.telemetryLevel` value is `all`; a missing or failed
+settings read hides it. Changing the setting requires reopening the view or restarting VS Code.
+The host checks permission again when clicked, without subscribing to settings changes.
+Query Insights no longer has its thumbs card or reason dialog, and the dashboard no longer
+sends thumb/reason events.
 The Help and Feedback tree has a separate Give Feedback item that opens this sidebar with
-`helpAndFeedbackView` as its source.
+`helpAndFeedbackView` as its source only when the same permission check passes.
 Manual opening explains "You're seeing this because you opened the feedback form" under
 "Why am I seeing this?" and shows Close instead of reminder/opt-out actions. It records no
 invitation shown/resolved outcome or visibility cooldown. The selected star is optional and

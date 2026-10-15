@@ -16,6 +16,7 @@ import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { type TreeCluster } from '../../tree/models/BaseClusterModel';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
+import { isFeedbackPermitted } from '../../utils/feedbackPermission';
 import {
     getOpenClusterDashboardSessionId,
     openClusterDashboardWebview,
@@ -134,6 +135,7 @@ export async function openClusterDashboard(
         clusterDisplayName: node.cluster.name,
         viewId: viewId,
         refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
+        feedbackPermitted: isFeedbackPermitted(),
         azure,
         showDashboardOnConnect,
         selectedDatabaseName,

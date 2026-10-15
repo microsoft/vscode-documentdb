@@ -1686,16 +1686,18 @@ export const LocalQuickStart = (): JSX.Element => {
             title={l10n.t('DocumentDB Local')}
             subtitle={l10n.t('Set up DocumentDB locally for development and testing with Docker.')}
             action={
-                <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
-                    <Button
-                        appearance="outline"
-                        icon={<EmojiRegular />}
-                        aria-label={l10n.t('Give Feedback')}
-                        onClick={() => void trpcClient.common.openFeedback.mutate({})}
-                    >
-                        {l10n.t('Give Feedback')}
-                    </Button>
-                </Tooltip>
+                configuration.feedbackPermitted === true ? (
+                    <Tooltip content={l10n.t('Give Feedback')} relationship="label" withArrow>
+                        <Button
+                            appearance="outline"
+                            icon={<EmojiRegular />}
+                            aria-label={l10n.t('Give Feedback')}
+                            onClick={() => void trpcClient.common.openFeedback.mutate({})}
+                        >
+                            {l10n.t('Give Feedback')}
+                        </Button>
+                    </Tooltip>
+                ) : undefined
             }
         />
     );

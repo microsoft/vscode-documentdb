@@ -7,12 +7,14 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { type InstanceState, type QuickStartWizardPhase } from '../../../services/localQuickStart/quickStartTypes';
+import { isFeedbackPermitted } from '../../../utils/feedbackPermission';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './localQuickStartRouter';
 import { createWizardSession, reportWizardClosed } from './wizardTelemetry';
 
 export type LocalQuickStartConfigurationType = {
     id: string;
+    feedbackPermitted?: boolean;
     /** Instance status at open time, so the first render already knows which step and guard to show. */
     initialInstanceState?: InstanceState;
     initialInstanceMissing?: boolean;
@@ -53,7 +55,7 @@ export function openLocalQuickStartWebview(
         title: vscode.l10n.t('Your own DocumentDB'),
         webviewName: 'localQuickStart',
         panelViewType: 'vscode-documentdb-local-quick-start',
-        config: initialData,
+        config: { ...initialData, feedbackPermitted: isFeedbackPermitted() },
         context: trpcContext,
         viewColumn: vscode.ViewColumn.Active,
         icon: {

@@ -31,6 +31,7 @@ import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { getSurveyService } from '../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { isFeedbackPermitted } from '../../utils/feedbackPermission';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
@@ -102,6 +103,9 @@ const commonRouter = router({
                 (viewName === 'collectionView') !== (input.collectionTab !== undefined)
             ) {
                 throw new Error('Invalid feedback source');
+            }
+            if (!isFeedbackPermitted()) {
+                return;
             }
             if (!(await getSurveyService()?.showFeedbackForm(viewName, input.collectionTab))) {
                 void vscode.window.showErrorMessage(

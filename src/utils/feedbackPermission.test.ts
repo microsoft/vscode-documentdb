@@ -7,7 +7,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as vscode from 'vscode';
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
 import { affectsFeedbackPermission, isFeedbackPermitted, TELEMETRY_LEVEL_SETTING } from './feedbackPermission';
+
+vi.mock('@microsoft/vscode-azext-utils', (): object => ({
+    callWithTelemetryAndErrorHandling: vi.fn(async (_name, callback: (context: IActionContext) => Promise<unknown>) =>
+        callback({ telemetry: { properties: {} } } as IActionContext),
+    ),
+    createGenericElement: vi.fn((item: { id: string; contextValue: string; commandId: string }): object => ({
+        ...item,
+        getTreeItem: async (): Promise<object> => ({ contextValue: item.contextValue }),
+    })),
+    createContextValue: vi.fn((values: string[]): string => values.join(';')),
+}));
+vi.mock('../extensionVariables', (): object => ({
+    ext: { context: { extension: { packageJSON: { version: '1.0.0' } } } },
+}));
 
 describe('isFeedbackPermitted', (): void => {
     const get = vi.fn<(...args: [string]) => unknown>();
@@ -83,6 +99,25 @@ describe('isFeedbackPermitted', (): void => {
         expect(vscode.workspace.getConfiguration).toHaveBeenCalledTimes(2);
         expect(get).toHaveBeenCalledTimes(2);
     });
+
+    it.each([true, false])(
+        'includes the Help tree survey item only when permission is %s',
+        async (permitted): Promise<void> => {
+            get.mockReturnValue(permitted ? 'all' : 'off');
+            const provider = new HelpAndFeedbackBranchDataProvider();
+            const items = await provider.getChildren();
+            const feedbackItem = items?.find((item): boolean => item.id === 'helpAndFeedbackView/give-feedback');
+
+            expect(feedbackItem !== undefined).toBe(permitted);
+            if (permitted) {
+                expect(feedbackItem).toMatchObject({
+                    commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openSurvey',
+                });
+            }
+            expect(items?.some((item): boolean => item.id === 'helpAndFeedbackView/report-bug')).toBe(true);
+            provider.dispose();
+        },
+    );
 });
 
 describe('affectsFeedbackPermission', (): void => {
