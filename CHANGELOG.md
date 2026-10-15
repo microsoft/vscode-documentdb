@@ -8,6 +8,8 @@
 
 ### Improvements
 
+- **Unified Feedback Entry Points**: Replaces the Query Insights and Cluster Dashboard thumb dialogs with survey buttons, and adds feedback access from Collection View, setup wizards, and Help and Feedback. Tracks the entry point and distinguishes first invitations from reminders. [#1016](https://github.com/microsoft/vscode-documentdb/pull/1016)
+- **Wizard Header Layout**: Updates `@microsoft/vscode-ext-webview-fluentui` to 1.2.0 with configurable content width and full-width headers. DocumentDB Local and MongoDB Atlas setup keep their previous content width while accommodating feedback actions. [#1016](https://github.com/microsoft/vscode-documentdb/pull/1016)
 - **Minimum VS Code Version**: Raises the minimum supported VS Code version to 1.109.0. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
 - **Webview Code Splitting**: Separates webview code by panel and loads it on demand. Local Quick Start and Atlas Credentials no longer load the Monaco editor or SlickGrid dependencies. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
 - **Build and Test Tooling**: Replaces webpack with Vite for the extension host and webviews, moves unit tests from Jest to Vitest, and removes the legacy Mocha harness. Uses TypeScript 6 and ES modules for the extension and six workspace packages. [#880](https://github.com/microsoft/vscode-documentdb/pull/880)
