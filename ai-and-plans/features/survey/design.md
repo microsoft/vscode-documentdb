@@ -17,29 +17,61 @@ behavior and `decisions.md` wins for intent.
 
 ## Modules
 
-| Module                                      | Responsibility                                                                                                                                  |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/utils/feedbackPermission.ts`           | `isFeedbackPermitted()`: `telemetry.telemetryLevel === 'all'`, fail closed. Shared with the Query Insights and Cluster Dashboard feedback cards |
-| `src/services/survey/surveyTypes.ts`        | Shared types: feature areas, preconditions, gates, eligibility result, persisted state                                                          |
-| `src/services/survey/surveyConfig.ts`       | Decision values, kill switch, form URL, state keys                                                                                              |
-| `src/services/survey/surveyPolicy.ts`       | Pure functions: kill switch override, preconditions, ordered gates, local day, cooldowns, sampling value                                        |
-| `src/services/survey/surveyState.ts`        | The versioned state object in `globalState`, write on transition only, in-memory fallback on failed writes                                      |
-| `src/services/survey/surveyTelemetry.ts`    | The only emitter of survey events; permission check and per-session bounds                                                                      |
-| `src/services/survey/surveyDiagnostics.ts`  | Guarded local-only trace formatting through the existing DocumentDB output channel; no telemetry forwarding                                     |
-| `src/services/survey/surveyPresentation.ts` | Contract for the invitation surface (Stage 2)                                                                                                   |
-| `src/services/survey/SurveyService.ts`      | Orchestration: `recordSurveyActivity(featureArea)`, the shared in-flight promise, reservation, presentation, outcomes, permission withdrawal    |
-| `src/services/survey/invitation/`           | Pure HTML builder, localized copy, Secondary Sidebar presenter, and generic host message handling                                               |
-| `src/commands/giveFeedback/`                | Explicit user opening through the service, with user-driven retries, bounded survey telemetry, and no automatic command telemetry               |
+| Module                                      | Responsibility                                                                                                                                                                      |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/utils/feedbackPermission.ts`           | `isFeedbackPermitted()`: `telemetry.feedback.enabled` (default `true`), fail closed (D0032). Gates automatic invitations and survey telemetry, not explicit user opening            |
+| `src/services/survey/surveyTypes.ts`        | Shared types: feature areas, preconditions, gates, eligibility result, persisted state                                                                                              |
+| `src/services/survey/surveyConfig.ts`       | Decision values, kill switch, form URL, state keys                                                                                                                                  |
+| `src/services/survey/surveyPolicy.ts`       | Pure functions: kill switch override, preconditions, ordered gates, local day, cooldowns, sampling value                                                                            |
+| `src/services/survey/surveyState.ts`        | The versioned state object in `globalState`, write on transition only, in-memory fallback on failed writes                                                                          |
+| `src/services/survey/surveyTelemetry.ts`    | The only emitter of survey events; permission check and per-session bounds                                                                                                          |
+| `src/services/survey/surveyDiagnostics.ts`  | Guarded local-only trace formatting through the existing DocumentDB output channel; no telemetry forwarding                                                                         |
+| `src/services/survey/surveyPresentation.ts` | Contract for the invitation surface (Stage 2)                                                                                                                                       |
+| `src/services/survey/SurveyService.ts`      | Orchestration: `recordSurveyActivity` / `recordSurveyActivityWithInvitation(featureArea)`, the shared in-flight promise, reservation, presentation, outcomes, permission withdrawal |
+| `src/services/survey/invitation/`           | Pure HTML builder, localized copy, Secondary Sidebar presenter, and generic host message handling                                                                                   |
+| `src/commands/giveFeedback/`                | Explicit user opening through the service, with user-driven retries, bounded survey telemetry, and no automatic command telemetry                                                   |
 
 ## Invitation Surface
 
 Stage 2 implements the stable Secondary Sidebar contribution, available from VS Code 1.106.0;
 the extension's minimum is now 1.109.0 (D0028, superseding D0018).
 Iteration 4 enables the shared code switch in all modes (D0021).
+The Cluster Dashboard toolbar, Collection View tab header, MongoDB Atlas credentials wizard,
+and DocumentDB Local wizard headers each have a feedback button. They call `common.openFeedback`,
+which opens this sidebar on explicit request even after opt-out. The button is included in a
+webview only when the open-time `telemetry.feedback.enabled` value is `true` (D0032); a failed
+settings read hides it. Changing the setting requires reopening the view or restarting VS Code.
+The host checks permission again when clicked, without subscribing to settings changes. A
+stale button or Help and Feedback item then shows an information message naming
+`telemetry.feedback.enabled` instead of doing nothing; the hidden command stays silent (D0032).
+Query Insights no longer has its thumbs card or reason dialog, and the dashboard no longer
+sends thumb/reason events.
+The Help and Feedback tree has a separate Give Feedback item that opens this sidebar with
+`helpAndFeedbackView` as its source only when the same permission check passes.
+Manual opening explains "You opened this with Give Feedback. Thank you for taking a moment to
+tell us how it's going." under
+"Why am I seeing this?" and shows Close instead of reminder/opt-out actions. It records no
+invitation shown/resolved outcome or visibility cooldown. The selected star is optional and
+only appears on `survey.openForm` when telemetry is permitted. The command-palette Give Feedback
+command opens the same sidebar with `giveFeedbackCommand` as its source (D0033). It falls back
+to opening the external form directly only when the survey service failed to initialize. Survey-owned
+`survey.feedbackActivated` reports a visible sidebar, and
+`survey.openForm` carries the same bounded activation source. A Collection View request sends
+only its selected tab; the host derives and checks the view name.
 The `documentdb-survey-invitation-active` context is false on activation and true only for a
 live invitation. It gates the view and its otherwise empty container. No HTML or webview
-state is restored at startup. The presenter opens the view with `preserveFocus: true`, uses
-`show(true)` once resolved. Presentation relies on the VS Code reveal API without a timeout
+state is restored at startup. The presenter opens an automatic invitation with
+`preserveFocus: true`, uses `show(true)` once resolved. A user-requested (manual) form, or a
+focus request on an open invitation, reveals with `preserveFocus: false` and, once rendered,
+posts a `focus` message that moves keyboard focus to "Continue to survey". VS Code's delayed
+reveal focus can then pull focus back to its outer webview frame, where keys do nothing, so for
+one second after the request the page re-focuses the button whenever its window loses focus.
+Any pointer press or key press inside the page ends that window. Waiting for the frame's own
+`focus` event instead was tried and rejected: on a cold reveal that event may never come, and
+focus stayed in another view. A cold reveal retries the view's open command once if the first
+call returns before the view resolves. A disposal during reveal, or from an obsolete view
+instance, does not dismiss the invitation; explicit disposal after reveal still does.
+Presentation relies on the VS Code reveal API without a timeout
 or a separate wait for view resolution or visibility. An unavailable presenter or API failure
 still defers the invitation. The rendered message plus current view visibility jointly trigger
 `onVisible` once, even if resolution or visibility occurs after the reveal API completes.
@@ -105,7 +137,7 @@ opt-out action is hidden behind the disclosure.
 **Resolved UX direction (D0023):** the operator rejected button-hover decoration and chose actual
 local selection, accepting that the external survey cannot be prefilled. The selected rating
 is captured by permitted opening telemetry, not persisted in local survey state. No selected
-value is required or synthesized, and command-based Give Feedback has no rating. The browser
+value is required or synthesized. The browser
 explanation stays small above the stars; selected-rating collection is disclosed in the
 native explanation section.
 
@@ -116,12 +148,12 @@ During opening the button stays focusable with `aria-disabled` and a busy guard,
 becoming native-disabled and losing focus. Rating inputs/other choice buttons are temporarily
 disabled. Reenabling controls does not move focus if the user moved to Privacy Statement.
 
-Give Feedback opens even after permanent opt-out and with the kill switch off. It never clears
-opt-out. User-approved browser attempts are not capped, in either the invitation or command.
-The command makes one attempt and reports a failure in a modal error without a Retry action
-(D0026); the user can run it again. The invitation tries again only on another click. Only the first three permitted/enabled attempts emit the approved
+Manually opened feedback opens even after permanent opt-out and with the kill switch off. It never clears
+opt-out. User-approved browser attempts are not capped, in either the invitation or the manual sidebar.
+A failed attempt is reported in a modal error without a Retry action
+(D0026); the user can choose "Continue to survey" again. Only the first three permitted/enabled attempts emit the approved
 `survey.openForm` event. Later attempts still open the browser and, if successful, apply the normal
-outcome/cooldown rules. This command uses native VS Code registration rather than an automatic
+outcome/cooldown rules. The Give Feedback command uses native VS Code registration rather than an automatic
 telemetry wrapper.
 
 ## Evaluation Flow
@@ -138,12 +170,19 @@ override is ignored outside Development. Telemetry independently requires
 
 Development activation registers `_DocumentDB: Survey: Simulate Milestone` and
 `_DocumentDB: Survey: Reset State`, with no category and palette visibility gated by
-`documentdb-development-mode`. Simulation calls the real activity entry point with
+`documentdb-development-mode`. Simulation calls the real inviting entry point with
 `connection`. Reset closes the invitation, invalidates pending work, waits for queued writes,
 deletes `SURVEY_STATE_KEY`, and clears local reservation and session suppression. It can
 clear a development opt-out without reloading; there is still no production reset command.
 
-Each call to `recordSurveyActivity(featureArea)` marks a successful, user-requested milestone.
+Each milestone marks a successful, user-requested action through one of two entry points
+(D0031):
+
+- `recordSurveyActivityWithInvitation(featureArea)`: Collection View (initial query, Indexes
+  tab, Query Insights) and the Cluster Dashboard inventory load. Runs every step below.
+- `recordSurveyActivity(featureArea)`: every other milestone (Query Playground, interactive
+  shell, paste tasks, Document View saves, Local Quick Start). Runs steps 1 to 3 only: it
+  counts the day but never evaluates gates, sends `survey.eligibility`, or presents.
 
 1. **Preconditions**, in order: shared code switch (D0021), feedback permission, permanent opt-out.
    If one fails, nothing happens: no state write, no event. Installations stopped here are
@@ -158,15 +197,29 @@ Each call to `recordSurveyActivity(featureArea)` marks a successful, user-reques
    any await, rechecks permission, and presents right away (D0012). If no presenter is
    available, `survey.presentationDeferred` is sent and the next milestone tries again.
 
-Evaluation runs only on the first call in a session, on a new active day, or after a state
-change (an outcome, a deferral, or a permission change). All work runs through one shared
-in-flight promise, so concurrent calls evaluate once; calls that arrive while it is pending are
-covered by it.
+Evaluation runs only on the first inviting call in a session, on a new active day, or after a
+state change (an outcome, a deferral, or a permission change). Because counting-only calls may
+already have counted the day, the `trigger` of a later evaluation can be `sessionStart` or
+`stateChange` rather than `newActiveDay`. All work runs through one shared in-flight promise,
+so concurrent calls evaluate once; calls that arrive while it is pending are covered by it,
+except that an inviting call arriving during counting-only work is evaluated right after it.
 
-The "DocumentDB: Give Feedback" command (D0015) opens the form whenever the
-user asks, even after "Never again". It sends `survey.openForm` with trigger `command` only when
-the survey is enabled and permitted, applies the 180-day cooldown only when also not opted out,
-and never clears the opt-out.
+The "DocumentDB: Give Feedback" command (D0015, D0033) opens the feedback sidebar whenever the
+user asks, even after "Never again", but only while `telemetry.feedback.enabled` is on (D0032):
+the palette hides it otherwise, and a keybinding invocation does nothing. Like every feedback
+button, it uses the manual form-opening path: `survey.openForm` has trigger `command` and is sent only when
+the survey is enabled and permitted; a successful opening applies the 180-day cooldown only when also not opted out,
+and never clears the opt-out. The rating selected in the sidebar is optional.
+Explicit opening is not an automatic
+invitation and bypasses automatic eligibility and invitation suppression.
+When an automatic invitation is already visible, a feedback button focuses it instead of
+replacing it, so it keeps its `automaticInvitation` attribution and its own outcome; no
+`survey.feedbackActivated` is added. A feedback button pressed while a manually opened form is
+open likewise focuses that form and keeps its original source. Otherwise, replacing an automatic invitation waits for any
+pending reveal to settle and its canceled handle to be disposed before presenting manual
+feedback. Each manual presentation owns its
+close state and handle: a late browser result cannot close a replacement, and Close during
+reveal disposes the handle as soon as it arrives.
 
 ### Gates
 
@@ -179,9 +232,9 @@ and never clears the opt-out.
 
 The sampling value is derived locally from the machine ID with SHA-256 and never sent.
 
-The Query Insights exclusion for RU accounts (`QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU`)
-controls whether that feature's feedback card renders. It is **not** a survey gate: RU users
-reach the survey through the same preconditions and gates as everyone else.
+The Query Insights RU exclusion (`QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU`) is not a
+survey gate. The Collection View's manual feedback button is available on every tab,
+including Query Insights on RU accounts.
 
 ### Outcomes and Cooldowns
 
@@ -204,14 +257,17 @@ saving failed (D0027). There is no Retry; after a restart the user may be invite
 
 One object under `globalState` key `documentdb.survey.state`:
 
-| Field            | Type                                         | Meaning                                                               |
-| ---------------- | -------------------------------------------- | --------------------------------------------------------------------- |
-| `version`        | `1`                                          | Schema version                                                        |
-| `activeDayCount` | number                                       | Distinct local days with a milestone                                  |
-| `lastActiveDay`  | `YYYY-MM-DD` or absent                       | Last counted day                                                      |
-| `lastOutcome`    | `opened`, `askLater`, `dismissed`, or absent | Explains a returning invitation; visibility alone leaves it unchanged |
-| `nextEligibleAt` | ISO 8601 or absent                           | End of the current cooldown                                           |
-| `optedOutAt`     | ISO 8601 or absent                           | Present means permanently opted out                                   |
+| Field                     | Type                                         | Meaning                                                                                |
+| ------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `version`                 | `1`                                          | Schema version                                                                         |
+| `activeDayCount`          | number                                       | Distinct local days with a milestone                                                   |
+| `lastActiveDay`           | `YYYY-MM-DD` or absent                       | Last counted day                                                                       |
+| `lastOutcome`             | `opened`, `askLater`, `dismissed`, or absent | Outcome associated with the longest cooldown                                           |
+| `nextEligibleAt`          | ISO 8601 or absent                           | End of the current cooldown                                                            |
+| `optedOutAt`              | ISO 8601 or absent                           | Present means permanently opted out                                                    |
+| `invitationHistory`       | `new`, `seen`, or `unknown`                  | Whether an invitation was actually shown; legacy history may be unknown                |
+| `lastInvitationOutcome`   | `opened`, `askLater`, `dismissed`, or absent | Latest resolved visible invitation outcome; explains returning invitations             |
+| `lastInvitationOutcomeAt` | ISO 8601 or absent                           | Recency of that invitation outcome, independent of its cooldown; absent in older state |
 
 Per D0011, no legacy value is read. The five legacy keys under
 `ms-azuretools.vscode-documentdb.survey/` are deleted after the new state is first saved.
@@ -220,7 +276,11 @@ A malformed or unknown-version value starts from the empty state but keeps any `
 Each VS Code window runs its own store over the same key. Before every read, transition, and
 write, the store merges the stored value into memory: the opt-out is sticky (earliest kept), the
 active-day count and last day take the maximum, and the later cooldown wins together with its
-outcome. This protects against sequential stale-window updates, but the merge and write are
+outcome. Invitation outcomes are merged separately by their local outcome timestamp, so a
+later dismissal updates the reminder explanation without shortening a command's 180-day
+cooldown. Timestamped history takes precedence over legacy history without a timestamp;
+legacy outcomes remain available until the next visible invitation is resolved.
+This protects against sequential stale-window updates, but the merge and write are
 not an atomic cross-window operation. Overlapping writes can still erase a saved opt-out or
 longer cooldown; see [review finding R1](./iterations/03-pr-review-and-ux-preparation.md#r1-concurrent-writes-can-erase-never-again-).
 The operator accepted this rare last-writer outcome during review; no cross-window coordination
@@ -254,7 +314,8 @@ remain excluded from the survey event schema below. Its three-attempt budget bou
 
 Survey telemetry starts fresh (D0001). Events are sent only from `surveyTelemetry.ts`, only when
 `isFeedbackPermitted()` is true at the moment of emission, and never while the kill switch is
-off. Bounds apply per extension host session; an event withheld for lack of permission does not
+off. The VS Code telemetry reporter additionally drops them unless `telemetry.telemetryLevel` is
+`all`. Bounds apply per extension host session; an event withheld for lack of permission does not
 count against its bound. Each `report*` method also rejects any value outside its vocabulary
 and any `invitationSessionId` that is not a UUID.
 
@@ -274,30 +335,37 @@ Cohort queries use the machine ID for installations and the machine and session 
 
 ### Events
 
-| Event                         | Properties and measurements                                                    | Vocabulary                                                                                                                 | Bound                                                                                |
-| ----------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `survey.cohortEntry`          | `featureArea`                                                                  | `connection`, `dataBrowsing`, `queryPlayground`, `interactiveShell`, `dataManagement`, `queryInsights`, `clusterDashboard` | Once per host session                                                                |
-| `survey.eligibility`          | `gate_sampling`, `gate_activeDays`, `gate_cooldown`, `gate_sessionSuppression` | `passed`, `blocked`, `notEvaluated`                                                                                        | First evaluation per host session, then only when a gate status or `overall` changes |
-|                               | `overall`                                                                      | `eligible`, `blocked`                                                                                                      |                                                                                      |
-|                               | `firstBlockingGate`                                                            | A gate ID, or `none`                                                                                                       |                                                                                      |
-|                               | `trigger`                                                                      | `sessionStart`, `newActiveDay`, `stateChange`                                                                              |                                                                                      |
-| `survey.presentationDeferred` | `reason`                                                                       | `presenterUnavailable`, `presentationFailed`                                                                               | Once per changed reason; reset when an invitation is shown                           |
-| `survey.invitationShown`      | `isReminder`                                                                   | `true`, `false`                                                                                                            | Once per invitation, only when rendered and visible                                  |
-| `survey.openForm`             | `trigger`                                                                      | `invitation`, `command`                                                                                                    | Once per attempt, at most 3 attempts per invitation or command call                  |
-|                               | `openResult`                                                                   | `success`, `failure`                                                                                                       |                                                                                      |
-|                               | measurement `attempt`                                                          | 1 to 3                                                                                                                     |                                                                                      |
-|                               | measurement `selectedRating`                                                   | Optional integer 1-5; invitation trigger only, omitted when no rating was selected                                         | Same three-attempt event budget; selection itself emits nothing                      |
-| `survey.invitationResolved`   | `outcome`                                                                      | `opened`, `askLater`, `neverAgain`, `dismissed`                                                                            | Once per invitation; never after permission withdrawal                               |
-|                               | `wasVisible`                                                                   | `true`, `false`                                                                                                            |                                                                                      |
+| Event                         | Properties and measurements                                                    | Vocabulary                                                                                                                                                                                                                                                                                          | Bound                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `survey.cohortEntry`          | `featureArea`                                                                  | `connection`, `dataBrowsing`, `queryPlayground`, `interactiveShell`, `dataManagement`, `queryInsights`, `clusterDashboard`                                                                                                                                                                          | Once per host session                                                                |
+| `survey.eligibility`          | `gate_sampling`, `gate_activeDays`, `gate_cooldown`, `gate_sessionSuppression` | `passed`, `blocked`, `notEvaluated`                                                                                                                                                                                                                                                                 | First evaluation per host session, then only when a gate status or `overall` changes |
+|                               | `overall`                                                                      | `eligible`, `blocked`                                                                                                                                                                                                                                                                               |                                                                                      |
+|                               | `firstBlockingGate`                                                            | A gate ID, or `none`                                                                                                                                                                                                                                                                                |                                                                                      |
+|                               | `trigger`                                                                      | `sessionStart`, `newActiveDay`, `stateChange`                                                                                                                                                                                                                                                       |                                                                                      |
+| `survey.presentationDeferred` | `reason`                                                                       | `presenterUnavailable`, `presentationFailed`                                                                                                                                                                                                                                                        | Once per changed reason; reset when an invitation is shown                           |
+| `survey.invitationShown`      | `isReminder`                                                                   | `true`, `false`                                                                                                                                                                                                                                                                                     | Once per invitation, only when rendered and visible                                  |
+| `survey.feedbackActivated`    | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | `automaticInvitation`, `clusterDashboard`, `collectionView`, `atlasCredentials`, `localQuickStart`, `helpAndFeedbackView`, `giveFeedbackCommand`; tabs `documents`, `indexes`, `queryInsights`; kinds `first`, `returning`, `unknown`; reasons `opened`, `askLater`, `dismissed`, `none`, `unknown` | Once per visible sidebar                                                             |
+| `survey.openForm`             | `trigger`                                                                      | `invitation`, `command`                                                                                                                                                                                                                                                                             | Once per attempt, at most 3 attempts per invitation or command call                  |
+|                               | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | Same closed values as `survey.feedbackActivated`                                                                                                                                                                                                                                                    | Present on service-originated openings                                               |
+|                               | `openResult`                                                                   | `success`, `failure`                                                                                                                                                                                                                                                                                |                                                                                      |
+|                               | measurement `attempt`                                                          | 1 to 3                                                                                                                                                                                                                                                                                              |                                                                                      |
+|                               | measurement `selectedRating`                                                   | Optional integer 1-5 on sidebar openings (invitation or manual), omitted without selection                                                                                                                                                                                                          | Same three-attempt event budget; selection itself emits nothing                      |
+| `survey.invitationResolved`   | `outcome`                                                                      | `opened`, `askLater`, `neverAgain`, `dismissed`                                                                                                                                                                                                                                                     | Once per invitation; never after permission withdrawal                               |
+|                               | `wasVisible`                                                                   | `true`, `false`                                                                                                                                                                                                                                                                                     |                                                                                      |
 
 `openResult` is not named `result` because the framework sets `result` on every event.
+The invitation kind and return reason come from local persisted invitation visibility and
+invitation outcomes, not the last browser-opening cooldown. A legacy state without this
+history is `unknown`, even if it has a previous open or dismissal. Manual opening does not
+start invitation history, and an `askLater` outcome is only a return reason for an actually
+shown invitation. No active-day count, URL, database or collection name is added.
 
 `selectedRating` is a numeric measurement, not a string property or a zero sentinel. The
 existing event is emitted after the browser attempt resolves, so ratings can accompany
 `openResult=success` or `failure`. A rating changed before another invitation attempt applies to
 that attempt; the three-reported-attempt limit still applies even though attempts are unlimited.
-Give Feedback always reports attempt 1 because it no longer loops.
-The score is feedback submitted from the invitation, not proof of an external-form answer
+Give Feedback and the manual sidebar opening each report attempt 1 because each click makes
+one browser attempt. The score is feedback submitted from the sidebar, not proof of an external-form answer
 or submission. Treat repeated attempts separately when analyzing rating distributions.
 
 ### Never Sent
@@ -310,7 +378,7 @@ Privacy Statement link are not recorded.
 
 ### Permission Withdrawal
 
-When `telemetry.telemetryLevel` leaves `all`, the service cancels pending work and disposes any
+When `telemetry.feedback.enabled` becomes `false`, the service cancels pending work and disposes any
 invitation. That closure records no outcome and sends no event, and an invitation that was already
 reserved does not reappear in the same session. If the user had already chosen "Never again" and its save fails,
 the local modal error still appears, because it is not telemetry. Opening the form
@@ -589,15 +657,16 @@ An operator request to implement collection is not a claim of independent privac
 
 ### Survey-Owned Fields
 
-| Event suffix                  | Properties (all strings) and closed vocabulary                                                                                                                                                                                                                                                                | Measurements                                                                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Every event                   | `surveyCampaignId`: currently `documentdb-satisfaction-1`; `surveyPolicyVersion`: currently `1`, changed explicitly with policy. Configuration categories, not user input                                                                                                                                     | None common to the survey                                                                                                                        |
-| `survey.cohortEntry`          | `featureArea`: `connection`, `dataBrowsing`, `queryPlayground`, `interactiveShell`, `dataManagement`, `queryInsights`, `clusterDashboard`                                                                                                                                                                     | None                                                                                                                                             |
-| `survey.eligibility`          | `gate_sampling`, `gate_activeDays`, `gate_cooldown`, `gate_sessionSuppression`: each `passed`, `blocked`, `notEvaluated`; `overall`: `eligible`, `blocked`; `firstBlockingGate`: `sampling`, `activeDays`, `cooldown`, `sessionSuppression`, `none`; `trigger`: `sessionStart`, `newActiveDay`, `stateChange` | None                                                                                                                                             |
-| `survey.presentationDeferred` | `reason`: `presenterUnavailable`, `presentationFailed`                                                                                                                                                                                                                                                        | None                                                                                                                                             |
-| `survey.invitationShown`      | `invitationSessionId`: random UUID per invitation, not a closed category; `isReminder`: `true`, `false`                                                                                                                                                                                                       | None                                                                                                                                             |
-| `survey.openForm`             | `trigger`: `invitation`, `command`; `openResult`: `success`, `failure`; `invitationSessionId`: UUID only for `invitation`, absent for `command`                                                                                                                                                               | `attempt`: integer 1, 2 or 3; optional `selectedRating`: integer 1-5, only for an invitation with a chosen rating. Both are numeric measurements |
-| `survey.invitationResolved`   | `invitationSessionId`: same invitation UUID; `outcome`: `opened`, `askLater`, `dismissed`, `neverAgain`; `wasVisible`: `true`, `false`                                                                                                                                                                        | None                                                                                                                                             |
+| Event suffix                  | Properties (all strings) and closed vocabulary                                                                                                                                                                                                                                                                                                                                                                       | Measurements                                                                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every event                   | `surveyCampaignId`: currently `documentdb-satisfaction-1`; `surveyPolicyVersion`: currently `1`, changed explicitly with policy. Configuration categories, not user input                                                                                                                                                                                                                                            | None common to the survey                                                                                                                    |
+| `survey.cohortEntry`          | `featureArea`: `connection`, `dataBrowsing`, `queryPlayground`, `interactiveShell`, `dataManagement`, `queryInsights`, `clusterDashboard`                                                                                                                                                                                                                                                                            | None                                                                                                                                         |
+| `survey.eligibility`          | `gate_sampling`, `gate_activeDays`, `gate_cooldown`, `gate_sessionSuppression`: each `passed`, `blocked`, `notEvaluated`; `overall`: `eligible`, `blocked`; `firstBlockingGate`: `sampling`, `activeDays`, `cooldown`, `sessionSuppression`, `none`; `trigger`: `sessionStart`, `newActiveDay`, `stateChange`                                                                                                        | None                                                                                                                                         |
+| `survey.presentationDeferred` | `reason`: `presenterUnavailable`, `presentationFailed`                                                                                                                                                                                                                                                                                                                                                               | None                                                                                                                                         |
+| `survey.invitationShown`      | `invitationSessionId`: random UUID per invitation, not a closed category; `isReminder`: `true`, `false`                                                                                                                                                                                                                                                                                                              | None                                                                                                                                         |
+| `survey.feedbackActivated`    | `activationSource`: `automaticInvitation`, `clusterDashboard`, `collectionView`, `atlasCredentials`, `localQuickStart`, `helpAndFeedbackView`, `giveFeedbackCommand`; `collectionTab`: only for Collection View (`documents`, `indexes`, `queryInsights`); `invitationKind`: `first`, `returning`, `unknown` and `returnReason`: `opened`, `askLater`, `dismissed`, `none`, `unknown` only for automatic invitations | None                                                                                                                                         |
+| `survey.openForm`             | `trigger`: `invitation`, `command`; `openResult`: `success`, `failure`; `invitationSessionId`: UUID only for `invitation`, absent for `command`; the same closed activation fields as above for service-originated opens                                                                                                                                                                                             | `attempt`: integer 1, 2 or 3; optional `selectedRating`: integer 1-5 on sidebar openings with a chosen rating. Both are numeric measurements |
+| `survey.invitationResolved`   | `invitationSessionId`: same invitation UUID; `outcome`: `opened`, `askLater`, `dismissed`, `neverAgain`; `wasVisible`: `true`, `false`                                                                                                                                                                                                                                                                               | None                                                                                                                                         |
 
 `openResult=failure` normally has framework `result=Succeeded`: the wrapper emits an already
 classified outcome rather than throwing a browser error. `opened` means the browser API returned
@@ -622,17 +691,17 @@ locally; warehouse names, transformations and actual delivered fields still need
 
 ### Exclusions and Permission
 
-| Boundary                 | Implemented behavior                                                                                                                                                                                                                     |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Submitted rating         | Optional integer 1-5 on an explicit invitation opening, subject to permission and event bounds. No default/zero, no emission on selection alone, no local-state persistence or trace output                                              |
-| Never sent by the survey | Hover, clicked-element identity, keyboard key, external-form answers, name, form URL, exact active-day count/history/dates, sampling value, database/collection names, query text, credentials or connection strings                     |
-| Local only               | Active-day count and dates, opt-out/cooldown state, sampling calculation, eligibility explanation. Event timestamps are transport metadata, not submitted local usage dates                                                              |
-| Permission               | Fresh `telemetry.telemetryLevel === 'all'`, fail closed for `error`, `crash`, `off`, missing/unrecognized values and read failures. Gates activity collection, events and automatic presentation; rechecked before invitation navigation |
-| Withdrawal               | Cancels pending work, silently closes visible invitation, emits no resolution/outcome after withdrawal. Persisted Never again still applies even if its event is lost                                                                    |
-| Other preconditions      | `SURVEY_ENABLED=true` in all modes (D0021); no enablement launch override. Permanent opt-out stops automatic tracking and invitations before cohort entry                                                                                |
-| Manual command exception | Give Feedback opens the fixed form on explicit request even after opt-out, with the switch off or without telemetry permission; survey events still require enabled/permitted. Never clears opt-out                                      |
-| External navigation      | Only the primary button sends `openForm`, with optional `selectedRating`. Stars select locally. Neither URL gains machine/session/campaign IDs, rating or tracking query parameters. Privacy clicks are unrecorded                       |
-| No answer linkage        | No completion callback, tracking pixel, response event or join to external submissions. The external form owns its consent and answers                                                                                                   |
+| Boundary                 | Implemented behavior                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Submitted rating         | Optional integer 1-5 on an explicit invitation opening, subject to permission and event bounds. No default/zero, no emission on selection alone, no local-state persistence or trace output                                                                                                                                  |
+| Never sent by the survey | Hover, clicked-element identity, keyboard key, external-form answers, name, form URL, exact active-day count/history/dates, sampling value, database/collection names, query text, credentials or connection strings                                                                                                         |
+| Local only               | Active-day count and dates, opt-out/cooldown state, sampling calculation, eligibility explanation. Event timestamps are transport metadata, not submitted local usage dates                                                                                                                                                  |
+| Permission               | Fresh `telemetry.feedback.enabled === true` (default `true`; D0032), fail closed for `false`, non-boolean values and read failures. Gates activity collection, events and automatic presentation; rechecked before invitation navigation. Events are also subject to `telemetry.telemetryLevel` through the VS Code reporter |
+| Withdrawal               | Cancels pending work, silently closes visible invitation, emits no resolution/outcome after withdrawal. Persisted Never again still applies even if its event is lost                                                                                                                                                        |
+| Other preconditions      | `SURVEY_ENABLED=true` in all modes (D0021); no enablement launch override. Permanent opt-out stops automatic tracking and invitations before cohort entry                                                                                                                                                                    |
+| Manual command exception | Give Feedback opens the fixed form on explicit request even after opt-out, with the switch off or without telemetry permission; survey events still require enabled/permitted. Never clears opt-out                                                                                                                          |
+| External navigation      | Only the primary button sends `openForm`, with optional `selectedRating`. Stars select locally. Neither URL gains machine/session/campaign IDs, rating or tracking query parameters. Privacy clicks are unrecorded                                                                                                           |
+| No answer linkage        | No completion callback, tracking pixel, response event or join to external submissions. The external form owns its consent and answers                                                                                                                                                                                       |
 
 ### Actual English Invitation Copy
 
@@ -640,22 +709,22 @@ Quoted from `getSurveyInvitationStrings()` in `SurveyInvitationView.ts`, includi
 names and status strings. `{0}` is replaced with the actual local usage count; none of this count
 is sent. This packet does not change the copy or claim that the external form is live.
 
-| Surface                      | Exact strings                                                                                                                                                                                                                                      |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Title                        | "DocumentDB for VS Code"                                                                                                                                                                                                                           |
-| Question                     | "How satisfied are you with DocumentDB for VS Code?"                                                                                                                                                                                               |
-| Star accessible names        | "1 very dissatisfied"; "2 dissatisfied"; "3 neutral"; "4 satisfied"; "5 very satisfied"                                                                                                                                                            |
-| Endpoints / primary action   | "1 very dissatisfied"; "5 very satisfied"; "Continue to survey"                                                                                                                                                                                    |
-| Browser / language notes     | "Pick a rating (optional), then finish the short survey in your browser."; "The survey is in English."                                                                                                                                             |
-| Choices                      | "Remind me later"; "Don't ask again"                                                                                                                                                                                                               |
-| Disclosure / usage           | "Why am I seeing this?"; "You've used DocumentDB for VS Code on {0} days, so we'd love to hear how it's going. This count stays on your device."                                                                                                   |
-| Returning after opening      | "It's been a while since you last opened the survey, so we're checking in again."                                                                                                                                                                  |
-| Returning after Ask me later | "You asked us to remind you later, so here we are."                                                                                                                                                                                                |
-| Returning after dismissal    | "You closed this invitation a while ago, so we are asking once more."                                                                                                                                                                              |
-| Telemetry                    | "To improve these invitations, we record whether you qualified, whether the invitation was shown, what you chose, and any rating selected when you open the survey. We don't record your name, answers in the external form, or your usage count." |
-| Privacy link                 | "Privacy Statement"                                                                                                                                                                                                                                |
-| Failure / blocked (modal)    | "We couldn't open the survey in your browser. Please try again."; "Sorry, the survey can't be opened from here right now."                                                                                                                         |
-| Opt-out save failure (modal) | "Saving your choice not to be asked for feedback again failed. It still applies until VS Code restarts."                                                                                                                                           |
+| Surface                      | Exact strings                                                                                                                                                                                                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Title                        | "DocumentDB for VS Code"                                                                                                                                                                                                                                 |
+| Question                     | "How satisfied are you with DocumentDB for VS Code?"                                                                                                                                                                                                     |
+| Star accessible names        | "1 very dissatisfied"; "2 dissatisfied"; "3 neutral"; "4 satisfied"; "5 very satisfied"                                                                                                                                                                  |
+| Endpoints / primary action   | "1 very dissatisfied"; "5 very satisfied"; "Continue to survey"                                                                                                                                                                                          |
+| Browser / language notes     | "Pick a rating (optional), then finish the short survey in your browser."; "The survey is in English."                                                                                                                                                   |
+| Choices                      | "Remind me later"; "Don't ask again"                                                                                                                                                                                                                     |
+| Disclosure / usage           | "Why am I seeing this?"; "You've used DocumentDB for VS Code on {0} days, so we'd love to hear how it's going. This count stays on your device."                                                                                                         |
+| Returning after opening      | "It's been a while since you last opened the survey, so we're checking in again."                                                                                                                                                                        |
+| Returning after Ask me later | "You asked us to remind you later, so here we are."                                                                                                                                                                                                      |
+| Returning after dismissal    | "You closed this invitation a while ago, so we are asking once more."                                                                                                                                                                                    |
+| Telemetry                    | "If VS Code telemetry is on, we record whether you qualified, whether this invitation was shown, what you chose, and the rating you picked when you continue to the survey. We don't record your name, your answers in the survey, or your usage count." |
+| Privacy link                 | "Privacy Statement"                                                                                                                                                                                                                                      |
+| Failure / blocked (modal)    | "We couldn't open the survey in your browser. Please try again."; "Sorry, the survey can't be opened from here right now."                                                                                                                               |
+| Opt-out save failure (modal) | "Saving your choice not to be asked for feedback again failed. It still applies until VS Code restarts."                                                                                                                                                 |
 
 | External destination        | Fixed URL                                        | Handling                                                                             |
 | --------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------ |

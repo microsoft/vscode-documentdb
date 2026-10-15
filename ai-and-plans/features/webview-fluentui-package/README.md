@@ -81,6 +81,12 @@ After increments 1-6:
 - Local Quick Start and Atlas Credentials consume the wizard components; Query Insights and
   Indexes consume the metric and badge components. Formatting and product logic stay extension-side.
 
+`ContainerBody` and `Wizard` leave content width unconstrained by default. Their optional
+`contentMaxWidth` prop limits navigation and main regions without limiting the header or its action.
+Local Quick Start and Atlas Credentials explicitly set `contentMaxWidth="760px"`; this width is an
+extension choice, not a package default. In side-navigation layouts, the cap applies to each region
+independently.
+
 `src/webviews/theme/` no longer exists.
 
 ## Architecture (intent - code is authoritative for behavior)
