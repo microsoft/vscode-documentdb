@@ -15,7 +15,10 @@ vi.mock('vscode', (): object => ({
     ExtensionMode: { Production: 1, Development: 2, Test: 3 },
     commands: { registerCommand: vi.fn((): object => ({ dispose: vi.fn() })) },
     window: { createOutputChannel: vi.fn(), registerUriHandler: vi.fn(), showErrorMessage: vi.fn() },
-    workspace: { registerTextDocumentContentProvider: vi.fn(), getConfiguration: (): object => ({ get: vi.fn() }) },
+    workspace: {
+        registerTextDocumentContentProvider: vi.fn(),
+        getConfiguration: (): object => ({ get: vi.fn((_key: string, fallback?: unknown): unknown => fallback) }),
+    },
     env: { openExternal: vi.fn().mockResolvedValue(true) },
     Uri: { parse: (value: string): string => value },
     l10n: { t: (value: string): string => value },
