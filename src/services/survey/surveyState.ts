@@ -30,6 +30,7 @@ export const EMPTY_SURVEY_STATE: SurveyPersistedState = {
     optedOutAt: undefined,
     invitationHistory: 'new',
     lastInvitationOutcome: undefined,
+    lastInvitationOutcomeAt: undefined,
 };
 
 /**
@@ -57,6 +58,7 @@ export function parseSurveyState(raw: unknown): SurveyPersistedState {
             nextEligibleAt,
             invitationHistory,
             lastInvitationOutcome,
+            lastInvitationOutcomeAt,
         } = object;
 
         if (
@@ -81,7 +83,11 @@ export function parseSurveyState(raw: unknown): SurveyPersistedState {
             (lastInvitationOutcome === undefined ||
                 lastInvitationOutcome === 'opened' ||
                 lastInvitationOutcome === 'askLater' ||
-                lastInvitationOutcome === 'dismissed')
+                lastInvitationOutcome === 'dismissed') &&
+            (lastInvitationOutcomeAt === undefined ||
+                (typeof lastInvitationOutcomeAt === 'string' &&
+                    Number.isFinite(Date.parse(lastInvitationOutcomeAt)) &&
+                    lastInvitationOutcome !== undefined))
         ) {
             return {
                 version,
@@ -92,6 +98,7 @@ export function parseSurveyState(raw: unknown): SurveyPersistedState {
                 optedOutAt,
                 invitationHistory: invitationHistory ?? 'unknown',
                 lastInvitationOutcome,
+                lastInvitationOutcomeAt,
             };
         }
     } catch {
@@ -110,6 +117,11 @@ export function mergeSurveyStates(a: SurveyPersistedState, b: SurveyPersistedSta
     const aCooldownTime = Number.isNaN(aCooldown) ? Number.NEGATIVE_INFINITY : aCooldown;
     const bCooldownTime = Number.isNaN(bCooldown) ? Number.NEGATIVE_INFINITY : bCooldown;
     const cooldown = bCooldownTime > aCooldownTime ? b : a;
+    const aOutcomeAt = Date.parse(a.lastInvitationOutcomeAt ?? '');
+    const bOutcomeAt = Date.parse(b.lastInvitationOutcomeAt ?? '');
+    const aOutcomeTime = Number.isNaN(aOutcomeAt) ? Number.NEGATIVE_INFINITY : aOutcomeAt;
+    const bOutcomeTime = Number.isNaN(bOutcomeAt) ? Number.NEGATIVE_INFINITY : bOutcomeAt;
+    const invitationOutcome = bOutcomeTime > aOutcomeTime ? b : a;
 
     return {
         version: 1,
@@ -127,7 +139,8 @@ export function mergeSurveyStates(a: SurveyPersistedState, b: SurveyPersistedSta
                 : a.invitationHistory === 'unknown' || b.invitationHistory === 'unknown'
                   ? 'unknown'
                   : 'new',
-        lastInvitationOutcome: cooldown.lastInvitationOutcome ?? a.lastInvitationOutcome ?? b.lastInvitationOutcome,
+        lastInvitationOutcome: invitationOutcome.lastInvitationOutcome ?? b.lastInvitationOutcome,
+        lastInvitationOutcomeAt: invitationOutcome.lastInvitationOutcomeAt,
     };
 }
 
@@ -192,7 +205,7 @@ export class SurveyStateStore {
     public async recordOutcome(
         outcome: SurveyTimedOutcome,
         nextEligibleAt: Date,
-        fromInvitation = false,
+        invitationOutcomeAt?: Date,
     ): Promise<SurveyStateWriteResult> {
         this.syncFromStorage();
         try {
@@ -201,7 +214,9 @@ export class SurveyStateStore {
                     ...this.state,
                     lastOutcome: outcome,
                     nextEligibleAt: nextEligibleAt.toISOString(),
-                    lastInvitationOutcome: fromInvitation ? outcome : this.state.lastInvitationOutcome,
+                    lastInvitationOutcome: invitationOutcomeAt ? outcome : this.state.lastInvitationOutcome,
+                    lastInvitationOutcomeAt:
+                        invitationOutcomeAt?.toISOString() ?? this.state.lastInvitationOutcomeAt,
                 },
                 this.state,
             );

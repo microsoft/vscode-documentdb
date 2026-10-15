@@ -28,6 +28,8 @@ reopen the view or restart VS Code after changing the setting. There is no live 
 Survey activation and form opening now carry a closed source (Dashboard, Collection View
 with tab, command, or timed invitation). Timed invitations distinguish first, returning,
 and unknown legacy history; returning invitations retain the previous invitation outcome.
+That outcome is tracked independently of cooldowns: a dismissal updates the next invitation's
+explanation even when a direct browser opening has already set a longer cooldown.
 Read [design.md](./design.md) for the implemented
 architecture and [decisions.md](./decisions.md) for binding operator choices.
 

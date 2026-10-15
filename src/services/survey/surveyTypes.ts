@@ -148,6 +148,8 @@ export interface SurveyPersistedState {
     /** `unknown` for state written before invitation history was tracked. */
     readonly invitationHistory: 'new' | 'seen' | 'unknown';
     readonly lastInvitationOutcome: SurveyTimedOutcome | undefined;
+    /** Local outcome timestamp; absent in state written before outcome recency was tracked. */
+    readonly lastInvitationOutcomeAt?: string;
 }
 
 // ---------------------------------------------------------------------------------------------

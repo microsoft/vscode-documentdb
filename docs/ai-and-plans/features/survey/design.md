@@ -201,6 +201,10 @@ and never clears the opt-out.
 The sidebar feedback buttons use the same manual form-opening path and `command` trigger,
 but pass the optional rating selected in the sidebar. Explicit opening is not an automatic
 invitation and bypasses automatic eligibility and invitation suppression.
+Replacing an automatic invitation waits for any pending reveal to settle and its canceled
+handle to be disposed before presenting manual feedback. Each manual presentation owns its
+close state and handle: a late browser result cannot close a replacement, and Close during
+reveal disposes the handle as soon as it arrives.
 
 ### Gates
 
@@ -243,9 +247,12 @@ One object under `globalState` key `documentdb.survey.state`:
 | `version`        | `1`                                          | Schema version                                                        |
 | `activeDayCount` | number                                       | Distinct local days with a milestone                                  |
 | `lastActiveDay`  | `YYYY-MM-DD` or absent                       | Last counted day                                                      |
-| `lastOutcome`    | `opened`, `askLater`, `dismissed`, or absent | Explains a returning invitation; visibility alone leaves it unchanged |
+| `lastOutcome`    | `opened`, `askLater`, `dismissed`, or absent | Outcome associated with the longest cooldown |
 | `nextEligibleAt` | ISO 8601 or absent                           | End of the current cooldown                                           |
 | `optedOutAt`     | ISO 8601 or absent                           | Present means permanently opted out                                   |
+| `invitationHistory` | `new`, `seen`, or `unknown` | Whether an invitation was actually shown; legacy history may be unknown |
+| `lastInvitationOutcome` | `opened`, `askLater`, `dismissed`, or absent | Latest resolved visible invitation outcome; explains returning invitations |
+| `lastInvitationOutcomeAt` | ISO 8601 or absent | Recency of that invitation outcome, independent of its cooldown; absent in older state |
 
 Per D0011, no legacy value is read. The five legacy keys under
 `ms-azuretools.vscode-documentdb.survey/` are deleted after the new state is first saved.
@@ -254,7 +261,11 @@ A malformed or unknown-version value starts from the empty state but keeps any `
 Each VS Code window runs its own store over the same key. Before every read, transition, and
 write, the store merges the stored value into memory: the opt-out is sticky (earliest kept), the
 active-day count and last day take the maximum, and the later cooldown wins together with its
-outcome. This protects against sequential stale-window updates, but the merge and write are
+outcome. Invitation outcomes are merged separately by their local outcome timestamp, so a
+later dismissal updates the reminder explanation without shortening a command's 180-day
+cooldown. Timestamped history takes precedence over legacy history without a timestamp;
+legacy outcomes remain available until the next visible invitation is resolved.
+This protects against sequential stale-window updates, but the merge and write are
 not an atomic cross-window operation. Overlapping writes can still erase a saved opt-out or
 longer cooldown; see [review finding R1](./iterations/03-pr-review-and-ux-preparation.md#r1-concurrent-writes-can-erase-never-again-).
 The operator accepted this rare last-writer outcome during review; no cross-window coordination

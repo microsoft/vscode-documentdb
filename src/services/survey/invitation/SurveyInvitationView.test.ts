@@ -244,6 +244,66 @@ describe('SurveyInvitationView', (): void => {
         expect(titles['survey.viewTitle']).toBeTruthy();
     });
 
+    it.each([false, true])(
+        'waits for a canceled automatic reveal before showing manual feedback, permission withdrawn=%s',
+        async (withdrawn): Promise<void> => {
+            const h = harness();
+            let finishReveal!: () => void;
+            const reveal = new Promise<void>((resolve): void => {
+                finishReveal = resolve;
+            });
+            vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+                if (command === `${SURVEY_VIEW_ID}.open`) {
+                    h.presenter.resolveWebviewView(h.surface.view);
+                    await reveal;
+                }
+                return undefined;
+            });
+            h.service.recordSurveyActivityWithInvitation('dataBrowsing');
+            await flush();
+            expect(h.surface.view.webview.html).toContain('days, so');
+            if (withdrawn) {
+                h.flags.permitted = false;
+                h.service.handlePermissionChanged();
+            }
+            const opening = h.service.showFeedbackForm('collectionView', 'documents');
+            finishReveal();
+
+            expect(await opening).toBe(true);
+            expect(h.surface.view.webview.html).toContain('opened the feedback form');
+            expect(h.events.filter((event): boolean => event.name === 'survey.invitationResolved')).toHaveLength(0);
+            h.service.dispose();
+            h.presenter.dispose();
+        },
+    );
+
+    it('closes manual feedback even when its reveal has not finished', async (): Promise<void> => {
+        const h = harness();
+        let finishReveal!: () => void;
+        const reveal = new Promise<void>((resolve): void => {
+            finishReveal = resolve;
+        });
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            if (command === `${SURVEY_VIEW_ID}.open`) {
+                h.presenter.resolveWebviewView(h.surface.view);
+                await reveal;
+            }
+            return undefined;
+        });
+        const opening = h.service.showFeedbackForm();
+        await flush();
+        h.surface.message({ type: 'askLater' });
+        await flush();
+        finishReveal();
+
+        expect(await opening).toBe(false);
+        expect(h.surface.view.webview.html).toBe('');
+        expect(await h.service.showFeedbackForm()).toBe(true);
+        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
     it('registers a presenter with startup context false and no retained webview state', async (): Promise<void> => {
         const context = {
             extensionUri: vscode.Uri.parse('extension:'),

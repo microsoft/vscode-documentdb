@@ -253,6 +253,63 @@ describe('SurveyService', (): void => {
         expect(h.sent('survey.invitationResolved')).toHaveLength(0);
     });
 
+    it('does not let an old browser result close replacement feedback', async (): Promise<void> => {
+        const h = createHarness();
+        const browser = deferred<boolean>();
+        const replacement = { dispose: vi.fn<(...args: []) => void>() };
+        await h.service.showFeedbackForm();
+        h.openExternal.mockReturnValueOnce(browser.promise);
+        const opening = h.callbacks().onOpenForm();
+        h.present.mockResolvedValueOnce(replacement);
+        expect(await h.service.showFeedbackForm('collectionView', 'documents')).toBe(true);
+        expect(h.handle.dispose).toHaveBeenCalledOnce();
+
+        browser.resolve(true);
+        expect(await opening).toBe('opened');
+        expect(replacement.dispose).not.toHaveBeenCalled();
+        await h.callbacks().onChoice('askLater');
+        expect(replacement.dispose).toHaveBeenCalledOnce();
+    });
+
+    it('disposes a manual handle that arrives after Close', async (): Promise<void> => {
+        const h = createHarness();
+        const pending = deferred<vscode.Disposable | undefined>();
+        h.present.mockReturnValueOnce(pending.promise);
+        const opening = h.service.showFeedbackForm();
+        await h.callbacks().onChoice('askLater');
+        pending.resolve(h.handle);
+
+        expect(await opening).toBe(false);
+        expect(h.handle.dispose).toHaveBeenCalledOnce();
+        expect(await h.service.showFeedbackForm()).toBe(true);
+    });
+
+    it('explains the latest invitation choice even after a command sets a longer cooldown', async (): Promise<void> => {
+        const first = createHarness();
+        await invite(first);
+        first.callbacks().onVisible();
+        await first.callbacks().onChoice('askLater');
+        const returning = createHarness(first.storage);
+        returning.flags.now = new Date(first.flags.now.getTime() + 15 * DAY_MS);
+        await activity(returning);
+        returning.callbacks().onVisible();
+        await returning.service.openSurveyFormFromCommand();
+        const deadline = returning.state().nextEligibleAt;
+        await returning.callbacks().onChoice('dismissed');
+        expect(returning.state().nextEligibleAt).toBe(deadline);
+        expect(returning.state().lastInvitationOutcome).toBe('dismissed');
+
+        const later = createHarness(first.storage);
+        later.flags.now = new Date(returning.flags.now.getTime() + 181 * DAY_MS);
+        await activity(later);
+        expect(later.present.mock.calls[0][0].explanation).toMatchObject({
+            isReminder: true,
+            previousOutcome: 'dismissed',
+        });
+        later.callbacks().onVisible();
+        expect(later.sent('survey.feedbackActivated')[0].properties.returnReason).toBe('dismissed');
+    });
+
     it('distinguishes first invitation from a return after Ask me later', async (): Promise<void> => {
         const first = createHarness();
         await invite(first);

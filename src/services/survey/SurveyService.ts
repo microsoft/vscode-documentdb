@@ -102,6 +102,7 @@ export class SurveyService implements vscode.Disposable {
     private readonly reportOptOutSaveFailure: () => void;
     private samplingValue: number | undefined;
     private inFlight: Promise<void> | undefined;
+    private invitationOpening: Promise<void> | undefined;
     private inFlightInvites = false;
     private pendingInvitation: SurveyFeatureArea | undefined;
     private generation = 0;
@@ -199,6 +200,9 @@ export class SurveyService implements vscode.Disposable {
                     traceSurvey((): string => vscode.l10n.t('[Survey] Activity processing failed.'));
                 })
                 .then((): void => {
+                    if (this.invitationOpening === run) {
+                        this.invitationOpening = undefined;
+                    }
                     if (this.inFlight !== run) {
                         return;
                     }
@@ -211,6 +215,9 @@ export class SurveyService implements vscode.Disposable {
                 });
             this.inFlight = run;
             this.inFlightInvites = invite;
+            if (invite) {
+                this.invitationOpening = run;
+            }
         } catch {
             // Survey failures must never affect the successful feature milestone.
             traceSurvey((): string => vscode.l10n.t('[Survey] Activity processing failed.'));
@@ -252,6 +259,7 @@ export class SurveyService implements vscode.Disposable {
             traceSurvey((): string => vscode.l10n.t('[Survey] Feedback presentation unavailable.'));
             return false;
         }
+        const pendingInvitation = this.invitationOpening;
         this.generation++;
         this.inFlight = undefined;
         this.cancelInvitation();
@@ -259,33 +267,51 @@ export class SurveyService implements vscode.Disposable {
         disposeHandle(this.manualHandle);
         this.manualHandle = undefined;
         const gen = this.generation;
+        let localHandle: vscode.Disposable | undefined;
+        let closed = false;
         const request = {
             invitationSessionId: this.createInvitationSessionId(),
             explanation: { activeDayCount: 0, requiredActiveDays: 0, isReminder: false, previousOutcome: undefined },
             manuallyOpened: true,
         };
         const close = (): void => {
-            disposeHandle(this.manualHandle);
-            this.manualHandle = undefined;
+            closed = true;
+            disposeHandle(localHandle);
+            if (this.manualHandle === localHandle) {
+                this.manualHandle = undefined;
+            }
+            localHandle = undefined;
         };
         try {
+            if (pendingInvitation) {
+                await pendingInvitation;
+                if (gen !== this.generation || this.disposed) {
+                    return false;
+                }
+            }
             const handle = await this.presenter.present(request, {
                 onVisible: (): void => {
+                    if (closed || gen !== this.generation || this.disposed) {
+                        return;
+                    }
                     traceSurvey((): string => vscode.l10n.t('[Survey] Feedback visible from {0}.', activation.source));
                     if (this.isEnabled()) {
                         this.telemetry.reportFeedbackActivated(activation, request.invitationSessionId);
                     }
                 },
                 onOpenForm: async (selectedRating): Promise<SurveyOpenFormResult> => {
+                    if (closed || gen !== this.generation || this.disposed) {
+                        return 'blocked';
+                    }
                     const result = await this.openSurveyFormFromCommand(selectedRating, activation);
-                    if (result === 'opened') {
+                    if (result === 'opened' && gen === this.generation) {
                         close();
                     }
                     return result;
                 },
                 onChoice: async (): Promise<void> => close(),
             });
-            if (gen !== this.generation || this.disposed) {
+            if (closed || gen !== this.generation || this.disposed) {
                 disposeHandle(handle);
                 return false;
             }
@@ -293,6 +319,7 @@ export class SurveyService implements vscode.Disposable {
                 traceSurvey((): string => vscode.l10n.t('[Survey] Feedback presentation unavailable.'));
                 return false;
             }
+            localHandle = handle;
             this.manualHandle = handle;
             return true;
         } catch {
@@ -746,10 +773,11 @@ export class SurveyService implements vscode.Disposable {
         const gen = this.generation;
         invitation.ended = true;
         traceSurvey((): string => vscode.l10n.t('[Survey] Invitation outcome: {0}.', outcome));
+        const now = this.now();
         const write = await this.store.recordOutcome(
             outcome,
-            computeNextEligibleAt(outcome, this.now(), this.config),
-            invitation.visible,
+            computeNextEligibleAt(outcome, now, this.config),
+            invitation.visible ? now : undefined,
         );
         this.tracePersistence('invitation outcome', write);
         if (gen !== this.generation) {

@@ -153,6 +153,34 @@ describe('mergeSurveyStates', (): void => {
         expect(mergeSurveyStates({ ...a, lastOutcome: undefined }, b)).toEqual({ ...a, lastOutcome: 'askLater' });
         expect(mergeSurveyStates({ ...b, lastOutcome: undefined }, a)).toEqual({ ...b, lastOutcome: 'opened' });
     });
+
+    it('merges invitation outcomes by recency independently of cooldowns in both orders', (): void => {
+        const earlier: SurveyPersistedState = {
+            ...EMPTY_SURVEY_STATE,
+            invitationHistory: 'seen',
+            nextEligibleAt: '2027-04-05T12:34:56.789Z',
+            lastOutcome: 'opened',
+            lastInvitationOutcome: 'askLater',
+            lastInvitationOutcomeAt: NOW.toISOString(),
+        };
+        const later: SurveyPersistedState = {
+            ...earlier,
+            nextEligibleAt: NEXT_ELIGIBLE_AT.toISOString(),
+            lastOutcome: 'dismissed',
+            lastInvitationOutcome: 'dismissed',
+            lastInvitationOutcomeAt: new Date(NOW.getTime() + 1).toISOString(),
+        };
+        expectBothOrders(earlier, later, {
+            ...earlier,
+            lastInvitationOutcome: later.lastInvitationOutcome,
+            lastInvitationOutcomeAt: later.lastInvitationOutcomeAt,
+        });
+        expectBothOrders({ ...earlier, lastInvitationOutcomeAt: undefined }, later, {
+            ...earlier,
+            lastInvitationOutcome: later.lastInvitationOutcome,
+            lastInvitationOutcomeAt: later.lastInvitationOutcomeAt,
+        });
+    });
 });
 
 describe('SurveyStateStore', (): void => {
@@ -501,6 +529,39 @@ describe('SurveyStateStore', (): void => {
         expect(b.current.lastOutcome).toBe('opened');
     });
 
+    it('preserves a newer invitation explanation across stale-window saves and restart', async (): Promise<void> => {
+        const storage = new MemorySurveyStorage();
+        const a = new SurveyStateStore(storage);
+        const b = new SurveyStateStore(storage);
+        const longerCooldown = new Date(NOW.getTime() + 180 * 86_400_000);
+        await a.recordOutcome('askLater', NEXT_ELIGIBLE_AT, NOW);
+        await a.recordOutcome('opened', longerCooldown);
+        await b.recordOutcome('dismissed', NEXT_ELIGIBLE_AT, new Date(NOW.getTime() + 1));
+        await a.recordActiveDay('2026-10-08');
+
+        expect(new SurveyStateStore(storage).current).toMatchObject({
+            lastOutcome: 'opened',
+            nextEligibleAt: longerCooldown.toISOString(),
+            lastInvitationOutcome: 'dismissed',
+            lastInvitationOutcomeAt: new Date(NOW.getTime() + 1).toISOString(),
+        });
+    });
+
+    it('keeps a failed newer invitation outcome through merging and a later save', async (): Promise<void> => {
+        const storage = new MemorySurveyStorage();
+        const store = new SurveyStateStore(storage);
+        await store.recordOutcome('askLater', NEXT_ELIGIBLE_AT, NOW);
+        await store.recordOutcome('opened', new Date(NOW.getTime() + 180 * 86_400_000));
+        storage.update.mockRejectedValueOnce(new Error('Write failed'));
+
+        expect(
+            await store.recordOutcome('dismissed', NEXT_ELIGIBLE_AT, new Date(NOW.getTime() + 1)),
+        ).toMatchObject({ persisted: false });
+        expect(store.current.lastInvitationOutcome).toBe('dismissed');
+        await store.recordActiveDay('2026-10-08');
+        expect(new SurveyStateStore(storage).current.lastInvitationOutcome).toBe('dismissed');
+    });
+
     it('does not double count or write an active day already counted by another window', async (): Promise<void> => {
         const storage = new MemorySurveyStorage();
         const a = new SurveyStateStore(storage);
@@ -677,6 +738,7 @@ describe('parseSurveyState', (): void => {
             optedOutAt: NOW.toISOString(),
             invitationHistory: 'unknown',
             lastInvitationOutcome: undefined,
+            lastInvitationOutcomeAt: undefined,
         });
         expect(parsed).not.toBe(raw);
         expect(Object.keys(parsed)).toEqual(Object.keys(EMPTY_SURVEY_STATE));
@@ -697,7 +759,7 @@ describe('parseSurveyState', (): void => {
         expect(store.current.invitationHistory).toBe('unknown');
         await store.recordCooldown(NEXT_ELIGIBLE_AT);
         expect(store.current.invitationHistory).toBe('seen');
-        await store.recordOutcome('askLater', NEXT_ELIGIBLE_AT, true);
+        await store.recordOutcome('askLater', NEXT_ELIGIBLE_AT, NOW);
         expect(store.current.lastInvitationOutcome).toBe('askLater');
     });
 
