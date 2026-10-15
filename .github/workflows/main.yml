@@ -271,11 +271,11 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - uses: ./.github/actions/setup
-            - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
               with:
                   name: Artifacts-${{ github.run_id }}
                   path: verification-artifacts
-            - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
               with:
                   name: Bundle-reports-${{ github.run_id }}
                   path: build/verification/reports
@@ -300,7 +300,7 @@ jobs:
             - name: Upload the inspection manifest report
               id: l1-report
               if: always()
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: L1-manifest-report-${{ github.run_id }}
                   path: verification-artifacts/l1-manifest-report.json
@@ -365,7 +365,7 @@ jobs:
 
             - name: Upload the build size section for the PR report
               if: always() && hashFiles('size-report.md') != ''
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: Size-report-${{ github.run_id }}
                   path: size-report.md
@@ -389,7 +389,7 @@ jobs:
               with:
                   path: .vscode-test/
                   key: vscode-activation-${{ runner.os }}-${{ hashFiles('package.json', 'build/verification/activation/**') }}
-            - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
               with:
                   name: Artifacts-${{ github.run_id }}
                   path: verification-artifacts
@@ -419,7 +419,7 @@ jobs:
 
             - name: Upload activation failure diagnostics
               if: failure()
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: Activation-diagnostics-${{ github.run_id }}
                   path: |
@@ -461,7 +461,7 @@ jobs:
 
             - name: 📤 Upload Artifacts
               id: artifacts
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: Artifacts-${{ github.run_id }}
                   path: |
@@ -472,7 +472,7 @@ jobs:
             - name: Upload bundle verification reports
               id: bundle-reports
               if: always()
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: Bundle-reports-${{ github.run_id }}
                   path: build/verification/reports/*.json
@@ -494,7 +494,7 @@ jobs:
             - name: Download the build size section
               if: needs.vsix-inspection.result != 'skipped'
               continue-on-error: true
-              uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
               with:
                   name: Size-report-${{ github.run_id }}
                   path: size-report
