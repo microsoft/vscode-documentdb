@@ -19,7 +19,7 @@ You can access this plugin in two ways:
 - From the `Service Discovery` panel in the extension sidebar.
 - When adding a new connection, select the `Azure CosmosDB for MongoDB (RU)` option.
 
-![Service Discovery Activation](./images/service-discovery-activation.png)
+<p align="center"><img src="./images/service-discovery-activation.png" alt="Service Discovery Activation" width="800" style="max-width:100%;height:auto;"></p>
 
 ## How It Works
 

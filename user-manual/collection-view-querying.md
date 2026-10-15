@@ -17,7 +17,7 @@ There are several ways to open a collection in the Collection View:
 3. **From the Interactive Shell**: Click the `↗ Collection View` link that appears after query results.
 4. **From the Query Playground**: Use the CodeLens link to open the referenced collection.
 
-<p align="center"><img src="images/inline-action-buttons.png" alt="Inline action buttons on a collection node: Open Collection View, New Query Playground, Open Interactive Shell" width="300" style="max-width:100%;height:auto;"></p>
+<p align="center"><img src="images/inline-action-buttons.png" alt="Inline action buttons on a collection node: Open Collection View, New Query Playground, Open Interactive Shell" width="800" style="max-width:100%;height:auto;"></p>
 
 The three inline icons next to each collection node are (from left to right): **Open Collection View**, **New Query Playground**, and **Open Interactive Shell**.
 
@@ -143,7 +143,7 @@ The extension doesn't just know field names, it also knows their types. This kno
 - After a **string** field: `$regex` and `$in` are prioritized
 - After a **boolean** field: `true`/`false` value suggestions appear at the top
 
-<p align="center"><img src="images/autocompletion-boolean-field.png" alt="Autocompletion for a boolean field showing true/false values first, then comparison operators" width="650" style="max-width:100%;height:auto;"></p>
+<p align="center"><img src="images/autocompletion-boolean-field.png" alt="Autocompletion for a boolean field showing true/false values first, then comparison operators" width="800" style="max-width:100%;height:auto;"></p>
 
 In this example, the field `additionalInfo.isFamilyFriendly` is a boolean. The editor suggests `true` and `false` first, followed by comparison operators sorted by relevance. The documentation panel at the bottom describes the selected item.
 

@@ -12,7 +12,7 @@
 
 **DocumentDB for VS Code** helps you browse, manage, and query **DocumentDB** and **MongoDB** databases across any cloud, hybrid, or local environment.
 
-![DocumentDB with a Collection View and auto-completion](./vscode-documentdb-hero-screenshot.png)
+<p align="center"><img src="./vscode-documentdb-hero-screenshot.png" alt="DocumentDB with a Collection View and auto-completion" width="800" style="max-width:100%;height:auto;"></p>
 
 # Features
 
@@ -85,6 +85,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
+- [1.0](./release-notes/1.0)
 - [0.11](./release-notes/0.11), [0.11.1](./release-notes/0.11#patch-release-v0111), [0.11.2](./release-notes/0.11#patch-release-v0112)
 - [0.10](./release-notes/0.10), [0.10.1](./release-notes/0.10#patch-release-v0101), [0.10.2](./release-notes/0.10#patch-release-v0102)
 - [0.9](./release-notes/0.9), [0.9.1](./release-notes/0.9#patch-release-v091), [0.9.2](./release-notes/0.9#patch-release-v092)
