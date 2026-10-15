@@ -73,6 +73,7 @@ describe('fallback DNS client', (): void => {
     const stubs: DnsStubServer[] = [];
 
     afterEach(async (): Promise<void> => {
+        vi.useRealTimers();
         await Promise.all(stubs.map((stub): Promise<void> => stub.close()));
         stubs.length = 0;
         vi.restoreAllMocks();
@@ -186,10 +187,13 @@ describe('fallback DNS client', (): void => {
     });
 
     it('retries a server once after a UDP timeout', async (): Promise<void> => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         const server = await stub((request): void => {
-            if (server.queries.length === 2) {
-                request.send(reply(request));
+            if (server.queries.length === 1) {
+                vi.advanceTimersByTime(25);
+                return;
             }
+            request.send(reply(request));
         });
         const result = await resolveSrvFallback(srvName, options([server], { udpTimeoutMs: 25 }));
 
