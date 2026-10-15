@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { makeStyles, mergeClasses } from '@fluentui/react-components';
-import { type JSX } from 'react';
+import { type CSSProperties, type JSX } from 'react';
 import { useContainerContext } from '../contexts/container.js';
 import { type ContainerBodyProps } from './Container.types.js';
 import { useOverflowState } from './useOverflowState.js';
@@ -14,7 +14,6 @@ const useStyles = makeStyles({
     content: {
         display: 'grid',
         gap: '20px',
-        maxWidth: '760px',
         padding: '24px',
     },
     navTop: {
@@ -52,12 +51,17 @@ const useStyles = makeStyles({
 export const ContainerBody = ({
     children,
     className,
+    contentMaxWidth,
     navPosition = 'top',
     onScroll,
     tabIndex = 0,
     ...rest
 }: ContainerBodyProps): JSX.Element => {
     const styles = useStyles();
+    const contentStyle: CSSProperties & { '--container-content-max-width'?: CSSProperties['maxWidth'] } = {
+        '--container-content-max-width':
+            typeof contentMaxWidth === 'number' ? `${contentMaxWidth}px` : contentMaxWidth,
+    };
     const { setOverflowing } = useContainerContext();
     const { scrollRef, contentRef, handleScroll } = useOverflowState(setOverflowing);
 
@@ -75,6 +79,7 @@ export const ContainerBody = ({
             <div
                 ref={contentRef}
                 className={mergeClasses(styles.content, navPosition === 'start' ? styles.navStart : styles.navTop)}
+                style={contentStyle}
             >
                 {children}
             </div>

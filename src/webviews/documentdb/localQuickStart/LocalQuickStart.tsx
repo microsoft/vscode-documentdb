@@ -2512,6 +2512,7 @@ export const LocalQuickStart = (): JSX.Element => {
             <Wizard
                 activeStep={step}
                 onStepChange={goToStep}
+                contentMaxWidth="760px"
                 headerBehavior="sticky-navigation"
                 stepsLocked={stepsLocked}
                 stepsAriaLabel={l10n.t('Setup steps')}

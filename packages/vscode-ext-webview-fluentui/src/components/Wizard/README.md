@@ -77,8 +77,8 @@ The fade uses the first 150 pixels of scrolling and reaches zero opacity at 65% 
 Header media, title and subtitle keep their normal sizes; there is no condensing presentation.
 
 Navigation gains a bottom border and shadow when there is content above the scroll position.
-The shadow is clipped to the bottom. Top navigation keeps the wizard's normal maximum content
-width while its background and elevation span the scroll viewport, matching `ContainerFooter`.
+The shadow is clipped to the bottom. Top navigation respects `contentMaxWidth`,
+while its background and elevation span the scroll viewport, matching `ContainerFooter`.
 With `navPosition="start"`, the background stays within the sidebar so it cannot cover the main content.
 
 ### Action buttons
@@ -105,6 +105,12 @@ away **without fading** and the navigation still pins. This fallback simply disa
 The navigation's border and shadow retain their short cosmetic transitions.
 
 ## Sizing and embedding
+
+Content fills the available width by default. Set `contentMaxWidth="760px"` (or another CSS
+`max-width` value) to cap the navigation and main regions without restricting the header or its
+action. Pixel numbers are also accepted. Omit the prop, or pass `"none"`, to remove the cap.
+With `navPosition="start"`, the cap applies to the navigation and main regions independently.
+The normal body padding remains in every case.
 
 `Wizard` uses `Container` as its root and intentionally defaults to a full-webview height of
 `100vh`. Its body scrolls and its footer stays visible. It does not automatically fill the space

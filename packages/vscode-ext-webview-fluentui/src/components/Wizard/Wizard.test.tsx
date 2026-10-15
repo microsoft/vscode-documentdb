@@ -46,6 +46,34 @@ const wizard = (activeStep: string, onStepChange: (value: string) => void = () =
 );
 
 describe('Wizard', () => {
+    test.each([undefined, '760px', 900, 'none'])(
+        'forwards contentMaxWidth=%s without limiting the header',
+        async (contentMaxWidth) => {
+            const { root } = await renderSurface(
+                <Wizard
+                    activeStep="only"
+                    onStepChange={() => undefined}
+                    stepsAriaLabel="Setup steps"
+                    contentMaxWidth={contentMaxWidth}
+                    header={<ContainerHeader title="DocumentDB Local" action={<button>Help</button>} />}
+                >
+                    <WizardStep value="only" label="Only" />
+                </Wizard>,
+            );
+            const main = root.querySelector('main')!;
+            const grid = main.parentElement!;
+            const expectedWidth = typeof contentMaxWidth === 'number' ? `${contentMaxWidth}px` : contentMaxWidth;
+
+            expect(grid.style.getPropertyValue('--container-content-max-width')).toBe(expectedWidth ?? '');
+            expect(stylesFor(main)).toContain('max-width: var(--container-content-max-width, none)');
+            expect(stylesFor(root.querySelector('nav')!.parentElement!)).toContain(
+                'max-width: var(--container-content-max-width, none)',
+            );
+            expect(stylesFor(grid)).not.toContain('max-width:');
+            expect(stylesFor(root.querySelector('h1')!.parentElement!.parentElement!)).not.toContain('max-width:');
+        },
+    );
+
     test('renders only the active step', async () => {
         const { root, rerender } = await renderSurface(wizard('configure'));
 

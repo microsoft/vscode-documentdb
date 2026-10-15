@@ -14,6 +14,15 @@ use Fluent's `Dialog` or `Drawer` instead.
 
 ## Sizing and embedding
 
+The body has no maximum content width by default. Set `contentMaxWidth` on `ContainerBody`
+to limit the navigation and main regions, for example `contentMaxWidth="760px"`. Values follow
+React's `maxWidth` style property: strings such as `"60rem"` and pixel numbers are supported.
+Omit the prop, or use `"none"`, for no maximum. With side navigation, the limit applies to each
+region independently, not to their combined width.
+
+The header always spans the available width, so its action stays at the trailing gutter regardless
+of the content limit. The body's 24px padding and the footer's independent sizing are unchanged.
+
 `Container` intentionally defaults to `height: 100vh`: it fills the visible height of the webview,
 not its parent element and not the whole VS Code window. Place it at the top level for a full-webview
 screen. `ContainerBody` scrolls within that height, while `ContainerFooter` stays visible at the
@@ -81,8 +90,8 @@ needing different landmark semantics should compose a layout with suitable eleme
 - Keep every scrolling concern inside `ContainerBody`. It is the only scroll container.
 - Pass `focusOnMount` on the section a step change mounts, and give it a `key` that changes with
   the step.
-- Use `className` when a surface needs a different content width. None of the metrics are public
-  API yet.
+- Use `contentMaxWidth` when a surface needs a constrained content width. Other layout metrics
+  are not public API yet.
 
 ### Don't
 
