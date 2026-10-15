@@ -43,8 +43,6 @@ export async function maybeShowWelcomeScreen(context: Pick<IActionContext, 'tele
         context.telemetry.properties.welcomeScreenShown = 'true';
     } catch (error) {
         context.telemetry.properties.welcomeScreenError = 'true';
-        ext.outputChannel.appendLog(
-            `Welcome screen error: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        ext.outputChannel.appendLog(`Welcome screen error: ${error instanceof Error ? error.message : String(error)}`);
     }
 }

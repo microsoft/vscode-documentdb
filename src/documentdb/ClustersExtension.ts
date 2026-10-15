@@ -111,10 +111,10 @@ import { disposeQuickStartOutputChannel } from '../services/localQuickStart/Cont
 import { QuickStartDiagnosticsProvider } from '../services/localQuickStart/QuickStartDiagnosticsProvider';
 import { QuickStartService, sweepStaleQuickStartEnvFiles } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
-import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
 import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
+import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
 import {
     CompletionCommandIds,
     normalizeCompletionCategory,
