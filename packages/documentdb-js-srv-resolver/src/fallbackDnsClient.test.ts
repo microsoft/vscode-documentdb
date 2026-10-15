@@ -180,7 +180,10 @@ describe('fallback DNS client', (): void => {
     });
 
     it('tries the next server after a silent server times out', async (): Promise<void> => {
-        const first = await stub((): void => {});
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const first = await stub((): void => {
+            vi.advanceTimersByTime(25);
+        });
         const second = await stub((request): void => request.send(reply(request)));
         const result = await resolveSrvFallback(srvName, options([first, second], { udpTimeoutMs: 25 }));
         expect(result.serversTried).toBe(2);
@@ -223,13 +226,23 @@ describe('fallback DNS client', (): void => {
     });
 
     it('bounds all servers by one shared deadline', async (): Promise<void> => {
-        const servers = await Promise.all([0, 1, 2].map((): Promise<DnsStubServer> => stub((): void => {})));
+        vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+        const first = await stub((): void => {
+            vi.advanceTimersByTime(200);
+        });
+        const second = await stub((): void => {
+            vi.advanceTimersByTime(100);
+        });
+        const third = await stub((): void => {});
+        const servers = [first, second, third];
         const started = Date.now();
         await expect(
             resolveSrvFallback(srvName, options(servers, { deadlineAt: started + 300, udpTimeoutMs: 200 })),
         ).rejects.toMatchObject({ code: dns.TIMEOUT, serversTried: 2 });
-        expect(Date.now() - started).toBeLessThan(450);
-        expect(servers[2].queries).toHaveLength(0);
+        expect(Date.now() - started).toBe(300);
+        expect(first.queries).toHaveLength(1);
+        expect(second.queries).toHaveLength(1);
+        expect(third.queries).toHaveLength(0);
     });
 
     it('rejects with the abort reason and does not try further servers', async (): Promise<void> => {
