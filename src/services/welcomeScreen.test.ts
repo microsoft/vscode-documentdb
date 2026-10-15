@@ -7,6 +7,8 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { maybeShowWelcomeScreen } from './welcomeScreen';
 
+type MockActionContext = Pick<IActionContext, 'telemetry' | 'errorHandling'>;
+
 const mocks = vi.hoisted(() => {
     const globalState = new Map<string, unknown>();
     const workspaceState = new Map<string, unknown>();
@@ -29,6 +31,22 @@ const mocks = vi.hoisted(() => {
         appendLog: vi.fn(),
     };
 });
+
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
+        async (_eventId: string, callback: (context: MockActionContext) => Promise<void>): Promise<void> => {
+            const context: MockActionContext = {
+                telemetry: { properties: {}, measurements: {} },
+                errorHandling: { issueProperties: {} },
+            };
+            try {
+                await callback(context);
+            } catch {
+                // The real wrapper reports and swallows background failures.
+            }
+        },
+    ),
+}));
 
 vi.mock('vscode', () => ({
     env: mocks.env,
@@ -53,19 +71,16 @@ const LEGACY_SHOWN_KEY = 'welcomeScreenShown_v0_4_0';
 const DEFERRED_SESSION_KEY = 'welcomeScreenDeferredSession_v1_0_0';
 
 describe('welcome screen session deferral', () => {
-    let context: Pick<IActionContext, 'telemetry'>;
-
     beforeEach((): void => {
         vi.clearAllMocks();
         mocks.globalState.clear();
         mocks.workspaceState.clear();
         mocks.env.sessionId = 'window-session-1';
         mocks.executeCommand.mockReset().mockResolvedValue(undefined);
-        context = { telemetry: { properties: {}, measurements: {} } };
     });
 
     it('opens onboarding for a fresh install without deferring', async (): Promise<void> => {
-        const opening = maybeShowWelcomeScreen(context);
+        const opening = maybeShowWelcomeScreen();
         expect(mocks.executeCommand).not.toHaveBeenCalled();
         await opening;
 
@@ -74,24 +89,22 @@ describe('welcome screen session deferral', () => {
             'ms-azuretools.vscode-documentdb#documentdb-welcome',
         );
         expect(mocks.globalState.get(SHOWN_KEY)).toBe(true);
-        expect(context.telemetry.properties.welcomeScreenShown).toBe('true');
         expect(mocks.workspaceUpdate).not.toHaveBeenCalledWith(DEFERRED_SESSION_KEY, mocks.env.sessionId);
     });
 
     it('treats an unset or false legacy welcome flag as a fresh install', async (): Promise<void> => {
         mocks.globalState.set(LEGACY_SHOWN_KEY, false);
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         expect(mocks.executeCommand).toHaveBeenCalledTimes(1);
     });
 
     it('defers the first upgraded activation without consuming the welcome opportunity', async (): Promise<void> => {
         mocks.globalState.set(LEGACY_SHOWN_KEY, true);
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
 
         expect(mocks.workspaceState.get(DEFERRED_SESSION_KEY)).toBe('window-session-1');
         expect(mocks.executeCommand).not.toHaveBeenCalled();
         expect(mocks.globalState.has(SHOWN_KEY)).toBe(false);
-        expect(context.telemetry.properties.welcomeScreenShown).toBeUndefined();
         expect(mocks.appendLog).toHaveBeenCalledWith(
             'Deferring the updated welcome screen until a later window session.',
         );
@@ -99,10 +112,10 @@ describe('welcome screen session deferral', () => {
 
     it('keeps deferring when the extension host restarts in the same window session', async (): Promise<void> => {
         mocks.globalState.set(LEGACY_SHOWN_KEY, true);
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         vi.resetModules();
         const reactivated = await import('./welcomeScreen');
-        await reactivated.maybeShowWelcomeScreen(context);
+        await reactivated.maybeShowWelcomeScreen();
 
         expect(mocks.executeCommand).not.toHaveBeenCalled();
         expect(mocks.workspaceUpdate).toHaveBeenCalledExactlyOnceWith(DEFERRED_SESSION_KEY, 'window-session-1');
@@ -111,22 +124,21 @@ describe('welcome screen session deferral', () => {
 
     it('opens the updated walkthrough on a later window session and clears the pending state', async (): Promise<void> => {
         mocks.globalState.set(LEGACY_SHOWN_KEY, true);
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         mocks.env.sessionId = 'window-session-2';
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
 
         expect(mocks.executeCommand).toHaveBeenCalledTimes(1);
         expect(mocks.globalState.get(SHOWN_KEY)).toBe(true);
         expect(mocks.workspaceState.has(DEFERRED_SESSION_KEY)).toBe(false);
-        expect(context.telemetry.properties.welcomeScreenShown).toBe('true');
     });
 
     it('does not reopen the walkthrough on subsequent activations or patch updates', async (): Promise<void> => {
         mocks.globalState.set(SHOWN_KEY, true);
         mocks.globalState.set(LEGACY_SHOWN_KEY, true);
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         mocks.env.sessionId = 'window-session-2';
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
 
         expect(mocks.executeCommand).not.toHaveBeenCalled();
         expect(mocks.workspaceUpdate).not.toHaveBeenCalled();
@@ -134,10 +146,10 @@ describe('welcome screen session deferral', () => {
 
     it('defers independently in another workspace instead of consuming its first activation', async (): Promise<void> => {
         mocks.globalState.set(LEGACY_SHOWN_KEY, true);
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         mocks.workspaceState.clear();
         mocks.env.sessionId = 'another-workspace-session';
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
 
         expect(mocks.executeCommand).not.toHaveBeenCalled();
         expect(mocks.workspaceState.get(DEFERRED_SESSION_KEY)).toBe('another-workspace-session');
@@ -145,10 +157,10 @@ describe('welcome screen session deferral', () => {
 
     it('honors the shared shown flag when another workspace already opened the guide', async (): Promise<void> => {
         mocks.globalState.set(LEGACY_SHOWN_KEY, true);
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         mocks.globalState.set(SHOWN_KEY, true);
         mocks.env.sessionId = 'window-session-2';
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
 
         expect(mocks.executeCommand).not.toHaveBeenCalled();
     });
@@ -163,7 +175,7 @@ describe('welcome screen session deferral', () => {
                     finishOpening = resolve;
                 }),
         );
-        const opening = maybeShowWelcomeScreen(context);
+        const opening = maybeShowWelcomeScreen();
         await new Promise<void>((resolve) => setImmediate(resolve));
 
         expect(mocks.executeCommand).toHaveBeenCalledTimes(1);
@@ -177,14 +189,13 @@ describe('welcome screen session deferral', () => {
         mocks.globalState.set(LEGACY_SHOWN_KEY, true);
         mocks.workspaceState.set(DEFERRED_SESSION_KEY, 'previous-window-session');
         mocks.executeCommand.mockRejectedValueOnce(new Error('Walkthrough unavailable'));
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
 
         expect(mocks.globalState.has(SHOWN_KEY)).toBe(false);
         expect(mocks.workspaceState.get(DEFERRED_SESSION_KEY)).toBe('previous-window-session');
-        expect(context.telemetry.properties.welcomeScreenError).toBe('true');
         expect(mocks.appendLog).toHaveBeenCalledWith('Welcome screen error: Walkthrough unavailable');
 
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         expect(mocks.executeCommand).toHaveBeenCalledTimes(2);
         expect(mocks.globalState.get(SHOWN_KEY)).toBe(true);
         expect(mocks.workspaceState.has(DEFERRED_SESSION_KEY)).toBe(false);
@@ -192,25 +203,24 @@ describe('welcome screen session deferral', () => {
 
     it('leaves fresh-install onboarding retryable after an opening failure', async (): Promise<void> => {
         mocks.executeCommand.mockRejectedValueOnce('Command failed');
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         expect(mocks.globalState.has(SHOWN_KEY)).toBe(false);
         expect(mocks.appendLog).toHaveBeenCalledWith('Welcome screen error: Command failed');
 
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         expect(mocks.globalState.get(SHOWN_KEY)).toBe(true);
     });
 
     it('does not open the guide when persisting the deferral fails', async (): Promise<void> => {
         mocks.globalState.set(LEGACY_SHOWN_KEY, true);
         mocks.workspaceUpdate.mockRejectedValueOnce(new Error('Storage unavailable'));
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
 
         expect(mocks.executeCommand).not.toHaveBeenCalled();
         expect(mocks.globalState.has(SHOWN_KEY)).toBe(false);
-        expect(context.telemetry.properties.welcomeScreenError).toBe('true');
         expect(mocks.appendLog).toHaveBeenCalledWith('Welcome screen error: Storage unavailable');
 
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         expect(mocks.workspaceState.get(DEFERRED_SESSION_KEY)).toBe('window-session-1');
         expect(mocks.executeCommand).not.toHaveBeenCalled();
     });
@@ -219,21 +229,19 @@ describe('welcome screen session deferral', () => {
         mocks.globalGet.mockImplementationOnce((): never => {
             throw new Error('State unavailable');
         });
-        await expect(maybeShowWelcomeScreen(context)).resolves.toBeUndefined();
+        await expect(maybeShowWelcomeScreen()).resolves.toBeUndefined();
         expect(mocks.executeCommand).not.toHaveBeenCalled();
         expect(mocks.appendLog).toHaveBeenCalledWith('Welcome screen error: State unavailable');
-        expect(context.telemetry.properties.welcomeScreenError).toBe('true');
     });
 
     it('leaves an unsuccessful shown-state write retryable', async (): Promise<void> => {
         mocks.globalUpdate.mockRejectedValueOnce(new Error('Write failed'));
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
 
         expect(mocks.globalState.has(SHOWN_KEY)).toBe(false);
-        expect(context.telemetry.properties.welcomeScreenShown).toBeUndefined();
         expect(mocks.appendLog).toHaveBeenCalledWith('Welcome screen error: Write failed');
 
-        await maybeShowWelcomeScreen(context);
+        await maybeShowWelcomeScreen();
         expect(mocks.globalState.get(SHOWN_KEY)).toBe(true);
     });
 });

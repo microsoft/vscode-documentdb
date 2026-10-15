@@ -1129,7 +1129,7 @@ export class ClustersExtension implements vscode.Disposable {
                     void task.start();
                 });
 
-                void maybeShowWelcomeScreen(activateContext);
+                void maybeShowWelcomeScreen();
             },
         );
     }
