@@ -23,7 +23,7 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
-import { recordSurveyActivity } from '../../../services/survey/SurveyService';
+import { recordSurveyActivityWithInvitation } from '../../../services/survey/SurveyService';
 import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
@@ -253,7 +253,7 @@ export const collectionsViewRouter = router({
             });
 
             if (executionIntent === 'initial' && !myCtx.signal?.aborted) {
-                recordSurveyActivity('dataBrowsing');
+                recordSurveyActivityWithInvitation('dataBrowsing');
             }
             return { documentCount: size };
         }),

@@ -397,7 +397,9 @@ path needs it. Do not wrap every command or add a survey event to every existing
 | Query Insights/AI             | First completed user-requested analysis                              | Completion boundary, not pipeline stages, streamed chunks, or automatic reanalysis                                                                           |
 | Cluster Dashboard, if shipped | First useful user-requested inventory load                           | No health polling; the feature index marks this as a POC, so it is not a release dependency                                                                  |
 
-Any one area can mark the day active; feature diversity is not a prerequisite. Once the
+Any one area can mark the day active; feature diversity is not a prerequisite. Only
+Collection View and Cluster Dashboard milestones evaluate eligibility and can show the
+invitation; every other milestone only counts the day (D0031). Once the
 session's initial observation/evaluation and day's count are recorded, repeated completion
 callbacks with unchanged state are cheap no-ops without additional survey events or writes.
 Relevant eligibility/presentation changes still produce the required bounded stage events.

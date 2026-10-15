@@ -12,6 +12,7 @@ import {
     getSurveyService,
     initializeSurveyService,
     recordSurveyActivity,
+    recordSurveyActivityWithInvitation,
     SurveyService,
     type SurveyServiceOptions,
 } from './SurveyService';
@@ -152,7 +153,7 @@ function createHarness(storage = new MemoryStorage(), overrides: Partial<SurveyS
 }
 
 async function activity(h: Harness): Promise<void> {
-    h.service.recordSurveyActivity('connection');
+    h.service.recordSurveyActivityWithInvitation('connection');
     await h.service.whenIdle();
 }
 
@@ -339,7 +340,7 @@ describe('SurveyService', (): void => {
             storage.write(key, value);
         });
         const h = createHarness(storage, { alwaysInvite: true });
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await started.promise;
         const reset = h.service.resetState();
         pending.resolve(undefined);
@@ -418,27 +419,74 @@ describe('SurveyService', (): void => {
         h.service.dispose();
     });
 
-    it('Stage 3: a playground-only user qualifies over three local days', async (): Promise<void> => {
+    it('D0031: playground-only usage counts days without evaluating, and Collection View then invites', async (): Promise<void> => {
         const h = createHarness();
         for (let day = 1; day <= 3; day++) {
             h.flags.now = new Date(2026, 9, day, 10, 0);
             h.service.recordSurveyActivity('queryPlayground');
             await h.service.whenIdle();
             expect(h.state().activeDayCount).toBe(day);
-            expect(h.present).toHaveBeenCalledTimes(day === 3 ? 1 : 0);
         }
+        expect(h.present).not.toHaveBeenCalled();
+        expect(h.events()).toEqual(['survey.cohortEntry']);
         expect(h.sent('survey.cohortEntry')[0].properties.featureArea).toBe('queryPlayground');
+        h.service.recordSurveyActivityWithInvitation('dataBrowsing');
+        await h.service.whenIdle();
+        expect(h.state().activeDayCount).toBe(3);
+        expect(h.present).toHaveBeenCalledOnce();
         expect(h.present.mock.calls[0][0].explanation.requiredActiveDays).toBe(3);
+        expect(h.sent('survey.eligibility')).toHaveLength(1);
+        h.service.dispose();
+    });
+
+    it('D0031: counting-only activity on an already counted day writes nothing', async (): Promise<void> => {
+        const h = createHarness();
+        h.service.recordSurveyActivity('interactiveShell');
+        await h.service.whenIdle();
+        const writes = h.stateKeyWrites();
+        h.service.recordSurveyActivity('dataManagement');
+        await h.service.whenIdle();
+        expect(h.stateKeyWrites()).toBe(writes);
+        expect(h.state().activeDayCount).toBe(1);
+        expect(h.events()).toEqual(['survey.cohortEntry']);
+        h.service.dispose();
+    });
+
+    it('D0031: an inviting milestone during in-flight counting is evaluated afterwards', async (): Promise<void> => {
+        const storage = new MemoryStorage();
+        seedEligible(storage);
+        const pending = deferred<void>();
+        storage.update.mockImplementationOnce(async (key, value): Promise<void> => {
+            await pending.promise;
+            storage.write(key, value);
+        });
+        const h = createHarness(storage);
+        h.service.recordSurveyActivity('interactiveShell');
+        h.service.recordSurveyActivityWithInvitation('clusterDashboard');
+        pending.resolve(undefined);
+        await h.service.whenIdle();
+        expect(h.state().activeDayCount).toBe(3);
+        expect(h.present).toHaveBeenCalledOnce();
+        expect(h.sent('survey.eligibility')).toHaveLength(1);
+        h.service.dispose();
+    });
+
+    it('D0031: counting-only activity never presents, even with always-invite', async (): Promise<void> => {
+        const h = createHarness(new MemoryStorage(), { alwaysInvite: true });
+        h.service.recordSurveyActivity('connection');
+        await h.service.whenIdle();
+        expect(h.present).not.toHaveBeenCalled();
+        expect(h.state().activeDayCount).toBe(1);
         h.service.dispose();
     });
 
     it('Stage 3: two successful areas on the same local day add one day and no extra events', async (): Promise<void> => {
         const h = createHarness();
-        h.service.recordSurveyActivity('interactiveShell');
+        h.service.recordSurveyActivityWithInvitation('interactiveShell');
         await h.service.whenIdle();
         const events = h.events();
         const writes = h.stateKeyWrites();
-        h.service.recordSurveyActivity('queryInsights');
+        h.service.recordSurveyActivityWithInvitation('queryInsights');
         await h.service.whenIdle();
         expect(h.state().activeDayCount).toBe(1);
         expect(h.stateKeyWrites()).toBe(writes);
@@ -517,7 +565,7 @@ describe('SurveyService', (): void => {
         vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue(configuration(level, level === 'throwing'));
         const storage = new MemoryStorage();
         const service = new SurveyService({ storage, machineId: 'test-machine', isSurveyEnabled: (): boolean => true });
-        service.recordSurveyActivity('connection');
+        service.recordSurveyActivityWithInvitation('connection');
         await service.whenIdle();
         expect(storage.update.mock.calls.filter(([key]): boolean => key === SURVEY_STATE_KEY)).toHaveLength(writes);
         service.dispose();
@@ -558,7 +606,7 @@ describe('SurveyService', (): void => {
         const writes = h.storage.update.mock.calls.length;
         const events = h.events();
         for (let index = 0; index < 10; index++) {
-            h.service.recordSurveyActivity('dataBrowsing');
+            h.service.recordSurveyActivityWithInvitation('dataBrowsing');
         }
         await h.service.whenIdle();
         expect(h.storage.update).toHaveBeenCalledTimes(writes);
@@ -578,7 +626,7 @@ describe('SurveyService', (): void => {
         });
         const h = createHarness(storage);
         for (const area of SURVEY_FEATURE_AREAS.slice(0, 5)) {
-            h.service.recordSurveyActivity(area);
+            h.service.recordSurveyActivityWithInvitation(area);
         }
         pending.resolve();
         await h.service.whenIdle();
@@ -769,7 +817,7 @@ describe('SurveyService', (): void => {
             started.resolve();
             return pending.promise;
         });
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await started.promise;
         const callbacks = h.callbacks();
         const events = h.events();
@@ -797,7 +845,7 @@ describe('SurveyService', (): void => {
             started.resolve();
             return pending.promise;
         });
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await started.promise;
         expect(h.state().activeDayCount).toBe(3);
         const writes = h.stateKeyWrites();
@@ -845,7 +893,7 @@ describe('SurveyService', (): void => {
             }
             h.storage.write(key, value);
         });
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await started.promise;
         h.flags.permitted = false;
         h.service.handlePermissionChanged();
@@ -1064,7 +1112,7 @@ describe('SurveyService', (): void => {
         h.sink.mockImplementation((): never => {
             throw new Error('Telemetry unavailable');
         });
-        expect((): void => h.service.recordSurveyActivity('connection')).not.toThrow();
+        expect((): void => h.service.recordSurveyActivityWithInvitation('connection')).not.toThrow();
         await h.service.whenIdle();
         expect(h.stateKeyWrites()).toBe(1);
         const broken = createHarness(new MemoryStorage(), {
@@ -1072,7 +1120,7 @@ describe('SurveyService', (): void => {
                 throw new Error('Policy unavailable');
             },
         });
-        expect((): void => broken.service.recordSurveyActivity('connection')).not.toThrow();
+        expect((): void => broken.service.recordSurveyActivityWithInvitation('connection')).not.toThrow();
         await broken.service.whenIdle();
         expect(broken.events()).toEqual([]);
         expect(broken.stateKeyWrites()).toBe(0);
@@ -1088,7 +1136,7 @@ describe('SurveyService', (): void => {
             started.resolve();
             return pending.promise;
         });
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await started.promise;
         const events = h.events();
         h.service.dispose();
@@ -1111,7 +1159,7 @@ describe('SurveyService', (): void => {
             started.resolve();
             return pending.promise;
         });
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await started.promise;
         const events = h.events();
         const writes = h.stateKeyWrites();
@@ -1273,7 +1321,7 @@ describe('survey local diagnostics', (): void => {
 
     it('acknowledges finite areas and distinguishes new versus already-counted days without extra counts or events', async (): Promise<void> => {
         const h = createHarness();
-        h.service.recordSurveyActivity('queryPlayground');
+        h.service.recordSurveyActivityWithInvitation('queryPlayground');
         await h.service.whenIdle();
         expect(trace).toHaveBeenCalledWith('[Survey] Acknowledged usage: queryPlayground.');
         expect(trace).toHaveBeenCalledWith('[Survey] Counted a new active day: 1 of 3 required.');
@@ -1282,7 +1330,7 @@ describe('survey local diagnostics', (): void => {
         const events = h.events();
         const writes = h.stateKeyWrites();
         trace.mockClear();
-        h.service.recordSurveyActivity('queryInsights');
+        h.service.recordSurveyActivityWithInvitation('queryInsights');
         await h.service.whenIdle();
         expect(trace.mock.calls).toEqual([
             ['[Survey] Acknowledged usage: queryInsights.'],
@@ -1318,8 +1366,8 @@ describe('survey local diagnostics', (): void => {
             await pending.promise;
             h.storage.write(key, value);
         });
-        h.service.recordSurveyActivity('connection');
-        h.service.recordSurveyActivity('dataBrowsing');
+        h.service.recordSurveyActivityWithInvitation('connection');
+        h.service.recordSurveyActivityWithInvitation('dataBrowsing');
         expect(trace).toHaveBeenCalledWith('[Survey] Acknowledged usage: dataBrowsing.');
         expect(trace).toHaveBeenCalledWith('[Survey] Skipping evaluation: covered by an in-flight evaluation.');
         pending.resolve();
@@ -1577,7 +1625,7 @@ describe('survey singleton initialization', (): void => {
         expect(getSurveyService()).toBe(service);
         expect(initializeSurveyService(context(new MemoryStorage(), mode))).toBe(service);
         expect(subscriptions).toHaveLength(3);
-        recordSurveyActivity('connection');
+        recordSurveyActivityWithInvitation('connection');
         await service.whenIdle();
         expect(storage.update.mock.calls.filter(([key]): boolean => key === SURVEY_STATE_KEY)).toHaveLength(writes);
     });
@@ -1606,7 +1654,7 @@ describe('survey singleton initialization', (): void => {
         const service = initializeSurveyService(context(storage, vscode.ExtensionMode.Development));
         const present = vi.fn().mockResolvedValue({ dispose: vi.fn() });
         service.setPresenter({ present });
-        recordSurveyActivity('connection');
+        recordSurveyActivityWithInvitation('connection');
         await service.whenIdle();
         expect(present).toHaveBeenCalledTimes(invitations);
         if (state.optedOutAt || level !== 'all') {
@@ -1628,7 +1676,7 @@ describe('survey singleton initialization', (): void => {
             const service = initializeSurveyService(context(storage, mode));
             const present = vi.fn().mockResolvedValue({ dispose: vi.fn() });
             service.setPresenter({ present });
-            recordSurveyActivity('connection');
+            recordSurveyActivityWithInvitation('connection');
             await service.whenIdle();
             expect(present).toHaveBeenCalledTimes(mode === vscode.ExtensionMode.Development ? 1 : 0);
         },
@@ -1652,11 +1700,16 @@ describe('survey singleton initialization', (): void => {
 
     it('module activity is a no-op before initialization and guards unexpected service errors', (): void => {
         expect(getSurveyService()).toBeUndefined();
+        expect((): void => recordSurveyActivityWithInvitation('connection')).not.toThrow();
         expect((): void => recordSurveyActivity('connection')).not.toThrow();
         const service = initializeSurveyService(context(new MemoryStorage(), vscode.ExtensionMode.Development));
+        vi.spyOn(service, 'recordSurveyActivityWithInvitation').mockImplementation((): never => {
+            throw new Error('Unexpected failure');
+        });
         vi.spyOn(service, 'recordSurveyActivity').mockImplementation((): never => {
             throw new Error('Unexpected failure');
         });
+        expect((): void => recordSurveyActivityWithInvitation('connection')).not.toThrow();
         expect((): void => recordSurveyActivity('connection')).not.toThrow();
     });
 });

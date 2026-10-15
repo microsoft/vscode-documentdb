@@ -43,6 +43,7 @@ created: 2026-10-07
 | 0028 | Minimum VS Code version follows the build stack, 1.109.0     | Accepted            | Supersedes D0018; raised by the merge of #880                                                                  | 2026-10-14 | #992  |
 | 0029 | Attribute feedback activation and distinguish true returns   | Accepted            | Adds host-validated source and persisted invitation history; old history is unknown                            | 2026-10-15 | -     |
 | 0030 | Gate feedback controls without live settings sync            | Accepted            | Applies the existing `all` permission rule to buttons and the Help tree; views snapshot it at open             | 2026-10-15 | #1016 |
+| 0031 | Only Collection View and the Dashboard show the invitation   | Accepted            | Other milestones only count active days; eligibility is evaluated only where the invitation can appear         | 2026-10-15 | #1016 |
 
 > Entries are semantically immutable: append new entries rather than rewriting old ones, and record
 > reversals as a new entry plus a status change above.
@@ -453,3 +454,27 @@ command-palette Give Feedback action remains an explicit direct browser request.
 **Reasoning (operator):** Users who are not eligible for feedback must not see these
 entry points. Live syncing this one setting would require a broader approach to syncing
 all settings throughout the application, which is not part of this work.
+
+## 0031: Only Collection View and the Dashboard show the invitation
+
+**Decision (operator):** every milestone keeps counting active days, but only Collection View
+milestones (initial query, Indexes tab, Query Insights) and the Cluster Dashboard inventory
+load may evaluate eligibility and show the invitation. The Query Playground, interactive shell,
+tree paste tasks, Document View saves, and Local Quick Start completion only count. The
+MongoDB Atlas credentials wizard records no usage. Counting-only milestones emit
+`survey.cohortEntry` but never `survey.eligibility`.
+
+**Reasoning (operator):** the invitation should appear while someone is working in the
+product's main webviews, not while they pass through other surfaces. Evaluating only where
+the invitation can appear keeps `survey.eligibility` meaning "eligible to be shown now", so
+the eligible-to-shown funnel and deferral reasons stay accurate without a schema change.
+
+**Rejected:** sending usage signals only from the two webviews (Shell and Playground users
+would never qualify, and cohort coverage would shrink); evaluating on every milestone but
+presenting only from the two webviews (needs a new eligibility dimension, dedupe changes,
+and updated reports, and "eligible" would no longer imply a chance to be shown).
+
+**Accepted consequence:** installations that never use Collection View or the Dashboard are
+enrolled but never evaluated, so they are absent from gate attribution. They can be estimated
+as enrolled installations without any `survey.eligibility` event. An inviting milestone that
+arrives while counting is in flight is evaluated right after it.

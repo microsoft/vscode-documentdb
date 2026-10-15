@@ -27,7 +27,7 @@ behavior and `decisions.md` wins for intent.
 | `src/services/survey/surveyTelemetry.ts`    | The only emitter of survey events; permission check and per-session bounds                                                                              |
 | `src/services/survey/surveyDiagnostics.ts`  | Guarded local-only trace formatting through the existing DocumentDB output channel; no telemetry forwarding                                             |
 | `src/services/survey/surveyPresentation.ts` | Contract for the invitation surface (Stage 2)                                                                                                           |
-| `src/services/survey/SurveyService.ts`      | Orchestration: `recordSurveyActivity(featureArea)`, the shared in-flight promise, reservation, presentation, outcomes, permission withdrawal            |
+| `src/services/survey/SurveyService.ts`      | Orchestration: `recordSurveyActivity` / `recordSurveyActivityWithInvitation(featureArea)`, the shared in-flight promise, reservation, presentation, outcomes, permission withdrawal |
 | `src/services/survey/invitation/`           | Pure HTML builder, localized copy, Secondary Sidebar presenter, and generic host message handling                                                       |
 | `src/commands/giveFeedback/`                | Explicit user opening through the service, with user-driven retries, bounded survey telemetry, and no automatic command telemetry                       |
 
@@ -159,12 +159,19 @@ override is ignored outside Development. Telemetry independently requires
 
 Development activation registers `_DocumentDB: Survey: Simulate Milestone` and
 `_DocumentDB: Survey: Reset State`, with no category and palette visibility gated by
-`documentdb-development-mode`. Simulation calls the real activity entry point with
+`documentdb-development-mode`. Simulation calls the real inviting entry point with
 `connection`. Reset closes the invitation, invalidates pending work, waits for queued writes,
 deletes `SURVEY_STATE_KEY`, and clears local reservation and session suppression. It can
 clear a development opt-out without reloading; there is still no production reset command.
 
-Each call to `recordSurveyActivity(featureArea)` marks a successful, user-requested milestone.
+Each milestone marks a successful, user-requested action through one of two entry points
+(D0031):
+
+- `recordSurveyActivityWithInvitation(featureArea)`: Collection View (initial query, Indexes
+  tab, Query Insights) and the Cluster Dashboard inventory load. Runs every step below.
+- `recordSurveyActivity(featureArea)`: every other milestone (Query Playground, interactive
+  shell, paste tasks, Document View saves, Local Quick Start). Runs steps 1 to 3 only: it
+  counts the day but never evaluates gates, sends `survey.eligibility`, or presents.
 
 1. **Preconditions**, in order: shared code switch (D0021), feedback permission, permanent opt-out.
    If one fails, nothing happens: no state write, no event. Installations stopped here are
@@ -179,10 +186,12 @@ Each call to `recordSurveyActivity(featureArea)` marks a successful, user-reques
    any await, rechecks permission, and presents right away (D0012). If no presenter is
    available, `survey.presentationDeferred` is sent and the next milestone tries again.
 
-Evaluation runs only on the first call in a session, on a new active day, or after a state
-change (an outcome, a deferral, or a permission change). All work runs through one shared
-in-flight promise, so concurrent calls evaluate once; calls that arrive while it is pending are
-covered by it.
+Evaluation runs only on the first inviting call in a session, on a new active day, or after a
+state change (an outcome, a deferral, or a permission change). Because counting-only calls may
+already have counted the day, the `trigger` of a later evaluation can be `sessionStart` or
+`stateChange` rather than `newActiveDay`. All work runs through one shared in-flight promise,
+so concurrent calls evaluate once; calls that arrive while it is pending are covered by it,
+except that an inviting call arriving during counting-only work is evaluated right after it.
 
 The "DocumentDB: Give Feedback" command (D0015) opens the form whenever the
 user asks, even after "Never again". It sends `survey.openForm` with trigger `command` only when

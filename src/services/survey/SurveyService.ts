@@ -76,9 +76,13 @@ interface ActiveInvitation {
  * Orchestrates the survey: activity, eligibility, presentation, outcomes.
  *
  * Contract:
- * - `recordSurveyActivity` is synchronous, fire-and-forget, and never throws. When a
- *   precondition fails (kill switch, permission, opt-out) it only traces: no write, no event.
- * - All work runs through one shared in-flight promise, so concurrent calls evaluate once.
+ * - `recordSurveyActivity` and `recordSurveyActivityWithInvitation` are synchronous,
+ *   fire-and-forget, and never throw. When a precondition fails (kill switch, permission,
+ *   opt-out) they only trace: no write, no event.
+ * - `recordSurveyActivity` only counts the active day: no eligibility evaluation or event and
+ *   no invitation. Only `recordSurveyActivityWithInvitation` evaluates and may present.
+ * - All work runs through one shared in-flight promise, so concurrent calls evaluate once. An
+ *   inviting call that arrives during in-flight counting is evaluated right after it.
  *   Repeated activity on an already counted day, with no state change since the last
  *   evaluation, is a no-op apart from local traces, without writes or events.
  * - An eligible result reserves the invitation synchronously, before any await, then rechecks
@@ -98,6 +102,8 @@ export class SurveyService implements vscode.Disposable {
     private readonly reportOptOutSaveFailure: () => void;
     private samplingValue: number | undefined;
     private inFlight: Promise<void> | undefined;
+    private inFlightInvites = false;
+    private pendingInvitation: SurveyFeatureArea | undefined;
     private generation = 0;
     private sessionEvaluated = false;
     private lastEvaluatedDay: SurveyLocalDay | undefined;
@@ -129,8 +135,20 @@ export class SurveyService implements vscode.Disposable {
         this.reportOptOutSaveFailure = options.reportOptOutSaveFailure ?? reportOptOutSaveFailure;
     }
 
-    /** Records a successful milestone in `featureArea`. See the class contract. */
+    /** Counts a successful milestone in `featureArea` as usage, without evaluating or inviting. */
     public recordSurveyActivity(featureArea: SurveyFeatureArea): void {
+        this.recordActivity(featureArea, false);
+    }
+
+    /**
+     * Counts a successful milestone and may show the invitation. Only Collection View and
+     * Cluster Dashboard milestones use this (D0031). See the class contract.
+     */
+    public recordSurveyActivityWithInvitation(featureArea: SurveyFeatureArea): void {
+        this.recordActivity(featureArea, true);
+    }
+
+    private recordActivity(featureArea: SurveyFeatureArea, invite: boolean): void {
         try {
             if (this.disposed) {
                 traceSurvey((): string => vscode.l10n.t('[Survey] Admission suppressed: service disposed.'));
@@ -144,13 +162,25 @@ export class SurveyService implements vscode.Disposable {
             }
             this.telemetry.reportCohortEntry(featureArea);
             if (this.inFlight) {
-                traceSurvey((): string =>
-                    vscode.l10n.t('[Survey] Skipping evaluation: covered by an in-flight evaluation.'),
-                );
+                if (invite && !this.inFlightInvites) {
+                    this.pendingInvitation = featureArea;
+                    traceSurvey((): string =>
+                        vscode.l10n.t('[Survey] Evaluation queued behind in-flight usage counting.'),
+                    );
+                } else {
+                    traceSurvey((): string =>
+                        vscode.l10n.t('[Survey] Skipping evaluation: covered by an in-flight evaluation.'),
+                    );
+                }
                 return;
             }
             const today = toLocalDay(this.now());
-            if (
+            if (!invite) {
+                if (this.store.current.lastActiveDay === today) {
+                    this.traceActiveDay(false, this.store.current.activeDayCount);
+                    return;
+                }
+            } else if (
                 !this.alwaysInvite &&
                 this.sessionEvaluated &&
                 today === this.lastEvaluatedDay &&
@@ -163,16 +193,24 @@ export class SurveyService implements vscode.Disposable {
                 return;
             }
             const gen = this.generation;
-            const run = this.process(today, gen)
+            this.pendingInvitation = undefined;
+            const run = (invite ? this.process(today, gen) : this.countActiveDay(today))
                 .catch((): void => {
                     traceSurvey((): string => vscode.l10n.t('[Survey] Activity processing failed.'));
                 })
                 .then((): void => {
-                    if (this.inFlight === run) {
-                        this.inFlight = undefined;
+                    if (this.inFlight !== run) {
+                        return;
+                    }
+                    this.inFlight = undefined;
+                    const pending = this.pendingInvitation;
+                    this.pendingInvitation = undefined;
+                    if (pending) {
+                        this.recordActivity(pending, true);
                     }
                 });
             this.inFlight = run;
+            this.inFlightInvites = invite;
         } catch {
             // Survey failures must never affect the successful feature milestone.
             traceSurvey((): string => vscode.l10n.t('[Survey] Activity processing failed.'));
@@ -378,8 +416,10 @@ export class SurveyService implements vscode.Disposable {
         this.generation++;
         this.inFlight = undefined;
         this.cancelInvitation();
+        disposeHandle(this.manualHandle);
+        this.manualHandle = undefined;
         this.invitationReserved = false;
-        this.recordSurveyActivity(featureArea);
+        this.recordSurveyActivityWithInvitation(featureArea);
         await this.whenIdle();
     }
 
@@ -470,6 +510,14 @@ export class SurveyService implements vscode.Disposable {
     private async recordVisibilityCooldown(nextEligibleAt: Date): Promise<void> {
         const write = await this.store.recordCooldown(nextEligibleAt);
         this.tracePersistence('visibility cooldown', write);
+    }
+
+    private async countActiveDay(today: SurveyLocalDay): Promise<void> {
+        const transition = await this.store.recordActiveDay(today);
+        if (transition.changed) {
+            this.tracePersistence('active day', transition.write);
+        }
+        this.traceActiveDay(transition.changed, this.store.current.activeDayCount);
     }
 
     private async process(today: SurveyLocalDay, gen: number): Promise<void> {
@@ -768,12 +816,21 @@ export function getSurveyService(): SurveyService | undefined {
 }
 
 /**
- * The single entry point for feature milestones. Fire-and-forget, never throws, and a no-op
- * before initialization. Call only after a successful, user-requested milestone.
+ * Counts a feature milestone as usage without showing the invitation. Fire-and-forget, never
+ * throws, and a no-op before initialization. Call only after a successful, user-requested milestone.
  */
 export function recordSurveyActivity(featureArea: SurveyFeatureArea): void {
     try {
         instance?.recordSurveyActivity(featureArea);
+    } catch {
+        // Never throw into features.
+    }
+}
+
+/** Like `recordSurveyActivity`, but may show the invitation. Collection View and Cluster Dashboard only. */
+export function recordSurveyActivityWithInvitation(featureArea: SurveyFeatureArea): void {
+    try {
+        instance?.recordSurveyActivityWithInvitation(featureArea);
     } catch {
         // Never throw into features.
     }

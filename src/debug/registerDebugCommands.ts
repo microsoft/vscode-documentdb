@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { getSurveyService, recordSurveyActivity, type SurveyService } from '../services/survey/SurveyService';
+import { getSurveyService, recordSurveyActivityWithInvitation, type SurveyService } from '../services/survey/SurveyService';
 import { SURVEY_FEATURE_AREAS } from '../services/survey/surveyTypes';
 
 // Hyphenated: the VSIX inspection reads bare `name.ext` manifest strings as file paths.
@@ -45,7 +45,7 @@ export async function registerDebugCommands(context: vscode.ExtensionContext): P
                 void vscode.window.showWarningMessage('Survey service is not initialized; see the DocumentDB output.');
                 return;
             }
-            recordSurveyActivity(SURVEY_FEATURE_AREAS[0]);
+            recordSurveyActivityWithInvitation(SURVEY_FEATURE_AREAS[0]);
             await service.whenIdle();
             reportSurveyDebugStatus(service);
         }),

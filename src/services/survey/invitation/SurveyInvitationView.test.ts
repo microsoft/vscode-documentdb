@@ -291,7 +291,7 @@ describe('SurveyInvitationView', (): void => {
         vi.useFakeTimers();
         const h = harness();
         vi.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         expect(h.service.getDebugStatus().invitationActive).toBe(true);
         expect(h.state().nextEligibleAt).toBeUndefined();
@@ -372,6 +372,18 @@ describe('SurveyInvitationView', (): void => {
         expect(h.surface.view.webview.html).toContain('survey-question');
         h.surface.message({ type: 'rendered' });
         expect(h.events.filter((event): boolean => event.name === 'survey.invitationShown')).toHaveLength(1);
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('replaces an open feedback form with the debug invitation', async (): Promise<void> => {
+        const h = harness();
+        expect(await h.service.showFeedbackForm('helpAndFeedbackView')).toBe(true);
+        expect(h.surface.view.webview.html).toContain('opened the feedback form');
+        await h.service.showInvitationForDebug('connection');
+        expect(h.service.getDebugStatus().invitationActive).toBe(true);
+        expect(h.surface.view.webview.html).toContain('survey-question');
+        expect(h.surface.view.webview.html).not.toContain('opened the feedback form');
         h.service.dispose();
         h.presenter.dispose();
     });
@@ -466,7 +478,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('withdrawal before navigation opens nothing and emits no new events or outcome', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         const before = h.events.length;
         h.flags.permitted = false;
@@ -488,7 +500,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('reports each failed opening in a modal and keeps the invitation usable until success', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         for (let attempt = 1; attempt <= 4; attempt++) {
             h.surface.message({ type: 'openForm' });
@@ -519,7 +531,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('passes a selected rating through the host only on an explicit opening request', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         expect(h.events.some((event): boolean => 'selectedRating' in event.measurements)).toBe(false);
         h.surface.message({ type: 'openForm', selectedRating: 4 });
@@ -550,7 +562,7 @@ describe('SurveyInvitationView', (): void => {
         { selectedRating: [5] },
     ])('blocks malformed selected rating $selectedRating', async ({ selectedRating }): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         const before = h.events.length;
         h.surface.message({ type: 'openForm', selectedRating });
@@ -568,7 +580,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('Never again saves before the host closes, including a hide during the pending save', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         const original = h.storage.update.bind(h.storage);
         let complete!: () => void;
@@ -595,7 +607,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('explicit hide records dismissed, while collapse or switching containers does not', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         h.surface.visibility(false);
         await flush();
@@ -612,7 +624,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('Ask me later is distinct from closing', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         h.surface.message({ type: 'askLater' });
         await flush();
@@ -623,7 +635,7 @@ describe('SurveyInvitationView', (): void => {
 
     it('closing during a failed browser open still records dismissed', async (): Promise<void> => {
         const h = harness();
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         let complete!: (result: boolean) => void;
         h.open.mockImplementationOnce(
@@ -644,7 +656,7 @@ describe('SurveyInvitationView', (): void => {
     it('privacy uses openExternal without survey callbacks, telemetry, or URL payloads', async (): Promise<void> => {
         const h = harness();
         vi.mocked(vscode.env.openExternal).mockResolvedValue(true);
-        h.service.recordSurveyActivity('connection');
+        h.service.recordSurveyActivityWithInvitation('connection');
         await h.service.whenIdle();
         const before = h.events.length;
         const stateBefore = { ...h.state() };
@@ -670,7 +682,7 @@ describe('SurveyInvitationView', (): void => {
             } else {
                 vi.mocked(vscode.env.openExternal).mockRejectedValueOnce(new Error('secret-browser-details'));
             }
-            h.service.recordSurveyActivity('connection');
+            h.service.recordSurveyActivityWithInvitation('connection');
             await h.service.whenIdle();
             h.surface.message({ type: 'rendered' });
             await flush();
