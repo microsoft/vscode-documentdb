@@ -19,7 +19,7 @@ You can access this plugin in two ways:
 - Through the `Service Discovery` panel in the extension sidebar.
 - When adding a new connection, select the `Azure VMs (DocumentDB)` option.
 
-![Service Discovery Activation](./images/service-discovery-activation-vm.png)
+<p align="center"><img src="./images/service-discovery-activation-vm.png" alt="Service Discovery Activation" width="800" style="max-width:100%;height:auto;"></p>
 
 ## How It Works
 
@@ -58,7 +58,7 @@ This provider supports the following management features:
 - **Filter Resources**: Control which tenants and subscriptions are displayed, and customize the VM tag filter. Click the funnel icon next to the provider name.
 - **Refresh**: Reload the resource list after making changes. Click the refresh icon.
 
-![Filter Azure VM resources](./images/service-discovery-filter-vm.png)
+<p align="center"><img src="./images/service-discovery-filter-vm.png" alt="Filter Azure VM resources" width="800" style="max-width:100%;height:auto;"></p>
 
 For detailed instructions on account and subscription management, see [Managing Azure Discovery (Accounts, Tenants, and Subscriptions)](./managing-azure-discovery).
 

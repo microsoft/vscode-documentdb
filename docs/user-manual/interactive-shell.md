@@ -33,7 +33,7 @@ There are several ways to open an Interactive Shell session:
 3. **From the Collection View**: Use the **Open in Shell** toolbar button to export your current find query into a new shell session.
 4. **From the Query Playground**: Use a CodeLens link to launch a shell for the same connection.
 
-<p align="center"><img src="images/inline-action-buttons.png" alt="Inline action buttons on a collection node: Open Collection View, New Query Playground, Open Interactive Shell" width="300" style="max-width:100%;height:auto;"></p>
+<p align="center"><img src="images/inline-action-buttons.png" alt="Inline action buttons on a collection node: Open Collection View, New Query Playground, Open Interactive Shell" width="800" style="max-width:100%;height:auto;"></p>
 
 The three inline icons next to each collection node are (from left to right): Open Collection View, New Query Playground, and **Open Interactive Shell**.
 
@@ -100,7 +100,7 @@ Variables, functions, and other JavaScript state persist until you close the she
 
 The shell provides two forms of input assistance:
 
-<p align="center"><img src="images/interactive-shell-completions.png" alt="Interactive Shell showing tab completion for collection methods and ghost text suggesting a field name" width="700" style="max-width:100%;height:auto;"></p>
+<p align="center"><img src="images/interactive-shell-completions.png" alt="Interactive Shell showing tab completion for collection methods and ghost text suggesting a field name" width="800" style="max-width:100%;height:auto;"></p>
 
 In this example, the shell suggests `find()`, `findOne()`, and other methods after typing `db.restaurants.find` (top). It also suggests the field name `reviews` as ghost text after the user typed `re` in a query (bottom). Field suggestions come from schema information gathered locally as you browse and query your data.
 
