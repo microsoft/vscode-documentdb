@@ -554,9 +554,9 @@ describe('SurveyStateStore', (): void => {
         await store.recordOutcome('opened', new Date(NOW.getTime() + 180 * 86_400_000));
         storage.update.mockRejectedValueOnce(new Error('Write failed'));
 
-        expect(
-            await store.recordOutcome('dismissed', NEXT_ELIGIBLE_AT, new Date(NOW.getTime() + 1)),
-        ).toMatchObject({ persisted: false });
+        expect(await store.recordOutcome('dismissed', NEXT_ELIGIBLE_AT, new Date(NOW.getTime() + 1))).toMatchObject({
+            persisted: false,
+        });
         expect(store.current.lastInvitationOutcome).toBe('dismissed');
         await store.recordActiveDay('2026-10-08');
         expect(new SurveyStateStore(storage).current.lastInvitationOutcome).toBe('dismissed');

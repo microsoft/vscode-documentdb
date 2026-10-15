@@ -215,8 +215,7 @@ export class SurveyStateStore {
                     lastOutcome: outcome,
                     nextEligibleAt: nextEligibleAt.toISOString(),
                     lastInvitationOutcome: invitationOutcomeAt ? outcome : this.state.lastInvitationOutcome,
-                    lastInvitationOutcomeAt:
-                        invitationOutcomeAt?.toISOString() ?? this.state.lastInvitationOutcomeAt,
+                    lastInvitationOutcomeAt: invitationOutcomeAt?.toISOString() ?? this.state.lastInvitationOutcomeAt,
                 },
                 this.state,
             );

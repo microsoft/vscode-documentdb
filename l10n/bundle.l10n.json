@@ -148,6 +148,7 @@
   "[Survey] Command outcome: opened.": "[Survey] Command outcome: opened.",
   "[Survey] Counted a new active day: {0} of {1} required.": "[Survey] Counted a new active day: {0} of {1} required.",
   "[Survey] Eligible for an invitation.": "[Survey] Eligible for an invitation.",
+  "[Survey] Evaluation queued behind in-flight usage counting.": "[Survey] Evaluation queued behind in-flight usage counting.",
   "[Survey] Feedback permission withdrawn: canceling pending work and invitation.": "[Survey] Feedback permission withdrawn: canceling pending work and invitation.",
   "[Survey] Feedback presentation failed.": "[Survey] Feedback presentation failed.",
   "[Survey] Feedback presentation unavailable.": "[Survey] Feedback presentation unavailable.",
