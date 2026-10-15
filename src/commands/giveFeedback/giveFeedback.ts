@@ -12,14 +12,40 @@ export const GIVE_FEEDBACK_COMMAND = 'vscode-documentdb.command.giveFeedback';
 export const GIVE_FEEDBACK_VIEW_COMMAND = 'vscode-documentdb.command.internal.helpAndFeedback.openSurvey';
 
 export async function giveFeedback(service?: SurveyService): Promise<void> {
+    await openFeedbackView('giveFeedbackCommand', service);
+}
+
+export async function showFeedbackView(service?: SurveyService): Promise<void> {
+    await openFeedbackView('helpAndFeedbackView', service);
+}
+
+async function openFeedbackView(
+    source: 'giveFeedbackCommand' | 'helpAndFeedbackView',
+    service: SurveyService | undefined,
+): Promise<void> {
     if (!isFeedbackPermitted()) {
         return;
     }
+    if (!service) {
+        await openSurveyInBrowser();
+        return;
+    }
+    let shown = false;
+    try {
+        shown = await service.showFeedbackForm(source);
+    } catch {
+        shown = false;
+    }
+    if (!shown) {
+        void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open the feedback view. Please try again."));
+    }
+}
+
+/** Fallback when the survey service failed to initialize. */
+async function openSurveyInBrowser(): Promise<void> {
     let opened = false;
     try {
-        opened = service
-            ? (await service.openSurveyFormFromCommand()) !== 'failed'
-            : await vscode.env.openExternal(vscode.Uri.parse(SURVEY_FORM_URL));
+        opened = await vscode.env.openExternal(vscode.Uri.parse(SURVEY_FORM_URL));
     } catch {
         opened = false;
     }
@@ -28,21 +54,6 @@ export async function giveFeedback(service?: SurveyService): Promise<void> {
             vscode.l10n.t("We couldn't open the survey in your browser. Please try again."),
             { modal: true },
         );
-    }
-}
-
-export async function showFeedbackView(service?: SurveyService): Promise<void> {
-    if (!isFeedbackPermitted()) {
-        return;
-    }
-    let shown = false;
-    try {
-        shown = (await (service ?? getSurveyService())?.showFeedbackForm('helpAndFeedbackView')) ?? false;
-    } catch {
-        shown = false;
-    }
-    if (!shown) {
-        void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open the feedback view. Please try again."));
     }
 }
 

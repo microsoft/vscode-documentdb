@@ -18,8 +18,8 @@ permission (D0021). The manual Give Feedback command and development preview are
 The Cluster Dashboard and Collection View also open the same sidebar on explicit feedback
 clicks. This manual mode explains that the user opened it, rather than claiming survey
 eligibility, and does not offer reminder or opt-out actions. A rating selected there is
-reported on the existing `survey.openForm` event only when feedback telemetry is permitted;
-the command-palette path still opens the browser directly without a rating. This supersedes
+reported on the existing `survey.openForm` event only when feedback telemetry is permitted.
+The command-palette Give Feedback opens the same sidebar (D0033). This supersedes
 the invitation-only rating restrictions in the historical proposal below, pending privacy review.
 Feedback buttons in webviews, the Help and Feedback tree item, and the Give Feedback command appear only when
 `telemetry.feedback.enabled` is `true`, its default (D0032, replacing the earlier
@@ -29,7 +29,7 @@ Survey activation and form opening now carry a closed source (Dashboard, Collect
 with tab, command, or timed invitation). Timed invitations distinguish first, returning,
 and unknown legacy history; returning invitations retain the previous invitation outcome.
 That outcome is tracked independently of cooldowns: a dismissal updates the next invitation's
-explanation even when a direct browser opening has already set a longer cooldown.
+explanation even when a manual survey opening has already set a longer cooldown.
 Read [design.md](./design.md) for the implemented
 architecture and [decisions.md](./decisions.md) for binding operator choices.
 

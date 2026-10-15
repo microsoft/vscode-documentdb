@@ -26,6 +26,7 @@ import { SurveyTelemetry } from './surveyTelemetry';
 import {
     SURVEY_FEATURE_AREAS,
     type SurveyActivation,
+    type SurveyActivationSource,
     type SurveyCollectionTab,
     type SurveyFeatureArea,
     type SurveyLocalDay,
@@ -235,12 +236,7 @@ export class SurveyService implements vscode.Disposable {
 
     /** Opens the sidebar on explicit request, independently of invitation eligibility and opt-out. */
     public async showFeedbackForm(
-        source:
-            | 'clusterDashboard'
-            | 'collectionView'
-            | 'atlasCredentials'
-            | 'localQuickStart'
-            | 'helpAndFeedbackView' = 'clusterDashboard',
+        source: Exclude<SurveyActivationSource, 'automaticInvitation'> = 'clusterDashboard',
         collectionTab?: SurveyCollectionTab,
     ): Promise<boolean> {
         if (this.manualOpening) {
@@ -338,7 +334,7 @@ export class SurveyService implements vscode.Disposable {
     }
 
     /**
-     * User-requested form opening (command or feedback sidebar). Opens even after
+     * User-requested form opening from the manually opened feedback sidebar. Opens even after
      * "Never again" and regardless of the kill switch or permission. Emits `survey.openForm`
      * with trigger `command` only when the survey is enabled and permission is
      * granted. On success, applies the opened cooldown only when the survey is enabled,
@@ -349,9 +345,6 @@ export class SurveyService implements vscode.Disposable {
         activation: SurveyActivation = { source: 'giveFeedbackCommand' },
     ): Promise<SurveyOpenFormResult> {
         traceSurvey((): string => vscode.l10n.t('[Survey] Form requested from {0}.', activation.source));
-        if (activation.source === 'giveFeedbackCommand' && this.isEnabled()) {
-            this.telemetry.reportFeedbackActivated(activation);
-        }
         const gen = this.generation;
         let ok = false;
         try {

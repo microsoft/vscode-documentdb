@@ -50,8 +50,9 @@ Manual opening explains "You're seeing this because you opened the feedback form
 "Why am I seeing this?" and shows Close instead of reminder/opt-out actions. It records no
 invitation shown/resolved outcome or visibility cooldown. The selected star is optional and
 only appears on `survey.openForm` when telemetry is permitted. The command-palette Give Feedback
-path still opens the external form directly and cannot select a star. Survey-owned
-`survey.feedbackActivated` reports a visible sidebar or direct command invocation, and
+command opens the same sidebar with `giveFeedbackCommand` as its source (D0033). It falls back
+to opening the external form directly only when the survey service failed to initialize. Survey-owned
+`survey.feedbackActivated` reports a visible sidebar, and
 `survey.openForm` carries the same bounded activation source. A Collection View request sends
 only its selected tab; the host derives and checks the view name.
 The `documentdb-survey-invitation-active` context is false on activation and true only for a
@@ -128,7 +129,7 @@ opt-out action is hidden behind the disclosure.
 **Resolved UX direction (D0023):** the operator rejected button-hover decoration and chose actual
 local selection, accepting that the external survey cannot be prefilled. The selected rating
 is captured by permitted opening telemetry, not persisted in local survey state. No selected
-value is required or synthesized, and command-based Give Feedback has no rating. The browser
+value is required or synthesized. The browser
 explanation stays small above the stars; selected-rating collection is disclosed in the
 native explanation section.
 
@@ -139,12 +140,12 @@ During opening the button stays focusable with `aria-disabled` and a busy guard,
 becoming native-disabled and losing focus. Rating inputs/other choice buttons are temporarily
 disabled. Reenabling controls does not move focus if the user moved to Privacy Statement.
 
-Give Feedback opens even after permanent opt-out and with the kill switch off. It never clears
-opt-out. User-approved browser attempts are not capped, in either the invitation or command.
-The command makes one attempt and reports a failure in a modal error without a Retry action
-(D0026); the user can run it again. The invitation tries again only on another click. Only the first three permitted/enabled attempts emit the approved
+Manually opened feedback opens even after permanent opt-out and with the kill switch off. It never clears
+opt-out. User-approved browser attempts are not capped, in either the invitation or the manual sidebar.
+A failed attempt is reported in a modal error without a Retry action
+(D0026); the user can choose "Continue to survey" again. Only the first three permitted/enabled attempts emit the approved
 `survey.openForm` event. Later attempts still open the browser and, if successful, apply the normal
-outcome/cooldown rules. This command uses native VS Code registration rather than an automatic
+outcome/cooldown rules. The Give Feedback command uses native VS Code registration rather than an automatic
 telemetry wrapper.
 
 ## Evaluation Flow
@@ -195,13 +196,13 @@ already have counted the day, the `trigger` of a later evaluation can be `sessio
 so concurrent calls evaluate once; calls that arrive while it is pending are covered by it,
 except that an inviting call arriving during counting-only work is evaluated right after it.
 
-The "DocumentDB: Give Feedback" command (D0015) opens the form whenever the
+The "DocumentDB: Give Feedback" command (D0015, D0033) opens the feedback sidebar whenever the
 user asks, even after "Never again", but only while `telemetry.feedback.enabled` is on (D0032):
-the palette hides it otherwise, and a keybinding invocation does nothing. It sends `survey.openForm` with trigger `command` only when
-the survey is enabled and permitted, applies the 180-day cooldown only when also not opted out,
-and never clears the opt-out.
-The sidebar feedback buttons use the same manual form-opening path and `command` trigger,
-but pass the optional rating selected in the sidebar. Explicit opening is not an automatic
+the palette hides it otherwise, and a keybinding invocation does nothing. Like every feedback
+button, it uses the manual form-opening path: `survey.openForm` has trigger `command` and is sent only when
+the survey is enabled and permitted; a successful opening applies the 180-day cooldown only when also not opted out,
+and never clears the opt-out. The rating selected in the sidebar is optional.
+Explicit opening is not an automatic
 invitation and bypasses automatic eligibility and invitation suppression.
 When an automatic invitation is already visible, a feedback button focuses it instead of
 replacing it, so it keeps its `automaticInvitation` attribution and its own outcome; no
@@ -334,7 +335,7 @@ Cohort queries use the machine ID for installations and the machine and session 
 |                               | `trigger`                                                                      | `sessionStart`, `newActiveDay`, `stateChange`                                                                                                                                                                                                                                                       |                                                                                      |
 | `survey.presentationDeferred` | `reason`                                                                       | `presenterUnavailable`, `presentationFailed`                                                                                                                                                                                                                                                        | Once per changed reason; reset when an invitation is shown                           |
 | `survey.invitationShown`      | `isReminder`                                                                   | `true`, `false`                                                                                                                                                                                                                                                                                     | Once per invitation, only when rendered and visible                                  |
-| `survey.feedbackActivated`    | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | `automaticInvitation`, `clusterDashboard`, `collectionView`, `atlasCredentials`, `localQuickStart`, `helpAndFeedbackView`, `giveFeedbackCommand`; tabs `documents`, `indexes`, `queryInsights`; kinds `first`, `returning`, `unknown`; reasons `opened`, `askLater`, `dismissed`, `none`, `unknown` | Once per visible sidebar or direct command invocation                                |
+| `survey.feedbackActivated`    | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | `automaticInvitation`, `clusterDashboard`, `collectionView`, `atlasCredentials`, `localQuickStart`, `helpAndFeedbackView`, `giveFeedbackCommand`; tabs `documents`, `indexes`, `queryInsights`; kinds `first`, `returning`, `unknown`; reasons `opened`, `askLater`, `dismissed`, `none`, `unknown` | Once per visible sidebar                                                             |
 | `survey.openForm`             | `trigger`                                                                      | `invitation`, `command`                                                                                                                                                                                                                                                                             | Once per attempt, at most 3 attempts per invitation or command call                  |
 |                               | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | Same closed values as `survey.feedbackActivated`                                                                                                                                                                                                                                                    | Present on service-originated openings                                               |
 |                               | `openResult`                                                                   | `success`, `failure`                                                                                                                                                                                                                                                                                |                                                                                      |

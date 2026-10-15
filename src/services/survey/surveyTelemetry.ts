@@ -261,29 +261,23 @@ export class SurveyTelemetry {
         return sent;
     }
 
-    /** One visible sidebar per presentation, or one explicit command invocation. */
-    public reportFeedbackActivated(activation: SurveyActivation, invitationSessionId?: string): boolean {
+    /** One visible sidebar per presentation. */
+    public reportFeedbackActivated(activation: SurveyActivation, invitationSessionId: string | undefined): boolean {
         const properties = activationProperties(activation);
-        if (
-            !properties ||
-            (activation.source === 'giveFeedbackCommand'
-                ? invitationSessionId !== undefined
-                : !isInvitationSessionId(invitationSessionId)) ||
-            (invitationSessionId !== undefined && this.activatedIds.has(invitationSessionId))
-        ) {
+        if (!properties || !isInvitationSessionId(invitationSessionId) || this.activatedIds.has(invitationSessionId)) {
             return false;
         }
         const sent = this.send(
             SurveyEventName.FeedbackActivated,
             {
                 ...properties,
-                ...(activation.source === 'automaticInvitation' && invitationSessionId
+                ...(activation.source === 'automaticInvitation'
                     ? { [SurveyTelemetryProperty.InvitationSessionId]: invitationSessionId }
                     : {}),
             },
             {},
         );
-        if (sent && invitationSessionId) {
+        if (sent) {
             this.activatedIds.add(invitationSessionId);
         }
         return sent;

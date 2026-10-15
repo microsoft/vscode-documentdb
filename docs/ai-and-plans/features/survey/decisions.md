@@ -27,7 +27,7 @@ created: 2026-10-07
 | 0012 | Present the invitation right after the milestone             | Accepted (modified) | Proposal was a delayed safe pause                                                                                              | 2026-10-07 | -     |
 | 0013 | The invitation lives in the Secondary Sidebar only           | Accepted (modified) | Proposal was to prototype two destinations                                                                                     | 2026-10-07 | -     |
 | 0014 | A plain "Open survey" button sits next to the stars          | Accepted (modified) | D0023 replaces star navigation and identical-message rule                                                                      | 2026-10-07 | -     |
-| 0015 | A "Give Feedback" command, no reset command                  | Accepted            | Accepted as proposed                                                                                                           | 2026-10-07 | -     |
+| 0015 | A "Give Feedback" command, no reset command                  | Accepted (modified) | D0033: the command opens the feedback sidebar instead of the browser                                                           | 2026-10-07 | -     |
 | 0016 | Kill switch is a code constant with a development override   | Superseded by D0020 | Development override removed; production code switch retained                                                                  | 2026-10-07 | -     |
 | 0017 | Telemetry wording in the invitation                          | Accepted (modified) | No anonymity claim; D0023 further replaces the no-rating/answer claim                                                          | 2026-10-07 | -     |
 | 0018 | Raise the minimum VS Code version to 1.106.0                 | Superseded by D0028 | Raised by the Stage 2 blocker                                                                                                  | 2026-10-07 | -     |
@@ -45,6 +45,7 @@ created: 2026-10-07
 | 0030 | Gate feedback controls without live settings sync            | Accepted (modified) | Applies the existing `all` permission rule to buttons and the Help tree; views snapshot it at open; D0032 replaces the setting | 2026-10-15 | #1016 |
 | 0031 | Only Collection View and the Dashboard show the invitation   | Accepted            | Other milestones only count active days; eligibility is evaluated only where the invitation can appear                         | 2026-10-15 | #1016 |
 | 0032 | Feedback permission follows `telemetry.feedback.enabled`     | Accepted            | Replaces the `telemetryLevel === 'all'` gate of D0002/D0030; aligns with the `EnableFeedback` policy                           | 2026-10-15 | #1016 |
+| 0033 | Give Feedback opens the feedback sidebar                     | Accepted            | Replaces the direct browser opening of D0015/D0030                                                                             | 2026-10-15 | #1016 |
 
 > Entries are semantically immutable: append new entries rather than rewriting old ones, and record
 > reversals as a new entry plus a status change above.
@@ -503,3 +504,17 @@ their survey events are dropped by the reporter, so they are invisible in the fu
 **Accepted consequence (operator):** anyone who lowered `telemetry.telemetryLevel` to stop
 feedback prompts now sees them unless `telemetry.feedback.enabled` is `false`. This is expected:
 the survey has not shipped yet, and the README and release notes in #1016 name the new setting.
+
+## 0033: Give Feedback opens the feedback sidebar
+
+**Decision (operator):** the Command Palette "DocumentDB: Give Feedback" command opens the same
+feedback sidebar as every other feedback entry point, with `giveFeedbackCommand` as its
+activation source, instead of opening the external form directly. It opens the form directly
+only if the survey service failed to initialize.
+
+**Reasoning (operator):** one label should have one behavior. "Give Feedback" in the Help and
+Feedback tree, the webviews, and the Command Palette now all lead to the same place, where the
+user can pick an optional rating before continuing to the survey.
+
+**Supersedes:** the direct browser opening of D0015 and the "explicit direct browser request"
+exception kept in D0030. `survey.feedbackActivated` is now always tied to a visible sidebar.

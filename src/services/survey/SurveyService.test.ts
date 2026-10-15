@@ -1176,7 +1176,7 @@ describe('SurveyService', (): void => {
         h.flags.permitted = false;
         pending.resolve(true);
         expect(await command).toBe('opened');
-        expect(h.events()).toEqual(['survey.feedbackActivated']);
+        expect(h.events()).toEqual([]);
         expect(h.stateKeyWrites()).toBe(0);
         h.flags.enabled = true;
         h.flags.permitted = true;
