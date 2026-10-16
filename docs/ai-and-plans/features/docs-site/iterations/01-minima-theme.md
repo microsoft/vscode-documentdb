@@ -45,14 +45,28 @@ conflicting.
     reads `header_pages`. Recorded as an open gap rather than changing the config in this step.
   - Minima `master` is about 30 functional commits ahead of the pin.
   - The "Testing locally" section put the Gemfile inside `docs/`, which would publish it. The new
-    guide keeps it outside and adds a local config that skips `ai-and-plans/`.
+    guide keeps it outside. (A local-only config that skipped `ai-and-plans/` was used at first;
+    it became unnecessary once the site exclusions below landed in `_config.yml`.)
 - **Verified locally.** Built with `github-pages` 232 on Ruby 3.3 (Windows). With `ai-and-plans/`
   excluded, the build finishes in about 8 seconds and the landing page renders with the Minima
   `auto` skin. A full build including `ai-and-plans/` did not finish within about 8 minutes and
   produced many Liquid syntax warnings.
+- **Limited the site to user-facing content.** Operator decision: publish only `index.md`,
+  `user-manual/` and `release-notes/`. Everything else in `docs/` goes under `exclude` in
+  `_config.yml`. Alternatives considered:
+  - _Also publish `blog-posts/`._ Rejected by the operator.
+  - _Publish `user-manual/` only._ Rejected: the landing page is the table of contents, the
+    extension's Help view links to the root, and the README links to release notes.
+  - _Copy only the allowed folders in the deploy workflow._ Not chosen: an `exclude` list in
+    `_config.yml` is visible to the local preview, so the preview matches production.
+
+  Verification: build in about 7 seconds with no warnings; 30 user-manual and 14 release-notes
+  pages; all 24 distinct `microsoft.github.io/vscode-documentdb` URLs in the README,
+  `package.json`, the release notes and the user manual return 200 locally; `blog-posts/`,
+  `ai-and-plans/` and `localization` return 404. No link needed updating.
 
 ## Not verified
 
 - The production build on GitHub (legacy Pages) with this theme.
-- Rendering of the user manual, release notes and blog posts beyond the landing page.
+- Visual review of user manual and release notes pages beyond spot checks.
 - Dark skin rendering.

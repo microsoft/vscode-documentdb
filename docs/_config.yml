@@ -4,8 +4,6 @@ remote_theme: 'jekyll/minima@1e8a445'
 # Site settings
 title: DocumentDB for VS Code
 description: Learn more about the DocumentDB for VS Code Extension
-# WARNING: All deployments (production + PR previews) share this single config
-# due to GitHub Pages limitations. This baseurl is set for production.
 baseurl: '/vscode-documentdb'
 url: 'https://microsoft.github.io'
 
@@ -74,11 +72,19 @@ minima:
 #     hard_wrap: false
 #     syntax_highlighter: rouge
 
-# Exclude from processing
+# Exclude from processing.
+# The public site publishes only index.md, user-manual/ and release-notes/.
+# Everything else under docs/ is contributor material and stays out of the site.
 exclude:
     - Gemfile
     - Gemfile.lock
     - node_modules
+    - ai-and-plans/
+    - blog-posts/
+    - atlas-mongodb-discovery-flow.md
+    - index-advisor-data-flow.md
+    - localization.md
+    - query-generation-data-flow.md
     - vendor/bundle/
     - vendor/cache/
     - vendor/gems/

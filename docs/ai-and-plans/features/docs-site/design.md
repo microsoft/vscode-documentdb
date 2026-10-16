@@ -102,8 +102,8 @@ $base-font-family: 'Segoe UI', -apple-system, system-ui, sans-serif;
 
 ## Header navigation
 
-Without an explicit list, Minima puts **every page that has a `title`** into the header. On this
-site that includes the privacy data-flow documents and, in production, all of `ai-and-plans/`.
+Without an explicit list, Minima puts **every published page that has a `title`** into the header.
+Today no published page sets a `title`, so the header shows only the site title.
 
 The key depends on the pinned commit:
 
@@ -115,11 +115,17 @@ The key depends on the pinned commit:
 ```yaml
 # For the pinned 1e8a445
 header_pages:
-    - blog-posts/index.md
+    - user-manual/some-page.md
 ```
 
-Paths are relative to `docs/`. `user-manual/` and `release-notes/` have no index page today, so
-they cannot be linked from the header until one is added.
+Paths are relative to `docs/`. `user-manual/` and `release-notes/` have no index page today; the
+landing page (`index.md`) is the table of contents for both.
+
+## What gets published
+
+Only `index.md`, `user-manual/` and `release-notes/`. Everything else is listed under `exclude` in
+`_config.yml`. When adding a new top-level file or folder to `docs/` that is not meant for users,
+add it to that list too.
 
 ## Social links
 
@@ -157,24 +163,14 @@ There are no hosted PR previews, so preview locally with the same gem GitHub use
    gem 'wdm', '>= 0.1.0', platforms: [:windows]
    ```
 
-3. Optionally, add a local-only config that skips the planning documents. A full build with
-   `ai-and-plans/` takes many minutes; without it, about 8 seconds:
-
-   ```yaml
-   # _config.preview.yml (outside the repository)
-   exclude:
-       - ai-and-plans
-   ```
-
-4. Run from the folder holding the Gemfile:
+3. Run from the folder holding the Gemfile. The build takes about 7 seconds:
 
    ```bash
    bundle install
-   bundle exec jekyll serve --source <repo>/docs --destination ./_site \
-       --config <repo>/docs/_config.yml,./_config.preview.yml --livereload
+   bundle exec jekyll serve --source <repo>/docs --destination ./_site --livereload
    ```
 
-5. Open http://127.0.0.1:4000/vscode-documentdb/ (note the base URL).
+4. Open http://127.0.0.1:4000/vscode-documentdb/ (note the base URL).
 
 Notes:
 

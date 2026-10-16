@@ -49,8 +49,12 @@ main (docs/**) --push--> deploy-documentation-production.yml --copy--> gh-pages 
 - The repository Pages source is the `gh-pages` branch root, with `build_type: legacy`. GitHub runs
   its own Jekyll build on that branch. Only the plugins and versions listed on
   [pages.github.com/versions](https://pages.github.com/versions/) are available.
-- `docs/` is copied as-is with `clean: true`, so everything under `docs/` is published, including
-  `docs/ai-and-plans/`.
+- `docs/` is copied as-is with `clean: true`, but the Jekyll build publishes **only `index.md`,
+  `user-manual/` and `release-notes/`**. Everything else in `docs/` (`ai-and-plans/`, `blog-posts/`,
+  the internal data-flow documents, `localization.md`) is listed under `exclude` in `_config.yml`.
+  A new top-level file or folder in `docs/` is published unless it is added to that list.
+- The raw `.md` sources of published pages are also served (for example `/index.md`). This is
+  GitHub Pages' optional-front-matter behavior and predates this feature.
 - There are no PR preview deployments. They were removed from `main` in `c8ad1900` ("simplify github
   pages release (no previews)"). Preview is local; see [design.md](./design.md#previewing-locally).
 
@@ -64,6 +68,7 @@ The theme customization guide is in [design.md](./design.md).
 | 2025-12-11 | Experimental Minima theme, preview workflow notes, `docs/THEME_CUSTOMIZATION.md`         | #420        |
 | 2025-12-11 | Preview deployments removed from `main`                                                  | `c8ad1900`  |
 | 2026-10-16 | `main` merged into #420, preview workflow change dropped, guide moved here and refreshed | #420        |
+| 2026-10-16 | Site limited to `index.md`, `user-manual/` and `release-notes/`                          | #420        |
 
 Details: [iterations/01-minima-theme.md](./iterations/01-minima-theme.md).
 
@@ -75,15 +80,12 @@ No `decisions.md` yet. The choices made so far are recorded in the iteration fil
 
 1. **Navigation key mismatch.** The pinned Minima commit `1e8a445` reads `site.header_pages`, but
    `_config.yml` documents `minima.nav_pages`, which only exists on newer Minima `master`. Either
-   pin a newer commit or use `header_pages`.
-2. **Header navigation lists every titled page.** With no nav list set, Minima adds every page
-   with a `title` to the header. In the local preview this already includes the privacy data-flow
-   documents. Production also publishes `ai-and-plans/`, so the header would fill with planning
-   documents. Set an explicit nav list before shipping.
-3. **Planning documents are public and slow the build.** `docs/ai-and-plans/` is published and
-   emits many Liquid warnings (GitHub Actions `${{ }}` expressions in Markdown). Decide whether to
-   exclude it from the site or mark those files with `render_with_liquid: false`.
-4. **Minima pin is old.** `1e8a445` (2025-02-27) is about 30 functional commits behind `master`
+   pin a newer commit or use `header_pages`. Today the header shows only the site title, because no
+   published page has a `title` in its front matter.
+2. **Minima pin is old.** `1e8a445` (2025-02-27) is about 30 functional commits behind `master`
    (WCAG contrast, mobile navigation, Font Awesome 7). Minima 3.0 is still unreleased.
-5. **Duplicate page title.** The landing page renders the site title and the `index.md` H1 one
+3. **Duplicate page title.** The landing page renders the site title and the `index.md` H1 one
    after the other.
+4. **Excluded pages will start returning 404.** Production currently serves `blog-posts/`,
+   `localization` and the data-flow documents. No link in the repository, the extension or the
+   published pages points to them, so nothing needs updating, but outside bookmarks will break.
