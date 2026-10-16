@@ -157,13 +157,26 @@ export const scenarios = {
         },
         configure: {
             config: base.config,
-            rpc: base.rpc,
+            rpc: {
+                ...base.rpc,
+                'common.openUrl': { type: 'mutation', results: [true] },
+            } as const satisfies TypedRpcFixtures,
             steps: continueSteps,
             readiness: {
                 content: ['Configure setup', '10260', 'Start DocumentDB Local'],
                 selectors: ['table'],
                 noProgressbar: true,
             },
+            assertions: [
+                {
+                    kind: 'calls',
+                    name: 'The privacy statement link opens the DocumentDB Local privacy statement',
+                    path: 'common.openUrl',
+                    input: { url: 'https://github.com/documentdb/documentdb/blob/main/documentdb-local/PRIVACY.md' },
+                    count: 1,
+                    steps: [{ action: 'click', role: 'button', name: 'Open DocumentDB Local privacy statement' }],
+                },
+            ],
         },
         provisioning: {
             config: base.config,

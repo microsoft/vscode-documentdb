@@ -440,3 +440,5 @@ that choice rather than ask again.
 - The setting is read when the container is created. A container keeps it across Stop, Start and
   Restart, until it is recreated.
 - Images before rc2 ignore the variable.
+- The Configure step says so in its footer note, after what Start does, linking the image's
+  [privacy statement](https://github.com/documentdb/documentdb/blob/main/documentdb-local/PRIVACY.md).
