@@ -119,7 +119,7 @@ DocumentDB for VS Code feels at home in your workspace, whether you prefer a lig
 
 The extension keeps its features clear and readable while matching the appearance you chose for VS Code.
 
-<p align="center"><img src="resources/readme/theme-aware-cluster-dashboard.svg" alt="Cluster Dashboard adapted to a light or dark background" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/readme/cluster-dashboard_dark.png"><img src="resources/readme/cluster-dashboard.png" alt="Cluster Dashboard adapted to a light or dark background" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 # Telemetry
 

@@ -65,6 +65,12 @@ This context allows providers to offer intelligent, targeted migration options b
 
 ## API Documentation
 
+> **Provider API preview**
+>
+> The migration provider API remains experimental and restricted to registered extensions.
+> To request access for a provider extension, [open an issue](https://github.com/microsoft/vscode-documentdb/issues)
+> with the extension ID and a short description of the provider.
+
 For detailed API documentation, plugin development information, and technical specifications, please refer to:
 
 **[Migration API Documentation](https://github.com/microsoft/vscode-documentdb/blob/main/api/README.md)**
