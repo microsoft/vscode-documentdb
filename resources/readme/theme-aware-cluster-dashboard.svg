@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 988">
+  <style>
+    .dark {
+      display: none;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .light {
+        display: none;
+      }
+
+      .dark {
+        display: inline;
+      }
+    }
+  </style>
+  <image class="light" href="cluster-dashboard.png" width="1920" height="988" />
+  <image class="dark" href="cluster-dashboard_dark.png" width="1920" height="988" />
+</svg>
