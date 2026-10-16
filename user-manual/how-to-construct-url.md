@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Connect with a URL'
+parent: 'Connecting to Databases'
+nav_order: 1
 ---
 
 # How to Construct a URL That Opens the Extension

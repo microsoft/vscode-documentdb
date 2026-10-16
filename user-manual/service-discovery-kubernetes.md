@@ -1,5 +1,8 @@
-> **User Manual** - [Back to Service Discovery](./service-discovery) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Kubernetes'
+parent: 'Service Discovery'
+nav_order: 4
+has_toc: false
 ---
 
 # Kubernetes Service Discovery

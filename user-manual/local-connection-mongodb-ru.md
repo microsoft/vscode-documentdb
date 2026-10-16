@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Azure Cosmos DB for MongoDB (RU) Emulator'
+parent: 'Local Instances'
+nav_order: 2
 ---
 
 # Azure CosmosDB for MongoDB (RU) Emulator

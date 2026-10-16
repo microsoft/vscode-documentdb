@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to Connecting with a URL](./how-to-construct-url) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Connect with a Managed Identity'
+parent: 'Connecting to Databases'
+nav_order: 2
 ---
 
 # Connect with a Managed Identity

@@ -1,0 +1,154 @@
+// Semibold headings, closer to learn.microsoft.com than the theme's light weights.
+h1,
+.text-alpha {
+    font-weight: 600;
+}
+
+h2,
+h3,
+.text-beta,
+.text-gamma {
+    font-weight: 600;
+}
+
+// The theme renders h4 as small uppercase labels, smaller than body text, so
+// "Step 1: ..." style subheadings are easy to miss. Keep them at body size and bold.
+.main-content h4 {
+    font-size: 1rem !important;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.site-title {
+    font-weight: 600;
+}
+
+// Sidebar title with the DocumentDB icon (see _includes/title.html).
+.site-title {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+}
+
+.site-icon {
+    display: flex;
+    flex: none;
+
+    img {
+        width: 1.75rem;
+        height: auto;
+    }
+}
+
+// The theme sets 1.5rem !important from 31.25rem up; keep the title on one line next to the icon.
+@media (min-width: 31.25rem) {
+    .site-title {
+        font-size: 1.25rem !important;
+    }
+}
+
+// "On this page" panel (assets/js/page-toc.js).
+// From 78.5rem up, the main column widens by 12rem to hold a right-side column on every page,
+// so pages with and without the panel share one layout. The theme's sidebar centering formula
+// is repeated here with the wider content width.
+$page-toc-width: 12rem;
+$page-toc-gap: 2rem;
+$page-toc-breakpoint: $nav-width + $content-width + $page-toc-width;
+
+.page-toc {
+    display: none;
+}
+
+@media (min-width: $page-toc-breakpoint) {
+    .side-bar {
+        width: calc((100% - #{$nav-width + $content-width + $page-toc-width}) / 2 + #{$nav-width});
+
+        & + .main {
+            margin-left: calc((100% - #{$nav-width + $content-width + $page-toc-width}) / 2 + #{$nav-width});
+            max-width: $content-width + $page-toc-width;
+        }
+    }
+
+    .main-content-wrap {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) $page-toc-width;
+        column-gap: $page-toc-gap;
+        align-items: start;
+
+        > :not(.page-toc) {
+            grid-column: 1;
+        }
+    }
+
+    .page-toc {
+        display: block;
+        grid-column: 2;
+        grid-row: 1 / span 3;
+        position: sticky;
+        top: 1.5rem;
+        max-height: calc(100vh - 3rem);
+        overflow-y: auto;
+        padding-top: 0.25rem;
+        font-size: 0.8125rem;
+        line-height: 1.4;
+
+        .page-toc-title {
+            margin: 0 0 0.5rem;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: $body-heading-color;
+        }
+
+        ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            border-left: 1px solid $border-color;
+        }
+
+        li {
+            margin: 0;
+            padding: 0;
+
+            &::before {
+                content: none;
+            }
+        }
+
+        a {
+            display: block;
+            margin-left: -1px;
+            padding: 0.25rem 0 0.25rem 0.75rem;
+            border-left: 2px solid transparent;
+            color: $body-text-color;
+            text-decoration: none;
+
+            &:hover {
+                color: $link-color;
+            }
+
+            &.active {
+                border-left-color: $link-color;
+                color: $link-color;
+                font-weight: 600;
+            }
+        }
+
+        .page-toc-h3 a {
+            padding-left: 1.5rem;
+        }
+    }
+}
+
+// Code blocks: the theme keeps the 16px body line box around 12px code, which pulls
+// box-drawing characters apart. Size the <pre> like its code so ASCII diagrams connect.
+pre.highlight {
+    font-size: 0.75rem;
+    line-height: 1.25;
+
+    code {
+        font-size: 1em;
+        line-height: inherit;
+    }
+}

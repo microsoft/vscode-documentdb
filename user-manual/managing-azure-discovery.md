@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Managing Azure Accounts and Subscriptions'
+parent: 'Service Discovery'
+nav_order: 6
 ---
 
 # Managing Azure Discovery (Accounts, Tenants, and Subscriptions)

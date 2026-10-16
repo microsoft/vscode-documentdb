@@ -1,5 +1,7 @@
-> **User Manual** - [Back to User Manual](../index#user-manual)
-
+---
+title: 'Query Playground'
+parent: 'Querying'
+nav_order: 2
 ---
 
 # Query Playground
@@ -31,7 +33,7 @@ There are several ways to open a new Query Playground:
 3. **From the Collection View**: Use the **Open in Playground** toolbar button to export your current find query into a new playground file.
 4. **From the Command Palette**: Run `DocumentDB: New Query Playground`.
 
-<p align="center"><img src="images/inline-action-buttons.png" alt="Inline action buttons on a collection node: Open Collection View, New Query Playground, Open Interactive Shell" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="images/inline-action-buttons_dark.png"><img src="images/inline-action-buttons.png" alt="Inline action buttons on a collection node: Open Collection View, New Query Playground, Open Interactive Shell" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 The three inline icons next to each collection node are (from left to right): Open Collection View, **New Query Playground**, and Open Interactive Shell.
 
@@ -77,7 +79,7 @@ Because the playground uses a full JavaScript runtime, you can write queries the
 
 The playground provides two execution modes, each triggered through CodeLens buttons that appear above your code:
 
-<p align="center"><img src="images/query-playground-codelens.png" alt="Query Playground showing Run All at the top, and Run, Collection View, Shell CodeLens links on each block" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="images/query-playground-codelens_dark.png"><img src="images/query-playground-codelens.png" alt="Query Playground showing Run All at the top, and Run, Collection View, Shell CodeLens links on each block" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 | Mode          | Trigger                                                                          | Behavior                                  |
 | ------------- | -------------------------------------------------------------------------------- | ----------------------------------------- |
