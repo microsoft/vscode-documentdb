@@ -52,10 +52,10 @@ bundle exec jekyll serve --source "$OLDPWD/docs" --destination ./_site --liverel
 
 ## Pitfalls
 
-| Symptom                                      | Cause and fix                                                                                                                                 |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Custom styles missing, no error              | `--source` casing differs from the disk (e.g. `C:\local` vs `C:\Local`), so `docs/_sass` is dropped. Use the script.                          |
-| New page or `_config.yml` change not visible | The sidebar is cached (`jekyll-include-cache`) and config is read once. Stop the server and start it again.                                   |
-| `/` returns 404                              | The site lives under `/vscode-documentdb/`.                                                                                                   |
-| Port already in use                          | Another preview is running. Use `-Port 4001`, or stop the old `ruby.exe` by its process ID.                                                   |
+| Symptom                                      | Cause and fix                                                                                                                                |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Custom styles missing, no error              | `--source` casing differs from the disk (e.g. `C:\local` vs `C:\Local`), so `docs/_sass` is dropped. Use the script.                         |
+| New page or `_config.yml` change not visible | The sidebar is cached (`jekyll-include-cache`) and config is read once. Stop the server and start it again.                                  |
+| `/` returns 404                              | The site lives under `/vscode-documentdb/`.                                                                                                  |
+| Port already in use                          | Another preview is running. Use `-Port 4001`, or stop the old `ruby.exe` by its process ID.                                                  |
 | Build works locally but not on GitHub        | Pages builds `gh-pages` itself (legacy build), so only plugins listed on pages.github.com/versions work. Keep the Gemfile on `github-pages`. |
