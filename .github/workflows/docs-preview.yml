@@ -42,15 +42,20 @@ jobs:
                   ruby-version: '3.3'
                   bundler-cache: true
 
-            # An empty base URL lets the site run from the root of any local web server.
+            # An empty base URL lets the site run from the root of any local web server. GitHub Pages
+            # also enables its default plugins (layouts, relative links); list them so the CI build
+            # matches.
             - name: 🔨 Build the site
               env:
                   JEKYLL_ENV: production
                   PAGES_REPO_NWO: ${{ github.repository }}
                   JEKYLL_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
-                  echo "baseurl: ''" > "$RUNNER_TEMP/preview.yml"
+                  plugins=$(ruby -ryaml -e 'puts (YAML.load_file("docs/_config.yml")["plugins"] + %w[jekyll-default-layout jekyll-optional-front-matter jekyll-relative-links jekyll-readme-index jekyll-titles-from-headings jekyll-github-metadata]).uniq.inspect')
+                  printf "baseurl: ''\nplugins: %s\n" "$plugins" > "$RUNNER_TEMP/preview.yml"
+                  cat "$RUNNER_TEMP/preview.yml"
                   bundle exec jekyll build --source docs --destination _site --config "docs/_config.yml,$RUNNER_TEMP/preview.yml"
+                  grep -q 'just-the-docs' _site/index.html || { echo "::error::Pages were built without the theme layout"; exit 1; }
 
             - name: 📤 Upload the site
               id: upload
