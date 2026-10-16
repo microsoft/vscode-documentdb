@@ -21,7 +21,7 @@ You can access this plugin in two ways:
 - Through the `Service Discovery` panel in the extension sidebar.
 - When adding a new connection, select the `Azure DocumentDB` option.
 
-<p align="center"><img src="./images/service-discovery-activation.png" alt="Service Discovery Activation" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/service-discovery-activation_dark.png"><img src="./images/service-discovery-activation.png" alt="Service Discovery Activation" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 ## How It Works
 

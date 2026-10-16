@@ -9,7 +9,7 @@ has_toc: false
 
 **DocumentDB for VS Code** allows you to connect to local DocumentDB and MongoDB instances. This can be useful for development, testing, or working with emulators on your own machine.
 
-<p align="center"><img src="./images/local-connection.png" alt="Local connection UI screenshot" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/local-connection_dark.png"><img src="./images/local-connection.png" alt="Local connection UI screenshot" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 ## How to Connect Locally
 
