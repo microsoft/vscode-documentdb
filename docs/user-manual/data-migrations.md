@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Data Migrations (Experimental)'
+parent: 'Data Management'
+nav_order: 2
 ---
 
 # Data Migrations in DocumentDB for VS Code

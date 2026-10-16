@@ -11,36 +11,41 @@ created: 2026-10-07
 > [the implementation plan](./iterations/01-implementation-plan.md). Where a decision overrides
 > the [README](./README.md), this file wins for intent.
 
-| #    | Decision                                                     | Status              | Changed from the proposal?                                                                                     | Date       | PR   |
-| ---- | ------------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- | ---- |
-| 0001 | Survey telemetry starts fresh, no legacy event mapping       | Accepted            | Operator correction to the README                                                                              | 2026-10-07 | -    |
-| 0002 | Requirements confirmed before planning                       | Accepted (modified) | Rating exclusion superseded by D0023; other requirements retained                                              | 2026-10-07 | -    |
-| 0003 | An active day is the local calendar day                      | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
-| 0004 | Eligibility after 3 active days                              | Accepted (modified) | Proposal was 5                                                                                                 | 2026-10-07 | -    |
-| 0005 | "Ask me later" cooldown is 14 days                           | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
-| 0006 | Cooldown after opening the form is 180 days                  | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
-| 0007 | Closing without a choice waits as long as "Ask me later"     | Accepted (modified) | Proposal was a shorter, 7-day cooldown                                                                         | 2026-10-07 | -    |
-| 0008 | No sampling at launch, fraction kept at 1.0                  | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
-| 0009 | One long-lived campaign ID                                   | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
-| 0010 | No locale gate; the invitation says the survey is in English | Accepted            | Accepted as proposed; operator confirmed English-only form                                                     | 2026-10-07 | -    |
-| 0011 | Legacy survey state is forgotten                             | Accepted (modified) | Proposal was to migrate; legacy opt-outs ignored too                                                           | 2026-10-07 | -    |
-| 0012 | Present the invitation right after the milestone             | Accepted (modified) | Proposal was a delayed safe pause                                                                              | 2026-10-07 | -    |
-| 0013 | The invitation lives in the Secondary Sidebar only           | Accepted (modified) | Proposal was to prototype two destinations                                                                     | 2026-10-07 | -    |
-| 0014 | A plain "Open survey" button sits next to the stars          | Accepted (modified) | D0023 replaces star navigation and identical-message rule                                                      | 2026-10-07 | -    |
-| 0015 | A "Give Feedback" command, no reset command                  | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
-| 0016 | Kill switch is a code constant with a development override   | Superseded by D0020 | Development override removed; production code switch retained                                                  | 2026-10-07 | -    |
-| 0017 | Telemetry wording in the invitation                          | Accepted (modified) | No anonymity claim; D0023 further replaces the no-rating/answer claim                                          | 2026-10-07 | -    |
-| 0018 | Raise the minimum VS Code version to 1.106.0                 | Superseded by D0028 | Raised by the Stage 2 blocker                                                                                  | 2026-10-07 | -    |
-| 0019 | The cooldown starts when the invitation is first visible     | Accepted            | Raised by the Stage 2 review                                                                                   | 2026-10-07 | -    |
-| 0020 | Normal survey behavior works automatically in development    | Superseded by D0021 | Conservative development-only interpretation corrected before validation                                       | 2026-10-08 | #992 |
-| 0021 | Re-enable surveys in production and development              | Accepted (modified) | One enabled code switch for all modes; no enablement environment override                                      | 2026-10-08 | #992 |
-| 0022 | Match the dashboard header and content surfaces              | Accepted            | Smaller identity row, shaded full-width header, editor-background body                                         | 2026-10-08 | #992 |
-| 0023 | Optional local rating, recorded when opening the survey      | Accepted (modified) | Reverses the no-rating telemetry boundary; only Open survey navigates                                          | 2026-10-09 | #992 |
-| 0024 | Complete the task-led UX pass and make rating resettable     | Accepted (modified) | Finish R7/R9; smaller stars with local hover preview and toggle-to-clear; layout/Retry revised by D0025/D0026  | 2026-10-09 | #992 |
-| 0025 | Apply the rendering review to the invitation layout          | Accepted (modified) | Compact left-aligned rating, secondary buttons, one helper size, dark logo; centering/stretch revised by D0027 | 2026-10-09 | #992 |
-| 0026 | Report open failures in a modal; remove Retry UI             | Accepted (modified) | Replaces the Open→Retry relabel, status line, and command retry loop; D0027 extends it to opt-out save         | 2026-10-09 | #992 |
-| 0027 | Centered smaller rating, stretched actions, no save Retry    | Accepted            | 20 px centered stars, symmetric spacing, "Continue to survey", modal opt-out save failure                      | 2026-10-09 | #992 |
-| 0028 | Minimum VS Code version follows the build stack, 1.109.0     | Accepted            | Supersedes D0018; raised by the merge of #880                                                                  | 2026-10-14 | #992 |
+| #    | Decision                                                     | Status              | Changed from the proposal?                                                                                                     | Date       | PR    |
+| ---- | ------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------- | ----- |
+| 0001 | Survey telemetry starts fresh, no legacy event mapping       | Accepted            | Operator correction to the README                                                                                              | 2026-10-07 | -     |
+| 0002 | Requirements confirmed before planning                       | Accepted (modified) | Rating exclusion superseded by D0023; other requirements retained                                                              | 2026-10-07 | -     |
+| 0003 | An active day is the local calendar day                      | Accepted            | Accepted as proposed                                                                                                           | 2026-10-07 | -     |
+| 0004 | Eligibility after 3 active days                              | Accepted (modified) | Proposal was 5                                                                                                                 | 2026-10-07 | -     |
+| 0005 | "Ask me later" cooldown is 14 days                           | Accepted            | Accepted as proposed                                                                                                           | 2026-10-07 | -     |
+| 0006 | Cooldown after opening the form is 180 days                  | Accepted            | Accepted as proposed                                                                                                           | 2026-10-07 | -     |
+| 0007 | Closing without a choice waits as long as "Ask me later"     | Accepted (modified) | Proposal was a shorter, 7-day cooldown                                                                                         | 2026-10-07 | -     |
+| 0008 | No sampling at launch, fraction kept at 1.0                  | Accepted            | Accepted as proposed                                                                                                           | 2026-10-07 | -     |
+| 0009 | One long-lived campaign ID                                   | Accepted            | Accepted as proposed                                                                                                           | 2026-10-07 | -     |
+| 0010 | No locale gate; the invitation says the survey is in English | Accepted            | Accepted as proposed; operator confirmed English-only form                                                                     | 2026-10-07 | -     |
+| 0011 | Legacy survey state is forgotten                             | Accepted (modified) | Proposal was to migrate; legacy opt-outs ignored too                                                                           | 2026-10-07 | -     |
+| 0012 | Present the invitation right after the milestone             | Accepted (modified) | Proposal was a delayed safe pause                                                                                              | 2026-10-07 | -     |
+| 0013 | The invitation lives in the Secondary Sidebar only           | Accepted (modified) | Proposal was to prototype two destinations                                                                                     | 2026-10-07 | -     |
+| 0014 | A plain "Open survey" button sits next to the stars          | Accepted (modified) | D0023 replaces star navigation and identical-message rule                                                                      | 2026-10-07 | -     |
+| 0015 | A "Give Feedback" command, no reset command                  | Accepted (modified) | D0033: the command opens the feedback sidebar instead of the browser                                                           | 2026-10-07 | -     |
+| 0016 | Kill switch is a code constant with a development override   | Superseded by D0020 | Development override removed; production code switch retained                                                                  | 2026-10-07 | -     |
+| 0017 | Telemetry wording in the invitation                          | Accepted (modified) | No anonymity claim; D0023 further replaces the no-rating/answer claim                                                          | 2026-10-07 | -     |
+| 0018 | Raise the minimum VS Code version to 1.106.0                 | Superseded by D0028 | Raised by the Stage 2 blocker                                                                                                  | 2026-10-07 | -     |
+| 0019 | The cooldown starts when the invitation is first visible     | Accepted            | Raised by the Stage 2 review                                                                                                   | 2026-10-07 | -     |
+| 0020 | Normal survey behavior works automatically in development    | Superseded by D0021 | Conservative development-only interpretation corrected before validation                                                       | 2026-10-08 | #992  |
+| 0021 | Re-enable surveys in production and development              | Accepted (modified) | One enabled code switch for all modes; no enablement environment override                                                      | 2026-10-08 | #992  |
+| 0022 | Match the dashboard header and content surfaces              | Accepted            | Smaller identity row, shaded full-width header, editor-background body                                                         | 2026-10-08 | #992  |
+| 0023 | Optional local rating, recorded when opening the survey      | Accepted (modified) | Reverses the no-rating telemetry boundary; only Open survey navigates                                                          | 2026-10-09 | #992  |
+| 0024 | Complete the task-led UX pass and make rating resettable     | Accepted (modified) | Finish R7/R9; smaller stars with local hover preview and toggle-to-clear; layout/Retry revised by D0025/D0026                  | 2026-10-09 | #992  |
+| 0025 | Apply the rendering review to the invitation layout          | Accepted (modified) | Compact left-aligned rating, secondary buttons, one helper size, dark logo; centering/stretch revised by D0027                 | 2026-10-09 | #992  |
+| 0026 | Report open failures in a modal; remove Retry UI             | Accepted (modified) | Replaces the Open→Retry relabel, status line, and command retry loop; D0027 extends it to opt-out save                         | 2026-10-09 | #992  |
+| 0027 | Centered smaller rating, stretched actions, no save Retry    | Accepted            | 20 px centered stars, symmetric spacing, "Continue to survey", modal opt-out save failure                                      | 2026-10-09 | #992  |
+| 0028 | Minimum VS Code version follows the build stack, 1.109.0     | Accepted            | Supersedes D0018; raised by the merge of #880                                                                                  | 2026-10-14 | #992  |
+| 0029 | Attribute feedback activation and distinguish true returns   | Accepted            | Adds host-validated source and persisted invitation history; old history is unknown                                            | 2026-10-15 | -     |
+| 0030 | Gate feedback controls without live settings sync            | Accepted (modified) | Applies the existing `all` permission rule to buttons and the Help tree; views snapshot it at open; D0032 replaces the setting | 2026-10-15 | #1016 |
+| 0031 | Only Collection View and the Dashboard show the invitation   | Accepted            | Other milestones only count active days; eligibility is evaluated only where the invitation can appear                         | 2026-10-15 | #1016 |
+| 0032 | Feedback permission follows `telemetry.feedback.enabled`     | Accepted            | Replaces the `telemetryLevel === 'all'` gate of D0002/D0030; aligns with the `EnableFeedback` policy                           | 2026-10-15 | #1016 |
+| 0033 | Give Feedback opens the feedback sidebar                     | Accepted            | Replaces the direct browser opening of D0015/D0030                                                                             | 2026-10-15 | #1016 |
 
 > Entries are semantically immutable: append new entries rather than rewriting old ones, and record
 > reversals as a new entry plus a status change above.
@@ -425,3 +430,91 @@ the build and test stack modernization (#880), merged into this branch. This sup
 unchanged: the stable `viewsContainers.secondarySidebar` contribution needs 1.106.0 or later, so
 D0013 still stands. `SurveyInvitationView.test.ts` now asserts that floor instead of the exact
 `^1.106.0` range, so later raises do not break it.
+
+## 0029: Attribute feedback activation and distinguish true returns
+
+**Decision (operator):** distinguish the Dashboard button, Collection View button and tab,
+direct Give Feedback command, and timed invitation from activation through browser opening.
+For timed invitations distinguish first from returning and record why a previous invitation
+returned, including Ask me later. The survey has not shipped, so adjust the schema now.
+
+**Reasoning:** `trigger=command` previously mixed both webview buttons and the command, while
+`isReminder` was derived from `lastOutcome` even when a manual browser opening caused it.
+The service stores whether an invitation was actually shown and its own last outcome. Existing
+local state without that history is classified `unknown`, preserving the opt-out and cooldown
+without inventing a first-invitation claim. Permission gates and bounded survey events remain.
+
+## 0030: Gate feedback controls without live settings sync
+
+**Decision (operator):** Only show the feedback buttons in the Dashboard, Collection View,
+MongoDB Atlas credentials wizard, and DocumentDB Local wizard, plus the Help and Feedback
+tree's survey item, when `telemetry.telemetryLevel` is `all`. Webviews read permission when
+opened; a settings change requires reopening the view or restarting VS Code. The host
+rechecks permission before opening the sidebar from a stale control. The separate
+command-palette Give Feedback action remains an explicit direct browser request.
+
+**Reasoning (operator):** Users who are not eligible for feedback must not see these
+entry points. Live syncing this one setting would require a broader approach to syncing
+all settings throughout the application, which is not part of this work.
+
+## 0031: Only Collection View and the Dashboard show the invitation
+
+**Decision (operator):** every milestone keeps counting active days, but only Collection View
+milestones (initial query, Indexes tab, Query Insights) and the Cluster Dashboard inventory
+load may evaluate eligibility and show the invitation. The Query Playground, interactive shell,
+tree paste tasks, Document View saves, and Local Quick Start completion only count. The
+MongoDB Atlas credentials wizard records no usage. Counting-only milestones emit
+`survey.cohortEntry` but never `survey.eligibility`.
+
+**Reasoning (operator):** the invitation should appear while someone is working in the
+product's main webviews, not while they pass through other surfaces. Evaluating only where
+the invitation can appear keeps `survey.eligibility` meaning "eligible to be shown now", so
+the eligible-to-shown funnel and deferral reasons stay accurate without a schema change.
+
+**Rejected:** sending usage signals only from the two webviews (Shell and Playground users
+would never qualify, and cohort coverage would shrink); evaluating on every milestone but
+presenting only from the two webviews (needs a new eligibility dimension, dedupe changes,
+and updated reports, and "eligible" would no longer imply a chance to be shown).
+
+**Accepted consequence:** installations that never use Collection View or the Dashboard are
+enrolled but never evaluated, so they are absent from gate attribution. They can be estimated
+as enrolled installations without any `survey.eligibility` event. An inviting milestone that
+arrives while counting is in flight is evaluated right after it.
+
+## 0032: Feedback permission follows `telemetry.feedback.enabled`
+
+**Decision (operator):** extension-wide, `isFeedbackPermitted()` reads
+`telemetry.feedback.enabled` (default `true`) instead of `telemetry.telemetryLevel === 'all'`.
+It gates the automatic invitation, usage collection, survey events, the webview feedback
+buttons, and the Help and Feedback tree item, and drives permission withdrawal. Only `true`
+permits; `false`, non-boolean values, and read failures fail closed. Survey events also still
+pass through the VS Code telemetry reporter, which drops them unless the telemetry level is
+`all`. Webviews keep snapshotting permission at open (D0030). The Command Palette Give
+Feedback action now follows the same setting: it is hidden from the palette by
+`config.telemetry.feedback.enabled` and does nothing if invoked while feedback is off.
+
+**Reasoning (operator):** `telemetry.feedback.enabled` is the VS Code setting, and the
+`EnableFeedback` enterprise policy, for feedback mechanisms such as surveys; the telemetry
+level is the older, indirect signal. Azure Cosmos DB for VS Code gates its surveys the same way.
+
+**Supersedes:** the `telemetryLevel === 'all'` presentation gate recorded in D0002 and applied
+by D0030. Users with telemetry below `all` but feedback enabled can now see the invitation;
+their survey events are dropped by the reporter, so they are invisible in the funnel reports.
+
+**Accepted consequence (operator):** anyone who lowered `telemetry.telemetryLevel` to stop
+feedback prompts now sees them unless `telemetry.feedback.enabled` is `false`. This is expected:
+the survey has not shipped yet, and the README and release notes in #1016 name the new setting.
+
+## 0033: Give Feedback opens the feedback sidebar
+
+**Decision (operator):** the Command Palette "DocumentDB: Give Feedback" command opens the same
+feedback sidebar as every other feedback entry point, with `giveFeedbackCommand` as its
+activation source, instead of opening the external form directly. It opens the form directly
+only if the survey service failed to initialize.
+
+**Reasoning (operator):** one label should have one behavior. "Give Feedback" in the Help and
+Feedback tree, the webviews, and the Command Palette now all lead to the same place, where the
+user can pick an optional rating before continuing to the survey.
+
+**Supersedes:** the direct browser opening of D0015 and the "explicit direct browser request"
+exception kept in D0030. `survey.feedbackActivated` is now always tied to a visible sidebar.

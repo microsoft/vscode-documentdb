@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: vi.fn() }));
+vi.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivityWithInvitation: vi.fn() }));
 
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import { type Document, type MongoClient } from 'mongodb';

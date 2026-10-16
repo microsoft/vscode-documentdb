@@ -114,6 +114,7 @@ import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotif
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
 import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
+import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
 import {
     CompletionCommandIds,
     normalizeCompletionCategory,
@@ -1128,46 +1129,7 @@ export class ClustersExtension implements vscode.Disposable {
                     void task.start();
                 });
 
-                // This is an optional task - if it fails, we don't want to break extension activation,
-                // but we should log the error for diagnostics
-                try {
-                    // Show welcome screen if it hasn't been shown before
-                    const welcomeScreenShown = ext.context.globalState.get<boolean>('welcomeScreenShown_v1_0_0', false);
-                    if (!welcomeScreenShown) {
-                        // Update the flag first
-                        await ext.context.globalState.update('welcomeScreenShown_v1_0_0', true);
-                        ext.outputChannel.appendLog('Showing welcome screen...');
-
-                        // Schedule the walkthrough to open after activation completes
-                        // This prevents it from blocking the activation process
-                        setImmediate(() => {
-                            vscode.commands
-                                .executeCommand(
-                                    'workbench.action.openWalkthrough',
-                                    'ms-azuretools.vscode-documentdb#documentdb-welcome',
-                                )
-                                .then(
-                                    // Success handler
-                                    () => {
-                                        activateContext.telemetry.properties.welcomeScreenShown = 'true';
-                                    },
-                                    // Error handler
-                                    (error) => {
-                                        ext.outputChannel.appendLog(
-                                            `Welcome screen error: ${error instanceof Error ? error.message : String(error)}`,
-                                        );
-                                    },
-                                );
-                        });
-                    }
-                } catch (error) {
-                    // Log the error but don't throw - this is non-critical functionality
-                    activateContext.telemetry.properties.welcomeScreenError = 'true';
-                    ext.outputChannel.appendLog(
-                        `Welcome screen error: ${error instanceof Error ? error.message : String(error)}`,
-                    );
-                    // Don't rethrow the error - we want activation to continue
-                }
+                void maybeShowWelcomeScreen();
             },
         );
     }

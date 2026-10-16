@@ -28,6 +28,9 @@ export const EMPTY_SURVEY_STATE: SurveyPersistedState = {
     lastOutcome: undefined,
     nextEligibleAt: undefined,
     optedOutAt: undefined,
+    invitationHistory: 'new',
+    lastInvitationOutcome: undefined,
+    lastInvitationOutcomeAt: undefined,
 };
 
 /**
@@ -47,7 +50,16 @@ export function parseSurveyState(raw: unknown): SurveyPersistedState {
         // Read the permanent opt-out first so a failure in another field cannot erase it.
         optedOutAt = object.optedOutAt;
         const prototype: unknown = Object.getPrototypeOf(object);
-        const { version, activeDayCount, lastActiveDay, lastOutcome, nextEligibleAt } = object;
+        const {
+            version,
+            activeDayCount,
+            lastActiveDay,
+            lastOutcome,
+            nextEligibleAt,
+            invitationHistory,
+            lastInvitationOutcome,
+            lastInvitationOutcomeAt,
+        } = object;
 
         if (
             !Array.isArray(object) &&
@@ -63,9 +75,31 @@ export function parseSurveyState(raw: unknown): SurveyPersistedState {
                 lastOutcome === 'askLater' ||
                 lastOutcome === 'dismissed') &&
             (nextEligibleAt === undefined || typeof nextEligibleAt === 'string') &&
-            (optedOutAt === undefined || typeof optedOutAt === 'string')
+            (optedOutAt === undefined || typeof optedOutAt === 'string') &&
+            (invitationHistory === undefined ||
+                invitationHistory === 'new' ||
+                invitationHistory === 'seen' ||
+                invitationHistory === 'unknown') &&
+            (lastInvitationOutcome === undefined ||
+                lastInvitationOutcome === 'opened' ||
+                lastInvitationOutcome === 'askLater' ||
+                lastInvitationOutcome === 'dismissed') &&
+            (lastInvitationOutcomeAt === undefined ||
+                (typeof lastInvitationOutcomeAt === 'string' &&
+                    Number.isFinite(Date.parse(lastInvitationOutcomeAt)) &&
+                    lastInvitationOutcome !== undefined))
         ) {
-            return { version, activeDayCount, lastActiveDay, lastOutcome, nextEligibleAt, optedOutAt };
+            return {
+                version,
+                activeDayCount,
+                lastActiveDay,
+                lastOutcome,
+                nextEligibleAt,
+                optedOutAt,
+                invitationHistory: invitationHistory ?? 'unknown',
+                lastInvitationOutcome,
+                lastInvitationOutcomeAt,
+            };
         }
     } catch {
         // Storage can contain objects with throwing getters or proxy traps.
@@ -83,6 +117,11 @@ export function mergeSurveyStates(a: SurveyPersistedState, b: SurveyPersistedSta
     const aCooldownTime = Number.isNaN(aCooldown) ? Number.NEGATIVE_INFINITY : aCooldown;
     const bCooldownTime = Number.isNaN(bCooldown) ? Number.NEGATIVE_INFINITY : bCooldown;
     const cooldown = bCooldownTime > aCooldownTime ? b : a;
+    const aOutcomeAt = Date.parse(a.lastInvitationOutcomeAt ?? '');
+    const bOutcomeAt = Date.parse(b.lastInvitationOutcomeAt ?? '');
+    const aOutcomeTime = Number.isNaN(aOutcomeAt) ? Number.NEGATIVE_INFINITY : aOutcomeAt;
+    const bOutcomeTime = Number.isNaN(bOutcomeAt) ? Number.NEGATIVE_INFINITY : bOutcomeAt;
+    const invitationOutcome = bOutcomeTime > aOutcomeTime ? b : a;
 
     return {
         version: 1,
@@ -94,6 +133,14 @@ export function mergeSurveyStates(a: SurveyPersistedState, b: SurveyPersistedSta
         lastOutcome: aCooldownTime === bCooldownTime ? (a.lastOutcome ?? b.lastOutcome) : cooldown.lastOutcome,
         nextEligibleAt: cooldown.nextEligibleAt,
         optedOutAt: (validOptOuts.length > 0 ? validOptOuts : optOuts).sort()[0],
+        invitationHistory:
+            a.invitationHistory === 'seen' || b.invitationHistory === 'seen'
+                ? 'seen'
+                : a.invitationHistory === 'unknown' || b.invitationHistory === 'unknown'
+                  ? 'unknown'
+                  : 'new',
+        lastInvitationOutcome: invitationOutcome.lastInvitationOutcome ?? b.lastInvitationOutcome,
+        lastInvitationOutcomeAt: invitationOutcome.lastInvitationOutcomeAt,
     };
 }
 
@@ -155,11 +202,21 @@ export class SurveyStateStore {
     }
 
     /** Records a timed outcome and its cooldown end. */
-    public async recordOutcome(outcome: SurveyTimedOutcome, nextEligibleAt: Date): Promise<SurveyStateWriteResult> {
+    public async recordOutcome(
+        outcome: SurveyTimedOutcome,
+        nextEligibleAt: Date,
+        invitationOutcomeAt?: Date,
+    ): Promise<SurveyStateWriteResult> {
         this.syncFromStorage();
         try {
             this.state = mergeSurveyStates(
-                { ...this.state, lastOutcome: outcome, nextEligibleAt: nextEligibleAt.toISOString() },
+                {
+                    ...this.state,
+                    lastOutcome: outcome,
+                    nextEligibleAt: nextEligibleAt.toISOString(),
+                    lastInvitationOutcome: invitationOutcomeAt ? outcome : this.state.lastInvitationOutcome,
+                    lastInvitationOutcomeAt: invitationOutcomeAt?.toISOString() ?? this.state.lastInvitationOutcomeAt,
+                },
                 this.state,
             );
             return await this.save();
@@ -171,7 +228,10 @@ export class SurveyStateStore {
     public async recordCooldown(nextEligibleAt: Date): Promise<SurveyStateWriteResult> {
         this.syncFromStorage();
         try {
-            this.state = mergeSurveyStates({ ...this.state, nextEligibleAt: nextEligibleAt.toISOString() }, this.state);
+            this.state = mergeSurveyStates(
+                { ...this.state, invitationHistory: 'seen', nextEligibleAt: nextEligibleAt.toISOString() },
+                this.state,
+            );
             return await this.save();
         } catch (error) {
             return { persisted: false, error };

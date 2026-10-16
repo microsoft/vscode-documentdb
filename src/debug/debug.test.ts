@@ -7,7 +7,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import * as vscode from 'vscode';
 import * as packageJson from '../../package.json';
-import { getSurveyService, recordSurveyActivity, type SurveyService } from '../services/survey/SurveyService';
+import {
+    getSurveyService,
+    recordSurveyActivityWithInvitation,
+    type SurveyService,
+} from '../services/survey/SurveyService';
 import { DEBUG_SURVEY_ALWAYS_INVITE_ENV, readDebugOverrides } from './debugOverrides';
 import {
     DEVELOPMENT_MODE_CONTEXT,
@@ -27,7 +31,7 @@ vi.mock('vscode', (): object => ({
 }));
 vi.mock('../services/survey/SurveyService', (): object => ({
     getSurveyService: vi.fn(),
-    recordSurveyActivity: vi.fn(),
+    recordSurveyActivityWithInvitation: vi.fn(),
 }));
 
 beforeEach((): void => {
@@ -103,7 +107,7 @@ it('registers development commands that use the real milestone entry point and s
         expect.stringMatching(/^Survey invitation NOT shown\. alwaysInvite=false, enabled=false/),
     );
     await registrations[1][1]();
-    expect(recordSurveyActivity).toHaveBeenCalledWith('connection');
+    expect(recordSurveyActivityWithInvitation).toHaveBeenCalledWith('connection');
     expect(whenIdle).toHaveBeenCalled();
     await registrations[2][1]();
     expect(resetState).toHaveBeenCalledTimes(1);

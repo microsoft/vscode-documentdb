@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ComponentPropsWithoutRef, type ReactNode } from 'react';
+import { type ComponentPropsWithoutRef, type CSSProperties, type ReactNode } from 'react';
 
 /** Where the step indicator sits relative to the step content. Logical, so RTL comes free. */
 export type ContainerNavPosition = 'top' | 'start';
@@ -15,6 +15,8 @@ export type ContainerNavPosition = 'top' | 'start';
 export type ContainerProps = ComponentPropsWithoutRef<'div'>;
 
 export interface ContainerBodyProps extends ComponentPropsWithoutRef<'div'> {
+    /** Maximum width of the navigation and main regions. Unset by default; the header is never capped. */
+    readonly contentMaxWidth?: CSSProperties['maxWidth'];
     /**
      * Where `ContainerNav` sits. `'top'` stacks header, nav and main; `'start'` puts the nav in
      * its own column beside main, with the header spanning both.

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ReactNode } from 'react';
-import { type ContainerNavPosition } from '../Container/Container.types.js';
+import { type ContainerBodyProps, type ContainerNavPosition } from '../Container/Container.types.js';
 
 /**
  * What stays visible while a wizard's body scrolls.
@@ -18,6 +18,8 @@ import { type ContainerNavPosition } from '../Container/Container.types.js';
 export type WizardHeaderBehavior = 'scroll' | 'sticky-navigation';
 
 export interface WizardProps {
+    /** Maximum width of the navigation and main regions. Unset by default; the header is never capped. */
+    readonly contentMaxWidth?: ContainerBodyProps['contentMaxWidth'];
     /** The `value` of the step being shown. */
     readonly activeStep: string;
     /** Called when a navigable step is activated. `Wizard` never navigates itself. */

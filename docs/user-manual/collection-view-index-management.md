@@ -1,5 +1,8 @@
-> **User Manual** | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Manage Indexes'
+parent: 'Data Management'
+nav_order: 1
+has_toc: false
 ---
 
 # Manage Indexes in Collection View

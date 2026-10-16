@@ -44,6 +44,8 @@ function createState(overrides: Partial<SurveyPersistedState> = {}): SurveyPersi
         lastOutcome: undefined,
         nextEligibleAt: undefined,
         optedOutAt: undefined,
+        invitationHistory: 'new',
+        lastInvitationOutcome: undefined,
         ...overrides,
     };
 }
@@ -392,26 +394,39 @@ describe('evaluateEligibility', (): void => {
             'opened',
         ];
 
-        it.each(previousOutcomes)('mirrors previous outcome %p in eligible results', (lastOutcome): void => {
-            const config: SurveyPolicyConfig = { ...DEFAULT_SURVEY_POLICY_CONFIG, requiredActiveDays: 7 };
-            const input = createEligibleInput({ state: createState({ activeDayCount: 10, lastOutcome }) });
-            const result = evaluateEligibility(input, config);
+        it.each(previousOutcomes)(
+            'mirrors previous invitation outcome %p in eligible results',
+            (lastInvitationOutcome): void => {
+                const config: SurveyPolicyConfig = { ...DEFAULT_SURVEY_POLICY_CONFIG, requiredActiveDays: 7 };
+                const input = createEligibleInput({
+                    state: createState({
+                        activeDayCount: 10,
+                        lastInvitationOutcome,
+                        invitationHistory: lastInvitationOutcome ? 'seen' : 'new',
+                    }),
+                });
+                const result = evaluateEligibility(input, config);
 
-            expect(result.overall).toBe('eligible');
-            expect(result.explanation).toEqual({
-                activeDayCount: 10,
-                requiredActiveDays: 7,
-                previousOutcome: lastOutcome,
-                isReminder: lastOutcome !== undefined,
-            });
-        });
+                expect(result.overall).toBe('eligible');
+                expect(result.explanation).toEqual({
+                    activeDayCount: 10,
+                    requiredActiveDays: 7,
+                    previousOutcome: lastInvitationOutcome,
+                    isReminder: lastInvitationOutcome !== undefined,
+                });
+            },
+        );
 
         it.each(previousOutcomes)(
             'produces the same input-based explanation when blocked with outcome %p',
-            (lastOutcome): void => {
+            (lastInvitationOutcome): void => {
                 const config: SurveyPolicyConfig = { ...DEFAULT_SURVEY_POLICY_CONFIG, requiredActiveDays: 7 };
                 const input = createEligibleInput({
-                    state: createState({ activeDayCount: 2, lastOutcome }),
+                    state: createState({
+                        activeDayCount: 2,
+                        lastInvitationOutcome,
+                        invitationHistory: lastInvitationOutcome ? 'seen' : 'new',
+                    }),
                     samplingValue: 1,
                 });
                 const result = evaluateEligibility(input, config);
@@ -421,8 +436,8 @@ describe('evaluateEligibility', (): void => {
                 expect(result.explanation).toEqual({
                     activeDayCount: 2,
                     requiredActiveDays: 7,
-                    previousOutcome: lastOutcome,
-                    isReminder: lastOutcome !== undefined,
+                    previousOutcome: lastInvitationOutcome,
+                    isReminder: lastInvitationOutcome !== undefined,
                 });
             },
         );
@@ -432,6 +447,8 @@ describe('evaluateEligibility', (): void => {
         const state = createState({
             activeDayCount: REQUIRED_ACTIVE_DAYS,
             lastOutcome: 'askLater',
+            lastInvitationOutcome: 'askLater',
+            invitationHistory: 'seen',
             nextEligibleAt: computeNextEligibleAt(
                 'askLater',
                 new Date(NOW.getTime() - 15 * MILLISECONDS_PER_DAY),

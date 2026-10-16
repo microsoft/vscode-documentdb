@@ -40,12 +40,14 @@ treat `status: historical` or `status: superseded` as current.
 | [copy-paste-collections](./features/copy-paste-collections/README.md)     | Collection copy/paste tasks, document streaming, conflict handling, and optional index copying           | active                              |
 | [cluster-dashboard](./features/cluster-dashboard/README.md)               | Cluster-wide inventory and resilience facts                                                              | POC, unmerged                       |
 | [settings](./features/settings/README.md)                                 | Settings editor grouping, setting ID naming, and how a setting is renamed safely                         | active                              |
+| [welcome](./features/welcome/README.md)                                   | Welcome walkthrough onboarding and quiet next-session deferral for upgraded installations                | active                              |
 | [escaping](./features/escaping/README.md)                                 | Safe rendering of user/database content and least-privilege Markdown tooltips                            | active                              |
 | [srv-dns-fallback](./features/srv-dns-fallback/README.md)                 | In-memory SRV fallback for `mongodb+srv://` when c-ares rejects compressed SRV replies (#993)            | implemented (manual checks pending) |
 | [build-and-test-stack](./features/build-and-test-stack/README.md)         | Vite host and webview builds, Vitest, packaged checks, CI tiers, and modernization history               | active                              |
 | [e2e-testing](./features/e2e-testing/README.md)                           | The planned installed-workbench and webview end-to-end test iteration                                    | planned                             |
 | [data-grid](./features/data-grid/README.md)                               | The Collection View table and tree, including the planned SlickGrid replacement                          | planned                             |
 | [survey](./features/survey/README.md)                                     | Survey refresh: simpler eligibility, broader activity coverage, cohort telemetry, and invitation surface | draft #992; enabled                 |
+| [docs-site](./features/docs-site/README.md)                               | The GitHub Pages documentation site: Just the Docs theme, OS dark mode, local preview                    | draft #420                          |
 
 Everything else is a single file at this root, such as:
 

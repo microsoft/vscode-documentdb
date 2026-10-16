@@ -7,8 +7,10 @@ This is a complete example of a major/minor release notes file (X.Y.0).
 ## Template
 
 ```markdown
-> **Release Notes** — [Back to Release Notes](../index.md#release-notes)
-
+---
+title: 'vX.Y'
+parent: 'Release Notes'
+nav_order: NNNN
 ---
 
 # DocumentDB for VS Code Extension vX.Y
@@ -63,8 +65,10 @@ See the full changelog entry for this release:
 ## Real Example (v0.6.0)
 
 ```markdown
-> **Release Notes** — [Back to Release Notes](../index.md#release-notes)
-
+---
+title: 'v0.6'
+parent: 'Release Notes'
+nav_order: 60
 ---
 
 # DocumentDB for VS Code Extension v0.6

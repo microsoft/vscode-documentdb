@@ -37,7 +37,7 @@ export interface SurveyPreconditionInput {
     readonly alwaysInvite?: boolean;
     /** Shared code kill switch (D0021). */
     readonly surveyEnabled: boolean;
-    /** Result of `isFeedbackPermitted()`: `telemetry.telemetryLevel === 'all'`, fail closed. */
+    /** Result of `isFeedbackPermitted()`: `telemetry.feedback.enabled`, fail closed. */
     readonly feedbackPermitted: boolean;
     /** The user chose "Never again" (D0002). Permanent. */
     readonly optedOut: boolean;
@@ -145,6 +145,11 @@ export interface SurveyPersistedState {
     readonly nextEligibleAt: string | undefined;
     /** ISO 8601 timestamp of "Never again". When set, the user is permanently opted out. */
     readonly optedOutAt: string | undefined;
+    /** `unknown` for state written before invitation history was tracked. */
+    readonly invitationHistory: 'new' | 'seen' | 'unknown';
+    readonly lastInvitationOutcome: SurveyTimedOutcome | undefined;
+    /** Local outcome timestamp; absent in state written before outcome recency was tracked. */
+    readonly lastInvitationOutcomeAt?: string;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -159,6 +164,25 @@ export function isSurveyRating(value: unknown): value is SurveyRating {
 
 /** Where the request to open the form came from (D0015). */
 export type SurveyOpenFormTrigger = 'invitation' | 'command';
+
+export type SurveyActivationSource =
+    | 'automaticInvitation'
+    | 'clusterDashboard'
+    | 'collectionView'
+    | 'atlasCredentials'
+    | 'localQuickStart'
+    | 'helpAndFeedbackView'
+    | 'giveFeedbackCommand';
+export type SurveyCollectionTab = 'documents' | 'indexes' | 'queryInsights';
+export type SurveyInvitationKind = 'first' | 'returning' | 'unknown';
+export type SurveyReturnReason = SurveyTimedOutcome | 'none' | 'unknown';
+
+export interface SurveyActivation {
+    readonly source: SurveyActivationSource;
+    readonly collectionTab?: SurveyCollectionTab;
+    readonly invitationKind?: SurveyInvitationKind;
+    readonly returnReason?: SurveyReturnReason;
+}
 
 /**
  * - `opened`: `openExternal` reported success. Not proof of survey completion.

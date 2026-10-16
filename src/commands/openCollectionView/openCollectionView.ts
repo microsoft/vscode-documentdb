@@ -65,9 +65,6 @@ export async function openCollectionViewInternal(
      */
     const sessionId = await ClusterSession.initNewSession(props.clusterId);
 
-    // isFeedbackPermitted gates feedback on telemetry level "all" and fails closed.
-    const feedbackSignalsEnabled = isFeedbackPermitted();
-
     const view = openCollectionWebview({
         sessionId: sessionId,
         clusterId: props.clusterId,
@@ -75,7 +72,7 @@ export async function openCollectionViewInternal(
         viewId: props.viewId,
         databaseName: props.databaseName,
         collectionName: props.collectionName,
-        feedbackSignalsEnabled: feedbackSignalsEnabled,
+        feedbackPermitted: isFeedbackPermitted(),
         initialQuery: props.initialQuery,
         initialTab: props.initialTab,
     });

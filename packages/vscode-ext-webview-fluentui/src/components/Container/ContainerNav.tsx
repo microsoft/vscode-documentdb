@@ -10,7 +10,7 @@ import { type ContainerNavProps } from './Container.types.js';
 const useStyles = makeStyles({
     // `minWidth: 0` is load-bearing: without it a grid item refuses to shrink below its content,
     // and the step indicator's own overflow handling never engages.
-    nav: { gridArea: 'nav', minWidth: 0 },
+    nav: { gridArea: 'nav', minWidth: 0, maxWidth: 'var(--container-content-max-width, none)' },
 });
 
 /** Placement for the step indicator. It carries no styling of its own beyond its grid area. */

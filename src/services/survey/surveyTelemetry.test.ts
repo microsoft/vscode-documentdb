@@ -174,6 +174,87 @@ describe('SurveyTelemetry', (): void => {
         vi.mocked(isFeedbackPermitted).mockReturnValue(false);
     });
 
+    it('attributes a collection tab and a returning invitation through activation and opening', (): void => {
+        const collection = { source: 'collectionView', collectionTab: 'queryInsights' } as const;
+        const invitation = {
+            source: 'automaticInvitation',
+            invitationKind: 'returning',
+            returnReason: 'askLater',
+        } as const;
+        expect(telemetry.reportFeedbackActivated(collection, INVITATION_ID)).toBe(true);
+        expect(telemetry.reportFeedbackActivated(collection, INVITATION_ID)).toBe(false);
+        expect(telemetry.reportOpenForm('command', 'success', 1, undefined, 4, collection)).toBe(true);
+        expect(telemetry.reportFeedbackActivated(invitation, OTHER_INVITATION_ID)).toBe(true);
+        expect(telemetry.reportOpenForm('invitation', 'failure', 1, OTHER_INVITATION_ID, undefined, invitation)).toBe(
+            true,
+        );
+        expect(sink.mock.calls.map(([event]): string => event.name)).toEqual([
+            'survey.feedbackActivated',
+            'survey.openForm',
+            'survey.feedbackActivated',
+            'survey.openForm',
+        ]);
+        expect(sink.mock.calls[0][0].properties).toMatchObject({
+            activationSource: 'collectionView',
+            collectionTab: 'queryInsights',
+        });
+        expect(sink.mock.calls[2][0].properties).toMatchObject({
+            activationSource: 'automaticInvitation',
+            invitationKind: 'returning',
+            returnReason: 'askLater',
+        });
+        expect(sink.mock.calls[3][0].properties).toMatchObject({
+            activationSource: 'automaticInvitation',
+            invitationKind: 'returning',
+            returnReason: 'askLater',
+        });
+    });
+
+    it('rejects invalid provenance and does not spend dedupe budget while permission is off', (): void => {
+        expect(
+            telemetry.reportFeedbackActivated(
+                { source: 'clusterDashboard', collectionTab: 'documents' },
+                INVITATION_ID,
+            ),
+        ).toBe(false);
+        expect(
+            telemetry.reportFeedbackActivated(
+                { source: 'automaticInvitation', invitationKind: 'first', returnReason: 'askLater' },
+                INVITATION_ID,
+            ),
+        ).toBe(false);
+        expect(
+            telemetry.reportFeedbackActivated(
+                { source: 'automaticInvitation', invitationKind: 'unknown', returnReason: 'askLater' },
+                INVITATION_ID,
+            ),
+        ).toBe(false);
+        expect(
+            telemetry.reportFeedbackActivated(
+                { source: 'automaticInvitation', invitationKind: 'returning', returnReason: 'unknown' },
+                INVITATION_ID,
+            ),
+        ).toBe(false);
+        expect(
+            telemetry.reportOpenForm('invitation', 'success', 1, INVITATION_ID, undefined, {
+                source: 'giveFeedbackCommand',
+            }),
+        ).toBe(false);
+        expect(telemetry.reportFeedbackActivated({ source: 'atlasCredentials' }, OTHER_INVITATION_ID)).toBe(true);
+        expect(sink.mock.calls[0][0].properties.activationSource).toBe('atlasCredentials');
+        sink.mockClear();
+        const localTelemetry = createTelemetry();
+        expect(localTelemetry.reportFeedbackActivated({ source: 'localQuickStart' }, INVITATION_ID)).toBe(true);
+        expect(localTelemetry.reportFeedbackActivated({ source: 'localQuickStart' }, INVITATION_ID)).toBe(false);
+        expect(sink.mock.calls[0][0].properties.activationSource).toBe('localQuickStart');
+        sink.mockClear();
+        permitted = false;
+        expect(telemetry.reportFeedbackActivated({ source: 'clusterDashboard' }, INVITATION_ID)).toBe(false);
+        permitted = true;
+        expect(telemetry.reportFeedbackActivated({ source: 'clusterDashboard' }, INVITATION_ID)).toBe(true);
+        expect(sink).toHaveBeenCalledOnce();
+    });
+
     it.each(EVENT_CASES)('emits the exact $label schema with campaign and policy', (eventCase): void => {
         expect(eventCase.report(telemetry)).toBe(true);
         expect(sink).toHaveBeenCalledTimes(1);
@@ -423,13 +504,23 @@ describe('SurveyTelemetry', (): void => {
         expect(sink.mock.calls[0][0].measurements).not.toHaveProperty('selectedRating');
     });
 
-    it('rejects invalid ratings and ratings attached to command openings', (): void => {
+    it('rejects invalid ratings on invitation and manual openings', (): void => {
         for (const rating of [0, 6, -1, 1.5, NaN, Infinity, null, '5', { value: 5 }, [5]]) {
             expect(telemetry.reportOpenForm('invitation', 'success', 1, INVITATION_ID, rating)).toBe(false);
+            expect(telemetry.reportOpenForm('command', 'success', 1, undefined, rating)).toBe(false);
         }
-        expect(telemetry.reportOpenForm('command', 'success', 1, undefined, 5)).toBe(false);
         expect(telemetry.reportOpenForm('invitation', 'success', 4, INVITATION_ID, 5)).toBe(false);
         expect(sink).not.toHaveBeenCalled();
+    });
+
+    it('reports an optional rating from a manually opened sidebar without an invitation id', (): void => {
+        expect(telemetry.reportOpenForm('command', 'success', 1, undefined, 4)).toBe(true);
+        expect(sink.mock.calls[0][0].properties).toEqual({
+            ...COMMON_PROPERTIES,
+            trigger: 'command',
+            openResult: 'success',
+        });
+        expect(sink.mock.calls[0][0].measurements).toEqual({ attempt: 1, selectedRating: 4 });
     });
 
     it('never emits eligibility explanation fields or the active-day count', (): void => {

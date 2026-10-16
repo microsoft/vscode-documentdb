@@ -143,6 +143,25 @@ describe('DiscoveryBranchDataProvider - provider visibility', () => {
         });
     });
 
+    it('sorts providers by display label rather than ID or registration order', async () => {
+        setGlobalState({});
+        listProvidersMock.mockReturnValue([
+            { id: 'provider-a', label: 'Zulu' },
+            { id: 'provider-c', label: 'Provider 10' },
+            { id: 'provider-d', label: 'Alpha' },
+            { id: 'provider-b', label: 'Provider 2' },
+        ]);
+
+        const result = await dataProvider.getChildren(undefined as never);
+
+        expect(result?.map((node) => node.id)).toEqual([
+            'discoveryView/provider-d',
+            'discoveryView/provider-b',
+            'discoveryView/provider-c',
+            'discoveryView/provider-a',
+        ]);
+    });
+
     it('hides only providers stored in hiddenDiscoveryProviderIds', async () => {
         setGlobalState({
             hiddenDiscoveryProviderIds: ['provider-b'],

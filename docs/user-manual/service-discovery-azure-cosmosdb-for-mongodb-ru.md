@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Azure Cosmos DB for MongoDB (RU)'
+parent: 'Service Discovery'
+nav_order: 2
 ---
 
 # Azure CosmosDB for MongoDB (RU) Service Discovery Plugin
@@ -19,7 +21,7 @@ You can access this plugin in two ways:
 - From the `Service Discovery` panel in the extension sidebar.
 - When adding a new connection, select the `Azure CosmosDB for MongoDB (RU)` option.
 
-<p align="center"><img src="./images/service-discovery-activation.png" alt="Service Discovery Activation" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/service-discovery-activation_dark.png"><img src="./images/service-discovery-activation.png" alt="Service Discovery Activation" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 ## How It Works
 

@@ -54,7 +54,7 @@ import {
 import { createImprovementCardConfig } from '../utils/createImprovementCard';
 import { extractErrorCode } from '../utils/errorCodeExtractor';
 import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDisplay';
-import { CardStack, FeedbackCard, FeedbackDialog, type CardStackItem } from './components';
+import { CardStack, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
 import {
@@ -147,7 +147,6 @@ export const QueryInsightsMain = (): JSX.Element => {
     //     `concerns` mention "Query Execution Failed").
     //   - bylineVisible: rAF-deferred fade-in for the post-success
     //     "Powered by …" footer (Fluent <Fade> first-mount workaround).
-    //   - feedbackDialogOpen / feedbackSentiment: feedback dialog.
     //   - stage3SubscriptionRef: tRPC unsubscribe handle.
     //   - stage3TipsTimerRef: the 1s timer above.
     //   - displayedErrorsRef: error-toast dedupe (see displayStageError).
@@ -184,10 +183,6 @@ export const QueryInsightsMain = (): JSX.Element => {
      * `idle` (a fresh query cycle) — see the reset effect below.
      */
     const displayedErrorsRef = useRef<Set<string>>(new Set());
-
-    // Feedback dialog state
-    const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
-    const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
 
     /**
      * Two-step visibility for the post-response "Powered by …" byline so it
@@ -604,40 +599,6 @@ export const QueryInsightsMain = (): JSX.Element => {
         },
         [],
     );
-
-    // Feedback handlers
-    const handleFeedbackClick = (sentiment: 'positive' | 'negative'): void => {
-        void trpcClient.common.reportEvent.mutate({
-            eventName: 'queryInsightsThumb',
-            properties: { sentiment, source: 'feedbackThumb' },
-        });
-        setFeedbackSentiment(sentiment);
-        setFeedbackDialogOpen(true);
-    };
-
-    const handleFeedbackSubmit = (feedback: {
-        sentiment: 'positive' | 'negative';
-        selectedReasons: string[];
-    }): Promise<void> => {
-        try {
-            const reasonProperties = feedback.selectedReasons.reduce(
-                (acc, reason) => {
-                    acc[reason] = 'true';
-                    return acc;
-                },
-                {} as Record<string, string>,
-            );
-
-            void trpcClient.common.reportEvent.mutate({
-                eventName: 'queryInsightsFeedback',
-                properties: { sentiment: feedback.sentiment, source: 'feedbackDialog', ...reasonProperties },
-            });
-        } catch (error) {
-            console.error('Failed to send feedback:', error);
-        }
-
-        return Promise.resolve();
-    };
 
     // ---------- Build the animated card list ------------------------------
     // Memoized so the array keeps a stable reference across renders when none
@@ -1262,22 +1223,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                         stage2Loading={pipeline.kind === 's2Loading'}
                         hasError={hasMetricsError}
                     />
-
-                    {/* Feedback Card - hidden for RU accounts where Query Insights is not available */}
-                    {configuration.feedbackSignalsEnabled &&
-                        stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
-                            <FeedbackCard onFeedback={handleFeedbackClick} />
-                        )}
                 </div>
             </div>
-
-            {/* Feedback Dialog */}
-            <FeedbackDialog
-                open={feedbackDialogOpen}
-                onClose={() => setFeedbackDialogOpen(false)}
-                sentiment={feedbackSentiment}
-                onSubmit={handleFeedbackSubmit}
-            />
         </div>
     );
 };

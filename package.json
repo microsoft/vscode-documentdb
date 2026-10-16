@@ -1567,6 +1567,10 @@
           "when": "documentdb-development-mode"
         },
         {
+          "command": "vscode-documentdb.command.giveFeedback",
+          "when": "config.telemetry.feedback.enabled"
+        },
+        {
           "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
           "when": "never"
         },

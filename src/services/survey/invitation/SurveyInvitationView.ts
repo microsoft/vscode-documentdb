@@ -26,6 +26,8 @@ interface Invitation {
     readonly callbacks: SurveyInvitationCallbacks;
     rendered: boolean;
     reported: boolean;
+    revealing: boolean;
+    focusPending: boolean;
     busy: boolean;
     closed: boolean;
 }
@@ -35,6 +37,7 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
     private active: Invitation | undefined;
     private listeners: vscode.Disposable[] = [];
     private disposed = false;
+    private contextUpdate: Promise<void> = Promise.resolve();
 
     public constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -51,27 +54,37 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             callbacks,
             rendered: false,
             reported: false,
+            revealing: true,
+            focusPending: request.manuallyOpened === true,
             busy: false,
             closed: false,
         };
+        const preserveFocus = !invitation.focusPending;
         this.active = invitation;
         try {
-            await vscode.commands.executeCommand('setContext', SURVEY_ACTIVE_CONTEXT, true);
+            await this.setActiveContext(true);
             if (this.active !== invitation) {
                 return undefined;
             }
             if (this.view) {
                 this.render(invitation);
-                this.view.show(true);
+                this.view.show(preserveFocus);
                 this.checkVisibility();
             } else {
-                await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus: true });
+                await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus });
+                if (!this.view && this.active === invitation) {
+                    await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus });
+                }
             }
+            invitation.revealing = false;
             if (this.active !== invitation || invitation.closed) {
                 this.clear(invitation);
                 return undefined;
             }
-            return { dispose: (): void => this.clear(invitation) };
+            return {
+                dispose: (): void => this.clear(invitation),
+                focus: (): boolean => this.focus(invitation),
+            };
         } catch {
             traceSurvey((): string => vscode.l10n.t('[Survey] Presentation deferred: reveal failed.'));
             this.clear(invitation);
@@ -92,8 +105,14 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             }),
             view.onDidChangeVisibility((): void => this.checkVisibility()),
             view.onDidDispose((): void => {
+                if (this.view !== view) {
+                    return;
+                }
                 this.view = undefined;
                 const invitation = this.active;
+                if (invitation?.revealing) {
+                    return;
+                }
                 if (invitation) {
                     invitation.closed = true;
                 }
@@ -105,7 +124,7 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
         ];
         if (this.active && !this.disposed) {
             this.render(this.active);
-            view.show(true);
+            view.show(!this.active.focusPending);
             this.checkVisibility();
         } else {
             view.webview.html = '';
@@ -134,6 +153,7 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'resources', 'documentdb', file)).toString();
         webview.html = buildSurveyInvitationHtml({
             explanation: invitation.request.explanation,
+            manuallyOpened: invitation.request.manuallyOpened,
             strings: getSurveyInvitationStrings(),
             nonce: randomBytes(16).toString('hex'),
             cspSource: webview.cspSource,
@@ -161,6 +181,9 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
         switch (message.type) {
             case 'rendered':
                 invitation.rendered = true;
+                if (invitation.focusPending) {
+                    this.postFocus(invitation);
+                }
                 this.checkVisibility();
                 return;
             case 'privacy': {
@@ -226,6 +249,30 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
         );
     }
 
+    private focus(invitation: Invitation): boolean {
+        if (this.active !== invitation || invitation.closed || !this.view) {
+            return false;
+        }
+        invitation.focusPending = true;
+        this.view.show(false);
+        if (invitation.rendered) {
+            this.postFocus(invitation);
+        }
+        return true;
+    }
+
+    private postFocus(invitation: Invitation): void {
+        void Promise.resolve(this.view?.webview.postMessage({ type: 'focus' })).then(
+            (delivered): void => {
+                // A webview reloading after being hidden drops the message; its next `rendered` retries.
+                if (delivered && this.active === invitation) {
+                    invitation.focusPending = false;
+                }
+            },
+            (): void => undefined,
+        );
+    }
+
     private clear(invitation: Invitation): void {
         if (this.active !== invitation) {
             return;
@@ -239,10 +286,18 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
 
     private async hide(): Promise<void> {
         try {
-            await vscode.commands.executeCommand('setContext', SURVEY_ACTIVE_CONTEXT, false);
+            await this.setActiveContext(false);
         } catch {
             return;
         }
+    }
+
+    private setActiveContext(active: boolean): Promise<void> {
+        const update = this.contextUpdate.then(async (): Promise<void> => {
+            await vscode.commands.executeCommand('setContext', SURVEY_ACTIVE_CONTEXT, active);
+        });
+        this.contextUpdate = update.catch((): void => undefined);
+        return update;
     }
 }
 
@@ -277,13 +332,20 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
         usage: vscode.l10n.t(
             "You've used DocumentDB for VS Code on {0} days, so we'd love to hear how it's going. This count stays on your device.",
         ),
+        manuallyOpened: vscode.l10n.t(
+            "You opened this with Give Feedback. Thank you for taking a moment to tell us how it's going.",
+        ),
+        close: vscode.l10n.t('Close'),
+        manualTelemetry: vscode.l10n.t(
+            "If VS Code telemetry is on, we record whether you continue to the survey and the rating you picked here. We don't record your name or your answers in the survey.",
+        ),
         reminders: {
             opened: vscode.l10n.t("It's been a while since you last opened the survey, so we're checking in again."),
             askLater: vscode.l10n.t('You asked us to remind you later, so here we are.'),
             dismissed: vscode.l10n.t('You closed this invitation a while ago, so we are asking once more.'),
         },
         telemetry: vscode.l10n.t(
-            "To improve these invitations, we record whether you qualified, whether the invitation was shown, what you chose, and any rating selected when you open the survey. We don't record your name, answers in the external form, or your usage count.",
+            "If VS Code telemetry is on, we record whether you qualified, whether this invitation was shown, what you chose, and the rating you picked when you continue to the survey. We don't record your name, your answers in the survey, or your usage count.",
         ),
         privacy: vscode.l10n.t('Privacy Statement'),
     };

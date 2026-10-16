@@ -1,5 +1,7 @@
-> **User Manual** | [MongoDB Atlas Service Discovery](./service-discovery-mongodb-atlas) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Browse and Connect to MongoDB Atlas'
+parent: 'MongoDB Atlas'
+nav_order: 1
 ---
 
 # Browse and Connect to MongoDB Atlas
