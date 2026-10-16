@@ -2,6 +2,8 @@ source 'https://rubygems.org'
 
 # Same gem set GitHub Pages uses to build the site (see https://pages.github.com/versions/).
 gem 'github-pages', group: :jekyll_plugins
+# Loaded by the Pages plugins; preinstalled with Ruby on Windows but not visible to Bundler on Linux.
+gem 'rake'
 gem 'webrick'
 gem 'tzinfo-data'
 gem 'wdm', '>= 0.1.0', platforms: [:windows]

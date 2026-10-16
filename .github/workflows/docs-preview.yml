@@ -125,7 +125,7 @@ jobs:
                           '',
                           `Commit \`${pr.head.sha.slice(0, 7)}\`, [workflow run](${runUrl}).`,
                           '',
-                          'GitHub Pages would fail to publish this version after merge. The **Build the site** step in the workflow run shows the Jekyll error; reproduce it locally with the `previewing-docs-site` skill.',
+                          'The **Build the site** step in the workflow run has the error. If it is a Jekyll error in `docs/`, GitHub Pages would fail to publish this version after merge; reproduce it locally with the `previewing-docs-site` skill.',
                         );
                       } else {
                         lines.push('## ⏭️ Docs preview not built', '', `The build was ${result}. [Workflow run](${runUrl}).`);
