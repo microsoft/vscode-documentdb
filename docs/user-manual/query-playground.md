@@ -1,5 +1,7 @@
-> **User Manual** - [Back to User Manual](../index#user-manual)
-
+---
+title: 'Query Playground'
+parent: 'Querying'
+nav_order: 2
 ---
 
 # Query Playground

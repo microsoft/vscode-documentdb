@@ -1,5 +1,8 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Local Instances'
+parent: 'Connecting to Databases'
+nav_order: 5
+has_toc: false
 ---
 
 # Local Connection

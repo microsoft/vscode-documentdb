@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to Service Discovery](./service-discovery) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Copy Connection String'
+parent: 'Data Management'
+nav_order: 4
 ---
 
 # Copy Connection String

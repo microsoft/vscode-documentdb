@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Troubleshoot SRV DNS Lookups'
+parent: 'Connecting to Databases'
+nav_order: 3
 ---
 
 # Troubleshoot SRV DNS Lookups (`querySrv EBADRESP`)

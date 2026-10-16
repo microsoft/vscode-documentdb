@@ -72,3 +72,32 @@ Not verified:
 - The live GitHub Pages build.
 - Mobile layout beyond the theme's defaults.
 - Every page visually; spot checks only.
+
+## Follow-up (2026-10-16): structured user manual
+
+Operator request: give the user manual the structure the landing page already describes, and
+improve page headers now that navigation exists. Constraint: no existing file moves, because
+outside links point at them; new files are allowed.
+
+- **Hierarchy in front matter, not folders.** Four new category pages (Connecting to Databases,
+  Data Management, Querying, AI Features) sit in `user-manual/`; existing pages are re-parented
+  through `parent`. Nesting follows the landing page's table of contents (Service Discovery, its
+  Kubernetes and MongoDB Atlas sub-pages, Local Instances, Manage Indexes).
+  - Where a page's old "Back to ..." line disagreed with the landing page (Copy Connection String
+    pointed to Service Discovery; Managed Identity to Connect with a URL), the landing page won.
+- **Navigation moved from `_config.yml` `defaults` into each page.** Rejected keeping it in
+  `_config.yml`: a new page would need edits in two places, and the explicit config titles only
+  existed to avoid touching content, which is now allowed.
+- **Headers:** the "Back to ..." blockquote, the `---` rule under it and any leading HTML comment
+  were replaced by front matter. Breadcrumbs cover the "back" role. H1s are unchanged.
+- **Sidebar titles** are shorter than the H1 where useful, unique (Just the Docs matches parents by
+  title) and self-explanatory, because they are also the browser tab title.
+- **Release notes** use `nav_order = major * 1000 + minor * 10` with `child_nav_order: desc`, so a
+  new release needs only its own front matter. The writing-release-notes skill and its examples now
+  produce this header. `CONTRIBUTING.md` strips front matter (`sed '1,/^---$/d'`) when posting
+  release notes as a GitHub discussion.
+
+Verified locally: the sidebar renders the intended tree, breadcrumbs follow it (for example User
+Manual > Connecting to Databases > Service Discovery > MongoDB Atlas > Browse and Connect to MongoDB
+Atlas), no "same title as its parent" warning, all 24 absolute URLs return 200 and none of the 97
+internal links are broken. The local build time rose from about 20 seconds to about 110 seconds.

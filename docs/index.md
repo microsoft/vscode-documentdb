@@ -1,3 +1,8 @@
+---
+title: 'Overview'
+nav_order: 1
+---
+
 # DocumentDB for VS Code
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)

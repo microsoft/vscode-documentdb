@@ -1,7 +1,7 @@
 ---
 title: Release Notes
 nav_order: 3
-has_children: true
+child_nav_order: desc
 has_toc: true
 permalink: /release-notes/
 ---

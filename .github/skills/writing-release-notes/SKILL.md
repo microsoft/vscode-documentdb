@@ -141,7 +141,7 @@ Before completing:
 - [ ] All issue/PR links are correct and clickable
 - [ ] Version numbers match across all files
 - [ ] Categories are appropriate (Features, Fixes, Improvements)
-- [ ] Release notes use proper header format
+- [ ] Release notes start with the front matter header (`title`, `parent: 'Release Notes'`, `nav_order`)
 - [ ] Patch releases append to existing file with `---` separator
 - [ ] `docs/index.md` Release Notes section updated with link to new version
 - [ ] Screenshot question was answered

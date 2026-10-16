@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Azure VMs (DocumentDB)'
+parent: 'Service Discovery'
+nav_order: 3
 ---
 
 # Azure VMs (DocumentDB) Service Discovery Plugin

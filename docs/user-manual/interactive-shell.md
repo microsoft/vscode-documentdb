@@ -1,5 +1,7 @@
-> **User Manual** - [Back to User Manual](../index#user-manual)
-
+---
+title: 'Interactive Shell'
+parent: 'Querying'
+nav_order: 3
 ---
 
 # Interactive Shell

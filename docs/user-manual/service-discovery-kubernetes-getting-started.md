@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to Kubernetes Service Discovery](./service-discovery-kubernetes) | [Back to Service Discovery](./service-discovery) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Kubernetes: Getting Started and Test Lab'
+parent: 'Kubernetes'
+nav_order: 1
 ---
 
 # Kubernetes Service Discovery: Getting Started and Test Lab

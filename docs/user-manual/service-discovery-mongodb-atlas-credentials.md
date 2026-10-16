@@ -1,5 +1,7 @@
-> **User Manual** | [MongoDB Atlas Service Discovery](./service-discovery-mongodb-atlas) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Manage MongoDB Atlas Credentials'
+parent: 'MongoDB Atlas'
+nav_order: 2
 ---
 
 # Manage MongoDB Atlas Credentials

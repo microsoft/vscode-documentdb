@@ -1,5 +1,7 @@
-> **User Manual** | [MongoDB Atlas Service Discovery](./service-discovery-mongodb-atlas) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Troubleshoot MongoDB Atlas Discovery'
+parent: 'MongoDB Atlas'
+nav_order: 3
 ---
 
 # Troubleshoot MongoDB Atlas Service Discovery

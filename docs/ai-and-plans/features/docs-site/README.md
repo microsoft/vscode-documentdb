@@ -30,14 +30,16 @@ harder (rewriting content into a site-specific format) are deliberately avoided.
 
 ## Code map
 
-| Path                                                    | Role                                                                           |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `.github/workflows/deploy-documentation-production.yml` | On push to `main` touching `docs/**`, copies `docs/` to `gh-pages`             |
-| `docs/_config.yml`                                      | Theme pin, plugins, search, published scope, **sidebar titles and order**      |
-| `docs/user-manual.md`, `docs/release-notes.md`          | Sidebar section pages; served at `/user-manual/` and `/release-notes/`         |
-| `docs/_includes/head_custom.html`                       | Loads the dark stylesheet when the OS prefers dark                             |
-| `docs/_sass/custom/setup.scss`                          | Theme variables: Segoe UI, Cascadia Mono, Microsoft blue for links and buttons |
-| `docs/_sass/custom/custom.scss`                         | CSS after the theme: semibold headings                                         |
+| Path                                                                                 | Role                                                                           |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `.github/workflows/deploy-documentation-production.yml`                              | On push to `main` touching `docs/**`, copies `docs/` to `gh-pages`             |
+| `docs/_config.yml`                                                                   | Theme pin, plugins, search, published scope                                    |
+| `docs/user-manual.md`, `docs/release-notes.md`                                       | Sidebar section pages; served at `/user-manual/` and `/release-notes/`         |
+| `docs/user-manual/{connecting-to-databases,data-management,querying,ai-features}.md` | Category pages grouping the user manual                                        |
+| Front matter of each published page                                                  | Sidebar title, parent and order                                                |
+| `docs/_includes/head_custom.html`                                                    | Loads the dark stylesheet when the OS prefers dark                             |
+| `docs/_sass/custom/setup.scss`                                                       | Theme variables: Segoe UI, Cascadia Mono, Microsoft blue for links and buttons |
+| `docs/_sass/custom/custom.scss`                                                      | CSS after the theme: semibold headings                                         |
 
 ## Architecture
 
@@ -64,19 +66,49 @@ main (docs/**) --push--> deploy-documentation-production.yml --copy--> gh-pages 
 
 ## How the sidebar is built
 
-Content files carry no front matter; all navigation lives in `_config.yml` `defaults`:
+Every published page starts with a front matter block; that is the only navigation data:
 
-- `user-manual/*` gets `parent: User Manual`, `release-notes/*` gets `parent: Release Notes`.
-- Each page has an explicit `title` and `nav_order`. The user manual order follows the landing
-  page's table of contents; sub-pages (Atlas, index management) sit right after their parent.
-  Release notes are newest first.
+```yaml
+---
+title: 'MongoDB Atlas' # sidebar label, breadcrumb and browser tab
+parent: 'Service Discovery' # title of the parent page
+nav_order: 5 # position among siblings
+has_toc: false # only on content pages with children, to skip the auto-generated child list
+---
+```
 
-Titles are explicit because the pages start with a "Back to User Manual" line, not the heading, so
-`jekyll-titles-from-headings` cannot find them.
+The tree mirrors the landing page's table of contents:
 
-**Adding a page:** add the Markdown file, link it from `index.md` as before, and add a
-`defaults` entry with `title` and `nav_order` in `_config.yml`. Without the entry the page is still
-published and searchable, but it has no title and appears at the end of the sidebar.
+```
+User Manual                     user-manual.md (served at /user-manual/)
+├── Connecting to Databases     user-manual/connecting-to-databases.md
+│   ├── Service Discovery       ├── Azure, Kubernetes, MongoDB Atlas, each with sub-pages
+│   └── Local Instances         └── ...
+├── Data Management             user-manual/data-management.md
+├── Querying                    user-manual/querying.md
+└── AI Features                 user-manual/ai-features.md
+Release Notes                   release-notes.md (child_nav_order: desc, newest first)
+```
+
+Rules:
+
+- **Files never move.** External links point at `user-manual/<page>`. The hierarchy lives only in
+  front matter, so a page can be re-parented without changing its URL. The four category pages
+  are new files.
+- **Titles must be unique.** Just the Docs links a child to its parent by title. Sidebar titles
+  can be shorter than the page's H1, but they also appear in the browser tab, so they must make
+  sense on their own ("Troubleshoot MongoDB Atlas Discovery", not "Troubleshooting").
+- **Release notes:** `nav_order` is `major * 1000 + minor * 10` (1.0 is `1000`, 0.11 is `110`).
+  The [writing-release-notes](../../../../.github/skills/writing-release-notes/SKILL.md) skill
+  includes the header.
+- Breadcrumbs replace the old "Back to User Manual" lines, which were removed.
+
+**Adding a user manual page:** create the file with the front matter above, choose the `parent`
+from the tree, and add a link to the landing page's table of contents as before. Restart a running
+local preview to see it in the sidebar.
+
+When the user manual moves to learn.microsoft.com, the front matter maps to a `TOC.yml` and is
+otherwise ignored.
 
 ## Dark mode
 
@@ -126,7 +158,8 @@ Notes:
   path, and the custom styles disappear without an error. GitHub's build is not affected.
 - Restart the server after changing `_config.yml` or adding a page: the sidebar is cached in memory
   (`jekyll-include-cache`), so new pages do not appear in the sidebar on live reload.
-- The first build downloads the theme, so it needs network access. A build takes about 20 seconds.
+- The first build downloads the theme, so it needs network access. A full build takes about
+  2 minutes locally, because the nested sidebar is rendered into every page.
 
 ## Timeline
 
@@ -138,6 +171,7 @@ Notes:
 | 2026-10-16 | `main` merged into #420, preview workflow change dropped, guide moved here and refreshed | #420        |
 | 2026-10-16 | Site limited to `index.md`, `user-manual/` and `release-notes/`                          | #420        |
 | 2026-10-16 | Minima replaced by Just the Docs: sidebar, search, OS dark mode, Microsoft styling       | #420        |
+| 2026-10-16 | User manual grouped into categories; navigation moved into page front matter             | #420        |
 
 Details: [01-minima-theme.md](./iterations/01-minima-theme.md),
 [02-just-the-docs.md](./iterations/02-just-the-docs.md).
@@ -149,11 +183,9 @@ No `decisions.md` yet. The choices are recorded in the iteration files.
 ## Open gaps
 
 1. **Landing page duplicates the sidebar.** `index.md` still carries the full table of contents and
-   its own "DocumentDB for VS Code" heading. Harmless; trim it only if it bothers readers.
-2. **"Back to ..." lines are redundant.** Every page starts with a "Back to User Manual" line,
-   which the breadcrumbs now cover. Left in place to avoid content edits.
-3. **Excluded pages return 404 after deploy.** Production currently serves `blog-posts/`,
+   its own "DocumentDB for VS Code" heading. It must be kept in sync with the front matter by hand.
+2. **Excluded pages return 404 after deploy.** Production currently serves `blog-posts/`,
    `localization` and the data-flow documents. Nothing in the repository, the extension or the
    published pages links to them, but outside bookmarks will break.
-4. **Not verified on GitHub.** Everything was checked with a local `github-pages` 232 build, not on
+3. **Not verified on GitHub.** Everything was checked with a local `github-pages` 232 build, not on
    the live Pages build.

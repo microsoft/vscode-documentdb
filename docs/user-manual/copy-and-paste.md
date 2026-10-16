@@ -1,7 +1,7 @@
-<!-- Learn More Section Badge or Breadcrumb -->
-
-> **Learn More** - [Back to Learn More Index](../index#user-manual)
-
+---
+title: 'Copy and Paste Collections'
+parent: 'Data Management'
+nav_order: 3
 ---
 
 # Copy and Paste Collections

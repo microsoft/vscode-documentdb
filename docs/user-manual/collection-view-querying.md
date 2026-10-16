@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Querying in Collection View'
+parent: 'Querying'
+nav_order: 1
 ---
 
 # Collection View: Querying

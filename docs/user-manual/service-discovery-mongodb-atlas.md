@@ -1,5 +1,8 @@
-> **User Manual** | [Back to Service Discovery](./service-discovery) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'MongoDB Atlas'
+parent: 'Service Discovery'
+nav_order: 5
+has_toc: false
 ---
 
 # MongoDB Atlas Service Discovery

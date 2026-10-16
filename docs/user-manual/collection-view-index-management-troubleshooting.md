@@ -1,5 +1,7 @@
-> **User Manual** | [Manage Indexes in Collection View](./collection-view-index-management) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Troubleshoot Index Management'
+parent: 'Manage Indexes'
+nav_order: 3
 ---
 
 # Troubleshoot Index Management
