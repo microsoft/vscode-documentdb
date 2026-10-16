@@ -117,6 +117,7 @@ type WizardStepId = 'introduction' | 'configure' | 'setup' | 'done';
 type StageStatus = Extract<StatusListItemStatus, 'pending' | 'active' | 'done' | 'error'>;
 
 const DOCUMENTDB_LOCAL_LEARN_MORE_URL = 'https://aka.ms/vscode-documentdb-local';
+const DOCUMENTDB_LOCAL_PRIVACY_URL = 'https://github.com/documentdb/documentdb/blob/main/documentdb-local/PRIVACY.md';
 
 function stepForPhase(phase: Phase): WizardStepId {
     switch (phase) {
@@ -134,6 +135,8 @@ function stepForPhase(phase: Phase): WizardStepId {
 
 const useStyles = makeStyles({
     muted: { color: tokens.colorNeutralForeground2 },
+    // A Link sets its own font size; in the footer note it should match the sentence around it.
+    inheritFont: { fontSize: 'inherit', lineHeight: 'inherit' },
     // A heading belongs to what follows it, so it keeps more air above than below: the section's
     // own 12px gap plus this 8px sits above the heading, and 8px separates it from its content.
     subsection: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' },
@@ -2351,7 +2354,7 @@ export const LocalQuickStart = (): JSX.Element => {
     let onPrimary: () => void;
     let secondaryActions: JSX.Element;
     // Sits directly above the primary action and states what pressing it does to the machine.
-    let footerNote: string | undefined;
+    let footerNote: ReactNode;
 
     // `isProvisioning` is just `phase === 'provisioning'`, so this switches on `phase` throughout;
     // `'failed'` alone has two footers, split on `timedOut` inside its case.
@@ -2377,7 +2380,21 @@ export const LocalQuickStart = (): JSX.Element => {
             primaryDisabled = advError !== undefined || passwordEncoding === 'checking' || startBlockedByGuard;
             primaryIcon = <RocketRegular />;
             onPrimary = handleStart;
-            footerNote = isRecreate
+            // Every Configure path creates a new container, which takes the telemetry setting at creation.
+            const telemetryNote = (
+                <>
+                    {l10n.t('DocumentDB Local follows your VS Code telemetry setting.')}{' '}
+                    <Link
+                        inline
+                        className={styles.inheritFont}
+                        onClick={() => handleOpenGuide(DOCUMENTDB_LOCAL_PRIVACY_URL)}
+                    >
+                        {l10n.t('Open DocumentDB Local privacy statement')}
+                    </Link>
+                    .
+                </>
+            );
+            const actionNote = isRecreate
                 ? l10n.t(
                       'Recreating replaces the container named {0} and keeps its data volume, so your documents, credentials and image version are preserved.',
                       QUICK_START_CONTAINER_NAME,
@@ -2391,6 +2408,11 @@ export const LocalQuickStart = (): JSX.Element => {
                         'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
                         QUICK_START_CONTAINER_NAME,
                     );
+            footerNote = (
+                <>
+                    {actionNote} {telemetryNote}
+                </>
+            );
             secondaryActions = (
                 <Button appearance="secondary" onClick={() => navigate('introduction', 'back')}>
                     {l10n.t('Back')}

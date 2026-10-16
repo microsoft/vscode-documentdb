@@ -44,6 +44,9 @@ vsCodeMock.CancellationTokenSource = class CancellationTokenSource {
     public dispose(): void {}
 };
 
+// Telemetry off by default, matching the safest real-world setting.
+vsCodeMock.env = { ...(vsCodeMock.env as object), isTelemetryEnabled: false };
+
 export default vsCodeMock;
 
 export const {
@@ -136,6 +139,7 @@ export const {
     WorkspaceEdit,
     commands,
     debug,
+    env,
     l10n,
     languages,
     tasks,

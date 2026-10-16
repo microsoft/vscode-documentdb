@@ -22,6 +22,8 @@ With Docker running, setup takes only a few clicks:
 
 The extension generates the credentials, includes sample data, and chooses an available port. The new **DocumentDB Local** connection appears under **Your own DocumentDB**, ready to browse.
 
+The note above **Start DocumentDB Local** also says that the container follows your VS Code telemetry setting. See [Usage telemetry](#usage-telemetry) for what that means.
+
 ## Docker requirement
 
 Setting up DocumentDB Local requires:
@@ -41,6 +43,57 @@ The setup view shows pull, create, start, and connection-readiness progress. Doc
 The **Configure** step pre-fills the **Address** with a host port that is free at that moment, starting at `10260` and moving forward if that port is taken. You can change it, and the value is checked while you are still on the step.
 
 Setup then uses exactly that port. It never moves the instance to a different port after you select **Start DocumentDB Local**. If the port is taken by the time the container is created, setup stops with an explanation so you can go back and choose another one.
+
+## Usage telemetry
+
+Starting with release 1.0-rc2, the DocumentDB Local image sends a small amount of anonymous usage data to the DocumentDB project. It helps the project see which releases and platforms are in use. The [DocumentDB Local privacy statement](https://github.com/documentdb/documentdb/blob/main/documentdb-local/PRIVACY.md) describes it in full. In short:
+
+- **What is sent:** the image's release version, the operating system, the CPU architecture, and a fixed event name. Nothing else.
+- **What is never sent:** your documents, queries, database or collection names, user names, or credentials.
+- **When:** once when the container starts, then once an hour while it keeps running.
+- **Where:** to [Scarf](https://scarf.sh), the analytics service the DocumentDB project uses. As with any web request, Scarf also sees the network address the request comes from.
+
+This is separate from the extension's own telemetry, which VS Code controls in the usual way.
+
+### Which VS Code setting does what
+
+The extension doesn't ask you a second time. When it creates the container, it applies the telemetry level you already chose in VS Code (`telemetry.telemetryLevel`):
+
+| VS Code telemetry level     | What the DocumentDB Local container does |
+| --------------------------- | ---------------------------------------- |
+| `all` (the VS Code default) | Sends the usage data described above.    |
+| `error`                     | Sends nothing.                           |
+| `crash`                     | Sends nothing.                           |
+| `off`                       | Sends nothing.                           |
+
+For every level except `all`, setup creates the container with `DOCUMENTDB_USAGE_TELEMETRY=false`, the image's own off switch. The same applies when telemetry is turned off by an organization policy or by starting VS Code with `--disable-telemetry`. See [Telemetry in VS Code](https://code.visualstudio.com/docs/configure/telemetry) for how to change the level.
+
+### When a change takes effect
+
+The setting is read once, when the container is created. **Stop**, **Start**, and **Restart** keep the container as it is, so changing the VS Code level later doesn't change an existing container.
+
+To apply a new level and keep your data:
+
+1. Remove only the container. Its data volume stays:
+
+   ```bash
+   docker rm -f vscode-documentdb-local
+   ```
+
+2. In the **Connections** view, expand the **DocumentDB Local** instance and select **Recreate container**. If the row doesn't appear yet, refresh the view.
+3. In the setup view, select **Continue**, then **Start DocumentDB Local**. The extension creates a new container on the same data volume, with the same credentials and image, using your current telemetry level.
+
+**Delete Container…** in the extension removes the data volume too, so use it only when you want to start over.
+
+To check what a running container does, run:
+
+```bash
+docker exec vscode-documentdb-local printenv DOCUMENTDB_USAGE_TELEMETRY
+```
+
+It prints `false` when usage telemetry is turned off. It prints nothing when the image's default (on) applies.
+
+Images older than 1.0-rc2, which you can pick with the image-tag setting on the **Configure** step, send no usage data and ignore this setting.
 
 ## Docker is not ready
 
