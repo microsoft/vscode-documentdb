@@ -38,8 +38,11 @@ harder (rewriting content into a site-specific format) are deliberately avoided.
 | `docs/user-manual/{connecting-to-databases,data-management,querying,ai-features}.md` | Category pages grouping the user manual                                        |
 | Front matter of each published page                                                  | Sidebar title, parent and order                                                |
 | `docs/_includes/head_custom.html`                                                    | Loads the dark stylesheet when the OS prefers dark                             |
+| `docs/_includes/title.html`                                                          | Sidebar title: DocumentDB icon (light/dark via `<picture>`) and site name      |
+| `docs/favicon.ico`                                                                   | Same favicon as documentdb.io; the theme links it automatically                |
+| `docs/assets/images/documentdb-icon-{light,dark}.svg`                                | Copies of `resources/documentdb/documentdb_icon_*.svg` with a `viewBox` added  |
 | `docs/_sass/custom/setup.scss`                                                       | Theme variables: Segoe UI, Cascadia Mono, Microsoft blue for links and buttons |
-| `docs/_sass/custom/custom.scss`                                                      | CSS after the theme: semibold headings                                         |
+| `docs/_sass/custom/custom.scss`                                                      | CSS after the theme: semibold headings, sidebar title layout                   |
 
 ## Architecture
 
@@ -172,6 +175,7 @@ Notes:
 | 2026-10-16 | Site limited to `index.md`, `user-manual/` and `release-notes/`                          | #420        |
 | 2026-10-16 | Minima replaced by Just the Docs: sidebar, search, OS dark mode, Microsoft styling       | #420        |
 | 2026-10-16 | User manual grouped into categories; navigation moved into page front matter             | #420        |
+| 2026-10-16 | documentdb.io favicon; DocumentDB icon in the sidebar title, swapping with the OS theme  | #420        |
 
 Details: [01-minima-theme.md](./iterations/01-minima-theme.md),
 [02-just-the-docs.md](./iterations/02-just-the-docs.md).

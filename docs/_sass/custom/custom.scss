@@ -14,3 +14,27 @@ h3,
 .site-title {
     font-weight: 600;
 }
+
+// Sidebar title with the DocumentDB icon (see _includes/title.html).
+.site-title {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+}
+
+.site-icon {
+    display: flex;
+    flex: none;
+
+    img {
+        width: 1.75rem;
+        height: auto;
+    }
+}
+
+// The theme sets 1.5rem !important from 31.25rem up; keep the title on one line next to the icon.
+@media (min-width: 31.25rem) {
+    .site-title {
+        font-size: 1.25rem !important;
+    }
+}
