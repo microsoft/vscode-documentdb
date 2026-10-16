@@ -190,4 +190,3 @@ gaps below remain.
 - **No used-vs-provisioned storage figure**, because there is no Azure Monitor integration.
 - **`Uptime` is a placeholder on vCore and DocumentDB Local**, where `serverStatus` is unavailable.
   The dashboard stops asking once a connection reports it unsupported (#1018).
-- **No user-manual page.**
