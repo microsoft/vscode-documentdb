@@ -13,7 +13,7 @@ nav_order: 1
 
 **DocumentDB for VS Code** helps you browse, manage, and query **DocumentDB** and **MongoDB** databases across any cloud, hybrid, or local environment.
 
-<p align="center"><img src="./vscode-documentdb-hero-screenshot.png" alt="DocumentDB with a Collection View and auto-completion" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./vscode-documentdb-hero-screenshot_dark.png"><img src="./vscode-documentdb-hero-screenshot.png" alt="DocumentDB with a Collection View and auto-completion" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 ## Features
 
