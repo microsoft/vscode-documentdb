@@ -1,0 +1,12 @@
+// Microsoft-style typography and brand color.
+// Light scheme values use !default, so these win in light mode; the dark scheme keeps its own colors.
+$body-font-family:
+    'Segoe UI Variable Text',
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    'Helvetica Neue',
+    sans-serif;
+$mono-font-family: 'Cascadia Mono', consolas, menlo, monospace;
+$link-color: #0067b8;
+$btn-primary-color: #0067b8;

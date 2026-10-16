@@ -1,0 +1,9 @@
+{%- comment -%}
+  Overrides the theme's title.html: DocumentDB icon next to the site title.
+  The <picture> source swaps to the dark-background icon when the OS prefers dark.
+{%- endcomment -%}
+<picture class="site-icon">
+  <source srcset="{{ '/assets/images/documentdb-icon-dark.svg' | relative_url }}" media="(prefers-color-scheme: dark)">
+  <img src="{{ '/assets/images/documentdb-icon-light.svg' | relative_url }}" alt="" width="28" height="28">
+</picture>
+<span>{{ site.title | replace: ' for VS Code', ' for&nbsp;VS&nbsp;Code' }}</span>

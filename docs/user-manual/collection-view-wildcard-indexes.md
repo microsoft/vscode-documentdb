@@ -1,5 +1,7 @@
-> **User Manual** | [Manage Indexes in Collection View](./collection-view-index-management) | [Back to User Manual](../index#user-manual)
-
+---
+title: 'Wildcard Indexes'
+parent: 'Manage Indexes'
+nav_order: 1
 ---
 
 # Wildcard Indexes in Collection View

@@ -419,7 +419,7 @@ mutation($repo: ID!, $cat: ID!, $title: String!, $body: String!) {
   createDiscussion(input: {repositoryId: $repo, categoryId: $cat, title: $title, body: $body}) {
     discussion { url }
   }
-}' -f repo=<repository id> -f cat=<category id> -f title="vX.Y.Z" -f body="$(cat docs/release-notes/X.Y.md)" \
+}' -f repo=<repository id> -f cat=<category id> -f title="vX.Y.Z" -f body="$(sed '1,/^---$/d' docs/release-notes/X.Y.md)" \
   --jq '.data.createDiscussion.discussion.url'
 ```
 

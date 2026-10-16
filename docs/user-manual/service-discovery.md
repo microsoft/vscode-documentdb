@@ -1,5 +1,8 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Service Discovery'
+parent: 'Connecting to Databases'
+nav_order: 4
+has_toc: false
 ---
 
 # Service Discovery in DocumentDB for VS Code

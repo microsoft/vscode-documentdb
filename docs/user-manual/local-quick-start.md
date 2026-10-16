@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'Set up DocumentDB Local'
+parent: 'Local Instances'
+nav_order: 1
 ---
 
 # Set up DocumentDB Local

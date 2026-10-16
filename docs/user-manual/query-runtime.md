@@ -1,5 +1,7 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
-
+---
+title: 'How Queries Run Behind the Scenes'
+parent: 'Querying'
+nav_order: 4
 ---
 
 # Query Runtime: How It Works Behind the Scenes

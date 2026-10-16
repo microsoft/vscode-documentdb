@@ -15,11 +15,20 @@ Examples:
 
 ### Header (Required for all release notes files)
 
-```markdown
-> **Release Notes** — [Back to Release Notes](../index.md#release-notes)
+Front matter that places the page in the documentation site's sidebar. The breadcrumbs replace the
+old "Back to Release Notes" line.
 
+```markdown
+---
+title: 'vX.Y'
+parent: 'Release Notes'
+nav_order: NNNN
 ---
 ```
+
+`nav_order` is `major * 1000 + minor * 10`, for example `1010` for 1.1 and `110` for 0.11. The
+Release Notes section lists pages in descending `nav_order`, so the newest release appears first.
+Patch releases append to the existing file and do not change the front matter.
 
 ### Main Release Section (X.Y.0)
 

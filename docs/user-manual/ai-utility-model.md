@@ -1,5 +1,7 @@
-> **User Manual** - [Back to User Manual](../index#user-manual)
-
+---
+title: 'AI Model and Billing'
+parent: 'AI Features'
+nav_order: 1
 ---
 
 # AI Features: Utility Model and Pricing
