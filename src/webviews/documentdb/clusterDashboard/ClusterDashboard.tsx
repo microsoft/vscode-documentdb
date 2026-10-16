@@ -28,6 +28,7 @@ import {
 import {
     ArrowClockwiseRegular,
     CopyRegular,
+    DatabaseArrowRightRegular,
     EyeRegular,
     MoreHorizontalRegular,
     WindowConsoleRegular,
@@ -789,7 +790,9 @@ const ClusterMoreActionsMenu = ({
                     <MenuItem icon={<EyeRegular />} disabled={isExporting} onClick={exportDiagnostics}>
                         {l10n.t('View Raw Diagnostics')}
                     </MenuItem>
-                    <MenuItem onClick={openDataMigration}>{l10n.t('Data Migration…')}</MenuItem>
+                    <MenuItem icon={<DatabaseArrowRightRegular />} onClick={openDataMigration}>
+                        {l10n.t('Data Migration…')}
+                    </MenuItem>
                 </MenuList>
             </MenuPopover>
         </Menu>

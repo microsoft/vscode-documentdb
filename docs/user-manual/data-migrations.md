@@ -1,5 +1,5 @@
 ---
-title: 'Data Migrations (Experimental)'
+title: 'Data Migrations'
 parent: 'Data Management'
 nav_order: 2
 ---
@@ -7,12 +7,6 @@ nav_order: 2
 # Data Migrations in DocumentDB for VS Code
 
 **DocumentDB for VS Code** provides a powerful and extensible data migration framework that enables seamless data movement between different database systems, cloud platforms, and local environments. This feature is designed to simplify complex migration scenarios while maintaining full control over the migration process.
-
-> **⚠️ Experimental Feature**
->
-> Data migrations are currently an **experimental feature** in active development. The API and user interface may change as we refine the functionality based on community feedback. Once the API stabilizes, it will be published to npm for easier integration.
->
-> **Interested in the preview?** We're looking for early adopters to help shape this feature. If you'd like to join the preview phase, please reach out to us through our [GitHub discussions](https://github.com/microsoft/vscode-documentdb/discussions) or [create an issue](https://github.com/microsoft/vscode-documentdb/issues).
 
 ## How Data Migrations Work
 
@@ -71,13 +65,11 @@ This context allows providers to offer intelligent, targeted migration options b
 
 ## API Documentation
 
-> **⚠️ Preview Phase Restrictions**
+> **Provider API preview**
 >
-> During the experimental phase, access to the Migration API is restricted to whitelisted extensions. This ensures stability and allows us to gather focused feedback from early adopters.
->
-> To access the API, your extension must be added to the whitelist in the DocumentDB extension. [Reach out to us](https://github.com/microsoft/vscode-documentdb/issues) with your extension id and a brief description of your migration provider to join the preview phase.
->
-> Once the experimental phase concludes, the API will be open to all extensions without restrictions.
+> The migration provider API remains experimental and restricted to registered extensions.
+> To request access for a provider extension, [open an issue](https://github.com/microsoft/vscode-documentdb/issues)
+> with the extension ID and a short description of the provider.
 
 For detailed API documentation, plugin development information, and technical specifications, please refer to:
 

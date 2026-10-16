@@ -1691,7 +1691,7 @@ export const LocalQuickStart = (): JSX.Element => {
             action={
                 configuration.feedbackPermitted === true ? (
                     <Button
-                        appearance="outline"
+                        appearance="secondary"
                         icon={<EmojiRegular />}
                         onClick={() => void trpcClient.common.openFeedback.mutate({})}
                     >

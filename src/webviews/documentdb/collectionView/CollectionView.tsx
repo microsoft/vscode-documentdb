@@ -651,7 +651,8 @@ export const CollectionView = (): JSX.Element => {
                     </TabList>
                     {configuration.feedbackPermitted === true && (
                         <Button
-                            appearance="secondary"
+                            appearance="transparent"
+                            size="small"
                             icon={<EmojiRegular />}
                             onClick={() =>
                                 void trpcClient.common.openFeedback.mutate({

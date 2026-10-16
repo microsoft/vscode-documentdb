@@ -115,6 +115,7 @@ header spans the full width and uses the same VS Code token chain as Fluent's
 `--vscode-editor-background` and the editor foreground; it is not hard-coded white.
 These mappings come from the [Fluent theme translator](../../../../packages/vscode-ext-webview-fluentui/src/theme/core/themeGenerator.ts).
 The lightweight native HTML implementation remains, and long titles wrap at narrow widths.
+The header keeps "for VS Code" together with `white-space: nowrap`, allowing a break after "DocumentDB".
 
 The question is the first and only content heading (16 px semibold / 24 px line height);
 the "Your Feedback Matters" line is removed again (D0025). A 12 px helper note directly
