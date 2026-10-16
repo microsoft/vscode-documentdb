@@ -47,7 +47,7 @@ treat `status: historical` or `status: superseded` as current.
 | [e2e-testing](./features/e2e-testing/README.md)                           | The planned installed-workbench and webview end-to-end test iteration                                    | planned                             |
 | [data-grid](./features/data-grid/README.md)                               | The Collection View table and tree, including the planned SlickGrid replacement                          | planned                             |
 | [survey](./features/survey/README.md)                                     | Survey refresh: simpler eligibility, broader activity coverage, cohort telemetry, and invitation surface | draft #992; enabled                 |
-| [docs-site](./features/docs-site/README.md)                               | The GitHub Pages documentation site: build, Minima theme, local preview                                  | draft #420                          |
+| [docs-site](./features/docs-site/README.md)                               | The GitHub Pages documentation site: Just the Docs theme, OS dark mode, local preview                    | draft #420                          |
 
 Everything else is a single file at this root, such as:
 

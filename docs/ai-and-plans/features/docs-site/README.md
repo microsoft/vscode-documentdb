@@ -4,11 +4,13 @@ kind: design
 status: active
 prs: [420]
 created: 2026-10-16
+verified: 2026-10-16
 code:
     - docs/_config.yml
     - docs/_includes/**
-    - docs/_sass/minima/**
-    - docs/assets/css/**
+    - docs/_sass/custom/**
+    - docs/user-manual.md
+    - docs/release-notes.md
     - .github/workflows/deploy-documentation-production.yml
 ---
 
@@ -19,21 +21,23 @@ code:
 
 ## Purpose
 
-The `docs/` folder is published as the public documentation site: the landing page, the user
-manual, release notes and blog posts. This feature covers the build and the look of that site, not
-its content.
+The public documentation site: the landing page, the user manual and the release notes. This
+feature covers the build and the look of that site, not its content.
+
+It is an **interim** solution. The user manual is expected to move to learn.microsoft.com; until
+then this site should look good and cost little to maintain. Changes that would make the later move
+harder (rewriting content into a site-specific format) are deliberately avoided.
 
 ## Code map
 
-| Path                                                    | Role                                                                     |
-| ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `.github/workflows/deploy-documentation-production.yml` | On push to `main` touching `docs/**`, copies `docs/` to `gh-pages`       |
-| `docs/_config.yml`                                      | Jekyll configuration: theme, plugins, `baseurl`, Minima options          |
-| `docs/assets/css/style.scss`                            | Main stylesheet entry point: imports the skin and Minima, then overrides |
-| `docs/_sass/minima/custom-variables.scss`               | Minima hook for Sass variable overrides, loaded before the theme         |
-| `docs/_sass/minima/custom-styles.scss`                  | Minima hook for CSS overrides, loaded after the theme                    |
-| `docs/_includes/custom-head.html`                       | Minima hook for extra `<head>` content                                   |
-| `docs/_includes/sub-footer.html`                        | Minima hook for content before `</body>`                                 |
+| Path                                                    | Role                                                                           |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `.github/workflows/deploy-documentation-production.yml` | On push to `main` touching `docs/**`, copies `docs/` to `gh-pages`             |
+| `docs/_config.yml`                                      | Theme pin, plugins, search, published scope, **sidebar titles and order**      |
+| `docs/user-manual.md`, `docs/release-notes.md`          | Sidebar section pages; served at `/user-manual/` and `/release-notes/`         |
+| `docs/_includes/head_custom.html`                       | Loads the dark stylesheet when the OS prefers dark                             |
+| `docs/_sass/custom/setup.scss`                          | Theme variables: Segoe UI, Cascadia Mono, Microsoft blue for links and buttons |
+| `docs/_sass/custom/custom.scss`                         | CSS after the theme: semibold headings                                         |
 
 ## Architecture
 
@@ -42,50 +46,114 @@ main (docs/**) --push--> deploy-documentation-production.yml --copy--> gh-pages 
                                                                             |
                          GitHub Pages "legacy" Jekyll build  <--------------+
                          (github-pages gem: Jekyll 3.10, safe mode)
+                         + remote_theme just-the-docs@v0.12.0
                                                                             |
                                               microsoft.github.io/vscode-documentdb
 ```
 
-- The repository Pages source is the `gh-pages` branch root, with `build_type: legacy`. GitHub runs
-  its own Jekyll build on that branch. Only the plugins and versions listed on
+- **The theme is not in the repository.** `remote_theme` downloads Just the Docs at the pinned tag
+  on every build. The repository holds content plus a few override files.
+- **The GitHub workflow does not run Jekyll.** It only copies `docs/` to `gh-pages`. GitHub Pages
+  builds that branch itself (`build_type: legacy`), so only the plugins and versions on
   [pages.github.com/versions](https://pages.github.com/versions/) are available.
-- `docs/` is copied as-is with `clean: true`, but the Jekyll build publishes **only `index.md`,
-  `user-manual/` and `release-notes/`**. Everything else in `docs/` (`ai-and-plans/`, `blog-posts/`,
-  the internal data-flow documents, `localization.md`) is listed under `exclude` in `_config.yml`.
-  A new top-level file or folder in `docs/` is published unless it is added to that list.
-- The raw `.md` sources of published pages are also served (for example `/index.md`). This is
-  GitHub Pages' optional-front-matter behavior and predates this feature.
-- There are no PR preview deployments. They were removed from `main` in `c8ad1900` ("simplify github
-  pages release (no previews)"). Preview is local; see [design.md](./design.md#previewing-locally).
+- **Only `index.md`, `user-manual/` and `release-notes/` are published.** Everything else in
+  `docs/` is listed under `exclude` in `_config.yml`. A new top-level file or folder in `docs/` is
+  published unless it is added to that list.
+- **No PR previews.** They were removed from `main` in `c8ad1900`. Preview locally; see
+  [Previewing locally](#previewing-locally).
 
-The theme customization guide is in [design.md](./design.md).
+## How the sidebar is built
+
+Content files carry no front matter; all navigation lives in `_config.yml` `defaults`:
+
+- `user-manual/*` gets `parent: User Manual`, `release-notes/*` gets `parent: Release Notes`.
+- Each page has an explicit `title` and `nav_order`. The user manual order follows the landing
+  page's table of contents; sub-pages (Atlas, index management) sit right after their parent.
+  Release notes are newest first.
+
+Titles are explicit because the pages start with a "Back to User Manual" line, not the heading, so
+`jekyll-titles-from-headings` cannot find them.
+
+**Adding a page:** add the Markdown file, link it from `index.md` as before, and add a
+`defaults` entry with `title` and `nav_order` in `_config.yml`. Without the entry the page is still
+published and searchable, but it has no title and appears at the end of the sidebar.
+
+## Dark mode
+
+Just the Docs has no built-in "follow the OS" mode
+([issue #234](https://github.com/just-the-docs/just-the-docs/issues/234) is open). The site uses
+the light scheme and `head_custom.html` adds the theme's own dark stylesheet with
+`media="(prefers-color-scheme: dark)"`. This switches live, needs no JavaScript and does not flash.
+There is no manual toggle.
+
+## Styling
+
+Kept small on purpose:
+
+- `_sass/custom/setup.scss` sets theme variables before the color schemes load. Light-scheme
+  variables are `!default`, so the brand blue applies in light mode; the dark scheme keeps its own
+  lighter link color for contrast.
+- `_sass/custom/custom.scss` adds CSS after the theme.
+
+See [Just the Docs customization](https://just-the-docs.com/docs/customization/) for the variables.
+
+## Previewing locally
+
+1. Install Ruby with the DevKit (Windows: `winget install RubyInstallerTeam.RubyWithDevKit.3.3`).
+2. Keep a Gemfile **outside** `docs/`, so it is not published:
+
+   ```ruby
+   source 'https://rubygems.org'
+   gem 'github-pages', group: :jekyll_plugins
+   gem 'webrick'
+   gem 'tzinfo-data'
+   gem 'wdm', '>= 0.1.0', platforms: [:windows]
+   ```
+
+3. From the folder holding the Gemfile:
+
+   ```bash
+   bundle install
+   bundle exec jekyll serve --source <repo>/docs --destination ./_site --livereload
+   ```
+
+4. Open http://127.0.0.1:4000/vscode-documentdb/ (note the base URL).
+
+Notes:
+
+- **Windows: pass `--source` with the exact folder casing on disk** (for example `C:\Local\...`, not
+  `C:\local\...`). In safe mode, a casing mismatch silently drops `docs/_sass` from the Sass load
+  path, and the custom styles disappear without an error. GitHub's build is not affected.
+- Restart the server after changing `_config.yml` or adding a page: the sidebar is cached in memory
+  (`jekyll-include-cache`), so new pages do not appear in the sidebar on live reload.
+- The first build downloads the theme, so it needs network access. A build takes about 20 seconds.
 
 ## Timeline
 
 | Date       | Change                                                                                   | PR / commit |
 | ---------- | ---------------------------------------------------------------------------------------- | ----------- |
 | 2025-12-11 | Pages configuration and production/preview workflows added                               | `4eda823c`  |
-| 2025-12-11 | Experimental Minima theme, preview workflow notes, `docs/THEME_CUSTOMIZATION.md`         | #420        |
+| 2025-12-11 | Experimental Minima theme, `docs/THEME_CUSTOMIZATION.md`                                 | #420        |
 | 2025-12-11 | Preview deployments removed from `main`                                                  | `c8ad1900`  |
 | 2026-10-16 | `main` merged into #420, preview workflow change dropped, guide moved here and refreshed | #420        |
 | 2026-10-16 | Site limited to `index.md`, `user-manual/` and `release-notes/`                          | #420        |
+| 2026-10-16 | Minima replaced by Just the Docs: sidebar, search, OS dark mode, Microsoft styling       | #420        |
 
-Details: [iterations/01-minima-theme.md](./iterations/01-minima-theme.md).
+Details: [01-minima-theme.md](./iterations/01-minima-theme.md),
+[02-just-the-docs.md](./iterations/02-just-the-docs.md).
 
 ## Decisions
 
-No `decisions.md` yet. The choices made so far are recorded in the iteration file.
+No `decisions.md` yet. The choices are recorded in the iteration files.
 
 ## Open gaps
 
-1. **Navigation key mismatch.** The pinned Minima commit `1e8a445` reads `site.header_pages`, but
-   `_config.yml` documents `minima.nav_pages`, which only exists on newer Minima `master`. Either
-   pin a newer commit or use `header_pages`. Today the header shows only the site title, because no
-   published page has a `title` in its front matter.
-2. **Minima pin is old.** `1e8a445` (2025-02-27) is about 30 functional commits behind `master`
-   (WCAG contrast, mobile navigation, Font Awesome 7). Minima 3.0 is still unreleased.
-3. **Duplicate page title.** The landing page renders the site title and the `index.md` H1 one
-   after the other.
-4. **Excluded pages will start returning 404.** Production currently serves `blog-posts/`,
-   `localization` and the data-flow documents. No link in the repository, the extension or the
-   published pages points to them, so nothing needs updating, but outside bookmarks will break.
+1. **Landing page duplicates the sidebar.** `index.md` still carries the full table of contents and
+   its own "DocumentDB for VS Code" heading. Harmless; trim it only if it bothers readers.
+2. **"Back to ..." lines are redundant.** Every page starts with a "Back to User Manual" line,
+   which the breadcrumbs now cover. Left in place to avoid content edits.
+3. **Excluded pages return 404 after deploy.** Production currently serves `blog-posts/`,
+   `localization` and the data-flow documents. Nothing in the repository, the extension or the
+   published pages links to them, but outside bookmarks will break.
+4. **Not verified on GitHub.** Everything was checked with a local `github-pages` 232 build, not on
+   the live Pages build.

@@ -1,78 +1,303 @@
-# Remote theme configuration for GitHub Pages
-remote_theme: 'jekyll/minima@1e8a445'
+# Documentation site, rendered by GitHub Pages with the Just the Docs theme.
+# Interim solution until the user manual moves to learn.microsoft.com.
+# How it works and how to preview it: ai-and-plans/features/docs-site/README.md
+remote_theme: just-the-docs/just-the-docs@v0.12.0
 
-# Site settings
 title: DocumentDB for VS Code
 description: Learn more about the DocumentDB for VS Code Extension
 baseurl: '/vscode-documentdb'
 url: 'https://microsoft.github.io'
 
-# GitHub Pages supported plugins
-# See: https://pages.github.com/versions/
 plugins:
-    - jekyll-remote-theme # REQUIRED for remote_theme to work
-    - jekyll-feed
+    - jekyll-remote-theme
+    - jekyll-include-cache
     - jekyll-seo-tag
     - jekyll-sitemap
-    - jekyll-mentions
     - jekyll-redirect-from
-    - jekyll-avatar
     - jemoji
 
-# Author metadata (for SEO and theme)
-author:
-    name: Microsoft
-    email: '' # Optional
+# Light by default; head_custom.html switches to dark when the OS prefers it.
+color_scheme: light
 
-# Minima theme configuration
-minima:
-    # Skin selection: classic (default), dark, auto, solarized, solarized-light, solarized-dark
-    skin: auto
+search_enabled: true
+search:
+    heading_level: 2
+    previews: 2
+    preview_words_before: 3
+    preview_words_after: 3
+    rel_url: true
 
-    # Date format (Liquid date filter)
-    # See: http://shopify.github.io/liquid/filters/date/
-    date_format: '%b %-d, %Y'
+heading_anchors: true
+back_to_top: true
+back_to_top_text: 'Back to top'
 
-    # Show post excerpts on the home page
-    show_excerpts: false
+aux_links:
+    'GitHub':
+        - 'https://github.com/microsoft/vscode-documentdb'
+    'Marketplace':
+        - 'https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb'
+aux_links_new_tab: true
 
-    # Hide site feed link in footer
-    hide_site_feed_link: false
+gh_edit_link: true
+gh_edit_link_text: 'Edit this page on GitHub'
+gh_edit_repository: 'https://github.com/microsoft/vscode-documentdb'
+gh_edit_branch: 'main'
+gh_edit_source: docs
+gh_edit_view_mode: 'tree'
 
-    # Navigation pages - customize which pages appear in header nav
-    # Uncomment and modify to control navigation order
-    # nav_pages:
-    #   - about.md
-    #   - index.md
+callouts:
+    note:
+        title: Note
+        color: blue
+    tip:
+        title: Tip
+        color: green
+    warning:
+        title: Warning
+        color: yellow
+    important:
+        title: Important
+        color: purple
+    caution:
+        title: Caution
+        color: red
 
-    # Social links (displayed in footer)
-    # Uses Font Awesome icons: https://fontawesome.com/search?ic=brands
-    social_links:
-        # - title: GitHub Repository
-        #   icon: github
-        #   url: "https://github.com/microsoft/vscode-documentdb"
-        # - title: X (Twitter)
-        #   icon: x-twitter
-        #   url: "https://twitter.com/yourhandle"
-        # - title: LinkedIn
-        #   icon: linkedin
-        #   url: "https://linkedin.com/company/microsoft"
+# Sidebar structure without touching content files.
+defaults:
+    - scope:
+          path: 'index.md'
+      values:
+          nav_order: 1
+          title: Overview
+    - scope:
+          path: 'user-manual'
+      values:
+          parent: User Manual
+    - scope:
+          path: 'user-manual/how-to-construct-url.md'
+      values:
+          title: 'How to Construct a URL That Opens the Extension'
+          nav_order: 1
+    - scope:
+          path: 'user-manual/connect-with-managed-identity.md'
+      values:
+          title: 'Connect with a Managed Identity'
+          nav_order: 2
+    - scope:
+          path: 'user-manual/troubleshooting-srv-dns.md'
+      values:
+          title: 'Troubleshoot SRV DNS Lookups (querySrv EBADRESP)'
+          nav_order: 3
+    - scope:
+          path: 'user-manual/service-discovery.md'
+      values:
+          title: 'Service Discovery in DocumentDB for VS Code'
+          nav_order: 4
+    - scope:
+          path: 'user-manual/service-discovery-azure-cosmosdb-for-mongodb-vcore.md'
+      values:
+          title: 'Azure DocumentDB Service Discovery Plugin'
+          nav_order: 5
+    - scope:
+          path: 'user-manual/service-discovery-azure-cosmosdb-for-mongodb-ru.md'
+      values:
+          title: 'Azure CosmosDB for MongoDB (RU) Service Discovery Plugin'
+          nav_order: 6
+    - scope:
+          path: 'user-manual/service-discovery-azure-vms.md'
+      values:
+          title: 'Azure VMs (DocumentDB) Service Discovery Plugin'
+          nav_order: 7
+    - scope:
+          path: 'user-manual/service-discovery-kubernetes.md'
+      values:
+          title: 'Kubernetes Service Discovery'
+          nav_order: 8
+    - scope:
+          path: 'user-manual/service-discovery-kubernetes-getting-started.md'
+      values:
+          title: 'Kubernetes Service Discovery: Getting Started and Test Lab'
+          nav_order: 9
+    - scope:
+          path: 'user-manual/service-discovery-mongodb-atlas.md'
+      values:
+          title: 'MongoDB Atlas Service Discovery'
+          nav_order: 10
+    - scope:
+          path: 'user-manual/service-discovery-mongodb-atlas-browse.md'
+      values:
+          title: 'Browse and Connect to MongoDB Atlas'
+          nav_order: 11
+    - scope:
+          path: 'user-manual/service-discovery-mongodb-atlas-credentials.md'
+      values:
+          title: 'Manage MongoDB Atlas Credentials'
+          nav_order: 12
+    - scope:
+          path: 'user-manual/service-discovery-mongodb-atlas-troubleshooting.md'
+      values:
+          title: 'Troubleshoot MongoDB Atlas Service Discovery'
+          nav_order: 13
+    - scope:
+          path: 'user-manual/managing-azure-discovery.md'
+      values:
+          title: 'Managing Azure Discovery (Accounts, Tenants, and Subscriptions)'
+          nav_order: 14
+    - scope:
+          path: 'user-manual/local-connection.md'
+      values:
+          title: 'Local Connection'
+          nav_order: 15
+    - scope:
+          path: 'user-manual/local-quick-start.md'
+      values:
+          title: 'Set up DocumentDB Local'
+          nav_order: 16
+    - scope:
+          path: 'user-manual/local-connection-mongodb-ru.md'
+      values:
+          title: 'Azure CosmosDB for MongoDB (RU) Emulator'
+          nav_order: 17
+    - scope:
+          path: 'user-manual/local-connection-documentdb-local.md'
+      values:
+          title: 'DocumentDB Local'
+          nav_order: 18
+    - scope:
+          path: 'user-manual/collection-view-index-management.md'
+      values:
+          title: 'Manage Indexes in Collection View'
+          nav_order: 19
+    - scope:
+          path: 'user-manual/collection-view-wildcard-indexes.md'
+      values:
+          title: 'Wildcard Indexes in Collection View'
+          nav_order: 20
+    - scope:
+          path: 'user-manual/collection-view-vector-indexes.md'
+      values:
+          title: 'Vector Indexes in Collection View'
+          nav_order: 21
+    - scope:
+          path: 'user-manual/collection-view-index-management-troubleshooting.md'
+      values:
+          title: 'Troubleshoot Index Management'
+          nav_order: 22
+    - scope:
+          path: 'user-manual/data-migrations.md'
+      values:
+          title: 'Data Migrations in DocumentDB for VS Code'
+          nav_order: 23
+    - scope:
+          path: 'user-manual/copy-and-paste.md'
+      values:
+          title: 'Copy and Paste Collections'
+          nav_order: 24
+    - scope:
+          path: 'user-manual/copy-connection-string.md'
+      values:
+          title: 'Copy Connection String'
+          nav_order: 25
+    - scope:
+          path: 'user-manual/collection-view-querying.md'
+      values:
+          title: 'Collection View: Querying'
+          nav_order: 26
+    - scope:
+          path: 'user-manual/query-playground.md'
+      values:
+          title: 'Query Playground'
+          nav_order: 27
+    - scope:
+          path: 'user-manual/interactive-shell.md'
+      values:
+          title: 'Interactive Shell'
+          nav_order: 28
+    - scope:
+          path: 'user-manual/query-runtime.md'
+      values:
+          title: 'Query Runtime: How It Works Behind the Scenes'
+          nav_order: 29
+    - scope:
+          path: 'user-manual/ai-utility-model.md'
+      values:
+          title: 'AI Features: Utility Model and Pricing'
+          nav_order: 30
+    - scope:
+          path: 'release-notes'
+      values:
+          parent: Release Notes
+    - scope:
+          path: 'release-notes/1.0.md'
+      values:
+          title: 'v1.0'
+          nav_order: 1
+    - scope:
+          path: 'release-notes/0.11.md'
+      values:
+          title: 'v0.11'
+          nav_order: 2
+    - scope:
+          path: 'release-notes/0.10.md'
+      values:
+          title: 'v0.10'
+          nav_order: 3
+    - scope:
+          path: 'release-notes/0.9.md'
+      values:
+          title: 'v0.9'
+          nav_order: 4
+    - scope:
+          path: 'release-notes/0.8.md'
+      values:
+          title: 'v0.8'
+          nav_order: 5
+    - scope:
+          path: 'release-notes/0.7.md'
+      values:
+          title: 'v0.7'
+          nav_order: 6
+    - scope:
+          path: 'release-notes/0.6.md'
+      values:
+          title: 'v0.6'
+          nav_order: 7
+    - scope:
+          path: 'release-notes/0.5.md'
+      values:
+          title: 'v0.5'
+          nav_order: 8
+    - scope:
+          path: 'release-notes/0.4.md'
+      values:
+          title: 'v0.4'
+          nav_order: 9
+    - scope:
+          path: 'release-notes/0.3.md'
+      values:
+          title: 'v0.3'
+          nav_order: 10
+    - scope:
+          path: 'release-notes/0.2.4.md'
+      values:
+          title: 'v0.2.4'
+          nav_order: 11
+    - scope:
+          path: 'release-notes/0.2.3.md'
+      values:
+          title: 'v0.2.3'
+          nav_order: 12
+    - scope:
+          path: 'release-notes/0.2.2.md'
+      values:
+          title: 'v0.2.2'
+          nav_order: 13
+    - scope:
+          path: 'release-notes/0.2.1.md'
+      values:
+          title: 'v0.2.1'
+          nav_order: 14
 
-# Google Analytics (optional)
-# google_analytics: G-NNNNNNNNNN
-
-# Disqus comments (optional) - only shows in production
-# disqus:
-#   shortname: your_disqus_shortname
-
-# # Build settings
-# markdown: kramdown
-# kramdown:
-#     input: GFM
-#     hard_wrap: false
-#     syntax_highlighter: rouge
-
-# Exclude from processing.
 # The public site publishes only index.md, user-manual/ and release-notes/.
 # Everything else under docs/ is contributor material and stays out of the site.
 exclude:
@@ -85,7 +310,3 @@ exclude:
     - index-advisor-data-flow.md
     - localization.md
     - query-generation-data-flow.md
-    - vendor/bundle/
-    - vendor/cache/
-    - vendor/gems/
-    - vendor/ruby/

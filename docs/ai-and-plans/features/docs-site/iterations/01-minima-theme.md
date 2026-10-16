@@ -1,7 +1,7 @@
 ---
 feature: docs-site
 kind: iteration
-status: active
+status: historical
 prs: [420]
 created: 2025-12-11
 ---
@@ -34,7 +34,7 @@ conflicting.
   previews was not the goal of this PR and `main` removed them deliberately.
 - **Moved the guide into this feature folder.** `docs/THEME_CUSTOMIZATION.md` was published as a
   page and showed up as "Theme Customization Guide" in the site header. It is contributor
-  documentation, so it now lives in [design.md](../design.md). Keeping it at the `docs/` root was
+  documentation, so it was moved into this feature folder (later folded into [README.md](../README.md) when Minima was replaced; see [iteration 02](./02-just-the-docs.md)). Keeping it at the `docs/` root was
   rejected for that reason.
 - **Refreshed the guide against current GitHub Pages.** Findings:
   - The legacy build is still `github-pages` v232 (Jekyll 3.10.0, Minima 2.5.1). Minima 3 still

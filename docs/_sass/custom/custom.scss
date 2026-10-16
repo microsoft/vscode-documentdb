@@ -1,0 +1,16 @@
+// Semibold headings, closer to learn.microsoft.com than the theme's light weights.
+h1,
+.text-alpha {
+    font-weight: 600;
+}
+
+h2,
+h3,
+.text-beta,
+.text-gamma {
+    font-weight: 600;
+}
+
+.site-title {
+    font-weight: 600;
+}
