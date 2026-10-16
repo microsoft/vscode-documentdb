@@ -37,12 +37,13 @@ harder (rewriting content into a site-specific format) are deliberately avoided.
 | `docs/user-manual.md`, `docs/release-notes.md`                                       | Sidebar section pages; served at `/user-manual/` and `/release-notes/`         |
 | `docs/user-manual/{connecting-to-databases,data-management,querying,ai-features}.md` | Category pages grouping the user manual                                        |
 | Front matter of each published page                                                  | Sidebar title, parent and order                                                |
-| `docs/_includes/head_custom.html`                                                    | Loads the dark stylesheet when the OS prefers dark                             |
+| `docs/_includes/head_custom.html`                                                    | Loads the dark stylesheet when the OS prefers dark, and `page-toc.js`          |
+| `docs/assets/js/page-toc.js`                                                         | Builds the "On this page" panel from the article's h2/h3 headings              |
 | `docs/_includes/title.html`                                                          | Sidebar title: DocumentDB icon (light/dark via `<picture>`) and site name      |
 | `docs/favicon.ico`                                                                   | Same favicon as documentdb.io; the theme links it automatically                |
 | `docs/assets/images/documentdb-icon-{light,dark}.svg`                                | Copies of `resources/documentdb/documentdb_icon_*.svg` with a `viewBox` added  |
 | `docs/_sass/custom/setup.scss`                                                       | Theme variables: Segoe UI, Cascadia Mono, Microsoft blue for links and buttons |
-| `docs/_sass/custom/custom.scss`                                                      | CSS after the theme: semibold headings, sidebar title layout                   |
+| `docs/_sass/custom/custom.scss`                                                      | CSS after the theme: semibold headings, sidebar title, "On this page" layout   |
 
 ## Architecture
 
@@ -113,6 +114,20 @@ local preview to see it in the sidebar.
 When the user manual moves to learn.microsoft.com, the front matter maps to a `TOC.yml` and is
 otherwise ignored.
 
+## "On this page" panel
+
+Just the Docs has no right-side table of contents; its only in-page option is a Kramdown `{:toc}`
+list inside the article. `assets/js/page-toc.js` adds a panel instead:
+
+- Built in the browser from the article's `h2` and `h3` headings that have an `id`; headings with
+  `.no_toc` are skipped. Pages with fewer than three such headings get no panel.
+- Sticky while scrolling; the section in view is highlighted (`IntersectionObserver`).
+- Shown from a 78.5rem (1256px) viewport up. There the main column is widened by 12rem on every
+  page, so pages with and without a panel share one layout; `custom.scss` repeats the theme's
+  sidebar centering formula with the wider width. Below that width nothing changes.
+- No content edits. Several pages still carry a hand-written "Table of Contents" list; it can be
+  removed page by page now that the panel exists.
+
 ## Dark mode
 
 Just the Docs has no built-in "follow the OS" mode
@@ -176,6 +191,7 @@ Notes:
 | 2026-10-16 | Minima replaced by Just the Docs: sidebar, search, OS dark mode, Microsoft styling       | #420        |
 | 2026-10-16 | User manual grouped into categories; navigation moved into page front matter             | #420        |
 | 2026-10-16 | documentdb.io favicon; DocumentDB icon in the sidebar title, swapping with the OS theme  | #420        |
+| 2026-10-16 | "On this page" panel for article sections; landing page links on one line                | #420        |
 
 Details: [01-minima-theme.md](./iterations/01-minima-theme.md),
 [02-just-the-docs.md](./iterations/02-just-the-docs.md).

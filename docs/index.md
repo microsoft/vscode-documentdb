@@ -5,11 +5,7 @@ nav_order: 1
 
 # DocumentDB for VS Code
 
-[Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
-
-[Join the Discussion Board](https://github.com/microsoft/vscode-documentdb/discussions)
-
-[Report Issues](https://github.com/microsoft/vscode-documentdb/issues)
+[Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb) · [Join the Discussion Board](https://github.com/microsoft/vscode-documentdb/discussions) · [Report Issues](https://github.com/microsoft/vscode-documentdb/issues)
 
 ---
 
