@@ -266,4 +266,14 @@ The best tool often depends on your data source, target, and migration requireme
 For example, Microsoft provides guidance on migrating between different versions of its own services, such as from Azure Cosmos DB for MongoDB (RU) to the vCore-based service:
 [Migrate from Azure Cosmos DB for MongoDB (RU) to Azure Cosmos DB for MongoDB (vCore)](https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/how-to-migrate-vcore)
 
+The linked documentation covers the broader migration options, but DocumentDB for VS Code can help you get started too:
+
+1. Locate the **source cluster** you want to migrate **from** in the Connections, Discovery, or Azure view.
+2. Right-click the cluster and select **Data Migration…**.
+3. Choose an installed migration provider and follow its prompts. Depending on the provider, you may first be asked to choose a migration action.
+
+If you need to install a provider, select its entry under **Visit Marketplace** to open its extension page. After installing it, run **Data Migration…** again. You can also select **Learn more…** for migration guidance.
+
+For more about this integration, see [Data Migrations](data-migrations.md).
+
 Before starting any significant migration, it is important to perform a thorough requirements analysis. For critical or large-scale projects, seeking professional help from migration specialists can ensure a successful outcome.
