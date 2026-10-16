@@ -79,7 +79,7 @@ This context allows providers to offer intelligent, targeted migration options b
 
 For detailed API documentation, plugin development information, and technical specifications, please refer to:
 
-**[Migration API Documentation](https://github.com/microsoft/vscode-documentdb/tree/main/api/README)**
+**[Migration API Documentation](https://github.com/microsoft/vscode-documentdb/blob/main/api/README.md)**
 
 The API documentation includes:
 

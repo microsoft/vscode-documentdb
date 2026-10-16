@@ -45,7 +45,7 @@ export class SelectClusterStep extends AzureWizardPromptStep<NewConnectionWizard
 
                     alwaysShow: true,
                 }))
-                .sort((a, b) => a.label.localeCompare(b.label));
+                .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
             return promptItems;
         };

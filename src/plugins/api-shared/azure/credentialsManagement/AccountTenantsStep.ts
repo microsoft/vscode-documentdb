@@ -64,7 +64,7 @@ export class AccountTenantsStep extends AzureWizardPromptStep<CredentialsManagem
             const sortedTenants = [...tenantsWithStatus].sort((a, b) => {
                 const aName = a.tenant.displayName ?? a.tenant.tenantId ?? '';
                 const bName = b.tenant.displayName ?? b.tenant.tenantId ?? '';
-                return aName.localeCompare(bName);
+                return aName.localeCompare(bName, undefined, { numeric: true });
             });
 
             const tenantItems: TenantQuickPickItem[] = sortedTenants.map(({ tenant, isSignedIn }) => ({

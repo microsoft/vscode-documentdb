@@ -17,15 +17,14 @@ import {
 import { ArrowUp16Filled } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext } from 'react';
-import { UsageImpact } from '../../../../../utils/surveyTypes';
-import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext, Views } from '../../collectionViewContext';
 
 export const ToolbarTableNavigation = (): React.JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
 
@@ -53,8 +52,6 @@ export const ToolbarTableNavigation = (): React.JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     }
 
     function jumpToLevel(level: number) {
@@ -81,8 +78,6 @@ export const ToolbarTableNavigation = (): React.JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     }
 
     type Item = {

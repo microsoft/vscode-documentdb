@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    callWithTelemetryAndErrorHandling,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
@@ -16,10 +20,11 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullValue } from '../../../utils/nonNull';
+import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 
-export class RUResourceItem extends ClusterItemBase {
+export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = vscode.Uri.joinPath(
         ext.context.extensionUri,
         'resources',
@@ -33,7 +38,7 @@ export class RUResourceItem extends ClusterItemBase {
 
     constructor(
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
     }
@@ -65,6 +70,7 @@ export class RUResourceItem extends ClusterItemBase {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'ru';
+            context.telemetry.properties.connectionInitiatedFrom = Views.AzureResourcesView;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -79,9 +85,9 @@ export class RUResourceItem extends ClusterItemBase {
                 this.cluster.name,
             );
 
-            // Cache credentials and attempt connection
+            // Cache credentials and attempt connection using clusterId for stable caching
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 credentials.selectedAuthMethod!,
                 nonNullValue(credentials.connectionString, 'credentials.connectionString', 'RUCoreResourceItem.ts'),
                 credentials.nativeAuthConfig,
@@ -94,7 +100,7 @@ export class RUResourceItem extends ClusterItemBase {
             );
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -102,9 +108,18 @@ export class RUResourceItem extends ClusterItemBase {
                     }),
                 );
 
+                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+
                 return clustersClient;
             } catch (error) {
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
@@ -113,13 +128,13 @@ export class RUResourceItem extends ClusterItemBase {
                         detail:
                             l10n.t('Revisit connection details and try again.') +
                             '\n\n' +
-                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                     },
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }

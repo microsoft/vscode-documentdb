@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    callWithTelemetryAndErrorHandling,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
@@ -11,12 +15,13 @@ import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { Views } from '../../../../documentdb/Views';
 import { ext } from '../../../../extensionVariables';
+import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { DISCOVERY_PROVIDER_ID, RESOURCE_TYPE } from '../../config';
 import { extractCredentialsFromRUAccount } from '../../utils/ruClusterHelpers';
 
-export class MongoRUResourceItem extends ClusterItemBase {
+export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = vscode.Uri.joinPath(
         ext.context.extensionUri,
         'resources',
@@ -35,7 +40,7 @@ export class MongoRUResourceItem extends ClusterItemBase {
          */
         journeyCorrelationId: string,
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;
@@ -93,16 +98,16 @@ export class MongoRUResourceItem extends ClusterItemBase {
                     );
                 }
 
-                // Cache the credentials for this cluster
+                // Cache the credentials for this cluster using clusterId for stable caching
                 CredentialCache.setAuthCredentials(
-                    this.id,
+                    this.cluster.clusterId,
                     credentials.selectedAuthMethod ?? credentials.availableAuthMethods[0],
                     credentials.connectionString,
                     credentials.nativeAuthConfig,
                 );
 
                 // Connect using the cached credentials
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -113,15 +118,24 @@ export class MongoRUResourceItem extends ClusterItemBase {
                 // Add success telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'success';
+                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
                 return clustersClient;
             } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+
                 // Add error telemetry
                 context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'failed';
                 context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
 
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
@@ -130,13 +144,13 @@ export class MongoRUResourceItem extends ClusterItemBase {
                         detail:
                             l10n.t('Revisit connection details and try again.') +
                             '\n\n' +
-                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                     },
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }

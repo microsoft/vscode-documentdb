@@ -15,6 +15,7 @@ import * as l10n from '@vscode/l10n';
 import { type QuickPickItem } from 'vscode';
 import { askToConfigureCredentials } from '../askToConfigureCredentials';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
+import { tenantSignInLimiter } from '../tenantSignInLimiter';
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { FilterSubscriptionSubStep } from './FilterSubscriptionSubStep';
 import { FilterTenantSubStep } from './FilterTenantSubStep';
@@ -63,13 +64,15 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         const allTenants = await azureSubscriptionProvider.getTenants();
 
         // Filter to only show authenticated tenants
-        // Check sign-in status for all tenants in parallel
+        // Check sign-in status for all tenants with bounded parallelism
         const tenantsWithSignInStatus = await Promise.all(
             allTenants.map(async (tenant) => {
                 if (!tenant.tenantId) {
                     return { tenant, isSignedIn: false };
                 }
-                const isSignedIn = await azureSubscriptionProvider.isSignedIn(tenant.tenantId, tenant.account);
+                const isSignedIn = await tenantSignInLimiter(() =>
+                    azureSubscriptionProvider.isSignedIn(tenant.tenantId, tenant.account),
+                );
                 return { tenant, isSignedIn };
             }),
         );
@@ -82,7 +85,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
                 // Sort by display name if available, otherwise by tenant ID
                 const aName = a.displayName || a.tenantId || '';
                 const bName = b.displayName || b.tenantId || '';
-                return aName.localeCompare(bName);
+                return aName.localeCompare(bName, undefined, { numeric: true });
             });
 
         context.telemetry.measurements.tenantLoadTimeMs = Date.now() - tenantLoadStartTime;
@@ -119,7 +122,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         // Determine the flow based on tenant count, but let's look at the actual subscriptions,
         // so that in case of a tenant without subscriptions, we don't bother the user with these.
         const uniqueTenants = this.getUniqueTenants(context.allSubscriptions);
-        context.telemetry.properties.tenantCountFromSubscriptions = uniqueTenants.length.toString();
+        context.telemetry.measurements.tenantCountFromSubscriptions = uniqueTenants.length;
 
         if (uniqueTenants.length > 1) {
             context.telemetry.properties.filteringFlow = 'multiTenant';

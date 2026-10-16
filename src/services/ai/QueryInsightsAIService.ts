@@ -3,21 +3,25 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
 import {
     CommandType,
     optimizeQuery,
+    optimizeQueryStreaming,
     type QueryObject,
     type QueryOptimizationContext,
 } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
-import { type FindQueryParams } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type IndexSpecification } from '../../documentdb/LlmEnhancedFeatureApis';
 import { ext } from '../../extensionVariables';
 import { getConfirmationAsInSettings, getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
-import { type AIOptimizationResponse } from './types';
+import { type AIIndexRecommendation, type AIOptimizationResponse } from './types';
 
 /**
  * Payload for create index action
@@ -47,7 +51,26 @@ interface ModifyIndexPayload {
     sessionId: string;
     databaseName: string;
     collectionName: string;
-    mongoShell: string;
+    shellCommand: string;
+}
+
+/**
+ * Pull-based streaming handle returned by
+ * {@link QueryInsightsAIService.getOptimizationRecommendationsStreaming}.
+ *
+ * Mirrors the {@link CopilotService.streamMessage} /
+ * {@link OptimizationStreamHandle} shape: `fragments` yields each text
+ * fragment from the LLM as it arrives, and `completion` resolves with the
+ * same parsed {@link AIOptimizationResponse} the buffered
+ * {@link QueryInsightsAIService.getOptimizationRecommendations} produces.
+ *
+ * Final parsing still happens once at completion time in this work item
+ * (WI-3 only threads the iterable end-to-end). Incremental parsing into
+ * domain events arrives in WI-7 / WI-8.
+ */
+export interface AIOptimizationStreamHandle {
+    fragments: AsyncIterable<string>;
+    completion: Promise<AIOptimizationResponse>;
 }
 
 /**
@@ -59,16 +82,21 @@ export class QueryInsightsAIService {
      * Gets optimization recommendations for a query
      *
      * @param sessionId - Session Id for accessing cached data
-     * @param query - The query string
+     * @param query - Either a parsed QueryObject (for find queries) or a raw query string
+     *                (kept for forward compatibility with non-find command types).
      * @param databaseName - Target database name
      * @param collectionName - Target collection name
+     * @param executionPlan - Optional pre-loaded execution plan
      * @returns AI optimization recommendations
      */
     public async getOptimizationRecommendations(
         sessionId: string,
-        query: string | FindQueryParams,
+        query: string | QueryObject,
         databaseName: string,
         collectionName: string,
+        executionPlan?: unknown,
+        signal?: AbortSignal,
+        staticAnalysisSummary?: string,
     ): Promise<AIOptimizationResponse> {
         const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.queryInsights.getOptimizationRecommendations',
@@ -76,14 +104,15 @@ export class QueryInsightsAIService {
                 // Prepare query optimization context
                 let queryContext: QueryOptimizationContext;
                 if (typeof query !== 'string') {
-                    // Convert FindQueryParams to QueryObject
-                    const queryObject = this.convertFindParamsToQueryObject(query);
                     queryContext = {
                         sessionId,
                         databaseName,
                         collectionName,
-                        queryObject,
+                        queryObject: query,
                         commandType: CommandType.Find,
+                        executionPlan,
+                        signal,
+                        staticAnalysisSummary,
                     };
                 } else {
                     // handle string query for temporary compatibility
@@ -92,7 +121,10 @@ export class QueryInsightsAIService {
                         databaseName,
                         collectionName,
                         query,
-                        commandType: CommandType.Find, // For now, only support find queries
+                        commandType: CommandType.Find,
+                        executionPlan,
+                        signal,
+                        staticAnalysisSummary,
                     };
                 }
 
@@ -102,15 +134,206 @@ export class QueryInsightsAIService {
                 // Parse the AI response to extract structured recommendations
                 const parsedResponse = this.parseAIResponse(optimizationResult.recommendations);
 
+                // Carry the model identity through to the webview so it can be
+                // disclosed in the AI Performance Insights UI. We surface both
+                // the stable id/family (for telemetry) and the display name
+                // (for the byline).
+                parsedResponse.modelId = optimizationResult.modelId;
+                parsedResponse.modelFamily = optimizationResult.modelFamily;
+                parsedResponse.modelDisplayName = optimizationResult.modelDisplayName;
+                parsedResponse.usage = optimizationResult.usage;
+
+                // Count all actionable recommendations by action type in a single pass
+                let actionableRecommendationCount = 0;
+                let createRecommendationCount = 0;
+                let dropRecommendationCount = 0;
+                let modifyRecommendationCount = 0;
+                for (const improvement of parsedResponse.improvements) {
+                    switch (improvement.action) {
+                        case 'create':
+                            actionableRecommendationCount++;
+                            createRecommendationCount++;
+                            break;
+                        case 'drop':
+                            actionableRecommendationCount++;
+                            dropRecommendationCount++;
+                            break;
+                        case 'modify':
+                            actionableRecommendationCount++;
+                            modifyRecommendationCount++;
+                            break;
+                    }
+                }
+
+                context.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
+                context.telemetry.measurements.createRecommendationCount = createRecommendationCount;
+                context.telemetry.measurements.dropRecommendationCount = dropRecommendationCount;
+                context.telemetry.measurements.modifyRecommendationCount = modifyRecommendationCount;
+
                 return parsedResponse;
             },
         );
 
         if (!result) {
+            // If signal was aborted, propagate cancellation silently
+            if (signal?.aborted) {
+                throw new UserCancelledError('AbortSignal');
+            }
             throw new Error(l10n.t('Failed to get optimization recommendations from index advisor.'));
         }
 
         return result;
+    }
+
+    /**
+     * Streaming variant of {@link getOptimizationRecommendations}. Returns a
+     * handle whose `fragments` iterable yields each LLM text fragment as it
+     * arrives end-to-end (CopilotService → optimizeQueryStreaming →
+     * QueryInsightsAIService), and whose `completion` promise resolves with
+     * the same fully-parsed {@link AIOptimizationResponse} the buffered
+     * variant produces.
+     *
+     * Per the WI-3 plan, this work item only threads the iterable through —
+     * the final response is still produced by a single `JSON.parse` at the
+     * end of the stream. WI-7 introduces a tolerant incremental parser and
+     * WI-8 turns this completion-only path into a per-event domain stream.
+     */
+    public async getOptimizationRecommendationsStreaming(
+        sessionId: string,
+        query: string | QueryObject,
+        databaseName: string,
+        collectionName: string,
+        executionPlan?: unknown,
+        signal?: AbortSignal,
+        staticAnalysisSummary?: string,
+    ): Promise<AIOptimizationStreamHandle> {
+        const result = await callWithTelemetryAndErrorHandling(
+            'vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming',
+            async (context: IActionContext): Promise<AIOptimizationStreamHandle> => {
+                let queryContext: QueryOptimizationContext;
+                if (typeof query !== 'string') {
+                    queryContext = {
+                        sessionId,
+                        databaseName,
+                        collectionName,
+                        queryObject: query,
+                        commandType: CommandType.Find,
+                        executionPlan,
+                        signal,
+                        staticAnalysisSummary,
+                    };
+                } else {
+                    queryContext = {
+                        sessionId,
+                        databaseName,
+                        collectionName,
+                        query,
+                        commandType: CommandType.Find,
+                        executionPlan,
+                        signal,
+                        staticAnalysisSummary,
+                    };
+                }
+
+                const streamHandle = await optimizeQueryStreaming(context, queryContext);
+
+                // Final parse + per-action counts happen once at completion time.
+                // The dedicated Stage 3 completion event (plan §7 / WI-10) will
+                // carry the recommendation counters for the streaming path —
+                // recording them here is best-effort because the wrapping
+                // callWithTelemetryAndErrorHandling will have already closed by
+                // the time `completion` resolves.
+                const completion: Promise<AIOptimizationResponse> = streamHandle.completion.then(
+                    (optimizationResult) => {
+                        const parsedResponse = this.parseAIResponse(optimizationResult.recommendations);
+                        parsedResponse.modelId = optimizationResult.modelId;
+                        parsedResponse.modelFamily = optimizationResult.modelFamily;
+                        parsedResponse.modelDisplayName = optimizationResult.modelDisplayName;
+                        parsedResponse.usage = optimizationResult.usage;
+                        return parsedResponse;
+                    },
+                );
+                completion.catch(() => {
+                    /* swallow: consumer chose not to observe */
+                });
+
+                return {
+                    fragments: streamHandle.fragments,
+                    completion,
+                };
+            },
+        );
+
+        if (!result) {
+            if (signal?.aborted) {
+                throw new UserCancelledError('AbortSignal');
+            }
+            throw new Error(l10n.t('Failed to start streaming optimization recommendations.'));
+        }
+
+        return result;
+    }
+
+    /**
+     * The default `_id_` index is always present and can neither be dropped
+     * nor hidden, so any AI recommendation targeting it is invalid.
+     */
+    private static readonly PROTECTED_INDEX_NAME = '_id_';
+
+    /**
+     * Determines whether an index recommendation targets the protected `_id_`
+     * index, either by its explicit name or by the index name referenced
+     * inside the shell command.
+     */
+    private static targetsProtectedIndex(recommendation: AIIndexRecommendation): boolean {
+        if ((recommendation.indexName ?? '').trim() === QueryInsightsAIService.PROTECTED_INDEX_NAME) {
+            return true;
+        }
+
+        const shellMatch = recommendation.shellCommand?.match(
+            /\.(?:hideIndex|unhideIndex|dropIndex)\(\s*['"]([^'"]+)['"]/,
+        );
+        return shellMatch?.[1].trim() === QueryInsightsAIService.PROTECTED_INDEX_NAME;
+    }
+
+    /**
+     * Splits index recommendations into those that may be shown to the user
+     * (`kept`) and those discarded because they target the protected `_id_`
+     * index. Only actionable recommendations (`create`/`drop`/`modify`) are
+     * filtered; informational `none` entries are always kept.
+     */
+    private static filterProtectedIndexRecommendations(recommendations: AIIndexRecommendation[]): {
+        kept: AIIndexRecommendation[];
+        removed: AIIndexRecommendation[];
+    } {
+        const kept: AIIndexRecommendation[] = [];
+        const removed: AIIndexRecommendation[] = [];
+        for (const recommendation of recommendations) {
+            if (recommendation.action !== 'none' && QueryInsightsAIService.targetsProtectedIndex(recommendation)) {
+                removed.push(recommendation);
+            } else {
+                kept.push(recommendation);
+            }
+        }
+        return { kept, removed };
+    }
+
+    /**
+     * Reports a dedicated telemetry event when one or more index
+     * recommendations were filtered out because they targeted a protected
+     * index. Fire-and-forget; failures are swallowed.
+     */
+    private static reportProtectedIndexRecommendationsFiltered(removed: AIIndexRecommendation[]): void {
+        void callWithTelemetryAndErrorHandling(
+            'vscode-documentdb.queryInsights.protectedIndexRecommendationFiltered',
+            (context: IActionContext) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.measurements.filteredRecommendationCount = removed.length;
+                context.telemetry.properties.filteredActions = removed
+                    .map((recommendation) => recommendation.action)
+                    .join(',');
+            },
+        );
     }
 
     /**
@@ -128,68 +351,33 @@ export class QueryInsightsAIService {
                     indexSpec: Record<string, number>;
                     indexOptions?: Record<string, unknown>;
                     indexName: string;
-                    mongoShell: string;
+                    shellCommand: string;
                     justification: string;
                     priority: 'high' | 'medium' | 'low';
                     risks?: string;
                 }>;
-                verification?: string[];
                 educationalContent?: string;
             };
 
+            // Discard any recommendation that targets a protected index (e.g.,
+            // the mandatory `_id_` index, which can neither be hidden nor
+            // dropped). Such recommendations must never reach the user.
+            const { kept, removed } = QueryInsightsAIService.filterProtectedIndexRecommendations(
+                parsedJson.improvements ?? [],
+            );
+            if (removed.length > 0) {
+                QueryInsightsAIService.reportProtectedIndexRecommendationsFiltered(removed);
+            }
+
             return {
                 analysis: parsedJson.analysis || 'No analysis provided.',
-                improvements: parsedJson.improvements || [],
-                verification: parsedJson.verification || [],
+                improvements: kept,
                 educationalContent: parsedJson.educationalContent,
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(l10n.t('Failed to parse AI optimization response. {error}', { error: errorMessage }));
         }
-    }
-
-    /**
-     * Converts FindQueryParams to QueryObject
-     * TODO: Later should support other command types as well
-     * @param params - FindQueryParams with string filter, sort, project
-     * @returns QueryObject with parsed Document objects
-     */
-    private convertFindParamsToQueryObject(params: FindQueryParams): QueryObject {
-        const result: QueryObject = {};
-
-        try {
-            if (params.filter) {
-                result.filter = JSON.parse(params.filter) as Document;
-            }
-
-            if (params.project) {
-                const projection = JSON.parse(params.project) as Document;
-                if (Object.keys(projection).length > 0) {
-                    result.projection = projection;
-                }
-            }
-
-            if (params.sort) {
-                const sort = JSON.parse(params.sort) as Document;
-                if (Object.keys(sort).length > 0) {
-                    result.sort = sort;
-                }
-            }
-
-            if (params.limit !== undefined) {
-                result.limit = params.limit;
-            }
-
-            if (params.skip !== undefined) {
-                result.skip = params.skip;
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(l10n.t('Failed to convert query parameters: {error}', { error: errorMessage }));
-        }
-
-        return result;
     }
 
     /**
@@ -216,14 +404,15 @@ export class QueryInsightsAIService {
                 // Route to appropriate handler based on actionId
                 switch (actionId) {
                     case 'createIndex':
-                        return this.handleCreateIndex(sessionId, payload);
+                        return this.handleCreateIndex(context, sessionId, payload);
                     case 'dropIndex':
-                        return this.handleDropIndex(sessionId, payload);
+                        return this.handleDropIndex(context, sessionId, payload);
                     case 'modifyIndex':
-                        return this.handleModifyIndex(sessionId, payload);
+                        return this.handleModifyIndex(context, sessionId, payload);
                     case 'learnMore':
                         return this.handleLearnMore(payload);
                     default:
+                        context.telemetry.properties.actionError = 'unknownAction';
                         return {
                             success: false,
                             message: `Unknown action: ${actionId}`,
@@ -277,10 +466,10 @@ export class QueryInsightsAIService {
             payload !== null &&
             'databaseName' in payload &&
             'collectionName' in payload &&
-            'mongoShell' in payload &&
+            'shellCommand' in payload &&
             typeof (payload as ModifyIndexPayload).databaseName === 'string' &&
             typeof (payload as ModifyIndexPayload).collectionName === 'string' &&
-            typeof (payload as ModifyIndexPayload).mongoShell === 'string'
+            typeof (payload as ModifyIndexPayload).shellCommand === 'string'
         );
     }
 
@@ -288,12 +477,14 @@ export class QueryInsightsAIService {
      * Handles create index action
      */
     private async handleCreateIndex(
+        context: IActionContext,
         sessionId: string | undefined,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> {
         try {
             // Validate payload
             if (!this.isCreateIndexPayload(payload)) {
+                context.telemetry.properties.actionError = 'invalidPayload';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for create index action', {}));
                 return {
                     success: false,
@@ -304,6 +495,7 @@ export class QueryInsightsAIService {
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                context.telemetry.properties.actionError = 'noSessionId';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
@@ -358,6 +550,7 @@ export class QueryInsightsAIService {
                 };
             } else {
                 const errorMsg = typeof result.note === 'string' ? result.note : 'Unknown error';
+                context.telemetry.properties.actionError = 'createIndexFailed';
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Create index action failed: {error}', { error: errorMsg }),
                 );
@@ -369,6 +562,7 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            context.telemetry.properties.actionError = 'createIndexException';
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Create index action error: {error}', { error: errorMessage }),
             );
@@ -384,12 +578,14 @@ export class QueryInsightsAIService {
      * Handles drop index action
      */
     private async handleDropIndex(
+        context: IActionContext,
         sessionId: string | undefined,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> {
         try {
             // Validate payload
             if (!this.isDropIndexPayload(payload)) {
+                context.telemetry.properties.actionError = 'invalidPayload';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for drop index action', {}));
                 return {
                     success: false,
@@ -397,9 +593,26 @@ export class QueryInsightsAIService {
                 };
             }
 
+            // Defense-in-depth: never drop the protected `_id_` index. The
+            // database forbids it, so refuse even if a recommendation slipped through.
+            if (payload.indexName.trim() === QueryInsightsAIService.PROTECTED_INDEX_NAME) {
+                context.telemetry.properties.actionError = 'protectedIndex';
+                context.telemetry.properties.protectedIndexName = payload.indexName.trim();
+                ext.outputChannel.warn(
+                    l10n.t('[Query Insights Action] Refusing to drop protected index "{indexName}"', {
+                        indexName: payload.indexName,
+                    }),
+                );
+                return {
+                    success: false,
+                    message: l10n.t('The "{indexName}" index cannot be dropped.', { indexName: payload.indexName }),
+                };
+            }
+
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                context.telemetry.properties.actionError = 'noSessionId';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
@@ -461,6 +674,7 @@ export class QueryInsightsAIService {
                 };
             } else {
                 const errorMsg = typeof result.note === 'string' ? result.note : 'Unknown error';
+                context.telemetry.properties.actionError = 'dropIndexFailed';
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Drop index action failed: {error}', { error: errorMsg }),
                 );
@@ -472,6 +686,7 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            context.telemetry.properties.actionError = 'dropIndexException';
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Drop index action error: {error}', { error: errorMessage }),
             );
@@ -487,12 +702,14 @@ export class QueryInsightsAIService {
      * Handles modify index action
      */
     private async handleModifyIndex(
+        context: IActionContext,
         sessionId: string | undefined,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> {
         try {
             // Validate payload
             if (!this.isModifyIndexPayload(payload)) {
+                context.telemetry.properties.actionError = 'invalidPayload';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Invalid payload for modify index action', {}));
                 return {
                     success: false,
@@ -501,25 +718,44 @@ export class QueryInsightsAIService {
             }
 
             const parseOperationPattern = /db\.getCollection\(['"]([^'"]+)['"]\)\.(\w+)\((.*)\)/;
-            const match = payload.mongoShell.match(parseOperationPattern);
+            const match = payload.shellCommand.match(parseOperationPattern);
             if (!match || match.length < 3 || (match[2] !== 'hideIndex' && match[2] !== 'unhideIndex')) {
+                context.telemetry.properties.actionError = 'invalidShellCommandFormat';
                 ext.outputChannel.warn(
-                    l10n.t('[Query Insights Action] Invalid mongoShell command format: {command}', {
-                        command: payload.mongoShell,
+                    l10n.t('[Query Insights Action] Invalid shell command format: {command}', {
+                        command: payload.shellCommand,
                     }),
                 );
                 return {
                     success: false,
-                    message: l10n.t('Invalid mongoShell command format'),
+                    message: l10n.t('Invalid shell command format'),
                 };
             }
 
             const operation = match[2];
             const indexName = match[3].replace(/['"]/g, '').trim();
 
+            // Defense-in-depth: never hide/unhide the protected `_id_` index. The
+            // database forbids hiding it, so refuse even if a recommendation slipped through.
+            if (indexName === QueryInsightsAIService.PROTECTED_INDEX_NAME) {
+                context.telemetry.properties.actionError = 'protectedIndex';
+                context.telemetry.properties.protectedIndexName = indexName;
+                ext.outputChannel.warn(
+                    l10n.t('[Query Insights Action] Refusing to {operation} protected index "{indexName}"', {
+                        operation,
+                        indexName,
+                    }),
+                );
+                return {
+                    success: false,
+                    message: l10n.t('The "{indexName}" index cannot be modified.', { indexName }),
+                };
+            }
+
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
+                context.telemetry.properties.actionError = 'noSessionId';
                 ext.outputChannel.warn(l10n.t('[Query Insights Action] Session ID is required', {}));
                 return {
                     success: false,
@@ -595,6 +831,7 @@ export class QueryInsightsAIService {
                         : typeof result.note === 'string'
                           ? result.note
                           : 'Unknown error';
+                context.telemetry.properties.actionError = 'modifyIndexFailed';
                 ext.outputChannel.error(
                     l10n.t('[Query Insights Action] Modify index action failed: {error}', { error: errmsg }),
                 );
@@ -606,6 +843,7 @@ export class QueryInsightsAIService {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            context.telemetry.properties.actionError = 'modifyIndexException';
             ext.outputChannel.error(
                 l10n.t('[Query Insights Action] Modify index action error: {error}', { error: errorMessage }),
             );

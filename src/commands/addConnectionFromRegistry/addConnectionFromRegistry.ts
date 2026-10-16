@@ -5,16 +5,28 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import vscode from 'vscode';
+import * as vscode from 'vscode';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { getConnectionAuthIdentity } from '../../documentdb/auth/connectionAuthIdentity';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, type ConnectionItem } from '../../services/connectionStorageService';
-import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
+import {
+    getKubernetesPortForwardIdentity,
+    getKubernetesPortForwardMetadata,
+} from '../../plugins/service-kubernetes/portForwardMetadata';
+import {
+    ConnectionStorageService,
+    ConnectionType,
+    ItemType,
+    type ConnectionItem,
+} from '../../services/connectionStorageService';
 import {
     buildConnectionsViewTreePath,
-    waitForConnectionsViewReady,
+    buildFullTreePath,
+    focusAndRevealInConnectionsView,
+    withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { UserFacingError } from '../../utils/commandErrorHandling';
@@ -38,6 +50,8 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
             ? Views.AzureResourcesView
             : Views.DiscoveryView;
 
+    context.telemetry.properties.sourceView = sourceViewId;
+
     if (sourceViewId === Views.AzureResourcesView) {
         // Show a modal dialog informing the user that the details will be saved for future use
         const continueButton = l10n.t('Yes, continue');
@@ -55,124 +69,152 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
         }
     }
 
-    return vscode.window.withProgress(
-        {
-            location: { viewId: Views.ConnectionsView },
-            cancellable: false,
-        },
-        async () => {
-            const credentials = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
-                context.telemetry.properties.experience = node.experience.api;
+    return withConnectionsViewProgress(async () => {
+        const credentials = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
+            // Use optional chaining — node may be duck-typed (e.g. KubernetesResourceItem)
+            // and not a true ClusterItemBase subclass
+            context.telemetry.properties.experience = node.experience?.api ?? 'unknown';
 
-                return node.getCredentials();
+            return node.getCredentials();
+        });
+
+        if (!credentials) {
+            throw new Error(l10n.t('Unable to retrieve credentials for the selected cluster.'));
+        }
+
+        const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
+        const username = credentials.nativeAuthConfig?.connectionUser || parsedCS.username;
+        parsedCS.username = '';
+
+        const joinedHosts = [...parsedCS.hosts].sort().join(',');
+        const newPortForwardMetadata = getKubernetesPortForwardMetadata(credentials.connectionProperties);
+
+        // A discovered cluster can legitimately be saved more than once, as long as each entry
+        // authenticates as a different identity (for example two user-assigned managed identities).
+        const newAuthIdentity = getConnectionAuthIdentity({
+            authMethod: credentials.selectedAuthMethod,
+            nativeAuthConfig: credentials.nativeAuthConfig,
+            entraIdAuthConfig: credentials.entraIdAuthConfig,
+            managedIdentityAuthConfig: credentials.managedIdentityAuthConfig,
+        });
+
+        //  Sanity Check 1/2: is there a connection with the same identity + host in there?
+        const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+
+        const existingDuplicateConnection = existingConnections.find((existingConnection) => {
+            const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
+            const existingHostsJoined = [...existingCS.hosts].sort().join(',');
+            const existingAuthIdentity = getConnectionAuthIdentity({
+                authMethod: existingConnection.properties?.selectedAuthMethod,
+                nativeAuthConfig: existingConnection.secrets.nativeAuthConfig,
+                entraIdAuthConfig: existingConnection.secrets.entraIdAuthConfig,
+                managedIdentityAuthConfig: existingConnection.secrets.managedIdentityAuthConfig,
             });
+            const existingPortForwardMetadata = getKubernetesPortForwardMetadata(existingConnection.properties);
 
-            if (!credentials) {
-                throw new Error(l10n.t('Unable to retrieve credentials for the selected cluster.'));
+            if (newPortForwardMetadata || existingPortForwardMetadata) {
+                return (
+                    existingAuthIdentity === newAuthIdentity &&
+                    !!newPortForwardMetadata &&
+                    !!existingPortForwardMetadata &&
+                    getKubernetesPortForwardIdentity(existingPortForwardMetadata) ===
+                        getKubernetesPortForwardIdentity(newPortForwardMetadata)
+                );
             }
 
-            const parsedCS = new DocumentDBConnectionString(credentials.connectionString);
-            const username = credentials.nativeAuthConfig?.connectionUser || parsedCS.username;
-            parsedCS.username = '';
+            return existingAuthIdentity === newAuthIdentity && existingHostsJoined === joinedHosts;
+        });
 
-            const joinedHosts = [...parsedCS.hosts].sort().join(',');
-
-            //  Sanity Check 1/2: is there a connection with the same username + host in there?
-            const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
-
-            const existingDuplicateConnection = existingConnections.find((existingConnection) => {
-                const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
-                const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                // Use nativeAuthConfig for comparison
-                const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
-                return existingUsername === username && existingHostsJoined === joinedHosts;
+        if (existingDuplicateConnection) {
+            // Reveal the existing duplicate connection.
+            // Use buildFullTreePath to correctly handle connections inside folders —
+            // buildConnectionsViewTreePath produces a flat path that omits folder ancestors,
+            // causing findNodeById to fail silently when the connection is in a folder.
+            ext.connectionsBranchDataProvider.refresh();
+            const connectionPath = await buildFullTreePath(existingDuplicateConnection.id, ConnectionType.Clusters);
+            await focusAndRevealInConnectionsView(context, connectionPath, {
+                select: true,
+                focus: false,
+                expand: false, // Don't expand to avoid login prompts
             });
 
-            if (existingDuplicateConnection) {
-                // Reveal the existing duplicate connection
-                await vscode.commands.executeCommand(`connectionsView.focus`);
-                ext.connectionsBranchDataProvider.refresh();
-                await waitForConnectionsViewReady(context);
-
-                const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
-                await revealConnectionsViewElement(context, connectionPath, {
-                    select: true,
-                    focus: false,
-                    expand: false, // Don't expand to avoid login prompts
-                });
-
-                throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
+            throw new UserFacingError(
+                l10n.t('A connection to the same host with the same authentication settings already exists.'),
+                {
                     details: l10n.t(
                         'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
                         existingDuplicateConnection.name,
                     ),
-                });
-            }
-
-            let newConnectionLabel = username && username.length > 0 ? `${username}@${joinedHosts}` : joinedHosts;
-
-            // Sanity Check 2/2: is there a connection with the same 'label' in there?
-            // If so, append a number to the label.
-            // This scenario is possible as users are allowed to rename their connections.
-            let existingDuplicateLabel = existingConnections.find(
-                (connection) => connection.name === newConnectionLabel,
-            );
-
-            // If a connection with the same label exists, append a number to the label
-            while (existingDuplicateLabel) {
-                /**
-                 * Matches and captures parts of a connection label string.
-                 *
-                 * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
-                 * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
-                 * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
-                 *   which may be preceded by whitespace. For example, " (123)".
-                 *
-                 * Examples:
-                 * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
-                 * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
-                 */
-                const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
-                if (match) {
-                    const baseName = match[1];
-                    const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
-                    newConnectionLabel = `${baseName} (${count})`;
-                }
-                existingDuplicateLabel = existingConnections.find(
-                    (connection) => connection.name === newConnectionLabel,
-                );
-            }
-
-            // Now, we're safe to create a new connection with the new unique label
-
-            const storageId = generateDocumentDBStorageId(parsedCS.toString());
-
-            const connectionItem: ConnectionItem = {
-                id: storageId,
-                name: newConnectionLabel,
-                properties: { api: API.DocumentDB, availableAuthMethods: credentials.availableAuthMethods },
-                secrets: {
-                    connectionString: parsedCS.toString(),
-                    nativeAuthConfig: credentials.nativeAuthConfig,
-                    entraIdAuthConfig: credentials.entraIdAuthConfig,
                 },
-            };
+            );
+        }
 
-            await ConnectionStorageService.save(ConnectionType.Clusters, connectionItem, true);
+        let newConnectionLabel = username && username.length > 0 ? `${username}@${joinedHosts}` : joinedHosts;
 
-            await vscode.commands.executeCommand(`connectionsView.focus`);
-            ext.connectionsBranchDataProvider.refresh();
-            await waitForConnectionsViewReady(context);
+        // Sanity Check 2/2: is there a connection with the same 'label' in there?
+        // If so, append a number to the label.
+        // This scenario is possible as users are allowed to rename their connections.
+        let existingDuplicateLabel = existingConnections.find((connection) => connection.name === newConnectionLabel);
 
-            // Reveal the connection
-            const connectionPath = buildConnectionsViewTreePath(connectionItem.id, false);
-            await revealConnectionsViewElement(context, connectionPath, {
-                select: true,
-                focus: false,
-                expand: false, // Don't expand immediately to avoid login prompts
-            });
+        // If a connection with the same label exists, append a number to the label
+        while (existingDuplicateLabel) {
+            /**
+             * Matches and captures parts of a connection label string.
+             *
+             * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
+             * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
+             * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+             *   which may be preceded by whitespace. For example, " (123)".
+             *
+             * Examples:
+             * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
+             * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
+             */
+            const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
+            if (match) {
+                const baseName = match[1];
+                const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+                newConnectionLabel = `${baseName} (${count})`;
+            }
+            existingDuplicateLabel = existingConnections.find((connection) => connection.name === newConnectionLabel);
+        }
 
-            showConfirmationAsInSettings(l10n.t('New connection has been added to your DocumentDB Connections.'));
-        },
-    );
+        // Now, we're safe to create a new connection with the new unique label
+
+        const storageId = generateDocumentDBStorageId(parsedCS.toString());
+
+        const connectionItem: ConnectionItem = {
+            id: storageId,
+            name: newConnectionLabel,
+            properties: {
+                ...credentials.connectionProperties,
+                type: ItemType.Connection,
+                api: API.DocumentDB,
+                availableAuthMethods: credentials.availableAuthMethods,
+                selectedAuthMethod: credentials.selectedAuthMethod,
+            },
+            secrets: {
+                connectionString: parsedCS.toString(),
+                nativeAuthConfig: credentials.nativeAuthConfig,
+                entraIdAuthConfig: credentials.entraIdAuthConfig,
+                managedIdentityAuthConfig:
+                    credentials.selectedAuthMethod === AuthMethodId.ManagedIdentity
+                        ? credentials.managedIdentityAuthConfig
+                        : undefined,
+            },
+        };
+
+        await ConnectionStorageService.save(ConnectionType.Clusters, connectionItem, true);
+
+        // Refresh and reveal the new connection
+        ext.connectionsBranchDataProvider.refresh();
+        const connectionPath = buildConnectionsViewTreePath(connectionItem.id, false);
+        await focusAndRevealInConnectionsView(context, connectionPath, {
+            select: true,
+            focus: false,
+            expand: false, // Don't expand immediately to avoid login prompts
+        });
+
+        showConfirmationAsInSettings(l10n.t('New connection has been added to your DocumentDB Connections.'));
+    });
 }

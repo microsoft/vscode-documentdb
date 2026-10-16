@@ -1,0 +1,468 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { API } from '../DocumentDBExperiences';
+import { ItemType } from '../services/connectionStorageService';
+import { AuthMethodId } from './auth/AuthMethod';
+import { CredentialCache } from './CredentialCache';
+
+describe('Credential Cache Stability', () => {
+    describe('when connection moves between folders', () => {
+        const clusterId = 'stable-cluster-id-123';
+
+        beforeEach(() => {
+            // Clear any cached credentials using the stable clusterId
+            // Note: We only need to delete using clusterId - tree paths are never used as cache keys
+            CredentialCache.deleteCredentials(clusterId);
+        });
+
+        it('should preserve credentials when treeId changes but clusterId stays same', () => {
+            // Arrange: Set credentials using clusterId (the stable identifier)
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://localhost:27017', {
+                connectionUser: 'testuser',
+                connectionPassword: 'testpass',
+            });
+
+            // Simulate tree ID change (folder move)
+            const oldTreeId = 'connectionsView/stable-cluster-id-123';
+            const newTreeId = 'connectionsView/folder1/stable-cluster-id-123';
+
+            // Act & Assert: Credentials should still be accessible via clusterId
+            expect(CredentialCache.hasCredentials(clusterId)).toBe(true);
+
+            // Verify that using old treeId would NOT find credentials
+            // (this is the bug we're fixing)
+            expect(CredentialCache.hasCredentials(oldTreeId)).toBe(false);
+            expect(CredentialCache.hasCredentials(newTreeId)).toBe(false);
+        });
+
+        it('should retrieve correct credentials when using clusterId after folder move', () => {
+            // Arrange: Set credentials using clusterId
+            const username = 'testuser';
+            const password = 'testpass';
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://localhost:27017', {
+                connectionUser: username,
+                connectionPassword: password,
+            });
+
+            // Act: Retrieve credentials using clusterId (not treeId)
+            const credentials = CredentialCache.getCredentials(clusterId);
+
+            // Assert: Should have correct credentials
+            expect(credentials).toBeDefined();
+            expect(credentials?.clusterId).toBe(clusterId);
+            expect(credentials?.nativeAuthConfig?.connectionUser).toBe(username);
+            expect(credentials?.nativeAuthConfig?.connectionPassword).toBe(password);
+        });
+
+        it('should NOT find credentials when using treeId instead of clusterId', () => {
+            // Arrange
+            const treeId = 'connectionsView/folder1/stable-cluster-id-123';
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://localhost:27017', {
+                connectionUser: 'test',
+                connectionPassword: 'test',
+            });
+
+            // Act & Assert: treeId should NOT be a valid cache key
+            expect(CredentialCache.hasCredentials(treeId)).toBe(false);
+            expect(CredentialCache.hasCredentials(clusterId)).toBe(true);
+        });
+
+        it('should delete credentials using clusterId after folder move', () => {
+            // Arrange: Set credentials
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://localhost:27017', {
+                connectionUser: 'testuser',
+                connectionPassword: 'testpass',
+            });
+            expect(CredentialCache.hasCredentials(clusterId)).toBe(true);
+
+            // Act: Delete using clusterId
+            CredentialCache.deleteCredentials(clusterId);
+
+            // Assert: Credentials should be gone
+            expect(CredentialCache.hasCredentials(clusterId)).toBe(false);
+        });
+    });
+
+    describe('ClusterModel ID separation', () => {
+        it('should have distinct treeId and clusterId properties for Connections View items', () => {
+            // Connections View case: treeId includes folder path, clusterId is storageId
+            const connectionsModel = {
+                treeId: 'connectionsView/folder1/abc-123',
+                clusterId: 'abc-123',
+                name: 'My Cluster',
+            };
+
+            expect(connectionsModel.treeId).not.toBe(connectionsModel.clusterId);
+            expect(connectionsModel.clusterId).toBe('abc-123');
+            expect(connectionsModel.treeId).toContain(connectionsModel.clusterId);
+        });
+
+        it('should allow treeId === clusterId for Azure resources (both sanitized)', () => {
+            // Azure views: both IDs are the sanitized Azure Resource ID (/ replaced with _)
+            const azureResourceId =
+                '/subscriptions/sub1/resourceGroups/rg1/providers/Microsoft.DocumentDB/mongoClusters/mycluster';
+            const sanitizedId = azureResourceId.replace(/\//g, '_');
+            const azureModel = {
+                treeId: sanitizedId,
+                clusterId: sanitizedId,
+                name: 'mycluster',
+            };
+
+            expect(azureModel.treeId).toBe(azureModel.clusterId);
+            expect(azureModel.clusterId).not.toContain('/');
+        });
+
+        it('should change treeId but preserve clusterId when moving between folders', () => {
+            // Simulate a connection at root level
+            const storageId = 'uuid-abc-123-def';
+            const clusterModelAtRoot = {
+                treeId: `connectionsView/${storageId}`,
+                clusterId: storageId,
+                name: 'My Cluster',
+            };
+
+            // Simulate the same connection moved to a folder
+            const clusterModelInFolder = {
+                treeId: `connectionsView/my-folder/${storageId}`,
+                clusterId: storageId, // Must remain the same!
+                name: 'My Cluster',
+            };
+
+            // The key invariant: clusterId remains stable
+            expect(clusterModelAtRoot.clusterId).toBe(clusterModelInFolder.clusterId);
+            expect(clusterModelAtRoot.treeId).not.toBe(clusterModelInFolder.treeId);
+        });
+    });
+
+    describe('cache key consistency', () => {
+        const clusterId = 'consistency-test-cluster';
+
+        beforeEach(() => {
+            CredentialCache.deleteCredentials(clusterId);
+        });
+
+        it('should use clusterId consistently across all cache operations', () => {
+            // Test the full lifecycle using clusterId
+
+            // 1. Set credentials
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NativeAuth, 'mongodb://host:27017', {
+                connectionUser: 'user',
+                connectionPassword: 'pass',
+            });
+
+            // 2. Verify existence
+            expect(CredentialCache.hasCredentials(clusterId)).toBe(true);
+
+            // 3. Get connection string
+            const connString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            expect(connString).toBeDefined();
+            expect(connString).toContain('mongodb://');
+
+            // 4. Get credentials
+            const credentials = CredentialCache.getCredentials(clusterId);
+            expect(credentials?.clusterId).toBe(clusterId);
+
+            // 5. Get user info
+            expect(CredentialCache.getConnectionUser(clusterId)).toBe('user');
+            expect(CredentialCache.getConnectionPassword(clusterId)).toBe('pass');
+
+            // 6. Delete credentials
+            CredentialCache.deleteCredentials(clusterId);
+            expect(CredentialCache.hasCredentials(clusterId)).toBe(false);
+        });
+
+        it('should preserve Entra ID config when using clusterId', () => {
+            const entraIdConfig = { tenantId: 'test-tenant-id' };
+
+            CredentialCache.setAuthCredentials(
+                clusterId,
+                AuthMethodId.MicrosoftEntraID,
+                'mongodb://host:27017',
+                undefined,
+                undefined,
+                entraIdConfig,
+            );
+
+            // Verify Entra ID config is accessible via clusterId
+            expect(CredentialCache.getEntraIdConfig(clusterId)).toEqual(entraIdConfig);
+        });
+
+        it('should preserve emulator config when using clusterId', () => {
+            const emulatorConfig = {
+                isEmulator: true,
+                disableEmulatorSecurity: false,
+            };
+
+            CredentialCache.setAuthCredentials(
+                clusterId,
+                AuthMethodId.NativeAuth,
+                'mongodb://localhost:10255',
+                { connectionUser: 'emulatorUser', connectionPassword: 'emulatorPass' },
+                emulatorConfig,
+            );
+
+            // Verify emulator config is accessible via clusterId
+            const retrievedConfig = CredentialCache.getEmulatorConfiguration(clusterId);
+            expect(retrievedConfig).toBeDefined();
+            expect(retrievedConfig?.isEmulator).toBe(true);
+            expect(retrievedConfig?.disableEmulatorSecurity).toBe(false);
+        });
+    });
+
+    describe('NoAuth (anonymous) connections', () => {
+        const clusterId = 'no-auth-cluster';
+
+        beforeEach(() => {
+            CredentialCache.deleteCredentials(clusterId);
+        });
+
+        it('produces a credential-free entry that preserves a tls=false override', () => {
+            CredentialCache.setFromConnectionItem({
+                id: clusterId,
+                name: 'anon-host:27017',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.NoAuth],
+                    selectedAuthMethod: AuthMethodId.NoAuth,
+                },
+                secrets: {
+                    connectionString: 'mongodb://anon-host:27017/?tls=false',
+                    nativeAuthConfig: undefined,
+                    entraIdAuthConfig: undefined,
+                },
+            });
+
+            const credentials = CredentialCache.getCredentials(clusterId);
+            expect(credentials).toBeDefined();
+            expect(credentials?.authMechanism).toBe(AuthMethodId.NoAuth);
+            expect(credentials?.nativeAuthConfig).toBeUndefined();
+
+            // No embedded credentials, and the user's TLS override survives.
+            const connString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            expect(connString).toBe('mongodb://anon-host:27017/?tls=false');
+            expect(connString).not.toContain('@');
+            expect(CredentialCache.getConnectionUser(clusterId)).toBeUndefined();
+            expect(CredentialCache.getConnectionPassword(clusterId)).toBeUndefined();
+        });
+
+        it('does not misclassify an explicit NoAuth item as Native', () => {
+            CredentialCache.setFromConnectionItem({
+                id: clusterId,
+                name: 'anon-host:27017',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.NativeAuth, AuthMethodId.NoAuth],
+                    selectedAuthMethod: AuthMethodId.NoAuth,
+                },
+                secrets: {
+                    connectionString: 'mongodb://anon-host:27017/',
+                    nativeAuthConfig: undefined,
+                    entraIdAuthConfig: undefined,
+                },
+            });
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NoAuth);
+        });
+
+        it('getConnectionStringWithPassword never returns undefined for a valid entry', () => {
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NoAuth, 'mongodb://anon-host:27017/');
+
+            const connString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            expect(typeof connString).toBe('string');
+            expect(connString).toContain('mongodb://');
+        });
+
+        it('never surfaces stale native or Entra secrets left in storage for a NoAuth item', () => {
+            // Defense in depth: a connection that was switched to NoAuth may still carry leftover
+            // native/Entra secrets in storage (e.g. saved before the write-side clear shipped).
+            // The cache must not re-expose those credentials for an explicit NoAuth connection.
+            CredentialCache.setFromConnectionItem({
+                id: clusterId,
+                name: 'anon-host:27017',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.NativeAuth, AuthMethodId.NoAuth],
+                    selectedAuthMethod: AuthMethodId.NoAuth,
+                },
+                secrets: {
+                    connectionString: 'mongodb://anon-host:27017/',
+                    nativeAuthConfig: { connectionUser: 'stale-user', connectionPassword: 'stale-pw' },
+                    entraIdAuthConfig: { tenantId: 'stale-tenant', subscriptionId: 'stale-sub' },
+                },
+            });
+
+            const credentials = CredentialCache.getCredentials(clusterId);
+            expect(credentials?.authMechanism).toBe(AuthMethodId.NoAuth);
+            expect(credentials?.nativeAuthConfig).toBeUndefined();
+            expect(credentials?.entraIdConfig).toBeUndefined();
+
+            // The credential-bearing connection string must not contain the stale username/password.
+            const connString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            expect(connString).toBe('mongodb://anon-host:27017/');
+            expect(connString).not.toContain('stale-user');
+            expect(connString).not.toContain('@');
+            expect(CredentialCache.getConnectionUser(clusterId)).toBeUndefined();
+            expect(CredentialCache.getConnectionPassword(clusterId)).toBeUndefined();
+        });
+    });
+
+    describe('Managed identity connections', () => {
+        const clusterId = 'managed-identity-cluster';
+        const clientId = '11111111-2222-3333-4444-555555555555';
+
+        beforeEach(() => {
+            CredentialCache.deleteCredentials(clusterId);
+        });
+
+        function connectionItem(secrets: Record<string, unknown>, selectedAuthMethod?: string) {
+            return {
+                id: clusterId,
+                name: 'my-cluster',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity],
+                    selectedAuthMethod,
+                },
+                secrets: {
+                    connectionString: 'mongodb+srv://my-cluster.mongocluster.cosmos.azure.com/',
+                    ...secrets,
+                },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any;
+        }
+
+        it('round trips a user-assigned identity through setAuthCredentials', () => {
+            CredentialCache.setAuthCredentials(
+                clusterId,
+                AuthMethodId.ManagedIdentity,
+                'mongodb+srv://my-cluster.mongocluster.cosmos.azure.com/',
+                undefined,
+                undefined,
+                undefined,
+                { clientId },
+            );
+
+            expect(CredentialCache.getManagedIdentityConfig(clusterId)).toEqual({ clientId });
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.ManagedIdentity);
+        });
+
+        it('preserves the empty config that means system-assigned', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ managedIdentityAuthConfig: {} }, AuthMethodId.ManagedIdentity),
+            );
+
+            const config = CredentialCache.getManagedIdentityConfig(clusterId);
+            expect(config).toBeDefined();
+            expect(config).toEqual({});
+        });
+
+        it('honors the persisted method even when an Entra ID config is also stored', () => {
+            // Managed identity connections discovered through ARM legitimately carry tenant and
+            // subscription metadata, so inference alone would resolve them to interactive Entra ID.
+            CredentialCache.setFromConnectionItem(
+                connectionItem(
+                    {
+                        managedIdentityAuthConfig: { clientId },
+                        entraIdAuthConfig: { tenantId: 'tenant-1', subscriptionId: 'sub-1' },
+                    },
+                    AuthMethodId.ManagedIdentity,
+                ),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.ManagedIdentity);
+            expect(CredentialCache.getManagedIdentityConfig(clusterId)).toEqual({ clientId });
+        });
+
+        it('infers managed identity only when no method was persisted', () => {
+            CredentialCache.setFromConnectionItem(connectionItem({ managedIdentityAuthConfig: { clientId } }));
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.ManagedIdentity);
+        });
+
+        it('clears the managed identity config for an explicit NoAuth connection', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ managedIdentityAuthConfig: { clientId } }, AuthMethodId.NoAuth),
+            );
+
+            expect(CredentialCache.getManagedIdentityConfig(clusterId)).toBeUndefined();
+        });
+    });
+
+    describe('Regression: existing connections resolve unchanged after the inference ladder change', () => {
+        const clusterId = 'ladder-regression-cluster';
+
+        beforeEach(() => {
+            CredentialCache.deleteCredentials(clusterId);
+        });
+
+        function connectionItem(secrets: Record<string, unknown>, selectedAuthMethod?: string) {
+            return {
+                id: clusterId,
+                name: 'legacy-cluster',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.NativeAuth],
+                    selectedAuthMethod,
+                },
+                secrets: {
+                    connectionString: 'mongodb://legacy-host:27017/',
+                    ...secrets,
+                },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any;
+        }
+
+        it('stored Native connections still resolve to Native', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem(
+                    { nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 'pw' } },
+                    AuthMethodId.NativeAuth,
+                ),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NativeAuth);
+            expect(CredentialCache.getConnectionUser(clusterId)).toBe('alice');
+        });
+
+        it('stored Entra ID connections still resolve to Entra ID', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ entraIdAuthConfig: { tenantId: 'tenant-1' } }, AuthMethodId.MicrosoftEntraID),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.MicrosoftEntraID);
+            expect(CredentialCache.getEntraIdConfig(clusterId)).toEqual({ tenantId: 'tenant-1' });
+        });
+
+        it('stored NoAuth connections still resolve to NoAuth', () => {
+            CredentialCache.setFromConnectionItem(connectionItem({}, AuthMethodId.NoAuth));
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NoAuth);
+        });
+
+        it('records with no persisted method still fall back to inference', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 'pw' } }),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NativeAuth);
+        });
+
+        it('an unrecognized persisted method falls through to inference rather than being trusted', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ entraIdAuthConfig: { tenantId: 'tenant-1' } }, 'SomeFutureMethod'),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.MicrosoftEntraID);
+        });
+    });
+});

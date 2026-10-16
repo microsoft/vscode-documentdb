@@ -1,0 +1,43 @@
+name: Set up Node.js and dependencies
+description: Installs Node from .nvmrc and restores node_modules, running npm ci only when the manifests changed.
+
+# Only the root node_modules is cached: the lockfile has no nested workspace installs, no workspace
+# has install scripts, and the workspace links are relative symlinks, which the cache archive keeps.
+runs:
+    using: composite
+    steps:
+        - name: Setup Node.js
+          id: node
+          uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+          with:
+              node-version-file: .nvmrc
+              package-manager-cache: false
+
+        # Restore and save are split so a cache hit does not pay for the save step's post-job check.
+        - name: Restore node_modules
+          id: modules
+          uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          with:
+              path: node_modules
+              # package.json is in the key so a manifest out of sync with the lockfile still reaches npm ci and fails.
+              key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json', 'package.json', 'packages/*/package.json') }}
+
+        - name: Restore npm cache
+          if: steps.modules.outputs.cache-hit != 'true'
+          uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          with:
+              path: ~/.npm
+              key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+              restore-keys: npm-${{ runner.os }}-
+
+        - name: Install dependencies (npm ci)
+          if: steps.modules.outputs.cache-hit != 'true'
+          shell: bash
+          run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+        - name: Save node_modules
+          if: steps.modules.outputs.cache-hit != 'true'
+          uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          with:
+              path: node_modules
+              key: ${{ steps.modules.outputs.cache-primary-key }}

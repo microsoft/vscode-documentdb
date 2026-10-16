@@ -20,6 +20,7 @@ export function ViewSwitcher({ onViewChanged }): JSX.Element {
             defaultValue={defaultView}
             // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
             onOptionSelect={(_, data) => onViewChanged(data.optionValue)}
+            aria-label={l10n.t('Select view type')}
         >
             <Option key="table">{l10n.t('Table View')}</Option>
             <Option key="tree">{l10n.t('Tree View')}</Option>

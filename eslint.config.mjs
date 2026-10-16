@@ -5,9 +5,10 @@
 
 import js from '@eslint/js';
 import importPlugin from 'eslint-plugin-import';
-import jest from 'eslint-plugin-jest';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 import licenseHeader from 'eslint-plugin-license-header';
-import mocha from 'eslint-plugin-mocha';
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 
@@ -22,10 +23,7 @@ export default ts.config(
             '**/dist',
             '**/out',
             '**/node_modules',
-            '**/__mocks__/**/*',
             '**/*.d.ts',
-            '**/jest.config.js',
-            '**/main.js',
         ],
     },
     {
@@ -48,7 +46,12 @@ export default ts.config(
         rules: {
             eqeqeq: ['error', 'always'],
             'import/consistent-type-specifier-style': ['error', 'prefer-inline'],
-            'import/no-internal-modules': ['error', { allow: ['antlr4ts/**', 'yaml/types'] }],
+            'import/no-internal-modules': [
+                'error',
+                {
+                    allow: ['antlr4ts/**', 'yaml/types', '**/components/**/*.scss'],
+                },
+            ],
             'no-case-declarations': 'error',
             'no-constant-condition': 'error',
             'no-inner-declarations': 'error',
@@ -63,7 +66,14 @@ export default ts.config(
                                 "Do not import nonNull helpers from '@microsoft/vscode-azext-utils'. Use the local 'src/utils/nonNull' instead.",
                         },
                     ],
-                    patterns: ['**/*/extension.bundle'],
+                },
+            ],
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: "ImportDeclaration[source.value='vscode'] > ImportDefaultSpecifier",
+                    message:
+                        "The extension host runs as an ES module, and VS Code's `vscode` module has no default export. Use `import * as vscode from 'vscode'`.",
                 },
             ],
             'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
@@ -80,7 +90,7 @@ export default ts.config(
         },
     },
     {
-        files: ['**/*.ts', '**/*.tsx'],
+        files: ['**/*.ts'],
 
         extends: [ts.configs.recommendedTypeChecked],
 
@@ -114,59 +124,74 @@ export default ts.config(
         },
     },
     {
-        files: ['src/**/*.test.ts', '**/__mocks__/**/*.js'],
+        files: ['**/*.tsx'],
 
-        extends: [ts.configs.recommendedTypeChecked, jest.configs['flat/recommended']],
+        extends: [
+            ts.configs.recommendedTypeChecked,
+            react.configs.flat.recommended,
+            react.configs.flat['jsx-runtime'],
+            jsxA11y.flatConfigs.recommended,
+            reactHooks.configs.flat['recommended-latest'],
+        ],
 
         plugins: {
             '@typescript-eslint': ts.plugin,
-            jest: jest,
         },
 
         languageOptions: {
-            globals: {
-                ...globals.node,
-                ...globals.jest,
-            },
-
             parser: ts.parser,
             ecmaVersion: 2023,
             sourceType: 'module',
 
+            ...jsxA11y.flatConfigs.recommended.languageOptions,
+
+            globals: {
+                ...globals.browser,
+            },
+
             parserOptions: {
                 projectService: true,
                 tsconfigRootDir: import.meta.dirname,
+                ecmaFeatures: {
+                    jsx: true,
+                },
+            },
+        },
+
+        settings: {
+            react: {
+                version: 'detect',
             },
         },
 
         rules: {
-            '@typescript-eslint/no-empty-function': 'off',
-            '@typescript-eslint/no-explicit-any': 'off',
-            '@typescript-eslint/no-floating-promises': 'off',
-            '@typescript-eslint/no-misused-promises': 'off',
-            '@typescript-eslint/no-non-null-assertion': 'off',
-            '@typescript-eslint/no-unsafe-assignment': 'off',
-            '@typescript-eslint/no-unsafe-member-access': 'off',
-            '@typescript-eslint/no-unsafe-return': 'off',
-            '@typescript-eslint/require-await': 'off',
-            'no-dupe-else-if': 'off',
-            'no-empty': 'off',
+            '@typescript-eslint/consistent-type-imports': 'error',
+            '@typescript-eslint/no-base-to-string': 'warn',
+            '@typescript-eslint/no-inferrable-types': 'off',
+            '@typescript-eslint/no-namespace': 'off',
+            '@typescript-eslint/no-restricted-types': 'error',
+            '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+            '@typescript-eslint/prefer-regexp-exec': 'off',
+            '@typescript-eslint/require-await': 'warn',
+            '@typescript-eslint/restrict-template-expressions': 'off',
+            '@typescript-eslint/unbound-method': 'warn',
+            'react/prop-types': 'off', // TypeScript handles prop validation
         },
     },
+    // Vitest unit tests in src/ (they import their test API from 'vitest'; no test globals)
     {
-        files: ['test/**/*.ts', '**/*.test.ts'],
+        files: ['src/**/*.test.ts'],
 
         extends: [ts.configs.recommendedTypeChecked],
 
         plugins: {
             '@typescript-eslint': ts.plugin,
-            mocha,
         },
 
         languageOptions: {
             globals: {
                 ...globals.node,
-                ...globals.mocha,
             },
 
             parser: ts.parser,
@@ -188,10 +213,72 @@ export default ts.config(
             '@typescript-eslint/no-unsafe-assignment': 'off',
             '@typescript-eslint/no-unsafe-member-access': 'off',
             '@typescript-eslint/no-unsafe-return': 'off',
+            '@typescript-eslint/no-unsafe-call': 'off',
+            '@typescript-eslint/no-unsafe-argument': 'off',
             '@typescript-eslint/require-await': 'off',
+            '@typescript-eslint/unbound-method': 'off',
             'no-dupe-else-if': 'off',
             'no-empty': 'off',
-            'no-restricted-imports': 'off',
+        },
+    },
+    // The fluentui package keeps its hooks in .ts files — they contain no JSX — so the repo's
+    // react-hooks scope, which is keyed on .tsx, does not reach them. Restore it here rather than
+    // leave a hooks file unlinted.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/**/*.ts'],
+
+        extends: [reactHooks.configs.flat['recommended-latest']],
+    },
+    // Invariant I1 of @microsoft/vscode-ext-webview-fluentui: a component must not require the
+    // package's own theming. Components style themselves from Fluent `tokens.*`, which resolve
+    // against whatever FluentProvider is above them, so a consumer can adopt one component
+    // without adopting a visual philosophy. See the package's decisions 0004 and 0010.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/components/**/*.{ts,tsx}'],
+
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: ['**/theme', '**/theme/**', '**/styles', '**/styles/**'],
+                            message:
+                                'Invariant I1: components/ must not import theme/ or styles/. Style components from Fluent `tokens.*` instead.',
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+    // The `./monaco` entry shares the VS Code colour source, not the Fluent adaptation. It must
+    // reach `vscode/` and nothing above it, so that importing it injects no stylesheet and pulls
+    // in no Fluent. See the package's decision 0032.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/monaco/**/*.{ts,tsx}'],
+
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: [
+                                '**/theme',
+                                '**/theme/**',
+                                '**/styles',
+                                '**/styles/**',
+                                '**/components',
+                                '**/components/**',
+                                'monaco-editor',
+                                'monaco-editor/**',
+                            ],
+                            message:
+                                'monaco/ must import only vscode/. It takes no dependency on monaco-editor: the theme data is structurally typed, and type-tests/monacoContract.ts proves it.',
+                        },
+                    ],
+                },
+            ],
         },
     },
 );

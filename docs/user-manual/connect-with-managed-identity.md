@@ -1,0 +1,152 @@
+> **User Manual** &mdash; [Back to Connecting with a URL](./how-to-construct-url) | [Back to User Manual](../index#user-manual)
+
+---
+
+# Connect with a Managed Identity
+
+When VS Code runs on an **Azure VM** that has a managed identity assigned, the extension can authenticate to an Azure DocumentDB cluster as that identity. Nobody signs in, no password is stored, and no secret is written to disk: the VM's identity is presented to Microsoft Entra ID and exchanged for a short-lived token.
+
+This is the right choice for a shared jump box, a build agent, or any Azure VM where an interactive sign-in is impractical or where you want the connection to be attributable to the machine rather than to a person.
+
+**Table of Contents**
+
+- [Before you start](#before-you-start)
+- [Supported environments](#supported-environments)
+- [Important: the identity and the cluster must be in the same tenant](#important-the-identity-and-the-cluster-must-be-in-the-same-tenant)
+- [Create a connection](#create-a-connection)
+- [Choosing the identity](#choosing-the-identity)
+- [Paste a connection string instead](#paste-a-connection-string-instead)
+- [Copying the connection string](#copying-the-connection-string)
+- [Troubleshooting](#troubleshooting)
+- [How it differs from Entra ID](#how-it-differs-from-entra-id)
+
+## Before you start
+
+Four things have to be in place, and all four are outside VS Code:
+
+1. The Azure VM has a **system-assigned** or **user-assigned** managed identity.
+2. The identity is **registered on the DocumentDB cluster** as a user. Assigning an identity to a VM does not grant it any database access on its own. See [Azure DocumentDB role-based access control](https://learn.microsoft.com/azure/documentdb/how-to-connect-role-based-access-control).
+3. The cluster allows Microsoft Entra ID authentication.
+4. The VM and the cluster are **in the same Microsoft Entra tenant**. See [the next section but one](#important-the-identity-and-the-cluster-must-be-in-the-same-tenant).
+
+If any of these is missing, the connection fails. The extension identifies failures reported by the
+managed identity endpoint and known tenant mismatches. If the cluster does not recognize the
+identity, the server returns a generic authentication error instead.
+
+## Supported environments
+
+**Azure VMs only.** This feature is designed, documented, and validated for Azure VMs.
+
+The underlying credential library also works on App Service, Container Apps, Azure Arc enabled servers and AKS, and nothing here deliberately blocks those. They are simply not scenarios the extension claims or verifies, so treat success there as a bonus rather than a guarantee.
+
+On a machine that is not Azure hosted, the method is still listed, and selecting it produces a clear message rather than a silent failure.
+
+## Important: the identity and the cluster must be in the same tenant
+
+Direct managed identity authentication is tenant-bound. The managed identity and the DocumentDB
+cluster must belong to the same Microsoft Entra tenant. Microsoft documents that
+[managed identities do not support cross-directory or cross-tenant scenarios](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/managed-identities-faq#can-i-use-a-managed-identity-to-access-a-resource-in-a-different-directorytenant).
+
+A managed identity is represented by a service principal in one Microsoft Entra tenant. The
+[Azure VM managed identity token endpoint](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-use-vm-token#get-a-token-using-http)
+lets a caller select the target resource and managed identity, but it does not accept a target
+tenant. The extension uses that endpoint through Azure's managed identity credential library, so
+this is an Azure managed identity constraint rather than a limitation introduced by the extension.
+If the managed identity is in one tenant and the DocumentDB cluster is in another, direct managed
+identity authentication fails.
+
+That is why the connection flow never asks which tenant to use, while [Entra ID sign-in](#how-it-differs-from-entra-id) does: a person can belong to several tenants, a machine identity belongs to one.
+
+**If your cluster is in a different tenant, use Entra ID sign-in instead.** A user account can be a guest in the cluster's tenant, and the connection flow lets you pick which tenant to authenticate against.
+
+When the extension knows which tenant owns the cluster, which is the case for connections created from the **Azure Resources** or **Service Discovery** views, it checks the tenant before connecting and tells you both tenant IDs rather than letting the cluster reject the token with a generic authentication error. For a connection created by pasting a connection string the extension has no way to know the cluster's tenant, so the failure surfaces as a plain authentication error from the server.
+
+## Create a connection
+
+1. In the **Connections** view, select **New Connection**, then **Connection String**.
+2. Paste the connection string of your cluster. You can copy it from the Azure portal.
+3. When asked for an authentication method, choose **Microsoft Entra ID**.
+4. In the identity list, choose the identity assigned to this machine, a pasted client ID, or a
+   different managed identity, as described below.
+
+The same identity list appears in the **Azure Resources** and **Service Discovery** views when you
+connect to a cluster that allows Microsoft Entra ID, and in **Update Credentials** on an existing
+connection.
+
+## Choosing the identity
+
+Microsoft Entra ID connections use one identity list for account sign-in and managed identity:
+
+- **Managed identity `<client-id>`**: shown when the pasted connection string supplied a
+  GUID-shaped candidate. Selecting it confirms that the value is the user-assigned managed identity
+  to use.
+- **Sign in with my account**: use an interactive VS Code account instead. The tenant picker follows
+  so you can choose a home or guest organization. Adding another account returns to the same picker
+  without restarting the connection flow.
+- **Use the identity assigned to this machine**: request a token without an identity selector. No
+  client ID is needed.
+- **Use a different managed identity...**: type the client ID of a user-assigned managed identity.
+  It looks like `11111111-2222-3333-4444-555555555555`.
+
+When the connection string declared OIDC and the extension inferred the Microsoft Entra ID family,
+the list also offers **Choose a different authentication method...**. This is the route to
+username/password or no authentication when the inferred family was not what you intended.
+
+When you selected Microsoft Entra ID from the authentication method list, the identity list instead
+offers **Back to authentication method selection**. Use it to return to the preceding list without
+restarting the connection flow.
+
+**If the VM has more than one identity, the client ID is not optional.** The Azure instance metadata service cannot choose between several identities on its own, so a request without a client ID fails. This is the single most common cause of a failed managed identity connection.
+
+A client ID is a tenant-scoped identifier, not a credential. It is stored alongside the connection and it is safe to paste into a bug report.
+
+> **A note on "system-assigned".** Choosing that option sends no identity selector at all, and the instance metadata service answers with the machine's **default** identity. On a machine that has no system-assigned identity but exactly one user-assigned identity, the request therefore still succeeds and returns that user-assigned identity. If you need a specific identity, name it with its client ID rather than relying on the default.
+
+## Paste a connection string instead
+
+A connection string in the form documented by Microsoft Learn is recognized automatically:
+
+```text
+mongodb+srv://<client-id>@<cluster>.mongocluster.cosmos.azure.com/?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net
+```
+
+When you paste this, the extension selects managed identity, takes the client ID from the user
+position, and does not ask you again. Leave the user position empty to request this machine's
+identity without a selector.
+
+If `ENVIRONMENT:azure` is missing, the string establishes only the Microsoft Entra ID family. A
+GUID in the user position is highlighted as a managed identity candidate, but you confirm it in the
+identity list because a GUID alone does not prove which kind of Entra identity it names.
+
+The extension reads those parameters to work out what you meant and then removes them from the stored connection string, so the mechanism is configured in exactly one place.
+
+## Copying the connection string
+
+**Copy Connection String** on a managed identity connection produces the same documented form shown above, so it works in `mongosh` and in application drivers **on the same Azure VM**, and it can be pasted back into **New Connection** in another VS Code window.
+
+No password prompt appears, because there is no password to include. See [Copy Connection String](./copy-connection-string#managed-identity-connections).
+
+## Troubleshooting
+
+| Message                                                                                       | What it means                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| This machine has more than one managed identity                                               | Reconnect and enter the client ID of the identity you want. The metadata service cannot pick one for you.                                                                                                                                                                     |
+| No managed identity is available on this machine                                              | VS Code is not running on an Azure resource with a managed identity assigned, or the instance metadata service is not reachable.                                                                                                                                              |
+| The managed identity with client ID ... is not assigned to this machine                       | The client ID is valid but that identity is not attached to this VM. Check the VM's Identity blade in the Azure portal.                                                                                                                                                       |
+| This managed identity belongs to Microsoft Entra tenant ..., but the cluster is in tenant ... | The VM and the cluster are in different tenants. Use Entra ID sign-in instead. See [the tenant section](#important-the-identity-and-the-cluster-must-be-in-the-same-tenant).                                                                                                  |
+| The connection is refused after a token was obtained                                          | Authentication worked but the cluster does not recognize the identity. Register it on the cluster as described in [Before you start](#before-you-start). If the connection came from a pasted connection string, also check that the cluster is in the same tenant as the VM. |
+
+## How it differs from Entra ID
+
+Both methods present a Microsoft Entra ID token to the cluster, and on the wire they are identical. The difference is where the token comes from:
+
+|                              | Account sign-in                               | Managed identity                            |
+| ---------------------------- | --------------------------------------------- | ------------------------------------------- |
+| Who is authenticated         | The signed-in VS Code user                    | The Azure VM                                |
+| Sign-in prompt               | Yes, the first time                           | Never                                       |
+| Works without a user session | No                                            | Yes                                         |
+| Tenants                      | You choose one, and can be a guest in several | Exactly one, fixed by the VM's subscription |
+| Cluster in another tenant    | Supported                                     | Not possible                                |
+| Where it works               | Anywhere                                      | On an Azure VM with an identity assigned    |
+
+If you want the connection to be attributable to you, use Entra ID. If you want it attributable to the machine, or there is no interactive user, use Managed Identity.

@@ -18,10 +18,19 @@ import {
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { accessDataMigrationServices } from '../commands/accessDataMigrationServices/accessDataMigrationServices';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
 import { addDiscoveryRegistry } from '../commands/addDiscoveryRegistry/addDiscoveryRegistry';
-import { chooseDataMigrationExtension } from '../commands/chooseDataMigrationExtension/chooseDataMigrationExtension';
+import { createFolder, createSubfolder } from '../commands/connections-view/createFolder/createFolder';
+import { deleteFolder } from '../commands/connections-view/deleteFolder/deleteFolder';
+import { moveItems } from '../commands/connections-view/moveItems/moveItems';
+import { newConnectionInFolder } from '../commands/connections-view/newConnectionInFolder/newConnectionInFolder';
+import { renameConnection } from '../commands/connections-view/renameConnection/renameConnection';
+import { renameFolder } from '../commands/connections-view/renameFolder/renameFolder';
+import { copyCollection } from '../commands/copyCollection/copyCollection';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
+import { copyIndex, copyIndexes } from '../commands/copyIndexes/copyIndexes';
+import { copyReference } from '../commands/copyReference/copyReference';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
@@ -31,55 +40,151 @@ import { filterProviderContent } from '../commands/discoveryService.filterProvid
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
 import { openHelpAndFeedbackUrl } from '../commands/helpAndFeedback.openUrl/openUrl';
+import { showAbout } from '../commands/helpAndFeedback.showAbout/showAbout';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { dropIndex } from '../commands/index.dropIndex/dropIndex';
 import { hideIndex } from '../commands/index.hideIndex/hideIndex';
 import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
-import { launchShell } from '../commands/launchShell/launchShell';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
+import {
+    copyQuickStartConnectionString,
+    copyQuickStartPassword,
+    deleteQuickStartInstance,
+    disposeQuickStartLogFollow,
+    restartQuickStartInstance,
+    startQuickStartInstance,
+    stopQuickStartInstance,
+    viewQuickStartLogs,
+} from '../commands/localQuickStart/localQuickStartCommands';
+import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
+import { openClusterDashboard } from '../commands/openClusterDashboard/openClusterDashboard';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
+import { openIndexManagementView } from '../commands/openIndexManagementView/openIndexManagementView';
+import {
+    openInteractiveShell,
+    openInteractiveShellWithInput,
+} from '../commands/openInteractiveShell/openInteractiveShell';
+import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
+import { pasteIndexes } from '../commands/pasteIndexes/pasteIndexes';
+import { connectPlayground, showConnectionInfo } from '../commands/playground/connectDatabase';
+import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
+import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
+import { playgroundOpenQueryInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
+import { playgroundOpenQueryInShell } from '../commands/playground/playgroundOpenInShell';
+import { runAll } from '../commands/playground/runAll';
+import { runSelected } from '../commands/playground/runSelected';
+import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
-import { renameConnection } from '../commands/renameConnection/renameConnection';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
+import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
+import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
+import { showWorkerStats } from '../commands/showWorkerStats/showWorkerStats';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
+import { AtlasDiagnosticsProvider } from '../plugins/service-atlas-mongodb/AtlasDiagnosticsProvider';
+import { AtlasDiscoveryProvider } from '../plugins/service-atlas-mongodb/AtlasDiscoveryProvider';
+import {
+    OPEN_ATLAS_CLUSTER_COMMAND_ID,
+    openAtlasCluster,
+} from '../plugins/service-atlas-mongodb/commands/openAtlasCluster';
+import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongodb/credentialsManagement/addAtlasCredential';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
+import { KubernetesDiagnosticsProvider } from '../plugins/service-kubernetes/KubernetesDiagnosticsProvider';
+import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/KubernetesDiscoveryProvider';
+import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
+import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
+import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
+import { migrateLegacyEmulatorConnections } from '../services/legacyEmulatorMigration';
+import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
+import { QuickStartDiagnosticsProvider } from '../services/localQuickStart/QuickStartDiagnosticsProvider';
+import { QuickStartService, sweepStaleQuickStartEnvFiles } from '../services/localQuickStart/QuickStartService';
+import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
+import { DemoTask } from '../services/taskService/tasks/DemoTask';
+import { TaskService } from '../services/taskService/taskService';
+import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
+import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
+import {
+    CompletionCommandIds,
+    normalizeCompletionCategory,
+    normalizeCompletionSource,
+} from '../telemetry/completionCategories';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
+import { createQuickStartProgressBridge } from '../tree/connections-view/LocalQuickStart/quickStartProgressBridge';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
+import { DiscoveryViewDragAndDropController } from '../tree/discovery-view/DiscoveryViewDragAndDropController';
+import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
+import { type CollectionItem } from '../tree/documentdb/CollectionItem';
+import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
+import { type TreeElement } from '../tree/TreeElement';
+import { accumulateTelemetry } from '../utils/accumulatingTelemetry';
 import {
     registerCommandWithModalErrors,
+    registerCommandWithTreeNodeUnwrappingAndDiagnostics,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
+import { registerClusterDashboardContextMenuCommands } from '../webviews/documentdb/clusterDashboard/clusterDashboardController';
+import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
+import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
+import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
+import { PlaygroundService } from './playground/PlaygroundService';
+import { ensureTsPluginStub } from './playground/tsPluginStub';
+import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
+import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
+import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
+import { PlaygroundSnippetSessionManager } from './query-language/playground-completions/PlaygroundSnippetSessionManager';
+import { ShellCommandIds } from './shell/constants';
+import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
+import { SrvDnsDiagnosticsProvider } from './srv/SrvDnsDiagnosticsProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
-    dispose(): Promise<void> {
-        return Promise.resolve();
+    private readonly atlasDiscoveryProvider = new AtlasDiscoveryProvider();
+
+    async dispose(): Promise<void> {
+        // Clean up any active port-forward tunnels
+        const { PortForwardTunnelManager } = await import('../plugins/service-kubernetes/portForwardTunnel');
+        PortForwardTunnelManager.getInstance().dispose();
     }
 
     registerDiscoveryServices(_activateContext: IActionContext) {
         DiscoveryService.registerProvider(new AzureDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
+        DiscoveryService.registerProvider(this.atlasDiscoveryProvider);
+        DiscoveryService.registerProvider(new KubernetesDiscoveryProvider());
+
+        // Connection-reachability providers: source-specific steps that make a saved connection
+        // reachable before connecting (e.g. re-establishing a Kubernetes port-forward tunnel).
+        // The generic Connections-view cluster node delegates to these via ConnectionReachabilityService.
+        // See docs/ai-and-plans/features/kubernetes-discovery/connection-reachability-providers.md
+        ConnectionReachabilityService.registerProvider(new KubernetesReachabilityProvider());
+
+        // Error-translation providers: they turn an infrastructure-caused database failure into an
+        // explanation the user can act on. They must never show UI or attempt recovery.
+        // See .github/skills/error-translation/SKILL.md
+        ConnectionDiagnosticsService.registerProvider(new QuickStartDiagnosticsProvider());
+        ConnectionDiagnosticsService.registerProvider(new KubernetesDiagnosticsProvider());
+        ConnectionDiagnosticsService.registerProvider(new AtlasDiagnosticsProvider());
+        // First explanation wins, so source-specific diagnostics take priority over generic SRV failures.
+        ConnectionDiagnosticsService.registerProvider(new SrvDnsDiagnosticsProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
@@ -91,6 +196,15 @@ export class ClustersExtension implements vscode.Disposable {
             treeDataProvider: ext.connectionsBranchDataProvider,
         });
         ext.context.subscriptions.push(ext.connectionsTreeView);
+
+        // Show release notes notification when the Connections View becomes visible
+        ext.context.subscriptions.push(
+            ext.connectionsTreeView.onDidChangeVisibility((e) => {
+                if (e.visible) {
+                    void maybeShowReleaseNotesNotification();
+                }
+            }),
+        );
     }
 
     registerDiscoveryTree(_activateContext: IActionContext): void {
@@ -99,12 +213,14 @@ export class ClustersExtension implements vscode.Disposable {
          */
         ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
 
-        const treeView = vscode.window.createTreeView(Views.DiscoveryView, {
+        ext.discoveryTreeView = vscode.window.createTreeView(Views.DiscoveryView, {
+            canSelectMany: true,
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
+            dragAndDropController: new DiscoveryViewDragAndDropController(),
         });
 
-        ext.context.subscriptions.push(treeView);
+        ext.context.subscriptions.push(ext.discoveryTreeView);
     }
 
     registerHelpAndFeedbackTree(_activateContext: IActionContext): void {
@@ -168,6 +284,341 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
                 this.registerHelpAndFeedbackTree(activateContext);
+                registerClusterDashboardContextMenuCommands(ext.context);
+
+                // Initialize TaskService and TaskProgressReportingService
+                TaskProgressReportingService.attach(TaskService);
+
+                // Initialize PlaygroundService (connection state + StatusBarItem)
+                const playgroundService = PlaygroundService.getInstance();
+                ext.context.subscriptions.push(playgroundService);
+
+                // Initialize Local Quick Start (managed local DocumentDB container). Durable state
+                // and Docker are reconciled lazily when the collapsed node or webview is opened.
+                ext.context.subscriptions.push(QuickStartService);
+                ext.context.subscriptions.push({ dispose: disposeQuickStartOutputChannel });
+                ext.context.subscriptions.push({ dispose: disposeQuickStartLogFollow });
+                ext.context.subscriptions.push(createQuickStartProgressBridge());
+                ext.context.subscriptions.push(
+                    QuickStartService.onDidChangeStatus(() => {
+                        // Reset BEFORE refreshing (I2-17): a failure the user fixed in the Quick Start
+                        // webview would otherwise keep rendering its cached error node, because the
+                        // provider returns those children without re-fetching.
+                        ext.connectionsBranchDataProvider?.resetLocalQuickStartErrorState();
+                        ext.connectionsBranchDataProvider?.refresh();
+                    }),
+                );
+                // Self-heal after a crash that skipped provision()'s env-file cleanup (L9).
+                void sweepStaleQuickStartEnvFiles();
+
+                // One-time migration of legacy emulator connections into a regular
+                // "Local Connections (Legacy)" folder (design §4). Non-blocking.
+                void migrateLegacyEmulatorConnections();
+
+                // Register evaluator disposal for clean worker shutdown on deactivation
+                ext.context.subscriptions.push({ dispose: disposeEvaluators });
+
+                // Shut down playground workers when their last document closes
+                ext.context.subscriptions.push(
+                    playgroundService.onDidChangeState(() => {
+                        shutdownOrphanedEvaluators();
+                    }),
+                );
+
+                // Shut down the query playground worker when the last .documentdb.js editor closes
+                ext.context.subscriptions.push(
+                    vscode.window.tabGroups.onDidChangeTabs((event) => {
+                        // Only react when tabs are closed
+                        if (event.closed.length === 0) {
+                            return;
+                        }
+
+                        // Check if any closed tab was a query playground
+                        const closedPlayground = event.closed.some((tab) => {
+                            const input = tab.input;
+                            return (
+                                input instanceof vscode.TabInputText &&
+                                input.uri.path.endsWith(PLAYGROUND_FILE_EXTENSION)
+                            );
+                        });
+
+                        if (!closedPlayground) {
+                            return;
+                        }
+
+                        // Shut down evaluators whose cluster has no remaining playgrounds
+                        shutdownOrphanedEvaluators();
+                    }),
+                );
+
+                // Register CodeLens provider for query playground files
+                const codeLensProvider = new PlaygroundCodeLensProvider();
+                ext.context.subscriptions.push(codeLensProvider);
+                ext.context.subscriptions.push(
+                    vscode.languages.registerCodeLensProvider({ language: PLAYGROUND_LANGUAGE_ID }, codeLensProvider),
+                );
+
+                // Register block highlighter for query playground files
+                const blockHighlighter = new PlaygroundBlockHighlighter(ext.context.extensionPath);
+                ext.context.subscriptions.push(blockHighlighter);
+
+                // Register completion provider for query playground files (Layer 2).
+                // Provides query operators, field names, collection names, and BSON
+                // constructors that the TypeScript service (Layer 1) doesn't know about.
+                ext.context.subscriptions.push(CollectionNameCache.getInstance());
+                ext.context.subscriptions.push(PlaygroundCompletionItemProvider.register());
+
+                // Register hover provider for query playground files.
+                // Provides inline docs for query operators, BSON constructors,
+                // and field names. Method hovers are handled by Layer 1 (TS Plugin).
+                ext.context.subscriptions.push(PlaygroundHoverProvider.register());
+
+                // Cancel snippet sessions when delimiter characters are typed in playground files.
+                // Mirrors the collection view's cancelSnippetSession behavior so that typing
+                // `,`, `}`, or `]` exits the tab-stop instead of leaving a "ghost selection".
+                ext.context.subscriptions.push(PlaygroundSnippetSessionManager.register());
+
+                // Ensure the TypeScript extension recognizes our plugin and restarts
+                // its TS server to load it. The TS extension may have started before our
+                // extension was discovered, so its TS server might not include our plugin.
+                // We restart it once when the first query playground file is opened.
+                let tsRestarted = false;
+                let tsPluginUnavailable = false;
+                let tsPluginRetryRegistered = false;
+                // Shared reference so the retry command always acts on the current
+                // status bar item. Reusing one item avoids stranding a stale warning
+                // when a retry fails again on a still-read-only install.
+                let tsPluginStatusBarItem: vscode.StatusBarItem | undefined;
+
+                const ensureTsRestart = async (): Promise<void> => {
+                    if (tsRestarted || tsPluginUnavailable) {
+                        return;
+                    }
+                    // Mark attempted up front to prevent concurrent bootstraps from racing.
+                    // If anything throws, the catch block below resets this flag so the
+                    // next playground open will retry (important for read-only extension
+                    // installs that may transiently fail or for slow-init environments).
+                    tsRestarted = true;
+
+                    // Track which phase of the bootstrap we are in so telemetry can
+                    // distinguish stub-install failures (filesystem / read-only installs)
+                    // from TS server restart failures (timing / api availability).
+                    let stage: 'stubInstall' | 'tsActivate' | 'tsWait' | 'tsRestart' | 'complete' = 'stubInstall';
+                    let stubCreated = false;
+                    // Disambiguates 'stubCreated=false': either a stub already existed (existed=true)
+                    // or the stub-install branch was never reached at all (existed=false).
+                    let stubExisted = false;
+                    // A stub existed but was outdated (for example the CommonJS-era `index.js`) and was rewritten.
+                    let stubReplaced = false;
+
+                    await callWithTelemetryAndErrorHandling('playground.tsPluginBootstrap', async (context) => {
+                        // We do not want a modal error popup if this best-effort
+                        // bootstrap fails. The wrapper still captures result=Failed,
+                        // error name, and error message automatically.
+                        context.errorHandling.suppressDisplay = true;
+
+                        try {
+                            // TODO: Remove this runtime stub once the TS plugin is published
+                            // as a standalone npm package with its own release pipeline.
+                            // The official VS Code docs say TS server plugins should be normal
+                            // npm `dependencies`. Our plugin is currently bundled inline
+                            // (`playgroundTsPlugin.cjs`), and vsce hardcodes `ignore: 'node_modules/**'`
+                            // in its file collection, so the stub can't ship in the VSIX. We create
+                            // it at runtime instead (same pattern as Vue/Volar).
+                            // Tracked by: https://github.com/microsoft/vscode-documentdb/issues/548
+                            const stubResult = ensureTsPluginStub(ext.context.extensionPath);
+                            stubExisted = stubResult !== 'created';
+                            stubCreated = stubResult === 'created';
+                            stubReplaced = stubResult === 'replaced';
+
+                            stage = 'tsActivate';
+                            const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
+                            context.telemetry.properties.tsExtensionFound = tsExt ? 'true' : 'false';
+                            if (tsExt) {
+                                if (!tsExt.isActive) {
+                                    await tsExt.activate();
+                                }
+                                // Wait a moment for the TS server to fully initialize before
+                                // restarting it. Without this delay, the restart command can
+                                // arrive while the server is still starting, causing a crash.
+                                stage = 'tsWait';
+                                await new Promise((resolve) => setTimeout(resolve, 2000));
+                                // Restart the TS server so it picks up our plugin from
+                                // contributes.typescriptServerPlugins. Without this, the server
+                                // may have started before our extension was loaded and won't
+                                // have our plugin in --globalPlugins.
+                                stage = 'tsRestart';
+                                await vscode.commands.executeCommand('typescript.restartTsServer');
+                            }
+
+                            stage = 'complete';
+                        } catch (error) {
+                            const message = error instanceof Error ? error.message : String(error);
+                            const errorCode = (error as NodeJS.ErrnoException)?.code;
+
+                            // EACCES / EROFS signal a read-only extension install
+                            // (Snap, system package, locked enterprise, network share).
+                            // Retrying won't help — surface a status bar warning so users
+                            // understand the limitation instead of silently failing.
+                            if (errorCode === 'EACCES' || errorCode === 'EROFS') {
+                                tsPluginUnavailable = true;
+
+                                // Create the status bar item once and reuse it. A failed
+                                // retry re-shows the same item instead of leaking a new one.
+                                if (!tsPluginStatusBarItem) {
+                                    const TS_PLUGIN_WARNING_PRIORITY = 100;
+                                    tsPluginStatusBarItem = vscode.window.createStatusBarItem(
+                                        vscode.StatusBarAlignment.Right,
+                                        TS_PLUGIN_WARNING_PRIORITY,
+                                    );
+                                    tsPluginStatusBarItem.command = {
+                                        title: vscode.l10n.t('Retry TS Plugin Setup'),
+                                        command: 'vscode-documentdb.command.retryTsPluginBootstrap',
+                                    };
+                                    ext.context.subscriptions.push(tsPluginStatusBarItem);
+                                }
+                                tsPluginStatusBarItem.text = `$(warning) ${vscode.l10n.t('DocumentDB TS Plugin')}`;
+                                tsPluginStatusBarItem.tooltip = vscode.l10n.t(
+                                    'TypeScript-powered completions are unavailable on this read-only extension install. Click to retry.',
+                                );
+                                tsPluginStatusBarItem.show();
+
+                                // Register the retry command once. It always acts on the
+                                // shared status bar item, so retries cannot strand an item
+                                // that an earlier closure captured.
+                                if (!tsPluginRetryRegistered) {
+                                    tsPluginRetryRegistered = true;
+                                    ext.context.subscriptions.push(
+                                        vscode.commands.registerCommand(
+                                            'vscode-documentdb.command.retryTsPluginBootstrap',
+                                            () => {
+                                                tsPluginStatusBarItem?.hide();
+                                                tsPluginUnavailable = false;
+                                                tsRestarted = false;
+                                                void ensureTsRestart();
+                                            },
+                                        ),
+                                    );
+                                }
+
+                                ext.outputChannel.debug(
+                                    `[Playground] TS plugin stub unavailable (read-only install): ${message}`,
+                                );
+                            } else {
+                                // Reset so the next playground open retries the bootstrap
+                                // for transient failures (e.g., slow-init environments
+                                // where the TS server was not ready in time).
+                                tsRestarted = false;
+                            }
+
+                            ext.outputChannel.debug(
+                                `[Playground] TS server bootstrap failed at stage=${stage}: ${message}`,
+                            );
+                            // Rethrow so the telemetry wrapper records result=Failed
+                            // and captures error name / errorMessage automatically.
+                            throw error;
+                        } finally {
+                            context.telemetry.properties.stage = stage;
+                            context.telemetry.properties.stubCreated = stubCreated ? 'true' : 'false';
+                            context.telemetry.properties.stubExisted = stubExisted ? 'true' : 'false';
+                            context.telemetry.properties.stubReplaced = stubReplaced ? 'true' : 'false';
+                        }
+                    });
+                };
+
+                ext.context.subscriptions.push(
+                    vscode.workspace.onDidOpenTextDocument((doc) => {
+                        if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
+                            void ensureTsRestart();
+                        }
+                    }),
+                );
+
+                // If a query playground file was already open before the extension activated
+                // (e.g., restored by hot-exit), the onDidOpenTextDocument event will not
+                // fire. Check existing documents to cover that path.
+                const hasPlaygroundOpen = vscode.workspace.textDocuments.some(
+                    (doc) => doc.languageId === PLAYGROUND_LANGUAGE_ID,
+                );
+                if (hasPlaygroundOpen) {
+                    void ensureTsRestart();
+                }
+
+                //// Playground Commands:
+
+                registerCommandWithTreeNodeUnwrapping(
+                    PlaygroundCommandIds.new,
+                    withTreeNodeCommandCorrelation(newPlayground),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.playground.new.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return newPlayground(context, node as DatabaseItem | CollectionItem);
+                    }),
+                );
+
+                registerCommand(PlaygroundCommandIds.newWithContent, withCommandCorrelation(newPlaygroundWithContent));
+
+                registerCommand(PlaygroundCommandIds.showConnectionInfo, withCommandCorrelation(showConnectionInfo));
+
+                registerCommand(PlaygroundCommandIds.connect, withCommandCorrelation(connectPlayground));
+
+                registerCommand(PlaygroundCommandIds.runAll, withCommandCorrelation(runAll));
+
+                registerCommand(PlaygroundCommandIds.runSelected, withCommandCorrelation(runSelected));
+
+                // Register scan schema command (triggered by "Discover Fields" completion item)
+                registerCommand(
+                    PlaygroundCommandIds.scanCollectionSchema,
+                    withCommandCorrelation(scanCollectionSchema),
+                );
+
+                // Playground → Collection View / Shell navigation
+                registerCommand(
+                    PlaygroundCommandIds.openQueryInCollectionView,
+                    withCommandCorrelation(playgroundOpenQueryInCollectionView),
+                );
+                registerCommand(
+                    PlaygroundCommandIds.openQueryInShell,
+                    withCommandCorrelation(playgroundOpenQueryInShell),
+                );
+
+                // Internal: telemetry for completion acceptance (playground + collection view)
+                registerCommand(
+                    CompletionCommandIds.completionAccepted,
+                    (context: IActionContext, category?: string, source?: string) => {
+                        // Suppress the per-call telemetry from registerCommand — we accumulate instead
+                        context.telemetry.suppressAll = true;
+
+                        const normalizedCategory = normalizeCompletionCategory(category);
+                        const normalizedSource = normalizeCompletionSource(source);
+                        if (normalizedCategory === 'unknown') {
+                            ext.outputChannel.appendLog(
+                                `Unknown completion category received: ${JSON.stringify(category)} (source: ${source ?? 'unknown'})`,
+                            );
+                        }
+                        if (normalizedSource === 'unknown') {
+                            ext.outputChannel.appendLog(
+                                `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
+                            );
+                        }
+                        accumulateTelemetry('completion.accepted', (sample) => {
+                            sample.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
+                        });
+                    },
+                );
+
+                registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
+
+                registerCommand(
+                    'vscode-documentdb.command.showSchemaStoreStats',
+                    withCommandCorrelation(showSchemaStoreStats),
+                );
+
+                registerCommand('vscode-documentdb.command.showWorkerStats', withCommandCorrelation(showWorkerStats));
 
                 //// General Commands:
 
@@ -176,7 +627,7 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(refreshTreeElement),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.createDatabase',
                     withTreeNodeCommandCorrelation(createAzureDatabase),
                 );
@@ -207,6 +658,39 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommand(
+                    'vscode-documentdb.command.localQuickStart.open',
+                    withCommandCorrelation(openLocalQuickStart),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.start',
+                    withCommandCorrelation(startQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.stop',
+                    withCommandCorrelation(stopQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.restart',
+                    withCommandCorrelation(restartQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.delete',
+                    withCommandCorrelation(deleteQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.copyConnectionString',
+                    withCommandCorrelation(copyQuickStartConnectionString),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.copyPassword',
+                    withCommandCorrelation(copyQuickStartPassword),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.viewLogs',
+                    withCommandCorrelation(viewQuickStartLogs),
+                );
+
+                registerCommand(
                     'vscode-documentdb.command.connectionsView.refresh',
                     withCommandCorrelation((context: IActionContext) => {
                         return refreshView(context, Views.ConnectionsView);
@@ -214,8 +698,8 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.chooseDataMigrationExtension',
-                    withTreeNodeCommandCorrelation(chooseDataMigrationExtension),
+                    'vscode-documentdb.command.accessDataMigrationServices',
+                    withTreeNodeCommandCorrelation(accessDataMigrationServices),
                 );
 
                 //// Registry Commands:
@@ -241,8 +725,139 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
+                    ADD_ATLAS_CREDENTIAL_COMMAND_ID,
+                    withTreeNodeCommandCorrelation((context, node: TreeElement) =>
+                        this.atlasDiscoveryProvider.addCredential(context, node),
+                    ),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    OPEN_ATLAS_CLUSTER_COMMAND_ID,
+                    withTreeNodeCommandCorrelation(openAtlasCluster),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
                     withTreeNodeCommandCorrelation(learnMoreAboutServiceProvider),
+                );
+
+                //// Kubernetes-specific source commands
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.addSource',
+                    withTreeNodeCommandCorrelation(async (context, _node) => {
+                        const { addKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/addKubeconfigSource');
+                        try {
+                            await addKubeconfigSource(context);
+                        } catch (error) {
+                            const { UserCancelledError } = await import('@microsoft/vscode-azext-utils');
+                            if (!(error instanceof UserCancelledError)) {
+                                throw error;
+                            }
+                            return;
+                        }
+
+                        const { refreshKubernetesRoot } =
+                            await import('../plugins/service-kubernetes/commands/refreshKubernetesRoot');
+                        refreshKubernetesRoot();
+                    }),
+                );
+
+                ext.context.subscriptions.push(
+                    (
+                        await import('../plugins/service-kubernetes/commands/viewKubeconfig')
+                    ).registerInlineKubeconfigContentProvider(),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.renameSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { renameKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/renameKubeconfigSource');
+                        await renameKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.removeSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { removeKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/removeKubeconfigSource');
+                        await removeKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { reloadKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/reloadKubeconfigSource');
+                        await reloadKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.editSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { editKubeconfig } =
+                            await import('../plugins/service-kubernetes/commands/editKubeconfig');
+                        await editKubeconfig(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.viewSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { viewKubeconfig } =
+                            await import('../plugins/service-kubernetes/commands/viewKubeconfig');
+                        await viewKubeconfig(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.renameContext',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { renameKubernetesContext } =
+                            await import('../plugins/service-kubernetes/commands/renameKubernetesContext');
+                        await renameKubernetesContext(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToKubernetesTreeView } =
+                            await import('../plugins/service-kubernetes/commands/switchKubernetesViewMode');
+                        await switchToKubernetesTreeView(context);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToKubernetesFlatListView } =
+                            await import('../plugins/service-kubernetes/commands/switchKubernetesViewMode');
+                        await switchToKubernetesFlatListView(context);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.atlas.switchToTreeView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToAtlasTreeView } =
+                            await import('../plugins/service-atlas-mongodb/commands/switchAtlasViewMode');
+                        await switchToAtlasTreeView(context);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.atlas.switchToFlatListView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToAtlasFlatListView } =
+                            await import('../plugins/service-atlas-mongodb/commands/switchAtlasViewMode');
+                        await switchToAtlasFlatListView(context);
+                    }),
                 );
 
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
@@ -266,10 +881,61 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.connectionsView.removeConnection',
                     withTreeNodeCommandCorrelation(removeConnection),
                 );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.removeSelectedConnections',
+                    withTreeNodeCommandCorrelation(removeConnection),
+                );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.renameConnection',
                     withTreeNodeCommandCorrelation(renameConnection),
+                );
+
+                //// Folder Management Commands:
+
+                registerCommandWithModalErrors(
+                    'vscode-documentdb.command.connectionsView.createFolder',
+                    withCommandCorrelation(createFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.createSubfolder',
+                    withTreeNodeCommandCorrelation(createSubfolder),
+                );
+
+                registerCommandWithTreeNodeUnwrappingAndModalErrors(
+                    'vscode-documentdb.command.connectionsView.newConnectionInFolder',
+                    withTreeNodeCommandCorrelation(newConnectionInFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.renameFolder',
+                    withTreeNodeCommandCorrelation(renameFolder),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.deleteFolder',
+                    withTreeNodeCommandCorrelation(deleteFolder),
+                );
+
+                //// Move Operations:
+
+                registerCommand(
+                    'vscode-documentdb.command.connectionsView.moveItems',
+                    withCommandCorrelation(moveItems),
+                );
+
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.copyCollection', copyCollection);
+                registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.pasteCollection', pasteCollection);
+                registerCommand('vscode-documentdb.command.copyIndex', withCommandCorrelation(copyIndex));
+                registerCommand('vscode-documentdb.command.copySelectedIndexes', withCommandCorrelation(copyIndex));
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.copyIndexes',
+                    withTreeNodeCommandCorrelation(copyIndexes),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.pasteIndexes',
+                    withTreeNodeCommandCorrelation(pasteIndexes),
                 );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
@@ -289,9 +955,28 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.internal.containerView.open',
                     withCommandCorrelation(openCollectionViewInternal),
                 );
+                registerCommand(
+                    'vscode-documentdb.command.internal.containerView.openFromTree',
+                    withCommandCorrelation(openCollectionViewInternal),
+                );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.containerView.open',
                     withTreeNodeCommandCorrelation(openCollectionView),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.containerView.open.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openCollectionView(context, node as CollectionItem);
+                    }),
+                );
+
+                // Context menu command for the Indexes node and individual index nodes
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.indexesView.open',
+                    withTreeNodeCommandCorrelation(openIndexManagementView),
                 );
 
                 registerCommand(
@@ -304,6 +989,11 @@ export class ClustersExtension implements vscode.Disposable {
                     withCommandCorrelation(openHelpAndFeedbackUrl),
                 );
 
+                registerCommand(
+                    'vscode-documentdb.command.internal.helpAndFeedback.showAbout',
+                    withCommandCorrelation(showAbout),
+                );
+
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.internal.retry',
                     withTreeNodeCommandCorrelation(retryAuthentication),
@@ -314,33 +1004,69 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.launchShell',
-                    withTreeNodeCommandCorrelation(launchShell),
+                    ShellCommandIds.open,
+                    withTreeNodeCommandCorrelation(openInteractiveShell),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.clusterDashboard.open',
+                    withTreeNodeCommandCorrelation(openClusterDashboard),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.clusterDashboard.open.inline',
+                    withTreeNodeCommandCorrelation((context, node) =>
+                        openClusterDashboard(context, node as ClusterItemBase | DatabaseItem, null, {
+                            activationSource: 'treeNodeInline',
+                        }),
+                    ),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    ShellCommandIds.openInline,
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openInteractiveShell(context, node as ClusterItemBase | DatabaseItem | CollectionItem);
+                    }),
+                );
+
+                registerCommand(ShellCommandIds.openWithInput, withCommandCorrelation(openInteractiveShellWithInput));
+
+                // Register the terminal link provider for "Open in Collection View" action lines
+                ext.context.subscriptions.push(
+                    vscode.window.registerTerminalLinkProvider(new ShellTerminalLinkProvider()),
+                );
+
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropCollection',
                     withTreeNodeCommandCorrelation(deleteCollection),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropDatabase',
                     withTreeNodeCommandCorrelation(deleteAzureDatabase),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.copyReference',
+                    withTreeNodeCommandCorrelation(copyReference),
+                );
+
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.hideIndex',
                     withTreeNodeCommandCorrelation(hideIndex),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.unhideIndex',
                     withTreeNodeCommandCorrelation(unhideIndex),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropIndex',
                     withTreeNodeCommandCorrelation(dropIndex),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.createCollection',
                     withTreeNodeCommandCorrelation(createCollection),
                 );
@@ -350,12 +1076,10 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(createMongoDocument),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.importDocuments',
                     withTreeNodeCommandCorrelation(importDocuments),
                 );
-
-                registerScrapbookCommands();
 
                 /**
                  * Here, exporting documents is done in two ways: one is accessible from the tree view
@@ -371,50 +1095,41 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.internal.exportDocuments',
                     withCommandCorrelation(exportQueryResults),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.exportDocuments',
                     withTreeNodeCommandCorrelation(exportEntireCollection),
                 );
-                // This is an optional task - if it fails, we don't want to break extension activation,
-                // but we should log the error for diagnostics
-                try {
-                    // Show welcome screen if it hasn't been shown before
-                    const welcomeScreenShown = ext.context.globalState.get<boolean>('welcomeScreenShown_v0_4_0', false);
-                    if (!welcomeScreenShown) {
-                        // Update the flag first
-                        await ext.context.globalState.update('welcomeScreenShown_v0_4_0', true);
-                        ext.outputChannel.appendLog('Showing welcome screen...');
 
-                        // Schedule the walkthrough to open after activation completes
-                        // This prevents it from blocking the activation process
-                        setImmediate(() => {
-                            vscode.commands
-                                .executeCommand(
-                                    'workbench.action.openWalkthrough',
-                                    'ms-azuretools.vscode-documentdb#documentdb-welcome',
-                                )
-                                .then(
-                                    // Success handler
-                                    () => {
-                                        activateContext.telemetry.properties.welcomeScreenShown = 'true';
-                                    },
-                                    // Error handler
-                                    (error) => {
-                                        ext.outputChannel.appendLog(
-                                            `Welcome screen error: ${error instanceof Error ? error.message : String(error)}`,
-                                        );
-                                    },
-                                );
-                        });
+                // Testing command for DemoTask
+                registerCommand('vscode-documentdb.command.testing.startDemoTask', async (_context: IActionContext) => {
+                    const failureOptions = [
+                        {
+                            label: vscode.l10n.t('$(check) Success'),
+                            description: vscode.l10n.t('Task will complete successfully'),
+                            shouldFail: false,
+                        },
+                        {
+                            label: vscode.l10n.t('$(error) Failure'),
+                            description: vscode.l10n.t('Task will fail at a random step for testing'),
+                            shouldFail: true,
+                        },
+                    ];
+
+                    const selectedOption = await vscode.window.showQuickPick(failureOptions, {
+                        title: vscode.l10n.t('Demo Task Configuration'),
+                        placeHolder: vscode.l10n.t('Choose whether the task should succeed or fail'),
+                    });
+
+                    if (!selectedOption) {
+                        return; // User cancelled
                     }
-                } catch (error) {
-                    // Log the error but don't throw - this is non-critical functionality
-                    activateContext.telemetry.properties.welcomeScreenError = 'true';
-                    ext.outputChannel.appendLog(
-                        `Welcome screen error: ${error instanceof Error ? error.message : String(error)}`,
-                    );
-                    // Don't rethrow the error - we want activation to continue
-                }
+
+                    const task = new DemoTask(vscode.l10n.t('Demo Task {0}', Date.now()), selectedOption.shouldFail);
+                    TaskService.registerTask(task);
+                    void task.start();
+                });
+
+                void maybeShowWelcomeScreen();
             },
         );
     }

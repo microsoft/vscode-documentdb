@@ -14,15 +14,14 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
 
     public async prompt(context: NewLocalConnectionWizardContext): Promise<void> {
         const prompt: string = l10n.t('Enter the connection string of your local connection');
-        context.connectionString = (
-            await context.ui.showInputBox({
-                prompt: prompt,
-                ignoreFocusOut: true,
-                placeHolder: l10n.t('Starts with mongodb:// or mongodb+srv://'),
-                validateInput: (connectionString?: string) => this.validateInput(connectionString),
-                asyncValidationTask: (connectionString: string) => this.validateConnectionString(connectionString),
-            })
-        ).trim();
+        context.connectionString = await context.ui.showInputBox({
+            prompt: prompt,
+            ignoreFocusOut: true,
+            placeHolder: l10n.t('Starts with mongodb:// or mongodb+srv://'),
+            validateInput: (connectionString?: string) => this.validateInput(connectionString),
+            asyncValidationTask: (connectionString: string) => this.validateConnectionString(connectionString),
+        });
+        context.connectionString = context.connectionString.trim();
 
         const parsedConnectionString = new DocumentDBConnectionString(context.connectionString);
         context.userName = parsedConnectionString.username;
@@ -34,6 +33,14 @@ export class PromptMongoRUEmulatorConnectionStringStep extends AzureWizardPrompt
 
     //eslint-disable-next-line @typescript-eslint/require-await
     private async validateConnectionString(connectionString: string): Promise<string | null | undefined> {
+        connectionString = connectionString ? connectionString.trim() : '';
+
+        if (connectionString.length === 0) {
+            return l10n.t('Invalid Connection String: {error}', {
+                error: l10n.t('Connection string cannot be empty.'),
+            });
+        }
+
         try {
             new DocumentDBConnectionString(connectionString);
         } catch (error) {

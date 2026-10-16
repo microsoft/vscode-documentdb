@@ -1,0 +1,909 @@
+---
+feature: managed-identities
+kind: design
+status: active
+prs: [886]
+---
+
+# Managed Identity Support for Azure DocumentDB (vCore)
+
+**Status:** Implemented on `dev/tnaum/managed-identities`, with the Entra identity presentation
+revised in [iteration 04](iterations/04-entra-identity-flow.md). Azure VM validation passed on
+2026-09-18.
+**Progress:** see the [original implementation log](iterations/01-implementation-log.md), the
+[Entra flow iteration](iterations/04-entra-identity-flow.md), and the
+[manual validation checklist](manual-validation-checklist.md)
+**Owner:** unassigned
+**Branch:** `dev/tnaum/managed-identities`
+**Companion docs:** [`research-findings.md`](research-findings.md) (evidence),
+[`decisions.md`](decisions.md) (choices and rejected alternatives)
+
+---
+
+## Summary
+
+Allow VS Code running on an **Azure VM** to authenticate to an Azure DocumentDB cluster using that
+VM's managed identity instead of an interactive user sign-in. The UI presents both as identity
+choices in the Microsoft Entra ID family. Their persisted method IDs, configurations, token
+handlers, cache identities, and telemetry remain separate.
+
+Today this is impossible: our Entra ID path only ever asks the signed-in VS Code user for a token.
+
+> **Platform scope.** Azure VMs only, per [D0](decisions.md#d0-supported-platforms-azure-vms-only).
+> The credential library we use also works on App Service, Container Apps, Arc-enabled servers and
+> AKS, and we are not blocking that, but those hosts are not claimed, documented, or tested here.
+
+---
+
+## Problem
+
+A customer provisioned an Azure VM with a user-assigned managed identity, registered that identity
+on their DocumentDB (vCore) cluster, and then tried to connect from VS Code running on that VM using
+"Entra ID". It failed.
+
+The initial theory was that our OIDC callback could not decide which of the VM's managed identities
+to use, because we omit the username from the connection string. That describes the wrong layer.
+
+**Our extension never contacts the Instance Metadata Service at all.** `MicrosoftEntraIDAuthHandler`
+calls `getSessionFromVSCode(...)`, which is `vscode.authentication.getSession('microsoft', ...)`,
+which is interactive user authentication. There is no managed identity in that code path, ambiguous
+or otherwise. See `research-findings.md` §1.
+
+A secondary factor compounds it: even a correctly formed connection string carrying the identity's
+client ID is discarded, because the handler blanks the username before connecting.
+
+The multi-identity ambiguity from the original theory **is** real, and we will meet it as soon as we
+implement this. It is handled explicitly in this design rather than inferred.
+
+### Why the existing Entra token handlers stay separate
+
+The interactive Entra ID path is working and battle-tested, including multi-tenant scenarios. The
+presentation now groups account sign-in and managed identity under one family, but this does not
+merge their runtime handlers or stored method values. The `expiresInSeconds: 0` quirk in the
+interactive handler is deliberately **left alone**; see
+[D6.1](decisions.md#d61-token-expiry-and-caching-out-of-scope-dedicated-issue).
+
+---
+
+## Goals
+
+- A user on an **Azure VM** can connect to a DocumentDB cluster using the VM's system-assigned or a
+  chosen user-assigned managed identity.
+- Selecting the identity is **explicit**. No environment sniffing decides it for the user.
+- Selecting the identity reuses the quick-pick pattern users have already met in the Atlas connect
+  flow: manual entry first, known values below it.
+- The connection string published in Microsoft Learn
+  (`mongodb+srv://<client-id>@<cluster>...&authMechanismProperties=ENVIRONMENT:azure,...`) works when
+  pasted into our New Connection flow.
+- `Copy Connection String` on a managed-identity connection produces that same documented form, so it
+  works in mongosh and application drivers on that VM **and** pastes back into our own flow.
+- Failures produce readable messages, especially the multi-identity case that caused the incident.
+- Works from all three entry points: Connections view, Azure Resources view, Discovery view.
+- Works in Collection View, the Query Playground, and the Interactive Shell.
+
+## Non-goals
+
+- Azure hosting platforms other than VMs. See [D0](decisions.md#d0-supported-platforms-azure-vms-only).
+- Using the driver's own `ENVIRONMENT: 'azure'` machine flow **at runtime**. We read that form on
+  input and normalise it away; the token always comes from `ManagedIdentityCredential`. See
+  [D1](decisions.md#d1-token-acquisition-mechanism).
+- `DefaultAzureCredential` / "Active Directory Default" chained credential mode, MFA and Conditional
+  Access behaviour, service principals, sovereign clouds. All tracked in the
+  [D4](decisions.md#d4-scope-managed-identity-only-not-a-general-default-credential-mode) issue,
+  which is filed **after** this work lands.
+- Workload identity federation as a distinct mode.
+- Changing the existing interactive Entra ID token-expiry behaviour. See
+  [D6.1](decisions.md#d61-token-expiry-and-caching-out-of-scope-dedicated-issue).
+- Actionable error remediation UI (commands, deep links). Plain-language translation only, see
+  [D6.2](decisions.md#d62-error-mapping-simplified-to-plain-language-translation).
+- Any new VS Code settings. See [D5](decisions.md#d5-no-vs-code-settings-for-managed-identity).
+- Azure infrastructure provisioning of any kind. Validation on real hardware is delegated via a
+  written checklist.
+
+---
+
+## Decisions at a glance
+
+Confirmed 2026-08-10 except D3; see [`decisions.md`](decisions.md) for reasoning and reversal
+instructions.
+
+| ID  | Decision                                                                                                                                                           | Status   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| D0  | Azure VMs only: what we claim, document, and test                                                                                                                  | Agreed   |
+| D1  | `@azure/identity` `ManagedIdentityCredential` is the only engine; a pasted driver-native `ENVIRONMENT:azure` string is **normalised into our own config** on input | Agreed   |
+| D1a | `Copy Connection String` emits that same documented form, no password prompt, round-trips with D1                                                                  | Agreed   |
+| D2  | Identity chosen through an Atlas-pattern quick pick: manual entry first, known values below                                                                        | Agreed   |
+| D3  | IMDS probe                                                                                                                                                         | **Open** |
+| D4  | Managed identity only; chained credential, MFA, service principals tracked in an issue filed after this work                                                       | Agreed   |
+| D5  | No new VS Code settings; per-connection configuration only                                                                                                         | Agreed   |
+| D6  | Token-expiry fix deferred to an issue; error mapping simplified; `docs/` updated                                                                                   | Agreed   |
+| D7  | Unit tests plus a fake identity-endpoint harness plus a manual checklist for the VM repro                                                                          | Agreed   |
+| D9  | Connection strings report stable authentication facts instead of `weak` or `explicit` confidence                                                                   | Agreed   |
+| D10 | Managed identity and account sign-in appear in one Microsoft Entra ID identity picker                                                                              | Agreed   |
+| D11 | Tenant selection follows token-source selection and continues after account management                                                                             | Agreed   |
+| D12 | The family presentation and gated identity step apply to all seven authentication entry points                                                                     | Agreed   |
+
+---
+
+## Conventions for the implementer
+
+Read these before writing code. They are not negotiable and they are cheap to get wrong.
+
+1. **No em dashes and no en dashes in user-facing strings.** Not in `vscode.l10n.t(...)` or
+   `l10n.t(...)` values, not in quick-pick labels, details, placeholders, validation messages, error
+   messages, notifications, tree item labels or descriptions, or `package.json` command titles. Use a
+   comma, a colon, a full stop, or restructure the sentence. Verify with a grep for the two
+   characters over the files you touched; the result must be empty. This applies to documentation
+   added under `docs/` as well.
+2. **Every user-facing string goes through `vscode.l10n.t()` / `l10n.t()`**, and `npm run l10n` runs
+   before the PR is considered done.
+3. **Never log or emit a credential.** The client ID is not a secret, but it is a stable
+   tenant-scoped identifier: add it to `context.valuesToMask` and keep it out of telemetry.
+4. **`any` is banned.** Use `unknown` plus a type guard. Explicit return types on all functions.
+5. **Error handling in catch blocks** uses `error instanceof Error ? error.message : String(error)`.
+6. **Cluster identity:** use `clusterId` for cache keys (`CredentialCache`, `ClustersClient`) and
+   `treeId` for tree element paths. Getting this backwards produces bugs that only appear when a user
+   moves a connection into a folder. See `.github/skills/tree-cluster-architecture/SKILL.md`.
+7. **Terminology:** "DocumentDB" for the service, "MongoDB API" or "DocumentDB API" for the wire
+   protocol. Never "MongoDB" alone as a product name, including in comments and test names.
+8. **The five-step PR checklist** at the end of this document must pass before the work is done.
+
+---
+
+## Design
+
+### 1. New authentication method
+
+`src/documentdb/auth/AuthMethod.ts`:
+
+```ts
+export enum AuthMethodId {
+  NativeAuth = 'NativeAuth',
+  MicrosoftEntraID = 'MicrosoftEntraID',
+  /** Microsoft Entra ID using the managed identity of the Azure resource hosting VS Code. */
+  ManagedIdentity = 'ManagedIdentity',
+  NoAuth = 'NoAuth',
+}
+
+export const ManagedIdentityAuthMethod: AuthMethodInfo = {
+  id: AuthMethodId.ManagedIdentity,
+  label: vscode.l10n.t('Managed Identity (Azure hosted)'),
+  detail: vscode.l10n.t('Authenticate using the managed identity assigned to this machine'),
+} as const;
+```
+
+Add to `authMethodsArray` for persisted-method lookup and internal display. Deliberately omit it from
+`authFamilyMethodsArray`: the top-level picker presents **Microsoft Entra ID** once, then the shared
+identity picker offers account sign-in and managed identity choices. See [D10](decisions.md#d10-managed-identity-is-presented-inside-the-microsoft-entra-id-family).
+
+> **Naming caveat.** `AuthMethodId` values double as the ARM `authConfig.allowedModes` vocabulary in
+> `clusterHelpers.ts` (`allowedModes.filter(isSupportedAuthMethod)`). `ManagedIdentity` has no ARM
+> counterpart, so it must be added by explicit rule (see §6), never by pass-through. If ARM ever
+> introduces a mode with this exact name, revisit.
+>
+> The internal method label remains "Managed Identity (Azure hosted)" for places that display the
+> resolved persisted method. It is not a separate row in the top-level authentication-family picker.
+>
+> **Revised in review, 2026-08-10.** The `detail` originally read "Use when VS Code is running on an
+> Azure VM that has a managed identity assigned". It asserted a host type we never verify, and it
+> broke the "Authenticate using..." parallel of the sibling entries. See the
+> [implementation log](iterations/01-implementation-log.md#post-review-host-type-wording).
+
+### 2. Configuration type
+
+`src/documentdb/auth/AuthConfig.ts`:
+
+```ts
+/**
+ * Configuration for authenticating with the managed identity of the Azure VM
+ * that is hosting VS Code.
+ */
+export interface ManagedIdentityAuthConfig {
+  /**
+   * Client ID of a user-assigned managed identity.
+   * Omitted for the system-assigned identity.
+   * Required whenever the host has more than one candidate identity, because the
+   * instance metadata service cannot disambiguate on its own.
+   */
+  readonly clientId?: string;
+}
+
+export type AuthConfig = NativeAuthConfig | EntraIdAuthConfig | ManagedIdentityAuthConfig;
+```
+
+> **Important:** an "empty" config `{}` is meaningful (it means system-assigned). Persisting
+> `undefined` instead of `{}` would make the method un-inferable after a reload. See §8.
+
+### 3. `ManagedIdentityAuthHandler`
+
+New file `src/documentdb/auth/ManagedIdentityAuthHandler.ts`, structurally parallel to
+`MicrosoftEntraIDAuthHandler`:
+
+```ts
+export class ManagedIdentityAuthHandler implements AuthHandler {
+  constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
+
+  public async configureAuth(): Promise<AuthHandlerResponse> {
+    // Dynamic import: @azure/identity pulls in MSAL and must stay out of the activation path.
+    const { ManagedIdentityCredential } = await import('@azure/identity');
+
+    const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
+    const credential = clientId ? new ManagedIdentityCredential({ clientId }) : new ManagedIdentityCredential();
+
+    const dbConnectionString = new DocumentDBConnectionString(this.clusterCredentials.connectionString);
+    dbConnectionString.username = '';
+    dbConnectionString.password = '';
+    dbConnectionString.searchParams.delete('authMechanism');
+    dbConnectionString.searchParams.delete('authMechanismProperties');
+    dbConnectionString.searchParams.delete('tls');
+
+    const options: MongoClientOptions = {
+      authMechanism: 'MONGODB-OIDC',
+      tls: true,
+      authMechanismProperties: {
+        ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
+        OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
+          let token: AccessToken | null;
+          try {
+            token = await credential.getToken(ENTRA_DOCUMENTDB_SCOPE);
+          } catch (error) {
+            throw new Error(describeManagedIdentityError(error, clientId));
+          }
+          if (!token) {
+            throw new Error(describeManagedIdentityError(undefined, clientId));
+          }
+          return {
+            accessToken: token.token,
+            expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
+          };
+        },
+      },
+    };
+
+    // Same host-gated TLS exception policy as every other handler.
+    if (
+      resolveAllowInvalidCertificates(
+        this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity,
+        this.clusterCredentials.connectionString,
+      )
+    ) {
+      options.tlsAllowInvalidCertificates = true;
+    }
+
+    return { connectionString: dbConnectionString.toString(), options };
+  }
+}
+```
+
+Notes:
+
+- **`authMechanismProperties` must be stripped from the URL.** We pass `authMechanismProperties` via
+  `MongoClientOptions`; leaving a competing `authMechanismProperties=ENVIRONMENT:azure,...` in the
+  connection string risks the driver merging or preferring the URL form and taking its own IMDS path.
+  Needs an explicit test (WI14).
+- The scope constant `https://ossrdbms-aad.database.windows.net/.default` is currently duplicated in
+  three places (`MicrosoftEntraIDAuthHandler.ts`, `playgroundWorker.ts`, and implicitly in the shell
+  path). Extract it to a shared constant while adding the fourth consumer.
+- `ALLOWED_HOSTS` alongside a machine callback matches the official Node.js sample in the DocumentDB
+  RBAC documentation, so the two are expected to coexist. Confirm empirically during WI14.
+
+Register in the `ClustersClient.initClient()` switch:
+
+```ts
+case AuthMethodId.ManagedIdentity:
+    authHandler = new ManagedIdentityAuthHandler(credentials);
+    break;
+```
+
+### 4. Token expiry for the new handler only
+
+`ManagedIdentityCredential` returns an `AccessToken` with a real `expiresOnTimestamp`, so the new
+handler reports a correct `expiresInSeconds` and the driver can cache the token. That matters here
+more than elsewhere: for interactive Entra ID a cache miss is cheap because the VS Code session is
+itself cached, whereas for managed identity every miss is a network round-trip to the identity
+endpoint.
+
+One small helper, used by the new handler only:
+
+```ts
+/** Seconds until an absolute expiry timestamp (ms since epoch), floored at zero. */
+export function expiresInSecondsFromTimestamp(expiresOnTimestamp: number): number;
+```
+
+> **Out of scope.** `MicrosoftEntraIDAuthHandler` returns `expiresInSeconds: 0`, and
+> `playgroundWorker.ts` computes the value correctly from the JWT `exp` claim. That inconsistency is
+> real, but there may be a reason for the zero, and changing token-lifetime behaviour underneath a
+> working interactive path is not something to do as a side effect of this work. Raised as a
+> dedicated issue instead (WI27), per
+> [D6.1](decisions.md#d61-token-expiry-and-caching-out-of-scope-dedicated-issue). **Do not touch
+> the existing handler in this PR.**
+
+### 5. Connection-string interoperability
+
+Per [D1](decisions.md#d1-token-acquisition-mechanism) the driver-native form is a **transport
+format**, not a runtime mechanism. We write it on copy and read it on paste, and in both directions
+the connection is represented internally by `ManagedIdentityAuthConfig` and served by
+`ManagedIdentityAuthHandler`. The driver's own `ENVIRONMENT: 'azure'` flow is never used.
+
+The two halves must be built and tested as a pair. If they drift, users get a string that looks
+right and behaves differently depending on which side of the clipboard it is on.
+
+#### 5.1 Copy Connection String (output)
+
+`src/commands/copyConnectionString/copyConnectionString.ts`, `buildParsedConnectionString()`, today
+handles native auth and `MicrosoftEntraID` only. A managed-identity connection currently falls
+through and produces a silently wrong string (no OIDC mechanism, empty username), so this is a
+correctness fix as much as a feature.
+
+```ts
+if (credentials.selectedAuthMethod === AuthMethodId.ManagedIdentity) {
+  parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');
+  parsedConnectionString.searchParams.set(
+    'authMechanismProperties',
+    `ENVIRONMENT:azure,TOKEN_RESOURCE:${DOCUMENTDB_TOKEN_RESOURCE}`,
+  );
+  // The client ID rides in the username position, per the documented form. Empty for system-assigned.
+  parsedConnectionString.username = credentials.managedIdentityConfig?.clientId ?? '';
+}
+```
+
+`DOCUMENTDB_TOKEN_RESOURCE` is `https://ossrdbms-aad.database.windows.net`, the resource form of the
+scope `MicrosoftEntraIDAuthHandler` already requests. Extract it as a shared constant rather than
+repeating the literal.
+
+Behaviour notes:
+
+- **No with/without-password prompt.** `canIncludeNativePassword()` already returns false for
+  non-native auth, so the existing branch is skipped without further change.
+- **Nothing secret is emitted.** A client ID is a tenant-scoped identifier, not a credential.
+- The result works in mongosh and application drivers **on the same Azure VM**, and pastes back into
+  our own New Connection flow (5.2).
+- Telemetry: `passwordIncluded` stays `notPrompted`; add `copiedAuthMechanism: 'managedIdentity'`.
+
+#### 5.2 Normalisation on paste (input)
+
+`src/documentdb/auth/managedIdentityConnectionString.ts` reports facts without recommending a
+wizard action:
+
+```ts
+export interface ConnectionStringAuthFacts {
+  readonly usesOidc: boolean;
+  readonly declaresAzureMachineWorkflow: boolean;
+  readonly tokenResource?: string;
+  readonly username?: string;
+  readonly usernameIsGuid: boolean;
+}
+
+export function getConnectionStringAuthFacts(cs: DocumentDBConnectionString): ConnectionStringAuthFacts;
+```
+
+Wizard rules:
+
+| Connection string shape                               | Result                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| OIDC, no `ENVIRONMENT:azure`                          | Select the Microsoft Entra ID family and ask which identity to use                               |
+| OIDC plus GUID username, no `ENVIRONMENT:azure`       | Same, with the GUID highlighted as a managed identity candidate                                  |
+| OIDC plus `ENVIRONMENT:azure`, no username            | Select managed identity with no client ID and skip the identity picker                           |
+| OIDC plus `ENVIRONMENT:azure` and a GUID username     | Select managed identity with that client ID and skip the identity picker                         |
+| OIDC plus `ENVIRONMENT:azure` and a non-GUID username | Select the Entra family and ask in the same picker, naming the unusable value in the placeholder |
+| Anything else                                         | Keep the existing family-prompt behavior                                                         |
+
+Normalisation for the Azure machine workflow:
+
+1. Set `selectedAuthMethod = AuthMethodId.ManagedIdentity` only when the source and identity are
+   fully determined.
+2. Set `managedIdentityAuthConfig` to `{ clientId }`, or `{}` when there was no username.
+3. **Strip `authMechanism`, `authMechanismProperties`, and the username from the stored connection
+   string.** They were inputs to a decision; keeping them risks the driver later preferring the URL
+   form over `MongoClientOptions` and taking its own IMDS path.
+
+A username that is present but **not** GUID-shaped stays in the facts for the identity picker to
+name, but is removed from the stored string and is never sent to IMDS. Do not guess or silently
+substitute this machine's identity.
+
+> **Ordering constraint.** `PromptConnectionStringStep.prompt()` clears the username unconditionally
+> before any inspection. The hint must be computed **before** that credential-stripping block, or the
+> client ID is gone by the time we look for it. This is the single easiest thing to get wrong in this
+> work item.
+
+This supersedes the original `ManagedIdentityHint` `weak`/`explicit` model. The reason is recorded in
+[D9](decisions.md#d9-connection-string-parsing-reports-facts-not-confidence).
+
+### 6. Availability rules
+
+The Microsoft Entra ID family is offered wherever either interactive Entra ID or managed identity
+is supported, because on the wire they are the same mechanism and differ only in token source
+(`research-findings.md` §5.3). OIDC facts also make that family available when a private endpoint,
+CNAME, or custom domain prevents host-based vCore classification.
+
+**Pasted connection string**, `src/commands/newConnection/PromptConnectionStringStep.ts`:
+
+```ts
+const supportedAuthMethods: AuthMethodId[] = [AuthMethodId.NativeAuth];
+
+if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
+  supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
+  supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
+}
+
+if (authFacts.usesOidc && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
+  supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
+}
+
+supportedAuthMethods.push(AuthMethodId.NoAuth);
+```
+
+**ARM metadata**, `src/plugins/service-azure-mongo-vcore/utils/clusterHelpers.ts`:
+
+```ts
+if (credentials.availableAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
+    // Managed identity is Entra ID on the wire; the cluster has no separate allowedModes value.
+    credentials.availableAuthMethods.push(AuthMethodId.ManagedIdentity);
+
+    credentials.entraIdAuthConfig = { tenantId: ..., subscriptionId: ... };
+}
+```
+
+Leave the `receivedAuthMethods` / `unknownAuthMethods` telemetry reading the **raw** `allowedModes`,
+so the synthesized entry does not pollute service-side telemetry.
+
+### 7. Wizard UX
+
+`src/documentdb/wizards/authenticate/SelectEntraTokenSourceStep.ts` is shown when the Microsoft
+Entra ID family is selected and the connection-string facts did not already determine the token
+source. It can set either `MicrosoftEntraID` for account sign-in or `ManagedIdentity` for a machine
+identity. Those stored values remain unchanged.
+
+There is one identity list, not separate token-source and system-versus-user-assigned lists. It is
+never a dead end.
+
+```text
+Select the identity to use for this connection
+
+From the connection string
+  Managed identity  11111111-2222-3333-4444-555555555555
+    Use the supplied client ID as a user-assigned managed identity
+Microsoft Entra account
+  Sign in with my account
+    Uses the account you sign in with in Visual Studio Code
+Managed identity
+  Use the identity assigned to this machine
+    Authenticate without a client ID using the system-assigned option
+  Use a different managed identity...
+    Enter the client ID of a user-assigned managed identity
+Other options
+  Choose a different authentication method...  [when the family was inferred]
+    This connection string asked for Microsoft Entra ID
+  Back to authentication method selection      [when the family picker prompted]
+```
+
+The nested authentication-method picker opened by **Choose a different authentication method...**
+contains its own **Other options** group:
+
+```text
+Other options
+  Back to Microsoft Entra ID identity choices
+```
+
+- The connection-string candidate and different-authentication-method rows are conditional.
+- Account sign-in and both managed identity routes are always present when the picker appears.
+- Manual client ID entry remains GUID-validated and normalizes missing or misplaced separators.
+- A non-GUID selector changes only the placeholder and prefills manual correction. It does not
+  create a second picker variant.
+- The different-authentication-method row appears when OIDC inference skipped the family picker,
+  because AzureWizard Back cannot reopen a step that did not prompt.
+- The nested authentication-method picker handles both its visible return row and its title-bar Back
+  locally. Both reopen the Entra identity choices instead of raising `GoBackError`, which would skip
+  the unprompted family step and land on connection-string entry.
+- The visible Back row appears when the family picker did prompt, and raises `GoBackError` to return
+  to it. It is omitted after inference or one-method auto-selection so it never jumps past a skipped
+  family step.
+- Group headings name authentication concepts rather than locations. System-assigned and
+  user-assigned terminology appears in complete detail sentences so the rows remain understandable
+  without relying on parenthetical fragments.
+- The tenant step runs after this picker. It sees the final stored method and therefore never asks a
+  managed identity to choose a tenant.
+- Empty tenant lists distinguish timeout, provider failure, and successful empty enumeration. An
+  explicit retry increases the initial five-second lookup deadline to 30 seconds, without removing
+  manual tenant entry or account management. Late responses are logged but do not replace the picker.
+- Persistent Info-level diagnostics describe offered option IDs and gating reasons, not customer
+  labels or input values. Token diagnostics cover credential reuse, SDK calls, endpoint-setting
+  presence, and tenant checks using safe classifications and operation correlation IDs. This adds
+  observability without probing the environment or changing authentication behavior.
+- Gate diagnostics run in `configureBeforePrompt()`, when the wizard reaches the step. Keep
+  `shouldPrompt()` side-effect free: AzureWizard also evaluates it for pending steps while computing
+  titles and step counts, before the inputs needed for a final authentication decision are available.
+- Selection telemetry enriches the existing wizard/command event with `authFlowOrigin`, resolved
+  method, selection source, and identity-choice details. No per-interaction events, reporting helper,
+  or new correlation IDs are added. Summaries replace prior choices; detailed chronology stays in
+  Output tracing. Re-prompting clears stale selection fields, and values are categories, never input.
+
+The top-level family rows use VS Code theme icons: `key` for username/password, `azure` for
+Microsoft Entra ID, and `unlock` for no authentication.
+
+The family picker is shared by seven entry points and omits managed identity as a top-level row in
+all of them. The identity step is registered behind its Entra-family gate in all seven; see
+[D12](decisions.md#d12-the-family-presentation-applies-to-all-authentication-entry-points).
+
+#### Source of the "known" rows
+
+v1 ships this machine's identity plus an optional client ID parsed from the current connection
+string and manual client ID entry. The proposed recently-used global-state list was removed before
+merge because only one entry point populated it and its expected usage did not justify the
+maintenance cost.
+
+ARM enumeration of user-assigned identities, and enumeration of the identities actually assigned to
+this VM, are phase 2. Both are described in the [D2 open item](decisions.md#open-item-needs-a-call);
+the second one depends on IMDS and therefore on the D3 outcome.
+
+`ChooseAuthMethodStep` needs no inference logic; the shared family builder removes the top-level
+managed identity row. The Microsoft Entra ID family detail keeps managed identity searchable.
+
+### 8. Storage and credential cache
+
+`src/services/connectionStorageService.ts`:
+
+```ts
+export interface ConnectionSecrets {
+  connectionString: string;
+  nativeAuthConfig?: NativeAuthConfig;
+  entraIdAuthConfig?: EntraIdAuthConfig;
+  managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
+}
+```
+
+A client ID is not a secret, but it belongs next to the other auth configs; splitting it into
+`properties` would make the read path inconsistent for no benefit.
+
+`src/documentdb/CredentialCache.ts`:
+
+```ts
+export interface CachedClusterCredentials {
+    ...
+    managedIdentityConfig?: ManagedIdentityAuthConfig;
+}
+```
+
+Two changes with real risk:
+
+1. **`setAuthCredentials()` gains a seventh positional parameter.** It already has six, four of them
+   optional, which is past the point where positional arguments are readable. Appending is the
+   minimal-blast-radius change and is what this plan assumes; converting the tail to an options
+   object is a worthwhile follow-up but should not be bundled into this work.
+
+2. **`setFromConnectionItem()` inference ladder.** It currently infers the method when one is not
+   passed explicitly, in this order: explicit `NoAuth`, then `entraIdAuthConfig`, then
+   `nativeAuthConfig`, then fallbacks. A managed-identity connection may legitimately carry an
+   `entraIdAuthConfig` too (tenant and subscription from ARM), so **adding a rung is not enough**:
+   it would resolve to interactive Entra ID after a reload.
+
+   The fix is to honour the persisted `selectedAuthMethod` first for **all** known methods, not just
+   `NoAuth`, and only fall through to inference when it is absent or unrecognised:
+
+   ```ts
+   let selectedAuthMethod = authMethod;
+   if (!selectedAuthMethod) {
+     const explicitMethod = connectionItem.properties.selectedAuthMethod as AuthMethodIdType | undefined;
+     if (isSupportedAuthMethod(explicitMethod)) {
+       selectedAuthMethod = explicitMethod; // covers NoAuth, ManagedIdentity, and the rest
+     } else if (secrets.managedIdentityAuthConfig) {
+       selectedAuthMethod = AuthMethodId.ManagedIdentity;
+     } else if (secrets.entraIdAuthConfig) {
+       selectedAuthMethod = AuthMethodId.MicrosoftEntraID;
+     } else if (secrets.nativeAuthConfig) {
+       selectedAuthMethod = AuthMethodId.NativeAuth;
+     } else {
+       selectedAuthMethod =
+         (connectionItem.properties.availableAuthMethods[0] as AuthMethodIdType) ?? AuthMethodId.NativeAuth;
+     }
+   }
+   ```
+
+   This is a behaviour change for existing connections, so it needs a regression test asserting that
+   stored Native / Entra ID / NoAuth connections still resolve identically.
+
+   The existing "defense in depth" rule that `NoAuth` never surfaces stale secrets stays as-is, and
+   should extend to clearing `managedIdentityConfig`.
+
+`ExecuteStep` must persist `managedIdentityAuthConfig` as `{}` for system-assigned rather than
+omitting it.
+
+### 9. Playground and Interactive Shell
+
+`src/documentdb/playground/workerTypes.ts`:
+
+```ts
+readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth';
+
+// tokenRequest gains a discriminator; absent means 'vscode' for backward compatibility.
+{
+    readonly type: 'tokenRequest';
+    readonly requestId: string;
+    readonly scopes: readonly string[];
+    readonly tenantId?: string;
+    readonly source?: 'vscode' | 'managedIdentity';
+    readonly clientId?: string;
+}
+```
+
+Token acquisition stays on the **main thread** for both sources, so there is a single credential
+object and a single token cache per window, and so the worker never needs `@azure/identity`.
+
+- `playgroundWorker.ts`: extend the `MicrosoftEntraID` branch to also fire for `ManagedIdentity`,
+  setting `source: 'managedIdentity'` and `clientId` on the request. The OIDC options are otherwise
+  identical.
+- `PlaygroundEvaluator.handleTokenRequest()` and `ShellSessionManager.handleTokenRequest()`: branch
+  on `source`. The `managedIdentity` branch caches one `ManagedIdentityCredential` per client ID.
+- `buildInitMessage()` in both: pass `managedIdentityClientId` from
+  `credentials.managedIdentityConfig`.
+
+### 10. Error handling: plain-language translation only
+
+Per [D6.2](decisions.md#d62-error-mapping-simplified-to-plain-language-translation), this iteration
+**translates** errors into readable sentences and stops there. No suggested commands, no deep links,
+no branching remediation UI. This is the same approach taken in the Local Quick Start work.
+
+New file `src/documentdb/auth/managedIdentityErrors.ts`:
+
+```ts
+/** Turns a raw credential failure into a sentence a human can act on. Never throws. */
+export function describeManagedIdentityError(error: unknown, clientId?: string): string;
+```
+
+| Condition                                           | Message (localized)                                                                                                                                                                      |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Multiple candidate identities, no selector          | "This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use."                                   |
+| No identity endpoint exists                         | "No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned." |
+| Identity endpoint is temporarily unreachable        | "The managed identity endpoint could not be reached. This is usually a transient network problem. Try again."                                                                            |
+| Endpoint reachable, requested identity not assigned | "The managed identity with client ID {0} is not assigned to this machine."                                                                                                               |
+| Anything else                                       | Pass through with a "Managed Identity authentication failed: {0}" prefix.                                                                                                                |
+
+The first row is the reported incident, so it gets a sentence that names the cause and says what to
+do. It is still a sentence, not a workflow.
+
+> **Implementation note.** In `@azure/identity` 4.13 managed identity is delegated to
+> `@azure/msal-node` (`ManagedIdentitySources/`), so the surfaced error is typically a
+> `CredentialUnavailableError` or `AuthenticationError` wrapping an MSAL `ManagedIdentityError`.
+> The exact `name` values and message substrings must be captured from the fake-endpoint harness
+> (WI14) rather than guessed. Match defensively on both name and message, and always fall through to
+> the pass-through case.
+
+Richer, actionable mapping (retry commands, a link to cluster-side registration, an offer to
+re-run the identity picker) is deliberately **deferred**. Revisit once WI14 has captured what the
+errors actually look like on hardware.
+
+One exception is worth the sentence: when a token is obtained but the **server** rejects it, the
+connect-failure message should mention cluster-side registration, because otherwise the failure looks
+identical to a bad identity. Text only, no command.
+
+### 11. Azure environment probe: **on hold, D3 is open**
+
+**Do not implement until D3 is settled.** The current lean is not to build this at all; see
+[D3](decisions.md#d3-azure-environment-detection-open). The discovery benefit it was meant to
+provide is already covered by the static `detail` copy in §1, and the detection itself is performed
+authoritatively by `ManagedIdentityCredential` at the moment it matters.
+
+If it is built after all, the shape is:
+
+New file `src/documentdb/auth/azureEnvironmentProbe.ts`:
+
+```ts
+/** Best-effort, never throws. Result is cached for the session. */
+export async function isLikelyAzureHosted(): Promise<boolean>;
+```
+
+- `GET http://169.254.169.254/metadata/versions` with header `Metadata: true`.
+- **2 second** timeout (vscode-cosmosdb uses 10, which is a latency trap).
+- Cached result, single-flight promise, never throws, never gates anything.
+- Called lazily when the auth quick pick is about to be built, and for telemetry. **Never awaited on
+  a connection path.**
+
+Note that dropping the probe does **not** forbid using IMDS _after_ the user has explicitly selected
+managed identity. That distinction keeps the phase 2 "identities assigned to this VM" option in §7
+available.
+
+### 12. Telemetry
+
+Riding on the existing `selectedAuthMethod` property, add:
+
+| Property / measurement          | Values                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `managedIdentityKind`           | `system` \| `user`                                                                                |
+| `managedIdentityClientIdSource` | `connectionString` \| `prompt` \| `none`                                                          |
+| `managedIdentityFailureReason`  | `noEndpoint` \| `endpointUnreachable` \| `multipleIdentities` \| `identityNotAssigned` \| `other` |
+| `copiedAuthMechanism`           | `managedIdentity`, on the copy command only                                                       |
+
+`azureEnvironmentDetected` is dropped unless D3 lands on the probe. `managedIdentityFailureReason`
+already distinguishes `noEndpoint`, which is the same signal obtained from the real call rather than
+from a speculative one.
+
+The client ID itself is never emitted, and is added to `context.valuesToMask`. It is not a secret,
+but it is a stable tenant-scoped identifier and there is no analysis question that needs it.
+
+Follow the patterns in `.github/skills/telemetry-instrumentation/SKILL.md`.
+
+---
+
+## Work items
+
+### Phase 1: core authentication path
+
+Goal: a connection created from a pasted connection string can authenticate with a managed identity.
+This alone closes the incident for the reported scenario.
+
+| ID  | Description                                                                                                                                                                                           | Status |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| WI1 | Add `AuthMethodId.ManagedIdentity`, `ManagedIdentityAuthMethod`, register in `authMethodsArray`                                                                                                       | ✅     |
+| WI2 | Extract the shared Entra scope / token-resource constant. **Do not** touch the existing handler's `expiresInSeconds: 0`; the new handler reports its own from `AccessToken.expiresOnTimestamp` (D6.1) | ✅     |
+| WI3 | Add `ManagedIdentityAuthConfig`; extend `AuthConfig` union                                                                                                                                            | ✅     |
+| WI4 | Implement `ManagedIdentityAuthHandler` with a dynamic `@azure/identity` import                                                                                                                        | ✅     |
+| WI5 | Add the `ManagedIdentity` case to the `ClustersClient.initClient()` switch                                                                                                                            | ✅     |
+| WI6 | Implement `managedIdentityErrors.ts` / `describeManagedIdentityError()` (plain-language translation only, D6.2)                                                                                       | ✅     |
+
+### Phase 2: connection creation and persistence
+
+| ID   | Description                                                                                                                                | Status |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| WI7  | Implement connection-string authentication facts and the normalisation rule (§5.2); read facts **before** the username is cleared          | ✅     |
+| WI8  | `Copy Connection String`: emit the driver-native form for `ManagedIdentity` (§5.1)                                                         | ✅     |
+| WI9  | Offer `ManagedIdentity` for vCore hosts in `PromptConnectionStringStep`                                                                    | ✅     |
+| WI10 | Implement the identity selector. Superseded by the unified `SelectEntraTokenSourceStep` in iteration 04                                    | ✅     |
+| WI11 | Extend `ConnectionSecrets`, `CachedClusterCredentials`, `setAuthCredentials()`, `EphemeralClusterCredentials`, `AuthenticateWizardContext` | ✅     |
+| WI12 | Rework the `setFromConnectionItem()` inference ladder to honour `selectedAuthMethod` for all known methods                                 | ✅     |
+| WI13 | Persist `managedIdentityAuthConfig` (including `{}` for system-assigned) in `ExecuteStep`                                                  | ✅     |
+
+### Phase 3: validation harness
+
+Deliberately ahead of the remaining feature work: WI6 and WI11 cannot be reviewed honestly without it.
+
+| ID   | Description                                                                                                    | Status |
+| ---- | -------------------------------------------------------------------------------------------------------------- | ------ |
+| WI14 | Fake identity-endpoint test harness (see Testing below); capture real error shapes and feed them back into WI6 | ✅     |
+| WI15 | Unit tests per the Testing section, including the **copy then paste round-trip** across §5.1 and §5.2          | ✅     |
+
+### Phase 4: Azure Resources and Discovery views
+
+| ID   | Description                                                                                                               | Status |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- | ------ |
+| WI16 | Synthesize `ManagedIdentity` into `availableAuthMethods` in `clusterHelpers.ts`; keep raw `allowedModes` telemetry intact | ✅     |
+| WI17 | Thread `managedIdentityAuthConfig` through `VCoreResourceItem` and `DocumentDBResourceItem` `authenticateAndConnect()`    | ✅     |
+
+### Phase 5: Playground and Shell
+
+| ID   | Description                                                                                                                                         | Status |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| WI18 | Extend `workerTypes.ts` (`authMechanism` union, `tokenRequest` `source` / `clientId`)                                                               | ✅     |
+| WI19 | Extend `playgroundWorker.ts` OIDC branch to cover `ManagedIdentity`                                                                                 | ✅     |
+| WI20 | Branch `handleTokenRequest()` in `PlaygroundEvaluator` and `ShellSessionManager`; cache credentials per client ID; extend both `buildInitMessage()` | ✅     |
+
+### Phase 6: hardening and documentation
+
+| ID   | Description                                                                                                                                              | Status |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| WI21 | **On hold.** `azureEnvironmentProbe.ts` and quick-pick annotation. Blocked on D3; currently expected to be dropped                                       | ⛔     |
+| WI22 | Telemetry properties per §12                                                                                                                             | ✅     |
+| WI23 | `npm run l10n`; verify **no em dashes and no en dashes** in any new user-facing string (see Conventions)                                                 | ✅     |
+| WI24 | `docs/` updates (D6.3): new managed identity user-manual page, `copy-connection-string.md`, `how-to-construct-url.md`, `connection-string-parameters.md` | ✅     |
+| WI25 | Manual validation checklist for the Azure VM repro                                                                                                       | ✅     |
+
+### After the work lands
+
+Deliberately **not** done up front: both issues should be written with what the implementation and
+completed VM validation taught us, otherwise they would need rewriting.
+
+| ID   | Description                                                                                                                                                                   | Status |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| WI26 | File the **D4 issue**: chained default credential, MFA and Conditional Access, service principals, workload identity, sovereign clouds, plus anything this work surfaced      | ☐      |
+| WI27 | File the **D6.1 issue**: revisit token expiry and refresh for all Entra-based methods, including why `expiresInSeconds: 0` is there, informed by how the new handler behaved  | ☐      |
+| WI28 | Follow-up: correct the Learn "Connect using Microsoft Entra ID in Visual Studio Code" section (client ID handling, and the stale "shell functionality isn't supported" claim) | ☐      |
+
+---
+
+## Testing
+
+### Unit (Jest)
+
+- `expiresInSecondsFromTimestamp`: timestamp maths, floor at zero, clock-skew tolerance.
+- `getConnectionStringAuthFacts`: OIDC use, Azure machine-workflow declaration, token resource,
+  non-GUID username, casing variants, and `+srv` versus plain hosts.
+- **Normalisation:** after Azure machine-workflow facts are applied, the stored connection string retains no
+  `authMechanism`, no `authMechanismProperties`, and no username, and the config carries the client
+  ID (or `{}` for system-assigned).
+- `ManagedIdentityAuthHandler`: with a mocked credential, assert `authMechanism`, `tls`,
+  `ALLOWED_HOSTS`, the TLS exception, and specifically that `authMechanismProperties` and
+  `authMechanism` are **removed from the returned connection string**.
+- `buildParsedConnectionString`: the copy output for a system-assigned and a user-assigned identity,
+  that existing query parameters survive, and that no password is ever added (§5.1).
+- **Round-trip:** copy output fed back through `getConnectionStringAuthFacts` plus normalisation
+  yields the original config. One test, both directions, so the two halves cannot drift apart
+  unnoticed.
+- `describeManagedIdentityError`: each mapped condition plus the pass-through fallback.
+- `CredentialCache`: `setAuthCredentials` and `setFromConnectionItem` round trip for
+  `ManagedIdentity`, including the system-assigned `{}` case.
+- `SelectEntraTokenSourceStep.buildItems()`: a pasted candidate is highlighted when present,
+  account sign-in is first otherwise, both managed identity routes remain reachable, and the list
+  is never empty.
+- **Regression:** `setFromConnectionItem` still resolves existing stored Native / Entra ID / NoAuth
+  connections identically after the WI12 ladder change.
+
+### Fake identity-endpoint harness (WI14)
+
+`ManagedIdentityCredential` delegates to `@azure/msal-node`, whose `ManagedIdentitySources/AppService`
+source reads `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` (verified in `node_modules`, API version
+`2019-08-01`). Pointing those at a local `http.Server` exercises the **real** credential object end to
+end, with no Azure resources involved.
+
+Cases to cover:
+
+1. Success, system-assigned. Assert no `client_id`-style selector is sent.
+2. Success, user-assigned. Assert the client ID reaches the endpoint.
+3. Multiple-identity failure response. Capture the real error `name` and message, and assert the
+   mapping in WI6.
+4. Identity not assigned.
+5. Endpoint unreachable (env vars unset, and no IMDS in the test environment).
+6. Expiry propagation: assert the driver receives a sane `expiresInSeconds`.
+
+### Manual validation checklist (WI25)
+
+Completed successfully on a real Azure VM on 2026-09-18. The verified scenarios and results are
+recorded in the [manual validation checklist](manual-validation-checklist.md).
+
+### PR completion checklist
+
+Per `.github/copilot-instructions.md`, all five must pass, in this order: `npm run l10n`,
+`npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage`, `npm run build`.
+
+Plus one project-specific gate for this work: **grep the files you touched for em dashes and en
+dashes and confirm there are none** in any user-facing string or in the documentation added under
+`docs/`. See Conventions for the implementer.
+
+---
+
+## Risks and open questions
+
+| #   | Risk                                                                                        | Mitigation                                                                                      |
+| --- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1   | `@azure/identity` + MSAL bundle weight                                                      | Dynamic `await import()` inside the handler only. Check the webpack bundle report before merge. |
+| 2   | URL `authMechanismProperties` conflicting with `MongoClientOptions.authMechanismProperties` | Strip from the URL; assert in a unit test (WI15).                                               |
+| 3   | `ALLOWED_HOSTS` may be spec'd for human callbacks only                                      | The official DocumentDB Node.js sample uses it with a machine callback; confirm in WI14.        |
+| 4   | WI12's inference-ladder change silently altering existing connections                       | Dedicated regression test; the change is ordered before the new rung is relied upon.            |
+| 5   | Error-message mapping written against guessed error shapes                                  | WI14 is scheduled before WI6 is finalized specifically to capture real shapes.                  |
+| 6   | Managed identity is unavailable in a browser-hosted extension host                          | Hide the method when the Node runtime is unavailable; confirm the current activation targets.   |
+| 7   | Sovereign clouds use a different Entra token endpoint and DocumentDB scope                  | Out of scope, folded into the D4 issue.                                                         |
+| 8   | Seventh positional parameter on `setAuthCredentials()`                                      | Accepted for now; options-object refactor tracked as separate follow-up.                        |
+| 9   | Copy and paste drifting apart, so a string we emit is not the string we can read            | One round-trip unit test spanning §5.1 and §5.2 (WI15), not two independent tests.              |
+
+Open items are listed in [`decisions.md`](decisions.md#still-open): **D3** (probe or no probe) and
+**D2** (source of the known identity rows). Neither blocks implementation; both have a default that
+an implementer should follow unless told otherwise.
+
+---
+
+## Future work
+
+- **The D4 issue** (WI26): chained default credential, MFA and Conditional Access behaviour, service
+  principals, workload identity federation, sovereign clouds.
+- **The D6.1 issue** (WI27): token expiry and refresh across all Entra-based methods.
+- **Richer identity discovery** (D2 open item): ARM enumeration of
+  `Microsoft.ManagedIdentity/userAssignedIdentities` for name-based selection in the Azure Resources
+  and Discovery views, and enumeration of the identities actually assigned to this VM.
+- **Actionable error remediation** (D6.2): commands and links, once WI14 has captured real shapes.
+- **Azure hosting platforms beyond VMs** (D0): a documentation and test change, not a code change.
+- **`setAuthCredentials()` options-object refactor.**
+- **Cluster-side registration assist.** When a managed identity token is obtained but the cluster
+  rejects it, offer to register the principal as a `Microsoft.DocumentDB/mongoClusters/users`
+  resource, mirroring the RBAC assist in vscode-cosmosdb.
+
+---
+
+## References
+
+- Evidence and prior-art analysis: [`research-findings.md`](research-findings.md)
+- Decisions and rejected alternatives: [`decisions.md`](decisions.md)
+- Azure DocumentDB role-based access control:
+  <https://learn.microsoft.com/azure/documentdb/how-to-connect-role-based-access-control>
+- SqlClient Microsoft Entra authentication (the vscode-mssql precedent):
+  <https://learn.microsoft.com/sql/connect/ado-net/sql/azure-active-directory-authentication>
+- `.github/skills/tree-cluster-architecture/SKILL.md` (dual-ID pattern, relevant to WI17)
+- `.github/skills/telemetry-instrumentation/SKILL.md` (relevant to WI22)
+- `.github/instructions/wizard.instructions.md` (relevant to WI10)

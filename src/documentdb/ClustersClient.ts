@@ -9,33 +9,45 @@
  * singletone on a client with a getter from a connection pool..
  */
 
-import { appendExtensionUserAgent, callWithTelemetryAndErrorHandling, parseError } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    appendExtensionUserAgent,
+    callWithTelemetryAndErrorHandling,
+    parseError,
+    type ITelemetryContext,
+} from '@microsoft/vscode-azext-utils';
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
-import { EJSON } from 'bson';
+import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
     MongoClient,
     ObjectId,
+    type ClientSession,
     type Collection,
     type DeleteResult,
     type Document,
     type Filter,
     type FindOptions,
+    type InsertManyResult,
     type ListDatabasesResult,
     type MongoClientOptions,
     type WithId,
     type WithoutId,
-    type WriteError,
 } from 'mongodb';
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
+import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
+import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
+import { NoAuthHandler } from './auth/NoAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
+import { QueryError } from './errors/QueryError';
 import {
     llmEnhancedFeatureApis,
     type CollectionStats,
@@ -46,8 +58,15 @@ import {
     type IndexSpecification,
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
+import { SchemaStore } from './SchemaStore';
+import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
+import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
+import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
+import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
+import { parseDocumentId } from './utils/parseDocumentId';
+import { resolveAllowInvalidCertificates } from './utils/tlsException';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export interface DatabaseItemModel {
@@ -59,6 +78,7 @@ export interface DatabaseItemModel {
 export interface CollectionItemModel {
     name: string;
     type?: string;
+    shardKey?: Record<string, number | string>;
 }
 
 /**
@@ -99,7 +119,7 @@ export interface FindQueryParams {
 
 export interface IndexItemModel {
     name: string;
-    type: 'traditional' | 'search';
+    type: 'traditional' | 'search' | 'vectorSearch';
     key?: {
         [key: string]: number | string;
     };
@@ -110,32 +130,96 @@ export interface IndexItemModel {
     hidden?: boolean;
     expireAfterSeconds?: number;
     partialFilterExpression?: Document;
+    cosmosSearchOptions?: Document;
     status?: string;
     queryable?: boolean;
     fields?: unknown[];
     [key: string]: unknown; // Allow additional index properties
 }
 
-// Currently we only return insertedCount, but we can add more fields in the future if needed
-// Keep the type definition here for future extensibility
-export type InsertDocumentsResult = {
-    /** The number of inserted documents for this operations */
-    insertedCount: number;
-};
+export type IndexExclusionReason = 'builtInId' | 'notCopyable';
+
+export function getIndexExclusionReason(index: IndexItemModel): IndexExclusionReason | undefined {
+    if (index.key && Object.keys(index.key).length === 1 && Object.prototype.hasOwnProperty.call(index.key, '_id')) {
+        return 'builtInId';
+    }
+
+    return index.key === undefined ? 'notCopyable' : undefined;
+}
+
+export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
+    return error instanceof MongoBulkWriteError;
+}
+
+type ClientStartupStage =
+    | 'stage01PreparingCredentials'
+    | 'stage02ConfiguringAuth'
+    | 'stage03PreparingClient'
+    | 'stage04ConnectingAndAuthenticating'
+    | 'stage05InitializingApis';
+
+interface ClientStartup {
+    readonly id: string;
+    readonly startedAt: number;
+    readonly costTimings: ConnectionStartupTimings;
+    readonly telemetry: ITelemetryContext;
+    readonly stageDurationsMs: Partial<Record<ClientStartupStage, number>>;
+    stage: ClientStartupStage;
+    stageStartedAt: number;
+}
+
+/**
+ * Validates that a parsed BSON value is a plain object (not a scalar, array, or null).
+ * Throws a QueryError if the value is not a plain object.
+ */
+function assertDocumentObject(value: unknown, errorCode: 'INVALID_PROJECTION' | 'INVALID_SORT'): Document {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new QueryError(errorCode, l10n.t('Expected a document object like { field: 1 }, got: {0}', typeof value));
+    }
+    return value as Document;
+}
 
 export class ClustersClient {
-    // cache of active/existing clients
+    /**
+     * Cache of active MongoDB clients, keyed by clusterId.
+     *
+     * KEY: `clusterId` - The stable cluster identifier (NOT the tree item ID)
+     *   - Connections View items: Use `cluster.clusterId` (= storageId, stable UUID)
+     *   - Azure Resources View items: Use `cluster.clusterId` (= Sanitized Azure Resource ID)
+     *
+     * VALUE: ClustersClient instance wrapping a MongoClient
+     *
+     * ⚠️ WARNING: Do NOT use `treeId` as the cache key!
+     * Tree IDs change when items are moved between folders, causing cache misses
+     * and orphaned connections.
+     */
     static _clients: Map<string, ClustersClient> = new Map();
 
     private _mongoClient: MongoClient;
     private _llmEnhancedFeatureApis: llmEnhancedFeatureApis | null = null;
     private _queryInsightsApis: QueryInsightsApis | null = null;
     private _clusterMetadataPromise: Promise<ClusterMetadata> | null = null;
+    private _srvResolution?: SrvResolutionSummary;
+
+    /** In-memory cache for listDatabases results. */
+    private _databasesCache: DatabaseItemModel[] | null = null;
+    /** In-memory cache for listCollections results, keyed by database name. */
+    private _collectionsCache = new Map<string, CollectionItemModel[]>();
 
     /**
-     * Use getClient instead of a constructor. Connections/Client are being cached and reused.
+     * This client's startup ID, also published as `startupCorrelationId`. Links `connect.startup`,
+     * `connect.staticmetadata`, `connect.getmetadata` and SRV events. Generated once per `initClient` call.
      */
-    private constructor(private readonly credentialId: string) {
+    public connectionCorrelationId?: string;
+
+    /**
+     * Private constructor - use getClient() instead.
+     * Connections/Clients are being cached and reused.
+     *
+     * @param clusterId - The stable cluster ID used to look up credentials in CredentialCache.
+     *   This is NOT the tree item ID - it's the clusterId that remains stable across folder moves.
+     */
+    private constructor(private readonly clusterId: string) {
         return;
     }
 
@@ -166,14 +250,89 @@ export class ClustersClient {
     //     }
     // }
 
-    private async initClient(): Promise<void> {
-        const credentials = CredentialCache.getCredentials(this.credentialId);
+    private async initClient(abortSignal?: AbortSignal): Promise<void> {
+        const startupId = randomUUID();
+        this.connectionCorrelationId = startupId;
+        let originalFailure: { error: unknown } | undefined;
+
+        try {
+            await callWithTelemetryAndErrorHandling('connect.startup', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.errorHandling.rethrow = true;
+                context.telemetry.maskEntireErrorMessage = true;
+                context.telemetry.properties.connectionCorrelationId = startupId;
+                context.telemetry.properties.startupCorrelationId = startupId;
+                context.telemetry.properties.surface = 'extension';
+                const startedAt = Date.now();
+                const startup: ClientStartup = {
+                    id: startupId,
+                    startedAt,
+                    costTimings: new ConnectionStartupTimings(),
+                    telemetry: context.telemetry,
+                    stageDurationsMs: {},
+                    stage: 'stage01PreparingCredentials',
+                    stageStartedAt: startedAt,
+                };
+
+                try {
+                    await this.initializeClient(startup, abortSignal);
+                    this.finishClientStartup(startup, 'succeeded');
+                } catch (error) {
+                    const canceled = error instanceof UserCancelledError;
+                    this.finishClientStartup(startup, canceled ? 'canceled' : 'failed');
+                    originalFailure = { error };
+                    if (canceled) {
+                        throw new UserCancelledError('connectionStartup');
+                    }
+                    const telemetryError = new Error('Connection startup failed');
+                    telemetryError.stack = undefined;
+                    throw telemetryError;
+                }
+            });
+        } catch (error) {
+            throw originalFailure ? originalFailure.error : error;
+        }
+
+        if (originalFailure) {
+            throw originalFailure.error;
+        }
+    }
+
+    private recordClientStartupStage(startup: ClientStartup): number {
+        const durationMs = Date.now() - startup.stageStartedAt;
+        const accumulatedDurationMs = (startup.stageDurationsMs[startup.stage] ?? 0) + durationMs;
+        startup.stageDurationsMs[startup.stage] = accumulatedDurationMs;
+        startup.telemetry.measurements[`${startup.stage}DurationMs`] = accumulatedDurationMs;
+        return durationMs;
+    }
+
+    private advanceClientStartup(startup: ClientStartup, stage: ClientStartupStage): void {
+        this.recordClientStartupStage(startup);
+        startup.stage = stage;
+        startup.stageStartedAt = Date.now();
+    }
+
+    private finishClientStartup(startup: ClientStartup, outcome: 'succeeded' | 'failed' | 'canceled'): void {
+        startup.telemetry.properties.startupOutcome = outcome;
+        startup.telemetry.properties.lastStage = startup.stage;
+        startup.telemetry.measurements.lastStageDurationMs = this.recordClientStartupStage(startup);
+        const costTimingsMs = startup.costTimings.finish();
+        Object.assign(startup.telemetry.measurements, costTimingsMs);
+        const level = outcome === 'failed' ? 'error' : 'trace';
+        ext.outputChannel?.[level](
+            `[ClustersClient] startup=${startup.id} ${outcome} surface=extension auth=${startup.telemetry.properties.authMethod ?? 'unknown'} lastStage=${startup.stage} elapsedMs=${String(Date.now() - startup.startedAt)} stageDurationsMs=${JSON.stringify(startup.stageDurationsMs)} costTimingsMs=${JSON.stringify(costTimingsMs)}`,
+        );
+    }
+
+    private async initializeClient(startup: ClientStartup, abortSignal?: AbortSignal): Promise<void> {
+        const credentials = CredentialCache.getCredentials(this.clusterId);
         if (!credentials) {
-            throw new Error(l10n.t('No credentials found for id {credentialId}', { credentialId: this.credentialId }));
+            throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
         }
 
         // default to NativeAuth if nothing is configured
         const authMethod = credentials?.authMechanism ?? AuthMethodId.NativeAuth;
+        startup.telemetry.properties.authMethod = authMethod;
 
         // TODO: add a proper factory pattern here when more methods are added
         let authHandler: AuthHandler;
@@ -184,21 +343,64 @@ export class ClustersClient {
             case AuthMethodId.MicrosoftEntraID:
                 authHandler = new MicrosoftEntraIDAuthHandler(credentials);
                 break;
+            case AuthMethodId.ManagedIdentity:
+                authHandler = new ManagedIdentityAuthHandler(credentials);
+                break;
+            case AuthMethodId.NoAuth:
+                authHandler = new NoAuthHandler(credentials);
+                break;
             default:
                 throw new Error(l10n.t('Unsupported authentication method: {0}', authMethod));
         }
 
         // Configure auth and get connection options
-        const { connectionString, options } = await authHandler.configureAuth();
+        this.advanceClientStartup(startup, 'stage02ConfiguringAuth');
+        const { connectionString, options } = await authHandler.configureAuth(startup.costTimings, {
+            startupCorrelationId: startup.id,
+            surface: 'extension',
+        });
 
+        this.advanceClientStartup(startup, 'stage03PreparingClient');
         const hosts = getHostsFromConnectionString(connectionString);
         const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
         if (userAgentString) {
             options.appName = userAgentString;
         }
 
-        // Connect with the configured options
-        await this.connect(connectionString, options, credentials.emulatorConfiguration);
+        // Emit static metadata (domain info) BEFORE the connection attempt.
+        // This ensures destination telemetry is available even when connections fail.
+        const correlationId = startup.id;
+        void callWithTelemetryAndErrorHandling('connect.staticmetadata', async (context) => {
+            const { getDomainMetadata } = await import('./utils/getClusterMetadata');
+            const domainMetadata = getDomainMetadata(hosts);
+            context.telemetry.properties = {
+                startupCorrelationId: correlationId,
+                connectionCorrelationId: correlationId,
+                ...context.telemetry.properties,
+                ...domainMetadata,
+            };
+        });
+
+        const prepared = await prepareDriverConnectionString({
+            connectionString,
+            options,
+            surface: 'extension',
+            correlation: {
+                startupCorrelationId: startup.id,
+                connectionCorrelationId: startup.id,
+            },
+            abortSignal,
+            startupTelemetry: startup.telemetry,
+        });
+        this._srvResolution = prepared.summary;
+        await this.connect(
+            startup,
+            prepared.connectionString,
+            prepared.options,
+            credentials.emulatorConfiguration,
+            abortSignal,
+            connectionString,
+        );
 
         // Start metadata collection and store the promise
         this._clusterMetadataPromise = getClusterMetadata(this._mongoClient, hosts);
@@ -208,6 +410,8 @@ export class ClustersClient {
             const metadata: ClusterMetadata = await this._clusterMetadataPromise!;
             context.telemetry.properties = {
                 authmethod: authMethod,
+                startupCorrelationId: correlationId,
+                connectionCorrelationId: correlationId,
                 ...context.telemetry.properties,
                 ...metadata,
             };
@@ -215,23 +419,93 @@ export class ClustersClient {
     }
 
     private async connect(
+        startup: ClientStartup,
         connectionString: string,
         options: MongoClientOptions,
         emulatorConfiguration?: EmulatorConfiguration,
+        abortSignal?: AbortSignal,
+        originalConnectionString: string = connectionString,
     ): Promise<void> {
+        // Create the client instance first so we hold a reference during connection.
+        // This allows callers to abort via abortSignal by closing the underlying client.
+        this._mongoClient = new MongoClient(connectionString, options);
+
+        if (abortSignal?.aborted) {
+            ext.outputChannel.debug(
+                `[ClustersClient] startup=${startup.id} canceled before connecting (already aborted signal) surface=extension`,
+            );
+            await this._mongoClient.close();
+            throw new UserCancelledError('abortConnection');
+        }
+
+        // Track whether connect() has resolved so the abort handler can avoid
+        // closing an already-connected client during the micro window between
+        // connect() resolving and removeEventListener firing. This window exists
+        // because abort events are dispatched synchronously when abort() is
+        // called: if abort() fires during the synchronous continuation after
+        // connect() resolves but before the listener is removed, the handler
+        // would close the now-connected client without this guard.
+        let connected = false;
+
+        // Wire up abort: closing the client causes the pending connect() to reject
+        const onAbort = (): void => {
+            if (connected) {
+                // connect() already resolved — do not close the connected client.
+                return;
+            }
+            ext.outputChannel.debug(
+                `[ClustersClient] startup=${startup.id} abort requested; closing client to interrupt connection handshake surface=extension`,
+            );
+            void this._mongoClient.close().catch(() => {
+                // Ignore close errors during abort cleanup
+            });
+        };
+        abortSignal?.addEventListener('abort', onAbort, { once: true });
+
         try {
-            this._mongoClient = await MongoClient.connect(connectionString, options);
+            this.advanceClientStartup(startup, 'stage04ConnectingAndAuthenticating');
+            const stopDatabaseConnect = startup.costTimings.startDatabaseConnect();
+            try {
+                await this._mongoClient.connect();
+            } finally {
+                stopDatabaseConnect();
+            }
+            connected = true;
+
+            // Remove the abort listener immediately after connect() resolves so
+            // that a late cancellation during synchronous API init below cannot
+            // close an already-connected client while the method continues as
+            // "successful". The connected flag above serves as a belt-and-suspenders
+            // guard in case abort fires between the assignment and this removal.
+            abortSignal?.removeEventListener('abort', onAbort);
+
+            this.advanceClientStartup(startup, 'stage05InitializingApis');
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
+            if (abortSignal?.aborted) {
+                ext.outputChannel.debug(`[ClustersClient] startup=${startup.id} canceled by user surface=extension`);
+                throw new UserCancelledError('abortConnection');
+            }
+
             const message = parseError(error).message;
-            if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
+            // Surface the friendly local-connection tips only for a genuinely local-ish connection
+            // (emulator, OR a local connection that opted into the TLS exception — host-gated the
+            // same way as the TLS option). An orphaned flag on a PUBLIC host must NOT make a public
+            // ECONNREFUSED/self-signed failure show "local instance" troubleshooting copy.
+            const isLocalish =
+                !!emulatorConfiguration?.isEmulator ||
+                !!resolveAllowInvalidCertificates(
+                    emulatorConfiguration?.disableEmulatorSecurity,
+                    originalConnectionString,
+                );
+            if (isLocalish && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.',
                     { link: Links.LocalConnectionDebuggingTips },
                 );
-            } else if (emulatorConfiguration?.isEmulator && message.includes('self-signed certificate')) {
+            } else if (isLocalish && message.includes('self-signed certificate')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'The local instance is using a self-signed certificate. To connect, you must import the appropriate TLS/SSL certificate. See {link} for tips.',
@@ -239,29 +513,81 @@ export class ClustersClient {
                 );
             }
             throw error;
+        } finally {
+            // Clean up the abort listener if we didn't already remove it in the
+            // success path (i.e., connect() failed). In the success path the
+            // listener was already removed above.
+            if (abortSignal && !connected) {
+                abortSignal.removeEventListener('abort', onAbort);
+            }
         }
     }
 
     /**
-     * Retrieves an instance of `ClustersClient` based on the provided `credentialId`.
+     * Returns the underlying MongoClient instance.
+     * Used by the query playground evaluator to create a `@mongosh` ServiceProvider
+     * that reuses the existing, authenticated connection.
+     */
+    public getMongoClient(): MongoClient {
+        return this._mongoClient;
+    }
+
+    /**
+     * Retrieves an instance of `ClustersClient` based on the provided `clusterId`.
      *
-     * @param credentialId - A required string used to find the cached connection string to connect.
+     * @param clusterId - A required string used to find the cached connection string to connect.
      * It is also used as a key to reuse existing clients.
+     * @param abortSignal - Optional signal to abort the connection attempt. When aborted,
+     * the in-progress connection is closed and a `UserCancelledError` is thrown.
      * @returns A promise that resolves to an instance of `ClustersClient`.
      */
-    public static async getClient(credentialId: string): Promise<ClustersClient> {
-        let client: ClustersClient;
+    public static async getClient(clusterId: string, abortSignal?: AbortSignal): Promise<ClustersClient> {
+        if (ClustersClient._clients.has(clusterId)) {
+            const client = ClustersClient._clients.get(clusterId) as ClustersClient;
 
-        if (ClustersClient._clients.has(credentialId)) {
-            client = ClustersClient._clients.get(credentialId) as ClustersClient;
+            // Wire up abort for cached client reconnection so the cancellable
+            // progress UI can also cancel a reconnection attempt.
+            if (abortSignal?.aborted) {
+                throw new UserCancelledError('abortConnection');
+            }
 
-            // if the client is already connected, it's a NOOP.
-            await client._mongoClient.connect();
-        } else {
-            client = new ClustersClient(credentialId);
+            const onAbort = (): void => {
+                void client._mongoClient.close().catch(() => {
+                    // Ignore close errors when aborting during reconnect
+                });
+            };
+            abortSignal?.addEventListener('abort', onAbort, { once: true });
+
+            try {
+                // if the client is already connected, it's a NOOP.
+                // Note: connectionCorrelationId retains the value from the initial
+                // connection (set in initClient). This is by design — the correlation
+                // ID links the original connect/staticmetadata/getmetadata events.
+                // Cached reconnects don't emit new metadata events, so no new ID is needed.
+                await client._mongoClient.connect();
+            } catch (error) {
+                if (abortSignal?.aborted) {
+                    throw new UserCancelledError('abortConnection');
+                }
+                throw error;
+            } finally {
+                abortSignal?.removeEventListener('abort', onAbort);
+            }
+
+            return client;
+        }
+
+        const client = new ClustersClient(clusterId);
+        try {
             // Cluster metadata is set in initClient
-            await client.initClient();
-            ClustersClient._clients.set(credentialId, client);
+            await client.initClient(abortSignal);
+            ClustersClient._clients.set(clusterId, client);
+        } catch (error) {
+            // On failure (including abort), clean up the partially-created client
+            void client._mongoClient?.close().catch(() => {
+                // Ignore close errors during cleanup
+            });
+            throw error;
         }
 
         return client;
@@ -283,22 +609,93 @@ export class ClustersClient {
     }
 
     /**
-     * Determines whether a client for the given credential identifier is present in the internal cache.
+     * Determines whether a client for the given cluster ID is present in the internal cache.
      */
-    public static exists(credentialId: string): boolean {
-        return ClustersClient._clients.has(credentialId);
+    public static exists(clusterId: string): boolean {
+        return ClustersClient._clients.has(clusterId);
     }
 
-    public static async deleteClient(credentialId: string): Promise<void> {
-        if (ClustersClient._clients.has(credentialId)) {
-            const client = ClustersClient._clients.get(credentialId) as ClustersClient;
+    /**
+     * Returns an existing client synchronously if it is already in the connection pool.
+     * Returns `undefined` if the client is not yet connected. This is useful for
+     * accessing cached data (e.g., cached collection/database listings) without
+     * triggering a connection or blocking on async operations.
+     */
+    public static getExistingClient(clusterId: string): ClustersClient | undefined {
+        return ClustersClient._clients.get(clusterId);
+    }
+
+    public static getSrvResolution(clusterId: string): SrvResolutionSummary | undefined {
+        return ClustersClient._clients.get(clusterId)?._srvResolution;
+    }
+
+    public static async deleteClient(clusterId: string): Promise<void> {
+        if (ClustersClient._clients.has(clusterId)) {
+            const client = ClustersClient._clients.get(clusterId) as ClustersClient;
             await client._mongoClient.close(true);
-            ClustersClient._clients.delete(credentialId);
+            ClustersClient._clients.delete(clusterId);
+
+            // Clear cached schema data for this cluster
+            SchemaStore.getInstance().clearCluster(clusterId);
         }
     }
 
+    startTransaction(): ClientSession {
+        try {
+            const session = this._mongoClient.startSession();
+            session.startTransaction();
+            return session;
+        } catch (error) {
+            throw new Error(l10n.t('Failed to start a transaction: {0}', parseError(error).message));
+        }
+    }
+
+    startTransactionWithSession(session: ClientSession): void {
+        try {
+            session.startTransaction();
+        } catch (error) {
+            throw new Error(
+                l10n.t('Failed to start a transaction with the provided session: {0}', parseError(error).message),
+            );
+        }
+    }
+
+    async commitTransaction(session: ClientSession): Promise<void> {
+        try {
+            await session.commitTransaction();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to commit transaction: {0}', parseError(error).message));
+        } finally {
+            this.endSession(session);
+        }
+    }
+
+    async abortTransaction(session: ClientSession): Promise<void> {
+        try {
+            await session.abortTransaction();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to abort transaction: {0}', parseError(error).message));
+        } finally {
+            this.endSession(session);
+        }
+    }
+
+    startSession(): ClientSession {
+        try {
+            return this._mongoClient.startSession();
+        } catch (error) {
+            throw new Error(l10n.t('Failed to start a session: {0}', parseError(error).message));
+        }
+    }
+
+    endSession(session: ClientSession): void {
+        session.endSession().catch((error) => {
+            throw new Error(l10n.t('Failed to end session: {0}', parseError(error).message));
+        });
+    }
+
     getUserName() {
-        return CredentialCache.getConnectionUser(this.credentialId);
+        return CredentialCache.getConnectionUser(this.clusterId);
     }
 
     /**
@@ -312,11 +709,11 @@ export class ClustersClient {
      * @deprecated Use getCredentials() which returns a CachedClusterCredentials object instead.
      */
     getConnectionStringWithPassword(): string | undefined {
-        return CredentialCache.getConnectionStringWithPassword(this.credentialId);
+        return CredentialCache.getConnectionStringWithPassword(this.clusterId);
     }
 
     public getCredentials(): CachedClusterCredentials | undefined {
-        return CredentialCache.getCredentials(this.credentialId) as CachedClusterCredentials | undefined;
+        return CredentialCache.getCredentials(this.clusterId) as CachedClusterCredentials | undefined;
     }
 
     /**
@@ -330,7 +727,30 @@ export class ClustersClient {
         return this._queryInsightsApis;
     }
 
-    async listDatabases(): Promise<DatabaseItemModel[]> {
+    getCollection(databaseName: string, collectionName: string): Collection<Document> {
+        try {
+            return this._mongoClient.db(databaseName).collection(collectionName);
+        } catch (error) {
+            throw new Error(
+                l10n.t(
+                    'Failed to get collection {0} in database {1}: {2}',
+                    collectionName,
+                    databaseName,
+                    parseError(error).message,
+                ),
+            );
+        }
+    }
+
+    async listDatabases(useCached?: boolean): Promise<DatabaseItemModel[]> {
+        if (useCached && this._databasesCache) {
+            return this._databasesCache;
+        }
+
+        // Note: we intentionally do NOT pass `{ nameOnly: true }` here. The empty-`admin`
+        // filter below relies on the `empty` field, which `nameOnly` omits (along with
+        // `sizeOnDisk`). Keeping the full listing ensures an empty `admin` database stays
+        // hidden while a non-empty `admin` (user-managed roles/collections) remains visible.
         const rawDatabases: ListDatabasesResult = await this._mongoClient.db().admin().listDatabases();
         const databases: DatabaseItemModel[] = rawDatabases.databases.filter(
             // Filter out the 'admin' database if it's empty
@@ -360,19 +780,84 @@ export class ClustersClient {
                              }
          */
 
+        this._databasesCache = databases;
+
         return databases;
     }
 
-    async listCollections(databaseName: string): Promise<CollectionItemModel[]> {
+    async listCollections(databaseName: string, useCached?: boolean): Promise<CollectionItemModel[]> {
+        if (useCached) {
+            const cached = this._collectionsCache.get(databaseName);
+            if (cached) {
+                return cached;
+            }
+        }
+
         const rawCollections = await this._mongoClient.db(databaseName).listCollections().toArray();
-        const collections: CollectionItemModel[] = rawCollections;
+        const collections: CollectionItemModel[] = rawCollections.map((c) => ({
+            name: c.name,
+            type: c.type,
+            shardKey:
+                'options' in c
+                    ? (c.options as { shardKey?: Record<string, number | string> } | undefined)?.shardKey
+                    : undefined,
+        }));
+
+        this._collectionsCache.set(databaseName, collections);
 
         return collections;
     }
 
-    async listIndexes(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
+    /**
+     * Counts collections in a database using a cursor with `nameOnly: true`.
+     * Fetches at most `limit + 1` items and closes the cursor early.
+     *
+     * @returns An object with `count` (capped at `limit`) and `hasMore`
+     *          (`true` when the database has more than `limit` collections).
+     */
+    async countCollections(databaseName: string, limit: number): Promise<{ count: number; hasMore: boolean }> {
+        const cursor = this._mongoClient
+            .db(databaseName)
+            .listCollections({}, { nameOnly: true })
+            .batchSize(limit + 1);
+
+        try {
+            let count = 0;
+            while (count <= limit && (await cursor.hasNext())) {
+                await cursor.next();
+                count++;
+            }
+
+            if (count > limit) {
+                return { count: limit, hasMore: true };
+            }
+            return { count, hasMore: false };
+        } finally {
+            await cursor.close();
+        }
+    }
+
+    /**
+     * Returns cached collection names for the given database, if available.
+     * Does NOT trigger a network request. Returns `undefined` if no cache exists.
+     */
+    getCachedCollections(databaseName: string): CollectionItemModel[] | undefined {
+        return this._collectionsCache.get(databaseName);
+    }
+
+    /**
+     * Returns cached database list, if available.
+     * Does NOT trigger a network request. Returns `undefined` if no cache exists.
+     */
+    getCachedDatabases(): DatabaseItemModel[] | undefined {
+        return this._databasesCache ?? undefined;
+    }
+
+    async listIndexes(databaseName: string, collectionName: string, signal?: AbortSignal): Promise<IndexItemModel[]> {
+        signal?.throwIfAborted();
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
         const indexes = await collection.indexes();
+        signal?.throwIfAborted();
 
         let i = 0;
         return indexes.map((index) => {
@@ -386,18 +871,26 @@ export class ClustersClient {
         });
     }
 
-    async listSearchIndexesForAtlas(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
+    async listSearchIndexesForAtlas(
+        databaseName: string,
+        collectionName: string,
+        signal?: AbortSignal,
+    ): Promise<IndexItemModel[]> {
         try {
             const collection = this._mongoClient.db(databaseName).collection(collectionName);
-            const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }]).toArray();
+            const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }], { signal }).toArray();
             let i = 0; // backup for indexes with no names
             return searchIndexes.map((index: Document) => ({
                 ...index,
                 name: (index.name as string | undefined) ?? 'search_idx_' + (i++).toString(),
-                type: ((index.type as string | undefined) ?? 'search') as 'traditional' | 'search',
+                type: index.type === 'vectorSearch' ? 'vectorSearch' : 'search',
                 fields: index.fields as unknown[] | undefined,
             }));
         } catch {
+            if (signal?.aborted) {
+                throw signal.reason instanceof Error ? signal.reason : new Error('Operation aborted');
+            }
+            meterSilentCatch('ClustersClient_listSearchIndexes');
             // $listSearchIndexes not supported on this platform (e.g., non-Atlas deployments)
             // Return empty array silently
             return [];
@@ -430,18 +923,42 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = EJSON.parse(queryParams.project) as Document;
+                const parsed: unknown = parseShellBSON(queryParams.project, {
+                    mode: ParseMode.Loose,
+                });
+                options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                if (error instanceof QueryError) throw error;
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = EJSON.parse(queryParams.sort) as Document;
+                const parsed: unknown = parseShellBSON(queryParams.sort, {
+                    mode: ParseMode.Loose,
+                });
+                options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                if (error instanceof QueryError) throw error;
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -483,6 +1000,55 @@ export class ClustersClient {
     }
 
     /**
+     * Counts documents in a collection matching the given filter query.
+     *
+     * @param databaseName - The name of the database
+     * @param collectionName - The name of the collection
+     * @param findQuery - Optional filter query string (defaults to '{}')
+     * @returns Number of documents matching the filter
+     *
+     * @throws {QueryError} with code 'INVALID_FILTER' if findQuery contains invalid JSON/BSON syntax.
+     *         Callers should handle this error appropriately - currently this error will propagate
+     *         up the call stack. TODO: Revisit error handling strategy when this function is used
+     *         in more contexts (e.g., UI count displays may want graceful fallback).
+     */
+    async countDocuments(databaseName: string, collectionName: string, findQuery: string = '{}'): Promise<number> {
+        if (findQuery === undefined || findQuery.trim().length === 0) {
+            findQuery = '{}';
+        }
+        // NOTE: toFilterQueryObj throws QueryError on invalid input - see JSDoc above
+        const findQueryObj: Filter<Document> = toFilterQueryObj(findQuery);
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+
+        const count = await collection.countDocuments(findQueryObj, {
+            // Use a read preference of 'primary' to ensure we get the most up-to-date
+            // count, especially important for sharded clusters.
+            readPreference: 'primary',
+        });
+        return count;
+    }
+
+    async estimateDocumentCount(databaseName: string, collectionName: string): Promise<number> {
+        const collection = this._mongoClient.db(databaseName).collection(collectionName);
+
+        try {
+            return await collection.estimatedDocumentCount();
+        } catch (error) {
+            // Fall back to countDocuments if estimatedDocumentCount is not supported
+            // This can happen with certain MongoDB configurations or versions
+            if (
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                error.code === 115 /* CommandNotSupported */ ||
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                error.code === 235 /* InternalErrorNotSupported */
+            ) {
+                return await this.countDocuments(databaseName, collectionName);
+            }
+            throw error;
+        }
+    }
+
+    /**
      * Streams documents from a collection with full query support (filter, projection, sort, skip, limit).
      *
      * @param databaseName - The name of the database
@@ -514,18 +1080,42 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                options.projection = EJSON.parse(queryParams.project) as Document;
+                const parsed: unknown = parseShellBSON(queryParams.project, {
+                    mode: ParseMode.Loose,
+                });
+                options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
             } catch (error) {
-                throw new Error(`Invalid projection syntax: ${parseError(error).message}`);
+                if (error instanceof QueryError) throw error;
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_PROJECTION',
+                    l10n.t(
+                        'Invalid projection syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                options.sort = EJSON.parse(queryParams.sort) as Document;
+                const parsed: unknown = parseShellBSON(queryParams.sort, {
+                    mode: ParseMode.Loose,
+                });
+                options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
             } catch (error) {
-                throw new Error(`Invalid sort syntax: ${parseError(error).message}`);
+                if (error instanceof QueryError) throw error;
+                const cause = error instanceof Error ? error : new Error(String(error));
+                throw new QueryError(
+                    'INVALID_SORT',
+                    l10n.t(
+                        'Invalid sort syntax: {0}. Please use valid JSON or a DocumentDB API expression, for example: { fieldName: 1 }',
+                        cause.message,
+                    ),
+                    cause,
+                );
             }
         }
 
@@ -559,49 +1149,24 @@ export class ClustersClient {
     // TODO: revisit, maybe we can work on BSON here for the documentIds, and the conversion from string etc.,
     // will remain in the ClusterSession class
     async deleteDocuments(databaseName: string, collectionName: string, documentIds: string[]): Promise<boolean> {
-        // Convert input data to BSON types
-        const parsedDocumentIds = documentIds.map((id) => {
-            let parsedId;
-            try {
-                // eslint-disable-next-line
-                parsedId = EJSON.parse(id);
-            } catch {
-                if (ObjectId.isValid(id)) {
-                    parsedId = new ObjectId(id);
-                } else {
-                    throw new Error(l10n.t('Invalid document ID: {0}', id));
-                }
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-            return parsedId;
-        });
+        const parsedDocumentIds = documentIds.map((id) => parseDocumentId(id));
 
         // Connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
-        const deleteResult: DeleteResult = await collection.deleteMany({ _id: { $in: parsedDocumentIds } });
+        const deleteResult: DeleteResult = await collection.deleteMany({
+            _id: { $in: parsedDocumentIds },
+        } as Filter<Document>);
 
         return deleteResult.acknowledged;
     }
 
     async pointRead(databaseName: string, collectionName: string, documentId: string) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let parsedDocumentId: any;
-        try {
-            // eslint-disable-next-line
-            parsedDocumentId = EJSON.parse(documentId);
-        } catch (error) {
-            if (ObjectId.isValid(documentId)) {
-                parsedDocumentId = new ObjectId(documentId);
-            } else {
-                throw error;
-            }
-        }
+        const parsedDocumentId = parseDocumentId(documentId);
 
         // connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
-        // eslint-disable-next-line
-        const documentContent = await collection.findOne({ _id: parsedDocumentId });
+        const documentContent = await collection.findOne({ _id: parsedDocumentId } as Filter<Document>);
 
         return documentContent;
     }
@@ -618,17 +1183,10 @@ export class ClustersClient {
         let parsedId: any;
 
         if (documentId === '') {
-            // TODO: do not rely in empty string, use null or undefined
+            // TODO: do not rely on empty string, use null or undefined
             parsedId = new ObjectId();
         } else {
-            try {
-                // eslint-disable-next-line
-                parsedId = EJSON.parse(documentId);
-            } catch {
-                if (ObjectId.isValid(documentId)) {
-                    parsedId = new ObjectId(documentId);
-                }
-            }
+            parsedId = parseDocumentId(documentId);
         }
 
         // connect and execute
@@ -654,32 +1212,46 @@ export class ClustersClient {
     }
 
     async dropCollection(databaseName: string, collectionName: string): Promise<boolean> {
-        return this._mongoClient.db(databaseName).collection(collectionName).drop();
+        const result = await this._mongoClient.db(databaseName).collection(collectionName).drop();
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
     async dropDatabase(databaseName: string): Promise<boolean> {
-        return this._mongoClient.db(databaseName).dropDatabase();
+        const result = await this._mongoClient.db(databaseName).dropDatabase();
+        this._databasesCache = null;
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
     async createCollection(databaseName: string, collectionName: string): Promise<Collection<Document>> {
-        return this._mongoClient.db(databaseName).createCollection(collectionName);
+        const result = await this._mongoClient.db(databaseName).createCollection(collectionName);
+        this._collectionsCache.delete(databaseName);
+        return result;
     }
 
-    async createDatabase(databaseName: string): Promise<void> {
+    async createDatabase(databaseName: string, collectionName?: string): Promise<void> {
         // TODO: add logging of failures to the telemetry somewhere in the call chain
-        const newCollection = await this._mongoClient
-            .db(databaseName)
-            .createCollection('_dummy_collection_creation_forces_db_creation');
-        await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
+        // In MongoDB, databases are created implicitly when their first collection is created.
+        if (collectionName) {
+            await this._mongoClient.db(databaseName).createCollection(collectionName);
+        } else {
+            const newCollection = await this._mongoClient
+                .db(databaseName)
+                .createCollection('_dummy_collection_creation_forces_db_creation');
+            await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
+        }
+        this._databasesCache = null;
     }
 
     async insertDocuments(
         databaseName: string,
         collectionName: string,
         documents: Document[],
-    ): Promise<InsertDocumentsResult> {
+        ordered: boolean = true,
+    ): Promise<InsertManyResult> {
         if (documents.length === 0) {
-            return { insertedCount: 0 };
+            return { acknowledged: false, insertedIds: {}, insertedCount: 0 };
         }
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
@@ -689,37 +1261,18 @@ export class ClustersClient {
 
                 // Setting `ordered` to be false allows MongoDB to continue inserting remaining documents even if previous fails.
                 // More details: https://www.mongodb.com/docs/manual/reference/method/db.collection.insertMany/#syntax
-                ordered: false,
+                ordered: ordered,
             });
-            return {
-                insertedCount: insertManyResults.insertedCount,
-            };
+            return insertManyResults;
         } catch (error) {
-            // print error messages to the console
+            // Log error messages to the console
             if (error instanceof MongoBulkWriteError) {
-                const writeErrors: WriteError[] = Array.isArray(error.writeErrors)
-                    ? (error.writeErrors as WriteError[])
-                    : [error.writeErrors as WriteError];
-
-                for (const writeError of writeErrors) {
-                    const generalErrorMessage = parseError(writeError).message;
-                    const descriptiveErrorMessage = writeError.err?.errmsg;
-
-                    const fullErrorMessage = descriptiveErrorMessage
-                        ? `${generalErrorMessage} - ${descriptiveErrorMessage}`
-                        : generalErrorMessage;
-
-                    ext.outputChannel.appendLog(l10n.t('Write error: {0}', fullErrorMessage));
-                }
-                ext.outputChannel.show();
+                throw error;
             } else if (error instanceof Error) {
-                ext.outputChannel.appendLog(l10n.t('Error: {0}', error.message));
-                ext.outputChannel.show();
+                throw error;
             }
 
-            return {
-                insertedCount: error instanceof MongoBulkWriteError ? error.insertedCount || 0 : 0,
-            };
+            throw new Error(l10n.t('An unknown error occurred while inserting documents.'));
         }
     }
 
@@ -771,7 +1324,9 @@ export class ClustersClient {
         if (!this._llmEnhancedFeatureApis) {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
-        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity, options);
+        const result = await this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity, options);
+        const metadata = await this.getClusterMetadata();
+        return (fixupDocumentDbExplain(result, metadata) as ExplainResult) ?? result;
     }
 
     /**
@@ -785,7 +1340,9 @@ export class ClustersClient {
         if (!this._llmEnhancedFeatureApis) {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
-        return this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
+        const result = await this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
+        const metadata = await this.getClusterMetadata();
+        return (fixupDocumentDbExplain(result, metadata) as ExplainResult) ?? result;
     }
 
     /**
@@ -799,7 +1356,9 @@ export class ClustersClient {
         if (!this._llmEnhancedFeatureApis) {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
-        return this._llmEnhancedFeatureApis.explainCount(databaseName, collectionName, filter);
+        const result = await this._llmEnhancedFeatureApis.explainCount(databaseName, collectionName, filter);
+        const metadata = await this.getClusterMetadata();
+        return fixupDocumentDbExplain(result, metadata) ?? result;
     }
 
     /**

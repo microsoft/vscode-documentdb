@@ -1,0 +1,104 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * VS Code adaptations for Fluent UI components.
+ *
+ * Keep component-scoped overrides here because Fluent reuses neutral aliases
+ * across controls with different semantics. For example, field stroke tokens
+ * also drive Switch indicators and Tab hover bars when changed globally.
+ *
+ * Compiled to src/styles/generated.ts and injected by the package entry, so it
+ * reaches the page whether or not the consumer mounts VSCodeFluentProvider.
+ *
+ * Every rule is wrapped in :where() so it carries zero specificity. That is what
+ * makes an injected stylesheet as overridable as an imported one: a consumer's
+ * plain `.fui-Input { … }` wins regardless of which <style> element came first.
+ */
+
+/*
+ * Not a design token, but a named shared subexpression, so a long fallback chain is
+ * not pasted into eight places. Many community themes define only a subset of
+ * VS Code's colors, hence the chain; the color-mix is an alpha multiply (sRGB
+ * mixing is premultiplied), which composites correctly on light and dark alike.
+ */
+$field-stroke: var(
+    --vscode-checkbox-border,
+    var(--vscode-input-border, color-mix(in srgb, var(--vscode-foreground) 55%, transparent))
+);
+
+/*
+ * Hover pulls the resting stroke 45% toward the foreground rather than replacing
+ * it with a flat foreground tint. Replacing it *lowered* contrast on any theme
+ * that defines a strong --vscode-checkbox-border; blending guarantees hover is
+ * never weaker than rest. Where no theme token exists the result is the
+ * foreground at ~75% alpha, which is what the flat value used to be.
+ */
+$field-stroke-hover: color-mix(in srgb, var(--vscode-foreground) 45%, #{$field-stroke});
+
+/* The one colour VS Code publishes for progress. Fluent needs it in three places. */
+$progress-fill: var(--vscode-progressBar-background, var(--colorBrandStroke1));
+
+/*
+ * VS Code publishes no progress *track* colour, because its own bars are trackless. Fluent's
+ * determinate bar needs one, and left alone it is a fixed neutral gray that ignores the theme.
+ *
+ * A faint foreground tint solves it without the stylesheet having to know which theme kind is
+ * active: it is translucent, so it composites over whatever surface the bar sits on, and it is
+ * keyed on the foreground, so it darkens on light themes and lightens on dark ones by itself.
+ * Same trick as the field stroke above.
+ */
+$progress-track: color-mix(in srgb, var(--vscode-foreground) 15%, transparent);
+
+:where(.fui-Input, .fui-SearchBox, .fui-Combobox, .fui-Dropdown, .fui-Select, .fui-SpinButton, .fui-Textarea) {
+    --colorNeutralForeground3: var(--vscode-descriptionForeground, var(--vscode-foreground));
+    --colorNeutralForeground4: var(
+        --vscode-input-placeholderForeground,
+        var(--vscode-descriptionForeground, var(--vscode-foreground))
+    );
+    --colorNeutralStroke1: #{$field-stroke};
+    --colorNeutralStroke1Hover: #{$field-stroke-hover};
+    --colorNeutralStroke1Pressed: #{$field-stroke-hover};
+    --colorNeutralStrokeAccessible: #{$field-stroke};
+    --colorNeutralStrokeAccessibleHover: #{$field-stroke-hover};
+    --colorNeutralStrokeAccessiblePressed: #{$field-stroke-hover};
+}
+
+:where(.fui-ProgressBar) {
+    // Fill (determinate) and rail. The indeterminate rule below re-points both; it wins on source
+    // order, since every rule here carries zero specificity.
+    --colorCompoundBrandBackground: #{$progress-fill};
+    --colorNeutralBackground6: #{$progress-track};
+}
+
+// Fluent's indeterminate bar has no aria-valuenow, so this selector matches only that variant.
+:where(.fui-ProgressBar:not([aria-valuenow])) {
+    // Fluent's indeterminate recipe paints a solid brand segment and overlays
+    // fixed-neutral edges on it:
+    //
+    //   background-color: colorCompoundBrandBackground
+    //   background-image: linear-gradient(to right,
+    //       colorNeutralBackground6 0%, colorTransparentBackground 50%, colorNeutralBackground6 100%)
+    //
+    // VS Code defines only the active progress color, so rather than replacing
+    // the gradient we re-point its three stops: clear the solid fill and the
+    // edges, and make the *midpoint* the progress color. The recipe then draws
+    // exactly one progress-colored segment that fades at its edges. Doing it
+    // through tokens rather than a background-image declaration is what lets the
+    // rule stay at zero specificity: a declaration would have to out-specify
+    // Fluent's own Griffel class to win, and then no consumer could override it.
+    //
+    // Retargeting colorTransparentBackground is safe here because it is scoped to
+    // the ProgressBar subtree, where this gradient is its only use.
+    //
+    // colorNeutralBackground6 is also the bar's rail, so clearing it leaves the
+    // indeterminate variant trackless. That is intentional, and how VS Code draws its own.
+    //
+    // fluentOverrides.test.ts pins the upstream recipe: if Fluent restructures it,
+    // that test fails instead of the bar silently going blank.
+    --colorNeutralBackground6: transparent;
+    --colorCompoundBrandBackground: transparent;
+    --colorTransparentBackground: #{$progress-fill};
+}

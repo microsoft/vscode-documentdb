@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type Document, type Filter } from 'mongodb';
 import * as vscode from 'vscode';
@@ -12,9 +12,9 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
-import { CopilotService } from '../../services/copilotService';
+import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import { FALLBACK_MODELS, PREFERRED_MODEL } from './promptTemplates';
+import { getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -66,10 +66,10 @@ export interface QueryOptimizationContext {
     collectionStats?: CollectionStats;
     // Pre-loaded index stat
     indexStats?: IndexStats[];
-    // Preferred LLM model for optimization
-    preferredModel?: string;
-    // Fallback LLM models
-    fallbackModels?: string[];
+    // Static analysis summary from Stage 2 (what the user has already been shown)
+    staticAnalysisSummary?: string;
+    // AbortSignal for cancellation support
+    signal?: AbortSignal;
 }
 
 /**
@@ -78,8 +78,52 @@ export interface QueryOptimizationContext {
 export interface OptimizationResult {
     // The optimization recommendations
     recommendations: string;
-    // The model used to generate recommendations
-    modelUsed: string;
+    // Stable opaque id of the selected model (LanguageModelChat.id).
+    // Use for telemetry and exact comparisons.
+    modelId: string;
+    // Well-known family of the selected model (LanguageModelChat.family).
+    // Use for warning checks against the preferred-model constant.
+    modelFamily: string;
+    // Human-readable display name (LanguageModelChat.name). Render in UI.
+    modelDisplayName: string;
+    // Underlying model version (LanguageModelChat.version). For opaque aliases
+    // such as `copilot-utility`, this is the only field that identifies the
+    // model the alias resolved to at request time (id/family read back as the
+    // alias itself).
+    modelVersion: string;
+    // Best-effort token usage measurements from the underlying CopilotService
+    // request. Optional fields (see CopilotTokenUsage) — may be undefined when
+    // the model rejects countTokens or the request is cancelled.
+    usage?: CopilotTokenUsage;
+}
+
+/**
+ * Pull-based streaming handle returned by {@link optimizeQueryStreaming}.
+ *
+ * `fragments` yields each text fragment from the LLM as it arrives (matching
+ * what {@link CopilotService.streamMessage} exposes); `completion` resolves
+ * with the same {@link OptimizationResult} that the buffered
+ * {@link optimizeQuery} would return.
+ */
+export interface OptimizationStreamHandle {
+    fragments: AsyncIterable<string>;
+    completion: Promise<OptimizationResult>;
+}
+
+/**
+ * Output of the shared pre-LLM preparation step. Carries everything
+ * {@link optimizeQuery} / {@link optimizeQueryStreaming} need to invoke the
+ * model and later record telemetry, without committing the call site to
+ * either the buffered or the streaming variant.
+ */
+interface PreparedOptimizationRequest {
+    messages: vscode.LanguageModelChatMessage[];
+    /**
+     * Combined length of the prompt template, user's original query and
+     * system-retrieved context data. Recorded as the `promptSize` measurement
+     * on the post-LLM telemetry call.
+     */
+    promptTotalLength: number;
 }
 
 /**
@@ -293,7 +337,7 @@ export function detectCommandType(command: string): CommandType {
  * @param collectionStats Statistics about the collection
  * @param indexes Current indexes on the collection
  * @param executionStats Execution statistics from explain()
- * @returns The filled prompt template
+ * @returns The filled prompt components
  */
 async function fillPromptTemplate(
     templateType: CommandType,
@@ -302,56 +346,29 @@ async function fillPromptTemplate(
     indexes: IndexStats[] | undefined,
     executionStats: string,
     clusterInfo: ClusterMetadata,
-): Promise<string> {
+    staticAnalysisSummary?: string,
+): Promise<FilledPromptResult> {
     // Get the template for this command type
-    const template = await getPromptTemplate(templateType);
+    const craftedPrompt = await getPromptTemplate(templateType);
 
-    // Note: Query information is currently not passed to the prompt
-    // This may be re-enabled in the future if needed
-    // if (templateType === CommandType.Find && context.queryObject) {
-    //     // Format query object as structured information
-    //     const queryParts: string[] = [];
-    //
-    //     if (context.queryObject.filter) {
-    //         queryParts.push(`**Filter**: \`\`\`json\n${JSON.stringify(context.queryObject.filter, null, 2)}\n\`\`\``);
-    //     }
-    //
-    //     if (context.queryObject.sort) {
-    //         queryParts.push(`**Sort**: \`\`\`json\n${JSON.stringify(context.queryObject.sort, null, 2)}\n\`\`\``);
-    //     }
-    //
-    //     if (context.queryObject.projection) {
-    //         queryParts.push(`**Projection**: \`\`\`json\n${JSON.stringify(context.queryObject.projection, null, 2)}\n\`\`\``);
-    //     }
-    //
-    //     if (context.queryObject.skip !== undefined) {
-    //         queryParts.push(`**Skip**: ${context.queryObject.skip}`);
-    //     }
-    //
-    //     if (context.queryObject.limit !== undefined) {
-    //         queryParts.push(`**Limit**: ${context.queryObject.limit}`);
-    //     }
-    //
-    //     queryInfo = queryParts.join('\n\n');
-    // } else if (context.query) {
-    //     // Fallback to string query for backward compatibility
-    //     queryInfo = context.query;
-    // }
+    // User's original query
+    const userQuery = context.query || (context.queryObject ? JSON.stringify(context.queryObject, null, 2) : 'N/A');
 
-    // Fill the template with actual data
-    const filled = template
-        .replace('{databaseName}', context.databaseName)
-        .replace('{collectionName}', context.collectionName)
-        .replace('{collectionStats}', collectionStats ? JSON.stringify(collectionStats, null, 2) : 'N/A')
-        .replace('{indexStats}', indexes ? JSON.stringify(indexes, null, 2) : 'N/A')
-        .replace('{executionStats}', executionStats)
-        .replace('{isAzureCluster}', JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2))
-        .replace('{origin_query}', context.query || 'N/A')
-        .replace(
-            '{AzureClusterType}',
-            clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A',
-        );
-    return filled;
+    // System-retrieved context data
+    const contextData = `## Cluster Information
+- **Is_Azure_Cluster**: ${JSON.stringify(clusterInfo.domainInfo_isAzure, null, 2)}
+- **Azure_Cluster_Type**: ${clusterInfo.domainInfo_isAzure === 'true' ? JSON.stringify(clusterInfo.domainInfo_api, null, 2) : 'N/A'}
+
+## Collection Information
+- **Collection_Stats**: ${collectionStats ? JSON.stringify(collectionStats, null, 2) : 'N/A'}
+
+## Index Information of Current Collection
+- **Indexes_Stats**: ${indexes ? JSON.stringify(indexes, null, 2) : 'N/A'}
+
+## Query Execution Stats
+- **Execution_Stats**: ${executionStats}${staticAnalysisSummary ? `\n\n${staticAnalysisSummary}` : ''}`;
+
+    return { craftedPrompt, userQuery, contextData };
 }
 
 /**
@@ -364,6 +381,94 @@ export async function optimizeQuery(
     context: IActionContext,
     queryContext: QueryOptimizationContext,
 ): Promise<OptimizationResult> {
+    const prepared = await prepareOptimizationRequest(context, queryContext);
+
+    // Check if the request was cancelled before calling Copilot (the most expensive operation)
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before calling Copilot'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
+    const response = await CopilotService.sendMessage(prepared.messages, {
+        signal: queryContext.signal,
+        featureSource: 'queryInsights',
+    });
+
+    return finalizeOptimizationResponse(context, prepared, response);
+}
+
+/**
+ * Streaming variant of {@link optimizeQuery}: returns a handle whose
+ * `fragments` async iterable yields each LLM text fragment as it arrives,
+ * and whose `completion` promise resolves with the same
+ * {@link OptimizationResult} {@link optimizeQuery} would have returned.
+ *
+ * Setup (explain, stats, prompt construction, message build, model-family
+ * selection) is fully awaited before the handle is returned, so consumers
+ * that immediately start iterating see fragments back-to-back from the
+ * model. Telemetry recorded *before* the LLM call (explain duration,
+ * stats availability, prompt source, hasStaticAnalysisSummary, …) lands on
+ * the caller's `context`. Post-LLM telemetry (duration, response size,
+ * token usage, modelId/Family) is recorded onto `context` only if the
+ * caller's `callWithTelemetryAndErrorHandling` wrapper is still open when
+ * `completion` resolves — for subscription-style callers, those values are
+ * preserved separately via {@link CopilotService.streamMessage}'s own
+ * telemetry event and, in the streaming pipeline, the dedicated Stage 3
+ * completion event (see plan §7 / WI-10).
+ */
+export async function optimizeQueryStreaming(
+    context: IActionContext,
+    queryContext: QueryOptimizationContext,
+): Promise<OptimizationStreamHandle> {
+    const prepared = await prepareOptimizationRequest(context, queryContext);
+
+    // Check if the request was cancelled before calling Copilot (the most expensive operation)
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before calling Copilot'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
+    const streamHandle = CopilotService.streamMessage(prepared.messages, {
+        signal: queryContext.signal,
+        featureSource: 'queryInsights',
+    });
+
+    const completion: Promise<OptimizationResult> = streamHandle.completion.then((response) =>
+        finalizeOptimizationResponse(context, prepared, response),
+    );
+    // Avoid an unhandled-rejection warning when callers only observe the
+    // failure through fragments iteration. Real consumers are expected to
+    // await `completion` (or attach their own catch).
+    completion.catch(() => {
+        /* swallow: consumer chose not to observe */
+    });
+
+    return {
+        fragments: streamHandle.fragments,
+        completion,
+    };
+}
+
+/**
+ * Performs everything {@link optimizeQuery} / {@link optimizeQueryStreaming}
+ * need to do *before* invoking the LLM: copilot availability check, explain,
+ * collection/index stats, prompt build, message construction, and pre-LLM
+ * telemetry. Records pre-LLM telemetry directly onto {@link context}.
+ *
+ * Extracted as a shared helper so the buffered and streaming entry points
+ * cannot drift apart, mirroring the `streamToModel`/`sendToModel` split
+ * inside {@link CopilotService}.
+ */
+async function prepareOptimizationRequest(
+    context: IActionContext,
+    queryContext: QueryOptimizationContext,
+): Promise<PreparedOptimizationRequest> {
+    // Check if the request was already cancelled before starting
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before starting optimization'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
     // Check if Copilot is available
     const copilotAvailable = await CopilotService.isAvailable();
     if (!copilotAvailable) {
@@ -392,15 +497,28 @@ export async function optimizeQuery(
     context.telemetry.properties.azureApi = clusterInfo.domainInfo_api || 'unknown';
 
     // Check if we have pre-loaded data
-    const hasPreloadedData = queryContext.executionPlan;
-    context.telemetry.properties.hasPreloadedData = hasPreloadedData ? 'true' : 'false';
+    const hasPreloadedExecutionPlan = queryContext.executionPlan !== undefined;
+    context.telemetry.properties.hasPreloadedExecutionPlan = hasPreloadedExecutionPlan ? 'true' : 'false';
 
-    if (hasPreloadedData) {
+    if (hasPreloadedExecutionPlan) {
         // Use pre-loaded data
         explainResult = queryContext.executionPlan;
-        collectionStats = queryContext.collectionStats!;
-        indexes = queryContext.indexStats!;
+        // Use pre-loaded collection stats and index stats if available
+        collectionStats = queryContext.collectionStats;
+        indexes = queryContext.indexStats;
+
+        // Track preloaded stats in telemetry
+        context.telemetry.properties.hasPreloadedCollectionStats = collectionStats ? 'true' : 'false';
+        context.telemetry.properties.hasPreloadedIndexStats = indexes ? 'true' : 'false';
+
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded execution plan'));
     } else {
+        // Check if the request was cancelled before running explain queries
+        if (queryContext.signal?.aborted) {
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before running explain queries'));
+            throw new UserCancelledError('AbortSignal');
+        }
+
         // Check if we have queryObject or need to parse query string
         if (!queryContext.queryObject && !queryContext.query) {
             throw new Error(l10n.t('query or queryObject is required when not using pre-loaded data'));
@@ -475,53 +593,88 @@ export async function optimizeQuery(
         }
     }
 
+    // Check if the request was cancelled before fetching stats
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before fetching stats'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
     let indexesInfo: IndexItemModel[] | undefined;
     try {
-        const statsStart = Date.now();
-        collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
-        const statsDuration = Date.now() - statsStart;
-        context.telemetry.measurements.collectionStatsDurationMs = statsDuration;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
-                ms: statsDuration.toString(),
-            }),
-        );
+        if (!collectionStats) {
+            const statsStart = Date.now();
+            collectionStats = await client.getCollectionStats(queryContext.databaseName, queryContext.collectionName);
+            const statsDuration = Date.now() - statsStart;
+            context.telemetry.measurements.collectionStatsDurationMs = statsDuration;
+            context.telemetry.properties.fetchedCollectionStats = 'true';
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] getCollectionStats completed in {ms}ms', {
+                    ms: statsDuration.toString(),
+                }),
+            );
 
-        const indexesInfoStart = Date.now();
-        indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
-        const indexesInfoDuration = Date.now() - indexesInfoStart;
-        context.telemetry.measurements.listIndexesDurationMs = indexesInfoDuration;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
-                ms: indexesInfoDuration.toString(),
-            }),
-        );
+            // Check if cancelled after getCollectionStats
+            if (queryContext.signal?.aborted) {
+                ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled after getCollectionStats'));
+                throw new UserCancelledError('AbortSignal');
+            }
+        } else {
+            context.telemetry.properties.fetchedCollectionStats = 'false';
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded collection stats'));
+        }
 
-        const indexesStatsStart = Date.now();
-        const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
-        const indexesStatsDuration = Date.now() - indexesStatsStart;
-        context.telemetry.measurements.indexStatsDurationMs = indexesStatsDuration;
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights AI] getIndexStats completed in {ms}ms', {
-                ms: indexesStatsDuration.toString(),
-            }),
-        );
+        if (!indexes) {
+            const indexesInfoStart = Date.now();
+            indexesInfo = await client.listIndexes(queryContext.databaseName, queryContext.collectionName);
+            const indexesInfoDuration = Date.now() - indexesInfoStart;
+            context.telemetry.measurements.listIndexesDurationMs = indexesInfoDuration;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] listIndexes completed in {ms}ms', {
+                    ms: indexesInfoDuration.toString(),
+                }),
+            );
 
-        // // TODO: handle search indexes for Atlas
-        // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
-        indexes = indexesStats.map((indexStat) => {
-            const indexInfo = indexesInfo?.find((idx) => idx.name === indexStat.name);
-            return {
-                ...indexStat,
-                ...indexInfo,
-            };
-        });
-        // indexes.push(...searchIndexes);
+            // Check if cancelled after listIndexes
+            if (queryContext.signal?.aborted) {
+                ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled after listIndexes'));
+                throw new UserCancelledError('AbortSignal');
+            }
+
+            const indexesStatsStart = Date.now();
+            const indexesStats = await client.getIndexStats(queryContext.databaseName, queryContext.collectionName);
+            const indexesStatsDuration = Date.now() - indexesStatsStart;
+            context.telemetry.measurements.indexStatsDurationMs = indexesStatsDuration;
+            ext.outputChannel.trace(
+                l10n.t('[Query Insights AI] getIndexStats completed in {ms}ms', {
+                    ms: indexesStatsDuration.toString(),
+                }),
+            );
+
+            // // TODO: handle search indexes for Atlas
+            // const searchIndexes = await client.listSearchIndexesForAtlas(queryContext.databaseName, queryContext.collectionName);
+            indexes = indexesStats.map((indexStat) => {
+                const indexInfo = indexesInfo?.find((idx) => idx.name === indexStat.name);
+                return {
+                    ...indexStat,
+                    ...indexInfo,
+                };
+            });
+            // indexes.push(...searchIndexes);
+            context.telemetry.properties.fetchedIndexStats = 'true';
+        } else {
+            context.telemetry.properties.fetchedIndexStats = 'false';
+            ext.outputChannel.trace(l10n.t('[Query Insights AI] Using preloaded index stats'));
+        }
 
         // Track stats availability in telemetry
         context.telemetry.properties.hasCollectionStats = collectionStats ? 'true' : 'false';
         context.telemetry.measurements.indexCount = indexes?.length ?? 0;
     } catch (error) {
+        // Re-throw cancellation errors — they must not be swallowed
+        if (error instanceof UserCancelledError) {
+            throw error;
+        }
+
         // They are not critical errors, we can continue without index stats and collection stats
         // If the API calls failed, collectionStats and indexes remain undefined (safe to continue)
         context.telemetry.properties.statsError = 'true';
@@ -556,7 +709,7 @@ export async function optimizeQuery(
 
     // Fill the prompt template
     const commandType = queryContext.commandType;
-    const promptContent = await fillPromptTemplate(
+    const { craftedPrompt, userQuery, contextData } = await fillPromptTemplate(
         commandType,
         queryContext,
         collectionStats,
@@ -564,54 +717,103 @@ export async function optimizeQuery(
         // sanitizedExecutionStats,
         JSON.stringify(explainResult, null, 2),
         clusterInfo,
+        queryContext.staticAnalysisSummary,
     );
 
-    // Send to Copilot with configured models
-    const preferredModelToUse = queryContext.preferredModel || PREFERRED_MODEL;
-    const fallbackModelsToUse = queryContext.fallbackModels || FALLBACK_MODELS;
+    // Track prompt source and static analysis inclusion
+    context.telemetry.properties.promptSource = getLastPromptSource();
+    context.telemetry.properties.hasStaticAnalysisSummary = queryContext.staticAnalysisSummary ? 'true' : 'false';
 
-    const copilotStart = Date.now();
-    ext.outputChannel.trace(
-        l10n.t('[Query Insights AI] Calling Copilot (model: {model})...', {
-            model: preferredModelToUse,
-        }),
-    );
-    const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {
-        preferredModel: preferredModelToUse,
-        fallbackModels: fallbackModelsToUse,
-    });
-    const copilotDuration = Date.now() - copilotStart;
+    ext.outputChannel.trace(l10n.t('[Query Insights AI] Calling Copilot...'));
 
+    const messages = [
+        // First message: User message with crafted prompt (instructions)
+        vscode.LanguageModelChatMessage.User(craftedPrompt),
+        // Second message: User's original query (data only)
+        vscode.LanguageModelChatMessage.User(`## User's Original Query\n${userQuery}`),
+        // Third message: User message with system-retrieved context data (data only)
+        vscode.LanguageModelChatMessage.User(contextData),
+    ];
+
+    return {
+        messages,
+        promptTotalLength: craftedPrompt.length + userQuery.length + contextData.length,
+    };
+}
+
+/**
+ * Records post-LLM telemetry (duration, response size, token usage, model
+ * identity) and the preferred-family warning onto the caller's `context`,
+ * then maps the {@link CopilotResponse} (or equivalent shape) into the
+ * exported {@link OptimizationResult}.
+ *
+ * For subscription-style callers (Stage 3 streaming) the caller's
+ * `callWithTelemetryAndErrorHandling` wrapper has typically already closed
+ * by the time the LLM finishes, so these recordings are best-effort — the
+ * dedicated Stage 3 completion event (plan §7 / WI-10) and
+ * {@link CopilotService.streamMessage}'s own telemetry event are the
+ * authoritative sources for the streaming path.
+ */
+function finalizeOptimizationResponse(
+    context: IActionContext,
+    prepared: PreparedOptimizationRequest,
+    response: {
+        text: string;
+        modelId: string;
+        modelFamily: string;
+        modelDisplayName: string;
+        modelVersion: string;
+        durationMs: number;
+        usage?: CopilotTokenUsage;
+    },
+): OptimizationResult {
     // Track Copilot call performance and response
-    context.telemetry.measurements.copilotDurationMs = copilotDuration;
-    context.telemetry.measurements.promptSize = promptContent.length;
+    context.telemetry.measurements.copilotDurationMs = response.durationMs;
+    context.telemetry.measurements.promptSize = prepared.promptTotalLength;
     context.telemetry.measurements.responseSize = response.text.length;
-    context.telemetry.properties.modelUsed = response.modelUsed;
+    context.telemetry.properties.modelId = response.modelId;
+    context.telemetry.properties.modelFamily = response.modelFamily;
+    // Capture model display name and underlying version explicitly: for opaque
+    // aliases (`copilot-utility`) id and family are the alias string, so the
+    // backing model is only visible through name/version.
+    context.telemetry.properties.modelName = response.modelDisplayName;
+    context.telemetry.properties.modelVersion = response.modelVersion;
+
+    // Track token usage measurements when available. The fields are best-effort
+    // (see CopilotTokenUsage) so each is only recorded when populated.
+    if (response.usage) {
+        const { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct } = response.usage;
+        if (promptTokens !== undefined) {
+            context.telemetry.measurements.promptTokens = promptTokens;
+        }
+        if (responseTokens !== undefined) {
+            context.telemetry.measurements.responseTokens = responseTokens;
+        }
+        if (totalTokens !== undefined) {
+            context.telemetry.measurements.totalTokens = totalTokens;
+        }
+        if (maxInputTokens !== undefined) {
+            context.telemetry.measurements.maxInputTokens = maxInputTokens;
+        }
+        if (promptUtilizationPct !== undefined) {
+            context.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
+        }
+    }
 
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Copilot response received in {ms}ms (model: {model})', {
-            ms: copilotDuration.toString(),
-            model: response.modelUsed,
+            ms: response.durationMs.toString(),
+            model: response.modelId,
         }),
     );
 
-    // Check if the preferred model was used
-    if (response.modelUsed !== preferredModelToUse && preferredModelToUse) {
-        // Show warning if not using preferred model
-        void vscode.window.showWarningMessage(
-            l10n.t(
-                'Index optimization is using model "{actualModel}" instead of preferred "{preferredModel}". Recommendations may be less optimal.',
-                {
-                    actualModel: response.modelUsed,
-                    preferredModel: preferredModelToUse,
-                },
-            ),
-        );
-    }
-
     return {
         recommendations: response.text,
-        modelUsed: response.modelUsed,
+        modelId: response.modelId,
+        modelFamily: response.modelFamily,
+        modelDisplayName: response.modelDisplayName,
+        modelVersion: response.modelVersion,
+        usage: response.usage,
     };
 }
 

@@ -22,13 +22,14 @@ import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/a
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { ext } from '../../../../extensionVariables';
+import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../../../tree/documentdb/ClusterModel';
+import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
 import { DISCOVERY_PROVIDER_ID } from '../../config';
 
-// Define a model for VM, similar to ClusterModel but for VM properties
-export interface VirtualMachineModel extends ClusterModel {
+// Define a model for VM, similar to AzureClusterModel but with VM-specific properties
+export interface VirtualMachineModel extends AzureClusterModel {
     vmSize?: string;
     publicIpAddress?: string;
     fqdn?: string;
@@ -36,7 +37,7 @@ export interface VirtualMachineModel extends ClusterModel {
 
 const DEFAULT_PORT = 27017;
 
-export class AzureVMResourceItem extends ClusterItemBase {
+export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
     iconPath = new vscode.ThemeIcon('server-environment');
 
     constructor(
@@ -46,13 +47,13 @@ export class AzureVMResourceItem extends ClusterItemBase {
          */
         journeyCorrelationId: string,
         readonly subscription: AzureSubscription,
-        readonly cluster: VirtualMachineModel,
+        readonly cluster: TreeCluster<VirtualMachineModel>,
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;
 
         // Construct tooltip and description
-        const tooltipParts: string[] = [`**Name:** ${cluster.name}`, `**ID:** ${cluster.id}`];
+        const tooltipParts: string[] = [`**Name:** ${cluster.name}`, `**ID:** ${cluster.azureResourceId}`];
         if (cluster.vmSize) {
             tooltipParts.push(`**Size:** ${cluster.vmSize}`);
         }
@@ -63,7 +64,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
             tooltipParts.push(`**Public IP:** ${cluster.publicIpAddress}`);
         }
 
-        if (cluster.publicIpAddress && !cluster.fqdn) {
+        if (!cluster.publicIpAddress && !cluster.fqdn) {
             this.descriptionOverride = l10n.t('No Connectivity');
             tooltipParts.push(l10n.t('**No public IP or FQDN available for direct connection.**'));
         }
@@ -77,6 +78,10 @@ export class AzureVMResourceItem extends ClusterItemBase {
             context.telemetry.properties.view = Views.DiscoveryView;
             if (this.journeyCorrelationId) {
                 context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+            }
+
+            if (!this.cluster.connectionString) {
+                return undefined;
             }
 
             const newPort = await context.ui.showInputBox({
@@ -160,6 +165,14 @@ export class AzureVMResourceItem extends ClusterItemBase {
         });
     }
 
+    public getTreeItem(): vscode.TreeItem {
+        const treeItem = super.getTreeItem();
+        if (!this.cluster.connectionString) {
+            treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        }
+        return treeItem;
+    }
+
     /**
      * Authenticates and connects to the MongoDB cluster.
      * @param context The action context.
@@ -211,7 +224,7 @@ export class AzureVMResourceItem extends ClusterItemBase {
             // Password will be handled by the ClustersClient, not directly in the string for cache
 
             CredentialCache.setCredentials(
-                this.id, // Use the VM resource ID as the cache key
+                this.cluster.clusterId, // Stable cache key (provider-prefixed sanitized ID)
                 finalConnectionString.toString(), // Store the string with username for reference, but password separately
                 wizardContext.selectedUserName,
                 wizardContext.password,
@@ -226,24 +239,27 @@ export class AzureVMResourceItem extends ClusterItemBase {
 
             let clustersClient: ClustersClient;
             try {
-                // GetClient will use the cached credentials including the password
-                clustersClient = await ClustersClient.getClient(this.id).catch((error: Error) => {
-                    ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: error.message }));
-                    void vscode.window.showErrorMessage(
-                        l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
-                        {
-                            modal: true,
-                            detail:
-                                l10n.t('Revisit connection details and try again.') +
-                                '\n\n' +
-                                l10n.t('Error: {error}', { error: error.message }),
-                        },
-                    );
+                clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
+            } catch (error) {
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
-                });
-            } catch {
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                }
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
+                void vscode.window.showErrorMessage(
+                    l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
+                    {
+                        modal: true,
+                        detail:
+                            l10n.t('Revisit connection details and try again.') +
+                            '\n\n' +
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                    },
+                );
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
                 return null;
             }
 
@@ -253,6 +269,8 @@ export class AzureVMResourceItem extends ClusterItemBase {
                     username: wizardContext.selectedUserName ?? '',
                 }),
             );
+
+            context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
             return clustersClient;
         });

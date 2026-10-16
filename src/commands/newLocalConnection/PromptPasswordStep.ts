@@ -16,7 +16,7 @@ export class PromptPasswordStep extends AzureWizardPromptStep<NewLocalConnection
             ignoreFocusOut: true,
         });
 
-        context.password = passwordTemp.trim();
+        context.password = passwordTemp;
         context.valuesToMask.push(context.password);
     }
 

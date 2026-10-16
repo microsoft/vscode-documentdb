@@ -8,14 +8,28 @@ import { EJSON } from 'bson';
 import { type Document } from 'mongodb';
 import { z } from 'zod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { recordSurveyActivity } from '../../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
-import { promptAfterActionEventually } from '../../../utils/survey';
-import { UsageImpact } from '../../../utils/surveyTypes';
-import { type BaseRouterContext } from '../../api/configuration/appRouter';
-import { publicProcedure, router, trpcToTelemetry } from '../../api/extension-server/trpc';
+import { type BaseRouterContext } from '../../_integration/appRouter';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 export type RouterContext = BaseRouterContext & {
+    /**
+     * Stable cluster identifier for cache/client lookups.
+     * Use this for ClustersClient.getClient() and CredentialCache operations.
+     */
     clusterId: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     *
+     * Required for finding the correct tree node when the webview needs to interact
+     * with the tree. The same Azure Resource ID can appear in multiple views
+     * (Discovery, Azure Resources, Workspace), so we need to know which branch
+     * data provider to query.
+     *
+     * @see Views enum for possible values (e.g., 'connectionsView', 'discoveryView')
+     */
+    viewId: string;
     databaseName: string;
     collectionName: string;
     documentId: string;
@@ -24,13 +38,12 @@ export type RouterContext = BaseRouterContext & {
 };
 
 export const documentsViewRouter = router({
-    getInfo: publicProcedure.query(({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
     }),
-    getDocumentById: publicProcedure
-        .use(trpcToTelemetry)
+    getDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
@@ -52,9 +65,8 @@ export const documentsViewRouter = router({
 
             return extendedJson;
         }),
-    saveDocument: publicProcedure
-        .use(trpcToTelemetry)
-        // parameteres
+    saveDocument: publicProcedureWithTelemetry
+        // parameters
         .input(z.object({ documentContent: z.string() }))
         // procedure type
         .mutation(async ({ input, ctx }) => {
@@ -97,8 +109,7 @@ export const documentsViewRouter = router({
 
             showConfirmationAsInSettings(l10n.t('The document with the _id "{0}" has been saved.', newDocumentId));
 
-            void promptAfterActionEventually(UsageImpact.High);
-
+            recordSurveyActivity('dataBrowsing');
             return { documentStringified: newDocumentStringified, documentId: newDocumentId };
         }),
 });

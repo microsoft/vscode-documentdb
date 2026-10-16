@@ -5,189 +5,14 @@
 
 import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
-import { type AIIndexRecommendation, type AIOptimizationResponse } from '../../services/ai/types';
 import {
-    type ImprovementCard,
+    type FetchOverheadKind,
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
-    type QueryInsightsStage3Response,
     type ShardInfo,
     type StageInfo,
 } from '../../webviews/documentdb/collectionView/types/queryInsights';
 import { ExplainPlanAnalyzer, type ExecutionStatsAnalysis, type QueryPlannerAnalysis } from './ExplainPlanAnalyzer';
-
-/**
- * Context from the router containing connection and collection info
- */
-interface TransformationContext {
-    clusterId: string;
-    databaseName: string;
-    collectionName: string;
-}
-
-/**
- * Transforms AI optimization response to UI-friendly format
- * Adds action buttons with complete payloads for execution
- *
- * @param aiResponse - Raw AI service response
- * @param context - Router context with connection info
- * @returns Transformed response ready for UI consumption
- */
-export function transformAIResponseForUI(
-    aiResponse: AIOptimizationResponse,
-    context: TransformationContext,
-): QueryInsightsStage3Response {
-    const analysisCard = {
-        type: 'analysis' as const,
-        content: aiResponse.analysis,
-    };
-
-    const improvementCards = aiResponse.improvements.map((improvement, index) => {
-        return createImprovementCard(improvement, index, context);
-    });
-
-    // Join verification steps into a single string
-    const verificationSteps = aiResponse.verification.join('\n');
-
-    return {
-        analysisCard,
-        improvementCards,
-        verificationSteps,
-        educationalContent: aiResponse.educationalContent,
-    };
-}
-
-/**
- * Creates an improvement card from an AI recommendation
- */
-function createImprovementCard(
-    improvement: AIIndexRecommendation,
-    index: number,
-    context: TransformationContext,
-): ImprovementCard {
-    const cardTitle = getCardTitle(improvement.action);
-    const indexSpecStr = JSON.stringify(improvement.indexSpec, null, 2);
-    const indexOptionsStr =
-        improvement.indexOptions && Object.keys(improvement.indexOptions).length > 0
-            ? JSON.stringify(improvement.indexOptions, null, 2)
-            : undefined;
-    const primaryButtonLabel = getPrimaryButtonLabel(improvement.action, improvement.mongoShell);
-
-    return {
-        type: 'improvement',
-        cardId: `improvement-${index}`,
-        title: cardTitle,
-        priority: improvement.priority,
-        description: improvement.justification,
-        recommendedIndex: indexSpecStr,
-        indexName: improvement.indexName,
-        recommendedIndexDetails: generateIndexExplanation(improvement),
-        indexOptions: indexOptionsStr,
-        details: improvement.risks || l10n.t('Additional write and storage overhead for maintaining a new index.'),
-        mongoShellCommand: improvement.mongoShell,
-        primaryButton: {
-            label: primaryButtonLabel,
-            actionId: getPrimaryActionId(improvement.action),
-            payload: {
-                clusterId: context.clusterId,
-                databaseName: context.databaseName,
-                collectionName: context.collectionName,
-                action: improvement.action,
-                indexSpec: improvement.indexSpec,
-                indexOptions: improvement.indexOptions,
-                mongoShell: improvement.mongoShell,
-            },
-        },
-        // TODO: Temporarily removing secondary button until we have relevant content
-        // secondaryButton: {
-        //     label: l10n.t('Learn More'),
-        //     actionId: 'learnMore',
-        //     payload: {
-        //         topic: 'index-optimization',
-        //     },
-        // },
-    };
-}
-
-/**
- * Gets the primary button label based on action and mongoShell command
- */
-function getPrimaryButtonLabel(action: string, mongoShell: string): string {
-    switch (action) {
-        case 'create':
-            return l10n.t('Create Index…');
-        case 'drop':
-            return l10n.t('Drop Index…');
-        case 'modify':
-            if (mongoShell.includes('.hideIndex(')) {
-                return l10n.t('Hide Index…');
-            } else if (mongoShell.includes('.unhideIndex(')) {
-                return l10n.t('Unhide Index…');
-            }
-            return l10n.t('Modify Index…');
-        default:
-            return l10n.t('No Action');
-    }
-}
-
-/**
- * Gets the card title based on the action type
- */
-function getCardTitle(action: string): string {
-    switch (action) {
-        case 'create':
-            return l10n.t('Recommendation: Create Index');
-        case 'drop':
-            return l10n.t('Recommendation: Drop Index');
-        case 'modify':
-            return l10n.t('Recommendation: Modify Index');
-        default:
-            return l10n.t('Query Performance Insight');
-    }
-}
-
-/**
- * Gets the primary action ID for the button
- */
-function getPrimaryActionId(action: string): string {
-    switch (action) {
-        case 'create':
-            return 'createIndex';
-        case 'drop':
-            return 'dropIndex';
-        case 'modify':
-            return 'modifyIndex';
-        default:
-            return 'noAction';
-    }
-}
-
-/**
- * Generates a user-friendly explanation of what the index does
- */
-function generateIndexExplanation(improvement: AIIndexRecommendation): string {
-    const fields = Object.keys(improvement.indexSpec).join(', ');
-
-    switch (improvement.action) {
-        case 'create':
-            return l10n.t(
-                'An index on {0} would allow direct lookup of matching documents and eliminate full collection scans.',
-                fields,
-            );
-        case 'drop':
-            return l10n.t(
-                'This index on {0} is not being used and adds unnecessary overhead to write operations.',
-                fields,
-            );
-        case 'modify':
-            return l10n.t(
-                'Optimizing the index on {0} can improve query performance by better matching the query pattern.',
-                fields,
-            );
-        default:
-            return l10n.t('No index changes needed at this time.');
-    }
-}
 
 /**
  * Transforms query planner analysis to Stage 1 response format
@@ -251,9 +76,13 @@ export function transformStage1Response(
  * Transforms execution stats analysis to Stage 2 response format
  *
  * @param analyzed - Execution stats analysis from ExplainPlanAnalyzer
+ * @param totalCollectionDocs - Estimated total documents in the collection (optional, for selectivity)
  * @returns Stage 2 response ready for UI
  */
-export function transformStage2Response(analyzed: ExecutionStatsAnalysis): QueryInsightsStage2Response {
+export function transformStage2Response(
+    analyzed: ExecutionStatsAnalysis,
+    totalCollectionDocs?: number,
+): QueryInsightsStage2Response {
     // Check if this is a sharded query
     const shardedInfo = extractShardedInfoFromDocument(analyzed.rawStats, true);
 
@@ -279,9 +108,9 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
             isCoveringQuery: analyzed.isCovered,
             concerns: buildConcernsForShardedQuery(shardedInfo.shards, examinedToReturnedRatio),
             efficiencyAnalysis: {
-                executionStrategy: 'Sharded Query',
+                selectivity: computeSelectivity(analyzed.nReturned, totalCollectionDocs),
                 indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
-                examinedReturnedRatio: formatRatioForDisplay(examinedToReturnedRatio),
+                ...computeFetchOverhead(analyzed),
                 hasInMemorySort: shardedInfo.shards.some((s) => s.hasBlockedSort || false),
                 performanceRating: analyzed.performanceRating,
             },
@@ -329,9 +158,6 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
         );
     }
 
-    // Format examined-to-returned ratio for display
-    const examinedReturnedRatioFormatted = formatRatioForDisplay(examinedToReturnedRatio);
-
     return {
         executionTimeMs: analyzed.executionTimeMillis,
         totalKeysExamined: analyzed.totalKeysExamined,
@@ -347,9 +173,9 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
         isCoveringQuery: analyzed.isCovered,
         concerns,
         efficiencyAnalysis: {
-            executionStrategy,
+            selectivity: computeSelectivity(analyzed.nReturned, totalCollectionDocs),
             indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
-            examinedReturnedRatio: examinedReturnedRatioFormatted,
+            ...computeFetchOverhead(analyzed),
             hasInMemorySort: analyzed.hasInMemorySort,
             performanceRating: analyzed.performanceRating,
         },
@@ -360,6 +186,50 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
         rawExecutionStats: analyzed.rawStats,
         extendedStageInfo: analyzed.extendedStageInfo, // Pass through extended stage properties for UI
     };
+}
+
+/**
+ * Computes selectivity as a percentage of the collection returned by the query.
+ *
+ * @param nReturned          - Number of documents returned
+ * @param totalCollectionDocs - Estimated total documents in the collection
+ * @returns Raw percentage value (e.g., 33.2375) or null if unavailable
+ */
+function computeSelectivity(nReturned: number, totalCollectionDocs: number | undefined): number | null {
+    if (!totalCollectionDocs || totalCollectionDocs <= 0 || nReturned === undefined) {
+        return null;
+    }
+    return Math.min((nReturned / totalCollectionDocs) * 100, 100);
+}
+
+/**
+ * Computes the fetch overhead label and stable kind based on query execution characteristics.
+ * First match wins.
+ *
+ * @param analyzed - Execution stats analysis
+ * @returns Object with localized `fetchOverhead` label and stable `fetchOverheadKind` identifier
+ */
+function computeFetchOverhead(analyzed: ExecutionStatsAnalysis): {
+    fetchOverhead: string;
+    fetchOverheadKind: FetchOverheadKind;
+} {
+    if (analyzed.nReturned === 0) {
+        return { fetchOverhead: l10n.t('No matches'), fetchOverheadKind: 'noMatches' };
+    }
+    if (analyzed.isCovered && analyzed.totalDocsExamined === 0 && analyzed.nReturned > 0) {
+        return { fetchOverhead: l10n.t('Covered query'), fetchOverheadKind: 'covered' };
+    }
+    if (analyzed.isCollectionScan) {
+        return { fetchOverhead: l10n.t('Collection scan'), fetchOverheadKind: 'collectionScan' };
+    }
+    if (analyzed.totalKeysExamined > analyzed.totalDocsExamined && analyzed.totalDocsExamined > 0) {
+        const ratio = analyzed.totalKeysExamined / analyzed.totalDocsExamined;
+        if (ratio > 10) {
+            return { fetchOverhead: l10n.t('Multikey expansion (>10×)'), fetchOverheadKind: 'multikey' };
+        }
+        return { fetchOverhead: l10n.t('Multikey expansion ({0}×)', ratio.toFixed(1)), fetchOverheadKind: 'multikey' };
+    }
+    return { fetchOverhead: l10n.t('Direct fetch'), fetchOverheadKind: 'directFetch' };
 }
 
 /**
@@ -415,22 +285,6 @@ export function extractStagesFromDocument(explainResult: Document): StageInfo[] 
 
     traverseStage(executionStages);
     return stages;
-}
-
-/**
- * Formats a ratio for display in the UI
- *
- * @param ratio - The numeric ratio (e.g., 50.5)
- * @returns Formatted string (e.g., "50 : 1", "1 : 1", "∞")
- */
-function formatRatioForDisplay(ratio: number): string {
-    if (!isFinite(ratio)) {
-        return '∞';
-    }
-    if (ratio < 1) {
-        return '1 : 1';
-    }
-    return `${Math.round(ratio)} : 1`;
 }
 
 /**
@@ -737,12 +591,10 @@ export function createFailedQueryResponse(
             `Error Code: ${analyzed.executionError?.errorCode || 'N/A'}`,
         ],
         efficiencyAnalysis: {
-            executionStrategy: `Failed at ${analyzed.executionError?.failedStage?.stage || 'Unknown'} stage`,
+            selectivity: null,
             indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
-            examinedReturnedRatio:
-                examinedToReturnedRatio === Infinity
-                    ? 'N/A (query failed)'
-                    : `${Math.round(examinedToReturnedRatio)}:1`,
+            fetchOverhead: l10n.t('Query failed'),
+            fetchOverheadKind: 'noMatches' as FetchOverheadKind,
             hasInMemorySort: analyzed.hasInMemorySort,
             performanceRating: analyzed.performanceRating,
         },

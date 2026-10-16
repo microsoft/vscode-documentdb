@@ -10,6 +10,8 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
+import { ext } from '../../extensionVariables';
+import { isFeedbackPermitted } from '../../utils/feedbackPermission';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -107,6 +109,18 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 commandArgs: ['https://documentdb.io'],
             }) as TreeElement,
 
+            ...(isFeedbackPermitted()
+                ? [
+                      createGenericElement({
+                          contextValue: 'feedbackItem',
+                          id: `${parentId}/give-feedback`,
+                          label: vscode.l10n.t('Give Feedback'),
+                          iconPath: new vscode.ThemeIcon('feedback'),
+                          commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openSurvey',
+                      }) as TreeElement,
+                  ]
+                : []),
+
             createGenericElement({
                 contextValue: 'feedbackItem',
                 id: `${parentId}/suggest-feature`,
@@ -137,8 +151,20 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                 commandArgs: ['https://aka.ms/tryvcore'],
             }) as TreeElement,
+
+            createGenericElement({
+                contextValue: 'helpItem',
+                id: `${parentId}/about`,
+                label: vscode.l10n.t('About (v{0})', this.getExtensionVersion()),
+                iconPath: new vscode.ThemeIcon('info'),
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.showAbout',
+            }) as TreeElement,
         ];
 
         return rootItems;
+    }
+
+    private getExtensionVersion(): string {
+        return (ext.context.extension.packageJSON as { version: string }).version;
     }
 }

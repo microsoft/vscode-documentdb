@@ -5,12 +5,13 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 
 import { ClusterSession } from '../../documentdb/ClusterSession';
+import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
-import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
+import { isFeedbackPermitted } from '../../utils/feedbackPermission';
+import { openCollectionWebview } from '../../webviews/documentdb/collectionView/collectionViewController';
 
 export async function openCollectionView(context: IActionContext, node: CollectionItem) {
     // added manually here as this function can by called bypassing our general command registration
@@ -22,8 +23,14 @@ export async function openCollectionView(context: IActionContext, node: Collecti
 
     context.telemetry.properties.experience = node?.experience.api;
 
+    // Extract viewId from the cluster model, or infer from treeId prefix
+    // The viewId tells us which branch data provider owns this node
+    const viewId = node.cluster.viewId ?? inferViewIdFromTreeId(node.cluster.treeId);
+
     return openCollectionViewInternal(context, {
-        clusterId: node.cluster.id,
+        clusterId: node.cluster.clusterId,
+        clusterDisplayName: node.cluster.name,
+        viewId: viewId,
         databaseName: node.databaseInfo.name,
         collectionName: node.collectionInfo.name,
     });
@@ -33,8 +40,23 @@ export async function openCollectionViewInternal(
     _context: IActionContext,
     props: {
         clusterId: string;
+        clusterDisplayName: string;
+        viewId: string;
         databaseName: string;
         collectionName: string;
+        initialQuery?: {
+            filter?: string;
+            project?: string;
+            sort?: string;
+            skip?: number;
+            limit?: number;
+        };
+        /**
+         * Optional tab to land on when the view opens. When invoked from the
+         * "Indexes" tree node we pass `'tab_indexes'` so the user lands
+         * directly on the Index Management tab instead of Documents.
+         */
+        initialTab?: 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
     },
 ): Promise<void> {
     /**
@@ -43,23 +65,21 @@ export async function openCollectionViewInternal(
      */
     const sessionId = await ClusterSession.initNewSession(props.clusterId);
 
-    // Enable feedback signals only when telemetry level is set to "all"
-    // See: https://code.visualstudio.com/docs/setup/enterprise#_configure-telemetry-level
-    let feedbackSignalsEnabled = false;
-    try {
-        const telemetryLevel = vscode.workspace.getConfiguration('telemetry').get<string>('telemetryLevel');
-        feedbackSignalsEnabled = telemetryLevel === 'all';
-    } catch {
-        // If we fail to read telemetry settings, default to false
-        feedbackSignalsEnabled = false;
-    }
-
-    const view = new CollectionViewController({
+    const view = openCollectionWebview({
         sessionId: sessionId,
         clusterId: props.clusterId,
+        clusterDisplayName: props.clusterDisplayName,
+        viewId: props.viewId,
         databaseName: props.databaseName,
         collectionName: props.collectionName,
-        feedbackSignalsEnabled: feedbackSignalsEnabled,
+        feedbackPermitted: isFeedbackPermitted(),
+        initialQuery: props.initialQuery,
+        initialTab: props.initialTab,
+    });
+
+    // Clean up the ClusterSession when the tab is closed
+    view.onDisposed(() => {
+        ClusterSession.closeSession(sessionId);
     });
 
     view.revealToForeground();

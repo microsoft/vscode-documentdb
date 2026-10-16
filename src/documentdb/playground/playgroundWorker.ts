@@ -1,0 +1,407 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/**
+ * Worker thread entry point for query playground code evaluation.
+ *
+ * This file runs in a Node.js worker_thread, isolated from the extension host.
+ * It owns its own database client instance (authenticated via credentials passed from
+ * the main thread at init time) and evaluates user code through the @mongosh pipeline.
+ *
+ * Communication with the main thread is via postMessage (structured clone).
+ * See workerTypes.ts for the message protocol.
+ */
+
+import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
+// Static or `await import('bson')`, this is the driver's CommonJS copy: vite.config.ext.mjs and
+// vitest.config.ts alias `bson` to it. Without the alias an ES-module importer gets bson's ESM
+// entry, a second copy whose classes fail `instanceof` against the driver's and silently corrupt
+// schema inference. build/verification/bson-identity checks both routes.
+import { EJSON } from 'bson';
+import { randomUUID } from 'crypto';
+import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
+import { parentPort } from 'worker_threads';
+import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
+import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
+import { type MainToWorkerMessage, type WorkerStartupStage, type WorkerToMainMessage } from './workerTypes';
+
+if (!parentPort) {
+    throw new Error('playgroundWorker.ts must be run as a worker_thread');
+}
+
+// ─── Worker state ────────────────────────────────────────────────────────────
+
+let mongoClient: MongoClientType | undefined;
+let shellRuntime: DocumentDBShellRuntime | undefined;
+
+/**
+ * Tracks the requestId of the currently executing eval message.
+ * Used by the uncaught exception handler to send error details back
+ * to the main thread before the worker exits.
+ */
+let currentEvalRequestId: string | undefined;
+
+/**
+ * Cache for pending Entra ID token requests from the OIDC callback.
+ * The OIDC_CALLBACK in the worker sends a tokenRequest to the main thread
+ * and awaits the response via this map.
+ */
+const pendingTokenRequests = new Map<string, { resolve: (token: string) => void; reject: (err: Error) => void }>();
+
+// ─── Logging helper ──────────────────────────────────────────────────────────
+
+function log(level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string): void {
+    const msg: WorkerToMainMessage = { type: 'log', level, message };
+    parentPort!.postMessage(msg);
+}
+
+// ─── Message handler ─────────────────────────────────────────────────────────
+
+parentPort.on('message', (msg: MainToWorkerMessage) => {
+    switch (msg.type) {
+        case 'init':
+            void handleInit(msg).catch((err: unknown) => {
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                const response: WorkerToMainMessage = {
+                    type: 'initResult',
+                    requestId: msg.requestId,
+                    success: false,
+                    error: errorMessage,
+                };
+                parentPort!.postMessage(response);
+            });
+            break;
+
+        case 'eval':
+            void handleEval(msg).catch((err: unknown) => {
+                currentEvalRequestId = undefined;
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                const stack = err instanceof Error ? err.stack : undefined;
+                const code =
+                    err instanceof Error && 'code' in err && typeof (err as { code: unknown }).code === 'number'
+                        ? (err as { code: number }).code
+                        : undefined;
+                const response: WorkerToMainMessage = {
+                    type: 'evalError',
+                    requestId: msg.requestId,
+                    error: errorMessage,
+                    stack,
+                    code,
+                };
+                parentPort!.postMessage(response);
+            });
+            break;
+
+        case 'shutdown':
+            void handleShutdown(msg);
+            break;
+
+        case 'tokenResponse':
+            handleTokenResponse(msg);
+            break;
+
+        case 'tokenError':
+            handleTokenError(msg);
+            break;
+    }
+});
+
+// ─── Init handler ────────────────────────────────────────────────────────────
+
+async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
+    let connecting = true;
+    const reportTiming = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
+        if (connecting) {
+            const timing: WorkerToMainMessage = {
+                type: 'initTiming',
+                requestId: msg.requestId,
+                activity,
+                activityId,
+                started,
+            };
+            parentPort!.postMessage(timing);
+        }
+    };
+    const reportProgress = (stage: WorkerStartupStage): void => {
+        const progress: WorkerToMainMessage = { type: 'initProgress', requestId: msg.requestId, stage };
+        parentPort!.postMessage(progress);
+    };
+
+    log('debug', `Initializing worker (auth: ${msg.authMechanism}, db: ${msg.databaseName})`);
+
+    reportProgress('loadingDriver');
+    // Lazy-import the MongoDB API driver. Safe only while `mongodb` publishes no `exports`
+    // map — it re-exports the bson classes, so an ESM entry would duplicate them here.
+    const { MongoClient } = await import('mongodb');
+
+    // Build client options from the serializable subset
+    const options: MongoClientOptions = {
+        ...msg.clientOptions,
+    };
+
+    // Entra ID and managed identity are the same OIDC mechanism on the wire; only the token source
+    // differs, and both are resolved on the main thread so there is one credential and one cache
+    // per window, and so the worker never needs @azure/identity.
+    if (msg.authMechanism === 'MicrosoftEntraID' || msg.authMechanism === 'ManagedIdentity') {
+        const usesManagedIdentity = msg.authMechanism === 'ManagedIdentity';
+        options.authMechanism = 'MONGODB-OIDC';
+        options.tls = true;
+        options.authMechanismProperties = {
+            ALLOWED_HOSTS: [...(msg.oidcAllowedHosts ?? getOidcAllowedHosts(msg.connectionString))],
+            OIDC_CALLBACK: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
+                const requestId = randomUUID();
+                const tokenPromise = new Promise<string>((resolve, reject) => {
+                    pendingTokenRequests.set(requestId, { resolve, reject });
+                });
+                const tokenRequest: WorkerToMainMessage = {
+                    type: 'tokenRequest',
+                    requestId,
+                    scopes: [DOCUMENTDB_ENTRA_SCOPE],
+                    tenantId: msg.tenantId,
+                    source: usesManagedIdentity ? 'managedIdentity' : 'vscode',
+                    clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,
+                };
+                reportProgress('acquiringToken');
+                reportTiming('tokenWait', requestId, true);
+                parentPort!.postMessage(tokenRequest);
+                let accessToken: string;
+                try {
+                    accessToken = await tokenPromise;
+                } finally {
+                    reportTiming('tokenWait', requestId, false);
+                }
+                reportProgress('authenticating');
+
+                // Parse the JWT exp claim for a meaningful cache duration.
+                // This avoids re-acquiring the token on every database operation
+                // in persistent shell sessions.
+                let expiresInSeconds = 3500; // Conservative default (~1 hour)
+                try {
+                    const payload = accessToken.split('.')[1];
+                    if (payload) {
+                        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
+                            exp?: number;
+                        };
+                        if (typeof decoded.exp === 'number') {
+                            expiresInSeconds = expiresInSecondsFromTimestamp(decoded.exp * 1000);
+                        }
+                    }
+                } catch {
+                    // JWT parsing failed — use conservative default
+                }
+
+                return { accessToken, expiresInSeconds };
+            },
+        };
+    }
+
+    // Create and connect the database client
+    reportProgress('connecting');
+    mongoClient = new MongoClient(msg.connectionString, options);
+    reportTiming('databaseConnect', msg.requestId, true);
+    try {
+        await mongoClient.connect();
+    } finally {
+        reportTiming('databaseConnect', msg.requestId, false);
+        connecting = false;
+    }
+
+    // Create the shell runtime with console output routing to the main thread
+    reportProgress('initializingRuntime');
+    shellRuntime = new DocumentDBShellRuntime(
+        mongoClient,
+        {
+            onConsoleOutput: (output: string) => {
+                const consoleMsg: WorkerToMainMessage = { type: 'consoleOutput', output };
+                parentPort!.postMessage(consoleMsg);
+            },
+            onLog: log,
+        },
+        {
+            productName: 'DocumentDB for VS Code Query Playground',
+            productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
+            persistent: msg.persistent ?? false,
+        },
+    );
+
+    log('debug', 'Worker initialized — client connected');
+
+    const response: WorkerToMainMessage = {
+        type: 'initResult',
+        requestId: msg.requestId,
+        success: true,
+    };
+    parentPort!.postMessage(response);
+}
+
+// ─── Eval handler ────────────────────────────────────────────────────────────
+
+async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): Promise<void> {
+    if (!mongoClient || !shellRuntime) {
+        throw new Error('Worker not initialized — call init first');
+    }
+
+    currentEvalRequestId = msg.requestId;
+
+    // Evaluate via shell-runtime (handles @mongosh setup, command interception, result transformation)
+    const result = await shellRuntime.evaluate(msg.code, msg.databaseName, {
+        displayBatchSize: msg.displayBatchSize,
+        terminalColumns: msg.terminalColumns,
+    });
+
+    // Proactively extract cursorHasMore before serialization.
+    // The ResultTransformer may have already extracted it from the { cursorHasMore, documents }
+    // wrapper, but in some @mongosh/vm contexts the property survives on the normalized
+    // printable array as an own property. Check both the runtime result and the raw printable.
+    let cursorHasMore = result.cursorHasMore;
+    if (cursorHasMore === undefined && result.type === 'Cursor') {
+        const p = result.printable;
+        if (typeof p === 'object' && p !== null && 'cursorHasMore' in p) {
+            const fallbackValue = (p as { cursorHasMore: unknown }).cursorHasMore;
+            if (typeof fallbackValue === 'boolean') {
+                cursorHasMore = fallbackValue;
+            }
+        }
+    }
+
+    // Detect undefined printable before EJSON serialization destroys the distinction.
+    // print(), console.log(), and side-effect-only expressions return undefined.
+    // EJSON.stringify(undefined) produces "null", losing the undefined/null distinction.
+    const printableIsUndefined = result.printable === undefined;
+
+    // Serialize the result for IPC transfer (the runtime returns raw values;
+    // serialization to EJSON is the worker's IPC concern)
+    let printableStr: string;
+    try {
+        printableStr = EJSON.stringify(result.printable, { relaxed: false });
+    } catch {
+        try {
+            printableStr = JSON.stringify(result.printable);
+        } catch {
+            printableStr = String(result.printable);
+        }
+    }
+
+    log('trace', `Evaluation complete (${String(result.durationMs)}ms, type: ${result.type ?? 'null'})`);
+
+    currentEvalRequestId = undefined;
+
+    const response: WorkerToMainMessage = {
+        type: 'evalResult',
+        requestId: msg.requestId,
+        result: {
+            type: result.type,
+            printable: printableStr,
+            durationMs: result.durationMs,
+            cursorHasMore,
+            printableIsUndefined: printableIsUndefined || undefined,
+            source: result.source,
+        },
+    };
+    parentPort!.postMessage(response);
+}
+
+// ─── Shutdown handler ────────────────────────────────────────────────────────
+
+async function handleShutdown(msg: Extract<MainToWorkerMessage, { type: 'shutdown' }>): Promise<void> {
+    log('debug', 'Shutting down worker — closing client');
+
+    try {
+        if (shellRuntime) {
+            shellRuntime.dispose();
+            shellRuntime = undefined;
+        }
+        if (mongoClient) {
+            await mongoClient.close();
+            mongoClient = undefined;
+        }
+    } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        log('warn', `Error closing client during shutdown: ${errorMessage}`);
+    }
+
+    const response: WorkerToMainMessage = {
+        type: 'shutdownComplete',
+        requestId: msg.requestId,
+    };
+    parentPort!.postMessage(response);
+}
+
+// ─── Token response/error handlers (Entra ID) ───────────────────────────────
+
+function handleTokenResponse(msg: Extract<MainToWorkerMessage, { type: 'tokenResponse' }>): void {
+    const pending = pendingTokenRequests.get(msg.requestId);
+    if (pending) {
+        pending.resolve(msg.accessToken);
+        pendingTokenRequests.delete(msg.requestId);
+    }
+}
+
+function handleTokenError(msg: Extract<MainToWorkerMessage, { type: 'tokenError' }>): void {
+    const pending = pendingTokenRequests.get(msg.requestId);
+    if (pending) {
+        pending.reject(new Error(msg.error));
+        pendingTokenRequests.delete(msg.requestId);
+    }
+}
+
+// ─── Uncaught exception handler ──────────────────────────────────────────────
+
+process.on('uncaughtException', (error: Error) => {
+    // Send the actual exception details to the main thread so the user sees
+    // the real error instead of a generic "Worker exited unexpectedly" message.
+    if (currentEvalRequestId) {
+        const response: WorkerToMainMessage = {
+            type: 'evalError',
+            requestId: currentEvalRequestId,
+            error: `Uncaught exception: ${error.message}`,
+            stack: error.stack,
+        };
+        parentPort!.postMessage(response);
+        currentEvalRequestId = undefined;
+    }
+
+    log('error', `Uncaught exception in worker: ${error.message}\n${error.stack ?? ''}`);
+
+    // Exit so the supervisor (WorkerSessionManager) treats this as an unexpected
+    // exit and respawns a fresh worker on the next eval. Continuing to run after
+    // an uncaught exception risks operating with a corrupted mongoClient or
+    // shellRuntime state. The supervisor emits worker.unexpectedExit telemetry
+    // when this happens, so we keep visibility into the failure.
+    //
+    // Use a short delay so the postMessage above flushes before the worker
+    // terminates. setImmediate is not enough because Node may schedule the exit
+    // before the IPC message is serialized to the parent.
+    setTimeout(() => process.exit(1), 50);
+});
+
+process.on('unhandledRejection', (reason: unknown) => {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    const stack = reason instanceof Error ? reason.stack : undefined;
+
+    // If a user-code eval is in flight, surface the rejection as its failure
+    // result so the user sees a meaningful error instead of a generic
+    // "Worker exited unexpectedly" message from the supervisor.
+    if (currentEvalRequestId) {
+        const response: WorkerToMainMessage = {
+            type: 'evalError',
+            requestId: currentEvalRequestId,
+            error: `Unhandled rejection: ${message}`,
+            stack,
+        };
+        parentPort!.postMessage(response);
+        currentEvalRequestId = undefined;
+    }
+
+    log('error', `Unhandled rejection in worker: ${message}\n${stack ?? ''}`);
+
+    // Exit for the same reason uncaughtException does: a rejection that escaped
+    // all eval-scoped catch blocks may have left mongoClient or shellRuntime in
+    // an inconsistent state. The supervisor (WorkerSessionManager) will reject
+    // pending requests, emit worker.unexpectedExit telemetry, and respawn a
+    // fresh worker on the next eval. The 50 ms delay lets postMessage flush.
+    setTimeout(() => process.exit(1), 50);
+});

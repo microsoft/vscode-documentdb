@@ -12,7 +12,7 @@ import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { generateSchemaDefinition, type SchemaDefinition } from '../../utils/schemaInference';
-import { FALLBACK_MODELS, PREFERRED_MODEL, getQueryTypeConfig } from './promptTemplates';
+import { getQueryTypeConfig, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of query generation
@@ -60,8 +60,16 @@ export interface QueryGenerationResult {
     generatedQuery: string;
     // Explanation of the query
     explanation: string;
-    // The model used to generate the query
-    modelUsed: string;
+    // Stable opaque id of the selected model (LanguageModelChat.id).
+    modelId: string;
+    // Well-known family of the selected model (LanguageModelChat.family).
+    modelFamily: string;
+    // Human-readable display name (LanguageModelChat.name).
+    modelDisplayName: string;
+    // Underlying model version (LanguageModelChat.version). For opaque aliases
+    // such as `copilot-utility`, this is the only field that reveals which
+    // model the alias resolved to at request time.
+    modelVersion: string;
 }
 
 /**
@@ -78,13 +86,13 @@ async function getPromptTemplate(generationType: QueryGenerationType): Promise<s
  * @param templateType The type of template to use
  * @param context The query generation context
  * @param schemas Collection schemas
- * @returns The filled prompt template
+ * @returns The filled prompt components
  */
 async function fillPromptTemplate(
     templateType: QueryGenerationType,
     context: QueryGenerationContext,
     schemas: Array<SchemaDefinition>,
-): Promise<string> {
+): Promise<FilledPromptResult> {
     // Get the template for this generation type
     const template = await getPromptTemplate(templateType);
 
@@ -112,16 +120,39 @@ async function fillPromptTemplate(
         schemaInfo = `No schema information available.\n\n`;
     }
 
-    const filled = template
-        .replace('{databaseName}', context.databaseName)
-        .replace('{collectionName}', context.collectionName || 'N/A')
+    const craftedPrompt = template
         .replace(/{targetQueryType}/g, targetQueryType)
         .replace('{queryTypeGuidelines}', guidelines)
-        .replace('{outputSchema}', outputSchema)
-        .replace('{schemaInfo}', schemaInfo)
-        .replace('{naturalLanguageQuery}', context.naturalLanguageQuery);
+        .replace('{outputSchema}', outputSchema);
 
-    return filled;
+    // system-retrieved information
+    let contextData: string;
+    if (templateType === QueryGenerationType.CrossCollection) {
+        contextData = `## Database Context
+- **Database Name**: ${context.databaseName}
+
+## Available Collections and Their Schemas
+${schemaInfo}
+
+## Query Type Requirement
+- **Required Query Type**: ${targetQueryType}`;
+    } else {
+        contextData = `## Database Context
+- **Database Name**: ${context.databaseName}
+- **Collection Name**: ${context.collectionName || 'N/A'}
+
+## Collection Schema
+${schemaInfo}
+
+## Query Type Requirement
+- **Required Query Type**: ${targetQueryType}`;
+    }
+
+    return {
+        craftedPrompt,
+        userQuery: context.naturalLanguageQuery,
+        contextData,
+    };
 }
 
 /**
@@ -226,43 +257,38 @@ export async function generateQuery(
     }
 
     // Fill the prompt template
-    const promptContent = await fillPromptTemplate(queryContext.generationType, queryContext, schemas);
-
-    // Send to Copilot with configured models
-    const llmCallStart = Date.now();
-    ext.outputChannel.trace(
-        l10n.t('[Query Generation] Calling Copilot (model: {model})...', {
-            model: PREFERRED_MODEL || 'default',
-        }),
+    const { craftedPrompt, userQuery, contextData } = await fillPromptTemplate(
+        queryContext.generationType,
+        queryContext,
+        schemas,
     );
-    const response = await CopilotService.sendMessage([vscode.LanguageModelChatMessage.User(promptContent)], {
-        preferredModel: PREFERRED_MODEL,
-        fallbackModels: FALLBACK_MODELS,
-    });
-    context.telemetry.measurements.llmCallDurationMs = Date.now() - llmCallStart;
+
+    ext.outputChannel.trace(l10n.t('[Query Generation] Calling Copilot...'));
+    const response = await CopilotService.sendMessage(
+        [
+            vscode.LanguageModelChatMessage.User(craftedPrompt),
+            vscode.LanguageModelChatMessage.User(`## User Request\n${userQuery}`),
+            vscode.LanguageModelChatMessage.User(contextData),
+        ],
+        {
+            featureSource: 'queryGeneration',
+        },
+    );
+    context.telemetry.measurements.llmCallDurationMs = response.durationMs;
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Copilot response received in {ms}ms (model: {model})', {
-            ms: context.telemetry.measurements.llmCallDurationMs.toString(),
-            model: response.modelUsed,
+            ms: response.durationMs.toString(),
+            model: response.modelId,
         }),
     );
 
-    // Check if the preferred model was used
-    if (response.modelUsed !== PREFERRED_MODEL && PREFERRED_MODEL) {
-        // Show warning if not using preferred model
-        void vscode.window.showWarningMessage(
-            l10n.t(
-                'Query generation is using model "{actualModel}" instead of preferred "{preferredModel}". Results may vary.',
-                {
-                    actualModel: response.modelUsed,
-                    preferredModel: PREFERRED_MODEL,
-                },
-            ),
-        );
-    }
-
-    // Add telemetry for the model used
-    context.telemetry.properties.modelUsed = response.modelUsed;
+    // Add telemetry for the model used. Capture name and underlying version
+    // explicitly: for opaque aliases (`copilot-utility`) id and family are the
+    // alias string, so the backing model is only visible through name/version.
+    context.telemetry.properties.modelId = response.modelId;
+    context.telemetry.properties.modelFamily = response.modelFamily;
+    context.telemetry.properties.modelName = response.modelDisplayName;
+    context.telemetry.properties.modelVersion = response.modelVersion;
     context.telemetry.properties.generationType = queryContext.targetQueryType || 'Find';
 
     // Parse the response
@@ -276,7 +302,10 @@ export async function generateQuery(
         return {
             generatedQuery: JSON.stringify(result.command, null, 2),
             explanation: result.explanation,
-            modelUsed: response.modelUsed,
+            modelId: response.modelId,
+            modelFamily: response.modelFamily,
+            modelDisplayName: response.modelDisplayName,
+            modelVersion: response.modelVersion,
         };
     } catch {
         throw new Error(

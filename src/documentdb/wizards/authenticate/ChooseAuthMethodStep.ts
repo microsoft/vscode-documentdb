@@ -5,32 +5,51 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { traceAuthFlow, traceAuthOperation } from '../../../utils/authTrace';
 
 import {
     AuthMethodId,
     authMethodsFromString,
     createAuthMethodQuickPickItems,
+    getAuthMethodFamily,
     isSupportedAuthMethod,
 } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
     public async prompt(context: AuthenticateWizardContext): Promise<void> {
+        Object.assign(context.telemetry.properties, {
+            authMethod: undefined,
+            authMethodSelectionSource: undefined,
+            entraIdentityChoice: undefined,
+            entraIdentityPrompted: undefined,
+            entraIdentitySkipReason: undefined,
+            managedIdentityKind: undefined,
+            managedIdentityClientIdSource: undefined,
+        });
         const availableMethods = context.availableAuthMethods ?? [AuthMethodId.NativeAuth];
+        const supportedMethods = authMethodsFromString(availableMethods);
+        const availableFamilies = [...new Set(supportedMethods.map(getAuthMethodFamily))];
 
-        // If there's only one method available, auto-select it
-        if (availableMethods.length === 1) {
-            if (isSupportedAuthMethod(availableMethods[0])) {
-                context.selectedAuthMethod = availableMethods[0];
-                context.isAuthMethodUpdated = true;
-                return;
-            }
-
+        if (availableMethods.length === 1 && !isSupportedAuthMethod(availableMethods[0])) {
             throw new Error(l10n.t('Unsupported authentication method: {0}', availableMethods[0]));
         }
 
+        if (supportedMethods.length === availableMethods.length && availableFamilies.length === 1) {
+            context.telemetry.properties.authMethod = availableFamilies[0];
+            context.telemetry.properties.authMethodSelectionSource = 'autoSelected';
+            traceAuthFlow('authenticate.authMethodPicker.skipped', {
+                reason: 'singleSupportedFamily',
+                method: availableFamilies[0],
+            });
+            context.selectedAuthMethod = availableFamilies[0];
+            context.isAuthMethodUpdated = true;
+            context.authenticationMethodPrompted = false;
+            return;
+        }
+
         // Create quick pick items for each auth method - show all methods with support info
-        const quickPickItems = createAuthMethodQuickPickItems(authMethodsFromString(availableMethods), {
+        const quickPickItems = createAuthMethodQuickPickItems(supportedMethods, {
             showSupportInfo: true,
             filterUnsupported: false,
         });
@@ -47,21 +66,44 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             });
         }
 
-        const selectedItem = await context.ui.showQuickPick(quickPickItems, {
-            placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
-                resourceName: context.resourceName,
-            }),
-            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
-            suppressPersistence: true,
-            ignoreFocusOut: true,
-        });
-
+        const selectedItem = await traceAuthOperation(
+            'authenticate.authMethodPicker',
+            () =>
+                context.ui.showQuickPick(quickPickItems, {
+                    placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
+                        resourceName: context.resourceName,
+                    }),
+                    title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
+                    suppressPersistence: true,
+                    ignoreFocusOut: true,
+                }),
+            {
+                options: quickPickItems.map((item) => item.authMethod ?? 'unsupported').join(','),
+                unknownMethodCount: unknownMethodIds.length,
+                reason: 'multipleOrUnknownFamilies',
+            },
+        );
         if (isSupportedAuthMethod(selectedItem.authMethod) === false) {
             throw new Error(l10n.t('The selected authentication method is not supported.'));
         }
 
+        context.telemetry.properties.authMethod = selectedItem.authMethod;
+        context.telemetry.properties.authMethodSelectionSource = 'prompt';
         context.selectedAuthMethod = selectedItem.authMethod;
+        traceAuthFlow('authenticate.authMethodSelected', { method: selectedItem.authMethod });
         context.isAuthMethodUpdated = true;
+        context.authenticationMethodPrompted = true;
+    }
+
+    public configureBeforePrompt(context: AuthenticateWizardContext): void {
+        if (!this.shouldPrompt(context)) {
+            context.telemetry.properties.authMethod = context.selectedAuthMethod;
+            context.telemetry.properties.authMethodSelectionSource = 'preselected';
+        }
+        traceAuthFlow('authenticate.authMethodGate', {
+            skipped: !this.shouldPrompt(context),
+            reason: context.selectedAuthMethod ? 'methodAlreadySelected' : 'noMethodSelected',
+        });
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {

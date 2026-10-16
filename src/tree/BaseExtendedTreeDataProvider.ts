@@ -6,6 +6,7 @@
 import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
+import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { dispose } from '../utils/vscodeUtils';
 import { type ExtendedTreeDataProvider } from './ExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
@@ -209,6 +210,16 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     }
 
     /**
+     * Checks whether a node is currently in an error state (has cached error children).
+     *
+     * @param nodeId The ID of the node to check.
+     * @returns `true` if the node has cached error children, `false` otherwise.
+     */
+    hasNodeErrorState(nodeId: string): boolean {
+        return this.failedChildrenCache.has(nodeId);
+    }
+
+    /**
      * Removes a node's error state from the failed children cache.
      * This allows the node to be refreshed and its children to be re-fetched on the next refresh call.
      * If not reset, the cached error children will always be returned for this node.
@@ -246,6 +257,45 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     }
 
     /**
+     * Finds a cached node whose ID ends with the given suffix.
+     *
+     * This is useful for finding nodes when you only know part of their ID (e.g., a clusterId)
+     * but not the full hierarchical path. Only searches already-cached nodes.
+     *
+     * @param suffix The suffix to match against node IDs
+     * @returns The first node whose ID ends with the suffix, or undefined if not found
+     */
+    findNodeBySuffix(suffix: string): T | undefined {
+        return this.parentCache.findNodeBySuffix(suffix);
+    }
+
+    /**
+     * Searches for a child node by ID starting from a specific parent element.
+     *
+     * **Important behavioral notes:**
+     * - The `parent` element must be provided directly - this method does NOT discover or
+     *   fetch the parent. If the parent is stale or invalid, the search will fail.
+     * - Returns `undefined` immediately if the target `id` doesn't start with `parent.id`
+     *   (i.e., if the target is not a descendant of the parent).
+     * - This method DOES trigger backend discovery by calling `getChildren()` on nodes
+     *   along the path to the target. Only direct ancestors of the target ID are expanded.
+     *
+     * This is more efficient than `findNodeById` when you already have the parent,
+     * as it avoids the ancestor fallback behavior that could expand unrelated branches.
+     *
+     * @param parent The parent element to start searching from (must be already obtained)
+     * @param id The full ID of the child node to find (must be a descendant of parent)
+     * @returns A Promise that resolves to the found node or undefined if not found
+     */
+    async findChildById(parent: T, id: string): Promise<T | undefined> {
+        return this.parentCache.findChildById(
+            parent,
+            id,
+            this.getChildren.bind(this) as (element: T) => Promise<T[] | null | undefined>,
+        );
+    }
+
+    /**
      * Refreshes the tree data.
      * This will trigger the view to update the changed element/root and its children recursively (if shown).
      *
@@ -274,34 +324,79 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * Helper method to find the current instance of an element by ID and refresh it.
      * This addresses the issue where stale references won't properly refresh the tree.
      *
-     * @param element Potentially stale element reference
+     * ## How It Works
+     *
+     * When `wrapItemInStateHandling` wraps an element, it registers a listener that captures
+     * the element reference in a closure. When `notifyChildrenChanged(id)` is called, this
+     * listener invokes `refresh(element)` with that captured reference.
+     *
+     * VS Code's TreeView API uses **object identity** (reference equality), not ID equality,
+     * to match elements. Therefore, we must fire `onDidChangeTreeData` with the exact same
+     * object reference that VS Code received from our previous `getChildren()` call.
+     *
+     * ## Current Callers
+     *
+     * All current `refresh(element)` calls receive elements from one of these sources:
+     * 1. **Listener closures**: via `wrapItemInStateHandling(item, () => this.refresh(item))`
+     * 2. **VS Code command arguments**: e.g., `retryAuthentication(context, node)` where VS Code
+     *    passes the exact reference it has internally
+     *
+     * Both sources provide the correct object reference for VS Code to match.
+     *
+     * ## Known Limitations
+     *
+     * 1. **Listener Accumulation**: The TreeElementStateManager library accumulates listeners
+     *    without cleanup. When a tree is refreshed and new objects are created with the same
+     *    IDs, old listeners persist alongside new ones. This causes `refresh()` to be called
+     *    multiple times for the same ID. This is inefficient but functionally correct because
+     *    only the listener with the current reference (matching VS Code's internal tree) will
+     *    trigger a successful refresh.
+     *
+     * 2. **Cache Timing**: After this method clears the cache and fires the refresh event,
+     *    the cache is only repopulated when VS Code calls `getChildren()`. If code attempts
+     *    to use `findNodeById()` before VS Code completes the refresh, the node may not be
+     *    found in the cache. Use `findNodeById(id, true)` with recursive search enabled to
+     *    handle this scenario.
+     *
+     * 3. **ID-based lookups for reveal**: The `revealConnectionsViewElement` and URL handler
+     *    use `findNodeById(id, true)` which triggers `getChildren()` during traversal. This
+     *    properly wraps and caches nodes, so reveal operations work correctly even if the
+     *    node wasn't previously cached.
+     *
+     * @param element The element reference from the listener closure (must be the original
+     *                wrapped element that was returned to VS Code)
      */
     protected async findAndRefreshCurrentElement(element: T): Promise<void> {
         try {
-            // First try to find the current instance with this ID
-            const currentElement = await this.findNodeById(element.id!);
+            // First, look up the cached element BEFORE clearing the cache
+            const cachedElement = await this.findNodeById(element.id!);
 
-            // AFTER finding the element, update the cache:
-            // 1. Clear the cache for this ID to remove any stale references
+            // Clear the cache for this ID to remove any stale references
             // (drops the element and its children)
             this.parentCache.clear(element.id!);
-            // 2. Re-register the node (but not its children)
-            if (currentElement?.id) {
-                this.registerNodeInCache(currentElement);
-            }
 
-            if (currentElement) {
-                // We found the current instance, use it for refresh
-                this.onDidChangeTreeDataEmitter.fire(currentElement);
-            } else {
-                // Current instance not found, fallback to using the provided element
-                // This may not work if it's truly a stale reference, but we've tried our best
-                this.onDidChangeTreeDataEmitter.fire(element);
+            // IMPORTANT: Fire with the ORIGINAL element reference first!
+            // VS Code uses object identity to match elements in its internal tree.
+            // The `element` parameter is typically the original wrapped element from the
+            // listener closure, which is the exact same object reference that VS Code has.
+            this.onDidChangeTreeDataEmitter.fire(element);
+
+            // Also fire with the cached element if it's a DIFFERENT reference.
+            //
+            // This handles scenarios where the `element` reference comes from a stale closure.
+            // For example, LazyMetadataLoader stores element references in a collection and
+            // calls refresh() later when async metadata loading completes. If the tree was
+            // refreshed in between (e.g., user collapsed and re-expanded), new element objects
+            // are created and registered in the cache. The stored element reference is now
+            // stale, but the cache has the current reference that VS Code recognizes.
+            //
+            // By firing both references, we ensure at least one matches VS Code's internal
+            // tree. VS Code will ignore the fire for whichever reference it doesn't recognize.
+            if (cachedElement && cachedElement !== element) {
+                this.onDidChangeTreeDataEmitter.fire(cachedElement);
             }
-        } catch (error) {
-            // If anything goes wrong during the lookup, still attempt the refresh with the original element
-            // and clear the cache for this ID
-            console.log(`Error finding current element for refresh: ${error}`);
+        } catch {
+            // If anything goes wrong, still attempt the refresh with the original element
             this.parentCache.clear(element.id!);
             this.onDidChangeTreeDataEmitter.fire(element);
         }
@@ -365,23 +460,35 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * return children; // Already fully processed with multiple context values
      *
      * @example
-     * // With helper nodes (Connections provider):
+     * // With view-specific error-recovery actions (Connections provider):
+     * //
+     * // Error-recovery nodes come from two layers:
+     * //  - The ELEMENT layer owns failure-type nodes ("retry", "open shell") and appends them itself.
+     * //  - The PROVIDER layer (here) owns view-specific nodes via `errorRecoveryActions`. Each action
+     * //    may declare a `forContextValues` whitelist, matched against the FAILING element's
+     * //    contextValue tags, so an action only appears for the node types it makes sense for.
      * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
      *   element,
      *   context,
      *   async () => element.getChildren?.(),
      *   {
      *     contextValue: [Views.ConnectionsView, 'anotherValue'],
-     *     createHelperNodes: (el) => [
-     *       createGenericElementWithContext({
-     *         contextValue: 'error',
-     *         id: `${el.id}/updateCredentials`,
-     *         label: vscode.l10n.t('Click here to update credentials'),
-     *         iconPath: new vscode.ThemeIcon('key'),
-     *         commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
-     *         commandArgs: [el],
-     *       }) as TreeElement,
-     *     ]
+     *     errorRecoveryActions: [
+     *       {
+     *         // Only attach when a cluster node fails (not when a database/collection/index fails).
+     *         forContextValues: ['treeItem_documentdbcluster'],
+     *         create: (el) => [
+     *           createGenericElementWithContext({
+     *             contextValue: 'error',
+     *             id: `${el.id}/updateCredentials`,
+     *             label: vscode.l10n.t('Click here to update credentials'),
+     *             iconPath: new vscode.ThemeIcon('key'),
+     *             commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
+     *             commandArgs: [el],
+     *           }) as TreeElement,
+     *         ],
+     *       },
+     *     ],
      *   }
      * );
      * return children; // Already fully processed
@@ -392,7 +499,20 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         childrenFetchFunc: () => Promise<T[] | null | undefined>,
         options: {
             detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
-            createHelperNodes?: (element: T) => T[];
+            /**
+             * View-specific error-recovery actions appended when an error is detected. Each action is
+             * gated by an optional `forContextValues` whitelist (see {@link elementMatchesContextValues}).
+             */
+            errorRecoveryActions?: ReadonlyArray<{
+                /**
+                 * Whitelist of contextValue tags. The action is only attached when the failing
+                 * element's contextValue contains at least one of these tags. Omit (or leave empty)
+                 * to attach for any failing element.
+                 */
+                forContextValues?: string[];
+                /** Builds the recovery node(s) to append for this action. */
+                create: (element: T) => T[];
+            }>;
             contextValue?: string | string[]; // For automatic context value appending - single or multiple values
         } = {},
     ): Promise<T[] | null | undefined> {
@@ -406,7 +526,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         }
 
         // 2. Fetch the children of the current element
-        const children = await childrenFetchFunc();
+        const children = await this.fetchChildrenWithDiagnostics(element, context, childrenFetchFunc);
         context.telemetry.measurements.childrenCount = children?.length ?? 0;
 
         // 3. Check if the returned children contain an error node
@@ -416,13 +536,18 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             : isTreeElementWithRetryChildren(element) && element.hasRetryNode(children);
 
         if (hasError && element.id) {
-            // 4. Optionally create helper nodes to provide user-friendly error recovery actions
-            if (options.createHelperNodes) {
-                const helperNodes = options.createHelperNodes(element);
-                children?.push(...helperNodes);
+            // 4. Optionally append view-specific error-recovery actions (e.g. "update credentials").
+            //    Each action may be gated to specific node types via `forContextValues`, so it only
+            //    appears when a matching element fails (e.g. a cluster, but not a database/index).
+            if (options.errorRecoveryActions) {
+                for (const action of options.errorRecoveryActions) {
+                    if (this.elementMatchesContextValues(element, action.forContextValues)) {
+                        children?.push(...action.create(element));
+                    }
+                }
             }
 
-            // 5. Store the complete error state (error nodes + helper nodes) in our cache for future refreshes
+            // 5. Store the complete error state (error nodes + recovery actions) in our cache for future refreshes
             this.failedChildrenCache.set(element.id, children ?? []);
             context.telemetry.properties.cachedErrorNode = 'true';
         }
@@ -445,13 +570,77 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
                         this.registerRelationshipInCache(element, child);
                     }
 
-                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as T;
+                    return ext.state.wrapItemInStateHandling(child, () => {
+                        this.refresh(child);
+                    }) as T;
                 }
                 return child;
             });
         }
 
         return children;
+    }
+
+    /**
+     * Single point where a failed expansion is translated into something the user can act on
+     * (a stopped DocumentDB Local container, a port-forward tunnel that is no longer up, an Atlas
+     * TLS rejection). Placed here rather than in each tree item or each view's provider, so every
+     * node below a cluster is covered in every view.
+     *
+     * The error itself is never modified: we only choose what to display, then rethrow it unchanged
+     * so telemetry and every downstream identity check keep working. Cluster nodes handle their own
+     * failures in `ClusterItemBase` and return error children instead of throwing, so they never
+     * reach this catch.
+     */
+    private async fetchChildrenWithDiagnostics(
+        element: T,
+        context: IActionContext,
+        childrenFetchFunc: () => Promise<T[] | null | undefined>,
+    ): Promise<T[] | null | undefined> {
+        try {
+            return await childrenFetchFunc();
+        } catch (error) {
+            // Cluster nodes and everything below them carry the same `cluster` model but share no
+            // interface, so this is structural rather than an `instanceof`.
+            const clusterId = (element as { cluster?: { clusterId?: string } }).cluster?.clusterId;
+            const diagnosis = clusterId ? await ConnectionDiagnosticsService.explain({ clusterId, error }) : undefined;
+
+            if (diagnosis) {
+                context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+                context.errorHandling.suppressDisplay = true;
+                // `detail` is only rendered for modal messages, so the raw text is appended instead.
+                const cause = error instanceof Error ? error.message : String(error);
+                void vscode.window.showErrorMessage(`${diagnosis.message} (${cause})`);
+            }
+
+            throw error;
+        }
+    }
+
+    /**
+     * Determines whether a failing element matches an error-recovery action's contextValue whitelist.
+     *
+     * A node's `contextValue` is a composite string of tags joined with ';' (built via azext-utils
+     * `createContextValue`). We parse it back into individual tags and check for membership, so a
+     * whitelist tag like `treeItem_documentdbcluster` matches the cluster node exactly without
+     * accidentally matching unrelated tags via substring comparison.
+     *
+     * @param element The failing element whose children triggered the error state.
+     * @param forContextValues Whitelist of tags. When omitted or empty, the action applies to any element.
+     * @returns `true` if the action should be attached for this element.
+     */
+    private elementMatchesContextValues(element: T, forContextValues?: string[]): boolean {
+        // No whitelist => the action applies to any failing element.
+        if (!forContextValues || forContextValues.length === 0) {
+            return true;
+        }
+
+        if (!isTreeElementWithContextValue(element)) {
+            return false;
+        }
+
+        const elementTags = element.contextValue.split(';');
+        return forContextValues.some((tag) => elementTags.includes(tag));
     }
 
     /**
@@ -479,7 +668,10 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         childrenFetchFunc: () => Promise<T[] | null | undefined>,
         options: {
             detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
-            createHelperNodes?: (element: T) => T[];
+            errorRecoveryActions?: ReadonlyArray<{
+                forContextValues?: string[];
+                create: (element: T) => T[];
+            }>;
         } = {},
     ): Promise<T[] | null | undefined> {
         // Delegate to the enhanced method without child processing

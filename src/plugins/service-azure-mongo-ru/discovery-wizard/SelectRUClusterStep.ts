@@ -50,7 +50,7 @@ export class SelectRUClusterStep extends AzureWizardPromptStep<NewConnectionWiza
 
                     alwaysShow: true,
                 }))
-                .sort((a, b) => a.label.localeCompare(b.label));
+                .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
             return promptItems;
         };

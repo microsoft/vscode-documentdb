@@ -1,0 +1,177 @@
+name: Publish @documentdb-js packages
+
+# Verifies the workspace packages and dry-runs publication by default, without
+# deployment approval or OIDC permissions. With no selection, dry-run checks all
+# five @documentdb-js/* packages.
+#
+# Real publication requires dry_run=false and at least one selected package.
+# Only the publish job uses npm Trusted Publishing (OIDC) and the
+# `npm-publish-documentdb-js-scope` environment's required-reviewer gate.
+# No long-lived token is stored in the repo.
+#
+# Trigger: workflow_dispatch only.
+
+on:
+    workflow_dispatch:
+        inputs:
+            dry_run:
+                description: 'Verify and dry-run only (no publication or deployment approval)'
+                type: boolean
+                default: true
+            publish_operator_registry:
+                description: 'Publish @documentdb-js/operator-registry'
+                type: boolean
+                default: false
+            publish_schema_analyzer:
+                description: 'Publish @documentdb-js/schema-analyzer'
+                type: boolean
+                default: false
+            publish_shell_api_types:
+                description: 'Publish @documentdb-js/shell-api-types'
+                type: boolean
+                default: false
+            publish_shell_runtime:
+                description: 'Publish @documentdb-js/shell-runtime'
+                type: boolean
+                default: false
+            publish_srv_resolver:
+                description: 'Publish @documentdb-js/srv-resolver'
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+jobs:
+    verify:
+        name: Verify packages (publish dry-run)
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        env:
+            VERIFY_ALL: >-
+                ${{
+                  inputs.dry_run &&
+                  !inputs.publish_operator_registry &&
+                  !inputs.publish_schema_analyzer &&
+                  !inputs.publish_shell_api_types &&
+                  !inputs.publish_shell_runtime &&
+                  !inputs.publish_srv_resolver
+                }}
+        steps:
+            - name: 🛑 Validate inputs (at least one package selected)
+              if: >-
+                  ${{
+                    !inputs.dry_run &&
+                    !inputs.publish_operator_registry &&
+                    !inputs.publish_schema_analyzer &&
+                    !inputs.publish_shell_api_types &&
+                    !inputs.publish_shell_runtime &&
+                    !inputs.publish_srv_resolver
+                  }}
+              run: |
+                  echo "::error::No package selected. Enable at least one publish_* input before running this workflow."
+                  exit 1
+
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: 🛠 Setup Node.js Environment (with cache)
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
+                  registry-url: 'https://registry.npmjs.org'
+
+            - name: ⬆️ Use npm 11.20.0 (Node-compatible, supports Trusted Publishing)
+              run: npm install -g npm@11.20.0
+
+            - name: 📦 Install Dependencies (npm ci)
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+            - name: 🔨 Build Workspace Packages
+              run: npm run build --workspaces --if-present
+
+            - name: 🔍 Type-check Package Tests (strict, no emit)
+              run: npm run typecheck:tests
+
+            - name: 🧪 Test Workspace Packages
+              run: npm run test --workspaces --if-present
+
+            - name: 🔎 Verify Packed Packages and Consumers
+              run: npm run verify:packages
+
+            - name: 📦 Dry-run @documentdb-js/operator-registry
+              if: ${{ inputs.publish_operator_registry || env.VERIFY_ALL == 'true' }}
+              run: npm publish --dry-run --workspace @documentdb-js/operator-registry
+
+            - name: 📦 Dry-run @documentdb-js/schema-analyzer
+              if: ${{ inputs.publish_schema_analyzer || env.VERIFY_ALL == 'true' }}
+              run: npm publish --dry-run --workspace @documentdb-js/schema-analyzer
+
+            - name: 📦 Dry-run @documentdb-js/shell-api-types
+              if: ${{ inputs.publish_shell_api_types || env.VERIFY_ALL == 'true' }}
+              run: npm publish --dry-run --workspace @documentdb-js/shell-api-types
+
+            - name: 📦 Dry-run @documentdb-js/shell-runtime
+              if: ${{ inputs.publish_shell_runtime || env.VERIFY_ALL == 'true' }}
+              run: npm publish --dry-run --workspace @documentdb-js/shell-runtime
+
+            - name: 📦 Dry-run @documentdb-js/srv-resolver
+              if: ${{ inputs.publish_srv_resolver || env.VERIFY_ALL == 'true' }}
+              run: npm publish --dry-run --workspace @documentdb-js/srv-resolver
+
+    publish:
+        name: Publish to npmjs.com
+        needs: verify
+        if: ${{ !inputs.dry_run }}
+        runs-on: ubuntu-latest
+        # Only real publications serialize; dry runs never queue behind a publish awaiting approval.
+        concurrency:
+            group: publish-documentdb-js-packages
+            cancel-in-progress: false
+        environment: npm-publish-documentdb-js-scope
+        permissions:
+            id-token: write # required for npm Trusted Publishing (OIDC)
+            contents: read
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: 🛠 Setup Node.js Environment (with cache)
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
+                  registry-url: 'https://registry.npmjs.org'
+
+            - name: ⬆️ Use npm 11.20.0 (Node-compatible, supports Trusted Publishing)
+              run: npm install -g npm@11.20.0
+
+            - name: 📦 Install Dependencies (npm ci)
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+            - name: 🔨 Build Workspace Packages
+              run: npm run build --workspaces --if-present
+
+            - name: 🚀 Publish @documentdb-js/operator-registry
+              if: ${{ inputs.publish_operator_registry }}
+              run: npm publish --provenance --workspace @documentdb-js/operator-registry
+
+            - name: 🚀 Publish @documentdb-js/schema-analyzer
+              if: ${{ inputs.publish_schema_analyzer }}
+              run: npm publish --provenance --workspace @documentdb-js/schema-analyzer
+
+            - name: 🚀 Publish @documentdb-js/shell-api-types
+              if: ${{ inputs.publish_shell_api_types }}
+              run: npm publish --provenance --workspace @documentdb-js/shell-api-types
+
+            - name: 🚀 Publish @documentdb-js/shell-runtime
+              if: ${{ inputs.publish_shell_runtime }}
+              run: npm publish --provenance --workspace @documentdb-js/shell-runtime
+
+            - name: 🚀 Publish @documentdb-js/srv-resolver
+              if: ${{ inputs.publish_srv_resolver }}
+              run: npm publish --provenance --workspace @documentdb-js/srv-resolver

@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { EJSON, type Document } from 'bson';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../documentdb/ClustersClient';
+import { ClustersClient, isBulkWriteError } from '../../documentdb/ClustersClient';
 import {
     AzureDomains,
     getHostsFromConnectionString,
@@ -17,7 +17,6 @@ import {
 import { ext } from '../../extensionVariables';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { BufferErrorCode, createMongoDbBuffer, type DocumentBuffer } from '../../utils/documentBuffer';
-import { nonNullProp } from '../../utils/nonNull';
 import { getRootPath } from '../../utils/workspacUtils';
 
 export async function importDocuments(
@@ -47,11 +46,21 @@ export async function importDocuments(
     });
 
     if (ignoredUris.length) {
-        ext.outputChannel.appendLog(
+        ext.outputChannel.warn(
             l10n.t('Ignoring the following files that do not match the "*.json" file name pattern:'),
         );
-        ignoredUris.forEach((uri) => ext.outputChannel.appendLog(`${uri.fsPath}`));
-        ext.outputChannel.show();
+        ignoredUris.forEach((uri) => ext.outputChannel.warn(`  ${uri.fsPath}`));
+
+        void vscode.window
+            .showWarningMessage(
+                l10n.t('{0} file(s) were ignored because they do not match the "*.json" pattern.', ignoredUris.length),
+                l10n.t('Show Output'),
+            )
+            .then((choice) => {
+                if (choice === l10n.t('Show Output')) {
+                    ext.outputChannel.show();
+                }
+            });
     }
 
     if (!selectedItem) {
@@ -64,11 +73,16 @@ export async function importDocuments(
 
     context.telemetry.properties.experience = selectedItem.experience.api;
 
-    await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
-        await importDocumentsWithProgress(selectedItem, uris);
-    });
-
-    ext.state.notifyChildrenChanged(selectedItem.id);
+    try {
+        await ext.state.runWithTemporaryDescription(selectedItem.id, l10n.t('Importing…'), async () => {
+            await importDocumentsWithProgress(selectedItem, uris);
+        });
+    } finally {
+        // Always refresh at the database level (parent of the collection) so collection
+        // descriptions (document counts) update correctly, even after partial failures
+        const databaseId = selectedItem.id.substring(0, selectedItem.id.lastIndexOf('/'));
+        ext.state.notifyChildrenChanged(databaseId);
+    }
 }
 
 export async function importDocumentsWithProgress(selectedItem: CollectionItem, uris: vscode.Uri[]): Promise<void> {
@@ -76,9 +90,18 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
         {
             location: vscode.ProgressLocation.Notification,
             title: l10n.t('Importing documents…'),
+            cancellable: true,
         },
-        async (progress) => {
+        async (progress, cancellationToken) => {
             progress.report({ increment: 0, message: l10n.t('Loading documents…') });
+
+            ext.outputChannel.info(
+                l10n.t(
+                    'Starting import of {0} file(s) into collection "{1}"',
+                    uris.length,
+                    selectedItem.collectionInfo.name,
+                ),
+            );
 
             const countUri = uris.length;
             const incrementUri = 25 / (countUri || 1);
@@ -92,38 +115,50 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
                     message: l10n.t('Loading document {num} of {countUri}', { num: i + 1, countUri }),
                 });
 
+                ext.outputChannel.trace(l10n.t('Parsing file {0}: {1}', i + 1, uris[i].fsPath));
+
                 const result = await parseAndValidateFile(selectedItem, uris[i]);
 
                 // Note to future maintainers: the validation can return 0 valid documents and still have errors.
 
                 if (result.errors && result.errors.length) {
-                    ext.outputChannel.appendLog(
-                        l10n.t('Errors found in document {path}. Please fix these.', { path: uris[i].path }),
+                    ext.outputChannel.error(
+                        l10n.t('Errors found in file "{path}". Please fix these:', { path: uris[i].path }),
                     );
-                    ext.outputChannel.appendLog(result.errors.join('\n'));
-                    ext.outputChannel.show();
+                    for (const err of result.errors) {
+                        ext.outputChannel.error(`  ${err}`);
+                    }
                     hasErrors = true;
                 }
 
                 if (result.documents && result.documents.length > 0) {
+                    ext.outputChannel.trace(
+                        l10n.t('Loaded {0} document(s) from "{1}"', result.documents.length, uris[i].path),
+                    );
                     documents.push(...result.documents);
                 }
             }
+
+            ext.outputChannel.info(l10n.t('Total documents to import: {0}', documents.length));
 
             const countDocuments = documents.length;
             const incrementDocuments = 75 / (countDocuments || 1);
             let count = 0;
             let buffer: DocumentBuffer<unknown> | undefined;
             if (selectedItem instanceof CollectionItem) {
-                const hosts = getHostsFromConnectionString(
-                    nonNullProp(
-                        selectedItem.cluster,
-                        'connectionString',
-                        'selectedItem.cluster.connectionString',
-                        'importDocuments.ts',
-                    ),
-                );
-                const isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
+                // Get the connection string from the ClustersClient, not from the cluster model.
+                // For Discovery View items, the cluster model may not have connectionString populated,
+                // but the ClustersClient will have it after authentication.
+                const client = await ClustersClient.getClient(selectedItem.cluster.clusterId);
+                const connectionString = client.getConnectionString();
+
+                // Determine if this is an Azure MongoDB RU resource
+                // Fall back to non-RU buffer if connection string is unavailable
+                let isRuResource = false;
+                if (connectionString) {
+                    const hosts = getHostsFromConnectionString(connectionString);
+                    isRuResource = hasDomainSuffix(AzureDomains.RU, ...hosts);
+                }
 
                 if (isRuResource) {
                     // For Azure MongoDB RU, we use a buffer with maxDocumentCount = 1
@@ -135,7 +170,15 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
                 }
             }
 
+            let wasCancelled = false;
+
             for (let i = 0; i < countDocuments; i++) {
+                if (cancellationToken.isCancellationRequested) {
+                    wasCancelled = true;
+                    ext.outputChannel.warn(l10n.t('Import operation was canceled after {0} document(s).', count));
+                    break;
+                }
+
                 progress.report({
                     increment: incrementDocuments,
                     message: l10n.t('Importing document {num} of {countDocuments}', {
@@ -153,7 +196,7 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             }
 
             // Do insertion for the last batch for bulk insertion
-            if (buffer && buffer.getStats().documentCount > 0) {
+            if (!wasCancelled && buffer && buffer.getStats().documentCount > 0) {
                 const lastBatchFlushResult = await insertDocument(selectedItem, undefined, buffer);
 
                 count += lastBatchFlushResult.count;
@@ -163,16 +206,41 @@ export async function importDocumentsWithProgress(selectedItem: CollectionItem, 
             // let's make sure we reach 100% progress, useful in case of errors etc.
             progress.report({ increment: 100, message: l10n.t('Finished importing') });
 
-            return (
-                (hasErrors ? l10n.t('Import completed with errors.') : l10n.t('Import successful.')) +
-                ' ' +
-                l10n.t('Inserted {0} document(s). See output for more details.', count)
-            );
+            return { hasErrors, count, wasCancelled };
         },
     );
 
-    // We should not use await here, otherwise the node status will not be updated until the message is closed
-    vscode.window.showInformationMessage(result);
+    if (result.wasCancelled) {
+        const message = l10n.t('Import canceled. Inserted {0} document(s) before cancellation.', result.count);
+        ext.outputChannel.warn(message);
+        void vscode.window.showWarningMessage(message, l10n.t('Show Output')).then((choice) => {
+            if (choice === l10n.t('Show Output')) {
+                ext.outputChannel.show();
+            }
+        });
+        return;
+    }
+
+    const message =
+        (result.hasErrors ? l10n.t('Import completed with errors.') : l10n.t('Import successful.')) +
+        ' ' +
+        l10n.t('Inserted {0} document(s).', result.count);
+
+    if (result.hasErrors) {
+        ext.outputChannel.warn(message);
+
+        void vscode.window
+            .showWarningMessage(message + ' ' + l10n.t('See output for more details.'), l10n.t('Show Output'))
+            .then((choice) => {
+                if (choice === l10n.t('Show Output')) {
+                    ext.outputChannel.show();
+                }
+            });
+    } else {
+        ext.outputChannel.info(message);
+        // We should not use await here, otherwise the node status will not be updated until the message is closed
+        void vscode.window.showInformationMessage(message);
+    }
 }
 
 async function askForDocuments(context: IActionContext): Promise<vscode.Uri[]> {
@@ -249,6 +317,7 @@ async function insertDocument(
     try {
         // Check for valid buffer
         if (!buffer) {
+            ext.outputChannel.error(l10n.t('Import failed: document buffer is not initialized.'));
             return { count: 0, errorOccurred: true };
         }
 
@@ -258,8 +327,11 @@ async function insertDocument(
         }
 
         // Should only reach here if node is neither CollectionItem nor CosmosDBContainerResourceItem
+        ext.outputChannel.error(l10n.t('Import failed: unsupported node type.'));
         return { count: 0, errorOccurred: true };
-    } catch {
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.error(l10n.t('Import failed with unexpected error: {0}', errorMessage));
         return { count: 0, errorOccurred: true };
     }
 }
@@ -292,11 +364,64 @@ async function insertDocumentWithBufferIntoCluster(
 
     // Documents to process could be the current document (if too large)
     // or the contents of the buffer (if it was full)
-    const client = await ClustersClient.getClient(node.cluster.id);
-    const insertResult = await client.insertDocuments(databaseName, collectionName, documentsToProcess as Document[]);
-
-    return {
-        count: insertResult.insertedCount,
-        errorOccurred: insertResult.insertedCount < (documentsToProcess?.length || 0),
-    };
+    const client = await ClustersClient.getClient(node.cluster.clusterId);
+    try {
+        const insertResult = await client.insertDocuments(
+            databaseName,
+            collectionName,
+            documentsToProcess as Document[],
+            false,
+        );
+        return {
+            count: insertResult.insertedCount,
+            errorOccurred: false,
+        };
+    } catch (error) {
+        if (isBulkWriteError(error)) {
+            // Handle MongoDB bulk write errors
+            // It could be a partial failure, so we need to check the result
+            ext.outputChannel.warn(
+                l10n.t(
+                    'Bulk write error during import into "{0}.{1}": {2} document(s) inserted.',
+                    databaseName,
+                    collectionName,
+                    error.result.insertedCount,
+                ),
+            );
+            if (error.writeErrors) {
+                const errors = Array.isArray(error.writeErrors) ? error.writeErrors : [error.writeErrors];
+                for (const writeError of errors) {
+                    // Extract error message from WriteError object
+                    // WriteError objects have errmsg property, other errors may have message
+                    let errorMsg = '';
+                    if (typeof writeError === 'object' && writeError !== null) {
+                        if (typeof (writeError as unknown as { errmsg?: string }).errmsg === 'string') {
+                            errorMsg = (writeError as unknown as { errmsg: string }).errmsg;
+                        } else if (typeof (writeError as unknown as { message?: string }).message === 'string') {
+                            errorMsg = (writeError as unknown as { message: string }).message;
+                        } else {
+                            errorMsg = JSON.stringify(writeError);
+                        }
+                    } else {
+                        errorMsg = JSON.stringify(writeError);
+                    }
+                    ext.outputChannel.error('  ' + l10n.t('Write error: {0}', errorMsg));
+                }
+            }
+            return {
+                count: error.result.insertedCount,
+                errorOccurred: true,
+            };
+        } else {
+            // Handle other errors
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('Error inserting documents into "{0}.{1}": {2}', databaseName, collectionName, errorMessage),
+            );
+            return {
+                count: 0,
+                errorOccurred: true,
+            };
+        }
+    }
 }

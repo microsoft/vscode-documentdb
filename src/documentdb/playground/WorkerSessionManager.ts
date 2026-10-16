@@ -1,0 +1,695 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type ITelemetryContext,
+} from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
+import * as path from 'path';
+import type * as vscode from 'vscode';
+import { Worker } from 'worker_threads';
+import { ext } from '../../extensionVariables';
+import { settingsKeys } from '../../settingsKeys';
+import { type AuthTraceContext } from '../../utils/authTrace';
+import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { SettingsHintError } from '../shell/SettingsHintError';
+import { prepareDriverConnectionString } from '../srv/prepareDriverConnectionString';
+import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
+import {
+    type MainToWorkerMessage,
+    type SerializableExecutionResult,
+    type WorkerStartupStage,
+    type WorkerToMainMessage,
+} from './workerTypes';
+
+/** Worker lifecycle states */
+export type WorkerState = 'idle' | 'spawning' | 'ready' | 'executing';
+
+type WorkerStartupOutcome = 'succeeded' | 'failed' | 'timedOut' | 'terminated' | 'exited' | 'canceled';
+
+const workerStartupStageNames = {
+    startingWorker: 'stage01StartingWorker',
+    loadingDriver: 'stage02LoadingDriver',
+    connecting: 'stage03Connecting',
+    acquiringToken: 'stage04AcquiringToken',
+    authenticating: 'stage05Authenticating',
+    initializingRuntime: 'stage06InitializingRuntime',
+} as const satisfies Record<WorkerStartupStage, string>;
+
+type WorkerStartupStageName = (typeof workerStartupStageNames)[WorkerStartupStage];
+
+export interface WorkerStartupTelemetryContext {
+    readonly shellSessionId?: string;
+    readonly sessionId?: string;
+    readonly connectionCorrelationId?: string;
+}
+
+interface WorkerStartup {
+    readonly requestId: string;
+    readonly surface: 'shell' | 'playground';
+    readonly startedAt: number;
+    readonly telemetry: ITelemetryContext;
+    readonly costTimings: ConnectionStartupTimings;
+    readonly timingStops: Map<string, () => void>;
+    readonly stageDurationsMs: Partial<Record<WorkerStartupStageName, number>>;
+    stage: WorkerStartupStage;
+    stageStartedAt: number;
+    outcome?: WorkerStartupOutcome;
+}
+
+/**
+ * Callbacks for worker events. The caller provides these to route
+ * worker messages to the appropriate destination (output channels,
+ * telemetry, etc.).
+ */
+export interface WorkerSessionCallbacks {
+    /** Called when user code produces console output (console.log, print, printjson). */
+    onConsoleOutput?: (output: string) => void;
+    /** Called for internal log messages from the worker, with that worker's startup ID. */
+    onLog?: (
+        level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
+        message: string,
+        startupCorrelationId?: string,
+    ) => void;
+    /**
+     * Called when the worker requests an OIDC token (Entra ID auth).
+     * The implementation must acquire the token via VS Code auth APIs
+     * and post it back to the worker.
+     */
+    onTokenRequest?: (
+        msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
+        postResponse: (response: MainToWorkerMessage) => void,
+        timings?: ConnectionStartupTimings,
+        traceContext?: AuthTraceContext,
+    ) => Promise<void>;
+    /** Called when the worker exits (crash or termination). */
+    onWorkerExit?: (exitCode: number) => void;
+}
+
+/**
+ * Core worker thread lifecycle and IPC manager.
+ *
+ * Handles spawning worker threads, the request/response correlation protocol,
+ * timeout management, OIDC token relay, and clean shutdown. This class is
+ * environment-agnostic — it does not depend on VS Code extension APIs directly
+ * (callers provide callbacks for output routing and auth).
+ *
+ * Consumers:
+ * - `PlaygroundEvaluator` wraps this with `persistent: false` (fresh context per eval)
+ * - `ShellSessionManager` wraps this with `persistent: true` (context reused across evals)
+ */
+export class WorkerSessionManager implements vscode.Disposable {
+    private _worker: Worker | undefined;
+    private _workerState: WorkerState = 'idle';
+    private _workerClusterId: string | undefined;
+    private _startup: WorkerStartup | undefined;
+    private _startupAbortController: AbortController | undefined;
+
+    // ─── Telemetry tracking ──────────────────────────────────────────────────
+    /** Number of workers spawned during this manager's lifetime. */
+    private _spawnCount: number = 0;
+    /** Timestamp of the last worker spawn (for lifetime measurement). */
+    private _lastSpawnTime: number = 0;
+
+    /** Pending request correlation map: requestId → { resolve, reject } */
+    private readonly _pendingRequests = new Map<
+        string,
+        {
+            resolve: (value: unknown) => void;
+            reject: (error: Error) => void;
+        }
+    >();
+
+    private readonly _callbacks: WorkerSessionCallbacks;
+
+    constructor(callbacks: WorkerSessionCallbacks) {
+        this._callbacks = callbacks;
+    }
+
+    // ─── Public state accessors ──────────────────────────────────────────────
+
+    get workerState(): WorkerState {
+        return this._workerState;
+    }
+
+    get workerClusterId(): string | undefined {
+        return this._workerClusterId;
+    }
+
+    /**
+     * Whether the worker is alive and connected to the specified cluster.
+     */
+    isConnectedTo(clusterId: string): boolean {
+        return this._worker !== undefined && this._workerState !== 'idle' && this._workerClusterId === clusterId;
+    }
+
+    /**
+     * Whether a worker is alive (in any non-idle state).
+     */
+    get isAlive(): boolean {
+        return this._worker !== undefined && this._workerState !== 'idle';
+    }
+
+    // ─── Worker lifecycle ────────────────────────────────────────────────────
+
+    /**
+     * Ensure a worker is alive and connected to the correct cluster.
+     * Spawns a new worker if needed, or kills and respawns if the cluster changed.
+     */
+    async ensureWorker(
+        clusterId: string,
+        initMsg: MainToWorkerMessage & { type: 'init' },
+        initTimeoutMs: number = 30000,
+        telemetryContext: WorkerStartupTelemetryContext = {},
+    ): Promise<void> {
+        // If worker is alive but connected to a different cluster, shut it down
+        if (this._worker && this._workerClusterId !== clusterId) {
+            ext.outputChannel?.trace(
+                `[WorkerSessionManager] Cluster changed (${String(this._workerClusterId)} → ${clusterId}), terminating old worker`,
+            );
+            this.terminateWorker('intentional');
+        }
+
+        // Callers must not overlap ensureWorker calls because SRV preparation runs before _worker is set.
+        if (!this._worker || this._workerState === 'idle') {
+            await this.spawnWorker(clusterId, initMsg, initTimeoutMs, telemetryContext);
+        }
+    }
+
+    /**
+     * Send an eval message to the worker and await the result.
+     *
+     * @returns The serializable execution result from the worker.
+     */
+    async sendEval(evalMsg: MainToWorkerMessage & { type: 'eval' }): Promise<{ result: SerializableExecutionResult }> {
+        this._workerState = 'executing';
+
+        try {
+            const result = await this.sendRequest<{ result: SerializableExecutionResult }>(evalMsg);
+            return result;
+        } finally {
+            if (this._workerState === 'executing') {
+                this._workerState = 'ready';
+            }
+        }
+    }
+
+    /**
+     * Gracefully shut down the worker: close the database client, then terminate thread.
+     */
+    async shutdown(): Promise<void> {
+        if (!this._worker || this._workerState === 'idle') {
+            this.terminateWorker('intentional');
+            return;
+        }
+
+        ext.outputChannel?.trace('[WorkerSessionManager] Graceful shutdown requested');
+        try {
+            await this.sendRequest<void>({ type: 'shutdown', requestId: '' }, 5000);
+        } catch {
+            // Shutdown timed out or failed — force-kill
+        }
+
+        this.terminateWorker('intentional');
+    }
+
+    /**
+     * Force-terminate the worker thread immediately.
+     * Used for infinite loop recovery (timeout) and cancellation.
+     */
+    killWorker(): void {
+        this.terminateWorker('forced');
+    }
+
+    dispose(): void {
+        this.terminateWorker('intentional');
+    }
+
+    // ─── Private: Worker lifecycle ───────────────────────────────────────────
+
+    /**
+     * Spawn a new worker thread and send the init message.
+     */
+    private async spawnWorker(
+        clusterId: string,
+        initMsg: MainToWorkerMessage & { type: 'init' },
+        initTimeoutMs: number,
+        telemetryContext: WorkerStartupTelemetryContext,
+    ): Promise<void> {
+        let originalFailure: { error: unknown } | undefined;
+        const controller = new AbortController();
+        this._startupAbortController = controller;
+
+        try {
+            await callWithTelemetryAndErrorHandling('worker.startup', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.errorHandling.rethrow = true;
+                context.telemetry.maskEntireErrorMessage = true;
+                const startedAt = Date.now();
+                const startup: WorkerStartup = {
+                    requestId: randomUUID(),
+                    surface: initMsg.persistent ? 'shell' : 'playground',
+                    startedAt,
+                    stage: 'startingWorker',
+                    stageStartedAt: startedAt,
+                    telemetry: context.telemetry,
+                    costTimings: new ConnectionStartupTimings(),
+                    timingStops: new Map(),
+                    stageDurationsMs: {},
+                };
+                this._startup = startup;
+                context.telemetry.properties.startupCorrelationId = startup.requestId;
+                context.telemetry.properties.surface = startup.surface;
+                context.telemetry.properties.authMethod = initMsg.authMechanism;
+                context.telemetry.measurements.timeoutMs = initTimeoutMs;
+                for (const key of ['shellSessionId', 'sessionId', 'connectionCorrelationId'] as const) {
+                    if (telemetryContext[key]) {
+                        context.telemetry.properties[key] = telemetryContext[key];
+                    }
+                }
+
+                try {
+                    await this.initializeWorker(
+                        clusterId,
+                        initMsg,
+                        initTimeoutMs,
+                        startup,
+                        controller.signal,
+                        telemetryContext,
+                    );
+                } catch (error) {
+                    if (this._startupAbortController === controller) {
+                        this.finishStartup(error instanceof UserCancelledError ? 'canceled' : 'failed');
+                        this.terminateWorker('intentional');
+                    }
+                    originalFailure = { error };
+                    if (startup.outcome === 'terminated' || startup.outcome === 'canceled') {
+                        throw new UserCancelledError('workerStartup');
+                    }
+                    const telemetryError = new Error('Worker startup failed');
+                    telemetryError.stack = undefined;
+                    throw telemetryError;
+                }
+            });
+        } catch (error) {
+            throw originalFailure ? originalFailure.error : error;
+        } finally {
+            if (this._startupAbortController === controller) {
+                this._startupAbortController = undefined;
+            }
+        }
+
+        if (originalFailure) {
+            throw originalFailure.error;
+        }
+    }
+
+    private async initializeWorker(
+        clusterId: string,
+        initMsg: MainToWorkerMessage & { type: 'init' },
+        initTimeoutMs: number,
+        startup: WorkerStartup,
+        abortSignal: AbortSignal,
+        telemetryContext: WorkerStartupTelemetryContext,
+    ): Promise<void> {
+        this._workerState = 'spawning';
+        const options = { ...initMsg.clientOptions };
+        const usesOidc = initMsg.authMechanism === 'MicrosoftEntraID' || initMsg.authMechanism === 'ManagedIdentity';
+        const prepared = await prepareDriverConnectionString({
+            connectionString: initMsg.connectionString,
+            // The worker adds OIDC itself; the mechanism is passed so a TXT authSource is not applied.
+            options: usesOidc ? { ...options, authMechanism: 'MONGODB-OIDC' } : options,
+            surface: initMsg.persistent ? 'shell' : 'playground',
+            correlation: {
+                ...telemetryContext,
+                startupCorrelationId: startup.requestId,
+            },
+            startupTelemetry: startup.telemetry,
+            abortSignal,
+        });
+        if (abortSignal.aborted) {
+            throw new UserCancelledError('workerStartup');
+        }
+        // Keep the worker's OIDC callback local, and never structured-clone driver functions.
+        const preparedInitMsg: MainToWorkerMessage & { type: 'init' } = {
+            ...initMsg,
+            connectionString: prepared.connectionString,
+            clientOptions: {
+                serverSelectionTimeoutMS: prepared.options.serverSelectionTimeoutMS,
+                tlsAllowInvalidCertificates: prepared.options.tlsAllowInvalidCertificates,
+                appName: prepared.options.appName,
+                tls: prepared.options.tls,
+            },
+            oidcAllowedHosts: getOidcAllowedHosts(initMsg.connectionString),
+        };
+        this._spawnCount++;
+        this._lastSpawnTime = Date.now();
+
+        // The worker is its own bundle entry at the extension root (`dist/` in development). The
+        // extension root, rather than this module's location, keeps the path independent of the
+        // chunk this code is bundled into.
+        const workerPath = path.join(ext.context.extensionPath, 'playgroundWorker.mjs');
+        if (abortSignal.aborted) {
+            throw new UserCancelledError('workerStartup');
+        }
+        const worker = new Worker(workerPath);
+        this._worker = worker;
+        this._workerClusterId = clusterId;
+        // Everything this worker reports stays tied to the startup that created it.
+        const connection: AuthTraceContext = { startupCorrelationId: startup.requestId, surface: startup.surface };
+
+        // Listen for messages from the worker
+        worker.on('message', (msg: WorkerToMainMessage) => {
+            this.handleWorkerMessage(msg, connection);
+        });
+
+        // terminateWorker() detaches a worker before it exits, so only the current worker can exit unexpectedly.
+        worker.on('exit', (exitCode: number) => {
+            this._callbacks.onLog?.('debug', `Worker exited with code ${String(exitCode)}`, startup.requestId);
+            if (this._worker !== worker) {
+                return;
+            }
+            this._callbacks.onWorkerExit?.(exitCode);
+            this.handleWorkerExit();
+        });
+
+        worker.on('error', (error: Error) => {
+            this._callbacks.onLog?.('error', error.message, startup.requestId);
+            if (this._worker !== worker) {
+                return;
+            }
+
+            // Reject all pending requests with the actual error so callers
+            // get an immediate, meaningful failure instead of waiting for
+            // the eval timeout to fire with a misleading "timed out" message.
+            for (const [, entry] of this._pendingRequests) {
+                entry.reject(error);
+            }
+            this._pendingRequests.clear();
+        });
+
+        await this.sendRequest<void>(preparedInitMsg, initTimeoutMs, settingsKeys.connectionTimeout);
+        this.finishStartup('succeeded');
+        this._workerState = 'ready';
+    }
+
+    private recordStartupStageDuration(startup: WorkerStartup): number {
+        const stageDurationMs = Date.now() - startup.stageStartedAt;
+        const stageName = workerStartupStageNames[startup.stage];
+        const accumulatedDurationMs = (startup.stageDurationsMs[stageName] ?? 0) + stageDurationMs;
+        startup.stageDurationsMs[stageName] = accumulatedDurationMs;
+        startup.telemetry.measurements[`${stageName}DurationMs`] = accumulatedDurationMs;
+        return stageDurationMs;
+    }
+
+    private finishStartup(outcome: WorkerStartupOutcome): void {
+        const startup = this._startup;
+        if (!startup) {
+            return;
+        }
+
+        startup.outcome = outcome;
+        startup.telemetry.properties.startupOutcome = outcome === 'terminated' ? 'canceled' : outcome;
+        startup.telemetry.properties.lastStage = workerStartupStageNames[startup.stage];
+        startup.telemetry.measurements.lastStageDurationMs = this.recordStartupStageDuration(startup);
+        const costTimingsMs = startup.costTimings.finish();
+        Object.assign(startup.telemetry.measurements, costTimingsMs);
+        const level = outcome === 'failed' || outcome === 'timedOut' || outcome === 'exited' ? 'error' : 'trace';
+        const { properties, measurements } = startup.telemetry;
+        ext.outputChannel?.[level](
+            `[WorkerSessionManager] startup=${startup.requestId} ${outcome} surface=${properties.surface} auth=${properties.authMethod} lastStage=${properties.lastStage} elapsedMs=${String(Date.now() - startup.startedAt)} timeoutMs=${String(measurements.timeoutMs)} stageDurationsMs=${JSON.stringify(startup.stageDurationsMs)} costTimingsMs=${JSON.stringify(costTimingsMs)}`,
+        );
+        this._startup = undefined;
+    }
+
+    private getStartupStageLabel(stage: WorkerStartupStage): string {
+        switch (stage) {
+            case 'startingWorker':
+                return l10n.t('Starting worker');
+            case 'loadingDriver':
+                return l10n.t('Loading database driver');
+            case 'connecting':
+                return l10n.t('Connecting to cluster');
+            case 'acquiringToken':
+                return l10n.t('Waiting for authentication token');
+            case 'authenticating':
+                return l10n.t('Authenticating with cluster');
+            case 'initializingRuntime':
+                return l10n.t('Initializing shell runtime');
+        }
+    }
+
+    // ─── Private: IPC request/response ───────────────────────────────────────
+
+    /**
+     * Send a message to the worker and return a promise that resolves
+     * when the corresponding response arrives.
+     *
+     * @param timeoutMs - Optional timeout. When set, kills the worker on expiry.
+     *   Used for init and shutdown messages. Eval messages have no IPC timeout—
+     *   the user cancels via Cancel button or Ctrl+C, and query-level timeouts
+     *   are enforced by the database via maxTimeMS.
+     * @param timeoutSettingKey - Optional VS Code setting key used when building
+     *   the user-facing `SettingsHintError` on timeout. When omitted, a plain
+     *   `Error` is thrown (appropriate for internal/swallowed paths like
+     *   shutdown where no actionable user setting exists).
+     */
+    private sendRequest<T>(msg: MainToWorkerMessage, timeoutMs?: number, timeoutSettingKey?: string): Promise<T> {
+        if (!this._worker) {
+            return Promise.reject(new Error(l10n.t('Worker is not running')));
+        }
+
+        const requestId = msg.type === 'init' ? (this._startup?.requestId ?? randomUUID()) : randomUUID();
+        const msgWithId = { ...msg, requestId };
+
+        return new Promise<T>((resolve, reject) => {
+            this._pendingRequests.set(requestId, {
+                resolve: resolve as (value: unknown) => void,
+                reject,
+            });
+
+            // Optional timeout — used for init/shutdown, not for eval
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            if (timeoutMs !== undefined) {
+                timer = setTimeout(() => {
+                    const pending = this._pendingRequests.get(requestId);
+                    if (pending) {
+                        this._pendingRequests.delete(requestId);
+                        let message = l10n.t(
+                            'Operation timed out after {0} seconds.',
+                            String(Math.round(timeoutMs / 1000)),
+                        );
+                        if (this._startup?.requestId === requestId) {
+                            message +=
+                                ' ' +
+                                l10n.t(
+                                    'Last startup stage: {0} ({1} seconds in this stage).',
+                                    this.getStartupStageLabel(this._startup.stage),
+                                    ((Date.now() - this._startup.stageStartedAt) / 1000).toFixed(1),
+                                );
+                            this.finishStartup('timedOut');
+                        }
+                        this.killWorker();
+                        pending.reject(
+                            timeoutSettingKey
+                                ? new SettingsHintError(
+                                      message,
+                                      timeoutSettingKey,
+                                      l10n.t(
+                                          'The connection did not finish in time. You can increase the timeout in Settings:',
+                                      ),
+                                  )
+                                : new Error(message),
+                        );
+                    }
+                }, timeoutMs);
+            }
+
+            // Wire up timer clearing on resolve/reject
+            const entry = this._pendingRequests.get(requestId)!;
+            const originalResolve = entry.resolve;
+            const originalReject = entry.reject;
+            entry.resolve = (value: unknown) => {
+                if (timer) clearTimeout(timer);
+                originalResolve(value);
+            };
+            entry.reject = (error: Error) => {
+                if (timer) clearTimeout(timer);
+                originalReject(error);
+            };
+
+            this._worker!.postMessage(msgWithId);
+        });
+    }
+
+    /**
+     * Handle an incoming message from the worker.
+     */
+    private handleWorkerMessage(msg: WorkerToMainMessage, connection: AuthTraceContext): void {
+        switch (msg.type) {
+            case 'initTiming': {
+                const startup = this._startup;
+                if (startup?.requestId === msg.requestId) {
+                    const key = `${msg.activity}:${msg.activityId}`;
+                    if (msg.started && !startup.timingStops.has(key)) {
+                        startup.timingStops.set(
+                            key,
+                            msg.activity === 'databaseConnect'
+                                ? startup.costTimings.startDatabaseConnect()
+                                : startup.costTimings.startTokenWait(),
+                        );
+                    } else if (!msg.started) {
+                        startup.timingStops.get(key)?.();
+                        startup.timingStops.delete(key);
+                    }
+                }
+                break;
+            }
+
+            case 'initProgress': {
+                if (this._startup?.requestId === msg.requestId) {
+                    this.recordStartupStageDuration(this._startup);
+                    this._startup.stage = msg.stage;
+                    this._startup.stageStartedAt = Date.now();
+                }
+                break;
+            }
+
+            case 'initResult': {
+                const pending = this._pendingRequests.get(msg.requestId);
+                if (pending) {
+                    this._pendingRequests.delete(msg.requestId);
+                    if (msg.success) {
+                        pending.resolve(undefined);
+                    } else {
+                        pending.reject(new Error(msg.error ?? 'Worker init failed'));
+                    }
+                }
+                break;
+            }
+
+            case 'evalResult': {
+                const pending = this._pendingRequests.get(msg.requestId);
+                if (pending) {
+                    this._pendingRequests.delete(msg.requestId);
+                    pending.resolve(msg);
+                }
+                break;
+            }
+
+            case 'evalError': {
+                const pending = this._pendingRequests.get(msg.requestId);
+                if (pending) {
+                    this._pendingRequests.delete(msg.requestId);
+                    const error: Error & { code?: number } = new Error(msg.error);
+                    if (msg.stack) {
+                        error.stack = msg.stack;
+                    }
+                    if (msg.code !== undefined) {
+                        error.code = msg.code;
+                    }
+                    pending.reject(error);
+                }
+                break;
+            }
+
+            case 'shutdownComplete': {
+                const pending = this._pendingRequests.get(msg.requestId);
+                if (pending) {
+                    this._pendingRequests.delete(msg.requestId);
+                    pending.resolve(undefined);
+                }
+                break;
+            }
+
+            case 'tokenRequest': {
+                if (this._callbacks.onTokenRequest) {
+                    const worker = this._worker;
+                    void this._callbacks.onTokenRequest(
+                        msg,
+                        (response) => {
+                            if (this._worker === worker) {
+                                worker?.postMessage(response);
+                            }
+                        },
+                        this._startup?.costTimings,
+                        connection,
+                    );
+                }
+                break;
+            }
+
+            case 'log': {
+                this._callbacks.onLog?.(msg.level, msg.message, connection.startupCorrelationId);
+                break;
+            }
+
+            case 'consoleOutput': {
+                this._callbacks.onConsoleOutput?.(msg.output);
+                break;
+            }
+        }
+    }
+
+    // ─── Private: Worker cleanup ─────────────────────────────────────────────
+
+    private terminateWorker(reason: 'intentional' | 'forced'): void {
+        this._startupAbortController?.abort();
+        this.finishStartup('terminated');
+        const wasAlive = !!this._worker;
+
+        if (this._worker) {
+            void this._worker.terminate();
+            this._worker = undefined;
+        }
+
+        this._workerState = 'idle';
+        this._workerClusterId = undefined;
+
+        // Reject all pending requests
+        for (const [, entry] of this._pendingRequests) {
+            entry.reject(new Error('Worker terminated'));
+        }
+        this._pendingRequests.clear();
+
+        // ── Telemetry: worker terminated ─────────────────────────────────
+        if (wasAlive) {
+            void callWithTelemetryAndErrorHandling('worker.terminated', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.reason = reason;
+                context.telemetry.measurements.spawnCount = this._spawnCount;
+                if (this._lastSpawnTime > 0) {
+                    context.telemetry.measurements.lifetimeMs = Date.now() - this._lastSpawnTime;
+                }
+            });
+        }
+    }
+
+    /** Handles an exit of the current worker. Intentional exits are tracked by worker.terminated. */
+    private handleWorkerExit(): void {
+        this.finishStartup('exited');
+        ext.outputChannel?.warn('[WorkerSessionManager] Unexpected worker exit detected');
+        void callWithTelemetryAndErrorHandling('worker.unexpectedExit', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.telemetry.measurements.spawnCount = this._spawnCount;
+            if (this._lastSpawnTime > 0) {
+                context.telemetry.measurements.lifetimeMs = Date.now() - this._lastSpawnTime;
+            }
+        });
+
+        this._worker = undefined;
+        this._workerState = 'idle';
+        this._workerClusterId = undefined;
+
+        // Reject any still-pending requests
+        for (const [, entry] of this._pendingRequests) {
+            entry.reject(new Error('Worker exited unexpectedly'));
+        }
+        this._pendingRequests.clear();
+    }
+}

@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable  */
 
 import * as crypto from 'crypto';
@@ -16,6 +14,20 @@ import { AzureDomains, extractDomainFromHost, hasAzureDomain, hasDomainSuffix } 
  */
 export interface ClusterMetadata {
     [key: string]: string | undefined;
+}
+
+/**
+ * Retrieves domain-only metadata from hosts without requiring a server connection.
+ * This can be called before the actual MongoDB connection to capture destination info
+ * even when the connection fails.
+ *
+ * @param hosts An array of host strings from the connection string.
+ * @returns An object containing domain metadata (isAzure, api, hashed domain segments).
+ */
+export function getDomainMetadata(hosts: string[]): ClusterMetadata {
+    const result: ClusterMetadata = {};
+    processDomainInfo(hosts, result);
+    return result;
 }
 
 /**
@@ -41,12 +53,106 @@ export async function getClusterMetadata(client: MongoClient, hosts: string[]): 
     return result;
 }
 
+/**
+ * Hello-response keys excluded from the telemetry shape by exact match.
+ * These carry per-connection or per-request values that are not useful as shape signals.
+ */
+const DEFAULT_IGNORED_HELLO_KEYS = ['connectionId', 'localTime', 'hosts', 'me', 'primary'];
+
+/**
+ * Hello-response key prefixes excluded from the telemetry shape.
+ * Keys starting with '$' (e.g. '$clusterTime') are protocol metadata and are pruned along with their subtrees.
+ */
+const DEFAULT_IGNORED_HELLO_KEY_PREFIXES = ['$'];
+
+function isIgnoredKey(key: string, ignoredKeys: string[], ignoredKeyPrefixes: string[]): boolean {
+    return ignoredKeys.includes(key) || ignoredKeyPrefixes.some((prefix) => key.startsWith(prefix));
+}
+
+export function getTelemetryShape(
+    value: unknown,
+    ignoredKeys: string[] = DEFAULT_IGNORED_HELLO_KEYS,
+    ignoredKeyPrefixes: string[] = DEFAULT_IGNORED_HELLO_KEY_PREFIXES,
+): string {
+    const shapeEntries: string[] = [];
+    const stack: Array<{ value: unknown; path: string }> = [{ value, path: '' }];
+
+    while (stack.length > 0) {
+        const current = stack.pop()!;
+        const currentValue = current.value;
+        const currentPath = current.path;
+
+        if (currentValue === undefined || currentValue === null) {
+            if (currentPath) {
+                shapeEntries.push(`${currentPath}:${currentValue === null ? 'null' : 'undefined'}`);
+            }
+            continue;
+        }
+
+        if (Array.isArray(currentValue)) {
+            if (currentPath) {
+                shapeEntries.push(`${currentPath}:array:${getArrayElementType(currentValue)}`);
+            }
+            continue;
+        }
+
+        if (typeof currentValue !== 'object') {
+            if (currentPath) {
+                shapeEntries.push(`${currentPath}:${typeof currentValue}`);
+            }
+            continue;
+        }
+
+        for (const [key, child] of Object.entries(currentValue)) {
+            if (isIgnoredKey(key, ignoredKeys, ignoredKeyPrefixes)) {
+                continue;
+            }
+
+            stack.push({ value: child, path: currentPath ? `${currentPath}.${key}` : key });
+        }
+    }
+
+    return shapeEntries.sort().join(';');
+}
+
+function getArrayElementType(values: readonly unknown[]): string {
+    const elementTypes = new Set(values.map(getTelemetryValueType));
+
+    if (elementTypes.size === 0) {
+        return 'empty';
+    }
+
+    if (elementTypes.size === 1) {
+        return Array.from(elementTypes)[0] ?? 'unknown';
+    }
+
+    return 'mixed';
+}
+
+function getTelemetryValueType(value: unknown): string {
+    if (value === null) {
+        return 'null';
+    }
+
+    if (Array.isArray(value)) {
+        return 'array';
+    }
+
+    return typeof value;
+}
+
+function setIfDefined(result: ClusterMetadata, key: string, value: unknown): void {
+    if (value !== undefined && value !== null) {
+        result[key] = Array.isArray(value) ? value.map(String).join(';') : String(value);
+    }
+}
+
 async function fetchBuildInfo(adminDb: Admin, result: ClusterMetadata): Promise<void> {
     try {
         const buildInfo = await adminDb.command({ buildInfo: 1 });
-        result['serverInfo_version'] = buildInfo.version;
-        result['serverInfo_platform'] = buildInfo.platform;
-        result['serverInfo_storageEngines'] = (buildInfo.storageEngines as string[])?.join(';');
+        setIfDefined(result, 'serverInfo_version', buildInfo.version);
+        setIfDefined(result, 'serverInfo_platform', buildInfo.platform);
+        setIfDefined(result, 'serverInfo_storageEngines', buildInfo.storageEngines);
     } catch (error) {
         try {
             result['serverInfo_error'] = error instanceof Error ? error.message : String(error);
@@ -60,7 +166,7 @@ async function fetchBuildInfo(adminDb: Admin, result: ClusterMetadata): Promise<
 async function fetchServerStatus(adminDb: Admin, result: ClusterMetadata): Promise<void> {
     try {
         const serverStatus = await adminDb.command({ serverStatus: 1 });
-        result['serverStatus_uptime'] = serverStatus.uptime.toString();
+        setIfDefined(result, 'serverStatus_uptime', serverStatus.uptime);
     } catch (error) {
         try {
             result['serverStatus_error'] = error instanceof Error ? error.message : String(error);
@@ -76,8 +182,17 @@ async function fetchTopologyInfo(adminDb: Admin, result: ClusterMetadata): Promi
         const helloInfo = await adminDb.command({ hello: 1 });
         result['topology_type'] = helloInfo.msg || 'unknown';
         result['topology_numberOfServers'] = (helloInfo.hosts?.length || 0).toString();
-        result['topology_minWireVersion'] = helloInfo.minWireVersion.toString();
-        result['topology_maxWireVersion'] = helloInfo.maxWireVersion.toString();
+        result['topology_minWireVersion'] = helloInfo.minWireVersion?.toString() ?? 'unknown';
+        result['topology_maxWireVersion'] = helloInfo.maxWireVersion?.toString() ?? 'unknown';
+
+        // `hello.readOnly` is the one replication fact the data plane always answers: it is
+        // true on a cross-region replica cluster and on any secondary connection, whatever
+        // the platform. Worth surfacing before a user types an insert.
+        setIfDefined(result, 'topology_readOnly', helloInfo.readOnly);
+        setIfDefined(result, 'topology_hello_saslSupportedMechs', helloInfo.saslSupportedMechs);
+        setIfDefined(result, 'topology_hello_internal_documentdb_versions', helloInfo.internal?.documentdb_versions);
+        setIfDefined(result, 'topology_hello_internal_kind', helloInfo.internal?.kind);
+        result['topology_helloShape'] = getTelemetryShape(helloInfo);
     } catch (error) {
         try {
             result['topology_error'] = error instanceof Error ? error.message : String(error);
@@ -98,7 +213,7 @@ async function fetchHostInfo(adminDb: Admin, result: ClusterMetadata): Promise<v
             hostInfo.system.currentTime = 'redacted'; // Redact system current time
         }
         // TODO: review in April 2024 if we need to redact more of the hostInfo fields.
-        result['hostInfo_json'] = JSON.stringify(hostInfo);
+        setIfDefined(result, 'hostInfo_json', JSON.stringify(hostInfo));
     } catch (error) {
         try {
             result['hostInfo_error'] = error instanceof Error ? error.message : String(error);
@@ -110,6 +225,17 @@ async function fetchHostInfo(adminDb: Admin, result: ClusterMetadata): Promise<v
 }
 
 function processDomainInfo(hosts: string[], result: ClusterMetadata): void {
+    addDomainInfoToProperties(hosts, result);
+}
+
+/**
+ * Extracts domain information from hosts and adds it to a properties object.
+ * Reusable for both cluster metadata telemetry and playground telemetry.
+ *
+ * For Azure domains, records the API type (RU, vCore).
+ * For non-Azure domains, produces SHA-256 hashed domain fragments for privacy-safe diagnostics.
+ */
+export function addDomainInfoToProperties(hosts: string[], result: Record<string, string | undefined>): void {
     for (const [index, host] of hosts.entries()) {
         const telemetrySuffix = index > 0 ? `_h${index}` : '';
         try {

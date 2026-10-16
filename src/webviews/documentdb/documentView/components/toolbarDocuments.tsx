@@ -6,26 +6,33 @@
 import { Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
 import { ArrowClockwiseRegular, SaveRegular, TextGrammarCheckmarkRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { type JSX, type RefObject } from 'react';
 import { ToolbarDividerTransparent } from '../../collectionView/components/toolbar/ToolbarDividerTransparent';
 
 interface ToolbarDocumentsProps {
     disableSaveButton: boolean;
+    disableRefreshButton: boolean;
     onValidateRequest: () => void;
     onRefreshRequest: () => void;
     onSaveRequest: () => void;
+    // Must accept null because useRef<HTMLButtonElement>(null) creates RefObject<HTMLButtonElement | null>
+    // See: https://react.dev/reference/react/useRef#typing-the-ref-with-an-initial-null-value
+    saveButtonRef?: RefObject<HTMLButtonElement | null>;
 }
 
 export const ToolbarDocuments = ({
     disableSaveButton,
+    disableRefreshButton,
     onValidateRequest,
     onRefreshRequest,
     onSaveRequest,
+    saveButtonRef,
 }: ToolbarDocumentsProps): JSX.Element => {
     return (
         <Toolbar size="small">
             <Tooltip content={l10n.t('Save document to the database')} relationship="description" withArrow>
                 <ToolbarButton
+                    ref={saveButtonRef}
                     onClick={onSaveRequest}
                     aria-label={l10n.t('Save to the database')}
                     icon={<SaveRegular />}
@@ -38,10 +45,10 @@ export const ToolbarDocuments = ({
 
             <ToolbarDividerTransparent />
 
-            <Tooltip content={l10n.t('Check document syntax')} relationship="description" withArrow>
+            <Tooltip content={l10n.t('Validate document syntax')} relationship="description" withArrow>
                 <ToolbarButton
                     onClick={onValidateRequest}
-                    aria-label={l10n.t('Check document syntax')}
+                    aria-label={l10n.t('Validate document syntax')}
                     icon={<TextGrammarCheckmarkRegular />}
                     disabled={true}
                 >
@@ -49,17 +56,14 @@ export const ToolbarDocuments = ({
                 </ToolbarButton>
             </Tooltip>
 
-            <Tooltip
-                content={l10n.t('Reload original document from the database')}
-                relationship="description"
-                withArrow
-            >
+            <Tooltip content={l10n.t('Reload document from the database')} relationship="description" withArrow>
                 <ToolbarButton
                     onClick={onRefreshRequest}
-                    aria-label={l10n.t('Reload original document from the database')}
+                    aria-label={l10n.t('Reload document from the database')}
                     icon={<ArrowClockwiseRegular />}
+                    disabled={disableRefreshButton}
                 >
-                    {l10n.t('Refresh')}
+                    {l10n.t('Reload')}
                 </ToolbarButton>
             </Tooltip>
         </Toolbar>

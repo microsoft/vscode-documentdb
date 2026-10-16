@@ -21,6 +21,7 @@ import { type AuthenticateWizardContext } from '../../../documentdb/wizards/auth
 import { ChooseAuthMethodStep } from '../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
 import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
+import { SelectEntraTokenSourceStep } from '../../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../../extensionVariables';
 import {
     extractCredentialsFromCluster,
@@ -28,15 +29,16 @@ import {
 } from '../../../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { getThemeAgnosticIconPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
+import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
-import { type ClusterModel } from '../../documentdb/ClusterModel';
+import { type TreeCluster } from '../../models/BaseClusterModel';
 
-export class VCoreResourceItem extends ClusterItemBase {
+export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
     iconPath = getThemeAgnosticIconPath('AzureDocumentDb.svg');
 
     constructor(
         readonly subscription: AzureSubscription,
-        cluster: ClusterModel,
+        cluster: TreeCluster<AzureClusterModel>,
     ) {
         super(cluster);
     }
@@ -79,6 +81,7 @@ export class VCoreResourceItem extends ClusterItemBase {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.AzureResourcesView;
             context.telemetry.properties.branch = 'documentdb';
+            context.telemetry.properties.connectionInitiatedFrom = Views.AzureResourcesView;
 
             ext.outputChannel.appendLine(
                 l10n.t('Attempting to authenticate with "{cluster}"…', {
@@ -96,6 +99,7 @@ export class VCoreResourceItem extends ClusterItemBase {
                 adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,
+                managedIdentityAuthConfig: credentials.managedIdentityAuthConfig,
             };
 
             // Prompt for credentials
@@ -119,8 +123,9 @@ export class VCoreResourceItem extends ClusterItemBase {
                       }
                     : wizardContext.nativeAuthConfig;
 
+            // Use clusterId for stable cache lookup across tree moves
             CredentialCache.setAuthCredentials(
-                this.id,
+                this.cluster.clusterId,
                 nonNullValue(
                     wizardContext.selectedAuthMethod,
                     'wizardContext.selectedAuthMethod',
@@ -130,11 +135,17 @@ export class VCoreResourceItem extends ClusterItemBase {
                 nativeAuthConfig,
                 undefined,
                 credentials.entraIdAuthConfig,
+                wizardContext.selectedAuthMethod === AuthMethodId.ManagedIdentity
+                    ? (wizardContext.managedIdentityAuthConfig ?? {})
+                    : undefined,
             );
 
             switch (wizardContext.selectedAuthMethod) {
                 case AuthMethodId.MicrosoftEntraID:
-                    ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a Microsoft Entra account…'));
+                    break;
+                case AuthMethodId.ManagedIdentity:
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a managed identity…'));
                     break;
                 default:
                     ext.outputChannel.append(
@@ -145,7 +156,7 @@ export class VCoreResourceItem extends ClusterItemBase {
             }
 
             try {
-                const clustersClient = await ClustersClient.getClient(this.id);
+                const clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
                 ext.outputChannel.appendLine(
                     l10n.t('Connected to the cluster "{cluster}".', {
@@ -153,9 +164,18 @@ export class VCoreResourceItem extends ClusterItemBase {
                     }),
                 );
 
+                context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
+
                 return clustersClient;
             } catch (error) {
-                ext.outputChannel.appendLine(l10n.t('Error: {error}', { error: (error as Error).message }));
+                if (error instanceof UserCancelledError) {
+                    context.telemetry.properties.connectionResult = 'cancelled';
+                    throw error;
+                }
+
+                ext.outputChannel.appendLine(
+                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
+                );
 
                 void vscode.window.showErrorMessage(
                     l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
@@ -164,13 +184,13 @@ export class VCoreResourceItem extends ClusterItemBase {
                         detail:
                             l10n.t('Revisit connection details and try again.') +
                             '\n\n' +
-                            l10n.t('Error: {error}', { error: (error as Error).message }),
+                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                     },
                 );
 
                 // Clean up failed connection
-                await ClustersClient.deleteClient(this.id);
-                CredentialCache.deleteCredentials(this.id);
+                await ClustersClient.deleteClient(this.cluster.clusterId);
+                CredentialCache.deleteCredentials(this.cluster.clusterId);
 
                 return null;
             }
@@ -186,8 +206,20 @@ export class VCoreResourceItem extends ClusterItemBase {
      * @returns True if the wizard completed successfully; false if the user canceled or an error occurred.
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
+        wizardContext.telemetry.properties.authFlowOrigin = 'azureResources';
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
+            promptSteps: [
+                new ChooseAuthMethodStep(),
+                new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod,
+                    (context, method) => {
+                        context.selectedAuthMethod = method;
+                        context.isAuthMethodUpdated = true;
+                    },
+                ),
+                new ProvideUserNameStep(),
+                new ProvidePasswordStep(),
+            ],
             title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             showLoadingPrompt: true,
         });

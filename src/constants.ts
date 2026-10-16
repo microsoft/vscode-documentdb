@@ -7,8 +7,13 @@ export const isWindows: boolean = /^win/.test(process.platform);
 export const isLinux: boolean = /^linux/.test(process.platform);
 export const isMacOS: boolean = /^darwin/.test(process.platform);
 
+/** OS-aware modifier key label: ⌘ on macOS, Ctrl elsewhere. */
+export const modifierKey: string = isMacOS ? '⌘' : 'Ctrl';
+
 export namespace Links {
     export const LocalConnectionDebuggingTips: string = 'https://aka.ms/vscode-documentdb-local-connections';
+    export const SrvDnsTroubleshooting: string =
+        'https://microsoft.github.io/vscode-documentdb/user-manual/troubleshooting-srv-dns';
 }
 
 export const doubleClickDebounceDelay = 500; //milliseconds
@@ -20,3 +25,17 @@ export const isEmulatorSupported = isWindows || isLinux || (isMacOS && process.a
 
 // https://docs.mongodb.com/manual/mongo/#working-with-the-mongo-shell
 export const testDb: string = 'test';
+
+/**
+ * Visual prefix shown before item counts in the tree view (e.g. "·· 12").
+ * Two middle dots (U+2027) followed by a regular space.
+ * Controlled by the `documentDB.accessibility.hideCountPrefix` setting.
+ */
+export const COUNT_PREFIX = '\u2027\u2027 ';
+
+/**
+ * Maximum number of collections to count via cursor before showing "N+".
+ * The cursor fetches `COLLECTION_COUNT_LIMIT + 1` items; if it gets more
+ * than the limit the description shows e.g. "5+".
+ */
+export const COLLECTION_COUNT_LIMIT = 50;

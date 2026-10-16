@@ -1,0 +1,38 @@
+{
+  "_debug_active": false,
+  "_instructions": "Set _debug_active to true to activate this override. This file contains a MongoDB explain('executionStats') response for a sharded collection.",
+  "explainVersion": 2,
+  "command": "db.runCommand({explain: { 'find' : 'f_sharded', 'filter' : { 'title' : { '$regex' : 'iwg' } } }})",
+  "explainCommandPlanningTimeMillis": 0.212,
+  "explainCommandExecTimeMillis": 353.938,
+  "dataSize": "9400 bytes",
+  "queryPlanner": {
+    "namespace": "try_on_new_million.f_sharded",
+    "winningPlan": {
+      "stage": "COLLSCAN",
+      "indexName": "_id_",
+      "direction": "Forward",
+      "runtimeFilterSet": [{ "$regex": { "title": "iwg" } }],
+      "estimatedTotalKeysExamined": 1
+    }
+  },
+  "executionStats": {
+    "nReturned": 235,
+    "executionTimeMillis": 330.589,
+    "executionStartAtTimeMillis": 0.133,
+    "totalDocsExamined": 1000000,
+    "totalKeysExamined": 235,
+    "executionStages": {
+      "stage": "COLLSCAN",
+      "nReturned": 235,
+      "executionTimeMillis": 330.589,
+      "executionStartAtTimeMillis": 0.133,
+      "totalDocsExamined": 1000000,
+      "indexName": "_id_",
+      "totalKeysExamined": 235,
+      "totalDocsRemovedByRuntimeFilter": 999765,
+      "numBlocksFromCache": 18374
+    }
+  },
+  "ok": 1
+}

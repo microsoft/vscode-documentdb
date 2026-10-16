@@ -3,14 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type FieldEntry } from '@documentdb-js/schema-analyzer';
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
-import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
-import { type JSONSchema } from '../utils/json/JSONSchema';
-import { getPropertyNamesAtLevel, updateSchemaWithDocument } from '../utils/json/mongo/SchemaAnalyzer';
+import { type Document, type Filter, type WithId } from 'mongodb';
+import { ext } from '../extensionVariables';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
+import { type QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
+import { SchemaStore } from './SchemaStore';
+import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
+import { parseDocumentId } from './utils/parseDocumentId';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export type TableDataEntry = {
@@ -65,7 +70,10 @@ export class ClusterSession {
      * Private constructor to enforce the use of `initNewSession` for creating new sessions.
      * This ensures that sessions are properly initialized and managed.
      */
-    private constructor(private _client: ClustersClient) {
+    private constructor(
+        private _client: ClustersClient,
+        private readonly _clusterId: string,
+    ) {
         return;
     }
 
@@ -74,19 +82,16 @@ export class ClusterSession {
     }
 
     /**
-     * Accumulated JSON schema across all pages seen for the current query.
-     * Updates progressively as users navigate through different pages.
-     * Reset when the query or page size changes.
+     * Database name for the current collection view.
+     * Set on the first runFindQueryWithCache call.
      */
-    private _accumulatedJsonSchema: JSONSchema = {};
+    private _databaseName: string | undefined;
 
     /**
-     * Tracks the highest page number that has been accumulated into the schema.
-     * Users navigate sequentially starting from page 1, so any page ≤ this value
-     * has already been accumulated and should be skipped.
-     * Reset when the query or page size changes.
+     * Collection name for the current collection view.
+     * Set on the first runFindQueryWithCache call.
      */
-    private _highestPageAccumulated: number = 0;
+    private _collectionName: string | undefined;
 
     /**
      * Stores the user's original query parameters (filter, project, sort, skip, limit).
@@ -121,6 +126,7 @@ export class ClusterSession {
     private _queryPlannerCache?: { result: Document; timestamp: number };
     private _executionStatsCache?: { result: Document; timestamp: number };
     private _aiRecommendationsCache?: { result: unknown; timestamp: number };
+    private _stage2ResponseCache?: { response: QueryInsightsStage2Response; totalCollectionDocs?: number };
 
     /**
      * Last query execution time in milliseconds
@@ -155,15 +161,20 @@ export class ClusterSession {
                 limit: this._currentUserQueryParams.limit ?? 0,
             });
 
-            if (previousQueryKey.localeCompare(userQueryKey, undefined, { sensitivity: 'base' }) === 0) {
+            if (previousQueryKey === userQueryKey) {
                 // Same query, no need to reset caches
                 return;
             }
         }
 
-        // The user's query has changed, invalidate all caches
-        this._accumulatedJsonSchema = {};
-        this._highestPageAccumulated = 0;
+        // The user's query has changed, invalidate all caches.
+        //
+        // NOTE: We intentionally do NOT reset schema here.
+        // Schema data is accumulated monotonically in the shared SchemaStore.
+        // When a new query returns 0 results, preserving field knowledge from
+        // previous queries is more valuable for autocompletion than having an
+        // empty field list. Consumers should treat type frequency data as
+        // approximate/relative (e.g., "mostly String").
         this._currentPageSize = null;
         this._currentRawDocuments = [];
         this._lastExecutionTimeMs = undefined;
@@ -184,9 +195,9 @@ export class ClusterSession {
      */
     private resetAccumulationIfPageSizeChanged(newPageSize: number): void {
         if (this._currentPageSize !== null && this._currentPageSize !== newPageSize) {
-            // Page size changed, reset accumulation tracking
-            this._accumulatedJsonSchema = {};
-            this._highestPageAccumulated = 0;
+            // Page size changed — schema data in SchemaStore is still valid
+            // (accumulated monotonically), just note the size change
+            ext.outputChannel.trace('[SchemaStore] Page size changed');
         }
         this._currentPageSize = newPageSize;
     }
@@ -199,6 +210,7 @@ export class ClusterSession {
         this._queryPlannerCache = undefined;
         this._executionStatsCache = undefined;
         this._aiRecommendationsCache = undefined;
+        this._stage2ResponseCache = undefined;
     }
 
     /**
@@ -294,12 +306,18 @@ export class ClusterSession {
         // Update current page documents (always replace, not accumulate)
         this._currentRawDocuments = documents;
 
-        // Accumulate schema only if this page hasn't been seen before
-        // Since navigation is sequential and starts at page 1, we only need to track
-        // the highest page number accumulated
-        if (pageNumber > this._highestPageAccumulated) {
-            this._currentRawDocuments.map((doc) => updateSchemaWithDocument(this._accumulatedJsonSchema, doc));
-            this._highestPageAccumulated = pageNumber;
+        // Store database/collection context for schema operations
+        this._databaseName = databaseName;
+        this._collectionName = collectionName;
+
+        // Feed documents to the shared SchemaStore
+        if (documents.length > 0) {
+            const store = SchemaStore.getInstance();
+            store.addDocuments(this._clusterId, databaseName, collectionName, documents);
+
+            ext.outputChannel.trace(
+                `[SchemaStore] Fed ${String(documents.length)} documents, ${String(store.getDocumentCount(this._clusterId, databaseName, collectionName))} total, ${String(store.getKnownFields(this._clusterId, databaseName, collectionName).length)} known fields`,
+            );
         }
 
         return documents.length;
@@ -318,31 +336,11 @@ export class ClusterSession {
 
         if (acknowledged) {
             this._currentRawDocuments = this._currentRawDocuments.filter((doc) => {
-                // Convert documentIds to BSON types and compare them with doc._id
                 return !documentIds.some((id) => {
-                    let parsedId;
-                    try {
-                        // eslint-disable-next-line
-                        parsedId = EJSON.parse(id);
-                    } catch {
-                        if (ObjectId.isValid(id)) {
-                            parsedId = new ObjectId(id);
-                        } else {
-                            parsedId = id;
-                        }
-                    }
-
-                    /**
-                     * deep equality for _id is tricky as we'd have to consider embedded objects,
-                     * arrays, etc. For now, we'll just stringify the _id and compare the strings.
-                     * The reasoning here is that this operation is used during interactive work
-                     * and were not expecting to delete a large number of documents at once.
-                     * Hence, the performance impact of this approach is negligible, and it's more
-                     * about simplicity here.
-                     */
+                    const parsedId = parseDocumentId(id);
 
                     const docIdStr = EJSON.stringify(doc._id, { relaxed: false }, 0);
-                    const parsedIdStr = EJSON.stringify(parsedId, { relaxed: false }, 0);
+                    const parsedIdStr = EJSON.stringify(parsedId as Document, { relaxed: false }, 0);
 
                     return docIdStr === parsedIdStr;
                 });
@@ -353,17 +351,28 @@ export class ClusterSession {
     }
 
     public getCurrentPageAsTable(path: string[]): TableData {
+        const store = SchemaStore.getInstance();
         const responsePack: TableData = {
             path: path,
-            headers: getPropertyNamesAtLevel(this._accumulatedJsonSchema, path),
+            headers:
+                this._databaseName && this._collectionName
+                    ? store.getPropertyNamesAtLevel(this._clusterId, this._databaseName, this._collectionName, path)
+                    : [],
             data: getDataAtPath(this._currentRawDocuments, path),
         };
 
         return responsePack;
     }
 
-    public getCurrentSchema(): JSONSchema {
-        return this._accumulatedJsonSchema;
+    /**
+     * Returns the cached list of known fields from the shared SchemaStore.
+     * Delegates to SchemaStore which provides cross-tab schema sharing.
+     */
+    public getKnownFields(): FieldEntry[] {
+        if (!this._databaseName || !this._collectionName) {
+            return [];
+        }
+        return SchemaStore.getInstance().getKnownFields(this._clusterId, this._databaseName, this._collectionName);
     }
 
     // ============================================================================
@@ -400,13 +409,17 @@ export class ClusterSession {
         }
 
         // Execute explain("queryPlanner") using QueryInsightsApis from ClustersClient
-        const explainResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
+        const rawResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
             verbosity: 'queryPlanner',
             sort: options?.sort,
             projection: options?.projection,
             skip: options?.skip,
             limit: options?.limit,
         });
+
+        // Apply Azure DocumentDB explain fixup (see fixupDocumentDbExplain for details)
+        const clusterMetadata = await this._client.getClusterMetadata();
+        const explainResult = fixupDocumentDbExplain(rawResult, clusterMetadata) ?? rawResult;
 
         // Cache result
         this._queryPlannerCache = {
@@ -418,8 +431,11 @@ export class ClusterSession {
     }
 
     /**
-     * Gets execution statistics - uses explain("executionStats")
+     * Gets execution statistics - uses explain with appropriate verbosity based on cluster type
      * Re-runs the query with execution stats and caches the result
+     *
+     * For Azure DocumentDB clusters: uses "allPlansExecution" verbosity for richer plan data
+     * For other clusters: uses "executionStats" verbosity
      *
      * Note: This method intentionally excludes skip/limit to get insights for the full query scope,
      * not just a single page. For page-specific explain plans, use client.queryInsightsApis.explainFind() directly.
@@ -446,15 +462,26 @@ export class ClusterSession {
             return this._executionStatsCache.result;
         }
 
-        // Execute explain("executionStats") using QueryInsightsApis from ClustersClient
+        // Determine verbosity based on cluster type
+        // Azure DocumentDB clusters support allPlansExecution for richer plan data
+        const clusterMetadata = await this._client.getClusterMetadata();
+        const verbosity =
+            clusterMetadata.domainInfo_isAzure === 'true' && clusterMetadata.domainInfo_api === 'vCore'
+                ? 'allPlansExecution'
+                : 'executionStats';
+
+        // Execute explain using QueryInsightsApis from ClustersClient
         // This re-runs the query to get authoritative execution metrics
-        const explainResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
-            verbosity: 'executionStats',
+        const rawResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
+            verbosity,
             sort: options?.sort,
             projection: options?.projection,
             skip: options?.skip,
             limit: options?.limit,
         });
+
+        // Apply Azure DocumentDB explain fixup (see fixupDocumentDbExplain for details)
+        const explainResult = fixupDocumentDbExplain(rawResult, clusterMetadata) ?? rawResult;
 
         // Cache result
         this._executionStatsCache = {
@@ -510,7 +537,7 @@ export class ClusterSession {
      * @remarks
      * This method uses the same BSON parsing logic as ClustersClient.runFindQuery():
      * - filter is parsed with toFilterQueryObj() which handles UUID(), Date(), MinKey(), MaxKey() constructors
-     * - projection and sort are parsed with EJSON.parse()
+     * - projection and sort are parsed with parseShellBSON() in Loose mode
      *
      * Use this method when you need the actual MongoDB Document objects for query execution.
      * Use getCurrentFindQueryParams() when you only need the string representations.
@@ -525,7 +552,9 @@ export class ClusterSession {
         let projectionObj: Document | undefined;
         if (stringParams.project && stringParams.project.trim() !== '{}') {
             try {
-                projectionObj = EJSON.parse(stringParams.project) as Document;
+                projectionObj = parseShellBSON(stringParams.project, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 throw new Error(
                     l10n.t('Invalid projection syntax: {0}', error instanceof Error ? error.message : String(error)),
@@ -537,7 +566,9 @@ export class ClusterSession {
         let sortObj: Document | undefined;
         if (stringParams.sort && stringParams.sort.trim() !== '{}') {
             try {
-                sortObj = EJSON.parse(stringParams.sort) as Document;
+                sortObj = parseShellBSON(stringParams.sort, {
+                    mode: ParseMode.Loose,
+                }) as Document;
             } catch (error) {
                 throw new Error(
                     l10n.t('Invalid sort syntax: {0}', error instanceof Error ? error.message : String(error)),
@@ -569,6 +600,21 @@ export class ClusterSession {
 
         // No cached data available
         return null;
+    }
+
+    /**
+     * Caches the transformed Stage 2 response and total collection docs
+     * for use by Stage 3 when building the static analysis summary.
+     */
+    public setStage2Response(response: QueryInsightsStage2Response, totalCollectionDocs?: number): void {
+        this._stage2ResponseCache = { response, totalCollectionDocs };
+    }
+
+    /**
+     * Gets the cached Stage 2 response, or null if not available.
+     */
+    public getStage2Response(): { response: QueryInsightsStage2Response; totalCollectionDocs?: number } | null {
+        return this._stage2ResponseCache ?? null;
     }
 
     /**
@@ -632,17 +678,21 @@ export class ClusterSession {
     /**
      * Initializes a new session for the MongoDB DocumentDB cluster.
      *
-     * @param credentialId - The ID of the credentials used to authenticate the MongoDB client.
+     * @param clusterId - The stable cluster identifier used to
+     *   look up credentials and create a MongoDB client.
+     *   - Connections View: storageId (UUID from ConnectionStorageService)
+     *   - Azure Resources View: Azure Resource ID
+     *   ⚠️ This is NOT the tree item ID - it must be the stable clusterId.
      * @returns A promise that resolves to the session ID of the newly created session.
      *
-     * @throws Will throw an error if the client cannot be obtained using the provided credential ID.
+     * @throws Will throw an error if the client cannot be obtained using the provided cluster ID.
      */
-    public static async initNewSession(credentialId: string): Promise<string> {
-        const client = await ClustersClient.getClient(credentialId);
+    public static async initNewSession(clusterId: string): Promise<string> {
+        const client = await ClustersClient.getClient(clusterId);
 
         const sessionId = Math.random().toString(16).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        const session = new ClusterSession(client);
+        const session = new ClusterSession(client, clusterId);
 
         ClusterSession._sessions.set(sessionId, session);
 

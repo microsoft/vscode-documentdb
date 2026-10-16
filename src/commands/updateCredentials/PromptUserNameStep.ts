@@ -15,6 +15,13 @@ export class PromptUserNameStep extends AzureWizardPromptStep<UpdateCredentialsW
             prompt: l10n.t('Please enter the username'),
             value: context.nativeAuthConfig?.connectionUser ?? '',
             ignoreFocusOut: true,
+            // eslint-disable-next-line @typescript-eslint/require-await
+            asyncValidationTask: async (username?: string) => {
+                if (!username || username.trim().length === 0) {
+                    return l10n.t('Username cannot be empty');
+                }
+                return undefined;
+            },
         });
 
         const trimmedUsername = username.trim();

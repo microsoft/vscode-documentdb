@@ -1,0 +1,66 @@
+{
+  "_debug_active": false,
+  "_instructions": "Set _debug_active to true to activate this override. This file contains a MongoDB explain('executionStats') response with FETCH and IXSCAN stages.",
+  "explainVersion": 2,
+  "command": "db.runCommand({explain: { 'find' : 'f_neg', 'filter' : { 'title' : { '$regex' : 'iwg' } } }})",
+  "explainCommandPlanningTimeMillis": 2.029,
+  "explainCommandExecTimeMillis": 1673.916,
+  "dataSize": "9400 bytes",
+  "queryPlanner": {
+    "namespace": "try_on_new_million.f_neg",
+    "winningPlan": {
+      "stage": "FETCH",
+      "estimatedTotalKeysExamined": 333333,
+      "inputStage": {
+        "stage": "IXSCAN",
+        "indexName": "title_1",
+        "isBitmap": true,
+        "indexUsage": [
+          {
+            "indexName": "title_1",
+            "isMultiKey": false,
+            "bounds": ["[\"title\": [\"\", { })]"]
+          }
+        ],
+        "indexFilterSet": [{ "$regex": { "title": "iwg" } }],
+        "estimatedTotalKeysExamined": 10000
+      }
+    }
+  },
+  "executionStats": {
+    "nReturned": 235,
+    "executionTimeMillis": 1645.04,
+    "executionStartAtTimeMillis": 1625.541,
+    "totalDocsExamined": 235,
+    "totalKeysExamined": 235,
+    "executionStages": {
+      "stage": "FETCH",
+      "nReturned": 235,
+      "executionTimeMillis": 1644.9950000000001,
+      "executionStartAtTimeMillis": 1625.539,
+      "totalDocsExamined": 235,
+      "totalKeysExamined": 235,
+      "exactBlocksRead": 231,
+      "numBlocksFromCache": 231,
+      "numBlocksFromDisk": 9806,
+      "inputStage": {
+        "stage": "IXSCAN",
+        "nReturned": 235,
+        "executionTimeMillis": 1625.406,
+        "executionStartAtTimeMillis": 1625.406,
+        "indexName": "title_1",
+        "indexUsage": [
+          {
+            "indexName": "title_1",
+            "scanLoops": 998383,
+            "scanType": "ordered",
+            "scanKeys": ["key 1: [(isInequality: true, estimatedEntryCount: 235)]"]
+          }
+        ],
+        "totalKeysExamined": 235,
+        "numBlocksFromDisk": 9806
+      }
+    }
+  },
+  "ok": 1
+}

@@ -3,74 +3,23 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Resource } from '@azure/arm-cosmosdb';
-import { type Experience } from '../../DocumentDBExperiences';
-import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
-
-// Selecting only the properties used in the extension, but keeping an easy option to extend the model later and offer full coverage of MongoCluster
-// '|' means that you can only access properties that are common to both types.
-//export type ClusterModel = (MongoCluster | ResourceModelInUse) & ResourceModelInUse;
-// TODO: rethink this, it was not really needed to be that complex.
-export type ClusterModel = ResourceModelInUse;
+import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
+import { type ConnectionClusterModel } from '../connections-view/models/ConnectionClusterModel';
+import { type TreeCluster } from '../models/BaseClusterModel';
 
 /**
- * Represents a cluster model that has been attached to the workspace
+ * @deprecated Use `ConnectionClusterModel` or `AzureClusterModel` directly.
+ *
+ * This type is kept for backward compatibility during migration.
+ * It represents a cluster that's ready for tree display (has both data and tree context).
+ *
+ * Migration guide:
+ * - For Connections View: Use `TreeCluster<ConnectionClusterModel>`
+ * - For Azure/Discovery Views: Use `TreeCluster<AzureClusterModel>`
+ * - For generic tree items that work with both: Use `TreeCluster<BaseClusterModel>`
+ *
+ * The new types provide better type safety:
+ * - `ConnectionClusterModel` has `storageId` and `emulatorConfiguration`
+ * - `AzureClusterModel` has `id` (Azure Resource ID), `resourceGroup`, `location`, etc.
  */
-export type AttachedClusterModel = ClusterModel & {
-    /**
-     * ID used to reference this attached cluster in storage
-     */
-    storageId: string;
-};
-
-/**
- * Represents a cluster model that has been persisted in storage
- */
-export type ClusterModelWithStorage = ClusterModel & {
-    /**
-     * ID used to reference this attached cluster in storage
-     */
-    storageId: string;
-};
-
-interface ResourceModelInUse extends Resource {
-    // from the original MongoCluster type
-    id: string;
-    name: string;
-
-    administratorLoginPassword?: string;
-
-    /**
-     * This connection string does not contain user credentials.
-     */
-    connectionString?: string;
-
-    location?: string;
-    capabilities?: string;
-    serverVersion?: string;
-    systemData?: {
-        createdAt?: Date;
-    };
-
-    // moved from nodeGroupSpecs[0] to the top level
-    // todo: check the spec learn more about the nodeGroupSpecs array
-    sku?: string;
-    nodeCount?: number;
-    diskSize?: number;
-    enableHa?: boolean;
-
-    // introduced new properties
-    resourceGroup?: string;
-
-    // adding support for MongoRU and DocumentDB
-    dbExperience: Experience;
-
-    /**
-     * Indicates whether the account is an emulator.
-     *
-     * This property is set when an account is being added to the workspace.
-     * We use it to filter the list of accounts when displaying them.
-     * Also, sometimes we need to know if the account is an emulator to show/hide some UI elements.
-     */
-    emulatorConfiguration?: EmulatorConfiguration;
-}
+export type ClusterModel = TreeCluster<ConnectionClusterModel> | TreeCluster<AzureClusterModel>;

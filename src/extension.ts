@@ -18,20 +18,29 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { registerDebugCommands } from './debug/registerDebugCommands';
 import { ClustersExtension } from './documentdb/ClustersExtension';
+import { PlaygroundDiagnostics } from './documentdb/playground/PlaygroundDiagnostics';
+import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
+import { SchemaStore } from './documentdb/SchemaStore';
 import { ext } from './extensionVariables';
+import { flushAccumulatedTelemetry } from './utils/accumulatingTelemetry';
+import { registerReadOnlyJsonDocumentProvider } from './utils/readOnlyJsonDocumentProvider';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../api/src';
+import { registerGiveFeedbackCommand } from './commands/giveFeedback/giveFeedback';
 import { MigrationService } from './services/migrationServices';
+import { initializeSurveyInvitation } from './services/survey/invitation/SurveyInvitationView';
+import { initializeSurveyService } from './services/survey/SurveyService';
+import { settingsKeys } from './settingsKeys';
 
 export async function activateInternal(
     context: vscode.ExtensionContext,
     perfStats: { loadStartTime: number; loadEndTime: number },
 ): Promise<apiUtils.AzureExtensionApiProvider | DocumentDBExtensionApi> {
     ext.context = context;
-    ext.isBundle = !!process.env.IS_BUNDLE;
 
     // getAzureResourcesExtensionApi provides a way to get the Azure Resources extension's API V2
     // and is used to work with the tree view structure, as an improved alternative to the
@@ -41,6 +50,18 @@ export async function activateInternal(
 
     ext.outputChannel = createAzExtLogOutputChannel('DocumentDB for VS Code');
     context.subscriptions.push(ext.outputChannel);
+
+    ext.playgroundOutputChannel = vscode.window.createOutputChannel('DocumentDB Query Playground Output');
+    context.subscriptions.push(ext.playgroundOutputChannel);
+
+    ext.playgroundResultProvider = new PlaygroundResultProvider();
+    context.subscriptions.push(
+        ext.playgroundResultProvider,
+        vscode.workspace.registerTextDocumentContentProvider(PLAYGROUND_RESULT_SCHEME, ext.playgroundResultProvider),
+        new PlaygroundDiagnostics(),
+        registerReadOnlyJsonDocumentProvider(),
+    );
+
     registerUIExtensionVariables(ext);
     registerAzureUtilsExtensionVariables(ext);
 
@@ -56,8 +77,22 @@ export async function activateInternal(
 
         ext.secretStorage = context.secrets;
 
+        registerGiveFeedbackCommand(context);
+        try {
+            const surveyService = initializeSurveyService(context);
+            await initializeSurveyInvitation(context, surveyService);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(vscode.l10n.t('Failed to initialize the DocumentDB survey: {0}', errorMessage));
+        }
+
+        if (context.extensionMode === vscode.ExtensionMode.Development) {
+            await registerDebugCommands(context);
+        }
+
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
+        SchemaStore.registerForDisposal(context.subscriptions, ext.outputChannel);
         await clustersSupport.activateClustersSupport();
 
         context.subscriptions.push(
@@ -69,6 +104,19 @@ export async function activateInternal(
         // Suppress "Report an Issue" button for all errors in favor of the command
         registerErrorHandler((c) => (c.errorHandling.suppressReportIssue = true));
         //registerReportIssueCommand('azureDatabases.reportIssue');
+    });
+
+    // Report enabled experimental settings at launch
+    void callWithTelemetryAndErrorHandling('experimentalFeaturesStatus', async (telemetryContext: IActionContext) => {
+        telemetryContext.telemetry.properties.isActivationEvent = 'true';
+        telemetryContext.errorHandling.suppressDisplay = true;
+        telemetryContext.errorHandling.rethrow = false;
+
+        const enableAIQueryGeneration = vscode.workspace
+            .getConfiguration()
+            .get<boolean>(settingsKeys.enableAIQueryGeneration, false);
+
+        telemetryContext.telemetry.properties.enableAIQueryGeneration = enableAIQueryGeneration ? 'true' : 'false';
     });
 
     // Create the DocumentDB Extension API v0.2.0
@@ -118,7 +166,9 @@ export async function activateInternal(
 
 // this method is called when your extension is deactivated
 export function deactivateInternal(_context: vscode.ExtensionContext): void {
-    // NOOP
+    // Flush any pending accumulated telemetry (high-frequency events batched via
+    // accumulateTelemetry) so the last partial batch is not lost.
+    flushAccumulatedTelemetry();
 }
 
 /**

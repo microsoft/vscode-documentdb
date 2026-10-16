@@ -1,0 +1,143 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as vscode from 'vscode';
+
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
+import {
+    affectsFeedbackPermission,
+    FEEDBACK_ENABLED_SETTING,
+    isFeedbackPermitted,
+    showFeedbackDisabledMessage,
+} from './feedbackPermission';
+
+vi.mock('@microsoft/vscode-azext-utils', (): object => ({
+    callWithTelemetryAndErrorHandling: vi.fn(async (_name, callback: (context: IActionContext) => Promise<unknown>) =>
+        callback({ telemetry: { properties: {} } } as IActionContext),
+    ),
+    createGenericElement: vi.fn((item: { id: string; contextValue: string; commandId: string }): object => ({
+        ...item,
+        getTreeItem: async (): Promise<object> => ({ contextValue: item.contextValue }),
+    })),
+    createContextValue: vi.fn((values: string[]): string => values.join(';')),
+}));
+vi.mock('../extensionVariables', (): object => ({
+    ext: { context: { extension: { packageJSON: { version: '1.0.0' } } } },
+}));
+
+describe('isFeedbackPermitted', (): void => {
+    const get = vi.fn<(...args: [string, unknown?]) => unknown>();
+
+    beforeEach((): void => {
+        get.mockReset();
+        vi.spyOn(vscode.workspace, 'getConfiguration')
+            .mockClear()
+            .mockReturnValue({
+                get,
+            } as unknown as vscode.WorkspaceConfiguration);
+    });
+
+    afterEach((): void => {
+        vi.restoreAllMocks();
+    });
+
+    it('permits feedback when telemetry.feedback.enabled is true, defaulting to true', (): void => {
+        get.mockImplementation((_key, defaultValue): unknown => defaultValue);
+
+        expect(isFeedbackPermitted()).toBe(true);
+        expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('telemetry');
+        expect(get).toHaveBeenCalledWith('feedback.enabled', true);
+    });
+
+    it('denies feedback when telemetry.feedback.enabled is false', (): void => {
+        get.mockReturnValue(false);
+
+        expect(isFeedbackPermitted()).toBe(false);
+    });
+
+    it.each(['true', 1, 'all', null])('denies feedback for non-boolean value %p', (value): void => {
+        get.mockReturnValue(value);
+
+        expect(isFeedbackPermitted()).toBe(false);
+    });
+
+    it('denies feedback when getConfiguration throws', (): void => {
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((): never => {
+            throw new Error('Configuration unavailable');
+        });
+
+        expect(isFeedbackPermitted()).toBe(false);
+    });
+
+    it('denies feedback when get throws', (): void => {
+        get.mockImplementation((): never => {
+            throw new Error('Feedback setting unavailable');
+        });
+
+        expect(isFeedbackPermitted()).toBe(false);
+    });
+
+    it('reads the current configuration on every call', (): void => {
+        get.mockReturnValue(true);
+        expect(isFeedbackPermitted()).toBe(true);
+
+        get.mockReturnValue(false);
+        expect(isFeedbackPermitted()).toBe(false);
+
+        expect(vscode.workspace.getConfiguration).toHaveBeenCalledTimes(2);
+        expect(get).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([true, false])(
+        'includes the Help tree survey item only when permission is %s',
+        async (permitted): Promise<void> => {
+            get.mockReturnValue(permitted);
+            const provider = new HelpAndFeedbackBranchDataProvider();
+            const items = await provider.getChildren();
+            const feedbackItem = items?.find((item): boolean => item.id === 'helpAndFeedbackView/give-feedback');
+
+            expect(feedbackItem !== undefined).toBe(permitted);
+            if (permitted) {
+                expect(feedbackItem).toMatchObject({
+                    commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openSurvey',
+                });
+            }
+            expect(items?.some((item): boolean => item.id === 'helpAndFeedbackView/report-bug')).toBe(true);
+            provider.dispose();
+        },
+    );
+});
+
+describe('showFeedbackDisabledMessage', (): void => {
+    it('names the setting that turned feedback off', (): void => {
+        const show = vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        showFeedbackDisabledMessage();
+        expect(show).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(FEEDBACK_ENABLED_SETTING));
+    });
+});
+
+describe('affectsFeedbackPermission', (): void => {
+    it.each([true, false])('passes through affectsConfiguration returning %p', (affected): void => {
+        const affectsConfiguration = vi.fn<(...args: [string]) => boolean>().mockReturnValue(affected);
+        const event: vscode.ConfigurationChangeEvent = { affectsConfiguration };
+
+        expect(affectsFeedbackPermission(event)).toBe(affected);
+        expect(FEEDBACK_ENABLED_SETTING).toBe('telemetry.feedback.enabled');
+        expect(affectsConfiguration).toHaveBeenCalledWith('telemetry.feedback.enabled');
+    });
+
+    it('requests a permission recheck when affectsConfiguration throws', (): void => {
+        const event: vscode.ConfigurationChangeEvent = {
+            affectsConfiguration: vi.fn((): never => {
+                throw new Error('Configuration change unavailable');
+            }),
+        };
+
+        expect(affectsFeedbackPermission(event)).toBe(true);
+    });
+});

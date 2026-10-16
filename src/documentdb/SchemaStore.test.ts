@@ -1,0 +1,435 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { ObjectId } from 'bson';
+import { SchemaStore, type SchemaChangeEvent } from './SchemaStore';
+
+// Replace the telemetry helper with a no-op mock; individual tests override the
+// implementation to capture the measurements reported by `schemaStore.stats`.
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(),
+}));
+
+describe('SchemaStore', () => {
+    let store: SchemaStore;
+
+    beforeEach(() => {
+        // Reset singleton between tests
+        SchemaStore.getInstance().dispose();
+        store = SchemaStore.getInstance();
+    });
+
+    afterEach(() => {
+        store.dispose();
+        vi.useRealTimers();
+    });
+
+    // ── Helpers ──
+
+    const clusterId = 'cluster-1';
+    const db = 'testDb';
+    const coll = 'testColl';
+
+    function makeDocs(fields: Record<string, unknown>[]) {
+        return fields.map((f) => ({ _id: new ObjectId(), ...f }));
+    }
+
+    // ── Read/Write operations ──
+
+    it('returns empty results for unknown keys', () => {
+        expect(store.hasSchema(clusterId, db, coll)).toBe(false);
+        expect(store.getKnownFields(clusterId, db, coll)).toEqual([]);
+        expect(store.getDocumentCount(clusterId, db, coll)).toBe(0);
+        expect(store.getSchema(clusterId, db, coll)).toEqual({ type: 'object' });
+        expect(store.getPropertyNamesAtLevel(clusterId, db, coll, [])).toEqual([]);
+    });
+
+    it('creates analyzer and exposes fields after addDocuments', () => {
+        const docs = makeDocs([{ name: 'Alice', age: 30 }]);
+        store.addDocuments(clusterId, db, coll, docs);
+
+        expect(store.hasSchema(clusterId, db, coll)).toBe(true);
+        expect(store.getDocumentCount(clusterId, db, coll)).toBe(1);
+
+        const fields = store.getKnownFields(clusterId, db, coll);
+        const fieldNames = fields.map((f) => f.path);
+        expect(fieldNames).toContain('_id');
+        expect(fieldNames).toContain('name');
+        expect(fieldNames).toContain('age');
+    });
+
+    it('accumulates schema across multiple addDocuments calls', () => {
+        store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'Alice' }]));
+        store.addDocuments(clusterId, db, coll, makeDocs([{ email: 'a@b.com' }]));
+
+        const fields = store.getKnownFields(clusterId, db, coll);
+        const fieldNames = fields.map((f) => f.path);
+        expect(fieldNames).toContain('name');
+        expect(fieldNames).toContain('email');
+        expect(store.getDocumentCount(clusterId, db, coll)).toBe(2);
+    });
+
+    it('does not create analyzer for empty document array', () => {
+        store.addDocuments(clusterId, db, coll, []);
+        expect(store.hasSchema(clusterId, db, coll)).toBe(false);
+    });
+
+    it('returns property names at root level', () => {
+        store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'Alice', age: 30 }]));
+        const props = store.getPropertyNamesAtLevel(clusterId, db, coll, []);
+        expect(props).toContain('_id');
+        expect(props).toContain('name');
+        expect(props).toContain('age');
+    });
+
+    it('returns property names at nested level', () => {
+        store.addDocuments(clusterId, db, coll, makeDocs([{ address: { city: 'NYC', zip: '10001' } }]));
+        const props = store.getPropertyNamesAtLevel(clusterId, db, coll, ['address']);
+        expect(props).toContain('city');
+        expect(props).toContain('zip');
+    });
+
+    // ── Multiple keys are independent ──
+
+    it('keeps schemas independent per collection', () => {
+        store.addDocuments(clusterId, db, 'users', makeDocs([{ name: 'Alice' }]));
+        store.addDocuments(clusterId, db, 'orders', makeDocs([{ total: 99 }]));
+
+        const userFields = store.getKnownFields(clusterId, db, 'users').map((f) => f.path);
+        const orderFields = store.getKnownFields(clusterId, db, 'orders').map((f) => f.path);
+
+        expect(userFields).toContain('name');
+        expect(userFields).not.toContain('total');
+        expect(orderFields).toContain('total');
+        expect(orderFields).not.toContain('name');
+    });
+
+    it('keeps schemas independent per cluster', () => {
+        store.addDocuments('cluster-a', db, coll, makeDocs([{ fieldA: 1 }]));
+        store.addDocuments('cluster-b', db, coll, makeDocs([{ fieldB: 2 }]));
+
+        const fieldsA = store.getKnownFields('cluster-a', db, coll).map((f) => f.path);
+        const fieldsB = store.getKnownFields('cluster-b', db, coll).map((f) => f.path);
+
+        expect(fieldsA).toContain('fieldA');
+        expect(fieldsA).not.toContain('fieldB');
+        expect(fieldsB).toContain('fieldB');
+        expect(fieldsB).not.toContain('fieldA');
+    });
+
+    // ── Clear operations ──
+
+    it('clearSchema removes a single collection', () => {
+        store.addDocuments(clusterId, db, 'users', makeDocs([{ name: 'Alice' }]));
+        store.addDocuments(clusterId, db, 'orders', makeDocs([{ total: 99 }]));
+
+        store.clearSchema(clusterId, db, 'users');
+
+        expect(store.hasSchema(clusterId, db, 'users')).toBe(false);
+        expect(store.hasSchema(clusterId, db, 'orders')).toBe(true);
+    });
+
+    it('clearSchema is a no-op for unknown keys', () => {
+        // Should not throw
+        store.clearSchema(clusterId, db, 'nonexistent');
+        expect(store.hasSchema(clusterId, db, 'nonexistent')).toBe(false);
+    });
+
+    it('clearCluster removes all schemas for a cluster', () => {
+        store.addDocuments(clusterId, db, 'users', makeDocs([{ name: 'Alice' }]));
+        store.addDocuments(clusterId, db, 'orders', makeDocs([{ total: 99 }]));
+        store.addDocuments('other-cluster', db, 'users', makeDocs([{ name: 'Bob' }]));
+
+        store.clearCluster(clusterId);
+
+        expect(store.hasSchema(clusterId, db, 'users')).toBe(false);
+        expect(store.hasSchema(clusterId, db, 'orders')).toBe(false);
+        expect(store.hasSchema('other-cluster', db, 'users')).toBe(true);
+    });
+
+    it('clearDatabase removes schemas for a specific database', () => {
+        store.addDocuments(clusterId, 'db1', 'users', makeDocs([{ name: 'Alice' }]));
+        store.addDocuments(clusterId, 'db1', 'orders', makeDocs([{ total: 99 }]));
+        store.addDocuments(clusterId, 'db2', 'products', makeDocs([{ sku: 'X' }]));
+
+        store.clearDatabase(clusterId, 'db1');
+
+        expect(store.hasSchema(clusterId, 'db1', 'users')).toBe(false);
+        expect(store.hasSchema(clusterId, 'db1', 'orders')).toBe(false);
+        expect(store.hasSchema(clusterId, 'db2', 'products')).toBe(true);
+    });
+
+    it('reset clears everything', () => {
+        store.addDocuments('c1', db, 'a', makeDocs([{ x: 1 }]));
+        store.addDocuments('c2', db, 'b', makeDocs([{ y: 2 }]));
+
+        store.reset();
+
+        expect(store.hasSchema('c1', db, 'a')).toBe(false);
+        expect(store.hasSchema('c2', db, 'b')).toBe(false);
+    });
+
+    // ── Singleton ──
+
+    it('getInstance returns the same instance', () => {
+        const a = SchemaStore.getInstance();
+        const b = SchemaStore.getInstance();
+        expect(a).toBe(b);
+    });
+
+    it('dispose resets the singleton', () => {
+        const before = SchemaStore.getInstance();
+        before.dispose();
+        const after = SchemaStore.getInstance();
+        expect(after).not.toBe(before);
+    });
+
+    describe('disposal registration', () => {
+        it('keeps logging alive through schema teardown and preserves other subscription ordering', () => {
+            vi.useFakeTimers();
+            store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'teardown' }]));
+            const order: string[] = [];
+            let outputDisposed = false;
+            const before = {
+                dispose: (): void => {
+                    order.push('before');
+                },
+            };
+            const after = {
+                dispose: (): void => {
+                    order.push('after');
+                },
+            };
+            const outputChannel = {
+                dispose: (): void => {
+                    outputDisposed = true;
+                    order.push('output');
+                },
+            };
+            const subscriptions = [before, outputChannel, after];
+            const logStats = vi.spyOn(store, 'logStats').mockImplementation((): void => {
+                if (outputDisposed) {
+                    throw new Error('Channel has been closed');
+                }
+                order.push('statistics');
+            });
+            try {
+                SchemaStore.registerForDisposal(subscriptions, outputChannel);
+                expect(subscriptions).toEqual([before, after, store, outputChannel]);
+                for (const disposable of subscriptions) {
+                    disposable.dispose();
+                }
+                expect(order).toEqual(['before', 'after', 'statistics', 'output']);
+                expect(store.getStats().collectionCount).toBe(0);
+                expect(vi.getTimerCount()).toBe(0);
+                expect(SchemaStore.getInstance()).not.toBe(store);
+            } finally {
+                logStats.mockRestore();
+            }
+        });
+
+        it('rejects an unregistered output channel without changing subscriptions', () => {
+            const disposable = { dispose: vi.fn() };
+            const outputChannel = { dispose: vi.fn() };
+            const subscriptions = [disposable];
+            expect(() => SchemaStore.registerForDisposal(subscriptions, outputChannel)).toThrow(
+                'outputChannel subscription',
+            );
+            expect(subscriptions).toEqual([disposable]);
+            expect(SchemaStore.getInstance()).toBe(store);
+        });
+    });
+
+    // ── LRU eviction (memory ceiling, issue #604) ──
+
+    describe('LRU eviction', () => {
+        // Mirrors SchemaStore.DEFAULT_MAX_ENTRIES.
+        const MAX_ENTRIES = 50;
+
+        function fillCollections(count: number, prefix = 'coll'): void {
+            for (let i = 0; i < count; i++) {
+                store.addDocuments(clusterId, db, `${prefix}-${i}`, makeDocs([{ idx: i }]));
+            }
+        }
+
+        it('caps the number of cached collections at the limit', () => {
+            fillCollections(MAX_ENTRIES + 25);
+            expect(store.getStats().collectionCount).toBe(MAX_ENTRIES);
+        });
+
+        it('evicts the least-recently-used collection when exceeding the cap', () => {
+            fillCollections(MAX_ENTRIES); // coll-0 (LRU) ... coll-49 (MRU)
+
+            // One more insertion pushes the cache over the cap and evicts coll-0.
+            store.addDocuments(clusterId, db, 'coll-new', makeDocs([{ x: 1 }]));
+
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(false);
+            expect(store.hasSchema(clusterId, db, 'coll-new')).toBe(true);
+            expect(store.getStats().collectionCount).toBe(MAX_ENTRIES);
+        });
+
+        it('treats a read as recent use, protecting recently-read collections', () => {
+            fillCollections(MAX_ENTRIES); // coll-0 (LRU) ... coll-49 (MRU)
+
+            // Reading coll-0 makes it most-recently-used, so coll-1 becomes the LRU.
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(true);
+
+            store.addDocuments(clusterId, db, 'coll-new', makeDocs([{ x: 1 }]));
+
+            // coll-1 is evicted; coll-0 survives because it was just read.
+            expect(store.hasSchema(clusterId, db, 'coll-1')).toBe(false);
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(true);
+        });
+
+        it('allows an evicted collection to be re-added', () => {
+            fillCollections(MAX_ENTRIES);
+            store.addDocuments(clusterId, db, 'coll-new', makeDocs([{ x: 1 }])); // evicts coll-0
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(false);
+
+            store.addDocuments(clusterId, db, 'coll-0', makeDocs([{ y: 2 }]));
+
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(true);
+            expect(store.getStats().collectionCount).toBe(MAX_ENTRIES);
+        });
+
+        it('reports cache size, cap, and eviction count via telemetry', async () => {
+            const measurements: Record<string, number> = {};
+            const callWithTelemetryMock = callWithTelemetryAndErrorHandling as unknown as Mock;
+            callWithTelemetryMock.mockImplementation(
+                async (_callbackId: string, callback: (ctx: IActionContext) => unknown) => {
+                    const ctx = {
+                        telemetry: { properties: {}, measurements },
+                        errorHandling: {},
+                    } as unknown as IActionContext;
+                    await callback(ctx);
+                    return undefined;
+                },
+            );
+
+            try {
+                fillCollections(MAX_ENTRIES + 10); // 10 evictions
+            } finally {
+                callWithTelemetryMock.mockReset();
+            }
+
+            expect(measurements.maxEntries).toBe(MAX_ENTRIES);
+            expect(measurements.currentCollectionCount).toBe(MAX_ENTRIES);
+            expect(measurements.evictionCount).toBeGreaterThanOrEqual(10);
+        });
+    });
+
+    // ── Events (debounced) ──
+
+    describe('onDidChangeSchema', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        it('fires after debounce delay on addDocuments', () => {
+            const events: SchemaChangeEvent[] = [];
+            store.onDidChangeSchema((e) => events.push(e));
+
+            store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'Alice' }]));
+
+            // Should not have fired yet
+            expect(events).toHaveLength(0);
+
+            // Advance past the 1-second debounce
+            vi.advanceTimersByTime(1000);
+
+            expect(events).toHaveLength(1);
+            expect(events[0]).toEqual({
+                clusterId,
+                databaseName: db,
+                collectionName: coll,
+            });
+        });
+
+        it('coalesces rapid addDocuments calls into a single event', () => {
+            const events: SchemaChangeEvent[] = [];
+            store.onDidChangeSchema((e) => events.push(e));
+
+            // Rapid successive calls
+            store.addDocuments(clusterId, db, coll, makeDocs([{ a: 1 }]));
+            store.addDocuments(clusterId, db, coll, makeDocs([{ b: 2 }]));
+            store.addDocuments(clusterId, db, coll, makeDocs([{ c: 3 }]));
+
+            vi.advanceTimersByTime(1000);
+
+            // Only one event, not three
+            expect(events).toHaveLength(1);
+        });
+
+        it('fires separate events for different collections', () => {
+            const events: SchemaChangeEvent[] = [];
+            store.onDidChangeSchema((e) => events.push(e));
+
+            store.addDocuments(clusterId, db, 'users', makeDocs([{ name: 'Alice' }]));
+            store.addDocuments(clusterId, db, 'orders', makeDocs([{ total: 99 }]));
+
+            vi.advanceTimersByTime(1000);
+
+            expect(events).toHaveLength(2);
+            expect(events.map((e) => e.collectionName)).toEqual(expect.arrayContaining(['users', 'orders']));
+        });
+
+        it('fires immediately on clearSchema (not debounced)', () => {
+            store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'Alice' }]));
+            vi.advanceTimersByTime(1000); // flush addDocuments event
+
+            const events: SchemaChangeEvent[] = [];
+            store.onDidChangeSchema((e) => events.push(e));
+
+            store.clearSchema(clusterId, db, coll);
+
+            // Should fire immediately, not after debounce
+            expect(events).toHaveLength(1);
+            expect(events[0]).toEqual({
+                clusterId,
+                databaseName: db,
+                collectionName: coll,
+            });
+        });
+
+        it('does not fire clearSchema for unknown keys', () => {
+            const events: SchemaChangeEvent[] = [];
+            store.onDidChangeSchema((e) => events.push(e));
+
+            store.clearSchema(clusterId, db, 'nonexistent');
+
+            expect(events).toHaveLength(0);
+        });
+
+        it('does not fire on addDocuments with empty array', () => {
+            const events: SchemaChangeEvent[] = [];
+            store.onDidChangeSchema((e) => events.push(e));
+
+            store.addDocuments(clusterId, db, coll, []);
+
+            vi.advanceTimersByTime(1000);
+
+            expect(events).toHaveLength(0);
+        });
+
+        it('cancels pending debounced event when clearSchema is called', () => {
+            const events: SchemaChangeEvent[] = [];
+            store.onDidChangeSchema((e) => events.push(e));
+
+            store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'Alice' }]));
+            // Pending debounced event exists
+            store.clearSchema(clusterId, db, coll);
+
+            // clearSchema fires immediately
+            expect(events).toHaveLength(1);
+
+            // Advance timers — no additional event from the cancelled addDocuments debounce
+            vi.advanceTimersByTime(1000);
+            expect(events).toHaveLength(1);
+        });
+    });
+});

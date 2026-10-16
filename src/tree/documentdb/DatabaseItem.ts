@@ -6,12 +6,17 @@
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { type Experience } from '../../DocumentDBExperiences';
+import { COLLECTION_COUNT_LIMIT } from '../../constants';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
+import { getCountPrefix } from '../../utils/countPrefix';
+import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
-import { type ClusterModel } from './ClusterModel';
 import { CollectionItem } from './CollectionItem';
 
 export class DatabaseItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
@@ -21,19 +26,59 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
     private readonly experienceContextValue: string = '';
 
+    /**
+     * Cached collection count for the database.
+     * `undefined` means not yet loaded, `null` means loading failed (used as a
+     * sentinel so a failed load is not retried for this item instance).
+     */
+    private collectionCount: number | undefined | null;
+    /** When true, the actual count exceeds COLLECTION_COUNT_LIMIT. */
+    private collectionCountExceeded: boolean = false;
+    /**
+     * When true, `collectionCount` is the exact value obtained from a full
+     * `listCollections` in `getChildren()`. Once exact, the background
+     * cursor-based count must not overwrite it with a capped/approximate value.
+     */
+    private collectionCountIsExact: boolean = false;
+    private isLoadingCount: boolean = false;
+
+    /**
+     * Monotonic counter bumped on every `getChildren` call. Used to invalidate
+     * background document-count work owned by stale CollectionItem instances
+     * (refresh / collapse / re-expand creates fresh instances; we want the
+     * previous ones to bail before mutating UI state or hitting the server).
+     */
+    private expansionGeneration = 0;
+
     constructor(
-        readonly cluster: ClusterModel,
+        readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience?.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.id);
+        const myGeneration = ++this.expansionGeneration;
+        const isCurrent = (): boolean => this.expansionGeneration === myGeneration;
+
+        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         const collections = await client.listCollections(this.databaseInfo.name);
+
+        // Update the collection count from the full list we just fetched. This
+        // is the exact value, so mark it authoritative: a still-running
+        // background count must not later overwrite it with a capped result.
+        const previousCount = this.collectionCount;
+        this.collectionCount = collections.length;
+        this.collectionCountExceeded = false;
+        this.collectionCountIsExact = true;
+        this.isLoadingCount = false;
+
+        if (previousCount !== this.collectionCount) {
+            ext.state.notifyChildrenChanged(this.id);
+        }
 
         if (collections.length === 0) {
             // no databases in there:
@@ -44,23 +89,99 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
                     label: l10n.t('Create Collection…'),
                     iconPath: new vscode.ThemeIcon('plus'),
                     commandId: 'vscode-documentdb.command.createCollection',
-                    commandArgs: [this],
+                    commandArgs: [this, null, { activationSource: 'treeEmptyPlaceholder' }],
                 }) as TreeElement,
             ];
         }
 
+        // Sort collections alphabetically by name before kicking off background
+        // count loads. The per-cluster limiter dispatches in FIFO order, so
+        // sorting first means counts are requested in alphabetical order.
+        // Completion order still depends on per-request latency and may differ.
+        collections.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
         return collections.map((collection) => {
-            return new CollectionItem(this.cluster, this.databaseInfo, collection);
+            const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection, isCurrent);
+            // Start loading document count in background (fire-and-forget).
+            collectionItem.loadDocumentCount();
+            return collectionItem;
         });
     }
 
+    /**
+     * Starts loading the collection count asynchronously using a lightweight
+     * cursor-based count (nameOnly, early termination at COLLECTION_COUNT_LIMIT).
+     * This method is fire-and-forget and does not block tree expansion.
+     */
+    public loadCollectionCount(): void {
+        if (this.isLoadingCount || this.collectionCount !== undefined) {
+            return;
+        }
+
+        this.isLoadingCount = true;
+        void this.fetchAndUpdateCount();
+    }
+
+    private async fetchAndUpdateCount(): Promise<void> {
+        try {
+            const client = await ClustersClient.getClient(this.cluster.clusterId);
+            const { count, hasMore } = await client.countCollections(this.databaseInfo.name, COLLECTION_COUNT_LIMIT);
+            // `getChildren()` may have run while this request was in flight and
+            // established the exact count. Never replace an exact count with
+            // this capped/approximate result.
+            if (!this.collectionCountIsExact) {
+                this.collectionCount = count;
+                this.collectionCountExceeded = hasMore;
+            }
+        } catch {
+            meterSilentCatch('DatabaseItem_loadCollectionCount');
+            if (!this.collectionCountIsExact) {
+                // Use null (not undefined) so loadCollectionCount() does not
+                // retry a known-failing request for this item instance.
+                this.collectionCount = null;
+                this.collectionCountExceeded = false;
+            }
+        } finally {
+            this.isLoadingCount = false;
+            ext.state.notifyChildrenChanged(this.id);
+        }
+    }
+
     getTreeItem(): vscode.TreeItem {
+        let description: string | undefined;
+        if (typeof this.collectionCount === 'number') {
+            const prefix = getCountPrefix();
+            const countText = this.collectionCountExceeded ? `${this.collectionCount}+` : `${this.collectionCount}`;
+            description = prefix ? `${prefix}${countText}` : countText;
+        }
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.databaseInfo.name,
+            description,
+            tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('database'), // TODO: create our own icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    /**
+     * Builds a markdown tooltip showing the database name and collection count.
+     */
+    private buildTooltip(): vscode.MarkdownString {
+        const md = new vscode.MarkdownString();
+        md.isTrusted = false;
+
+        md.appendMarkdown(`### ${escapeMarkdown(this.databaseInfo.name)}\n\n`);
+
+        md.appendMarkdown(`\`${l10n.t('Database')}\`\n\n`);
+
+        if (typeof this.collectionCount === 'number') {
+            const countText = this.collectionCountExceeded ? `${this.collectionCount}+` : `${this.collectionCount}`;
+            md.appendMarkdown(`**${l10n.t('Collections')}:** ${countText}\n\n`);
+        }
+
+        return md;
     }
 }

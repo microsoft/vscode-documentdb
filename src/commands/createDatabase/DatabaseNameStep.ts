@@ -60,6 +60,8 @@ export class DatabaseNameStep extends AzureWizardPromptStep<CreateDatabaseWizard
         context: CreateDatabaseWizardContext,
         name: string,
     ): Promise<string | undefined> {
+        name = name.trim();
+
         if (name.length === 0) {
             return l10n.t('Database name is required.');
         }
@@ -74,7 +76,7 @@ export class DatabaseNameStep extends AzureWizardPromptStep<CreateDatabaseWizard
             ) {
                 return (
                     l10n.t(
-                        'The database "{0}" already exists in the MongoDB Cluster "{1}".',
+                        'The database "{0}" already exists in the DocumentDB cluster "{1}".',
                         name,
                         context.clusterName,
                     ) +

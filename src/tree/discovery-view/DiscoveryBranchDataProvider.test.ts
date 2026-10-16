@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { ext } from '../../extensionVariables';
+import { resetDiscoveryProviderVisibilityCacheForTests } from '../../services/discoveryProviderVisibility';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { DiscoveryBranchDataProvider } from './DiscoveryBranchDataProvider';
 
@@ -12,39 +14,37 @@ const telemetryContextMock = {
     telemetry: { properties: {}, measurements: {} },
     errorHandling: { issueProperties: {} },
     ui: {
-        showWarningMessage: jest.fn(),
-        onDidFinishPrompt: jest.fn(),
-        showQuickPick: jest.fn(),
-        showInputBox: jest.fn(),
-        showOpenDialog: jest.fn(),
-        showWorkspaceFolderPick: jest.fn(),
+        showWarningMessage: vi.fn(),
+        onDidFinishPrompt: vi.fn(),
+        showQuickPick: vi.fn(),
+        showInputBox: vi.fn(),
+        showOpenDialog: vi.fn(),
+        showWorkspaceFolderPick: vi.fn(),
     },
     valuesToMask: [],
 };
 
-// Mock vscode-azext-utils module
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
-        async (_eventName, callback: (context: IActionContext) => Promise<void>) => {
-            await callback(telemetryContextMock);
-            return undefined;
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
+        async (_eventName, callback: (context: IActionContext) => Promise<unknown>) => {
+            return await callback(telemetryContextMock);
         },
     ),
+    createContextValue: vi.fn((values: string[]) => values.join(';')),
 }));
 
-// Mock vscode module
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     Disposable: class Disposable {
-        dispose() {
+        dispose(): void {
             // Mock dispose
         }
     },
     EventEmitter: class EventEmitter {
-        fire() {
+        fire(): void {
             // Mock fire
         }
-        get event() {
-            return jest.fn();
+        get event(): Mock {
+            return vi.fn();
         }
     },
     TreeItemCollapsibleState: {
@@ -53,403 +53,207 @@ jest.mock('vscode', () => ({
         Expanded: 2,
     },
     l10n: {
-        t: jest.fn((str) => str),
+        t: vi.fn((str: string) => str),
     },
 }));
 
-// Mock extensionVariables module
-jest.mock('../../extensionVariables', () => ({
+const mockGlobalStateGet = vi.fn();
+const mockGlobalStateUpdate = vi.fn();
+
+vi.mock('../../extensionVariables', () => ({
     ext: {
         context: {
             globalState: {
-                get: jest.fn(),
-                update: jest.fn(() => Promise.resolve()),
+                get: (...args: unknown[]) => mockGlobalStateGet(...args),
+                update: (...args: unknown[]) => mockGlobalStateUpdate(...args),
             },
         },
         state: {
-            wrapItemInStateHandling: jest.fn((item) => item),
+            wrapItemInStateHandling: vi.fn((item) => item),
+        },
+        outputChannel: {
+            trace: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
-// Mock DiscoveryService
-jest.mock('../../services/discoveryServices', () => ({
+vi.mock('../../services/discoveryServices', () => ({
     DiscoveryService: {
-        listProviders: jest.fn(),
-        getProvider: jest.fn(),
+        listProviders: vi.fn(),
+        getProvider: vi.fn(),
     },
 }));
 
-describe('DiscoveryBranchDataProvider - addDiscoveryProviderPromotionIfNeeded', () => {
-    let dataProvider: DiscoveryBranchDataProvider;
-    let globalStateGetMock: jest.Mock;
-    let globalStateUpdateMock: jest.Mock;
-    let listProvidersMock: jest.Mock;
-    let getProviderMock: jest.Mock;
+interface MockTreeElement {
+    readonly id: string;
+    readonly contextValue?: string;
+    readonly cluster?: { readonly clusterId: string; readonly name: string };
+    getTreeItem(): Promise<{ readonly contextValue?: string }>;
+    getChildren?(): Promise<MockTreeElement[]>;
+}
 
-    // Create a mock provider
-    const mockProvider = {
-        id: 'azure-mongo-ru-discovery',
-        label: 'Azure Cosmos DB for MongoDB RU',
-        description: 'Azure discovery provider',
-        getDiscoveryWizard: jest.fn(),
-        getDiscoveryTreeRootItem: jest.fn().mockReturnValue({
-            id: 'root-item-id',
-            getTreeItem: jest.fn().mockResolvedValue({}),
+const listProvidersMock = DiscoveryService.listProviders as Mock;
+const getProviderMock = DiscoveryService.getProvider as Mock;
+
+function createRootProvider(id: string): unknown {
+    return {
+        id,
+        label: `Provider ${id}`,
+        getDiscoveryTreeRootItem: vi.fn().mockReturnValue({
+            id: `discoveryView/${id}`,
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'rootItem' }),
+            getChildren: vi.fn().mockResolvedValue([]),
         }),
     };
+}
+
+function setGlobalState(values: Record<string, unknown>): void {
+    mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) =>
+        Object.prototype.hasOwnProperty.call(values, key) ? values[key] : defaultValue,
+    );
+}
+
+describe('DiscoveryBranchDataProvider - provider visibility', () => {
+    let dataProvider: DiscoveryBranchDataProvider;
 
     beforeEach(() => {
-        // Clear all mocks
-        jest.clearAllMocks();
-
-        // Store references to mocks
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        globalStateGetMock = ext.context.globalState.get as jest.Mock;
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        globalStateUpdateMock = ext.context.globalState.update as jest.Mock;
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        listProvidersMock = DiscoveryService.listProviders as jest.Mock;
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        getProviderMock = DiscoveryService.getProvider as jest.Mock;
-
-        // Setup default mock behavior
-        globalStateUpdateMock.mockResolvedValue(undefined);
-
-        // Create a new instance for each test
+        vi.clearAllMocks();
+        resetDiscoveryProviderVisibilityCacheForTests();
+        telemetryContextMock.telemetry = { properties: {}, measurements: {} };
+        mockGlobalStateUpdate.mockResolvedValue(undefined);
+        listProvidersMock.mockReturnValue([
+            { id: 'provider-a', label: 'Provider A' },
+            { id: 'provider-b', label: 'Provider B' },
+        ]);
+        getProviderMock.mockImplementation((id: string) => createRootProvider(id));
         dataProvider = new DiscoveryBranchDataProvider();
     });
 
-    describe('when user never worked with discovery (empty activeDiscoveryProviderIds)', () => {
-        beforeEach(() => {
-            // Setup: no active providers (user never added any OR removed all)
-            listProvidersMock.mockReturnValue([mockProvider]); // Provider exists in registry
-            getProviderMock.mockReturnValue(mockProvider);
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return false;
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    return []; // Empty list = new user or removed all
-                }
-                return defaultValue;
-            });
-        });
+    it('shows all registered providers by default when no visibility state exists', async () => {
+        setGlobalState({});
 
-        it('should not add the provider to activeDiscoveryProviderIds', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
+        const result = await dataProvider.getChildren(undefined as never);
 
-            // Should NOT update activeDiscoveryProviderIds
-            const updateCalls = globalStateUpdateMock.mock.calls;
-            const activeProviderUpdates = updateCalls.filter((call) => call[0] === 'activeDiscoveryProviderIds');
-            expect(activeProviderUpdates).toHaveLength(0);
-        });
-
-        it('should mark the promotion flag as processed', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            // Should mark the promotion as processed
-            expect(globalStateUpdateMock).toHaveBeenCalledWith(
-                'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery',
-                true,
-            );
-        });
-
-        it('should return early without checking provider availability', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            // Should not call getProvider since we return early
-            expect(getProviderMock).not.toHaveBeenCalled();
+        expect(result).toHaveLength(2);
+        expect(result?.map((node) => node.id)).toEqual(['discoveryView/provider-a', 'discoveryView/provider-b']);
+        expect(telemetryContextMock.telemetry.measurements).toMatchObject({
+            activeDiscoveryProviders: 2,
+            hiddenDiscoveryProviders: 0,
         });
     });
 
-    describe('when user has explored discovery in the past', () => {
-        beforeEach(() => {
-            // Setup: user has some providers active
-            listProvidersMock.mockReturnValue([mockProvider]);
-            getProviderMock.mockReturnValue(mockProvider);
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return false;
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    // User has other providers active, indicating they've used discovery before
-                    return ['other-provider-id'];
-                }
-                return defaultValue;
-            });
-        });
+    it('sorts providers by display label rather than ID or registration order', async () => {
+        setGlobalState({});
+        listProvidersMock.mockReturnValue([
+            { id: 'provider-a', label: 'Zulu' },
+            { id: 'provider-c', label: 'Provider 10' },
+            { id: 'provider-d', label: 'Alpha' },
+            { id: 'provider-b', label: 'Provider 2' },
+        ]);
 
-        it('should add the provider to activeDiscoveryProviderIds', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
+        const result = await dataProvider.getChildren(undefined as never);
 
-            // Should add the provider to the active list
-            expect(globalStateUpdateMock).toHaveBeenCalledWith('activeDiscoveryProviderIds', [
-                'other-provider-id',
-                'azure-mongo-ru-discovery',
-            ]);
-        });
-
-        it('should mark the promotion flag as processed', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            // Should mark the promotion as processed
-            expect(globalStateUpdateMock).toHaveBeenCalledWith(
-                'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery',
-                true,
-            );
-        });
-
-        it('should preserve existing providers when adding the new one', async () => {
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return false;
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    return ['provider-1', 'provider-2'];
-                }
-                return defaultValue;
-            });
-
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            expect(globalStateUpdateMock).toHaveBeenCalledWith('activeDiscoveryProviderIds', [
-                'provider-1',
-                'provider-2',
-                'azure-mongo-ru-discovery',
-            ]);
-        });
+        expect(result?.map((node) => node.id)).toEqual([
+            'discoveryView/provider-d',
+            'discoveryView/provider-b',
+            'discoveryView/provider-c',
+            'discoveryView/provider-a',
+        ]);
     });
 
-    describe('when promotion was already shown', () => {
-        beforeEach(() => {
-            // Setup: promotion flag already set
-            listProvidersMock.mockReturnValue([mockProvider]);
-            getProviderMock.mockReturnValue(mockProvider);
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return true; // Already shown
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    return ['other-provider-id'];
-                }
-                return defaultValue;
-            });
+    it('hides only providers stored in hiddenDiscoveryProviderIds', async () => {
+        setGlobalState({
+            hiddenDiscoveryProviderIds: ['provider-b'],
         });
 
-        it('should return early without any updates', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
+        const result = await dataProvider.getChildren(undefined as never);
 
-            // Should not update anything
-            expect(globalStateUpdateMock).not.toHaveBeenCalled();
-        });
-
-        it('should not check for registered providers', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            // Should not call listProviders since we return early
-            expect(listProvidersMock).not.toHaveBeenCalled();
+        expect(result).toHaveLength(1);
+        expect(result?.[0]?.id).toBe('discoveryView/provider-a');
+        expect(mockGlobalStateUpdate).not.toHaveBeenCalled();
+        expect(telemetryContextMock.telemetry.measurements).toMatchObject({
+            activeDiscoveryProviders: 1,
+            hiddenDiscoveryProviders: 1,
         });
     });
+});
 
-    describe('when provider is not registered in DiscoveryService', () => {
-        beforeEach(() => {
-            // Setup: providers exist but not the requested one
-            listProvidersMock.mockReturnValue([mockProvider]);
-            getProviderMock.mockReturnValue(undefined); // Provider not found
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return false;
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    return ['other-provider-id'];
-                }
-                return defaultValue;
-            });
-        });
+describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
+    let dataProvider: DiscoveryBranchDataProvider;
 
-        it('should not add the provider to activeDiscoveryProviderIds', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            // Should not update activeDiscoveryProviderIds
-            const updateCalls = globalStateUpdateMock.mock.calls;
-            const activeProviderUpdates = updateCalls.filter((call) => call[0] === 'activeDiscoveryProviderIds');
-            expect(activeProviderUpdates).toHaveLength(0);
-        });
-
-        it('should not mark promotion as processed', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            // Should not mark promotion as processed since provider doesn't exist
-            expect(globalStateUpdateMock).not.toHaveBeenCalledWith(
-                'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery',
-                true,
-            );
-        });
+    beforeEach(() => {
+        vi.clearAllMocks();
+        resetDiscoveryProviderVisibilityCacheForTests();
+        dataProvider = new DiscoveryBranchDataProvider();
     });
 
-    describe('when provider is already in activeDiscoveryProviderIds', () => {
-        beforeEach(() => {
-            // Setup: provider already active
-            listProvidersMock.mockReturnValue([mockProvider]);
-            getProviderMock.mockReturnValue(mockProvider);
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return false;
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    return ['azure-mongo-ru-discovery', 'other-provider-id']; // Already includes the provider
-                }
-                return defaultValue;
-            });
-        });
+    it('accepts cluster IDs with the provider prefix', async () => {
+        const prefixedClusterId =
+            'azure-mongo-vcore-discovery__subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1';
+        const mockClusterElement: MockTreeElement = {
+            id: 'cluster-element-id',
+            contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
+            cluster: {
+                clusterId: prefixedClusterId,
+                name: 'Test Cluster',
+            },
+        };
 
-        it('should not add duplicate provider to activeDiscoveryProviderIds', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
+        const mockParentElement: MockTreeElement = {
+            id: 'discoveryView/azure-mongo-vcore-discovery/subscription1',
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'subscription' }),
+            getChildren: vi.fn().mockResolvedValue([mockClusterElement]),
+        };
 
-            // Should not update activeDiscoveryProviderIds since provider already exists
-            const updateCalls = globalStateUpdateMock.mock.calls;
-            const activeProviderUpdates = updateCalls.filter((call) => call[0] === 'activeDiscoveryProviderIds');
-            expect(activeProviderUpdates).toHaveLength(0);
-        });
+        const children = await dataProvider.getChildren(mockParentElement);
 
-        it('should still mark promotion as processed', async () => {
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            // Should mark the promotion as processed
-            expect(globalStateUpdateMock).toHaveBeenCalledWith(
-                'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery',
-                true,
-            );
-        });
+        expect(children).toBeDefined();
+        expect((children?.[0] as MockTreeElement).cluster?.clusterId).toBe(prefixedClusterId);
     });
 
-    describe('error handling', () => {
-        beforeEach(() => {
-            listProvidersMock.mockReturnValue([mockProvider]);
-            getProviderMock.mockReturnValue(mockProvider);
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return false;
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    return ['other-provider-id'];
-                }
-                return defaultValue;
-            });
-        });
+    it('throws when cluster ID is missing the provider prefix', async () => {
+        const mockClusterElement: MockTreeElement = {
+            id: 'cluster-element-id',
+            contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
+            cluster: {
+                clusterId:
+                    '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1',
+                name: 'Test Cluster',
+            },
+        };
 
-        it('should handle errors when updating activeDiscoveryProviderIds gracefully', async () => {
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-            globalStateUpdateMock.mockImplementation((key: string) => {
-                if (key === 'activeDiscoveryProviderIds') {
-                    return Promise.reject(new Error('Storage error'));
-                }
-                return Promise.resolve();
-            });
+        const mockParentElement: MockTreeElement = {
+            id: 'discoveryView/azure-mongo-vcore-discovery/subscription1',
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'subscription' }),
+            getChildren: vi.fn().mockResolvedValue([mockClusterElement]),
+        };
 
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-            // Should log error
-            expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to update activeDiscoveryProviderIds: Storage error');
-
-            // Should still attempt to mark promotion as processed
-            expect(globalStateUpdateMock).toHaveBeenCalledWith(
-                'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery',
-                true,
-            );
-
-            consoleErrorSpy.mockRestore();
-        });
-
-        it('should handle errors when marking promotion as processed gracefully', async () => {
-            globalStateUpdateMock.mockImplementation((key: string) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return Promise.reject(new Error('Storage error'));
-                }
-                return Promise.resolve();
-            });
-
-            // Should not throw
-            await expect(
-                dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery'),
-            ).resolves.not.toThrow();
-        });
-
-        it('should handle errors when checking if no providers exist gracefully', async () => {
-            listProvidersMock.mockReturnValue([]);
-            globalStateUpdateMock.mockImplementation((key: string) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return Promise.reject(new Error('Storage error'));
-                }
-                return Promise.resolve();
-            });
-
-            // Should not throw
-            await expect(
-                dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery'),
-            ).resolves.not.toThrow();
-        });
+        await expect(dataProvider.getChildren(mockParentElement)).rejects.toThrow(/must start with provider ID/i);
     });
 
-    describe('edge cases', () => {
-        it('should handle when activeDiscoveryProviderIds is null/undefined', async () => {
-            listProvidersMock.mockReturnValue([mockProvider]);
-            getProviderMock.mockReturnValue(mockProvider);
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery') {
-                    return false;
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    return null; // Explicitly return null
-                }
-                return defaultValue;
-            });
+    it('skips validation when provider ID cannot be extracted from tree ID', async () => {
+        const nonPrefixedClusterId = '_subscriptions_sub1_clusters_cluster1';
+        const mockClusterElement: MockTreeElement = {
+            id: 'cluster-element-id',
+            contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
+            cluster: {
+                clusterId: nonPrefixedClusterId,
+                name: 'Test Cluster',
+            },
+        };
 
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
+        const mockParentElement: MockTreeElement = {
+            id: 'invalid-tree-id-format',
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'unknown' }),
+            getChildren: vi.fn().mockResolvedValue([mockClusterElement]),
+        };
 
-            // Should mark promotion as processed and not add provider
-            expect(globalStateUpdateMock).toHaveBeenCalledWith(
-                'discoveryProviderPromotionProcessed:azure-mongo-ru-discovery',
-                true,
-            );
+        const children = await dataProvider.getChildren(mockParentElement);
 
-            const updateCalls = globalStateUpdateMock.mock.calls;
-            const activeProviderUpdates = updateCalls.filter((call) => call[0] === 'activeDiscoveryProviderIds');
-            expect(activeProviderUpdates).toHaveLength(0);
-        });
-
-        it('should handle different provider IDs correctly', async () => {
-            listProvidersMock.mockReturnValue([mockProvider]);
-            const differentProvider = {
-                ...mockProvider,
-                id: 'different-provider-id',
-            };
-            getProviderMock.mockReturnValue(differentProvider);
-
-            globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === 'discoveryProviderPromotionProcessed:different-provider-id') {
-                    return false;
-                }
-                if (key === 'activeDiscoveryProviderIds') {
-                    return ['other-provider-id'];
-                }
-                return defaultValue;
-            });
-
-            await dataProvider.addDiscoveryProviderPromotionIfNeeded('different-provider-id');
-
-            // Should add the different provider
-            expect(globalStateUpdateMock).toHaveBeenCalledWith('activeDiscoveryProviderIds', [
-                'other-provider-id',
-                'different-provider-id',
-            ]);
-
-            // Should use the correct promotion flag
-            expect(globalStateUpdateMock).toHaveBeenCalledWith(
-                'discoveryProviderPromotionProcessed:different-provider-id',
-                true,
-            );
-        });
+        expect((children?.[0] as MockTreeElement).cluster?.clusterId).toBe(nonPrefixedClusterId);
     });
 });

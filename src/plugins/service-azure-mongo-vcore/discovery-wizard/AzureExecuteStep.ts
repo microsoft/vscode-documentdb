@@ -41,6 +41,7 @@ export class AzureExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         context.connectionString = credentials.connectionString;
         context.nativeAuthConfig = credentials.nativeAuthConfig;
         context.entraIdAuthConfig = credentials.entraIdAuthConfig;
+        context.managedIdentityAuthConfig = credentials.managedIdentityAuthConfig;
         context.availableAuthenticationMethods = credentials.availableAuthMethods;
 
         // clean-up

@@ -44,6 +44,11 @@ export type MonacoAutoHeightProps = EditorProps & {
      * When false (default), Tab navigation behaves like a standard input and moves focus to the next/previous focusable element.
      */
     trapTabKey?: boolean;
+    /**
+     * Callback invoked when the user presses Escape key to exit the editor.
+     * If not provided, pressing Escape will move focus to the next focusable element.
+     */
+    onEscapeEditor?: () => void;
 };
 
 export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
@@ -80,7 +85,160 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
 
     // These props are intentionally destructured but not used directly - they're handled specially
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { adaptiveHeight, onExecuteRequest, onMount, trapTabKey, ...editorProps } = props;
+    const { adaptiveHeight, onExecuteRequest, onMount, trapTabKey, onEscapeEditor, ...editorProps } = props;
+
+    const handleResize = () => {
+        if (editorRef.current) {
+            editorRef.current.layout();
+        }
+    };
+
+    // Update the editor height based on the number of lines in the document
+    const updateEditorHeight = (editor: monacoEditor.editor.IStandaloneCodeEditor) => {
+        // Safely access adaptiveHeight properties with defaults
+        const lineHeight = propsRef.current.adaptiveHeight?.lineHeight ?? 19;
+        const minLines = propsRef.current.adaptiveHeight?.minLines ?? 1;
+        const maxLines = propsRef.current.adaptiveHeight?.maxLines ?? 10;
+
+        const lineCount = editor.getModel()?.getLineCount() || 1;
+
+        // Only update if the number of lines changes
+        if (lineCount !== lastLineCountRef.current) {
+            const lines = Math.min(lineCount, maxLines);
+            const finalLines = Math.max(lines, minLines);
+
+            const finalHeight = finalLines * lineHeight;
+
+            // Call the callback if provided
+            setEditorHeight(finalHeight);
+
+            // TODO: once allotment is implemented, we can remove this hack:
+
+            // this is a hack to fix the issue with the editor not updating the layout properly
+            // the first run computes the correct width. The second run applies the height we need
+            editor.layout();
+            // Update the editor layout with the new height
+            editor.layout({ width: editor.getLayoutInfo().width, height: finalHeight });
+
+            // Save the last line count to avoid unnecessary updates
+            setLastLineCount(lineCount);
+        }
+    };
+
+    //Helper function to set up adaptive height behavior
+    const setupAdaptiveHeight = (editor: monacoEditor.editor.IStandaloneCodeEditor) => {
+        // Update the height initially and on content changes
+        // const updateHeight = debounce(() => updateEditorHeight(editor), 300); // doesn't really look good, but let's revisit it later
+        const updateHeight = () => updateEditorHeight(editor);
+
+        updateHeight();
+
+        // Attach event listener for content changes
+        editor.onDidChangeModelContent(updateHeight);
+    };
+
+    /**
+     * Moves keyboard focus to the next or previous focusable element relative to the editor.
+     *
+     * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
+     * @param {'next' | 'previous'} direction - The direction to move focus:
+     *        'next' moves to the next focusable element, 'previous' moves to the previous one.
+     *        Typically determined by whether Shift is held during Tab key press.
+     *
+     * If no focusable element is found in the given direction, the currently active element
+     * or the editor DOM node will be blurred as a fallback.
+     */
+    const moveFocus = (editor: monacoEditor.editor.IStandaloneCodeEditor, direction: 'next' | 'previous') => {
+        const focusFinders = focusFindersRef.current;
+        const editorDomNode = editor.getDomNode();
+
+        if (!focusFinders || !editorDomNode) {
+            return;
+        }
+
+        const activeElement = document.activeElement as HTMLElement | null;
+        const startElement = activeElement ?? (editorDomNode as HTMLElement);
+
+        const targetElement =
+            direction === 'next'
+                ? focusFinders.findNextFocusable(startElement)
+                : focusFinders.findPrevFocusable(startElement);
+
+        if (targetElement) {
+            targetElement.focus();
+            return;
+        }
+
+        if (activeElement) {
+            activeElement.blur();
+        } else if (editorDomNode instanceof HTMLElement) {
+            editorDomNode.blur();
+        }
+    };
+
+    /**
+     * Configures the Tab key behavior for the Monaco editor.
+     *
+     * When `shouldTrap` is true, Tab/Shift+Tab are trapped within the editor
+     * (default Monaco behavior for code indentation).
+     *
+     * When `shouldTrap` is false, Tab/Shift+Tab move focus to the next/previous
+     * focusable element outside the editor — UNLESS the editor is in snippet
+     * tab-stop mode (`inSnippetMode`), in which case Tab navigates between
+     * snippet placeholders. After the snippet session ends (final tab stop or
+     * ESC), Tab reverts to moving focus out of the editor.
+     *
+     * Uses `editor.addAction` with a precondition context key expression
+     * (`!inSnippetMode`) rather than `onKeyDown` interception, so Monaco's
+     * built-in snippet navigation takes priority when a snippet is active.
+     *
+     * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
+     * @param {boolean} shouldTrap - Whether to trap Tab key in the editor.
+     */
+    const configureTabKeyMode = (editor: monacoEditor.editor.IStandaloneCodeEditor, shouldTrap: boolean) => {
+        if (tabKeyDisposerRef.current) {
+            tabKeyDisposerRef.current.dispose();
+            tabKeyDisposerRef.current = null;
+        }
+
+        if (shouldTrap) {
+            return;
+        }
+
+        // Register Tab and Shift+Tab actions that only fire when NOT in snippet mode.
+        // When inSnippetMode is true, Monaco's built-in snippet Tab handler takes over.
+        const tabAction = editor.addAction({
+            id: 'documentdb.tab.moveFocusNext',
+            label: 'Move Focus to Next Element',
+            keybindings: [monacoEditor.KeyCode.Tab],
+            precondition: '!inSnippetMode',
+            run: () => moveFocus(editor, 'next'),
+        });
+
+        const shiftTabAction = editor.addAction({
+            id: 'documentdb.tab.moveFocusPrevious',
+            label: 'Move Focus to Previous Element',
+            keybindings: [monacoEditor.KeyMod.Shift | monacoEditor.KeyCode.Tab],
+            precondition: '!inSnippetMode',
+            run: () => moveFocus(editor, 'previous'),
+        });
+
+        tabKeyDisposerRef.current = {
+            dispose: () => {
+                tabAction.dispose();
+                shiftTabAction.dispose();
+            },
+        };
+    };
+
+    // Default escape handler: move focus to next element (like Tab)
+    const handleEscapeEditor = () => {
+        if (propsRef.current.onEscapeEditor) {
+            propsRef.current.onEscapeEditor();
+        } else if (editorRef.current) {
+            moveFocus(editorRef.current, 'next');
+        }
+    };
 
     const handleMonacoEditorMount = (
         editor: monacoEditor.editor.IStandaloneCodeEditor,
@@ -138,133 +296,9 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
         }
     }, [trapTabKey]);
 
-    const handleResize = () => {
-        if (editorRef.current) {
-            editorRef.current.layout();
-        }
-    };
-
-    //Helper function to set up adaptive height behavior
-    const setupAdaptiveHeight = (editor: monacoEditor.editor.IStandaloneCodeEditor) => {
-        // Update the height initially and on content changes
-        // const updateHeight = debounce(() => updateEditorHeight(editor), 300); // doesn't really look good, but let's revisit it later
-        const updateHeight = () => updateEditorHeight(editor);
-
-        updateHeight();
-
-        // Attach event listener for content changes
-        editor.onDidChangeModelContent(updateHeight);
-    };
-
-    // Update the editor height based on the number of lines in the document
-    const updateEditorHeight = (editor: monacoEditor.editor.IStandaloneCodeEditor) => {
-        // Safely access adaptiveHeight properties with defaults
-        const lineHeight = propsRef.current.adaptiveHeight?.lineHeight ?? 19;
-        const minLines = propsRef.current.adaptiveHeight?.minLines ?? 1;
-        const maxLines = propsRef.current.adaptiveHeight?.maxLines ?? 10;
-
-        const lineCount = editor.getModel()?.getLineCount() || 1;
-
-        // Only update if the number of lines changes
-        if (lineCount !== lastLineCountRef.current) {
-            const lines = Math.min(lineCount, maxLines);
-            const finalLines = Math.max(lines, minLines);
-
-            const finalHeight = finalLines * lineHeight;
-
-            // Call the callback if provided
-            setEditorHeight(finalHeight);
-
-            // TODO: once allotment is implemented, we can remove this hack:
-
-            // this is a hack to fix the issue with the editor not updating the layout properly
-            // the first run computes the correct width. The second run applies the height we need
-            editor.layout();
-            // Update the editor layout with the new height
-            editor.layout({ width: editor.getLayoutInfo().width, height: finalHeight });
-
-            // Save the last line count to avoid unnecessary updates
-            setLastLineCount(lineCount);
-        }
-    };
-
-    /**
-     * Configures the Tab key behavior for the Monaco editor.
-     *
-     * When called, this function sets up or removes a keydown handler for the Tab key.
-     * If `shouldTrap` is true, Tab/Shift+Tab are trapped within the editor (focus remains in editor).
-     * If `shouldTrap` is false, Tab/Shift+Tab move focus to the next/previous focusable element outside the editor.
-     *
-     * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
-     * @param {boolean} shouldTrap - Whether to trap Tab key in the editor.
-     *   - true: Tab/Shift+Tab are trapped in the editor.
-     *   - false: Tab/Shift+Tab move focus to next/previous element.
-     */
-    const configureTabKeyMode = (editor: monacoEditor.editor.IStandaloneCodeEditor, shouldTrap: boolean) => {
-        if (tabKeyDisposerRef.current) {
-            tabKeyDisposerRef.current.dispose();
-            tabKeyDisposerRef.current = null;
-        }
-
-        if (shouldTrap) {
-            return;
-        }
-
-        tabKeyDisposerRef.current = editor.onKeyDown((event) => {
-            if (event.keyCode !== monacoEditor.KeyCode.Tab) {
-                return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-
-            const direction = event.browserEvent.shiftKey ? 'previous' : 'next';
-            moveFocus(editor, direction);
-        });
-    };
-
-    /**
-     * Moves keyboard focus to the next or previous focusable element relative to the editor.
-     *
-     * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
-     * @param {'next' | 'previous'} direction - The direction to move focus:
-     *        'next' moves to the next focusable element, 'previous' moves to the previous one.
-     *        Typically determined by whether Shift is held during Tab key press.
-     *
-     * If no focusable element is found in the given direction, the currently active element
-     * or the editor DOM node will be blurred as a fallback.
-     */
-    const moveFocus = (editor: monacoEditor.editor.IStandaloneCodeEditor, direction: 'next' | 'previous') => {
-        const focusFinders = focusFindersRef.current;
-        const editorDomNode = editor.getDomNode();
-
-        if (!focusFinders || !editorDomNode) {
-            return;
-        }
-
-        const activeElement = document.activeElement as HTMLElement | null;
-        const startElement = activeElement ?? (editorDomNode as HTMLElement);
-
-        const targetElement =
-            direction === 'next'
-                ? focusFinders.findNextFocusable(startElement)
-                : focusFinders.findPrevFocusable(startElement);
-
-        if (targetElement) {
-            targetElement.focus();
-            return;
-        }
-
-        if (activeElement) {
-            activeElement.blur();
-        } else if (editorDomNode instanceof HTMLElement) {
-            editorDomNode.blur();
-        }
-    };
-
     return (
         <div className="monacoAutoHeightContainer" style={{ height: editorHeight }}>
-            <MonacoEditor {...editorProps} onMount={handleMonacoEditorMount} />
+            <MonacoEditor {...editorProps} onMount={handleMonacoEditorMount} onEscapeEditor={handleEscapeEditor} />
         </div>
     );
 };

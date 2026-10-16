@@ -1,0 +1,456 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { AzureWizardPromptStep, GoBackError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
+import { traceAuthFlow, traceAuthOperation } from '../../../utils/authTrace';
+import { type EntraIdAuthConfig, type ManagedIdentityAuthConfig } from '../../auth/AuthConfig';
+import {
+    AuthMethodId,
+    authMethodsFromString,
+    createAuthMethodQuickPickItems,
+    isSupportedAuthMethod,
+} from '../../auth/AuthMethod';
+import { type ConnectionStringAuthFacts } from '../../auth/managedIdentityConnectionString';
+
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HEX_ONLY_PATTERN = /^[0-9a-f]*$/i;
+
+/** Shown wherever the expected shape is explained. Uses letters as well as digits, because both are valid. */
+const CLIENT_ID_EXAMPLE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+
+/** The 8-4-4-4-12 grouping of a GUID. */
+const GUID_GROUP_SIZES = [8, 4, 4, 4, 12];
+
+function stripGuidSeparators(value: string): string {
+    return value.trim().replace(/-/g, '');
+}
+
+/**
+ * Re-inserts the GUID group separators, for as many characters as are present.
+ *
+ * Anything past the 32nd character is kept as a trailing group so an over-long value stays visible
+ * rather than looking correct.
+ */
+export function groupAsGuid(hexOnly: string): string {
+    const groups: string[] = [];
+    let position = 0;
+
+    for (const size of GUID_GROUP_SIZES) {
+        if (position >= hexOnly.length) {
+            break;
+        }
+
+        groups.push(hexOnly.slice(position, position + size));
+        position += size;
+    }
+
+    if (position < hexOnly.length) {
+        groups.push(hexOnly.slice(position));
+    }
+
+    return groups.join('-');
+}
+
+/**
+ * Accepts a client ID that was pasted without separators, or with them in the wrong places, and
+ * returns it in canonical form. A value that is not 32 hexadecimal characters is only trimmed.
+ */
+export function normalizeClientId(value: string | undefined): string {
+    const trimmed = (value ?? '').trim();
+    const hexOnly = stripGuidSeparators(trimmed);
+
+    if (hexOnly.length !== 32 || !HEX_ONLY_PATTERN.test(hexOnly)) {
+        return trimmed;
+    }
+
+    return groupAsGuid(hexOnly);
+}
+
+/** The subset of a wizard context this step needs, so it can serve every wizard that offers the method. */
+export interface ManagedIdentitySelectionContext extends IActionContext {
+    entraIdAuthConfig?: EntraIdAuthConfig;
+    managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
+    connectionStringAuthFacts?: ConnectionStringAuthFacts;
+    availableAuthenticationMethods?: AuthMethodId[];
+    availableAuthMethods?: string[];
+    authenticationMethodPrompted?: boolean;
+}
+
+type IdentityChoice = 'account' | 'manual' | 'systemAssigned' | 'clientId' | 'authMethod' | 'back';
+
+interface IdentityQuickPickItem extends vscode.QuickPickItem {
+    readonly choice?: IdentityChoice;
+    readonly clientId?: string;
+}
+
+interface AuthMethodQuickPickItem extends vscode.QuickPickItem {
+    readonly authMethod?: AuthMethodId;
+    readonly returnToIdentityChoices?: boolean;
+}
+
+interface IdentityPromptDecision {
+    readonly shouldPrompt: boolean;
+    readonly reason:
+        | 'nonEntraAuthMethod'
+        | 'managedIdentityUnavailable'
+        | 'noExplicitMachineWorkflow'
+        | 'suppliedIdentityNotClientId'
+        | 'explicitMachineWorkflow';
+}
+
+/**
+ * Asks whether to use an account or managed identity within the Microsoft Entra ID family.
+ *
+ * It is never a dead end: account sign-in and both managed identity routes remain reachable, and
+ * visible navigation is provided whenever the preceding family choice can be revisited.
+ */
+export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContext> extends AzureWizardPromptStep<T> {
+    constructor(
+        private readonly getSelectedAuthMethod: (context: T) => AuthMethodId | undefined,
+        private readonly setSelectedAuthMethod: (context: T, method: AuthMethodId) => void,
+    ) {
+        super();
+    }
+
+    public async prompt(context: T): Promise<void> {
+        context.telemetry.properties.entraIdentityPrompted = 'true';
+        delete context.telemetry.properties.entraIdentitySkipReason;
+        delete context.telemetry.properties.managedIdentityKind;
+        delete context.telemetry.properties.managedIdentityClientIdSource;
+        const prefilledClientId = context.managedIdentityAuthConfig?.clientId;
+        const facts = context.connectionStringAuthFacts;
+        const suppliedIdentity = facts?.username && !facts.usernameIsGuid ? facts.username : undefined;
+
+        let selected: IdentityQuickPickItem;
+        do {
+            const items = this.buildItems(
+                prefilledClientId,
+                suppliedIdentity,
+                facts?.usesOidc === true,
+                context.authenticationMethodPrompted === true,
+            );
+            delete context.telemetry.properties.entraIdentityChoice;
+            selected = await traceAuthOperation(
+                'identityPicker',
+                () =>
+                    context.ui.showQuickPick(items, {
+                        stepName: 'selectEntraTokenSource',
+                        placeHolder: suppliedIdentity
+                            ? l10n.t('Select the identity to use ("{0}" is not a client ID)', suppliedIdentity)
+                            : l10n.t('Select the identity to use for this connection'),
+                        matchOnDetail: true,
+                        suppressPersistence: true,
+                    }),
+                {
+                    options: items.flatMap((item) => (item.choice ? [item.choice] : [])).join(','),
+                    baseOptionsReason: 'accountAndBothManagedIdentityRoutesAlwaysAvailable',
+                    clientIdOptionReason: prefilledClientId ? 'configuredCandidate' : 'noCandidate',
+                    changeAuthMethodReason: facts?.usesOidc ? 'oidcDeclared' : 'oidcNotDeclared',
+                    backOptionReason: context.authenticationMethodPrompted
+                        ? 'familyPickerShown'
+                        : 'familyPickerSkipped',
+                    manualInputPrefilled: !!suppliedIdentity,
+                },
+            );
+            context.telemetry.properties.entraIdentityChoice = selected.choice;
+            traceAuthFlow('identityPicker.selection', { choice: selected.choice ?? 'none' });
+
+            if (selected.choice === 'authMethod' && (await this.selectDifferentAuthMethod(context))) {
+                return;
+            }
+        } while (selected.choice === 'authMethod');
+
+        if (selected.choice === 'account') {
+            this.applyAuthMethod(context, AuthMethodId.MicrosoftEntraID);
+            return;
+        }
+
+        if (selected.choice === 'back') {
+            throw new GoBackError();
+        }
+
+        if (selected.choice === 'systemAssigned') {
+            this.applyAuthMethod(context, AuthMethodId.ManagedIdentity);
+            const tenantId = context.managedIdentityAuthConfig?.tenantId;
+            // A config without a client ID selects the system-assigned identity.
+            context.managedIdentityAuthConfig = tenantId ? { tenantId } : {};
+            context.telemetry.properties.managedIdentityKind = 'system';
+            context.telemetry.properties.managedIdentityClientIdSource = 'none';
+            traceAuthFlow('identityPicker.managedIdentityConfigured', {
+                identityKind: 'systemAssigned',
+                source: 'none',
+            });
+            return;
+        }
+
+        if (selected.choice === 'clientId' && selected.clientId) {
+            this.applyAuthMethod(context, AuthMethodId.ManagedIdentity);
+            this.applyClientId(context, selected.clientId, 'connectionString');
+            return;
+        }
+
+        const clientId = await traceAuthOperation(
+            'identityPicker.clientIdInput',
+            () =>
+                context.ui.showInputBox({
+                    prompt: l10n.t('Enter the client ID of the user-assigned managed identity.'),
+                    placeHolder: l10n.t('For example, {0}', CLIENT_ID_EXAMPLE),
+                    value: selected.clientId ?? prefilledClientId,
+                    ignoreFocusOut: true,
+                    validateInput: (value?: string) => this.validateClientId(value),
+                }),
+            { prefilled: !!(selected.clientId ?? prefilledClientId) },
+        );
+
+        const normalized = normalizeClientId(clientId);
+        this.applyAuthMethod(context, AuthMethodId.ManagedIdentity);
+        this.applyClientId(context, normalized, normalized === selected.clientId ? 'connectionString' : 'prompt');
+    }
+
+    public configureBeforePrompt(context: T): void {
+        const decision = this.getPromptDecision(context);
+        const facts = context.connectionStringAuthFacts;
+        const method = this.getSelectedAuthMethod(context);
+        context.telemetry.properties.authMethod = method;
+        context.telemetry.properties.entraIdentityPrompted = decision.shouldPrompt ? 'true' : 'false';
+        context.telemetry.properties.entraIdentitySkipReason = decision.shouldPrompt ? undefined : decision.reason;
+        delete context.telemetry.properties.entraIdentityChoice;
+        if (!decision.shouldPrompt) {
+            context.telemetry.properties.managedIdentityKind =
+                method === AuthMethodId.ManagedIdentity
+                    ? context.managedIdentityAuthConfig?.clientId
+                        ? 'user'
+                        : 'system'
+                    : undefined;
+            context.telemetry.properties.managedIdentityClientIdSource =
+                method === AuthMethodId.ManagedIdentity && facts?.declaresAzureMachineWorkflow
+                    ? facts.username
+                        ? 'connectionString'
+                        : 'none'
+                    : undefined;
+        }
+        traceAuthFlow(decision.shouldPrompt ? 'identityPicker.required' : 'identityPicker.skipped', {
+            reason: decision.reason,
+            method: this.getSelectedAuthMethod(context) ?? 'none',
+            suppliedIdentity: !facts?.username ? 'absent' : facts.usernameIsGuid ? 'clientId' : 'unrecognized',
+        });
+    }
+
+    public shouldPrompt(context: T): boolean {
+        return this.getPromptDecision(context).shouldPrompt;
+    }
+
+    private getPromptDecision(context: T): IdentityPromptDecision {
+        const selectedAuthMethod = this.getSelectedAuthMethod(context);
+        if (
+            selectedAuthMethod !== AuthMethodId.MicrosoftEntraID &&
+            selectedAuthMethod !== AuthMethodId.ManagedIdentity
+        ) {
+            return { shouldPrompt: false, reason: 'nonEntraAuthMethod' };
+        }
+
+        const availableMethods =
+            context.availableAuthenticationMethods ?? authMethodsFromString(context.availableAuthMethods);
+        if (!availableMethods.includes(AuthMethodId.ManagedIdentity)) {
+            return { shouldPrompt: false, reason: 'managedIdentityUnavailable' };
+        }
+
+        const facts = context.connectionStringAuthFacts;
+        if (!facts || !facts.declaresAzureMachineWorkflow) {
+            return { shouldPrompt: true, reason: 'noExplicitMachineWorkflow' };
+        }
+
+        const needsCorrection = !!facts.username && !facts.usernameIsGuid;
+        return {
+            shouldPrompt: needsCorrection,
+            reason: needsCorrection ? 'suppliedIdentityNotClientId' : 'explicitMachineWorkflow',
+        };
+    }
+
+    public validateClientId(this: void, value: string | undefined): string | undefined {
+        const trimmed = (value ?? '').trim();
+
+        if (trimmed.length === 0) {
+            return l10n.t('A client ID is required. Go back to choose the system-assigned identity instead.');
+        }
+
+        if (GUID_PATTERN.test(normalizeClientId(trimmed))) {
+            return undefined;
+        }
+
+        const hexOnly = stripGuidSeparators(trimmed);
+
+        if (!HEX_ONLY_PATTERN.test(hexOnly)) {
+            return l10n.t('A client ID uses only 0-9, a-f, and dashes, like {0}.', CLIENT_ID_EXAMPLE);
+        }
+
+        // Echoing the grouped reading is more useful than the abstract shape: it shows which group
+        // the next character lands in and how much is still missing.
+        return l10n.t('Read as {0}. A complete client ID looks like {1}.', groupAsGuid(hexOnly), CLIENT_ID_EXAMPLE);
+    }
+
+    /**
+     * System-assigned identity first, then the values we know about, with manual entry last.
+     * A group with nothing in it contributes no separator, so the list never shows an empty heading.
+     *
+     * `suppliedIdentity` is a value the connection string put in the identity position that is not
+     * usable as a client ID. It is offered for editing rather than dropped, because it is the only
+     * evidence of which identity the user meant.
+     */
+    public buildItems(
+        prefilledClientId?: string,
+        suppliedIdentity?: string,
+        showChangeAuthMethod: boolean = false,
+        showBack: boolean = false,
+    ): IdentityQuickPickItem[] {
+        const items: IdentityQuickPickItem[] = [];
+
+        if (prefilledClientId) {
+            items.push({ label: l10n.t('From the connection string'), kind: vscode.QuickPickItemKind.Separator });
+            items.push({
+                label: l10n.t('Managed identity  {0}', prefilledClientId),
+                detail: l10n.t('Use the supplied client ID as a user-assigned managed identity'),
+                iconPath: new vscode.ThemeIcon('account'),
+                choice: 'clientId',
+                clientId: prefilledClientId,
+            });
+        }
+
+        items.push({ label: l10n.t('Microsoft Entra account'), kind: vscode.QuickPickItemKind.Separator });
+        items.push({
+            label: l10n.t('Sign in with my account'),
+            detail: l10n.t('Uses the account you sign in with in Visual Studio Code'),
+            iconPath: new vscode.ThemeIcon('sign-in'),
+            choice: 'account',
+            alwaysShow: true,
+        });
+        items.push(
+            { label: l10n.t('Managed identity'), kind: vscode.QuickPickItemKind.Separator },
+            {
+                label: l10n.t('Use the identity assigned to this machine'),
+                detail: l10n.t('Authenticate without a client ID using the system-assigned option'),
+                iconPath: new vscode.ThemeIcon('device-desktop'),
+                choice: 'systemAssigned',
+            },
+            {
+                label: l10n.t('Use a different managed identity...'),
+                detail: l10n.t('Enter the client ID of a user-assigned managed identity'),
+                iconPath: new vscode.ThemeIcon('edit'),
+                choice: 'manual',
+                clientId: suppliedIdentity,
+                alwaysShow: true,
+            },
+        );
+
+        if (showChangeAuthMethod || showBack) {
+            items.push({ label: l10n.t('Other options'), kind: vscode.QuickPickItemKind.Separator });
+        }
+
+        if (showChangeAuthMethod) {
+            items.push({
+                label: l10n.t('Choose a different authentication method...'),
+                detail: l10n.t('This connection string asked for Microsoft Entra ID'),
+                iconPath: new vscode.ThemeIcon('arrow-swap'),
+                choice: 'authMethod',
+                alwaysShow: true,
+            });
+        }
+
+        if (showBack) {
+            items.push({
+                label: l10n.t('Back to authentication method selection'),
+                iconPath: new vscode.ThemeIcon('arrow-left'),
+                choice: 'back',
+                alwaysShow: true,
+            });
+        }
+
+        return items;
+    }
+
+    private async selectDifferentAuthMethod(context: T): Promise<boolean> {
+        const availableMethods =
+            context.availableAuthenticationMethods ?? authMethodsFromString(context.availableAuthMethods);
+        const authMethodItems: AuthMethodQuickPickItem[] = [
+            ...createAuthMethodQuickPickItems(availableMethods, { showSupportInfo: true }).filter(
+                (item) => item.authMethod !== AuthMethodId.MicrosoftEntraID,
+            ),
+            { label: l10n.t('Other options'), kind: vscode.QuickPickItemKind.Separator },
+            {
+                label: l10n.t('Back to Microsoft Entra ID identity choices'),
+                iconPath: new vscode.ThemeIcon('arrow-left'),
+                returnToIdentityChoices: true,
+                alwaysShow: true,
+            },
+        ];
+
+        let selected: AuthMethodQuickPickItem;
+        try {
+            selected = await traceAuthOperation(
+                'identityPicker.changeAuthMethod',
+                () =>
+                    context.ui.showQuickPick(authMethodItems, {
+                        stepName: 'selectDifferentAuthMethod',
+                        placeHolder: l10n.t('Select an authentication method'),
+                        matchOnDetail: true,
+                        suppressPersistence: true,
+                    }),
+                {
+                    options: authMethodItems.flatMap((item) => (item.authMethod ? [item.authMethod] : [])).join(','),
+                    returnOption: true,
+                    reason: 'changeAuthMethodSelected',
+                },
+            );
+        } catch (error) {
+            if (error instanceof GoBackError) {
+                return false;
+            }
+            throw error;
+        }
+
+        if (selected.returnToIdentityChoices) {
+            traceAuthFlow('identityPicker.changeAuthMethod.selection', { choice: 'returnToIdentityChoices' });
+            return false;
+        }
+
+        if (!isSupportedAuthMethod(selected.authMethod)) {
+            throw new Error(l10n.t('The selected authentication method is not supported.'));
+        }
+
+        this.applyAuthMethod(context, selected.authMethod);
+        return true;
+    }
+
+    private applyAuthMethod(context: T, method: AuthMethodId): void {
+        traceAuthFlow('identityPicker.authMethodApplied', { method });
+        this.setSelectedAuthMethod(context, method);
+        context.telemetry.properties.authMethod = method;
+        context.telemetry.properties.authMethodSelectionSource = 'prompt';
+
+        if (method !== AuthMethodId.ManagedIdentity) {
+            delete context.telemetry.properties.managedIdentityKind;
+            delete context.telemetry.properties.managedIdentityClientIdSource;
+        }
+
+        if (method === AuthMethodId.MicrosoftEntraID) {
+            context.managedIdentityAuthConfig = undefined;
+        } else if (method === AuthMethodId.ManagedIdentity) {
+            context.entraIdAuthConfig = undefined;
+        } else {
+            context.entraIdAuthConfig = undefined;
+            context.managedIdentityAuthConfig = undefined;
+        }
+    }
+
+    private applyClientId(context: T, clientId: string, source: 'connectionString' | 'prompt'): void {
+        traceAuthFlow('identityPicker.managedIdentityConfigured', { identityKind: 'userAssigned', source });
+        context.managedIdentityAuthConfig = { ...context.managedIdentityAuthConfig, clientId };
+        context.valuesToMask.push(clientId);
+        context.telemetry.properties.managedIdentityKind = 'user';
+        context.telemetry.properties.managedIdentityClientIdSource = source;
+    }
+}

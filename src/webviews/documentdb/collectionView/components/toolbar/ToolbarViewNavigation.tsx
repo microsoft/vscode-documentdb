@@ -7,8 +7,7 @@ import { Dropdown, Label, Option, Toolbar, ToolbarButton, Tooltip } from '@fluen
 import { ArrowLeftFilled, ArrowPreviousFilled, ArrowRightFilled } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext } from 'react';
-import { UsageImpact } from '../../../../../utils/surveyTypes';
-import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
@@ -16,7 +15,7 @@ export const ToolbarViewNavigation = (): React.JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
 
@@ -47,8 +46,6 @@ export const ToolbarViewNavigation = (): React.JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     }
 
     function goToPreviousPage() {
@@ -78,8 +75,6 @@ export const ToolbarViewNavigation = (): React.JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     }
 
     function goToFirstPage() {
@@ -174,6 +169,7 @@ export const ToolbarViewNavigation = (): React.JSX.Element => {
                     style={{ minWidth: '100px', maxWidth: '100px' }}
                     value={currentContext.activeQuery.pageSize.toString()}
                     selectedOptions={[currentContext.activeQuery.pageSize.toString()]}
+                    aria-label={l10n.t('Change page size')}
                 >
                     <Option key="10">10</Option>
                     <Option key="50">50</Option>

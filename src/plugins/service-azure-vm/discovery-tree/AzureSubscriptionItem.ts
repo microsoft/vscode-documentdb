@@ -12,6 +12,8 @@ import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDB
 import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { sanitizeAzureResourceIdForTreeId } from '../../../tree/azure-views/models/AzureClusterModel';
+import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createComputeManagementClient, createNetworkManagementClient } from '../../../utils/azureClients';
@@ -98,22 +100,38 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         }
 
                         const host = fqdn || publicIpAddress;
+                        let connectionString: string | undefined;
+                        if (host) {
+                            const parsedConnectionString = new DocumentDBConnectionString('mongodb://localhost:27017/');
+                            parsedConnectionString.hosts = [`${host}:27017`];
+                            parsedConnectionString.protocol = 'mongodb';
+                            connectionString = parsedConnectionString.toString();
+                        }
 
-                        const connectionString = new DocumentDBConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
+                        // Sanitize Azure Resource ID: replace '/' with '_' for treeId
+                        const sanitizedId = sanitizeAzureResourceIdForTreeId(vm.id!);
 
-                        connectionString.hosts = [host + ':27017']; // Set the actual host and default port
-                        connectionString.protocol = 'mongodb';
+                        // clusterId must be prefixed with provider ID for uniqueness across plugins
+                        const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedId}`;
 
-                        const vmInfo: VirtualMachineModel = {
-                            id: vm.id!,
+                        const vmInfo: TreeCluster<VirtualMachineModel> = {
+                            // Core cluster data
                             name: vm.name!,
-                            connectionString: connectionString.toString(),
+                            connectionString,
+                            dbExperience: DocumentDBExperience,
+                            clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
+                            // Azure-specific data
+                            azureResourceId: vm.id!, // Keep original Azure Resource ID for ARM API correlation
                             resourceGroup: getResourceGroupFromId(vm.id!),
+                            // VM-specific data
                             vmSize: vm.hardwareProfile?.vmSize,
                             publicIpAddress: publicIpAddress,
                             fqdn: fqdn,
-                            dbExperience: DocumentDBExperience,
+                            // Tree context - treeId includes parent hierarchy for findNodeById to work
+                            treeId: `${this.id}/${sanitizedId}`,
+                            viewId: Views.DiscoveryView,
                         };
+
                         vmItems.push(
                             new AzureVMResourceItem(this.journeyCorrelationId, this.subscription.subscription, vmInfo),
                         );
@@ -124,7 +142,11 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 context.telemetry.measurements.discoveryResourcesCount = vmItems.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
 
-                return vmItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name));
+                ext.outputChannel.trace(`[DiscoveryView/VM] Loaded ${vmItems.length} tagged virtual machine(s).`);
+
+                return vmItems.sort((a, b) =>
+                    a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true }),
+                );
             },
         );
     }

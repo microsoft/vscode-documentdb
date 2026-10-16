@@ -3,19 +3,27 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { VSCodeFluentProvider } from '@microsoft/vscode-ext-webview-fluentui';
+import { type WebviewState, WithWebviewContext } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { type l10nJsonFormat } from '@vscode/l10n';
-import * as React from 'react';
-// eslint-disable-next-line import/no-internal-modules
-import { createRoot } from 'react-dom/client';
+import type * as React from 'react';
+import { Suspense } from 'react';
+import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { type WebviewApi } from 'vscode-webview';
-import { WebviewRegistry } from './api/configuration/WebviewRegistry';
-import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
-import { type WebviewState, WithWebviewContext } from './WebviewContext';
+import { reportObserverError } from './_integration/observability/reportObserverError';
+import { installResizeObserverLoopDetector } from './_integration/observability/resizeObserverLoopDetector';
+import { type WebviewName, WebviewRegistry } from './_integration/WebviewRegistry';
 
-export type ViewKey = keyof typeof WebviewRegistry;
+export type ViewKey = WebviewName;
 
 export function render<V extends ViewKey>(key: V, vscodeApi: WebviewApi<WebviewState>, rootId = 'root'): void {
+    // Dev-only: flag a *sustained* ResizeObserver loop (the benign one-shot is
+    // filtered from the dev-server overlay). Stripped from production builds by
+    // dead-code elimination via the `process.env.NODE_ENV` guard.
+    if (process.env.NODE_ENV !== 'production') {
+        installResizeObserverLoopDetector();
+    }
     l10n.config({
         contents: (globalThis.l10n_bundle as l10nJsonFormat) ?? {},
     });
@@ -24,15 +32,17 @@ export function render<V extends ViewKey>(key: V, vscodeApi: WebviewApi<WebviewS
         throw new Error(l10n.t('Element with id of {rootId} not found.', { rootId }));
     }
 
-    const Component: React.ComponentType = WebviewRegistry[key];
+    const Component: React.LazyExoticComponent<React.ComponentType> = WebviewRegistry[key];
 
     const root = createRoot(container);
 
     root.render(
-        <DynamicThemeProvider useAdaptive={true}>
-            <WithWebviewContext vscodeApi={vscodeApi}>
-                <Component />
+        <VSCodeFluentProvider>
+            <WithWebviewContext vscodeApi={vscodeApi} onObserverError={reportObserverError}>
+                <Suspense fallback={null}>
+                    <Component />
+                </Suspense>
             </WithWebviewContext>
-        </DynamicThemeProvider>,
+        </VSCodeFluentProvider>,
     );
 }

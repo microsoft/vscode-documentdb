@@ -6,10 +6,16 @@
 // eslint-disable-next-line import/no-internal-modules
 import { getSessionFromVSCode } from '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
+import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
+import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
+import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
+import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
+import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
 /**
  * Handler for Microsoft Entra ID authentication via OIDC
@@ -17,17 +23,32 @@ import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
-    public async configureAuth(): Promise<AuthHandlerResponse> {
+    public async configureAuth(
+        timings?: ConnectionStartupTimings,
+        traceContext?: AuthTraceContext,
+    ): Promise<AuthHandlerResponse> {
+        const authCorrelationId = randomUUID();
         // Get Microsoft Entra ID token
-        const session = await getSessionFromVSCode(
-            ['https://ossrdbms-aad.database.windows.net/.default'],
-            this.clusterCredentials.entraIdConfig?.tenantId,
-            {
-                createIfNone: true,
-            },
+        const session = await traceAuthOperation(
+            'interactiveEntra.getSession',
+            () =>
+                withTokenAcquisitionTiming(timings, () =>
+                    getSessionFromVSCode([DOCUMENTDB_ENTRA_SCOPE], this.clusterCredentials.entraIdConfig?.tenantId, {
+                        createIfNone: true,
+                    }),
+                ),
+            { tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId, createIfNone: true },
+            authCorrelationId,
+            traceContext,
         );
 
         if (!session) {
+            traceAuthFlow(
+                'interactiveEntra.sessionUnavailable',
+                { reason: 'noSessionReturned' },
+                authCorrelationId,
+                traceContext,
+            );
             throw new Error(l10n.t('Failed to obtain Entra ID token.'));
         }
 
@@ -36,6 +57,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         dbConnectionString.username = ''; // required to move forward with Entra ID
         dbConnectionString.password = ''; // required to move forward with Entra ID
         dbConnectionString.searchParams.delete('authMechanism');
+        dbConnectionString.searchParams.delete('authMechanismProperties');
         dbConnectionString.searchParams.delete('tls');
 
         // Configure MongoDB client options for OIDC
@@ -43,7 +65,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             authMechanism: 'MONGODB-OIDC',
             tls: true,
             authMechanismProperties: {
-                ALLOWED_HOSTS: ['*.azure.com'],
+                ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
                 OIDC_CALLBACK: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
                     Promise.resolve({
                         accessToken: session.accessToken,
@@ -52,6 +74,25 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             },
         };
 
+        // Honor the TLS exception (design §7) consistently with the other auth paths, with the same
+        // "hybrid" runtime policy (flag honored only for local/private hosts). Entra ID is only
+        // offered for Azure (public) hosts, so this is effectively defensive, but it keeps the policy
+        // uniform across all builders.
+        if (
+            resolveAllowInvalidCertificates(
+                this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity,
+                this.clusterCredentials.connectionString,
+            )
+        ) {
+            options.tlsAllowInvalidCertificates = true;
+        }
+
+        traceAuthFlow(
+            'interactiveEntra.oidcConfigured',
+            { sessionAvailable: true, tls: true },
+            authCorrelationId,
+            traceContext,
+        );
         return {
             connectionString: dbConnectionString.toString(),
             options,

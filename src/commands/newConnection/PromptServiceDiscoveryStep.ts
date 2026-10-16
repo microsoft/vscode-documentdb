@@ -23,7 +23,7 @@ export class PromptServiceDiscoveryStep extends AzureWizardPromptStep<NewConnect
                 alwaysShow: true,
             }))
             // Sort alphabetically
-            .sort((a, b) => a.label.localeCompare(b.label));
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
         const selectedItem = await context.ui.showQuickPick(
             [

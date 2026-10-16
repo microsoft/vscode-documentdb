@@ -1,0 +1,65 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/**
+ * Consumer-owned configuration for the webview integration layer.
+ *
+ * Every runtime value a consumer might want to customise (bundle layout,
+ * dev-server host, telemetry namespace) lives here. Other files in this
+ * folder import the relevant slice rather than declaring constants inline,
+ * so a coding agent asked "where do I change the dev port?" or "where is
+ * the telemetry namespace?" finds the answer in one place.
+ *
+ * Keep this file small: live values only, no commented-out templates.
+ */
+
+/**
+ * Root namespace for every telemetry event emitted by this extension's
+ * webview integration. Change this when forking the extension under a
+ * different telemetry channel.
+ */
+const TELEMETRY_NAMESPACE = 'documentDB';
+
+export const WEBVIEW_CONFIG = {
+    telemetry: {
+        /**
+         * Prefix for tRPC procedure events. Event names follow
+         * `${rpcEventPrefix}.${type}.${path}` (see appRouter.ts).
+         */
+        rpcEventPrefix: `${TELEMETRY_NAMESPACE}.rpc`,
+        /**
+         * Prefix for `reportEvent` calls from the webview. Event names follow
+         * `${webviewEventPrefix}.${webviewName}.${eventName}`.
+         */
+        webviewEventPrefix: `${TELEMETRY_NAMESPACE}.webview.event`,
+        /**
+         * Prefix for `reportError` calls from the webview. Event names follow
+         * `${webviewErrorPrefix}.${webviewName}`.
+         */
+        webviewErrorPrefix: `${TELEMETRY_NAMESPACE}.webview.error`,
+        /**
+         * Event name for the batched webview RPC concurrency gauge (R766-S04).
+         * Emitted through `accumulateTelemetry`, so it surfaces as
+         * `dist_concurrentRpcOps_min/max/sum/count` (the concurrency gauge) plus a
+         * summed `dispatch` count and the free `dist_auto_duration_ms_*` latency.
+         */
+        rpcConcurrencyEvent: `${TELEMETRY_NAMESPACE}.webview.rpcConcurrency`,
+    },
+    /**
+     * Layout describing where the extension's webview JavaScript lives on
+     * disk. Both development and production builds use Vite's bundled
+     * output (`dist/views.js`).
+     * These paths are joined with `extensionPath` by the framework at
+     * runtime.
+     */
+    bundle: {
+        bundled: { dir: '', file: 'views.js' },
+    },
+    /**
+     * URL of the local Vite dev server used when running the
+     * extension in development mode.
+     */
+    devServerHost: 'http://localhost:18080',
+} as const;

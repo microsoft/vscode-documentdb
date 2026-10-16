@@ -7,19 +7,32 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import { l10n, window } from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
+/**
+ * Saves updated credentials to storage.
+ *
+ * This step:
+ * 1. Removes embedded username/password from the connection string
+ * 2. Updates the auth method-specific configuration (native auth or Entra ID)
+ * 3. Saves the updated connection to storage
+ *
+ * Note: Cache clearing and error state management happen after the wizard completes
+ * in the main updateCredentials function, not in this execution step.
+ */
 export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardContext> {
     public priority: number = 100;
 
     public async execute(context: UpdateCredentialsWizardContext): Promise<void> {
-        const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+        const resourceType =
+            context.storageZone ?? (context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
         const connectionCredentials = await ConnectionStorageService.get(context.storageId, resourceType);
 
         if (!connectionCredentials) {
-            console.error(`Connection with ID "${context.storageId}" not found in storage.`);
+            ext.outputChannel.error(l10n.t('Failed to save credentials: connection not found in storage.'));
             void window.showErrorMessage(l10n.t('Failed to save credentials.'));
             return;
         }
@@ -49,9 +62,11 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
                     connectionUser: context.nativeAuthConfig.connectionUser,
                     connectionPassword: context.nativeAuthConfig.connectionPassword,
                 };
+                connectionCredentials.secrets.managedIdentityAuthConfig = undefined;
             } else if (authMethod === AuthMethodId.MicrosoftEntraID && context.entraIdAuthConfig) {
                 // For Entra ID, clear any native auth configs
                 connectionCredentials.secrets.nativeAuthConfig = undefined;
+                connectionCredentials.secrets.managedIdentityAuthConfig = undefined;
 
                 // Update Entra ID auth config from structured config
                 connectionCredentials.secrets.entraIdAuthConfig = {
@@ -61,9 +76,25 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             } else if (authMethod === AuthMethodId.MicrosoftEntraID) {
                 // For Entra ID without config, clear any native auth configs
                 connectionCredentials.secrets.nativeAuthConfig = undefined;
+                connectionCredentials.secrets.managedIdentityAuthConfig = undefined;
 
                 // Clear any existing Entra ID config if no new config provided
                 connectionCredentials.secrets.entraIdAuthConfig = undefined;
+            } else if (authMethod === AuthMethodId.ManagedIdentity) {
+                // Managed identity carries no user credentials. An empty config is meaningful and
+                // must be written: it selects the system-assigned identity.
+                connectionCredentials.secrets.nativeAuthConfig = undefined;
+                connectionCredentials.secrets.entraIdAuthConfig = undefined;
+                connectionCredentials.secrets.managedIdentityAuthConfig = context.managedIdentityAuthConfig ?? {};
+            } else if (authMethod === AuthMethodId.NoAuth) {
+                // "No Authentication" is credential-free. Clear any previously stored native or
+                // Entra ID secrets so that switching an existing Native/Entra connection to NoAuth
+                // cannot leave stale credentials behind. Without this, the leftover secrets would be
+                // re-injected into the credential cache on next load (re-adding a username/password
+                // to the connection string and exposing them through paths such as migration sharing).
+                connectionCredentials.secrets.nativeAuthConfig = undefined;
+                connectionCredentials.secrets.entraIdAuthConfig = undefined;
+                connectionCredentials.secrets.managedIdentityAuthConfig = undefined;
             }
 
             connectionCredentials.properties.selectedAuthMethod = context.selectedAuthenticationMethod?.toString();
@@ -71,7 +102,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             try {
                 await ConnectionStorageService.save(resourceType, connectionCredentials, true);
             } catch (pushError) {
-                console.error(`Failed to save credentials for connection "${context.storageId}":`, pushError);
+                ext.outputChannel.error(l10n.t('Failed to save credentials: {0}', String(pushError)));
                 void window.showErrorMessage(l10n.t('Failed to save credentials.'));
                 return;
             }

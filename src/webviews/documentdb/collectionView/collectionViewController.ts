@@ -3,48 +3,88 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
+
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { SettingsService } from '../../../services/SettingsService';
-import { WebviewController } from '../../api/extension-server/WebviewController';
+import { settingsKeys } from '../../../settingsKeys';
+import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './collectionViewRouter';
 
 export type CollectionViewWebviewConfigurationType = {
     sessionId: string;
     clusterId: string;
+    /**
+     * Human-readable cluster display name for Playground headers and Shell titles.
+     */
+    clusterDisplayName: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     * Required for finding the tree node during import/export operations.
+     * @see Views enum
+     */
+    viewId: string;
     databaseName: string;
     collectionName: string;
     defaultPageSize: number;
-    feedbackSignalsEnabled: boolean;
+    enableAIQueryGeneration: boolean;
+    feedbackPermitted?: boolean;
+    /** Pre-populated query from cross-feature navigation (e.g., Playground → Collection View). */
+    initialQuery?: {
+        filter?: string;
+        project?: string;
+        sort?: string;
+        skip?: number;
+        limit?: number;
+    };
+    /**
+     * Optional tab to land on when the view opens. Defaults to `tab_result`
+     * (the Documents tab). Used when the user double-clicks the "Indexes"
+     * node in the tree so the Index Management tab is the first thing
+     * they see.
+     */
+    initialTab?: 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
 };
 
-export class CollectionViewController extends WebviewController<CollectionViewWebviewConfigurationType> {
-    constructor(initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize'>) {
-        // ext.context here is the vscode.ExtensionContext required by the ReactWebviewPanelController's original implementation
-        // we're not modifying it here in order to be ready for future updates of the webview API.
+export function openCollectionWebview(
+    initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
+): AppWebviewController<CollectionViewWebviewConfigurationType> {
+    const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
 
-        const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
+    // Get the default page size from settings
+    const defaultPageSize = SettingsService.getSetting<number>(settingsKeys.collectionViewDefaultPageSize) ?? 50;
 
-        // Get the default page size from settings
-        const defaultPageSize =
-            SettingsService.getSetting<number>(ext.settingsKeys.collectionViewDefaultPageSize) ?? 50;
+    // Get the experimental AI query generation setting
+    const enableAIQueryGeneration = SettingsService.getSetting<boolean>(settingsKeys.enableAIQueryGeneration) ?? false;
 
-        const fullInitialData: CollectionViewWebviewConfigurationType = {
-            ...initialData,
-            defaultPageSize,
-        };
+    const fullInitialData: CollectionViewWebviewConfigurationType = {
+        ...initialData,
+        defaultPageSize,
+        enableAIQueryGeneration,
+    };
 
-        super(ext.context, API.DocumentDB, title, 'mongoClustersCollectionView', fullInitialData);
+    const trpcContext: RouterContext = {
+        dbExperience: API.DocumentDB,
+        webviewName: 'collectionView',
+        sessionId: initialData.sessionId,
+        clusterId: initialData.clusterId,
+        clusterDisplayName: initialData.clusterDisplayName,
+        viewId: initialData.viewId,
+        databaseName: initialData.databaseName,
+        collectionName: initialData.collectionName,
+    };
 
-        const trpcContext: RouterContext = {
-            dbExperience: API.DocumentDB,
-            webviewName: 'collectionView',
-            sessionId: initialData.sessionId,
-            clusterId: initialData.clusterId,
-            databaseName: initialData.databaseName,
-            collectionName: initialData.collectionName,
-        };
-
-        this.setupTrpc(trpcContext);
-    }
+    return openAppWebview({
+        title,
+        webviewName: 'collectionView',
+        panelViewType: 'vscode-documentdb-collection-view',
+        config: fullInitialData,
+        context: trpcContext,
+        viewColumn: vscode.ViewColumn.One,
+        icon: {
+            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
+            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-dark.svg'),
+        },
+    });
 }

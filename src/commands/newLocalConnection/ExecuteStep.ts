@@ -3,24 +3,39 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import { AzureWizardExecuteStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
+import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import {
+    type ConnectionItem,
+    ConnectionStorageService,
+    ConnectionType,
+    ItemType,
+} from '../../services/connectionStorageService';
+import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
+import {
+    buildFullTreePath,
+    focusAndRevealInConnectionsView,
+    refreshParentInConnectionsView,
+    withConnectionsViewProgress,
+} from '../../tree/connections-view/connectionsViewHelpers';
+import { revealQuickStartInstance } from '../../tree/connections-view/LocalQuickStart/revealQuickStartInstance';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { nonNullValue } from '../../utils/nonNull';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
+import { findQuickStartInstanceForHosts, normalizeEndpointList } from './localEndpoint';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizardContext> {
     public priority: number = 100;
 
     public async execute(context: NewLocalConnectionWizardContext): Promise<void> {
-        const parentId = context.parentTreeElementId;
         const experience = context.experience;
 
         switch (context.mode) {
@@ -38,7 +53,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 throw new Error(l10n.t('Internal error: mode must be defined.'));
         }
 
-        const newConnectionStringParsed = new DocumentDBConnectionString(context.connectionString);
+        const newConnectionStringParsed = new DocumentDBConnectionString(context.connectionString.trim());
         newConnectionStringParsed.username = context.userName ?? '';
         newConnectionStringParsed.password = context.password ?? '';
 
@@ -51,6 +66,51 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         });
 
         const joinedHosts = [...newConnectionStringParsed.hosts].sort().join(',');
+        // Compared instead of `joinedHosts` for duplicate detection: `localhost`, `127.0.0.1`, and
+        // `[::1]` are the same endpoint, and the raw strings are not (#858).
+        const normalizedHosts = normalizeEndpointList(newConnectionStringParsed.hosts);
+
+        // Sanity Check 0/2: does the Quick Start managed instance already serve this endpoint?
+        // It is service-owned and in-memory rather than a stored connection, so the stored-connection
+        // scan below cannot see it — which is how a bug-bash user ended up adding a second entry for
+        // an instance Quick Start had already put in the Connections view (#858).
+        const quickStartInstance = findQuickStartInstanceForHosts(
+            newConnectionStringParsed.hosts,
+            QuickStartService.listStatuses(),
+        );
+        if (quickStartInstance) {
+            context.telemetry.properties.quickStartEndpointCollision = 'true';
+            const openExisting = l10n.t('Open Existing');
+            const addAnyway = l10n.t('Add Anyway');
+            const choice = await vscode.window.showWarningMessage(
+                l10n.t(
+                    '“{0}” already uses localhost:{1}.',
+                    quickStartInstance.displayName,
+                    // `findQuickStartInstanceForHosts` only matches instances that HAVE a port.
+                    String(quickStartInstance.port),
+                ),
+                {
+                    modal: true,
+                    detail: l10n.t(
+                        'DocumentDB Local setup added this instance to the Connections view, so there is no need to add it by hand. You can still create a separate connection if you want a different configuration for the same endpoint.',
+                    ),
+                },
+                openExisting,
+                addAnyway,
+            );
+            context.telemetry.properties.quickStartCollisionChoice =
+                choice === addAnyway ? 'addAnyway' : choice === openExisting ? 'openExisting' : 'cancel';
+            if (choice !== addAnyway) {
+                if (choice === openExisting) {
+                    // Same navigation the success screen's "Open Connection" performs, so both
+                    // routes to the instance land the user in the same place.
+                    await revealQuickStartInstance(context);
+                }
+                // Dismissing the dialog cancels the wizard rather than creating the duplicate it
+                // just warned about.
+                throw new UserCancelledError();
+            }
+        }
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
         const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Emulators);
@@ -58,19 +118,44 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         const existingDuplicateConnection = existingConnections.find((connection) => {
             const secret = connection.secrets?.connectionString;
             if (!secret) {
+                ext.outputChannel.trace(
+                    `[NewLocalConnection] Skipping stored connection "${connection.name}" (id: ${connection.id}) — empty connection string`,
+                );
                 return false; // Skip if no secret string is found
             }
 
-            const itemCS = new DocumentDBConnectionString(secret);
-            return (
-                itemCS.username === newConnectionStringParsed.username &&
-                [...itemCS.hosts].sort().join(',') === joinedHosts
-            );
+            try {
+                const itemCS = new DocumentDBConnectionString(secret);
+                return (
+                    itemCS.username === newConnectionStringParsed.username &&
+                    normalizeEndpointList(itemCS.hosts) === normalizedHosts
+                );
+            } catch (error) {
+                const rawMessage = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.warn(
+                    `[NewLocalConnection] Stored connection "${connection.name}" (id: ${connection.id}) has an invalid connection string and was skipped during duplicate check: ${redactCredentialsFromConnectionString(rawMessage)}`,
+                );
+                return false;
+            }
         });
 
         if (existingDuplicateConnection) {
+            // Reveal the existing duplicate connection.
+            // Use buildFullTreePath to correctly handle connections inside folders —
+            // buildConnectionsViewTreePath produces a flat path that omits folder ancestors,
+            // causing findNodeById to fail silently when the connection is in a folder.
+            const connectionPath = await buildFullTreePath(existingDuplicateConnection.id, ConnectionType.Emulators);
+            await focusAndRevealInConnectionsView(context, connectionPath, {
+                select: true,
+                focus: false,
+                expand: false, // Don't expand to avoid login prompts
+            });
+
             throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
-                details: l10n.t('The existing connection name:\n"{0}"', existingDuplicateConnection.name),
+                details: l10n.t(
+                    'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
+                    existingDuplicateConnection.name,
+                ),
             });
         }
 
@@ -79,9 +164,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 ? `${newConnectionStringParsed.username}@${joinedHosts}`
                 : joinedHosts;
 
-        return ext.state.showCreatingChild(parentId, l10n.t('Creating new connection…'), async () => {
-            await new Promise((resolve) => setTimeout(resolve, 250));
-
+        return withConnectionsViewProgress(async () => {
             let isEmulator: boolean = true;
             let disableEmulatorSecurity: boolean | undefined;
 
@@ -111,6 +194,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                     const baseName = match[1];
                     const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
                     newConnectionLabel = `${baseName} (${count})`;
+                } else {
+                    // Fallback to prevent endless loop if regex fails - use timestamp for guaranteed uniqueness
+                    newConnectionLabel = `${newConnectionLabel} (${Date.now()})`;
                 }
                 existingDuplicateLabel = existingConnections.find(
                     (connection) => connection.name === newConnectionLabel,
@@ -141,7 +227,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 id: generateDocumentDBStorageId(connectionString),
                 name: newConnectionLabel,
                 properties: {
+                    type: ItemType.Connection,
                     api: experience.api === API.DocumentDB ? API.DocumentDB : experience.api,
+                    parentId: context.parentStorageId, // Set parent folder ID if in a subfolder
                     emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
                     availableAuthMethods: [],
                 },
@@ -152,7 +240,14 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
 
             await ConnectionStorageService.save(ConnectionType.Emulators, storageItem, true);
 
-            // We're not refreshing the tree here, the new connection is a child node, the parent node will refresh itself
+            // Build the reveal path and focus on the new connection
+            const connectionPath = `${context.parentTreeElementId}/${storageItem.id}`;
+
+            // Refresh the parent to show the new connection
+            refreshParentInConnectionsView(connectionPath);
+
+            // Focus and reveal the new connection
+            await focusAndRevealInConnectionsView(context, connectionPath);
 
             showConfirmationAsInSettings(l10n.t('New connection has been added.'));
         });

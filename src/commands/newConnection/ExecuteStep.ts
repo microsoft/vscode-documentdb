@@ -5,18 +5,42 @@
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { getConnectionAuthIdentity } from '../../documentdb/auth/connectionAuthIdentity';
+import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { areAllHostsLocal, canonicalizeTlsException } from '../../documentdb/utils/tlsException';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+// FIXME (discovery plugin API coupling): this generic command imports directly from the
+// `service-kubernetes` plugin so that duplicate-connection detection can compare two
+// port-forwarded targets by their tunnel identity instead of host + username (two tunnels can
+// share localhost:<port> yet point at different services). This leaks plugin-specific knowledge
+// into core. The discovery plugin API is still experimental and has no source-agnostic way for a
+// provider to declare what makes two of its connections "the same".
+//
+// Potential workaround / target design: have the plugin write a generic `connectionIdentity`
+// string into the source-agnostic `context.connectionProperties` bag when it builds a connection.
+// The dedup logic below would compare `connectionIdentity` whenever both sides have one and fall
+// back to host + username otherwise, keeping this command plugin-agnostic. Tracked in the discovery
+// API issue: https://github.com/microsoft/vscode-documentdb/issues/739 (milestone 0.12.0).
+import {
+    getKubernetesPortForwardIdentity,
+    getKubernetesPortForwardMetadata,
+} from '../../plugins/service-kubernetes/portForwardMetadata';
 
-import { Views } from '../../documentdb/Views';
-import { type ConnectionItem, ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
-import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
+import {
+    type ConnectionItem,
+    ConnectionStorageService,
+    ConnectionType,
+    ItemType,
+} from '../../services/connectionStorageService';
 import {
     buildConnectionsViewTreePath,
-    waitForConnectionsViewReady,
+    buildFullTreePath,
+    focusAndRevealInConnectionsView,
+    refreshParentInConnectionsView,
+    withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -27,145 +51,222 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
     public priority: number = 100;
 
     public async execute(context: NewConnectionWizardContext): Promise<void> {
-        return vscode.window.withProgress(
-            {
-                location: { viewId: Views.ConnectionsView },
-                cancellable: false,
-            },
-            async () => {
-                const api = context.experience?.api ?? API.DocumentDB;
-                const parentId = context.parentId;
+        return withConnectionsViewProgress(async () => {
+            const api = context.experience?.api ?? API.DocumentDB;
+            const parentId = context.parentId;
 
-                const newConnectionString = context.connectionString!;
+            // Canonicalize the TLS exception once more at save time (defense-in-depth) and make it
+            // AUTHORITATIVE: allow-invalid is honored only when EVERY host in the final connection
+            // string is local/private, so a stale wizard choice (e.g. picked for a local host, then
+            // the connection string changed to public via Back-navigation) can never disable
+            // certificate validation for a public host.
+            const canonicalTls = canonicalizeTlsException(context.connectionString!.trim());
+            const newConnectionString = canonicalTls.connectionString;
+            const allowInvalidCertificates =
+                areAllHostsLocal(newConnectionString) &&
+                (canonicalTls.disableEmulatorSecurity || !!context.disableEmulatorSecurity);
 
-                const newPassword = context.nativeAuthConfig?.connectionPassword;
-                const newUsername = context.nativeAuthConfig?.connectionUser;
+            const newAuthenticationMethod = context.selectedAuthenticationMethod;
 
-                const newAuthenticationMethod = context.selectedAuthenticationMethod;
-                const newAvailableAuthenticationMethods =
-                    context.availableAuthenticationMethods ??
-                    (newAuthenticationMethod ? [newAuthenticationMethod] : []);
+            // Native credentials only apply to the Native authentication method. When a user
+            // pastes a connection string that embeds a username/password but then selects a
+            // credential-free method (No Authentication or Microsoft Entra ID), those parsed
+            // credentials must be ignored. Otherwise duplicate detection compares against a stale
+            // username (incorrectly blocking creation) and the credentials would leak into the
+            // stored secrets of a connection that is supposed to be credential-free.
+            const usesNativeCredentials = newAuthenticationMethod === AuthMethodId.NativeAuth;
 
-                const newParsedCS = new DocumentDBConnectionString(newConnectionString);
-                const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
+            // Entra ID configuration only applies to the Microsoft Entra ID method. If the user
+            // backtracked through the wizard and changed the method (e.g. Entra -> No Authentication
+            // or Entra -> Native), stale Entra config could otherwise be persisted onto a connection
+            // that is supposed to be credential-free or native. Mirror the native-credential gate.
+            const usesEntraId = newAuthenticationMethod === AuthMethodId.MicrosoftEntraID;
 
-                //  Sanity Check 1/2: is there a connection with the same username + host in there?
-                const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+            // Same gate for managed identity. Note that an EMPTY config is meaningful here: it means
+            // the system-assigned identity, so it must be persisted rather than collapsed to
+            // undefined, or the method becomes un-inferable after a reload.
+            const usesManagedIdentity = newAuthenticationMethod === AuthMethodId.ManagedIdentity;
+            const newManagedIdentityAuthConfig = usesManagedIdentity
+                ? (context.managedIdentityAuthConfig ?? {})
+                : undefined;
 
-                const existingDuplicateConnection = existingConnections.find((existingConnection) => {
-                    const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
+            const newAvailableAuthenticationMethods =
+                context.availableAuthenticationMethods ?? (newAuthenticationMethod ? [newAuthenticationMethod] : []);
+
+            const newParsedCS = new DocumentDBConnectionString(newConnectionString);
+            const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
+            const newPortForwardMetadata = getKubernetesPortForwardMetadata(context.connectionProperties);
+
+            // Two connections are the same only when they reach the same host AS THE SAME IDENTITY.
+            // Comparing the native username alone made every managed identity on a host collide,
+            // because none of them has one.
+            const newAuthIdentity = getConnectionAuthIdentity({
+                authMethod: newAuthenticationMethod,
+                nativeAuthConfig: usesNativeCredentials ? context.nativeAuthConfig : undefined,
+                entraIdAuthConfig: usesEntraId ? context.entraIdAuthConfig : undefined,
+                managedIdentityAuthConfig: newManagedIdentityAuthConfig,
+            });
+
+            //  Sanity Check 1/2: is there a connection with the same identity + host in there?
+            const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
+
+            const existingDuplicateConnection = existingConnections.find((existingConnection) => {
+                const secret = existingConnection.secrets?.connectionString;
+                if (!secret) {
+                    ext.outputChannel.trace(
+                        `[NewConnection] Skipping stored connection "${existingConnection.name}" (id: ${existingConnection.id}) — empty connection string`,
+                    );
+                    return false;
+                }
+
+                try {
+                    const existingCS = new DocumentDBConnectionString(secret);
                     const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                    // Use nativeAuthConfig for comparison
-                    const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+                    const existingAuthIdentity = getConnectionAuthIdentity({
+                        authMethod: existingConnection.properties?.selectedAuthMethod,
+                        nativeAuthConfig: existingConnection.secrets.nativeAuthConfig,
+                        entraIdAuthConfig: existingConnection.secrets.entraIdAuthConfig,
+                        managedIdentityAuthConfig: existingConnection.secrets.managedIdentityAuthConfig,
+                    });
+                    const existingPortForwardMetadata = getKubernetesPortForwardMetadata(existingConnection.properties);
 
-                    return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
+                    if (newPortForwardMetadata || existingPortForwardMetadata) {
+                        return (
+                            existingAuthIdentity === newAuthIdentity &&
+                            !!newPortForwardMetadata &&
+                            !!existingPortForwardMetadata &&
+                            getKubernetesPortForwardIdentity(existingPortForwardMetadata) ===
+                                getKubernetesPortForwardIdentity(newPortForwardMetadata)
+                        );
+                    }
+
+                    return existingAuthIdentity === newAuthIdentity && existingHostsJoined === newJoinedHosts;
+                } catch (error) {
+                    // An existing stored connection has an invalid/corrupt connection string.
+                    // Log it but don't block the user from creating a new connection.
+                    const rawMessage = error instanceof Error ? error.message : String(error);
+                    ext.outputChannel.warn(
+                        `[NewConnection] Stored connection "${existingConnection.name}" (id: ${existingConnection.id}) has an invalid connection string and was skipped during duplicate check: ${redactCredentialsFromConnectionString(rawMessage)}`,
+                    );
+                    return false;
+                }
+            });
+
+            if (existingDuplicateConnection) {
+                // Reveal the existing duplicate connection.
+                // Use buildFullTreePath to correctly handle connections inside folders —
+                // buildConnectionsViewTreePath produces a flat path that omits folder ancestors,
+                // causing findNodeById to fail silently when the connection is in a folder.
+                const connectionPath = await buildFullTreePath(existingDuplicateConnection.id, ConnectionType.Clusters);
+                await focusAndRevealInConnectionsView(context, connectionPath, {
+                    select: true,
+                    focus: false,
+                    expand: false, // Don't expand to avoid login prompts
                 });
 
-                if (existingDuplicateConnection) {
-                    // Reveal the existing duplicate connection
-                    const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
-                    await revealConnectionsViewElement(context, connectionPath, {
-                        select: true,
-                        focus: false,
-                        expand: false, // Don't expand to avoid login prompts
-                    });
-
-                    throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
+                throw new UserFacingError(
+                    l10n.t('A connection to the same host with the same authentication settings already exists.'),
+                    {
                         details: l10n.t(
                             'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
                             existingDuplicateConnection.name,
                         ),
-                    });
+                    },
+                );
+            }
+
+            // remove obsolete authMechanism entry
+            if (newParsedCS.searchParams.get('authMechanism') === 'SCRAM-SHA-256') {
+                newParsedCS.searchParams.delete('authMechanism');
+            }
+            newParsedCS.username = '';
+            newParsedCS.password = '';
+
+            // The connection label is derived from the host(s) only. We intentionally do not
+            // prefix it with the username so that all new connections share a consistent,
+            // credential-free naming scheme.
+            let newConnectionLabel = newJoinedHosts;
+
+            // Sanity Check 2/2: is there a connection with the same 'label' in there?
+            // If so, append a number to the label.
+            // This scenario is possible as users are allowed to rename their connections.
+            let existingDuplicateLabel = existingConnections.find(
+                (connection) => connection.name === newConnectionLabel,
+            );
+
+            // If a connection with the same label exists, append a number to the label
+            while (existingDuplicateLabel) {
+                /**
+                 * Matches and captures parts of a connection label string.
+                 *
+                 * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
+                 * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
+                 * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
+                 *   which may be preceded by whitespace. For example, " (123)".
+                 *
+                 * Examples:
+                 * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
+                 * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
+                 */
+                const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
+                if (match) {
+                    const baseName = match[1];
+                    const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
+                    newConnectionLabel = `${baseName} (${count})`;
                 }
-
-                // remove obsolete authMechanism entry
-                if (newParsedCS.searchParams.get('authMechanism') === 'SCRAM-SHA-256') {
-                    newParsedCS.searchParams.delete('authMechanism');
-                }
-                newParsedCS.username = '';
-                newParsedCS.password = '';
-
-                let newConnectionLabel =
-                    newUsername && newUsername.length > 0 ? `${newUsername}@${newJoinedHosts}` : newJoinedHosts;
-
-                // Sanity Check 2/2: is there a connection with the same 'label' in there?
-                // If so, append a number to the label.
-                // This scenario is possible as users are allowed to rename their connections.
-                let existingDuplicateLabel = existingConnections.find(
+                existingDuplicateLabel = existingConnections.find(
                     (connection) => connection.name === newConnectionLabel,
                 );
+            }
 
-                // If a connection with the same label exists, append a number to the label
-                while (existingDuplicateLabel) {
-                    /**
-                     * Matches and captures parts of a connection label string.
-                     *
-                     * The regular expression `^(.*?)(\s*\(\d+\))?$` is used to parse the connection label into two groups:
-                     * - The first capturing group `(.*?)` matches the main part of the label (non-greedy match of any characters).
-                     * - The second capturing group `(\s*\(\d+\))?` optionally matches a numeric suffix enclosed in parentheses,
-                     *   which may be preceded by whitespace. For example, " (123)".
-                     *
-                     * Examples:
-                     * - Input: "ConnectionName (123)" -> Match: ["ConnectionName (123)", "ConnectionName", " (123)"]
-                     * - Input: "ConnectionName" -> Match: ["ConnectionName", "ConnectionName", undefined]
-                     */
-                    const match = newConnectionLabel.match(/^(.*?)(\s*\(\d+\))?$/);
-                    if (match) {
-                        const baseName = match[1];
-                        const count = match[2] ? parseInt(match[2].replace(/\D/g, ''), 10) + 1 : 1;
-                        newConnectionLabel = `${baseName} (${count})`;
-                    }
-                    existingDuplicateLabel = existingConnections.find(
-                        (connection) => connection.name === newConnectionLabel,
-                    );
-                }
+            // Now, we're safe to create a new connection with the new unique label
+            const storageId = generateDocumentDBStorageId(newParsedCS.toString());
 
-                // Now, we're safe to create a new connection with the new unique label
+            const storageItem: ConnectionItem = {
+                id: storageId,
+                name: newConnectionLabel,
+                properties: {
+                    ...context.connectionProperties,
+                    type: ItemType.Connection,
+                    api: api,
+                    parentId: parentId ? parentId : undefined, // Set parent folder ID if in a subfolder
+                    availableAuthMethods: newAvailableAuthenticationMethods,
+                    selectedAuthMethod: newAuthenticationMethod,
+                    // TLS exception (§7): when the user opted to allow invalid certificates for a
+                    // local/private host, persist it as a non-emulator emulatorConfiguration so the
+                    // connection accepts a self-signed certificate (TLS is keyed off
+                    // disableEmulatorSecurity alone) without being treated as an emulator.
+                    emulatorConfiguration: allowInvalidCertificates
+                        ? { isEmulator: false, disableEmulatorSecurity: true }
+                        : undefined,
+                },
+                secrets: {
+                    connectionString: newParsedCS.toString(),
+                    // Persist native credentials only for the Native authentication method.
+                    // No Authentication and Microsoft Entra ID are credential-free.
+                    nativeAuthConfig: usesNativeCredentials ? context.nativeAuthConfig : undefined,
+                    // Persist Entra ID config only for the Microsoft Entra ID method, so a
+                    // credential-free or native connection never carries stale Entra metadata.
+                    entraIdAuthConfig: usesEntraId ? context.entraIdAuthConfig : undefined,
+                    managedIdentityAuthConfig: newManagedIdentityAuthConfig,
+                },
+            };
 
-                const storageId = generateDocumentDBStorageId(newParsedCS.toString());
+            await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
 
-                const storageItem: ConnectionItem = {
-                    id: storageId,
-                    name: newConnectionLabel,
-                    properties: {
-                        api: api,
-                        availableAuthMethods: newAvailableAuthenticationMethods,
-                        selectedAuthMethod: newAuthenticationMethod,
-                    },
-                    secrets: {
-                        connectionString: newParsedCS.toString(),
-                        nativeAuthConfig:
-                            context.nativeAuthConfig ??
-                            (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
-                                ? {
-                                      connectionUser: newUsername ?? '',
-                                      connectionPassword: newPassword,
-                                  }
-                                : undefined),
-                        entraIdAuthConfig: context.entraIdAuthConfig,
-                    },
-                };
+            // Build the reveal path based on whether this is in a subfolder
+            const connectionPath = context.parentTreeId
+                ? `${context.parentTreeId}/${storageId}`
+                : buildConnectionsViewTreePath(storageId, false);
 
-                await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
+            // Refresh the parent to show the new connection
+            refreshParentInConnectionsView(connectionPath);
 
-                // Refresh the connections tree when adding a new root-level connection
-                if (parentId === undefined || parentId === '') {
-                    await vscode.commands.executeCommand(`connectionsView.focus`);
-                    ext.connectionsBranchDataProvider.refresh();
-                    await waitForConnectionsViewReady(context);
+            // Focus and reveal the new connection
+            await focusAndRevealInConnectionsView(context, connectionPath);
 
-                    // Reveal the connection
-                    const connectionPath = buildConnectionsViewTreePath(storageId, false);
-                    await revealConnectionsViewElement(context, connectionPath, {
-                        select: true,
-                        focus: true,
-                        expand: false, // Don't expand immediately to avoid login prompts
-                    });
-                }
-
-                showConfirmationAsInSettings(l10n.t('New connection has been added.'));
-            },
-        );
+            showConfirmationAsInSettings(l10n.t('New connection has been added.'));
+        });
     }
 
     public shouldExecute(context: NewConnectionWizardContext): boolean {

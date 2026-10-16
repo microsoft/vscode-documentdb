@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { rejectOnTimeout, valueOnTimeout } from './timeout';
 
 describe('timeout Tests', () => {
@@ -54,7 +56,7 @@ describe('timeout Tests', () => {
                         setTimeout(() => {
                             executed = true;
                             resolve();
-                        }, 1000);
+                        }, 1000).unref();
                     });
                 }),
             ).rejects.toThrow('Execution timed out');
@@ -99,7 +101,7 @@ describe('timeout Tests', () => {
                 return await new Promise<number>((resolve, _reject) => {
                     setTimeout(() => {
                         resolve(-123);
-                    }, 1000);
+                    }, 1000).unref();
                 });
             });
 

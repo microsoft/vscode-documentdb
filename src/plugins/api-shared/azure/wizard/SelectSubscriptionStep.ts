@@ -114,7 +114,7 @@ export class SelectSubscriptionStep extends AzureWizardPromptStep<NewConnectionW
                         alwaysShow: true,
                     };
                 })
-                .sort((a, b) => a.label.localeCompare(b.label));
+                .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
             // Add edit entry at the top
             return [

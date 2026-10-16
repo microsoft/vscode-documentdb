@@ -5,12 +5,18 @@
 
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import {
+    type CollectionItemModel,
+    type DatabaseItemModel,
+    getIndexExclusionReason,
+    type IndexItemModel,
+} from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
-import { type CollectionItemModel, type DatabaseItemModel, type IndexItemModel } from '../../documentdb/ClustersClient';
+import { escapeMarkdown, formatInlineCode } from '../../webviews/utils/escapeMarkdown';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
-import { type ClusterModel } from './ClusterModel';
 
 export class IndexItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
@@ -20,42 +26,43 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
     private readonly experienceContextValue: string = '';
 
     constructor(
-        readonly cluster: ClusterModel,
+        readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
         readonly collectionInfo: CollectionItemModel,
         readonly indexInfo: IndexItemModel,
     ) {
-        this.id = `${cluster.id}/${databaseInfo.name}/${collectionInfo.name}/indexes/${indexInfo.name}`;
+        this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}/indexes/${indexInfo.name}`;
         this.experience = cluster.dbExperience;
+        const contextValues = ['treeItem_index'];
+        const exclusionReason = getIndexExclusionReason(this.indexInfo);
+        if (exclusionReason === 'builtInId') {
+            contextValues.push('state_default');
+        } else if (exclusionReason === undefined) {
+            contextValues.push('state_copyable');
+        }
+        if (this.indexInfo.hidden) {
+            contextValues.push('state_hidden');
+        }
         this.experienceContextValue = `experience_${this.experience.api}`;
-        this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
+        contextValues.push(this.experienceContextValue);
+        this.contextValue = createContextValue(contextValues);
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        // Use key if available, otherwise show not supported and will be handled in the future (for search indexes)
-        if (this.indexInfo.key) {
-            return Object.keys(this.indexInfo.key).map((key) => {
-                const value = this.indexInfo.key![key];
+        if (!this.indexInfo.key) {
+            return [];
+        }
 
-                return createGenericElement({
+        return Object.entries(this.indexInfo.key).map(
+            ([key, value]) =>
+                createGenericElement({
                     contextValue: key,
                     id: `${this.id}/${key}`,
                     label: key,
                     description: value === -1 ? 'desc' : value === 1 ? 'asc' : value.toString(),
                     iconPath: new vscode.ThemeIcon('combine'),
-                }) as TreeElement;
-            });
-        } else {
-            return [
-                createGenericElement({
-                    contextValue: 'indexField',
-                    id: `${this.id}/notSupported`,
-                    label: 'Support coming soon',
-                    description: '',
-                    iconPath: new vscode.ThemeIcon('combine'),
                 }) as TreeElement,
-            ];
-        }
+        );
     }
 
     getTreeItem(): vscode.TreeItem {
@@ -63,22 +70,41 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
             id: this.id,
             contextValue: this.contextValue,
             label: this.indexInfo.name,
+            description: this.getDescription(),
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            collapsibleState: this.indexInfo.key
+                ? vscode.TreeItemCollapsibleState.Collapsed
+                : vscode.TreeItemCollapsibleState.None,
         };
+    }
+
+    private getDescription(): string | undefined {
+        const descriptions: string[] = [];
+        if (this.indexInfo.key === undefined) {
+            descriptions.push(this.getIndexTypeLabel());
+        }
+        if (this.indexInfo.hidden) {
+            descriptions.push(vscode.l10n.t('hidden'));
+        }
+
+        return descriptions.length > 0 ? `(${descriptions.join(', ')})` : undefined;
+    }
+
+    private getIndexTypeLabel(): string {
+        return this.indexInfo.type === 'vectorSearch' ? vscode.l10n.t('vector search') : this.indexInfo.type;
     }
 
     private buildTooltip(): vscode.MarkdownString {
         const md = new vscode.MarkdownString();
-        md.supportHtml = true;
-        md.isTrusted = true;
-        md.supportThemeIcons = true;
+        md.supportHtml = false;
+        md.isTrusted = false;
+        md.supportThemeIcons = false;
 
-        md.appendMarkdown(`### ${this.indexInfo.name}\n\n`);
+        md.appendMarkdown(`### ${escapeMarkdown(this.indexInfo.name)}\n\n`);
 
         const badges: string[] = [];
-        badges.push(`\`${this.indexInfo.type}\``);
+        badges.push(formatInlineCode(this.indexInfo.type));
         if (this.indexInfo.unique) {
             badges.push('`unique`');
         }
@@ -90,6 +116,12 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         }
         if (badges.length > 0) {
             md.appendMarkdown(`${badges.join(' | ')}\n\n`);
+        }
+
+        if (this.indexInfo.key === undefined) {
+            md.appendMarkdown(
+                `${escapeMarkdown(vscode.l10n.t('This {0} index cannot be copied by Copy/Paste Indexes.', this.getIndexTypeLabel()))}\n\n`,
+            );
         }
 
         md.appendMarkdown('---\n\n');
@@ -131,7 +163,7 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         // Render properties in a clean format
         if (properties.length > 0) {
             for (const prop of properties) {
-                md.appendMarkdown(`**${prop.label}:** ${prop.value}  \n`);
+                md.appendMarkdown(`**${prop.label}:** ${escapeMarkdown(prop.value)}  \n`);
             }
             md.appendMarkdown('\n');
         }
@@ -147,14 +179,12 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
                 // For simple indexes, show inline
                 const keyStrings = keyEntries.map(([field, order]) => {
                     const orderStr = order === -1 ? 'desc' : order === 1 ? 'asc' : String(order);
-                    return `\`${field}\`: ${orderStr}`;
+                    return `${formatInlineCode(field)}: ${escapeMarkdown(orderStr)}`;
                 });
                 md.appendMarkdown(keyStrings.join(', ') + '\n\n');
             } else {
                 // For complex indexes, show as code block
-                md.appendMarkdown('```json\n');
-                md.appendMarkdown(JSON.stringify(this.indexInfo.key, null, 2));
-                md.appendMarkdown('\n```\n\n');
+                this.appendJsonCodeblock(md, this.indexInfo.key);
             }
         }
 
@@ -162,70 +192,22 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         if (this.indexInfo.partialFilterExpression) {
             md.appendMarkdown('---\n\n');
             md.appendMarkdown('**Partial Filter Expression**\n\n');
-            md.appendMarkdown('```json\n');
-            md.appendMarkdown(JSON.stringify(this.indexInfo.partialFilterExpression, null, 2));
-            md.appendMarkdown('\n```\n\n');
+            this.appendJsonCodeblock(md, this.indexInfo.partialFilterExpression);
         }
 
         // Fields (for search indexes)
         if (this.indexInfo.fields && Array.isArray(this.indexInfo.fields) && this.indexInfo.fields.length > 0) {
             md.appendMarkdown('---\n\n');
             md.appendMarkdown('**Search Fields**\n\n');
-            md.appendMarkdown('```json\n');
-            md.appendMarkdown(JSON.stringify(this.indexInfo.fields, null, 2));
-            md.appendMarkdown('\n```\n\n');
+            this.appendJsonCodeblock(md, this.indexInfo.fields);
         }
 
-        // // Action buttons at the bottom
-        // md.appendMarkdown('---\n\n');
-        // md.appendMarkdown('**Actions:**\n\n');
-
-        // // Create command URIs with encoded arguments
-        // const dropIndexArgs = encodeURIComponent(
-        //     JSON.stringify([
-        //         {
-        //             cluster: this.cluster.id,
-        //             databaseInfo: this.databaseInfo.name,
-        //             collectionInfo: this.collectionInfo.name,
-        //             indexInfo: this.indexInfo.name,
-        //         },
-        //     ]),
-        // );
-
-        // const hideUnhideArgs = encodeURIComponent(
-        //     JSON.stringify([
-        //         {
-        //             cluster: this.cluster.id,
-        //             databaseInfo: this.databaseInfo.name,
-        //             collectionInfo: this.collectionInfo.name,
-        //             indexInfo: this.indexInfo.name,
-        //         },
-        //     ]),
-        // );
-
-        // // TODO: wire up buttons with actual commands
-        // // Drop index button (only if not _id index)
-        // if (this.indexInfo.name !== '_id_') {
-        //     md.appendMarkdown(
-        //         `[$(trash) Drop Index](command:vscode-documentdb.command.dropIndex?${dropIndexArgs} "Delete this index") &nbsp;&nbsp;`,
-        //     );
-        // }
-
-        // // Hide/Unhide button
-        // if (this.indexInfo.name !== '_id_') {
-        //     const hideUnhideText = this.indexInfo.hidden ? '$(eye) Unhide Index' : '$(eye-closed) Hide Index';
-        //     const hideUnhideCommand = this.indexInfo.hidden
-        //         ? 'vscode-documentdb.command.unhideIndex'
-        //         : 'vscode-documentdb.command.hideIndex';
-        //     const hideUnhideTooltip = this.indexInfo.hidden
-        //         ? 'Make this index visible'
-        //         : 'Hide this index from queries';
-
-        //     md.appendMarkdown(
-        //         `[${hideUnhideText}](command:${hideUnhideCommand}?${hideUnhideArgs} "${hideUnhideTooltip}") &nbsp;&nbsp;`,
-        //     );
-        // }
-
         return md;
+    }
+
+    private appendJsonCodeblock(md: vscode.MarkdownString, value: object): void {
+        // A fixed fence is safe: pretty-printed JSON escapes newlines inside strings,
+        // so no output line can begin with backticks and close the block early.
+        md.appendMarkdown(`\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`\n\n`);
     }
 }

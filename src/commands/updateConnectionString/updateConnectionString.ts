@@ -8,13 +8,27 @@ import * as l10n from '@vscode/l10n';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
-import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { ConnectionStorageService } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { refreshView } from '../refreshView/refreshView';
 import { ConnectionStringStep } from './ConnectionStringStep';
 import { ExecuteStep } from './ExecuteStep';
 import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
 
+/**
+ * Updates the connection string (hosts, ports, etc.) for a cluster connection.
+ *
+ * Architecture:
+ * 1. Loads the current connection string with credentials masked
+ * 2. Runs wizard to collect new connection string:
+ *    - ConnectionStringStep: Enter new connection string
+ * 3. ExecuteStep: Saves updated connection string to storage
+ * 4. Post-wizard: Refreshes the view
+ *
+ * Note: This command does NOT prompt for reconnection or handle error node states.
+ * Use updateCredentials command for error recovery scenarios.
+ */
 export async function updateConnectionString(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
@@ -26,9 +40,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     // as the object is cached in the tree view, and in the 'retry/error' nodes
     // that's why we need to get the fresh one each time.
 
-    const resourceType = node.cluster.emulatorConfiguration?.isEmulator
-        ? ConnectionType.Emulators
-        : ConnectionType.Clusters;
+    const resourceType = resolveStorageZone(node.cluster);
     const connection = await ConnectionStorageService.get(node.storageId, resourceType);
     const connectionString = connection?.secrets?.connectionString || '';
 
@@ -44,6 +56,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
         ...context,
         originalConnectionString: parsedCS.toString(),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
+        storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
     };
 

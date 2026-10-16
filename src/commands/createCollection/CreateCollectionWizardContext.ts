@@ -6,6 +6,10 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
 export interface CreateCollectionWizardContext extends IActionContext {
+    /**
+     * The stable cluster identifier for credential lookup.
+     * This should be `cluster.clusterId` (NOT treeId).
+     */
     credentialsId: string;
     databaseId: string;
     nodeId: string;

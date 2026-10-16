@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { ObjectId, type Document, type WithId } from 'mongodb';
 import { getDataAtPath } from './toSlickGridTable';
 
@@ -76,7 +78,6 @@ describe('toSlickGridTable', () => {
 
     it('at a nested level', () => {
         const tableData = getDataAtPath(mongoDocuments, ['nestedDocument']);
-        console.log(tableData);
 
         expect(tableData).toHaveLength(5);
         expect(tableData[0]['key']).toBeDefined();

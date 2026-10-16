@@ -7,10 +7,11 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { l10n } from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+import { hideDiscoveryProvider } from '../../services/discoveryProviderVisibility';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 
-export async function removeDiscoveryRegistry(_context: IActionContext, node: TreeElement): Promise<void> {
+export async function removeDiscoveryRegistry(context: IActionContext, node: TreeElement): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
@@ -40,13 +41,15 @@ export async function removeDiscoveryRegistry(_context: IActionContext, node: Tr
         return;
     }
 
-    // Get active discovery provider IDs from global state
-    const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
+    if (provider.deactivate) {
+        await provider.deactivate(context);
+    }
 
-    const updatedProviderIds = activeDiscoveryProviderIds.filter((id) => id !== provider.id);
+    // Persist provider as hidden so future registered providers remain visible by default.
+    const hiddenDiscoveryProviderIds = await hideDiscoveryProvider(provider.id);
 
-    // Update global state with the filtered list
-    await ext.context.globalState.update('activeDiscoveryProviderIds', updatedProviderIds);
+    context.telemetry.properties.discoveryProviderId = provider.id;
+    context.telemetry.measurements.hiddenDiscoveryProviders = hiddenDiscoveryProviderIds.length;
 
     // Refresh the discovery branch data provider to show the updated list
     ext.discoveryBranchDataProvider.refresh();

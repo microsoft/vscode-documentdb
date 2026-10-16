@@ -8,6 +8,8 @@ declare global {
         const template = <T>(data: T): string => '';
         export default template;
     }
-
-    declare var __webpack_public_path__: string;
 }
+
+// Stylesheets are side-effect imports that Vite compiles. TypeScript 6 checks that side-effect imports
+// resolve (`noUncheckedSideEffectImports`), so declare them as modules without exports.
+declare module '*.scss' {}

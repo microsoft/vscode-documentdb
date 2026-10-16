@@ -1,0 +1,136 @@
+name: Build Size Cache
+
+# Manual workflow to seed the build-sizes cache for a branch,
+# or to verify that a cache entry already exists.
+#
+# Usage:
+#   - "seed":   Build the selected branch and save its L1 graph sizes to the cache.
+#   - "verify": Check whether a cache entry exists for the selected branch (no build needed).
+
+on:
+    workflow_dispatch:
+        inputs:
+            mode:
+                description: 'Action to perform'
+                required: true
+                type: choice
+                options:
+                    - seed
+                    - verify
+                default: seed
+
+jobs:
+    seed:
+        name: Seed build size cache
+        runs-on: ubuntu-latest
+        if: inputs.mode == 'seed'
+        permissions:
+            contents: read
+            actions: write
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: 🛠 Setup Node.js Environment (with cache)
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
+
+            - name: 📦 Install Dependencies
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+            - name: 🏗 Build Project
+              run: npm run build
+
+            - name: 📦 Package Distributables
+              run: npm run package
+
+            - name: Inspect production VSIX (L1)
+              run: |
+                  mapfile -t packages < <(find . -maxdepth 1 -name '*.vsix' -type f)
+                  test "${#packages[@]}" -eq 1
+                  npm run verify:vsix -- "${packages[0]}" --manifest-report build/verification/l1-manifest-report.json
+
+            - name: Upload bundle verification reports
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: Bundle-reports-${{ github.run_id }}
+                  path: build/verification/reports/*.json
+                  if-no-files-found: error
+
+            - name: Upload L1 manifest report
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: L1-manifest-report-${{ github.run_id }}
+                  path: build/verification/l1-manifest-report.json
+                  if-no-files-found: warn
+
+            - name: 📐 Collect L1 graph sizes
+              if: always() && hashFiles('build/verification/l1-manifest-report.json') != ''
+              run: node build/verification/build-size-report.cjs build/verification/l1-manifest-report.json build-sizes.json
+
+            - name: 💾 Save to cache
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
+
+            - name: ✅ Done
+              run: echo "Cache seeded for $GITHUB_REF_NAME @ $GITHUB_SHA"
+
+    verify:
+        name: Verify build size cache
+        runs-on: ubuntu-latest
+        if: inputs.mode == 'verify'
+        permissions:
+            actions: read
+        steps:
+            - name: 📥 Attempt exact cache restore
+              id: exact
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
+                  lookup-only: true
+
+            - name: 📥 Attempt prefix cache restore
+              id: prefix
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: build-sizes-prefix.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}-impossible
+                  restore-keys: |
+                      build-sizes-${{ github.ref_name }}-
+                  lookup-only: true
+
+            - name: 📋 Report results
+              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              with:
+                  script: |
+                      const branch  = '${{ github.ref_name }}';
+                      const sha     = '${{ github.sha }}';
+                      const exactHit   = '${{ steps.exact.outputs.cache-matched-key }}';
+                      const prefixHit  = '${{ steps.prefix.outputs.cache-matched-key }}';
+
+                      const lines = [
+                        `### 🔍 Cache Verification for \`${branch}\``,
+                        '',
+                        `| Check | Result |`,
+                        `|-------|--------|`,
+                        `| Exact match (\`build-sizes-${branch}-${sha.slice(0,8)}…\`) | ${exactHit ? '✅ Hit: `' + exactHit + '`' : '❌ Miss'} |`,
+                        `| Prefix match (\`build-sizes-${branch}-*\`) | ${prefixHit ? '✅ Hit: `' + prefixHit + '`' : '❌ Miss'} |`,
+                      ];
+
+                      if (!exactHit && !prefixHit) {
+                        lines.push('', '> ⚠️ No cache exists for this branch. Run this workflow again with **seed** mode.');
+                      } else if (!exactHit && prefixHit) {
+                        lines.push('', `> ℹ️ No exact SHA match, but a previous cache entry exists. PRs will use this as the baseline.`);
+                      } else {
+                        lines.push('', '> ✅ Cache is up to date for the current HEAD.');
+                      }
+
+                      await core.summary.addRaw(lines.join('\n')).write();

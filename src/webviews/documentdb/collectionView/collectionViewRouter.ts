@@ -3,17 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type FieldEntry } from '@documentdb-js/schema-analyzer';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as fs from 'fs';
-import { type Document } from 'mongodb';
-import * as path from 'path';
 import * as vscode from 'vscode';
-import { type JSONSchema } from 'vscode-json-languageservice';
 import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
+import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { getKnownFields, type FieldEntry } from '../../../utils/json/mongo/autocomplete/getKnownFields';
-import { publicProcedure, router, trpcToTelemetry } from '../../api/extension-server/trpc';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 import * as l10n from '@vscode/l10n';
 import {
@@ -23,128 +20,193 @@ import {
 } from '../../../commands/llmEnhancedCommands/queryGenerationCommands';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
+import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import { Views } from '../../../documentdb/Views';
-import {
-    ExplainPlanAnalyzer,
-    type ExecutionStatsAnalysis,
-    type QueryPlannerAnalysis,
-} from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
-import { StagePropertyExtractor } from '../../../documentdb/queryInsights/StagePropertyExtractor';
-import {
-    createFailedQueryResponse,
-    transformAIResponseForUI,
-    transformStage1Response,
-    transformStage2Response,
-} from '../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../extensionVariables';
-import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
+import { recordSurveyActivityWithInvitation } from '../../../services/survey/SurveyService';
+import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
-// eslint-disable-next-line import/no-internal-modules
-import basicFindQuerySchema from '../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
-import { generateMongoFindJsonSchema } from '../../../utils/json/mongo/autocomplete/generateMongoFindJsonSchema';
-import { promptAfterActionEventually } from '../../../utils/survey';
-import { UsageImpact } from '../../../utils/surveyTypes';
-import { type BaseRouterContext } from '../../api/configuration/appRouter';
-import { type QueryInsightsStage3Response } from './types/queryInsights';
+import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
+import { escapeJsString } from '../../../utils/escapeJsString';
+import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
+import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
+import { type BaseRouterContext } from '../../_integration/appRouter';
+import { queryInsightsRouter } from './queryInsights/queryInsightsRouter';
 
 export type RouterContext = BaseRouterContext & {
     sessionId: string;
+    /**
+     * Stable cluster identifier for cache/client lookups.
+     * Use this for ClustersClient.getClient() and CredentialCache operations.
+     *
+     * For Connections View: This is the storageId (UUID like 'storageId-xxx')
+     * For Azure/Discovery Views: This is the Azure Resource ID (already a valid tree path)
+     */
     clusterId: string;
+    /**
+     * Human-readable cluster display name for use in Playground headers and Shell titles.
+     */
+    clusterDisplayName: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     *
+     * Required for finding the correct tree node when the webview needs to interact
+     * with the tree (e.g., import/export). The same Azure Resource ID can appear in
+     * multiple views (Discovery, Azure Resources, Workspace), so we need to know
+     * which branch data provider to query.
+     *
+     * @see Views enum for possible values (e.g., 'connectionsView', 'discoveryView')
+     */
+    viewId: string;
     databaseName: string;
     collectionName: string;
 };
 
 /**
- * Debug helper: Read debug override file for Query Insights testing
- * Looks for files in resources/debug/ directory
- * Returns the raw MongoDB explain response if file exists and is valid, otherwise null
- *
- * To activate: Remove the "_comment" field from the JSON file
+ * Build a `db.getCollection('name').find(filter, project).sort(sort)` expression
+ * from the Collection View's current query state. Used by cross-feature navigation
+ * to carry the query to Playground or Shell.
  */
-function readQueryInsightsDebugFile(filename: string): Document | null {
-    try {
-        const debugFilePath = path.join(ext.context.extensionPath, 'resources', 'debug', filename);
+function buildFindExpression(
+    collectionName: string,
+    filter: string,
+    project: string | undefined,
+    sort: string | undefined,
+    skip: number | undefined,
+    limit: number | undefined,
+): string {
+    const hasProject = project && project.trim() !== '{}' && project.trim() !== '{  }' && project.trim() !== '';
+    const hasSort = sort && sort.trim() !== '{}' && sort.trim() !== '{  }' && sort.trim() !== '';
 
-        if (!fs.existsSync(debugFilePath)) {
-            return null;
-        }
+    const filterArg = filter.trim() || '{}';
 
-        const content = fs.readFileSync(debugFilePath, 'utf8').trim();
+    const escaped = escapeJsString(collectionName);
 
-        if (!content) {
-            return null;
-        }
-
-        const parsed = JSON.parse(content) as Document & { _debug_active?: boolean };
-
-        // Check if debug mode is explicitly activated
-        if (!parsed._debug_active) {
-            return null;
-        }
-
-        ext.outputChannel.appendLine(`🐛 Query Insights Debug: Using override data from ${filename}`);
-
-        return parsed;
-    } catch (error) {
-        ext.outputChannel.appendLine(
-            `⚠️ Query Insights Debug: Failed to read ${filename}: ${(error as Error).message}`,
-        );
-        return null;
+    let expr: string;
+    if (hasProject) {
+        expr = `db.getCollection('${escaped}').find(${filterArg}, ${project})`;
+    } else {
+        expr = `db.getCollection('${escaped}').find(${filterArg})`;
     }
+
+    if (hasSort) {
+        expr += `.sort(${sort})`;
+    }
+
+    if (skip && skip > 0) {
+        expr += `.skip(${skip})`;
+    }
+
+    if (limit && limit > 0) {
+        expr += `.limit(${limit})`;
+    }
+
+    return expr;
 }
 
 // Helper function to find the collection node based on context
+// Delegates to the appropriate branch data provider's findCollectionByClusterId method
 async function findCollectionNodeInTree(
     clusterId: string,
+    viewId: string,
     databaseName: string,
     collectionName: string,
 ): Promise<CollectionItem | undefined> {
-    let branchDataProvider: { findNodeById(id: string): Promise<unknown> } | undefined;
-    const nodeId = `${clusterId}/${databaseName}/${collectionName}`;
+    // Select the branch data provider based on viewId
+    // The viewId tells us which tree view the cluster was opened from
+    //
+    // Each provider now implements findCollectionByClusterId for the dual-ID architecture.
 
-    // TODO: this should not be necessary in general, let's rebuild this in the near future
-    // There is a lack of consistency with using the parentId in the ID of the tree nodes
-    // This is happening in the discovery and the plugins, it's easy to fix but needs
-    // a bit of work. For now, we'll ignore it as we only have two branchdata providers
-    // but it needs to be fixed when new providers are added.
-
-    if (clusterId.startsWith(Views.ConnectionsView)) {
-        branchDataProvider = ext.connectionsBranchDataProvider;
-    } else {
-        branchDataProvider = ext.discoveryBranchDataProvider;
-    }
-    // } else if (clusterId.startsWith(Views.DiscoveryView)) {
-    //     branchDataProvider = ext.discoveryBranchDataProvider;
-    // } else if (clusterId.startsWith(WorkspaceResourceType.MongoClusters)) {
-    //     branchDataProvider = ext.mongoClustersWorkspaceBranchDataProvider;
-    // } else if (clusterId.includes('/providers/Microsoft.DocumentDB/mongoClusters/')) {
-    //     branchDataProvider = ext.mongoVCoreBranchDataProvider;
-    // }
-
-    if (branchDataProvider) {
-        try {
-            // Assuming findNodeById might return undefined or throw if not found
-            const node = await branchDataProvider.findNodeById(nodeId);
-            // The cast is still necessary if the providers don't share a precise enough common type
-            return node as CollectionItem | undefined;
-        } catch (error) {
-            console.error(`Error finding node by ID '${nodeId}':`, error);
-            return undefined;
+    // Cast viewId to string enum values for comparison
+    // (viewId comes from serialized context as a string)
+    if (viewId === (Views.ConnectionsView as string)) {
+        return (await ext.connectionsBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    } else if (viewId === (Views.DiscoveryView as string)) {
+        return (await ext.discoveryBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    } else if (viewId === (Views.AzureResourcesView as string)) {
+        // Azure Resources View has two providers: vCore and RU
+        // Try both since we don't know which API type this cluster uses
+        const vcoreResult = await ext.azureResourcesVCoreBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        );
+        if (vcoreResult) {
+            return vcoreResult as CollectionItem | undefined;
         }
-    } else {
-        console.warn(`Could not determine branch data provider for clusterId: ${clusterId}`);
+        return (await ext.azureResourcesRUBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    } else if (viewId === (Views.AzureWorkspaceView as string)) {
+        // Azure Workspace View doesn't surface cluster items directly
+        console.warn(`findCollectionNodeInTree: Azure Workspace View does not support collection lookup`);
         return undefined;
+    } else {
+        // Fallback: try to infer from clusterId format
+        // - Azure resources: clusterId is sanitized, contains '_providers_' or '_subscriptions_'
+        // - Connections View: clusterId is a storageId (UUID like 'storageId-xxx')
+        const isAzureResource = clusterId.includes('_providers_') || clusterId.includes('_subscriptions_');
+        if (isAzureResource) {
+            return (await ext.discoveryBranchDataProvider.findCollectionByClusterId(
+                clusterId,
+                databaseName,
+                collectionName,
+            )) as CollectionItem | undefined;
+        }
+        return (await ext.connectionsBranchDataProvider.findCollectionByClusterId(
+            clusterId,
+            databaseName,
+            collectionName,
+        )) as CollectionItem | undefined;
+    }
+}
+
+async function reportCollectionNodeResolutionFailure(
+    operation: 'import' | 'export',
+    { clusterId, viewId, databaseName, collectionName }: RouterContext,
+): Promise<void> {
+    const showOutput = l10n.t('Show Output');
+    ext.outputChannel.error(
+        l10n.t(
+            'Collection View {0} failed because the collection tree node could not be resolved. View ID: {1}; Cluster ID: {2}; Database: {3}; Collection: {4}',
+            operation,
+            viewId,
+            clusterId,
+            databaseName,
+            collectionName,
+        ),
+    );
+
+    const choice = await vscode.window.showErrorMessage(
+        l10n.t('Failed to {0} documents.', operation),
+        {
+            modal: true,
+            detail: l10n.t('Select "{0}" to see error details.', showOutput),
+        },
+        showOutput,
+    );
+    if (choice === showOutput) {
+        ext.outputChannel.show();
     }
 }
 
 export const collectionsViewRouter = router({
-    getInfo: publicProcedure.use(trpcToTelemetry).query(({ ctx }) => {
+    getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
         const myCtx = ctx as RouterContext;
 
         return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
     }),
-    runFindQuery: publicProcedure
-        .use(trpcToTelemetry)
+    runFindQuery: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -186,38 +248,28 @@ export const collectionsViewRouter = router({
             void callWithTelemetryAndErrorHandling('documentDB.query.executionIntent', (telemetryCtx) => {
                 telemetryCtx.errorHandling.suppressDisplay = true;
                 telemetryCtx.telemetry.properties.intent = executionIntent;
-                telemetryCtx.telemetry.properties.pageNumber = input.pageNumber.toString();
+                telemetryCtx.telemetry.measurements.pageNumber = input.pageNumber;
                 telemetryCtx.telemetry.measurements.documentCount = size;
             });
 
-            void promptAfterActionEventually(UsageImpact.High);
-
+            if (executionIntent === 'initial' && !myCtx.signal?.aborted) {
+                recordSurveyActivityWithInvitation('dataBrowsing');
+            }
             return { documentCount: size };
         }),
-    getAutocompletionSchema: publicProcedure
-        .use(trpcToTelemetry)
+    getFieldCompletionData: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
             const myCtx = ctx as RouterContext;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
-            const _currentJsonSchema = session.getCurrentSchema();
-            const autoCompletionData: FieldEntry[] = getKnownFields(_currentJsonSchema);
+            const fieldEntries: FieldEntry[] = session.getKnownFields();
 
-            let querySchema: JSONSchema;
-
-            if (autoCompletionData.length > 0) {
-                querySchema = generateMongoFindJsonSchema(autoCompletionData);
-            } else {
-                querySchema = basicFindQuerySchema;
-            }
-
-            return querySchema;
+            return toFieldCompletionItems(fieldEntries);
         }),
-    getCurrentPageAsTable: publicProcedure
-        .use(trpcToTelemetry)
-        //parameters
+    getCurrentPageAsTable: publicProcedureWithTelemetry
+        // parameters
         .input(z.array(z.string()))
         // procedure type
         .query(({ input, ctx }) => {
@@ -228,8 +280,7 @@ export const collectionsViewRouter = router({
 
             return tableData;
         }),
-    getCurrentPageAsTree: publicProcedure
-        .use(trpcToTelemetry)
+    getCurrentPageAsTree: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
             const myCtx = ctx as RouterContext;
@@ -239,8 +290,7 @@ export const collectionsViewRouter = router({
 
             return treeData;
         }),
-    getCurrentPageAsJson: publicProcedure
-        .use(trpcToTelemetry)
+    getCurrentPageAsJson: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
             const myCtx = ctx as RouterContext;
@@ -250,21 +300,20 @@ export const collectionsViewRouter = router({
 
             return jsonData;
         }),
-    addDocument: publicProcedure
-        .use(trpcToTelemetry)
+    addDocument: publicProcedureWithTelemetry
         // procedure type
         .mutation(({ ctx }) => {
             const myCtx = ctx as RouterContext;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
+                viewId: myCtx.viewId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
                 mode: 'add',
             });
         }),
-    viewDocumentById: publicProcedure
-        .use(trpcToTelemetry)
+    viewDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
@@ -273,14 +322,14 @@ export const collectionsViewRouter = router({
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
+                viewId: myCtx.viewId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
                 documentId: input,
                 mode: 'view',
             });
         }),
-    editDocumentById: publicProcedure
-        .use(trpcToTelemetry)
+    editDocumentById: publicProcedureWithTelemetry
         // parameters
         .input(z.string())
         // procedure type
@@ -289,15 +338,15 @@ export const collectionsViewRouter = router({
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
+                viewId: myCtx.viewId,
                 databaseName: myCtx.databaseName,
                 collectionName: myCtx.collectionName,
                 documentId: input,
                 mode: 'edit',
             });
         }),
-    deleteDocumentsById: publicProcedure
-        .use(trpcToTelemetry)
-        // parameteres
+    deleteDocumentsById: publicProcedureWithTelemetry
+        // parameters
         .input(z.array(z.string())) // stands for string[]
         // procedure type
         .mutation(async ({ input, ctx }) => {
@@ -330,8 +379,7 @@ export const collectionsViewRouter = router({
 
             return acknowledged;
         }),
-    exportDocuments: publicProcedure
-        .use(trpcToTelemetry)
+    exportDocuments: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -344,11 +392,12 @@ export const collectionsViewRouter = router({
         )
         //procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
             const collectionTreeNode = await findCollectionNodeInTree(
                 myCtx.clusterId,
+                myCtx.viewId,
                 myCtx.databaseName,
                 myCtx.collectionName,
             );
@@ -369,16 +418,19 @@ export const collectionsViewRouter = router({
                     },
                 );
             } else {
-                throw new Error('Could not find the specified collection in the tree.');
+                myCtx.actionContext.telemetry.properties.failureReason = 'collectionNodeNotFound';
+                await reportCollectionNodeResolutionFailure('export', myCtx);
+                throw new Error('Collection tree node could not be resolved.');
             }
         }),
 
-    importDocuments: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    importDocuments: publicProcedureWithTelemetry.query(async ({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
         const collectionTreeNode = await findCollectionNodeInTree(
             myCtx.clusterId,
+            myCtx.viewId,
             myCtx.databaseName,
             myCtx.collectionName,
         );
@@ -388,12 +440,13 @@ export const collectionsViewRouter = router({
                 source: 'webview;collectionView',
             });
         } else {
-            throw new Error('Could not find the specified collection in the tree.');
+            myCtx.actionContext.telemetry.properties.failureReason = 'collectionNodeNotFound';
+            await reportCollectionNodeResolutionFailure('import', myCtx);
+            throw new Error('Collection tree node could not be resolved.');
         }
     }),
 
-    generateQuery: publicProcedure
-        .use(trpcToTelemetry)
+    generateQuery: publicProcedureWithTelemetry
         // parameters
         .input(
             z.object({
@@ -484,335 +537,22 @@ export const collectionsViewRouter = router({
         }),
 
     /**
-     * Query Insights Stage 1 - Initial Performance View
-     * Returns fast metrics using explain("queryPlanner")
+     * Query Insights sub-router (Stage 1/2/3 + executeQueryInsightsAction).
      *
-     * This endpoint:
-     * 1. Retrieves execution time from ClusterSession (tracked during query execution)
-     * 2. Retrieves cached query planner info from ClusterSession
-     * 3. Uses ExplainPlanAnalyzer to parse the explain output
-     * 4. Transforms the analysis into UI-friendly format
+     * Mounted under `collectionView.queryInsights.*`. See
+     * `./queryInsights/queryInsightsRouter.ts` for the procedure bodies.
      *
-     * Note: This uses queryPlanner verbosity (no query re-execution)
-     * Documents returned is NOT available in Stage 1 - only in Stage 2 with executionStats
+     * Note: this changes the tRPC rpc event path for these procedures
+     * (now includes a `queryInsights` segment); telemetry queries that
+     * hard-coded the old path must be updated.
      */
-    getQueryInsightsStage1: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
-        const { sessionId, databaseName, collectionName } = myCtx;
-
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights Stage 1] Started for {db}.{collection}', {
-                db: databaseName,
-                collection: collectionName,
-            }),
-        );
-
-        let analyzed: QueryPlannerAnalysis;
-        let executionTime: number;
-
-        // Platform compatibility check:
-        // Query Insights requires the MongoDB API explain() command with specific verbosity modes
-        // (queryPlanner and executionStats). Currently, only DocumentDB supports these features.
-        //
-        // Supported platforms:
-        //   - Azure Cosmos DB for MongoDB vCore (domainInfo_api !== 'RU')
-        //   - Native MongoDB clusters
-        const session: ClusterSession = ClusterSession.getSession(sessionId);
-        const clusterMetadata = await session.getClient().getClusterMetadata();
-
-        if (clusterMetadata?.domainInfo_api === 'RU') {
-            // TODO: Platform identification improvements needed
-            // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
-            // 2. Define platform capabilities enum (SupportsExplain, SupportsAggregation, etc.)
-            // 3. Check capabilities instead of platform names for better maintainability
-            // 4. Consider adding feature detection (try explain() and handle gracefully)
-            // 5. Update UI to show platform-specific feature availability
-            ext.outputChannel.trace(
-                l10n.t(
-                    '[Query Insights Stage 1] Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.',
-                ),
-            );
-
-            // Create error with code for UI-specific handling
-            const error = new Error(
-                l10n.t('Query Insights is not supported on Azure Cosmos DB for MongoDB (RU) clusters.'),
-            );
-            // Add error code as a custom property for UI pattern matching
-            (error as Error & { code?: string }).code = 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU';
-            throw error;
-        }
-
-        // Check for debug override file first
-        const debugData = readQueryInsightsDebugFile('query-insights-stage1.json');
-        if (debugData) {
-            ext.outputChannel.trace(l10n.t('[Query Insights Stage 1] Using debug data file'));
-            // Use debug data - analyze it the same way as real data
-            analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(debugData);
-            // Use a default execution time for debug mode
-            executionTime = 2.5;
-        } else {
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-
-            // Get execution time from session (tracked during last query execution)
-            executionTime = session.getLastExecutionTimeMs();
-
-            // Get query parameters from session with parsed BSON objects
-            const queryParams = session.getCurrentFindQueryParamsWithObjects();
-
-            // Get query planner info (cached or fetch) without skip/limit for full query insights
-            const queryPlannerStart = Date.now();
-            const queryPlannerResult = await session.getQueryPlannerInfo(
-                databaseName,
-                collectionName,
-                queryParams.filterObj,
-                {
-                    sort: queryParams.sortObj,
-                    projection: queryParams.projectionObj,
-                    // Intentionally omit skip/limit for full query insights
-                },
-            );
-            const queryPlannerDuration = Date.now() - queryPlannerStart;
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 1] explain(queryPlanner) completed in {ms}ms', {
-                    ms: queryPlannerDuration.toString(),
-                }),
-            );
-
-            // Analyze with ExplainPlanAnalyzer
-            analyzed = ExplainPlanAnalyzer.analyzeQueryPlanner(queryPlannerResult);
-        }
-
-        // Transform to UI format
-        const transformed = transformStage1Response(analyzed, executionTime);
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights Stage 1] Completed: indexes={idx}, collScan={scan}', {
-                idx: analyzed.usedIndexes.join(', ') || 'none',
-                scan: analyzed.isCollectionScan.toString(),
-            }),
-        );
-
-        return transformed;
-    }),
-
-    /**
-     * Query Insights Stage 2 - Detailed Execution Analysis
-     * Returns authoritative metrics using explain("executionStats")
-     *
-     * This endpoint:
-     * 1. Retrieves the current query from ClusterSession (no parameters needed)
-     * 2. Retrieves cached execution stats from ClusterSession
-     * 3. Uses ExplainPlanAnalyzer to parse and rate performance
-     * 4. Transforms the analysis into UI-friendly format with performance rating
-     *
-     * Note: This executes the query with executionStats verbosity
-     */
-    getQueryInsightsStage2: publicProcedure.use(trpcToTelemetry).query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
-        const { sessionId, databaseName, collectionName } = myCtx;
-
-        ext.outputChannel.trace(
-            l10n.t('[Query Insights Stage 2] Started for {db}.{collection}', {
-                db: databaseName,
-                collection: collectionName,
-            }),
-        );
-
-        // Track execution time to ensure minimum duration for better UX
-        const startTime = performance.now();
-
-        let analyzed: ExecutionStatsAnalysis;
-        let explainResult: Document | undefined;
-
-        // Check for debug override file first
-        const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
-        if (debugData) {
-            ext.outputChannel.trace(l10n.t('[Query Insights Stage 2] Using debug data file'));
-            // Use debug data - analyze it the same way as real data
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
-            explainResult = debugData;
-        } else {
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-
-            // Get query parameters from session with parsed BSON objects
-            const queryParams = session.getCurrentFindQueryParamsWithObjects();
-
-            // Get execution stats (cached or fetch) without skip/limit for full query insights
-            const executionStatsStart = Date.now();
-            const executionStatsResult = await session.getExecutionStats(
-                databaseName,
-                collectionName,
-                queryParams.filterObj,
-                {
-                    sort: queryParams.sortObj,
-                    projection: queryParams.projectionObj,
-                    // Intentionally omit skip/limit for full query insights
-                },
-            );
-            const executionStatsDuration = Date.now() - executionStatsStart;
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 2] explain(executionStats) completed in {ms}ms', {
-                    ms: executionStatsDuration.toString(),
-                }),
-            );
-
-            // Analyze with ExplainPlanAnalyzer
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
-            explainResult = executionStatsResult;
-        }
-
-        // Extract extended stage info (as per design document)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
-        if (executionStages) {
-            analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
-        }
-
-        // Check for execution error and return error response if found
-        if (analyzed.executionError) {
-            ext.outputChannel.warn(
-                l10n.t('[Query Insights Stage 2] Query execution failed: {error}', {
-                    error: analyzed.executionError.errorMessage,
-                }),
-            );
-            const errorResponse = createFailedQueryResponse(analyzed, explainResult);
-
-            // Ensure minimum execution time for better UX
-            const elapsedTime = performance.now() - startTime;
-            const minimumDuration = 1500; // 1.5 seconds
-            if (elapsedTime < minimumDuration) {
-                await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
-            }
-
-            ext.outputChannel.trace(l10n.t('Query Insights Stage 2 completed with execution error'));
-            return errorResponse;
-        }
-
-        // Transform to UI format (normal successful execution path)
-        ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
-        const transformed = transformStage2Response(analyzed);
-
-        // Ensure minimum execution time for better UX (avoid jarring instant transitions)
-        const elapsedTime = performance.now() - startTime;
-        const minimumDuration = 1500; // 1.5 seconds
-        if (elapsedTime < minimumDuration) {
-            await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
-        }
-
-        ext.outputChannel.trace(
-            l10n.t(
-                '[Query Insights Stage 2] Completed: execTime={time}ms, returned={ret}, examined={ex}, ratio={ratio}',
-                {
-                    time: analyzed.executionTimeMillis.toString(),
-                    ret: analyzed.nReturned.toString(),
-                    ex: analyzed.totalDocsExamined.toString(),
-                    ratio: analyzed.efficiencyRatio.toFixed(2),
-                },
-            ),
-        );
-        return transformed;
-    }),
-
-    /**
-     * Get Query Insights - Stage 3 (AI-powered recommendations)
-     * Opt-in AI analysis of query performance with actionable suggestions
-     *
-     * This endpoint:
-     * 1. Retrieves the current query from ClusterSession (no parameters needed)
-     * 2. Calls AI service with query, database, and collection info
-     * 3. Transforms AI response into UI-friendly format with action buttons
-     */
-    getQueryInsightsStage3: publicProcedure
-        .use(trpcToTelemetry)
-        .input(z.object({ requestKey: z.string() }))
-        .query(async ({ input, ctx }): Promise<QueryInsightsStage3Response> => {
-            const myCtx = ctx as RouterContext;
-            const { sessionId, clusterId, databaseName, collectionName } = myCtx;
-            const { requestKey } = input;
-
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] Started for {db}.{collection} (requestKey: {key})', {
-                    db: databaseName,
-                    collection: collectionName,
-                    key: requestKey,
-                }),
-            );
-
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-
-            // Get query parameters from session (current query)
-            const queryParams = session.getCurrentFindQueryParams();
-
-            // Create AI service instance
-            const aiService = new QueryInsightsAIService();
-
-            // Call AI service
-            const aiServiceStart = Date.now();
-            const aiRecommendations = await aiService.getOptimizationRecommendations(
-                sessionId,
-                queryParams,
-                databaseName,
-                collectionName,
-            );
-            const aiServiceDuration = Date.now() - aiServiceStart;
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] AI service completed in {ms}ms (requestKey: {key})', {
-                    ms: aiServiceDuration.toString(),
-                    key: requestKey,
-                }),
-            );
-
-            // Transform AI response to UI format with button payloads
-            const transformed = transformAIResponseForUI(aiRecommendations, {
-                clusterId,
-                databaseName,
-                collectionName,
-            });
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] Completed: {count} improvement cards generated (requestKey: {key})', {
-                    count: transformed.improvementCards.length.toString(),
-                    key: requestKey,
-                }),
-            );
-
-            return transformed;
-        }),
-
-    /**
-     * Execute a recommendation action (create index, drop index, learn more, etc.)
-     *
-     * Takes actionId and payload from the button click and routes to appropriate handler
-     * in QueryInsightsAIService
-     */
-    executeQueryInsightsAction: publicProcedure
-        .use(trpcToTelemetry)
-        .input(
-            z.object({
-                actionId: z.string(),
-                payload: z.unknown(),
-            }),
-        )
-        .mutation(async ({ ctx, input }) => {
-            const myCtx = ctx as RouterContext;
-            const { sessionId, clusterId } = myCtx;
-            const { actionId, payload } = input;
-
-            // Create AI service instance
-            const aiService = new QueryInsightsAIService();
-
-            // Execute the recommendation action
-            const result = await aiService.executeQueryInsightsAction(clusterId, sessionId, actionId, payload);
-
-            return result;
-        }),
+    queryInsights: queryInsightsRouter,
 
     /**
      * View Raw Explain Output
      * Opens the raw explain plan output in a new VS Code document
      */
-    viewRawExplainOutput: publicProcedure.use(trpcToTelemetry).mutation(async ({ ctx }) => {
+    viewRawExplainOutput: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
         const myCtx = ctx as RouterContext;
         const { sessionId, databaseName, collectionName } = myCtx;
 
@@ -829,15 +569,154 @@ export const collectionsViewRouter = router({
         // Pretty-print the JSON
         const prettyJson = JSON.stringify(rawExplainOutput, null, 4);
 
-        // Open in a new untitled document with .json extension
-        const vscode = await import('vscode');
-        const doc = await vscode.workspace.openTextDocument({
-            content: prettyJson,
-            language: 'json',
-        });
-
-        await vscode.window.showTextDocument(doc);
+        await readOnlyJsonDocumentProvider.openDocument(l10n.t('Raw Explain Output'), prettyJson);
 
         return { success: true };
     }),
+
+    openQueryInPlayground: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
+            myCtx.actionContext.telemetry.properties.hasFilter =
+                input.filter && input.filter.replace(/\s/g, '') !== '{}' ? 'true' : 'false';
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+
+            await vscode.commands.executeCommand('vscode-documentdb.command.playground.new.withContent', {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                content: query,
+                viewId: myCtx.viewId,
+            });
+        }),
+
+    openQueryInShell: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+
+            await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                viewId: myCtx.viewId,
+                initialInput: query,
+            });
+        }),
+
+    copyQueryToClipboard: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as RouterContext;
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+            await vscode.env.clipboard.writeText(query);
+            void vscode.window.showInformationMessage(l10n.t('Query copied to clipboard'));
+        }),
+
+    pasteQueryFromClipboard: publicProcedureWithTelemetry.mutation(async () => {
+        const text = await vscode.env.clipboard.readText();
+
+        if (!text.trim()) {
+            throw new Error(l10n.t('Clipboard is empty.'));
+        }
+
+        const parsed = parseFindExpression(text);
+
+        // Require at least one transferable query component before reporting success
+        if (
+            !parsed.filter &&
+            !parsed.project &&
+            !parsed.sort &&
+            parsed.skip === undefined &&
+            parsed.limit === undefined
+        ) {
+            throw new Error(l10n.t('Clipboard does not contain a recognizable find() query.'));
+        }
+
+        return {
+            success: true as const,
+            filter: parsed.filter,
+            project: parsed.project,
+            sort: parsed.sort,
+            skip: parsed.skip,
+            limit: parsed.limit,
+        };
+    }),
+
+    completionAccepted: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                category: z.enum([...COMPLETION_CATEGORIES, 'unknown']),
+            }),
+        )
+        .mutation(({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            // Suppress per-call tRPC telemetry — we accumulate instead
+            myCtx.actionContext.telemetry.suppressAll = true;
+
+            if (input.category === 'unknown') {
+                ext.outputChannel.appendLog(
+                    `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
+                );
+            }
+            accumulateTelemetry('completion.accepted.cv', (sample) => {
+                sample.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
+            });
+        }),
 });

@@ -6,15 +6,39 @@
       "_justification": "No need to scan external node modules."
     },
     {
-      "file": "test\\mongoGetCommand.test.ts",
-      "_justification": "Fake credentials used for unit tests."
-    },
-    {
-      "file": "src\\documentdb\\scrapbook\\mongoConnectionStrings.test.ts",
+      "file": "src\\documentdb\\mongoConnectionStrings.test.ts",
       "_justification": "Fake credentials used for unit tests."
     },
     {
       "file": "src\\documentdb\\utils\\DocumentDBConnectionString.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "src\\services\\connectionStorageService.cleanup.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "src\\services\\connectionStorageService.contract.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "src\\services\\connectionStorageService.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "packages\\documentdb-js-srv-resolver\\src\\srvUriRewrite.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "packages\\documentdb-js-srv-resolver\\src\\resolveSrvForDriver.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "packages\\documentdb-js-srv-resolver\\src\\srvUriRewrite.differential.test.ts",
+      "_justification": "Fake credentials used for unit tests."
+    },
+    {
+      "file": "src\\documentdb\\srv\\prepareDriverConnectionString.test.ts",
       "_justification": "Fake credentials used for unit tests."
     }
   ]

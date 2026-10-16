@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/* eslint-disable react-hooks/refs -- SlickgridReact requires ref for imperative grid API access */
+
 import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
 import * as React from 'react';

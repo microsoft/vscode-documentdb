@@ -11,6 +11,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { unwrapArgs } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 
 /**
  * UserFacingError represents an error that should be prominently displayed to the user
@@ -101,6 +102,62 @@ export function registerCommandWithModalErrors(
 }
 
 /**
+ * Registers a tree-node command that explains infrastructure-caused failures, without changing how
+ * anything else is reported.
+ *
+ * Separate from {@link registerCommandWithTreeNodeUnwrappingAndModalErrors}: the database commands
+ * (create, drop, import, export, index) report their failures as notifications today, and a
+ * diagnosis is not a reason to start blocking the user with a modal. Only the wording changes, and
+ * only when a provider recognises the cluster.
+ *
+ * @param commandId The command ID to register
+ * @param callback The command handler function that expects unwrapped tree node arguments
+ * @param debounce Optional debounce time in milliseconds
+ * @param telemetryId Optional custom telemetry ID
+ */
+export function registerCommandWithTreeNodeUnwrappingAndDiagnostics<T>(
+    commandId: string,
+    callback: TreeNodeCommandCallback<T>,
+    debounce?: number,
+    telemetryId?: string,
+): void {
+    registerCommand(
+        commandId,
+        async (context: IActionContext, ...args: unknown[]) => {
+            let unwrappedArgs: ReturnType<typeof unwrapArgs<T>> = [];
+            try {
+                unwrappedArgs = unwrapArgs<T>(args);
+                return await callback(context, ...unwrappedArgs);
+            } catch (error) {
+                // A UserFacingError already says what it needs to; leave it to default handling.
+                if (error instanceof UserFacingError) {
+                    throw error;
+                }
+
+                const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
+                    ?.cluster?.clusterId;
+                const diagnosis = clusterId
+                    ? await ConnectionDiagnosticsService.explain({ clusterId, error })
+                    : undefined;
+
+                if (diagnosis) {
+                    context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+                    context.errorHandling.suppressDisplay = true;
+                    // `detail` is only rendered for modal messages, so the raw text is appended.
+                    const cause = error instanceof Error ? error.message : String(error);
+                    void vscode.window.showErrorMessage(`${diagnosis.message} (${cause})`);
+                }
+
+                // The error itself is never modified, so telemetry and identity checks still work.
+                throw error;
+            }
+        },
+        debounce,
+        telemetryId,
+    );
+}
+
+/**
  * Registers a command that unwraps tree node arguments and shows UserFacingErrors in modal dialogs.
  * This combines the functionality of registerCommandWithTreeNodeUnwrapping and registerCommandWithModalErrors.
  *
@@ -121,9 +178,11 @@ export function registerCommandWithTreeNodeUnwrappingAndModalErrors<T>(
     registerCommand(
         commandId,
         async (context: IActionContext, ...args: unknown[]) => {
+            let unwrappedArgs: ReturnType<typeof unwrapArgs<T>> = [];
             try {
                 // Unwrap tree node arguments before passing to the callback
-                return await callback(context, ...unwrapArgs<T>(args));
+                unwrappedArgs = unwrapArgs<T>(args);
+                return await callback(context, ...unwrappedArgs);
             } catch (error) {
                 // Only handle UserFacingError specially
                 if (error instanceof UserFacingError) {
@@ -142,7 +201,24 @@ export function registerCommandWithTreeNodeUnwrappingAndModalErrors<T>(
                     throw error;
                 }
 
-                // For all other error types, just re-throw to use default handling
+                // The command's tree node carries the cluster, so a failure caused by its
+                // infrastructure can be explained instead of showing the raw driver error.
+                const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
+                    ?.cluster?.clusterId;
+                const diagnosis = clusterId
+                    ? await ConnectionDiagnosticsService.explain({ clusterId, error })
+                    : undefined;
+
+                if (diagnosis) {
+                    context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+                    context.errorHandling.suppressDisplay = true;
+                    await vscode.window.showErrorMessage(diagnosis.message, {
+                        modal: true,
+                        detail: error instanceof Error ? error.message : String(error),
+                    });
+                }
+
+                // The error itself is never modified, so telemetry and identity checks still work.
                 throw error;
             }
         },

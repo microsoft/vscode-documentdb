@@ -88,6 +88,24 @@ export class TreeParentCache<T extends TreeElement> {
     }
 
     /**
+     * Finds a cached node whose ID ends with the given suffix.
+     *
+     * This is useful when you know part of a node's ID (e.g., a clusterId) but not
+     * the full path. Returns the first matching node found.
+     *
+     * @param suffix The suffix to match against node IDs
+     * @returns The first node whose ID ends with the suffix, or undefined if not found
+     */
+    findNodeBySuffix(suffix: string): T | undefined {
+        for (const [key, node] of this.nodeCache) {
+            if (key.endsWith(suffix)) {
+                return node;
+            }
+        }
+        return undefined;
+    }
+
+    /**
      * Gets the parent of a node from the cache.
      *
      * @param element The node to find the parent for

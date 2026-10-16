@@ -14,6 +14,13 @@ export class PromptUsernameStep extends AzureWizardPromptStep<NewLocalConnection
             prompt: l10n.t('Enter the username'),
             value: context.userName,
             ignoreFocusOut: true,
+            // eslint-disable-next-line @typescript-eslint/require-await
+            asyncValidationTask: async (username?: string) => {
+                if (!username || username.trim().length === 0) {
+                    return l10n.t('Username cannot be empty');
+                }
+                return undefined;
+            },
         });
 
         context.userName = username.trim();

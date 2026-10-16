@@ -100,7 +100,7 @@ export function extractCredentialsFromCluster(
 
     const allowedModes = clusterInformation.properties?.authConfig?.allowedModes ?? [];
     context.telemetry.properties.receivedAuthMethods = allowedModes.join(',');
-    context.telemetry.properties.receivedAuthMethodsCount = allowedModes.length.toString();
+    context.telemetry.measurements.receivedAuthMethodsCount = allowedModes.length;
 
     credentials.availableAuthMethods = allowedModes.filter(isSupportedAuthMethod);
 
@@ -108,14 +108,22 @@ export function extractCredentialsFromCluster(
     context.telemetry.properties.unknownAuthMethods = unknownMethodIds.join(',');
 
     if (credentials.availableAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
+        // Managed identity is Entra ID on the wire and has no separate ARM allowedModes value, so it
+        // is synthesized by this explicit rule. The raw allowedModes telemetry above is left alone,
+        // so the synthesized entry never pollutes the service-side numbers.
+        credentials.availableAuthMethods.push(AuthMethodId.ManagedIdentity);
+
         credentials.entraIdAuthConfig = {
             tenantId: subscription.tenantId,
             subscriptionId: subscription.subscriptionId,
         };
+        credentials.managedIdentityAuthConfig = {
+            tenantId: subscription.tenantId,
+        };
     }
 
     // Add telemetry properties from subscription
-    context.telemetry.properties.isCustomCloud = subscription.isCustomCloud.toString();
+    context.telemetry.properties.isCustomCloud = subscription.isCustomCloud ? 'true' : 'false';
 
     return credentials;
 }

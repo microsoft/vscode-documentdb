@@ -6,13 +6,19 @@
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { WebviewController } from '../../api/extension-server/WebviewController';
+import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './documentsViewRouter';
 
 export type DocumentsViewWebviewConfigurationType = {
     id: string; // move to base type
 
     clusterId: string;
+    /**
+     * Identifies which tree view this cluster belongs to.
+     * Required for finding the tree node if needed.
+     * @see Views enum
+     */
+    viewId: string;
     databaseName: string;
     collectionName: string;
     documentId: string;
@@ -20,34 +26,55 @@ export type DocumentsViewWebviewConfigurationType = {
     mode: string; // 'add', 'view', 'edit'
 };
 
-export class DocumentsViewController extends WebviewController<DocumentsViewWebviewConfigurationType> {
-    constructor(initialData: DocumentsViewWebviewConfigurationType) {
-        // ext.context here is the vscode.ExtensionContext required by the ReactWebviewPanelController's original implementation
-        // we're not modifying it here in order to be ready for future updates of the webview API.
-
-        let title: string = `${initialData.databaseName}/${initialData.collectionName}/*new*`;
-        switch (initialData.mode) {
-            case 'view':
-            case 'edit': {
-                title = `${initialData.databaseName}/${initialData.collectionName}/${initialData.documentId}`;
-                break;
-            }
+export function openDocumentWebview(
+    initialData: DocumentsViewWebviewConfigurationType,
+): AppWebviewController<DocumentsViewWebviewConfigurationType> {
+    let title: string = `${initialData.databaseName}/${initialData.collectionName}/*new*`;
+    switch (initialData.mode) {
+        case 'view':
+        case 'edit': {
+            title = `${initialData.databaseName}/${initialData.collectionName}/${initialData.documentId}`;
+            break;
         }
-
-        super(ext.context, API.DocumentDB, title, 'mongoClustersDocumentView', initialData, vscode.ViewColumn.Active);
-
-        const trpcContext: RouterContext = {
-            dbExperience: API.DocumentDB,
-            webviewName: 'documentView',
-            clusterId: initialData.clusterId,
-            databaseName: initialData.databaseName,
-            collectionName: initialData.collectionName,
-            documentId: initialData.documentId,
-            viewPanelTitleSetter: (title: string) => {
-                this.panel.title = title;
-            },
-        };
-
-        this.setupTrpc(trpcContext);
     }
+
+    // The router context's title setter needs the controller handle, which only
+    // exists after openAppWebview returns. The setter is only invoked at runtime
+    // (in response to a tRPC call), well after the handle is assigned below.
+    const handle: { controller?: AppWebviewController<DocumentsViewWebviewConfigurationType> } = {};
+
+    const trpcContext: RouterContext = {
+        dbExperience: API.DocumentDB,
+        webviewName: 'documentView',
+        clusterId: initialData.clusterId,
+        viewId: initialData.viewId,
+        databaseName: initialData.databaseName,
+        collectionName: initialData.collectionName,
+        documentId: initialData.documentId,
+        viewPanelTitleSetter: (title: string) => {
+            if (handle.controller) {
+                handle.controller.panel.title = title;
+            }
+        },
+    };
+
+    const controller = openAppWebview({
+        title,
+        webviewName: 'documentView',
+        panelViewType: 'vscode-documentdb-document-view',
+        config: initialData,
+        context: trpcContext,
+        viewColumn: vscode.ViewColumn.Active,
+        icon: {
+            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-light.svg'),
+            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-dark.svg'),
+        },
+    });
+
+    // Assign into the deferred handle so the title-setter closure above can reach
+    // the controller, then return the local `const` (never the optional
+    // `handle.controller`), so the return path is obviously non-nullable.
+    handle.controller = controller;
+
+    return controller;
 }

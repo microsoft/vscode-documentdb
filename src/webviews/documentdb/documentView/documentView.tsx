@@ -4,23 +4,29 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ProgressBar } from '@fluentui/react-components';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import { loader } from '@monaco-editor/react';
 import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
-import { type JSX, useEffect, useRef, useState } from 'react';
-// eslint-disable-next-line import/no-internal-modules
-import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
-import { UsageImpact } from '../../../utils/surveyTypes';
-import { useConfiguration } from '../../api/webview-client/useConfiguration';
-import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
-import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
+import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { MonacoEditor } from '../../components/MonacoEditor';
+import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { ToolbarDocuments } from './components/toolbarDocuments';
 import { type DocumentsViewWebviewConfigurationType } from './documentsViewController';
 import './documentView.scss';
 
 loader.config({ monaco: monacoEditor });
 
+// ===========================================
+// ACCESSIBILITY: Programmatic Names for Monaco Editors
+// ===========================================
+// Monaco Editor natively supports the `ariaLabel` property in its
+// IStandaloneEditorConstructionOptions interface. This sets the aria-label
+// attribute on the editor's internal textarea, allowing screen readers to
+// announce a meaningful description of the editor's purpose.
+// ===========================================
 const monacoOptions = {
     minimap: {
         enabled: true,
@@ -29,6 +35,8 @@ const monacoOptions = {
 
     readOnly: false,
     automaticLayout: false,
+    // Accessibility: aria-label for screen readers
+    ariaLabel: l10n.t('Document Editor: Edit the document in JSON format'),
 };
 
 export const DocumentView = (): JSX.Element => {
@@ -41,11 +49,31 @@ export const DocumentView = (): JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
-    const [editorContent] = configuration.mode === 'add' ? useState('{  }') : useState('{ "loading…": true }');
+    const initialContent = configuration.mode === 'add' ? '{  }' : '{ "loading…": true }';
+    const [editorContent] = useState(initialContent);
     const [isLoading, setIsLoading] = useState(configuration.mode !== 'add');
     const [isDirty, setIsDirty] = useState(true);
+
+    // Ref for the Save button to manage focus
+    const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+    const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    // Monaco can mount after the initial document fetch resolves (e.g. fast local emulator
+    // responses beat Monaco's async module load), so we stash the value here and flush it
+    // in handleMonacoEditorMount instead of silently dropping it.
+    const pendingContentRef = useRef<string | null>(null);
+    // Falls back to pending/initial content if called before Monaco has mounted,
+    // so callers (e.g. Save) never operate on an empty string.
+    const getCurrentContent = () => editorRef.current?.getValue() ?? pendingContentRef.current ?? editorContent;
+    const setContent = (newValue: string) => {
+        if (editorRef.current) {
+            editorRef.current.setValue(newValue);
+        } else {
+            pendingContentRef.current = newValue;
+        }
+    };
 
     useSelectiveContextMenuPrevention();
 
@@ -54,6 +82,7 @@ export const DocumentView = (): JSX.Element => {
         if (configuration.mode !== 'add') {
             const documentId: string = configuration.documentId;
 
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- Setting loading state before async document fetch
             setIsLoading(true);
 
             void trpcClient.mongoClusters.documentView.getDocumentById
@@ -61,11 +90,13 @@ export const DocumentView = (): JSX.Element => {
                 .then((response) => {
                     setContent(response);
                 })
-                .catch((error) => {
+                .catch(async (error) => {
+                    const cause = error instanceof Error ? error.message : String(error);
+                    const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                     void trpcClient.common.displayErrorMessage.mutate({
-                        message: l10n.t('Error while loading the document'),
+                        message: explained ?? l10n.t('Error while loading the document'),
                         modal: false,
-                        cause: error instanceof Error ? error.message : String(error),
+                        cause,
                     });
                 })
                 .finally(() => {
@@ -74,9 +105,11 @@ export const DocumentView = (): JSX.Element => {
         }
     }, []);
 
-    const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
-    const getCurrentContent = () => editorRef.current?.getValue() || '';
-    const setContent = (newValue: string) => editorRef.current?.setValue(newValue);
+    const handleResize = () => {
+        if (editorRef.current) {
+            editorRef.current.layout();
+        }
+    };
 
     const handleMonacoEditorMount = (
         editor: monacoEditor.editor.IStandaloneCodeEditor,
@@ -85,29 +118,20 @@ export const DocumentView = (): JSX.Element => {
         // Store the editor instance in ref
         editorRef.current = editor;
 
+        // Flush any content that arrived before the editor finished mounting
+        if (pendingContentRef.current !== null) {
+            editor.setValue(pendingContentRef.current);
+            pendingContentRef.current = null;
+        }
+
         handleResize();
 
-        // initialize the monaco editor with the schema that's basic
-        // as we don't know the schema of the collection available
-        // this is a fallback for the case when the autocompletion feature fails.
-        // monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-        //     validate: true,
-        //     schemas: [
-        //         {
-        //             uri: 'mongodb-filter-query-schema.json', // Unique identifier
-        //             fileMatch: ['*'], // Apply to all JSON files or specify as needed
-        //             // eslint-disable-next-line
-        //             schema: basicFindQuerySchema,
-        //             // schema: generateMongoFindJsonSchema(fieldEntries)
-        //         },
-        //     ],
-        // });
-    };
-
-    const handleResize = () => {
-        if (editorRef.current) {
-            editorRef.current.layout();
-        }
+        // Accessibility: Focus the Save button instead of the editor
+        // Monaco editor captures Tab/Shift-Tab for document editing, making it difficult
+        // for keyboard users to navigate away. Setting focus on the toolbar button
+        // provides better keyboard navigation until Tab navigation from editor is improved.
+        // Addresses WCAG 2.4.3 Focus Order requirement.
+        saveButtonRef.current?.focus();
     };
 
     useEffect(() => {
@@ -177,11 +201,13 @@ export const DocumentView = (): JSX.Element => {
                 documentLength = response.length ?? 0;
                 setContent(response);
             })
-            .catch((error) => {
+            .catch(async (error) => {
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while refreshing the document'),
+                    message: explained ?? l10n.t('Error while refreshing the document'),
                     modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
+                    cause,
                 });
             })
             .finally(() => {
@@ -201,8 +227,6 @@ export const DocumentView = (): JSX.Element => {
             .catch((error) => {
                 console.debug('Failed to report an event:', error);
             });
-
-        trpcClient.common.surveyPing.mutate({ usageImpact: UsageImpact.Medium }).catch(() => {});
     }
 
     function handleOnSaveRequest(): void {
@@ -226,11 +250,13 @@ export const DocumentView = (): JSX.Element => {
                 setIsLoading(false);
                 setIsDirty(false);
             })
-            .catch((error) => {
+            .catch(async (error) => {
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error saving the document'),
+                    message: explained ?? l10n.t('Error saving the document'),
                     modal: true, // we want to show the error in a modal dialog as it's an important one, failed to save the document
-                    cause: error instanceof Error ? error.message : String(error),
+                    cause,
                 });
             })
             .finally(() => {
@@ -254,15 +280,22 @@ export const DocumentView = (): JSX.Element => {
 
     function handleOnValidateRequest(): void {}
 
+    // Accessibility: Handle Escape key to exit Monaco editor
+    const handleEscapeEditor = useCallback(() => {
+        saveButtonRef.current?.focus();
+    }, []);
+
     return (
         <div className="documentView">
             <div className="toolbarContainer">
                 {isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
                 <ToolbarDocuments
-                    disableSaveButton={configuration.mode === 'view' || !isDirty}
+                    disableSaveButton={configuration.mode === 'view' || !isDirty || isLoading}
+                    disableRefreshButton={isLoading}
                     onSaveRequest={handleOnSaveRequest}
                     onValidateRequest={handleOnValidateRequest}
                     onRefreshRequest={handleOnRefreshRequest}
+                    saveButtonRef={saveButtonRef}
                 />
             </div>
             <div className="monacoContainer">
@@ -273,6 +306,7 @@ export const DocumentView = (): JSX.Element => {
                     options={monacoOptions}
                     value={editorContent}
                     onMount={handleMonacoEditorMount}
+                    onEscapeEditor={handleEscapeEditor}
                     onChange={() => {
                         setIsDirty(true);
                     }}

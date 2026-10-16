@@ -1,130 +1,457 @@
-name: Node PR Lint, Build and Test
+name: CI
 
-# This workflow handles three scenarios:
+# CI runs in tiers (decision 0002 in docs/ai-and-plans/features/build-and-test-stack/decisions.md). The `plan` job
+# picks the tier and the path-scoped checks; every other job has one `if:` on its outputs.
 #
-# 1. Push to `next`, `dev/*`, or `feature/*` branches:
-#    - Runs `code-quality-and-tests`
-#    - Skips `integration-tests` and `build-and-package` to save resources and focus on code quality
+# - fast: draft PRs, and manual runs without `enforce_full_run`. Static checks (build, l10n, lint,
+#   Prettier, type checks) and unit tests.
+# - standard: ready PRs to `main`, `release/**` or `feature/**`, and pushes to `main` or
+#   `release/**`. Fast, plus the VSIX build, inspection with sizes and activation. Path-scoped:
+#   the npm package checks when `packages/**` changes; the VSIX self-tests and the verification
+#   tool tests when `build/verification/**`, `build/vite/**` or a Vite config changes; the unbundled
+#   webview host check when `packages/vscode-ext-webview/**` changes. `package-lock.json`, this file
+#   and `.github/actions/**` count for all three. Pushes cache build sizes for PR comparisons.
+# - full: the `ci:full-requested` label (one run; the plan job removes the label), and manual runs
+#   with `enforce_full_run`. Every check.
+# - skip: any other label. Nothing runs.
 #
-# 2. Pull Requests to `main` or `next`:
-#    - Runs all jobs: code checks, tests, integration tests, and packaging
-#    - Ensures complete validation including artifact generation before merge
+# After the plan, static checks, unit tests, the npm package checks and the VSIX build run in
+# parallel; inspection and activation wait for the VSIX build (decision 0014). Jobs install with
+# `.github/actions/setup`, which restores `node_modules` from the Actions cache.
 #
-# 3. Push to `main`:
-#    - Runs full workflow for release validation and artifact generation
+# Same-repository PRs get one `<!-- ci-report -->` comment, updated in place: the checks that ran
+# and why, code quality and build size.
+#
+# The ruleset requires `Merge gate`. That is the `gate` job: it fails unless every check the
+# tier expected passed (decisions 0013, 0015).
 
 on:
     workflow_dispatch:
+        inputs:
+            enforce_full_run:
+                description: 'Run every check (full tier); otherwise static checks and unit tests only (fast tier)'
+                required: false
+                type: boolean
+                default: false
 
     push:
         branches:
             - main
-            - next
-            - dev/*
-            - feature/*
+            - release/**
 
     pull_request:
+        types: [opened, synchronize, reopened, ready_for_review, labeled]
         branches:
             - main
-            - next
-            - dev/*
-            - feature/*
+            - release/**
+            - feature/**
 
+# A labeled run gets its own group, so an unrelated label cannot cancel a build and a push cannot
+# cancel a requested full run.
 concurrency:
-    group: ${{ github.head_ref || github.run_id }}
+    group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && format('label-{0}', github.event.label.name) || 'run' }}"
     cancel-in-progress: true
 
+# The default for a job without its own `permissions`; plan and report add the writes they need.
+permissions:
+    contents: read
+
+# Timeouts are about 3 to 4 times the first standard-tier run's durations, at least 5 minutes.
 jobs:
-    code-quality-and-tests:
-        name: Code Quality & Tests
+    plan:
+        name: 'Plan: choose checks'
         runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+            issues: write
+            pull-requests: write
+        outputs:
+            tier: ${{ steps.plan.outputs.tier }}
+            reason: ${{ steps.plan.outputs.reason }}
+            requester: ${{ steps.plan.outputs.requester }}
+            packages: ${{ steps.plan.outputs.packages }}
+            webview-package: ${{ steps.plan.outputs.webview-package }}
+            verification: ${{ steps.plan.outputs.verification }}
+        steps:
+            - name: Pick the tier and the path-scoped checks
+              id: plan
+              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              env:
+                  ENFORCE_FULL_RUN: ${{ inputs.enforce_full_run }}
+              with:
+                  script: |
+                      const { eventName, payload } = context;
+                      const pr = payload.pull_request;
+                      const fullLabel = 'ci:full-requested';
+                      let tier;
+                      let reason;
+                      if (eventName === 'pull_request' && payload.action === 'labeled') {
+                        [tier, reason] = payload.label.name === fullLabel
+                          ? ['full', `full run requested by @${payload.sender.login} for ${pr.head.sha.slice(0, 7)}`]
+                          : ['skip', `label ${payload.label.name} does not affect CI`];
+                      } else if (eventName === 'pull_request') {
+                        [tier, reason] = pr.draft ? ['fast', 'draft PR'] : ['standard', 'ready PR'];
+                      } else if (eventName === 'push') {
+                        [tier, reason] = ['standard', `push to ${context.ref.replace('refs/heads/', '')}`];
+                      } else {
+                        [tier, reason] = process.env.ENFORCE_FULL_RUN === 'true'
+                          ? ['full', 'manual run with enforce_full_run']
+                          : ['fast', 'manual run'];
+                      }
+
+                      // Path-scoped checks: all in the full tier, none in fast or skip, by the whole diff in standard.
+                      let files = null;
+                      if (tier === 'standard') {
+                        try {
+                          let changed;
+                          if (pr) {
+                            changed = await github.paginate(github.rest.pulls.listFiles, { ...context.repo, pull_number: pr.number, per_page: 100 });
+                            if (changed.length >= 3000) changed = null; // the API's limit
+                          } else if (!/^0+$/.test(payload.before)) {
+                            const { data } = await github.rest.repos.compareCommitsWithBasehead({ ...context.repo, basehead: `${payload.before}...${payload.after}` });
+                            changed = data.files?.length < 300 ? data.files : null; // the API's limit
+                          }
+                          files = changed?.flatMap((file) => [file.filename, file.previous_filename].filter(Boolean)) ?? null;
+                        } catch (error) {
+                          core.warning(`Could not list the changed files, so every path-scoped check runs: ${error.message}`);
+                        }
+                      }
+                      const always = /^(package-lock\.json|\.github\/workflows\/main\.yml|\.github\/actions\/.+)$/;
+                      const touched = (pattern) =>
+                        tier === 'full' || (tier === 'standard' && (files === null || files.some((file) => always.test(file) || pattern.test(file))));
+                      const outputs = {
+                        tier,
+                        reason,
+                        requester: tier === 'full' && pr ? payload.sender.login : '',
+                        packages: touched(/^packages\//),
+                        'webview-package': touched(/^packages\/vscode-ext-webview\//),
+                        verification: touched(/^(build\/(verification|vite)\/|vite\.config\.(ext|views)\.mjs$)/),
+                      };
+                      for (const [name, value] of Object.entries(outputs)) core.setOutput(name, String(value));
+                      core.notice(`CI tier: ${tier} (${reason}). Path-scoped: ${JSON.stringify(outputs)}`);
+
+                      if (tier === 'full' && pr) {
+                        try {
+                          await github.rest.issues.removeLabel({ ...context.repo, issue_number: pr.number, name: fullLabel });
+                        } catch (error) {
+                          core.warning(`Could not remove the ${fullLabel} label (fork PRs have a read-only token): ${error.message}`);
+                        }
+                      }
+
+            - if: steps.plan.outputs.tier != 'skip' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  sparse-checkout: build/verification
+            - name: Mark the PR report as running
+              if: steps.plan.outputs.tier != 'skip' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              env:
+                  TIER: ${{ steps.plan.outputs.tier }}
+                  REASON: ${{ steps.plan.outputs.reason }}
+              with:
+                  script: |
+                      const { MARKER, runningBody } = require('./build/verification/ci-report.cjs');
+                      const pr = context.payload.pull_request;
+                      const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: pr.number, per_page: 100 });
+                      const existing = comments.find((comment) => comment.body?.includes(MARKER));
+                      // The first report is created when the run finishes; before that there is nothing stale to hide.
+                      if (!existing) return;
+                      const { data: current } = await github.rest.pulls.get({ ...context.repo, pull_number: pr.number });
+                      if (current.head.sha !== pr.head.sha) return;
+                      const body = runningBody({
+                        tier: process.env.TIER,
+                        reason: process.env.REASON,
+                        headSha: pr.head.sha,
+                        runUrl: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                        existingBody: existing.body,
+                      });
+                      await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+
+    static-checks:
+        name: Static checks
+        needs: [plan]
+        if: needs.plan.outputs.tier != 'skip'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        outputs:
+            l10n: ${{ steps.l10n.outcome }}
+            lint: ${{ steps.lint.outcome }}
+            prettier: ${{ steps.prettier.outcome }}
         defaults:
             run:
                 working-directory: '.'
         steps:
             - name: ✅ Checkout Repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@v4
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
+            - name: 🛠 Set up Node.js and dependencies
+              uses: ./.github/actions/setup
 
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false --verbose
+            - name: 🔨 Build Workspace Packages
+              run: npm run build --workspaces --if-present
 
             - name: 🌐 Check Localization Files
+              id: l10n
+              continue-on-error: true
               run: npm run l10n:check
 
             - name: 🧹 Run ESLint
+              id: lint
+              continue-on-error: true
               run: npm run lint
 
             - name: 🎨 Check Code Formatting (Prettier)
+              id: prettier
+              continue-on-error: true
               run: npm run prettier
 
-            - name: 🧪 Run Unit Tests (Jest)
-              run: npm run jesttest
+            - name: 🔍 Type-check Extension and Tests (root tsc, no emit)
+              run: npx tsc -p tsconfig.json
 
-    integration-tests:
-        name: Integration Tests
+            - name: 🔍 Type-check Package Tests (strict, no emit)
+              run: npm run typecheck:tests
+
+            - name: ❌ Fail if code quality checks failed
+              if: steps.l10n.outcome == 'failure' || steps.lint.outcome == 'failure' || steps.prettier.outcome == 'failure'
+              run: |
+                  echo "One or more code quality checks failed (l10n=${{ steps.l10n.outcome }}, lint=${{ steps.lint.outcome }}, prettier=${{ steps.prettier.outcome }})"
+                  exit 1
+
+    unit-tests:
+        name: Unit tests
+        needs: [plan]
+        if: needs.plan.outputs.tier != 'skip'
         runs-on: ubuntu-latest
-        needs: [code-quality-and-tests]
-        if: |
-            github.ref == 'refs/heads/main' ||
-            (startsWith(github.ref, 'refs/pull/') && (
-              github.base_ref == 'main' ||
-              github.base_ref == 'next'
-            ))
-        defaults:
-            run:
-                working-directory: '.'
+        timeout-minutes: 15
+        permissions:
+            contents: read
         steps:
             - name: ✅ Checkout Repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@v4
+            - name: 🛠 Set up Node.js and dependencies
+              uses: ./.github/actions/setup
+
+            # Tests import the workspace packages' dist.
+            - name: 🔨 Build Workspace Packages
+              run: npm run build --workspaces --if-present
+
+            - name: 🧪 Run Unit Tests (Vitest)
+              run: npm test
+
+    package-checks:
+        name: 'npm packages: verify tarballs'
+        needs: [plan]
+        if: needs.plan.outputs.packages == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 6
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            - uses: ./.github/actions/setup
+            - name: 📦 Verify packed workspace packages (builds them first)
+              run: npm run verify:packages
+
+    vsix-inspection:
+        name: 'VSIX: inspect contents'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        needs: [plan, build-and-package]
+        if: needs.plan.outputs.tier == 'standard' || needs.plan.outputs.tier == 'full'
+        permissions:
+            contents: read
+        outputs:
+            inspect: ${{ steps.inspect.outcome }}
+            prove: ${{ steps.prove.outcome }}
+            verification-tests: ${{ steps.verification-tests.outcome }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            - uses: ./.github/actions/setup
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
               with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
+                  name: Artifacts-${{ github.run_id }}
+                  path: verification-artifacts
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+              with:
+                  name: Bundle-reports-${{ github.run_id }}
+                  path: build/verification/reports
+            - name: Inspect production VSIX
+              id: inspect
+              run: |
+                  mapfile -t packages < <(find verification-artifacts -name '*.vsix' -type f)
+                  test "${#packages[@]}" -eq 1
+                  echo "VSIX=${packages[0]}" >> "$GITHUB_ENV"
+                  npm run verify:vsix -- "${packages[0]}" --manifest-report verification-artifacts/l1-manifest-report.json
+            - name: 'Self-test: inspection rejects broken VSIXs'
+              id: prove
+              if: needs.plan.outputs.verification == 'true'
+              run: npm run prove:vsix -- "$VSIX"
+            - name: Build workspace packages (for the verification tool tests)
+              if: needs.plan.outputs.verification == 'true'
+              run: npm run build --workspaces --if-present
+            - name: Test the verification tools
+              id: verification-tests
+              if: needs.plan.outputs.verification == 'true'
+              run: npm run test:verification
+            - name: Upload the inspection manifest report
+              id: l1-report
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: L1-manifest-report-${{ github.run_id }}
+                  path: verification-artifacts/l1-manifest-report.json
+                  if-no-files-found: warn
 
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+            - name: 📥 Restore base branch sizes (PR only)
+              if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+              id: base-cache
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.event.pull_request.base.ref }}-${{ github.event.pull_request.base.sha }}
+                  restore-keys: |
+                      build-sizes-${{ github.event.pull_request.base.ref }}-
 
-            - name: 🔄 Run Integration Tests (Headless UI)
-              run: xvfb-run -a npm test
+            - name: 📐 Prepare base sizes for comparison
+              if: always() && steps.base-cache.outcome == 'success' && steps.base-cache.outputs.cache-matched-key
+              run: mv build-sizes.json base-sizes.json
 
-    # Run only on push to `main` or for PRs to main or next
-    # Skip on direct pushes to `next`, `dev/*`, and `feature/*` branches
+            - name: 📐 Collect graph sizes
+              if: always() && hashFiles('verification-artifacts/l1-manifest-report.json') != ''
+              run: node build/verification/build-size-report.cjs verification-artifacts/l1-manifest-report.json build-sizes.json
+
+            - name: 💾 Cache build sizes (push only)
+              if: success() && github.event_name == 'push'
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
+
+            - name: 📐 Write the build size section (PR only)
+              if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              env:
+                  L1_OUTCOME: ${{ steps.inspect.outcome }}
+                  BASE_REF: ${{ github.event.pull_request.base.ref }}
+                  VSIX_URL: ${{ needs.build-and-package.outputs.vsix-url }}
+                  BUNDLE_URL: ${{ needs.build-and-package.outputs.bundle-url }}
+                  L1_URL: ${{ steps.l1-report.outputs.artifact-url }}
+              with:
+                  script: |
+                      const fs = require('node:fs');
+                      const { buildSizeComment, sizeWarnings } = require('./build/verification/build-size-report.cjs');
+                      const reportFile = 'verification-artifacts/l1-manifest-report.json';
+                      const report = fs.existsSync(reportFile) ? JSON.parse(fs.readFileSync(reportFile, 'utf8')) : null;
+                      const base = fs.existsSync('base-sizes.json') ? JSON.parse(fs.readFileSync('base-sizes.json', 'utf8')) : null;
+                      const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+                      const body = buildSizeComment(report, base, {
+                        outcome: process.env.L1_OUTCOME,
+                        baseRef: process.env.BASE_REF,
+                        runId: process.env.GITHUB_RUN_ID,
+                        runUrl,
+                        vsixUrl: process.env.VSIX_URL,
+                        bundleUrl: process.env.BUNDLE_URL,
+                        l1Url: process.env.L1_URL,
+                      });
+                      fs.writeFileSync('size-report.md', body);
+                      await core.summary.addRaw(body).write();
+                      for (const warning of sizeWarnings(report, base, process.env.BASE_REF)) {
+                        core.warning(warning.message, { title: warning.title });
+                      }
+
+            - name: Upload the build size section for the PR report
+              if: always() && hashFiles('size-report.md') != ''
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: Size-report-${{ github.run_id }}
+                  path: size-report.md
+
+    vsix-activation:
+        name: 'VSIX: activate in VS Code'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        needs: [plan, build-and-package]
+        if: needs.plan.outputs.tier == 'standard' || needs.plan.outputs.tier == 'full'
+        permissions:
+            contents: read
+        outputs:
+            activation: ${{ steps.activation.outcome }}
+            prove-activation: ${{ steps.prove-activation.outcome }}
+            host-probe: ${{ steps.host-probe.outcome }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            - uses: ./.github/actions/setup
+            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: .vscode-test/
+                  key: vscode-activation-${{ runner.os }}-${{ hashFiles('package.json', 'build/verification/activation/**') }}
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+              with:
+                  name: Artifacts-${{ github.run_id }}
+                  path: verification-artifacts
+            - name: Activate installed VSIX
+              id: activation
+              env:
+                  TMPDIR: ${{ runner.temp }}
+              run: |
+                  mapfile -t packages < <(find verification-artifacts -name '*.vsix' -type f)
+                  test "${#packages[@]}" -eq 1
+                  echo "VSIX=${packages[0]}" >> "$GITHUB_ENV"
+                  xvfb-run -a npm run test:vsix -- "${packages[0]}"
+
+            - name: 'Self-test: activation check catches a swallowed error'
+              id: prove-activation
+              if: needs.plan.outputs.verification == 'true'
+              env:
+                  TMPDIR: ${{ runner.temp }}
+              run: xvfb-run -a npm run prove:activation -- "$VSIX"
+
+            - name: Webview host in unbundled extensions
+              id: host-probe
+              if: needs.plan.outputs.webview-package == 'true'
+              env:
+                  TMPDIR: ${{ runner.temp }}
+              run: xvfb-run -a npm run probe:host-unbundled
+
+            - name: Upload activation failure diagnostics
+              if: failure()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: Activation-diagnostics-${{ github.run_id }}
+                  path: |
+                      ${{ runner.temp }}/documentdb-l3-*/**/*.log
+                      ${{ runner.temp }}/documentdb-l3-*/log-report.json
+                      ${{ runner.temp }}/documentdb-host-probe-*/**/*.log
+                      ${{ runner.temp }}/documentdb-host-probe-*/*/trace.txt
+                      ${{ runner.temp }}/documentdb-host-probe-*/*/result.json
+                      ${{ runner.temp }}/documentdb-host-probe-*/report.json
+                  if-no-files-found: warn
+
+    # Standard and full tiers; pushes to `main` and `release/**` feed the build size cache.
     build-and-package:
-        name: Build & Package Artifacts
+        name: 'VSIX: build'
         runs-on: ubuntu-latest
-        needs: [code-quality-and-tests]
-        if: |
-            github.ref == 'refs/heads/main' ||
-            (startsWith(github.ref, 'refs/pull/') && (
-              github.base_ref == 'main' ||
-              github.base_ref == 'next'
-            ))
+        timeout-minutes: 5
+        needs: [plan]
+        permissions:
+            contents: read
+        outputs:
+            vsix-url: ${{ steps.artifacts.outputs.artifact-url }}
+            bundle-url: ${{ steps.bundle-reports.outputs.artifact-url }}
+        if: needs.plan.outputs.tier == 'standard' || needs.plan.outputs.tier == 'full'
         defaults:
             run:
                 working-directory: '.'
         steps:
             - name: ✅ Checkout Repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@v4
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
-
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+            - name: 🛠 Set up Node.js and dependencies
+              uses: ./.github/actions/setup
 
             - name: 🏗 Build Project
               run: npm run build
@@ -133,10 +460,133 @@ jobs:
               run: npm run package
 
             - name: 📤 Upload Artifacts
-              uses: actions/upload-artifact@v4
+              id: artifacts
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: Artifacts-${{ github.run_id }}
                   path: |
                       **/*.vsix
                       **/*.tgz
                       !**/node_modules
+
+            - name: Upload bundle verification reports
+              id: bundle-reports
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: Bundle-reports-${{ github.run_id }}
+                  path: build/verification/reports/*.json
+                  if-no-files-found: error
+
+    report:
+        name: PR report
+        needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
+        if: always() && needs.plan.result == 'success' && needs.plan.outputs.tier != 'skip' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+            pull-requests: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  sparse-checkout: build/verification
+            - name: Download the build size section
+              if: needs.vsix-inspection.result != 'skipped'
+              continue-on-error: true
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+              with:
+                  name: Size-report-${{ github.run_id }}
+                  path: size-report
+            - name: Post or update the PR report comment
+              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              env:
+                  NEEDS: ${{ toJSON(needs) }}
+              with:
+                  script: |
+                      const fs = require('node:fs');
+                      const { MARKER, OLD_MARKERS, ciReport, commentBody, parseLastFull } = require('./build/verification/ci-report.cjs');
+                      const needs = JSON.parse(process.env.NEEDS);
+                      const plan = needs.plan.outputs;
+                      const pr = context.payload.pull_request;
+                      const issue = { ...context.repo, issue_number: pr.number };
+                      const comments = await github.paginate(github.rest.issues.listComments, { ...issue, per_page: 100 });
+                      const existing = comments.find((comment) => comment.body?.includes(MARKER));
+                      const sizeFile = 'size-report/size-report.md';
+                      const report = ciReport({
+                        tier: plan.tier,
+                        reason: plan.reason,
+                        requester: plan.requester,
+                        flags: { packages: plan.packages === 'true', webviewPackage: plan['webview-package'] === 'true', verification: plan.verification === 'true' },
+                        headSha: pr.head.sha,
+                        runUrl: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                        jobs: {
+                          static: needs['static-checks'].result,
+                          unit: needs['unit-tests'].result,
+                          packages: needs['package-checks'].result,
+                          l1: needs['vsix-inspection'].result,
+                          l3: needs['vsix-activation'].result,
+                        },
+                        steps: { ...needs['static-checks'].outputs, ...needs['vsix-inspection'].outputs, ...needs['vsix-activation'].outputs },
+                        sizeSection: fs.existsSync(sizeFile) ? fs.readFileSync(sizeFile, 'utf8') : null,
+                        lastFull: parseLastFull(existing?.body),
+                      });
+                      await core.summary.addRaw(report.body).write();
+
+                      // A run for an older commit must not post its report; a full run still records itself.
+                      const { data: current } = await github.rest.pulls.get({ ...context.repo, pull_number: pr.number });
+                      const body = commentBody(report, existing?.body, current.head.sha !== pr.head.sha);
+                      if (!body) {
+                        core.info(`The PR moved on to ${current.head.sha}; leaving the report to that run.`);
+                      } else if (existing) {
+                        await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+                      } else {
+                        await github.rest.issues.createComment({ ...issue, body });
+                        for (const old of comments.filter((comment) => OLD_MARKERS.some((marker) => comment.body?.includes(marker)))) {
+                          await github.rest.issues.deleteComment({ ...context.repo, comment_id: old.id });
+                        }
+                      }
+
+    # The ruleset's required check (decision 0013). An unrelated-label run must not post a skipped
+    # check under this name, because a skipped required check counts as passed. It runs (and passes)
+    # under the label-event name instead: a skipped job would show its raw name expression. A manual
+    # fast run checks less than a ready PR needs, so it must not post this name either (S85L-F01).
+    gate:
+        name: ${{ github.event.action == 'labeled' && github.event.label.name != 'ci:full-requested' && 'Merge gate (label event, not run)' || github.event_name == 'workflow_dispatch' && !inputs.enforce_full_run && 'Merge gate (manual fast run)' || 'Merge gate' }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        needs: [plan, static-checks, unit-tests, package-checks, build-and-package, vsix-inspection, vsix-activation]
+        if: always()
+        permissions: {}
+        steps:
+            - name: Require every check the tier expected
+              env:
+                  TIER: ${{ needs.plan.outputs.tier }}
+                  PACKAGES: ${{ needs.plan.outputs.packages }}
+                  PLAN: ${{ needs.plan.result }}
+                  STATIC: ${{ needs.static-checks.result }}
+                  UNIT: ${{ needs.unit-tests.result }}
+                  PACKAGE_CHECKS: ${{ needs.package-checks.result }}
+                  PACKAGE: ${{ needs.build-and-package.result }}
+                  L1: ${{ needs.vsix-inspection.result }}
+                  L3: ${{ needs.vsix-activation.result }}
+              run: |
+                  if [[ "$TIER" == skip && "$PLAN" == success ]]; then
+                    echo 'Label event: nothing to gate; the PR keeps the previous Merge gate result.'
+                    exit 0
+                  fi
+                  failed=0
+                  expect() {
+                    echo "$1: $2"
+                    if [[ "$2" != success ]]; then echo "::error::$1 was expected to pass in the ${TIER:-unknown} tier: $2"; failed=1; fi
+                  }
+                  expect 'Plan: choose checks' "$PLAN"
+                  expect 'Static checks' "$STATIC"
+                  expect 'Unit tests' "$UNIT"
+                  if [[ "$PACKAGES" == true ]]; then expect 'npm packages: verify tarballs' "$PACKAGE_CHECKS"; fi
+                  if [[ "$TIER" == standard || "$TIER" == full ]]; then
+                    expect 'VSIX: build' "$PACKAGE"
+                    expect 'VSIX: inspect contents' "$L1"
+                    expect 'VSIX: activate in VS Code' "$L3"
+                  fi
+                  exit "$failed"
