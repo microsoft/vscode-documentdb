@@ -48,6 +48,7 @@ treat `status: historical` or `status: superseded` as current.
 | [data-grid](./features/data-grid/README.md)                               | The Collection View table and tree, including the planned SlickGrid replacement                          | planned                             |
 | [survey](./features/survey/README.md)                                     | Survey refresh: simpler eligibility, broader activity coverage, cohort telemetry, and invitation surface | draft #992; enabled                 |
 | [docs-site](./features/docs-site/README.md)                               | The GitHub Pages documentation site: Just the Docs theme, OS dark mode, local preview                    | draft #420                          |
+| [pre-release-polish](./features/pre-release-polish/README.md)             | Cross-feature visual and documentation refinements prepared for the 1.0 release                          | active                              |
 
 Everything else is a single file at this root, such as:
 
