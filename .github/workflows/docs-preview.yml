@@ -113,7 +113,10 @@ jobs:
                           'and open http://localhost:8000/. The site follows your OS light or dark setting.',
                         );
                         if (pages.length) {
-                          lines.push('', `### Changed pages (${pages.length})`, '', ...pages.map((p) => `- [\`${p.replace(/\.html$/, '')}\`](http://localhost:8000/${p})`));
+                          const links = pages.map((p) => `- [\`${p.replace(/\.html$/, '')}\`](http://localhost:8000/${p})`);
+                          lines.push('', `### Changed pages (${pages.length})`, '');
+                          if (pages.length > 10) lines.push('<details><summary>Show all</summary>', '', ...links, '', '</details>');
+                          else lines.push(...links);
                         }
                         const notes = [];
                         if (images) notes.push(`${images} image${images === 1 ? '' : 's'} changed`);
