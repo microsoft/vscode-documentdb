@@ -28,6 +28,21 @@
         aside.appendChild(title);
 
         var list = document.createElement('ul');
+
+        // First entry returns to the top of the article (the layout's #top element).
+        var introItem = document.createElement('li');
+        introItem.className = 'page-toc-intro';
+        var intro = document.createElement('a');
+        intro.href = '#top';
+        intro.textContent = 'Introduction';
+        intro.addEventListener('click', function (event) {
+            event.preventDefault();
+            window.scrollTo(0, 0);
+            history.replaceState(null, '', location.pathname + location.search);
+        });
+        introItem.appendChild(intro);
+        list.appendChild(introItem);
+
         var links = headings.map(function (h) {
             var item = document.createElement('li');
             item.className = 'page-toc-' + h.tagName.toLowerCase();
@@ -41,54 +56,37 @@
         aside.appendChild(list);
         wrap.appendChild(aside);
 
-        if (!('IntersectionObserver' in window)) {
-            return;
-        }
-
-        var visible = new Set();
+        // The current section is the last heading that has scrolled into the top 40% of the
+        // viewport; before the first one, the introduction is current.
         function update() {
+            var threshold = window.innerHeight * 0.4;
             var current = null;
             for (var i = 0; i < headings.length; i++) {
-                if (visible.has(headings[i])) {
+                if (headings[i].getBoundingClientRect().top <= threshold) {
                     current = i;
+                } else {
                     break;
                 }
             }
-            if (current === null) {
-                // Between headings: keep the last heading above the viewport.
-                for (var j = headings.length - 1; j >= 0; j--) {
-                    if (headings[j].getBoundingClientRect().top < 0) {
-                        current = j;
-                        break;
-                    }
-                }
-            }
+            setActive(intro, current === null);
             links.forEach(function (link, k) {
-                link.classList.toggle('active', k === current);
-                if (k === current) {
-                    link.setAttribute('aria-current', 'location');
-                } else {
-                    link.removeAttribute('aria-current');
-                }
+                setActive(link, k === current);
             });
         }
 
-        var observer = new IntersectionObserver(
-            function (entries) {
-                entries.forEach(function (entry) {
-                    if (entry.isIntersecting) {
-                        visible.add(entry.target);
-                    } else {
-                        visible.delete(entry.target);
-                    }
-                });
-                update();
-            },
-            { rootMargin: '0px 0px -60% 0px' },
-        );
-        headings.forEach(function (h) {
-            observer.observe(h);
-        });
+        function setActive(link, active) {
+            link.classList.toggle('active', active);
+            if (active) {
+                link.setAttribute('aria-current', 'location');
+            } else {
+                link.removeAttribute('aria-current');
+            }
+        }
+
+        window.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+
+        update();
     }
 
     if (document.readyState === 'loading') {

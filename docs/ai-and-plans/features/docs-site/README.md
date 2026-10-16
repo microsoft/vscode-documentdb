@@ -121,7 +121,9 @@ list inside the article. `assets/js/page-toc.js` adds a panel instead:
 
 - Built in the browser from the article's `h2` and `h3` headings that have an `id`; headings with
   `.no_toc` are skipped. Pages with fewer than three such headings get no panel.
-- Sticky while scrolling; the section in view is highlighted (`IntersectionObserver`).
+- The first entry, **Introduction**, returns to the top of the page.
+- Sticky while scrolling. The highlighted entry is the last heading that has reached the top 40%
+  of the viewport, or Introduction before the first one.
 - Shown from a 78.5rem (1256px) viewport up. There the main column is widened by 12rem on every
   page, so pages with and without a panel share one layout; `custom.scss` repeats the theme's
   sidebar centering formula with the wider width. Below that width nothing changes.

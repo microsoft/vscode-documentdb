@@ -15,7 +15,7 @@ nav_order: 1
 
 <p align="center"><img src="./vscode-documentdb-hero-screenshot.png" alt="DocumentDB with a Collection View and auto-completion" width="800" style="max-width:100%;height:auto;"></p>
 
-# Features
+## Features
 
 ### Universal DocumentDB and MongoDB Support
 
@@ -39,8 +39,6 @@ DocumentDB for VS Code focuses on providing developer productivity features with
 
 We believe in building in the open. All development, roadmap planning, and feature discussions happen publicly on GitHub.
 Your feedback, contributions, and ideas shape the future of the extension.
-
-# Table of Contents
 
 ## User Manual
 
