@@ -151,6 +151,10 @@ See [Just the Docs customization](https://just-the-docs.com/docs/customization/)
 
 ## Previewing locally
 
+The `previewing-docs-site` skill (`.github/skills/previewing-docs-site/`) wraps these steps in
+`scripts/preview.ps1`, which also fixes the path casing issue below and keeps all build output
+outside the repository. The manual steps:
+
 1. Install Ruby with the DevKit (Windows: `winget install RubyInstallerTeam.RubyWithDevKit.3.3`).
 2. Keep a Gemfile **outside** `docs/`, so it is not published:
 
