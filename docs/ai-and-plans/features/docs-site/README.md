@@ -12,7 +12,6 @@ code:
     - docs/user-manual.md
     - docs/release-notes.md
     - .github/workflows/deploy-documentation-production.yml
-    - .github/workflows/docs-preview.yml
     - .github/skills/previewing-docs-site/**
 ---
 
@@ -67,10 +66,8 @@ main (docs/**) --push--> deploy-documentation-production.yml --copy--> gh-pages 
 - **Only `index.md`, `user-manual/` and `release-notes/` are published.** Everything else in
   `docs/` is listed under `exclude` in `_config.yml`. A new top-level file or folder in `docs/` is
   published unless it is added to that list.
-- **No hosted PR previews.** The `gh-pages` preview workflow was removed from `main` in `c8ad1900`.
-  Instead, `.github/workflows/docs-preview.yml` builds the site on PRs that touch `docs/**` and
-  attaches it as a downloadable artifact, with a `<!-- docs-preview -->` PR comment. For live
-  reload, see [Previewing locally](#previewing-locally).
+- **No PR previews.** They were removed from `main` in `c8ad1900`. Preview locally; see
+  [Previewing locally](#previewing-locally).
 
 ## How the sidebar is built
 
@@ -204,7 +201,7 @@ Notes:
 | 2026-10-16 | "On this page" panel for article sections; landing page links on one line                | #420        |
 | 2026-10-16 | Dark variants for every image; copy-and-paste diagrams redrawn for both themes           | #420        |
 | 2026-10-16 | Code block line height and `h4` styling fixed                                            | #420        |
-| 2026-10-16 | `previewing-docs-site` skill; `docs-preview.yml` builds a downloadable preview on PRs    | #420        |
+| 2026-10-16 | `previewing-docs-site` skill for local previews                                          | #420        |
 
 Details: [01-minima-theme.md](./iterations/01-minima-theme.md),
 [02-just-the-docs.md](./iterations/02-just-the-docs.md).
