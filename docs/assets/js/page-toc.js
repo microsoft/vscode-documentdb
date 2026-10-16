@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 // "On this page" panel: lists the article's h2/h3 sections and highlights the one in view.
 // The theme has no right-side table of contents; layout lives in _sass/custom/custom.scss.
 (function () {

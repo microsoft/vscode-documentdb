@@ -179,6 +179,16 @@ export default ts.config(
             'react/prop-types': 'off', // TypeScript handles prop validation
         },
     },
+    // Docs site scripts run in the browser (GitHub Pages), not in Node.
+    {
+        files: ['docs/assets/js/**/*.js'],
+
+        languageOptions: {
+            globals: {
+                ...globals.browser,
+            },
+        },
+    },
     // Vitest unit tests in src/ (they import their test API from 'vitest'; no test globals)
     {
         files: ['src/**/*.test.ts'],
