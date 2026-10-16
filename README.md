@@ -4,7 +4,6 @@
 
 [![CI](https://github.com/microsoft/vscode-documentdb/actions/workflows/main.yml/badge.svg)](https://github.com/microsoft/vscode-documentdb/actions/workflows/main.yml)
 [![License: MIT](https://img.shields.io/github/license/microsoft/vscode-documentdb)](LICENSE.md)
-[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/ms-azuretools.vscode-documentdb?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
 
 <img src="resources/readme/documentdb-logo.png" alt="DocumentDB Logo" style="width:40%; min-width:180px; max-width:320px; height:auto;" />
 
@@ -111,6 +110,16 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow Microsoft's Trademark & Brand Guidelines. Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
 
 <!-- endregion exclude-from-marketplace -->
+
+## Designed for Every Theme
+
+DocumentDB for VS Code feels at home in your workspace, whether you prefer a light or dark theme.
+
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/readme/documentdb-logo_dark.png"><img src="resources/readme/documentdb-logo.png" alt="DocumentDB logo" width="320" style="max-width:100%;height:auto;"></picture></p>
+
+The extension keeps its features clear and readable while matching the appearance you chose for VS Code.
+
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/readme/cluster-dashboard_dark.png"><img src="resources/readme/cluster-dashboard.png" alt="Cluster Dashboard adapted to a light or dark background" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 # Telemetry
 

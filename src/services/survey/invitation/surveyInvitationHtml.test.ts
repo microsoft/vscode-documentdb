@@ -13,7 +13,7 @@ const { DOMParser } = window;
 
 const strings: SurveyInvitationStrings = {
     language: 'en',
-    title: 'DocumentDB',
+    title: 'DocumentDB for VS Code',
     question: 'Overall, how satisfied are you with DocumentDB for VS Code?',
     stars: ['Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'],
     openSurvey: 'Continue to survey',
@@ -86,6 +86,16 @@ function interactiveHtml(): {
 }
 
 describe('survey invitation HTML', (): void => {
+    it('keeps the title suffix together while allowing a break after DocumentDB', (): void => {
+        const page = parseHtml(html());
+        const title = page.querySelector('h1');
+        expect(title?.textContent).toBe(strings.title);
+        expect(title?.firstChild?.textContent).toBe('DocumentDB ');
+        expect(title?.querySelector('.title-suffix')?.textContent).toBe('for VS Code');
+        expect(page.querySelector('style')?.textContent).toContain('.title-suffix { white-space: nowrap; }');
+        expect(page.querySelector('title')?.textContent).toBe(strings.title);
+    });
+
     it('explains user-opened feedback without claiming eligibility or offering invitation choices', (): void => {
         const page = parseHtml(
             buildSurveyInvitationHtml({
