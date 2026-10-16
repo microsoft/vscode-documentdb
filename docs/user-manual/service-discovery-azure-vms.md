@@ -75,7 +75,7 @@ Step 1: Select Tenants (if multi-tenant)
 Step 2: Select Subscriptions
 Step 3: Configure VM Tag Filter
 ┌────────────────────────────────────────────┐
-│ Enter the tag name to filter VMs          │
+│ Enter the tag name to filter VMs           │
 ├────────────────────────────────────────────┤
 │ DocumentDB                                 │  ← Default value
 └────────────────────────────────────────────┘

@@ -131,3 +131,15 @@ $page-toc-breakpoint: $nav-width + $content-width + $page-toc-width;
         }
     }
 }
+
+// Code blocks: the theme keeps the 16px body line box around 12px code, which pulls
+// box-drawing characters apart. Size the <pre> like its code so ASCII diagrams connect.
+pre.highlight {
+    font-size: 0.75rem;
+    line-height: 1.25;
+
+    code {
+        font-size: 1em;
+        line-height: inherit;
+    }
+}
