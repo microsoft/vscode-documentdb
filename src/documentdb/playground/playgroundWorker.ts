@@ -221,7 +221,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
             onLog: log,
         },
         {
-            productName: 'DocumentDB for VS Code Query Playground',
+            productName: 'DocumentDB Query Playground',
             productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
             persistent: msg.persistent ?? false,
         },
