@@ -1,6 +1,6 @@
-# DocumentDB extension for Visual Studio Code 1.0: Run It Locally, Bring Your Data
+# DocumentDB Extension for Visual Studio Code 1.0: Run It Locally, Bring Your Data
 
-> Also published on the DocumentDB blog at documentdb.io: tracked in [documentdb/documentdb.github.io#214](https://github.com/documentdb/documentdb.github.io/pull/214). Keep both versions in sync.
+> Also published on the DocumentDB blog at documentdb.io: tracked in [documentdb/documentdb.github.io#214](https://github.com/documentdb/documentdb.github.io/pull/214) and [#226](https://github.com/documentdb/documentdb.github.io/pull/226). Keep both versions in sync.
 
 _October 19, 2026, by Tomasz Naumowicz and the team behind the DocumentDB extension for Visual Studio Code_
 
@@ -8,7 +8,7 @@ _The DocumentDB extension for Visual Studio Code, a free, open-source DocumentDB
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_hero_dark.png"><img src="./images/1.0.0_hero.png" alt="DocumentDB extension for Visual Studio Code 1.0" width="800" style="max-width:100%;height:auto;"></picture></p>
 
-Version 1.0 of the DocumentDB extension for Visual Studio Code is here. Released alongside [DocumentDB 1.0](https://documentdb.io/), the free, open-source extension is a **DocumentDB GUI** and MongoDB GUI, right in your editor. It works with DocumentDB, Azure DocumentDB and other MongoDB-compatible databases, wherever they run.
+Version 1.0 of the DocumentDB extension for Visual Studio Code is here. Released alongside [DocumentDB 1.0](https://documentdb.io/blogs/posts/documentdb-1-0/), the free, open-source extension is a **DocumentDB GUI** and MongoDB GUI, right in your editor. It works with DocumentDB, Azure DocumentDB and other MongoDB-compatible databases, wherever they run.
 
 The milestone reflects what we built across all the releases on the way to 1.0, over a little more than a year. Version 1.0 focuses on fixes and polish, and celebrates how far that experience has come. Here is the shortest path from reading about DocumentDB 1.0 to working with it: run it locally, bring your own data, and understand what you have.
 
@@ -64,7 +64,7 @@ We didn't get here alone. Eleven community developers contributed nearly 30 pull
 
 ## Try it
 
-**[Install DocumentDB extension in VS Code from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)**, or search for "DocumentDB" in the VS Code Extensions view.
+**[Install the DocumentDB extension for Visual Studio Code from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)**, or search for "DocumentDB" in the VS Code Extensions view.
 
 - [Version 1.0 release notes](https://github.com/microsoft/vscode-documentdb/discussions/1012) (the full tour, with every feature explained)
 - [Documentation](https://microsoft.github.io/vscode-documentdb/)
