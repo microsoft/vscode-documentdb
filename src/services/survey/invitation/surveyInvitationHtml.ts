@@ -58,7 +58,7 @@ function escapeHtml(value: string): string {
 export function buildSurveyInvitationHtml(options: SurveyInvitationHtmlOptions): string {
     const { explanation, manuallyOpened, strings, nonce, cspSource, artworkUri, artworkDarkUri } = options;
     const text = escapeHtml;
-    const title = text(strings.title).replace('for VS Code', '<span class="title-suffix">for VS Code</span>');
+    const title = text(strings.title);
     const usage = manuallyOpened
         ? strings.manuallyOpened
         : strings.usage.replaceAll('{0}', String(explanation.activeDayCount));
@@ -93,7 +93,6 @@ img { flex: 0 0 auto; width: 36px; height: 36px; object-fit: contain; }
 body.vscode-dark .logo-light, body.vscode-high-contrast:not(.vscode-high-contrast-light) .logo-light { display: none; }
 body.vscode-dark .logo-dark, body.vscode-high-contrast:not(.vscode-high-contrast-light) .logo-dark { display: block; }
 h1 { flex: 1 1 auto; min-width: 0; font-size: 18px; font-weight: 600; line-height: 24px; margin: 0; }
-.title-suffix { white-space: nowrap; }
 .content { max-width: 480px; margin: 0 auto; padding: 24px 16px; }
 h2 { font-size: 16px; font-weight: 600; line-height: 24px; margin: 0; }
 p { margin: 8px 0; }

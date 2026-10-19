@@ -48,7 +48,7 @@ function temporaryDirectory(context) {
 }
 
 /** @param {string} text @param {string} [file] @returns {ReturnType<typeof recognizeLogs>} */
-function recognized(text, file = 'logs/exthost1/output_logging/1-DocumentDB for VS Code.log') {
+function recognized(text, file = 'logs/exthost1/output_logging/1-DocumentDB.log') {
     return recognizeLogs(
         [
             { file: 'logs/exthost1/exthost.log', contents: '2026-10-01 12:00:00 [info] Extension host started' },
@@ -234,7 +234,7 @@ test('captured successful-run teardown retains the real SchemaStore disposed-cha
         [
             { file: 'exthost.log', contents: host },
             {
-                file: 'DocumentDB for VS Code.log',
+                file: 'DocumentDB.log',
                 contents: '2026-10-02 06:59:46.280 [info] Showing welcome screen...',
             },
         ],
@@ -547,7 +547,7 @@ module.exports.activate = async function () {
                         `2026-10-01 12:00:00 [info] Activated ${TARGET_ID}\n2026-10-01 12:00:01 [error] vscode.git unrelated failure`,
                     );
                     fs.writeFileSync(
-                        path.join(logs, 'output_logging/1-DocumentDB for VS Code.log'),
+                        path.join(logs, 'output_logging/1-DocumentDB.log'),
                         output.length
                             ? output.map((message) => `2026-10-01 12:00:01 [info] ${message}`).join('\n')
                             : '2026-10-01 12:00:01 [info] Showing welcome screen...',
@@ -675,7 +675,7 @@ test('proof rejects absent marker and unrelated DocumentDB failures, not just ar
     unrelated.dependencies.logs = (userDataDir, installed) => {
         const report = inspectUnrelated(userDataDir, installed);
         report.errors.push({
-            file: 'DocumentDB for VS Code.log',
+            file: 'DocumentDB.log',
             line: 2,
             text: 'Error: another initialization failure',
         });

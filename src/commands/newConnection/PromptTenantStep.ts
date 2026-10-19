@@ -66,7 +66,7 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
                     status === 'timeout'
                         ? l10n.t('Loading tenants timed out after {0} seconds.', lookupTimeoutMs / 1000)
                         : status === 'error'
-                          ? l10n.t('Unable to load tenants. See the DocumentDB for VS Code output for details.')
+                          ? l10n.t('Unable to load tenants. See the DocumentDB output for details.')
                           : l10n.t('No tenants were returned for the available Azure accounts.');
                 tenantItems.unshift({
                     label: l10n.t('Retry loading tenants'),

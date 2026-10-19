@@ -218,7 +218,7 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
             };
 
             const selectedButton = await vscode.window.showInformationMessage(
-                vscode.l10n.t('DocumentDB for VS Code has been updated. View the release notes?'),
+                vscode.l10n.t('The DocumentDB extension has been updated. View the release notes?'),
                 releaseNotesButton,
                 remindLaterButton,
                 ignoreButton,

@@ -27,7 +27,7 @@ function isValidPackageJson(packageJson: unknown): packageJson is DocumentDBApiC
 }
 
 /**
- * Gets the DocumentDB for VS Code extension API
+ * Gets the DocumentDB extension API
  *
  * NOTE: This is an experimental implementation. Extensions using this API are whitelisted
  * as a safeguard during the experimental phase. This safeguard will be removed once the
@@ -69,14 +69,14 @@ export async function getDocumentDBExtensionApi(
         : undefined;
 
     if (!registeredClients || !Array.isArray(registeredClients)) {
-        throw new Error(`DocumentDB for VS Code API configuration is invalid. No registered clients found.`);
+        throw new Error(`DocumentDB extension API configuration is invalid. No registered clients found.`);
     }
 
     if (!registeredClients.includes(callingExtensionId)) {
         throw new Error(
-            `Extension '${callingExtensionId}' is not authorized to use the DocumentDB for VS Code API. ` +
+            `Extension '${callingExtensionId}' is not authorized to use the DocumentDB extension API. ` +
                 `This is an experimental API with whitelisted access. ` +
-                `Please reach out to the DocumentDB for VS Code extension team to request access.`,
+                `Please reach out to the DocumentDB extension team to request access.`,
         );
     }
 

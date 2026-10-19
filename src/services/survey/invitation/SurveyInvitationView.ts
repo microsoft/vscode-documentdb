@@ -314,8 +314,8 @@ export async function initializeSurveyInvitation(
 export function getSurveyInvitationStrings(): SurveyInvitationStrings {
     return {
         language: vscode.env.language,
-        title: vscode.l10n.t('DocumentDB for VS Code'),
-        question: vscode.l10n.t('How satisfied are you with DocumentDB for VS Code?'),
+        title: vscode.l10n.t('DocumentDB'),
+        question: vscode.l10n.t('How satisfied are you with the DocumentDB extension?'),
         stars: [
             vscode.l10n.t('Very dissatisfied'),
             vscode.l10n.t('Dissatisfied'),
@@ -330,7 +330,7 @@ export function getSurveyInvitationStrings(): SurveyInvitationStrings {
         neverAgain: vscode.l10n.t("Don't ask again"),
         why: vscode.l10n.t('Why am I seeing this?'),
         usage: vscode.l10n.t(
-            "You've used DocumentDB for VS Code on {0} days, so we'd love to hear how it's going. This count stays on your device.",
+            "You've used the DocumentDB extension on {0} days, so we'd love to hear how it's going. This count stays on your device.",
         ),
         manuallyOpened: vscode.l10n.t(
             "You opened this with Give Feedback. Thank you for taking a moment to tell us how it's going.",
