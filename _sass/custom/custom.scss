@@ -20,32 +20,38 @@ h3,
     letter-spacing: normal;
 }
 
+.site-header {
+    height: auto;
+    min-height: 5.5rem;
+}
+
 .site-title {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.25rem;
+    min-width: 0;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    font-size: 1.25rem !important;
     font-weight: 600;
+    white-space: normal;
 }
 
-// Sidebar title with the DocumentDB icon (see _includes/title.html).
-.site-title {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
+.site-title-name {
+    line-height: 1.2;
 }
 
-.site-icon {
-    display: flex;
-    flex: none;
-
-    img {
-        width: 1.75rem;
-        height: auto;
-    }
+.site-title-subtitle {
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.4;
 }
 
-// The theme sets 1.5rem !important from 31.25rem up; keep the title on one line next to the icon.
-@media (min-width: 31.25rem) {
-    .site-title {
-        font-size: 1.25rem !important;
-    }
+.site-title-editor {
+    white-space: nowrap;
 }
 
 // "On this page" panel (assets/js/page-toc.js).

@@ -85,7 +85,7 @@ The `documentDB.connectionTimeout` setting starts counting **after** the DNS loo
 
 ## Collect a trace for support
 
-1. Open the **Output** panel and select **DocumentDB for VS Code**.
+1. Open the **Output** panel and select **DocumentDB**.
 2. Set the log level to **Trace** (the gear icon in the Output panel, or **Developer: Set Log Level…**).
 3. Connect again.
 4. Copy the lines that start with `[SrvResolution]`.

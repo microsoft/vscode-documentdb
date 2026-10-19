@@ -3,8 +3,8 @@
 # How it works and how to preview it: ai-and-plans/features/docs-site/README.md
 remote_theme: just-the-docs/just-the-docs@v0.12.0
 
-title: DocumentDB for VS Code
-description: Learn more about the DocumentDB for VS Code Extension
+title: DocumentDB extension for Visual Studio Code
+description: Learn more about the DocumentDB extension for Visual Studio Code, an open-source DocumentDB GUI and MongoDB GUI.
 baseurl: '/vscode-documentdb'
 url: 'https://microsoft.github.io'
 

@@ -5,9 +5,9 @@ nav_order: 4
 has_toc: false
 ---
 
-# Service Discovery in DocumentDB for VS Code
+# Service Discovery in the DocumentDB extension for Visual Studio Code
 
-**DocumentDB for VS Code** is built with an open architecture. While the extension focuses on developer productivity (data exploration, running queries, and importing/exporting data), the core connectivity is centered around connection strings.
+The **DocumentDB extension for Visual Studio Code** is built with an open architecture. While the extension focuses on developer productivity (data exploration, running queries, and importing/exporting data), the core connectivity is centered around connection strings.
 
 ## How Service Discovery Works
 
@@ -16,7 +16,7 @@ A **Service Discovery plugin** is designed to understand a specific vendor envir
 - **Authentication:** Handling the process of logging in or obtaining credentials for the target platform.
 - **Navigation:** Guiding the user through the internal platform, systems, or APIs to locate relevant resources.
 - **Discovery:** Identifying available database services or endpoints.
-- **Connection Sharing:** Once discovery is complete, the plugin provides a connection string to DocumentDB for VS Code. From there, the extension manages the connection and enables you to work with your data.
+- **Connection Sharing:** Once discovery is complete, the plugin provides a connection string to the extension. From there, the extension manages the connection and enables you to work with your data.
 
 This approach allows you to connect to a variety of platforms without needing to manually gather connection details. The plugin handles the complexity of each environment, so you can focus on your development tasks.
 
@@ -45,4 +45,4 @@ If you are interested in contributing, now is a great time to get involved and h
 
 Would you like to add your own service discovery provider? Would you like to suggest a provider to be added? Do you have feedback or suggestions about the existing plugins?
 
-We encourage you to [join the discussion board](https://github.com/microsoft/vscode-documentdb/discussions) and share your ideas or questions. Collaboration and feedback from developers like you are essential to making DocumentDB for VS Code more useful and adaptable to a wide range of environments.
+We encourage you to [join the discussion board](https://github.com/microsoft/vscode-documentdb/discussions) and share your ideas or questions. Collaboration and feedback from developers like you are essential to making the extension more useful and adaptable to a wide range of environments.

@@ -4,13 +4,13 @@ parent: 'Data Management'
 nav_order: 2
 ---
 
-# Data Migrations in DocumentDB for VS Code
+# Data Migrations in the DocumentDB extension for Visual Studio Code
 
-**DocumentDB for VS Code** provides a powerful and extensible data migration framework that enables seamless data movement between different database systems, cloud platforms, and local environments. This feature is designed to simplify complex migration scenarios while maintaining full control over the migration process.
+The **DocumentDB extension for Visual Studio Code** provides a powerful and extensible data migration framework that enables seamless data movement between different database systems, cloud platforms, and local environments. This feature is designed to simplify complex migration scenarios while maintaining full control over the migration process.
 
 ## How Data Migrations Work
 
-The migration system in DocumentDB for VS Code is built on a **provider-based architecture**. Each migration provider is a specialized extension that understands how to handle migrations for specific platforms, tools, or migration scenarios.
+The migration system in the extension is built on a **provider-based architecture**. Each migration provider is a specialized extension that understands how to handle migrations for specific platforms, tools, or migration scenarios.
 
 ## How to Use Data Migrations
 

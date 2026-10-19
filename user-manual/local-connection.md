@@ -7,7 +7,7 @@ has_toc: false
 
 # Local Connection
 
-**DocumentDB for VS Code** allows you to connect to local DocumentDB and MongoDB instances. This can be useful for development, testing, or working with emulators on your own machine.
+The **DocumentDB extension for Visual Studio Code** allows you to connect to local DocumentDB and MongoDB instances. This can be useful for development, testing, or working with emulators on your own machine.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/local-connection_dark.png"><img src="./images/local-connection.png" alt="Local connection UI screenshot" width="800" style="max-width:100%;height:auto;"></picture></p>
 
@@ -42,7 +42,7 @@ TLS/SSL provides encryption for data in transit, protecting your information fro
 
 ### Local Development Considerations
 
-We understand that setting up TLS/SSL for local deployments can sometimes be inconvenient or unnecessary, especially when you're just experimenting or developing on your own machine. For this reason, the extension allows you to disable the security requirement for local connections. When this option is selected, DocumentDB for VS Code will not verify SSL/TLS certificates.
+We understand that setting up TLS/SSL for local deployments can sometimes be inconvenient or unnecessary, especially when you're just experimenting or developing on your own machine. For this reason, the extension allows you to disable the security requirement for local connections. When this option is selected, the extension will not verify SSL/TLS certificates.
 
 ### A Note on Security Best Practices
 
