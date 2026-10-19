@@ -62,7 +62,7 @@ We didn't get here alone. Eleven community developers contributed nearly 30 pull
 
 ## Try it
 
-**[Install DocumentDB for VS Code from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)**, or search for "DocumentDB" in the VS Code Extensions view.
+**[Install DocumentDB extension in VS Code from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)**, or search for "DocumentDB" in the VS Code Extensions view.
 
 - [DocumentDB for VS Code 1.0 release notes](https://github.com/microsoft/vscode-documentdb/discussions/1012) (the full tour, with every feature explained)
 - [Documentation](https://microsoft.github.io/vscode-documentdb/)
