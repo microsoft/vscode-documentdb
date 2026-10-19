@@ -6,7 +6,7 @@ _October 19, 2026, by Tomasz Naumowicz and the DocumentDB for VS Code team_
 
 _The free, open-source DocumentDB GUI for VS Code reaches 1.0. Start DocumentDB Local in a few clicks, bring your data with copy and paste, and understand it with the Cluster Dashboard and Query Insights._
 
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_hero_dark.png"><img src="./images/1.0.0_hero.png" alt="DocumentDB for VS Code 1.0" width="800" style="max-width:100%;height:auto;"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./images/1.0.0_hero_dark.png"><img src="./images/1.0.0_hero.png" alt="DocumentDB extension for Visual Studio Code 1.0" width="800" style="max-width:100%;height:auto;"></picture></p>
 
 DocumentDB for VS Code 1.0 is here. Released alongside [DocumentDB 1.0](https://documentdb.io/), the free, open-source extension is a **DocumentDB GUI** and MongoDB GUI, built right into Visual Studio Code. It works with DocumentDB, Azure DocumentDB and other MongoDB-compatible databases, wherever they run.
 
