@@ -9,9 +9,9 @@ Webview infrastructure for VS Code extensions: type-safe tRPC over
 transport, optional React hooks for the webview side, and pluggable telemetry.
 
 The transport was extracted from the webview stack that ships in the
-battle-tested [DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb)
-and [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb)
-extensions, where it powers the production collection, document, and query
+battle-tested [DocumentDB extension for Visual Studio Code](https://github.com/microsoft/vscode-documentdb)
+and the [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb)
+extension, where it powers the production collection, document, and query
 experiences that people use every day.
 
 A companion [vscode-webview-starter-kit](https://github.com/tnaum-ms/vscode-webview-starter-kit)
@@ -437,7 +437,7 @@ The `/webview` and `/react` entries run in the webview and are bundled with the
 webview application.
 
 The unbundled rows were verified on VS Code 1.109.0 and 1.115.0 (Linux) with the
-packed package. DocumentDB for VS Code ships the bundled form and checks it in CI.
+packed package. The DocumentDB extension ships the bundled form and checks it in CI.
 
 ## What's inside
 
@@ -519,7 +519,7 @@ This package and the [vscode-webview-starter-kit](https://github.com/tnaum-ms/vs
 built alongside it were a team effort:
 
 - [**tnaum-ms**](https://github.com/tnaum-ms) extracted the package from the
-  webview stack that ships in DocumentDB for VS Code, shaped the tRPC
+  webview stack that ships in the DocumentDB extension, shaped the tRPC
   integration and public API, and built the companion starter kit.
 - [**bk201-**](https://github.com/bk201-) built the dynamic theming system and,
   with sevoku, test-drove the package in [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb),

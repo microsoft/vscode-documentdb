@@ -183,7 +183,7 @@ For more details on the Interactive Shell, see the [Interactive Shell](./interac
 
 ## Settings
 
-Open VS Code Settings and expand **Extensions** > **DocumentDB for VS Code**. The Run All confirmation
+Open VS Code Settings and expand **Extensions** > **DocumentDB**. The Run All confirmation
 is under **Query Playground**. The shared batch size is under **Queries & Results**, and the shared
 connection timeout is under **Connections & Discovery**. You can also search for a setting ID from the table.
 

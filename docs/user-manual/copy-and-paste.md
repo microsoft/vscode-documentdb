@@ -6,7 +6,7 @@ nav_order: 3
 
 # Copy and Paste Collections
 
-The **Copy and Paste** feature in DocumentDB for VS Code provides a convenient way to move smaller datasets between collections, whether they are on the same server or across different connections. It is designed for quick, ad-hoc data transfers directly within the VS Code environment.
+The **Copy and Paste** feature in the DocumentDB extension for Visual Studio Code provides a convenient way to move smaller datasets between collections, whether they are on the same server or across different connections. It is designed for quick, ad-hoc data transfers directly within the VS Code environment.
 
 **Table of Contents**
 
@@ -95,7 +95,7 @@ The copy-and-paste operation is **not an atomic snapshot**. It is a live data tr
 
 Because this feature streams data through your local machine, it can be slow and resource-intensive for very large collections. To prevent accidental performance issues, the extension will show a warning for collections that exceed a certain size.
 
-Open VS Code Settings and expand **Extensions** > **DocumentDB for VS Code** > **Copy & Paste** to
+Open VS Code Settings and expand **Extensions** > **DocumentDB** > **Copy & Paste** to
 customize this behavior. You can also search for either setting ID:
 
 - **`documentDB.copyPaste.showLargeCollectionWarning`**: (Default: `true`) Set to `false` to disable the warning entirely.
@@ -266,7 +266,7 @@ The best tool often depends on your data source, target, and migration requireme
 For example, Microsoft provides guidance on migrating between different versions of its own services, such as from Azure Cosmos DB for MongoDB (RU) to the vCore-based service:
 [Migrate from Azure Cosmos DB for MongoDB (RU) to Azure Cosmos DB for MongoDB (vCore)](https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/how-to-migrate-vcore)
 
-The linked documentation covers the broader migration options, but DocumentDB for VS Code can help you get started too:
+The linked documentation covers the broader migration options, but the extension can help you get started too:
 
 1. Locate the **source cluster** you want to migrate **from** in the Connections, Discovery, or Azure view.
 2. Right-click the cluster and select **Data Migration…**.

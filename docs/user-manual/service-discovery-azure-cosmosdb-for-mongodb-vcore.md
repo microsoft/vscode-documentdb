@@ -6,7 +6,7 @@ nav_order: 1
 
 # Azure DocumentDB Service Discovery Plugin
 
-The **Azure DocumentDB** plugin is available as part of the [Service Discovery](./service-discovery) feature in DocumentDB for VS Code. This plugin helps you connect to your Azure DocumentDB clusters by handling authentication, resource discovery, and connection management within the extension.
+The **Azure DocumentDB** plugin is available as part of the [Service Discovery](./service-discovery) feature in the DocumentDB extension for Visual Studio Code. This plugin helps you connect to your Azure DocumentDB clusters by handling authentication, resource discovery, and connection management within the extension.
 
 > **📘 Managing Azure Resources**: This provider shares common Azure management features with other Azure-based providers. See [Managing Azure Discovery (Accounts, Tenants, and Subscriptions)](./managing-azure-discovery) for detailed information about:
 >

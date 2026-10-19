@@ -3,7 +3,7 @@ title: 'Overview'
 nav_order: 1
 ---
 
-# DocumentDB for VS Code
+# DocumentDB extension for Visual Studio Code
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb) · [Join the Discussion Board](https://github.com/microsoft/vscode-documentdb/discussions) · [Report Issues](https://github.com/microsoft/vscode-documentdb/issues)
 
@@ -11,7 +11,7 @@ nav_order: 1
 
 **A powerful, open-source DocumentDB and MongoDB GUI for everyone.**
 
-**DocumentDB for VS Code** helps you browse, manage, and query **DocumentDB** and **MongoDB** databases across any cloud, hybrid, or local environment.
+The **DocumentDB extension for Visual Studio Code** helps you browse, manage, and query **DocumentDB** and **MongoDB** databases across any cloud, hybrid, or local environment.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./vscode-documentdb-hero-screenshot_dark.png"><img src="./vscode-documentdb-hero-screenshot.png" alt="DocumentDB with a Collection View and auto-completion" width="800" style="max-width:100%;height:auto;"></picture></p>
 
@@ -27,7 +27,7 @@ Connect to any MongoDB or DocumentDB instance: cloud, hybrid cloud, on-premises,
 
 ### Developer-Centric Experience
 
-DocumentDB for VS Code focuses on providing developer productivity features with minimal setup.
+The extension focuses on providing developer productivity features with minimal setup.
 
 - **Query Your Data, Your Way**: Three integrated query surfaces: the visual **Collection View** with context-aware autocompletion, the file-based **Query Playground** for JavaScript scripts, and the built-in **Interactive Shell** for ad-hoc exploration. All three share schema awareness and are linked with navigation actions.
 - **Multiple Data Views**: Inspect collections using **Table**, **Tree**, or **JSON** layouts, with built-in pagination.
@@ -42,7 +42,7 @@ Your feedback, contributions, and ideas shape the future of the extension.
 
 ## User Manual
 
-The User Manual provides guidance on using DocumentDB for VS Code. It contains detailed documentation for specific features and concepts. These documents provide additional context and examples for features you encounter while using the extension:
+The User Manual provides guidance on using the extension. It contains detailed documentation for specific features and concepts. These documents provide additional context and examples for features you encounter while using the extension:
 
 ### Connecting to Databases
 
@@ -82,7 +82,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 
 ## Release Notes
 
-Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
+Explore the history of updates and improvements to the extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
 - [1.0](./release-notes/1.0)
 - [0.11](./release-notes/0.11), [0.11.1](./release-notes/0.11#patch-release-v0111), [0.11.2](./release-notes/0.11#patch-release-v0112)

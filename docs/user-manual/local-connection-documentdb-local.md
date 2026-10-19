@@ -15,5 +15,5 @@ Use the manual connection flow when DocumentDB Local is already running and you 
 ## How to Use
 
 - Ensure you have a DocumentDB instance reachable from the VS Code extension host.
-- In DocumentDB for VS Code, select the **DocumentDB Local** option from the local connection area.
+- In the DocumentDB extension for Visual Studio Code, select the **DocumentDB Local** option from the local connection area.
 - The extension will guide you through the connection process, allowing you to specify connection details and adjust security settings as needed.

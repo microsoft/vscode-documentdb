@@ -7,7 +7,7 @@ has_toc: false
 
 # MongoDB Atlas Service Discovery
 
-MongoDB Atlas Service Discovery lets you browse Atlas organizations, projects, and clusters from DocumentDB for VS Code. You can then create a connection from a discovered cluster without manually copying its endpoint.
+MongoDB Atlas Service Discovery lets you browse Atlas organizations, projects, and clusters from the DocumentDB extension for Visual Studio Code. You can then create a connection from a discovered cluster without manually copying its endpoint.
 
 Use MongoDB Atlas Service Discovery from either location:
 
@@ -37,7 +37,7 @@ The Atlas API Key or Service Account is used only to discover resources. It is n
 6. Enter the Atlas database username and password when prompted.
 7. Save the connection or open the cluster to work with its databases and collections.
 
-The extension prefers the Atlas SRV connection string when Atlas provides one. The saved result is a regular DocumentDB for VS Code connection.
+The extension prefers the Atlas SRV connection string when Atlas provides one. The saved result is a regular connection in the extension.
 
 ## What to do next
 

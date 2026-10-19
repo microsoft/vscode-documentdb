@@ -6,14 +6,14 @@ nav_order: 1
 
 # How to Construct a URL That Opens the Extension
 
-**DocumentDB for VS Code** supports activation through custom URLs, enabling you to integrate the extension seamlessly with your development environment and build deep links directly to your DocumentDB and MongoDB clusters. This powerful feature allows you to create shortcuts that can open specific connections, navigate to particular databases, or even jump directly to a collection view within the extension.
+The **DocumentDB extension for Visual Studio Code** supports activation through custom URLs, enabling you to integrate the extension seamlessly with your development environment and build deep links directly to your DocumentDB and MongoDB clusters. This powerful feature allows you to create shortcuts that can open specific connections, navigate to particular databases, or even jump directly to a collection view within the extension.
 
 This URL-based activation is particularly useful for:
 
 - **Development Workflow Integration:** Create bookmarks or shortcuts that instantly connect to your frequently used databases
 - **Team Collaboration:** Share direct links to specific database resources with your team members
 - **Documentation and Tutorials:** Embed clickable links in documentation that open specific database connections
-- **External Tool Integration:** Allow other applications to launch DocumentDB for VS Code with pre-configured connections
+- **External Tool Integration:** Allow other applications to launch the extension with pre-configured connections
 
 ## URL Syntax
 
@@ -158,9 +158,9 @@ confirmation before opening the setup wizard.
 
 ## How It Works
 
-When you click a DocumentDB for VS Code URL, the following process occurs:
+When you click a URL for the extension, the following process occurs:
 
-1. **Activation**: The `vscode://` prefix tells the operating system to activate VS Code. The `ms-azuretools.vscode-documentdb` segment activates the **DocumentDB for VS Code** extension.
+1. **Activation**: The `vscode://` prefix tells the operating system to activate VS Code. The `ms-azuretools.vscode-documentdb` segment activates the **DocumentDB** extension.
 
 2. **Action routing**: The extension reads the action from the path. An unrecognized action is refused rather than guessed at, so a mistyped link never acts on parameters you did not intend for it.
 
