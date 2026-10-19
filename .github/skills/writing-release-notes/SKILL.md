@@ -1,6 +1,6 @@
 ---
 name: writing-release-notes
-description: Generates release notes and changelog entries for the DocumentDB extension for Visual Studio Code. Use when preparing version releases, creating patch update notes, writing changelog entries, or documenting new features and fixes. Handles both major/minor versions (new file) and patch updates (append to existing file).
+description: Generates release notes and changelog entries for the DocumentDB extension for Visual Studio Code, and announces releases on GitHub Discussions. Use when preparing version releases, creating patch update notes, writing changelog entries, documenting new features and fixes, or posting a release or patch release announcement to Discussions. Handles both major/minor versions (new file) and patch updates (append to existing file).
 ---
 
 # Writing Release Notes and Changelog
@@ -15,6 +15,7 @@ Product name: use **DocumentDB extension for Visual Studio Code** in titles and 
 - Appending patch release notes (X.Y.Z where Z > 0)
 - Writing changelog entries for any version
 - Documenting new features, improvements, or fixes
+- Announcing a release or patch release on GitHub Discussions
 
 ## Quick Reference
 
@@ -104,6 +105,18 @@ Version X.Y.Z:
 4. For X.Y.Z (patch): Append `, [X.Y.Z](./release-notes/X.Y#patch-release-vXYZ)` to the existing line for that major.minor version (where `vXYZ` uses no dots, e.g., `v071`)
 5. Follow the existing pattern of other entries in the list
 
+### Step 6: Announce on GitHub Discussions
+
+Once the release notes are committed, post the announcement in the **Announcements** category. Follow
+[ANNOUNCING-ON-DISCUSSIONS.md](./ANNOUNCING-ON-DISCUSSIONS.md) for the commands and the image handling.
+
+- **X.Y.0:** one new discussion, titled `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>`,
+  with the release notes as the body. Point `releaseNotesUrl` in `package.json` at it and pin it.
+- **X.Y.Z (patch):** first create a new discussion titled `Patch Release vX.Y.Z 📎` whose body is the
+  `## Patch Release vX.Y.Z` section; then post the same text as a comment on the X.Y.0 announcement.
+  Keep this order: it puts the X.Y.0 announcement first and the patch post second in the
+  recently updated Announcements list.
+
 ## Writing Guidelines
 
 ### Changelog Tone
@@ -148,3 +161,4 @@ Before completing:
 - [ ] `docs/index.md` Release Notes section updated with link to new version
 - [ ] Screenshot question was answered
 - [ ] Every requested screenshot is framed with [documentation-screenshots](../documentation-screenshots/SKILL.md), saved under `docs/release-notes/images/` and referenced
+- [ ] Announcement posted per [ANNOUNCING-ON-DISCUSSIONS.md](./ANNOUNCING-ON-DISCUSSIONS.md) (for a patch: new `Patch Release vX.Y.Z 📎` discussion first, then the same text as a comment on the X.Y.0 announcement)

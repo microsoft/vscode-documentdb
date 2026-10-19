@@ -399,35 +399,12 @@ Running `npm install` here is required: bumping `package.json` alone leaves the 
 
 ### 7.5 Create the announcement discussion
 
-Based on the `docs/release-notes/X.Y.md` file, create a new discussion under **Discussions** on the GitHub repo. This is the user-facing announcement for the release.
+Based on the `docs/release-notes/X.Y.md` file, announce the release in the **Announcements** category of **Discussions** on the GitHub repo. This is the user-facing announcement for the release.
 
-An agent can create it for you. GitHub's REST API has no endpoint for discussions, so this goes through GraphQL. First look up the repository ID and the category you want:
+An agent can do this for you with the `writing-release-notes` skill. The full commands, including how to handle images, are in [ANNOUNCING-ON-DISCUSSIONS.md](.github/skills/writing-release-notes/ANNOUNCING-ON-DISCUSSIONS.md).
 
-```bash
-gh api graphql -f query='
-{
-  repository(owner: "microsoft", name: "vscode-documentdb") {
-    id
-    discussionCategories(first: 20) { nodes { id name } }
-  }
-}'
-```
-
-Then create the discussion, using the release-notes body:
-
-```bash
-gh api graphql -f query='
-mutation($repo: ID!, $cat: ID!, $title: String!, $body: String!) {
-  createDiscussion(input: {repositoryId: $repo, categoryId: $cat, title: $title, body: $body}) {
-    discussion { url }
-  }
-}' -f repo=<repository id> -f cat=<category id> -f title="vX.Y.Z" -f body="$(sed '1,/^---$/d' docs/release-notes/X.Y.md)" \
-  --jq '.data.createDiscussion.discussion.url'
-```
-
-The mutation returns the discussion URL, which is what the next paragraph needs.
-
-If this is **more than a patch release** (a new minor or major, `X.Y.0`), copy that URL into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension. For a plain patch release, leave `releaseNotesUrl` pointing at the current minor's announcement.
+- **Minor or major release (`X.Y.0`):** create one new discussion titled `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>` with the release notes as the body. Copy its URL into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension, then pin it in place of the previous announcement.
+- **Patch release (`X.Y.Z`):** first create a new discussion titled `Patch Release vX.Y.Z 📎` whose body is the `## Patch Release vX.Y.Z` section of the release notes. Then post the same text as a comment on the `X.Y.0` announcement (the one `releaseNotesUrl` points to). Keep this order: Announcements are listed by most recent activity, so the comment brings the `X.Y.0` announcement back to the top with the patch post right below it. Leave `releaseNotesUrl` unchanged.
 
 ### 7.6 Commit the version bump
 
