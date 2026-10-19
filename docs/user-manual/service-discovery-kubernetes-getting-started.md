@@ -245,7 +245,7 @@ EOF
 Wait for the custom resource to become healthy:
 
 ```bash
-kubectl wait --for=jsonpath='{.status.phase}'='Cluster in healthy state' \
+kubectl wait --for=jsonpath='{.status.status}'='Cluster in healthy state' \
   documentdb/my-documentdb \
   --namespace documentdb-ns \
   --timeout=300s
@@ -425,7 +425,7 @@ EOF
 Wait and inspect:
 
 ```bash
-kubectl wait --for=jsonpath='{.status.phase}'='Cluster in healthy state' \
+kubectl wait --for=jsonpath='{.status.status}'='Cluster in healthy state' \
   documentdb/my-documentdb \
   --namespace documentdb-ns \
   --timeout=600s
