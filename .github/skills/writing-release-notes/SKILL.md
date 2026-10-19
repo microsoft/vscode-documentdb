@@ -114,6 +114,8 @@ Once the release notes are committed, post the announcement in the **Announcemen
   with the release notes as the body. Point `releaseNotesUrl` in `package.json` at it and pin it.
 - **X.Y.Z (patch):** first create a new discussion titled `Patch Release vX.Y.Z 📎` whose body is the
   `## Patch Release vX.Y.Z` section; then post the same text as a comment on the X.Y.0 announcement.
+  Find that announcement by title (`vX.Y Released`) and content, not through `releaseNotesUrl`: a
+  patch can target an older version. If the lookup is not a single clear match, ask the operator.
   Keep this order: it puts the X.Y.0 announcement first and the patch post second in the
   recently updated Announcements list.
 

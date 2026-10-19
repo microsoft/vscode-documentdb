@@ -42,20 +42,45 @@ announcement on top, with the patch post right below it.
      -F body=@patch-body.md --jq '.data.createDiscussion.discussion.url'
    ```
 
-3. **Comment on the X.Y.0 announcement** with the same text. The announcement is the discussion that
-   `releaseNotesUrl` in `package.json` points to, which a patch release leaves unchanged:
+3. **Find the X.Y.0 announcement** for the version being patched. Do not assume it is the discussion
+   that `releaseNotesUrl` in `package.json` points to: that is the announcement of the newest minor
+   release, and a patch can target an older version (for example 1.0.2 shipped from a
+   `release/1.0.2` branch while `main` is on 1.1). Look it up by title and check its content:
 
    ```bash
    gh api graphql -f query='
-   { repository(owner: "microsoft", name: "vscode-documentdb") { discussion(number: <N>) { id } } }'
+   query($cat: ID!) {
+     repository(owner: "microsoft", name: "vscode-documentdb") {
+       discussions(categoryId: $cat, first: 100) {
+         nodes { number id title url body }
+       }
+     }
+   }' -f cat=<Announcements category id> --jq '.data.repository.discussions.nodes[]
+     | select(.title | contains("vX.Y Released"))
+     | {number, id, title, url, heading: (.body | split("\n") | map(select(startswith("# "))) | first)}'
+   ```
 
+   - The title must contain `vX.Y Released`. Older titles use the retired product name (for example
+     "DocumentDB for VS Code v0.7 Released! 🦈"), so match on the version, not on the name. The
+     trailing space keeps `v0.1` from matching `v0.11`.
+   - The `heading` (the first `# ` line of the body) must name the same `vX.Y` and must not be a
+     patch heading. Compare a paragraph of the body with the opening of `docs/release-notes/X.Y.md`
+     if in doubt.
+   - Use the result only if exactly one discussion passes both checks. If none or several do, stop and
+     ask the operator which discussion to use. Never fall back to `releaseNotesUrl` silently.
+   - If Announcements ever holds more than 100 discussions, page through them with `pageInfo` and
+     `after`.
+
+4. **Comment on that announcement** with the same text, using the `id` from the lookup:
+
+   ```bash
    gh api graphql -f query='
    mutation($id: ID!, $body: String!) {
      addDiscussionComment(input: {discussionId: $id, body: $body}) { comment { url } }
    }' -f id=<discussion id> -F body=@patch-body.md --jq '.data.addDiscussionComment.comment.url'
    ```
 
-4. Check that the Announcements list shows the X.Y.0 announcement first and the patch discussion second.
+5. Check that the Announcements list shows the X.Y.0 announcement first and the patch discussion second.
 
 ## Major or minor release
 
