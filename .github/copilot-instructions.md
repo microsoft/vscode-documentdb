@@ -1,6 +1,6 @@
 # GitHub Copilot Instructions for vscode-documentdb
 
-VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mode), React webviews, Vitest testing.
+The DocumentDB extension for Visual Studio Code: a DocumentDB and MongoDB GUI for Azure DocumentDB, DocumentDB and MongoDB. TypeScript (strict mode), React webviews, Vitest testing.
 
 ## Critical Build Commands
 
@@ -277,6 +277,21 @@ This is a **DocumentDB** extension that uses the **MongoDB-compatible wire proto
 | `documentdbQuery` (variable name)                    | `mongoQuery`                     |
 
 This applies to: code comments, JSDoc/TSDoc, naming (prefer `documentdb` prefix), user-facing strings, docs, and test descriptions.
+
+### Product name
+
+The extension is the **DocumentDB extension for Visual Studio Code** (was "DocumentDB for VS Code", see #1024).
+
+| Where                                                                                                 | Name to use                                                                                |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| README, docs, release notes, blog posts, announcements, Marketplace listing (title and first mention) | **DocumentDB extension for Visual Studio Code**                                            |
+| Later mentions in the same text                                                                       | "the extension" or "the DocumentDB extension"                                              |
+| In-product UI (`displayName`, output channel, walkthrough, notifications, view and command titles)    | **DocumentDB**, or "the DocumentDB extension" where it could be confused with the database |
+| Running text                                                                                          | "VS Code" is fine, for example "without leaving VS Code"                                   |
+
+- Keep UI strings short: never put the full product name in a notification, quick pick, tree item or webview.
+- Never write "DocumentDB for VS Code" as a product name in new content.
+- Unchanged: the extension ID `ms-azuretools.vscode-documentdb`, the repo slug `vscode-documentdb`, URLs, and historical content (0.x release notes, `CHANGELOG.md`, `docs/ai-and-plans/**`).
 
 ## TDD Contract Tests
 

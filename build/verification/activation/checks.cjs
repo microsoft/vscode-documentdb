@@ -153,7 +153,8 @@ function recognizeLogs(logs, installedPath) {
     for (const log of logs) {
         const basename = path.basename(log.file);
         const host = /^exthost(?:\.\d+)?\.log$/i.test(basename);
-        const output = /documentdb.*(?:for.*vs.*code|query.*playground).*\.log$/i.test(basename);
+        // Output channel logs are named "<n>-<channel>.log": the main "DocumentDB" channel and the playground output.
+        const output = /^(?:\d+-)?documentdb(?: query playground.*)?\.log$/i.test(basename);
         if (!host && !output) {
             continue;
         }

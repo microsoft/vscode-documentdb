@@ -26,7 +26,7 @@ import {
 const DIRECT_COMMAND_LINE_RE = /^(\s*)(use|show)\s+([^(\s][^;]*?)\s*;?\s*$/;
 
 const DEFAULT_OPTIONS: ShellRuntimeOptions = {
-    productName: 'DocumentDB for VS Code',
+    productName: 'DocumentDB',
     productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
     displayBatchSize: 50,
     persistent: false,

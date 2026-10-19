@@ -8,4 +8,4 @@ permalink: /release-notes/
 
 # Release Notes
 
-What changed in each release of DocumentDB for VS Code.
+What changed in each release of the DocumentDB extension for Visual Studio Code.

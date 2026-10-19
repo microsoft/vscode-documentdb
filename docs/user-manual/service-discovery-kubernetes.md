@@ -238,7 +238,7 @@ When you **save** a discovered target to the Connections view, the `tlsAllowInva
 | **ClusterIP**           | Starts a local port-forward tunnel to a ready backing pod and connects through `127.0.0.1:<localPort>`.                                                             |
 | **ExternalName**        | Not resolved automatically. Use the external DNS name to connect manually.                                                                                          |
 
-For ClusterIP targets the extension prompts for a local port when needed. By default, the suggested local port matches the remote service port. Open VS Code Settings and expand **Extensions** > **DocumentDB for VS Code** > **Connections & Discovery** to change this behavior. You can also search for either setting ID:
+For ClusterIP targets the extension prompts for a local port when needed. By default, the suggested local port matches the remote service port. Open VS Code Settings and expand **Extensions** > **DocumentDB** > **Connections & Discovery** to change this behavior. You can also search for either setting ID:
 
 - **Local Port Strategy** (`documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy`):
   - **matchRemote**: use the same port number as the remote Kubernetes service port.

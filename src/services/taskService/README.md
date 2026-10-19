@@ -1,6 +1,6 @@
 # Task Service Architecture
 
-Technical documentation for the Task Service framework, which provides long-running background task management for the DocumentDB VS Code extension.
+Technical documentation for the Task Service framework, which provides long-running background task management for the DocumentDB extension for Visual Studio Code.
 
 ---
 

@@ -1,5 +1,12 @@
 # Change Log
 
+## 1.0.1
+
+### Improvements
+
+- **New Name**: The extension is now the DocumentDB extension for Visual Studio Code. The product UI, walkthrough, settings group and output channel use the short name DocumentDB; the extension ID, settings and commands are unchanged. [#1024](https://github.com/microsoft/vscode-documentdb/issues/1024), [#1027](https://github.com/microsoft/vscode-documentdb/issues/1027), [#1035](https://github.com/microsoft/vscode-documentdb/pull/1035)
+- **Documentation**: Updates the README, user manual and documentation site header to the new name, and adds product name guidance for contributors and agents. [#1025](https://github.com/microsoft/vscode-documentdb/issues/1025), [#1029](https://github.com/microsoft/vscode-documentdb/issues/1029), [#1030](https://github.com/microsoft/vscode-documentdb/issues/1030), [#1035](https://github.com/microsoft/vscode-documentdb/pull/1035)
+
 ## 1.0.0
 
 ### New Features

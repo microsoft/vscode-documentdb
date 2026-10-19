@@ -13,8 +13,8 @@ const { DOMParser } = window;
 
 const strings: SurveyInvitationStrings = {
     language: 'en',
-    title: 'DocumentDB for VS Code',
-    question: 'Overall, how satisfied are you with DocumentDB for VS Code?',
+    title: 'DocumentDB',
+    question: 'Overall, how satisfied are you with the DocumentDB extension?',
     stars: ['Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'],
     openSurvey: 'Continue to survey',
     browserNote: "You'll answer this question in the external form in your browser.",
@@ -22,7 +22,7 @@ const strings: SurveyInvitationStrings = {
     askLater: 'Ask me later',
     neverAgain: 'Never again',
     why: 'Why am I seeing this?',
-    usage: "You've used DocumentDB for VS Code on {0} days with meaningful extension use. This count stays on your device.",
+    usage: "You've used the DocumentDB extension on {0} days with meaningful extension use. This count stays on your device.",
     manuallyOpened: "You're seeing this because you opened the feedback form.",
     close: 'Close',
     manualTelemetry: 'We record survey opening only when feedback telemetry is permitted.',
@@ -86,13 +86,9 @@ function interactiveHtml(): {
 }
 
 describe('survey invitation HTML', (): void => {
-    it('keeps the title suffix together while allowing a break after DocumentDB', (): void => {
+    it('shows the product name as the heading and the page title', (): void => {
         const page = parseHtml(html());
-        const title = page.querySelector('h1');
-        expect(title?.textContent).toBe(strings.title);
-        expect(title?.firstChild?.textContent).toBe('DocumentDB ');
-        expect(title?.querySelector('.title-suffix')?.textContent).toBe('for VS Code');
-        expect(page.querySelector('style')?.textContent).toContain('.title-suffix { white-space: nowrap; }');
+        expect(page.querySelector('h1')?.textContent).toBe(strings.title);
         expect(page.querySelector('title')?.textContent).toBe(strings.title);
     });
 

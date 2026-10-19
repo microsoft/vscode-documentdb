@@ -56,7 +56,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
         // Show a modal dialog informing the user that the details will be saved for future use
         const continueButton = l10n.t('Yes, continue');
         const message = l10n.t(
-            'Connection: "{selectedConnectionName}"\n\nThe connection will be added to the "Connections View" in the "DocumentDB for VS Code" extension. The "Connections View" will be opened once this process completes.\n\nDo you want to continue?',
+            'Connection: "{selectedConnectionName}"\n\nThe connection will be added to the "Connections View" in the DocumentDB extension. The "Connections View" will be opened once this process completes.\n\nDo you want to continue?',
             {
                 selectedConnectionName: node.cluster.name,
             },

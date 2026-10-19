@@ -1,6 +1,6 @@
 ---
 name: documentation-screenshots
-description: Frames and annotates DocumentDB for VS Code screenshots for release notes, documentation and blog posts, so every image shares one visual style (brand background, Fluent 2 shadow, rounded corners, consistent text size), in a light theme for this repo or a dark theme for dark sites such as documentdb.io. Use when adding or replacing screenshots in docs/release-notes, docs/user-manual or docs/blog-posts, when preparing images for the documentdb.io blog, when the operator provides raw captures, or when asked to frame, beautify, annotate (numbered steps, arrows) or unify images.
+description: Frames and annotates screenshots of the DocumentDB extension for Visual Studio Code for release notes, documentation and blog posts, so every image shares one visual style (brand background, Fluent 2 shadow, rounded corners, consistent text size), in a light theme for this repo or a dark theme for dark sites such as documentdb.io. Use when adding or replacing screenshots in docs/release-notes, docs/user-manual or docs/blog-posts, when preparing images for the documentdb.io blog, when the operator provides raw captures, or when asked to frame, beautify, annotate (numbered steps, arrows) or unify images.
 ---
 
 # Documentation and Release Notes Screenshots

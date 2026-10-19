@@ -6,7 +6,7 @@ active VS Code theme, a small set of **reusable components** that Fluent itself 
 **Monaco theming** that paints the editor from the same colors, so the two engines agree.
 
 All three were extracted from the webview stack that ships in the battle-tested
-[DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb) extension, where they
+[DocumentDB extension for Visual Studio Code](https://github.com/microsoft/vscode-documentdb), where they
 style the production collection, document, and query views that people use every day. Dropping in
 `VSCodeFluentProvider` is a one-line change; everything past that is optional.
 

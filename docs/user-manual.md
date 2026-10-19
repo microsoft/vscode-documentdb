@@ -7,4 +7,4 @@ permalink: /user-manual/
 
 # User Manual
 
-Guides for connecting to databases, managing data and querying with DocumentDB for VS Code.
+Guides for connecting to databases, managing data and querying with the DocumentDB extension for Visual Studio Code.

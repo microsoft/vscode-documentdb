@@ -6,7 +6,7 @@ nav_order: 3
 
 # Azure VMs (DocumentDB) Service Discovery Plugin
 
-The **Azure VMs (DocumentDB)** plugin is available as part of the [Service Discovery](./service-discovery) feature in DocumentDB for VS Code. This plugin helps you locate and connect to your virtual machines hosted in Azure that are running self-hosted DocumentDB or MongoDB instances.
+The **Azure VMs (DocumentDB)** plugin is available as part of the [Service Discovery](./service-discovery) feature in the DocumentDB extension for Visual Studio Code. This plugin helps you locate and connect to your virtual machines hosted in Azure that are running self-hosted DocumentDB or MongoDB instances.
 
 > **📘 Managing Azure Resources**: This provider shares common Azure management features with other Azure-based providers. See [Managing Azure Discovery (Accounts, Tenants, and Subscriptions)](./managing-azure-discovery) for detailed information about:
 >

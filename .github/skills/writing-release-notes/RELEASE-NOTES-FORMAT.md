@@ -33,7 +33,7 @@ Patch releases append to the existing file and do not change the front matter.
 ### Main Release Section (X.Y.0)
 
 ```markdown
-# DocumentDB for VS Code Extension vX.Y
+# DocumentDB extension for Visual Studio Code vX.Y
 
 Opening paragraph expressing excitement about the release. Summarize 2-3 key highlights. Mention the extension name and target audience (developers working with DocumentDB/MongoDB).
 
@@ -91,24 +91,28 @@ See the full changelog entry for this release:
 
 ## Writing Style
 
+### Product Name
+
+The extension is the **DocumentDB extension for Visual Studio Code**. Use the full name in the title and the first mention, then "the extension". "VS Code" is fine in running text. Never use the retired name "DocumentDB for VS Code" in new release notes; it still appears in the real 0.x examples below because those notes are historical. See [Product name](../../copilot-instructions.md#product-name).
+
 ### Opening Paragraph Patterns
 
 **For Major Features:**
 
 ```markdown
-We are excited to announce the release of **DocumentDB for VS Code Extension vX.Y**. This is a landmark update for our DocumentDB and MongoDB GUI, focused on [theme]. It introduces [major feature], enhances [improvement area], and improves [another area] for developers working with DocumentDB and MongoDB API databases.
+We are excited to announce the release of **version X.Y of the DocumentDB extension for Visual Studio Code**. This is a landmark update for our DocumentDB and MongoDB GUI, focused on [theme]. It introduces [major feature], enhances [improvement area], and improves [another area] for developers working with DocumentDB and MongoDB API databases.
 ```
 
 **For Incremental Updates:**
 
 ```markdown
-We are excited to announce the release of **DocumentDB for VS Code Extension vX.Y**. This update significantly enhances [area] with [improvement], introduces [feature], and delivers several key bug fixes to improve stability and user experience.
+We are excited to announce the release of **version X.Y of the DocumentDB extension for Visual Studio Code**. This update significantly enhances [area] with [improvement], introduces [feature], and delivers several key bug fixes to improve stability and user experience.
 ```
 
 **For Initial/Foundation Releases:**
 
 ```markdown
-We're happy to announce the **public release of the DocumentDB for VS Code Extension (vX.Y)**, a dedicated VS Code extension designed specifically for developers working with **DocumentDB** and **MongoDB** databases.
+We're happy to announce the **public release of the DocumentDB extension for Visual Studio Code (vX.Y)**, a dedicated VS Code extension designed specifically for developers working with **DocumentDB** and **MongoDB** databases.
 ```
 
 ### Feature Description Patterns

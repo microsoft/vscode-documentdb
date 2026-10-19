@@ -6,7 +6,7 @@ nav_order: 6
 
 # Managing Azure Discovery (Accounts, Tenants, and Subscriptions)
 
-When using Azure-based service discovery providers in DocumentDB for VS Code, you have access to shared features for managing your Azure credentials and filtering which resources are displayed. These features are consistent across all Azure service discovery providers:
+When using Azure-based service discovery providers in the DocumentDB extension for Visual Studio Code, you have access to shared features for managing your Azure credentials and filtering which resources are displayed. These features are consistent across all Azure service discovery providers:
 
 - [Azure Cosmos DB for MongoDB (RU)](./service-discovery-azure-cosmosdb-for-mongodb-ru)
 - [Azure DocumentDB](./service-discovery-azure-cosmosdb-for-mongodb-vcore)
@@ -83,7 +83,7 @@ The credential management wizard does **not** provide a sign-out option. If you 
 2. Select the account you want to sign out from
 3. Choose **"Sign Out"**
 
-> **⚠️ Important**: Signing out from an Azure account in VS Code will sign you out globally across VS Code, not just from the DocumentDB for VS Code extension. This may affect other extensions that use the same Azure account.
+> **⚠️ Important**: Signing out from an Azure account in VS Code will sign you out globally across VS Code, not just from the DocumentDB extension. This may affect other extensions that use the same Azure account.
 
 ---
 

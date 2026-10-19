@@ -219,7 +219,7 @@ For more details on the Query Playground, see the [Query Playground](./query-pla
 
 ## Settings
 
-Open VS Code Settings and expand **Extensions** > **DocumentDB for VS Code**. The display and paste
+Open VS Code Settings and expand **Extensions** > **DocumentDB**. The display and paste
 options are under **Interactive Shell**. The shared connection timeout is under **Connections & Discovery**,
 and the shared batch size is under **Queries & Results**. You can also search for a setting ID from the table.
 

@@ -7,7 +7,7 @@ import { NodeDriverServiceProvider } from '@mongosh/service-provider-node-driver
 import { EventEmitter } from 'events';
 import { type MongoClient } from 'mongodb';
 
-const DEFAULT_PRODUCT_NAME = 'DocumentDB for VS Code';
+const DEFAULT_PRODUCT_NAME = 'DocumentDB';
 const DEFAULT_PRODUCT_DOCS_LINK = 'https://github.com/microsoft/vscode-documentdb';
 
 /**

@@ -13,7 +13,7 @@ The **Azure CosmosDB for MongoDB (RU) Emulator** allows you to develop and test 
 - Install the Azure CosmosDB Emulator on your local machine.
   [Official documentation and download](https://learn.microsoft.com/azure/cosmos-db/local-emulator)
 - Start the emulator. It will expose a local endpoint for MongoDB connections.
-- In DocumentDB for VS Code, choose the **Azure CosmosDB for MongoDB (RU) Emulator** option from the local connection area.
+- In the DocumentDB extension for Visual Studio Code, choose the **Azure CosmosDB for MongoDB (RU) Emulator** option from the local connection area.
 - The extension will pre-fill the connection string and handle any required configuration.
 
 ## Features

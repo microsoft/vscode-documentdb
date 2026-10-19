@@ -1,4 +1,4 @@
-# DocumentDB for VS Code
+# DocumentDB extension for Visual Studio Code
 
 <!-- region exclude-from-marketplace -->
 
@@ -7,7 +7,7 @@
 
 <img src="resources/readme/documentdb-logo.png" alt="DocumentDB Logo" style="width:40%; min-width:180px; max-width:320px; height:auto;" />
 
-> **Built in the open, with you.** DocumentDB for VS Code is open source under the MIT license. The roadmap, the design discussions and every change happen right here on GitHub.
+> **Built in the open, with you.** The DocumentDB extension for Visual Studio Code is open source under the MIT license. The roadmap, the design discussions and every change happen right here on GitHub.
 >
 > - ⬇️ **Install it** from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb), or search for "DocumentDB" in the VS Code Extensions view
 > - 💬 **Have a question or an idea?** Join the conversation in [GitHub Discussions](https://github.com/microsoft/vscode-documentdb/discussions)
@@ -28,7 +28,7 @@ Connect to your databases, explore your data, run and tune queries, and move col
 
 🎉 **Version 1.0 is here**, released alongside DocumentDB 1.0. See [what's in 1.0](https://microsoft.github.io/vscode-documentdb/release-notes/1.0).
 
-<p align="center"><img src="resources/readme/vscode-documentdb-hero-screenshot.png" alt="DocumentDB for VS Code: the Collection View with a query, autocompletion and results in a table" width="800" style="max-width:100%;height:auto;"></p>
+<p align="center"><img src="resources/readme/vscode-documentdb-hero-screenshot.png" alt="DocumentDB extension for Visual Studio Code: the Collection View with a query, autocompletion and results in a table" width="800" style="max-width:100%;height:auto;"></p>
 
 ## Connect in Seconds, Wherever Your Data Lives
 
@@ -113,7 +113,7 @@ This project may contain trademarks or logos for projects, products, or services
 
 ## Designed for Every Theme
 
-DocumentDB for VS Code feels at home in your workspace, whether you prefer a light or dark theme.
+The extension feels at home in your workspace, whether you prefer a light or dark theme.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="resources/readme/documentdb-logo_dark.png"><img src="resources/readme/documentdb-logo.png" alt="DocumentDB logo" width="320" style="max-width:100%;height:auto;"></picture></p>
 
@@ -127,7 +127,7 @@ VS Code collects usage data and sends it to Microsoft to help improve our produc
 
 # Feedback Collection
 
-DocumentDB for VS Code proactively asks for user feedback and provides feedback entry points in the UI. Feedback collection follows VS Code's `telemetry.feedback.enabled` setting, which organizations can also enforce through the `EnableFeedback` policy.
+The extension proactively asks for user feedback and provides feedback entry points in the UI. Feedback collection follows VS Code's `telemetry.feedback.enabled` setting, which organizations can also enforce through the `EnableFeedback` policy.
 
 To disable feedback, set `telemetry.feedback.enabled` to `false`. This hides the survey invitation, the in-product feedback buttons, and the **DocumentDB: Give Feedback** command. Telemetry about the survey is additionally subject to `telemetry.telemetryLevel`.
 

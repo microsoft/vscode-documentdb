@@ -81,7 +81,7 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
                 return [
                     {
                         label: l10n.t('Sign in to Azure to continue…'),
-                        detail: l10n.t('DocumentDB for VS Code is not signed in to Azure'),
+                        detail: l10n.t('Not signed in to Azure'),
                         iconPath: new vscode.ThemeIcon('sign-in'),
                         isSignInOption: true,
                     },

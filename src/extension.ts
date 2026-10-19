@@ -48,7 +48,7 @@ export async function activateInternal(
     // TreeElementStateManager is needed here too
     ext.state = new TreeElementStateManager();
 
-    ext.outputChannel = createAzExtLogOutputChannel('DocumentDB for VS Code');
+    ext.outputChannel = createAzExtLogOutputChannel('DocumentDB');
     context.subscriptions.push(ext.outputChannel);
 
     ext.playgroundOutputChannel = vscode.window.createOutputChannel('DocumentDB Query Playground Output');

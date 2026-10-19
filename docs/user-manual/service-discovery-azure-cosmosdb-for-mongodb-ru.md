@@ -6,7 +6,7 @@ nav_order: 2
 
 # Azure CosmosDB for MongoDB (RU) Service Discovery Plugin
 
-The **Azure CosmosDB for MongoDB (RU)** plugin is available as part of the [Service Discovery](./service-discovery) feature in DocumentDB for VS Code. This plugin helps you find and connect to Azure Cosmos DB accounts provisioned with Request Units (RU) for the MongoDB API by handling authentication, resource discovery, and connection creation from inside the extension.
+The **Azure CosmosDB for MongoDB (RU)** plugin is available as part of the [Service Discovery](./service-discovery) feature in the DocumentDB extension for Visual Studio Code. This plugin helps you find and connect to Azure Cosmos DB accounts provisioned with Request Units (RU) for the MongoDB API by handling authentication, resource discovery, and connection creation from inside the extension.
 
 > **📘 Managing Azure Resources**: This provider shares common Azure management features with other Azure-based providers. See [Managing Azure Discovery (Accounts, Tenants, and Subscriptions)](./managing-azure-discovery) for detailed information about:
 >
