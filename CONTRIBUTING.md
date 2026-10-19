@@ -1,6 +1,8 @@
-# Contributing to DocumentDB for VS Code
+# Contributing to the DocumentDB extension for Visual Studio Code
 
-Thank you for your interest in contributing to the **DocumentDB for VS Code** extension. This guide helps you set up your development environment and configure Visual Studio Code to effectively contribute to the extension.
+Thank you for your interest in contributing to the **DocumentDB extension for Visual Studio Code**. This guide helps you set up your development environment and configure Visual Studio Code to effectively contribute to the extension.
+
+> **Product name:** in docs and announcements, use **DocumentDB extension for Visual Studio Code** on first mention, then "the extension". In the product UI, the extension is just **DocumentDB**. The old name "DocumentDB for VS Code" is retired. See [Product name](.github/copilot-instructions.md#product-name) for the full rule.
 
 The document consists of seven sections:
 
@@ -175,14 +177,14 @@ npm install -g typescript
 
 ## 3. VS Code Configuration
 
-This section explains how to clone the **DocumentDB for VS Code** repository and set up Visual Studio Code for development and debugging.
+This section explains how to clone the **DocumentDB extension for Visual Studio Code** repository and set up Visual Studio Code for development and debugging.
 
 ### 3.1. Steps to Clone and Set Up Repository
 
 1. Ensure you have completed the [Machine Setup](#2-machine-setup) steps.
 
 2. Fork or directly clone the official repository:
-   - [DocumentDB for VS Code (vscode-documentdb)](https://github.com/microsoft/vscode-documentdb)
+   - [DocumentDB extension for Visual Studio Code (vscode-documentdb)](https://github.com/microsoft/vscode-documentdb)
 
    - Open your **WSL2** terminal and clone the repository:
 
@@ -450,4 +452,4 @@ Run the second internal Azure DevOps pipeline, the **release** pipeline, which p
 
 ## You're Ready to Contribute! 🎉
 
-You've now successfully set up your development environment and are ready to contribute to **DocumentDB for VS Code**. We appreciate your contributions!
+You've now successfully set up your development environment and are ready to contribute to the **DocumentDB extension for Visual Studio Code**. We appreciate your contributions!

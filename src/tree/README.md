@@ -2,7 +2,7 @@
 
 _Last update: April 30, 2025_
 
-This directory contains the tree view implementations for the DocumentDB for VS Code extension. The extension provides multiple ways to visualize and interact with CosmosDB resources.
+This directory contains the tree view implementations for the DocumentDB extension for Visual Studio Code. The extension provides multiple ways to visualize and interact with CosmosDB resources.
 
 ## View Types
 

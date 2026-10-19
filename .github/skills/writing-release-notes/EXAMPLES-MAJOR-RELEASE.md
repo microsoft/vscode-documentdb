@@ -13,9 +13,9 @@ parent: 'Release Notes'
 nav_order: NNNN
 ---
 
-# DocumentDB for VS Code Extension vX.Y
+# DocumentDB extension for Visual Studio Code vX.Y
 
-We are excited to announce the release of **DocumentDB for VS Code Extension vX.Y**. This is a landmark update for our DocumentDB and MongoDB GUI, focused on [primary theme]. It introduces [headline feature], enhances [secondary improvement], and improves [third improvement] for developers working with DocumentDB and MongoDB API databases.
+We are excited to announce the release of **version X.Y of the DocumentDB extension for Visual Studio Code**. This is a landmark update for our DocumentDB and MongoDB GUI, focused on [primary theme]. It introduces [headline feature], enhances [secondary improvement], and improves [third improvement] for developers working with DocumentDB and MongoDB API databases.
 
 ## What's New in vX.Y
 
@@ -63,6 +63,8 @@ See the full changelog entry for this release:
 ---
 
 ## Real Example (v0.6.0)
+
+Historical example: it uses the retired name "DocumentDB for VS Code". Use the template above for the product name.
 
 ```markdown
 ---

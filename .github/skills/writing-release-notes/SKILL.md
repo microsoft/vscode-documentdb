@@ -1,11 +1,13 @@
 ---
 name: writing-release-notes
-description: Generates release notes and changelog entries for the DocumentDB VS Code extension. Use when preparing version releases, creating patch update notes, writing changelog entries, or documenting new features and fixes. Handles both major/minor versions (new file) and patch updates (append to existing file).
+description: Generates release notes and changelog entries for the DocumentDB extension for Visual Studio Code. Use when preparing version releases, creating patch update notes, writing changelog entries, or documenting new features and fixes. Handles both major/minor versions (new file) and patch updates (append to existing file).
 ---
 
 # Writing Release Notes and Changelog
 
-Generate professional release documentation for the DocumentDB VS Code extension.
+Generate professional release documentation for the DocumentDB extension for Visual Studio Code.
+
+Product name: use **DocumentDB extension for Visual Studio Code** in titles and first mentions, then "the extension". The old name "DocumentDB for VS Code" is retired; see [Product name](../../copilot-instructions.md#product-name).
 
 ## When to Use
 

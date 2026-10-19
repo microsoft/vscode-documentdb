@@ -1,5 +1,5 @@
 """
-DocumentDB for VS Code screenshot framing tool.
+Screenshot framing tool for the DocumentDB extension for Visual Studio Code.
 
 Frames tool screenshots in the DocumentDB release-notes style:
   - brand background: pale blue -> cyan gradient with a subtle dot grid
