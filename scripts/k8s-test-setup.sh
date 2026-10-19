@@ -94,7 +94,7 @@ EOF
 
 # 7. Wait for DocumentDB to be healthy
 echo "Waiting for DocumentDB cluster to become healthy..."
-kubectl wait --for=jsonpath='{.status.phase}'='Cluster in healthy state' \
+kubectl wait --for=jsonpath='{.status.status}'='Cluster in healthy state' \
   documentdb/my-documentdb -n documentdb-ns --timeout=300s 2>/dev/null || \
   kubectl get documentdb my-documentdb -n documentdb-ns
 
