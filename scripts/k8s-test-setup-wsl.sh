@@ -100,9 +100,7 @@ helm install cert-manager jetstack/cert-manager \
 
 # 8. Install DocumentDB operator
 echo "Installing DocumentDB operator..."
-helm repo add documentdb https://documentdb.github.io/documentdb-kubernetes-operator 2>/dev/null || true
-helm repo update
-helm install documentdb-operator documentdb/documentdb-operator \
+helm install documentdb-operator oci://ghcr.io/documentdb/documentdb-operator --version 1.0.0 \
   --namespace documentdb-operator \
   --create-namespace \
   --wait
