@@ -268,7 +268,7 @@ export const scenarios = {
             steps: explorerSteps,
             readiness: {
                 content: ['Feature preview', 'Query Efficiency Analysis', 'Query Performance Analysis', 'Consider indexing the filter.',
-                    'Copy command', 'Reconfigure', 'demo.items', 'Prompt: built-in', '0 credits', '1200 in / 350 out tokens'],
+                    'Copy command', 'Reconfigure', 'demo.items', 'Prompt: built-in', '0 credits', '1,200 in / 350 out tokens'],
                 selectors: ['.leftColumn', '.rightColumn'], noProgressbar: true,
             },
             assertions: [{

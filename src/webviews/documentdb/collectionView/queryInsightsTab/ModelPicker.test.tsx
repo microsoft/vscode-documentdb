@@ -165,7 +165,7 @@ describe('Shared Query Insights ModelPicker', () => {
         expect(details?.textContent).toContain('Long contextInput4');
         expect(details?.textContent).not.toContain('Cache Write');
         expect(details?.textContent).toContain('Tools supported · No image input');
-        expect(details?.textContent).toContain('premium / 1 / premium');
+        expect(details?.textContent).toContain('premium · v1');
         expect(details?.textContent).toContain('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.');
     });
 
@@ -187,6 +187,6 @@ describe('Shared Query Insights ModelPicker', () => {
         expect(host.textContent).toContain('Context window: 128,000 tokens');
         expect(host.textContent).not.toContain('Pricing details');
         expect(host.querySelector('details')).toBeNull();
-        expect(host.textContent).toContain('premium / 1 / premium');
+        expect(host.textContent).toContain('premium · v1');
     });
 });

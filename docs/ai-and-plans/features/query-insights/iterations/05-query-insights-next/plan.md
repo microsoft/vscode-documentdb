@@ -570,6 +570,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-16 | Coding agent (gpt-6.1-sol) | 16:38 | 16:39 | 1 | Slim facts row and reconfiguration scenario; checks deferred to E. |
 | WI-15 follow-up | Coding agent (gpt-6.1-sol) | 16:39 | 16:40 | 1 | Lead screenshot steering: VS Code-style collapsible pricing, tier badges and F9; checks deferred to E. |
 | WI-17 + Checkpoint E | Coding agent (gpt-6.1-sol) | 16:40 | 16:56 | 16 | Four Monaco editors, markers/focus tests, later lead F9/F10 clarifications, checkpoint fixes, build/tests, 21 headless routes, screenshot/theme inspection, cleanup and commit. |
+| Phase E style review (lead) | Lead agent | 16:58 | 17:12 | 14 | Pricing panel moved from raw SCSS (px, `'›'` text chevron, editor-background card) to Fluent tokens + `ChevronRightRegular` (VS Code-like subtle card), duplicate pricing label removed, cost values and byline token counts locale-formatted, identity line `id · family · vN`, HC stroke. Restarted the operator's stale Vite watcher (cleared `node_modules/.vite`). Headless screenshots in 3 themes; build + 149 targeted tests passed |
 
 ## Deviation log
 
@@ -603,6 +604,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Checkpoint A | Restored lockfile dependencies with `npm ci` after the initial commands could not start due to missing packages. | This worktree had no installed dependency set; no dependency manifests or lockfile changed. |
 | Checkpoint A | The new picker selection test replaces only Fluent's floating dropdown/option layer with a native test stand-in. | Opening the real popup in jsdom (no layout engine) timed out; picker state, RPC calls, ordering, token labels, hints, and disclosure tests remain exercised. Also isolated the new host test's cancellation-error mock. No existing snapshots or TDD contracts changed. |
 | Operator feedback (16:22) | Welcome: the explain output always shows **Required**; when supplied, a green "Prefilled from your session" note appears below it instead of replacing the tag. All wizard and preview badges use the house style `appearance="tint" shape="rounded" size="small"` (as in the Indexes tab and the plan summary). | "Prefilled" replacing "Required" read like a stale state; the rounded-square tint badge is the convention across the other webviews. |
+| Phase E lead review | The Pricing details panel was restyled after Phase E; the operator's `watch:views` was restarted with a cleared dependency cache. | Phase E's panel used hand-rolled CSS outside the house style. The running watcher's pre-bundled Monaco chunk was stale (504 Outdated Optimize Dep), so Configure never loaded in the operator's browser; restart was the only fix because the dev origin is pinned to `localhost:18080`. |
 
 ## Phase A verification outcome
 

@@ -14,7 +14,14 @@ export function usageByline(usage: QueryInsightsStreamUsage | undefined): string
         parts.push(l10n.t('{0} credits', credits));
     }
     if (usage?.promptTokens !== undefined && usage.responseTokens !== undefined) {
-        parts.push(l10n.t('{0} in / {1} out tokens', String(usage.promptTokens), String(usage.responseTokens)));
+        const formatTokens = new Intl.NumberFormat(navigator.language);
+        parts.push(
+            l10n.t(
+                '{0} in / {1} out tokens',
+                formatTokens.format(usage.promptTokens),
+                formatTokens.format(usage.responseTokens),
+            ),
+        );
     }
     return parts.length ? ` · ${parts.join(' · ')}` : '';
 }

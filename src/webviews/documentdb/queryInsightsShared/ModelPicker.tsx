@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, Button, Dropdown, Field, Option, OptionGroup, Text, Tooltip } from '@fluentui/react-components';
-import { InfoRegular } from '@fluentui/react-icons';
+import { ChevronRightRegular, InfoRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useEffect, useRef, useState, type JSX } from 'react';
 import type { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
@@ -14,6 +14,12 @@ import { formatTokenCount } from '../../../utils/formatTokenCount';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import './ModelPicker.scss';
+
+function formatCredits(value: unknown): string {
+    return typeof value === 'number'
+        ? new Intl.NumberFormat(navigator.language, { maximumFractionDigits: 2 }).format(value)
+        : String(value);
+}
 
 export interface ModelPickerProps {
     commandType: CommandType;
@@ -72,7 +78,7 @@ function ModelDetails({ model, compact = false, tooltip = false }: {
     const rows = (fields: readonly [keyof AvailableModelInfo, string][]): JSX.Element => (
         <dl className="query-insights-model-costs">
             {fields.filter(([key]) => model[key] !== undefined).map(([key, label]) => (
-                <div key={key}><dt>{label}</dt><dd>{String(model[key])}</dd></div>
+                <div key={key}><dt>{label}</dt><dd>{formatCredits(model[key])}</dd></div>
             ))}
         </dl>
     );
@@ -84,21 +90,20 @@ function ModelDetails({ model, compact = false, tooltip = false }: {
             {model.maxInputTokens > 0 && <Text size={200}>{l10n.t('Context window: {0} tokens', model.maxInputTokens.toLocaleString(navigator.language))}</Text>}
             {capabilities.length > 0 && <Text size={200}>{capabilities.join(' · ')}</Text>}
             <Text size={100} className="query-insights-model-identity">
-                {[model.family, model.version, model.id].filter(Boolean).join(' / ')}
+                {[model.id, model.family !== model.id ? model.family : undefined, model.version ? `v${model.version}` : undefined].filter(Boolean).join(' · ')}
             </Text>
             <Text size={200}>{l10n.t('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.')}</Text>
         </div>
     );
     const pricing = (
         <div className="query-insights-model-pricing-body">
-            {model.pricing && <Text size={200}>{model.pricing}</Text>}
             {(costs.some(([key]) => model[key] !== undefined) || longCosts.some(([key]) => model[key] !== undefined)) && (
                 <>
                     <Text size={200} className="query-insights-model-muted">{l10n.t('Credits per 1M tokens')}</Text>
                     {rows(costs)}
                     {longCosts.some(([key]) => model[key] !== undefined) && (
                         <>
-                            <Text size={200} weight="semibold">{l10n.t('Long context')}</Text>
+                            <span className="query-insights-model-cost-group">{l10n.t('Long context')}</span>
                             {rows(longCosts)}
                         </>
                     )}
@@ -121,6 +126,7 @@ function ModelDetails({ model, compact = false, tooltip = false }: {
             ) : (
                 <details open={!compact}>
                     <summary>
+                        <ChevronRightRegular aria-hidden="true" className="query-insights-model-chevron" />
                         <span>{l10n.t('Pricing details')}</span>
                         {compact && <Text size={200} className="query-insights-model-muted">{modelSummary(model)}</Text>}
                         <ModelCostBadge category={model.priceCategory} />
