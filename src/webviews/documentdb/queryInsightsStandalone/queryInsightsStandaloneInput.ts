@@ -2,6 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { z } from 'zod';
@@ -119,4 +120,145 @@ export function parseStandaloneInput(input: StandaloneInput): {
         totalDocs: typeof stats?.count === 'number' && stats.count >= 0 ? stats.count : undefined,
         filter,
     };
+}
+
+/** Where a supplied text failed to parse. Line and column are 1-based. */
+export interface InputIssue {
+    message: string;
+    line?: number;
+    column?: number;
+}
+
+export type ExplainInspection =
+    | {
+          ok: true;
+          detectedCommandType: CommandType;
+          databaseName?: string;
+          collectionName?: string;
+          /** Winning-plan stages in execution order (leaf first), then later pipeline stages. */
+          planStages: string[];
+      }
+    | ({ ok: false } & InputIssue);
+
+/** Non-throwing, per-field validation that the Configure step shows while the user types. */
+export interface StandaloneInspection {
+    explain?: ExplainInspection;
+    commandType?: CommandType;
+    /** The query that Analyze will send: the user's override, or the one extracted from the plan. */
+    query?: string;
+    queryIsExtracted?: boolean;
+    queryIssue?: InputIssue;
+    collectionStats?: ({ ok: true; documentCount?: number } | ({ ok: false } & InputIssue));
+    indexes?: ({ ok: true; names: string[] } | ({ ok: false } & InputIssue));
+    /** True when Analyze can run with these inputs. */
+    ready: boolean;
+}
+
+function parseWithLocation(text: string): { value: unknown } | { issue: InputIssue } {
+    try {
+        return { value: EJSON.parse(text, { relaxed: true }) as unknown };
+    } catch {
+        try {
+            const value = parseShellBSON(text, { mode: ParseMode.Loose }) as unknown;
+            return { value: EJSON.parse(EJSON.stringify(value), { relaxed: true }) as unknown };
+        } catch (cause) {
+            const loc = (cause as { loc?: { line?: number; column?: number } }).loc;
+            const raw = cause instanceof Error ? cause.message : String(cause);
+            // The shell parser wraps the text in "(\n…\n)": its line is one too high and its column 0-based.
+            const reason = raw.replace(/\s*\(\d+:\d+\)[\s\S]*$/, '').trim() || raw;
+            return typeof loc?.line === 'number' && typeof loc.column === 'number'
+                ? { issue: { message: reason, line: Math.max(1, loc.line - 1), column: loc.column + 1 } }
+                : { issue: { message: reason } };
+        }
+    }
+}
+
+function planStageChain(plan: Record<string, unknown> | undefined): string[] {
+    const chain: string[] = [];
+    let node = plan;
+    while (node && chain.length < 8) {
+        if (typeof node.stage === 'string') chain.push(node.stage);
+        node = object(node.inputStage) ?? object(Array.isArray(node.inputStages) ? node.inputStages[0] : undefined);
+    }
+    return chain.reverse();
+}
+
+function inspectExplain(explain: Record<string, unknown>): ExplainInspection {
+    const command = object(explain.command) ?? {};
+    const initial = getInitialExplainPlan(explain, 'aggregate');
+    const planner = object(initial.queryPlanner) ?? object(explain.queryPlanner) ?? {};
+    let detectedCommandType = CommandType.Find;
+    if ('aggregate' in command || Array.isArray(explain.stages)) detectedCommandType = CommandType.Aggregate;
+    else if ('count' in command) detectedCommandType = CommandType.Count;
+    let databaseName: string | undefined;
+    let collectionName: string | undefined;
+    if (typeof planner.namespace === 'string' && planner.namespace.includes('.')) {
+        const dot = planner.namespace.indexOf('.');
+        databaseName = planner.namespace.slice(0, dot);
+        collectionName = planner.namespace.slice(dot + 1);
+    } else {
+        const target = command.find ?? command.aggregate ?? command.count;
+        collectionName = typeof target === 'string' ? target : undefined;
+        databaseName = typeof command.$db === 'string' ? command.$db : undefined;
+    }
+    const laterStages = Array.isArray(explain.stages)
+        ? (explain.stages as unknown[]).slice(1).flatMap((stage) => Object.keys(object(stage) ?? {}).filter((key) => key.startsWith('$')))
+        : [];
+    return {
+        ok: true, detectedCommandType, databaseName, collectionName,
+        planStages: [
+            ...planStageChain(object(planner.winningPlan) ?? object(object(initial.executionStats)?.executionStages)),
+            ...laterStages,
+        ],
+    };
+}
+
+export function inspectStandaloneInput(input: StandaloneInput): StandaloneInspection {
+    const result: StandaloneInspection = { ready: false };
+    if (input.collectionStats.trim()) {
+        const parsed = parseWithLocation(input.collectionStats);
+        const stats = 'value' in parsed ? object(parsed.value) : undefined;
+        result.collectionStats = 'issue' in parsed ? { ok: false, ...parsed.issue }
+            : stats ? { ok: true, documentCount: typeof stats.count === 'number' ? stats.count : undefined }
+                : { ok: false, message: vscode.l10n.t('Collection statistics must be a JSON object.') };
+    }
+    if (input.indexes.trim()) {
+        const parsed = parseWithLocation(input.indexes);
+        const list = 'value' in parsed && Array.isArray(parsed.value) && parsed.value.every((item: unknown) => object(item))
+            ? parsed.value as Record<string, unknown>[] : undefined;
+        result.indexes = 'issue' in parsed ? { ok: false, ...parsed.issue }
+            : list ? { ok: true, names: list.map((item) => typeof item.name === 'string' ? item.name : '').filter(Boolean) }
+                : { ok: false, message: vscode.l10n.t('Indexes must be a JSON array of index objects.') };
+    }
+    if (!input.explain.trim()) return result;
+    const parsedExplain = parseWithLocation(input.explain);
+    if ('issue' in parsedExplain) {
+        result.explain = { ok: false, ...parsedExplain.issue };
+        return result;
+    }
+    const explain = object(parsedExplain.value);
+    if (!explain || (!object(explain.queryPlanner) && !object(explain.executionStats) && !Array.isArray(explain.stages))) {
+        result.explain = { ok: false, message: vscode.l10n.t('Paste an explain plan containing queryPlanner, executionStats, or stages.') };
+        return result;
+    }
+    result.explain = inspectExplain(explain);
+    if (input.query.trim()) {
+        const parsedQuery = parseWithLocation(input.query);
+        if ('issue' in parsedQuery) {
+            result.queryIssue = parsedQuery.issue;
+            return result;
+        }
+    }
+    try {
+        // Optional inputs are validated above, so only explain/query problems can surface here.
+        const parsed = parseStandaloneInput({ ...input, collectionStats: '', indexes: '' });
+        result.commandType = parsed.commandType;
+        result.query = parsed.query;
+        result.queryIsExtracted = !input.query.trim();
+    } catch (cause) {
+        result.queryIssue = { message: cause instanceof Error ? cause.message : String(cause) };
+        return result;
+    }
+    result.ready = result.collectionStats?.ok !== false && result.indexes?.ok !== false;
+    return result;
 }

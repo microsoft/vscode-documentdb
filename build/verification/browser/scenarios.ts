@@ -78,9 +78,28 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 const explorerBase = fixtures.queryInsightsStandalone;
 const explorerSteps = [
     { action: 'click', role: 'button', name: 'Continue' },
-    { action: 'click', role: 'button', name: 'Analyze supplied data' },
+    { action: 'click', role: 'button', name: 'Analyze query' },
 ] as const satisfies readonly ScenarioStep[];
 const explorerStage2 = explorerBase.rpc['queryInsightsStandalone.getStage2'].results[0];
+const explorerInspection = explorerBase.rpc['queryInsightsStandalone.inspectInput'].results[0];
+type ExplorerInspection = FixtureOutputs['queryInsightsStandalone']['inspectInput'];
+const explorerAnalysisInput = {
+    explain: explorerBase.config.explain ?? '', query: '{}', commandType: 'find', collectionStats: '', indexes: '',
+    databaseName: 'demo', collectionName: 'items', clusterType: 'azure-documentdb', modelId: 'copilot-utility',
+} as const;
+
+function explorerConfigure(
+    inspection: ExplorerInspection,
+    content: readonly string[],
+    extra: { config?: Partial<typeof explorerBase.config>; steps?: readonly ScenarioStep[] } = {},
+): Scenario<'queryInsightsStandalone'> {
+    return {
+        config: { ...explorerBase.config, ...extra.config },
+        rpc: { ...explorerBase.rpc, 'queryInsightsStandalone.inspectInput': { type: 'query', results: [inspection] } },
+        steps: [{ action: 'click', role: 'button', name: 'Continue' }, ...(extra.steps ?? [])],
+        readiness: { content, noProgressbar: true },
+    };
+}
 
 function explorerProfile(profile: 'aggregate' | 'count'): Scenario<'queryInsightsStandalone'> {
     const isCount = profile === 'count';
@@ -122,7 +141,12 @@ function explorerProfile(profile: 'aggregate' | 'count'): Scenario<'queryInsight
         config: { ...explorerBase.config, explain: JSON.stringify(explain), commandType: profile },
         rpc: {
             ...explorerBase.rpc,
-            'queryInsightsStandalone.validateInput': { type: 'query', results: [{ commandType, query: isCount ? '{}' : '[]' }] },
+            'queryInsightsStandalone.inspectInput': { type: 'query', results: [{
+                ...explorerInspection,
+                explain: { ok: true, detectedCommandType: commandType, databaseName: 'shop', collectionName: 'items',
+                    planStages: isCount ? ['COUNT_SCAN', 'COUNT'] : ['COLLSCAN', '$group', '$sort'] },
+                commandType, query: isCount ? '{}' : '[]',
+            }] },
             'queryInsightsStandalone.getStage2': { type: 'query', results: [stage2] },
             'queryInsightsStandalone.getStage1': { type: 'query', results: [stage1] },
         },
@@ -206,17 +230,44 @@ function dockerMissing(
 
 export const scenarios = {
     queryInsightsStandalone: {
-        default: defaultScenario('queryInsightsStandalone'),
-        configure: {
+        default: {
             ...defaultScenario('queryInsightsStandalone'),
-            steps: [{ action: 'click', role: 'button', name: 'Continue' }],
-            readiness: { content: ['Provide your query data', 'Explain plan', 'Copilot utility', 'Prompt: built-in'], noProgressbar: true },
+            assertions: [
+                ...(defaultScenario('queryInsightsStandalone').assertions ?? []),
+                {
+                    kind: 'calls', name: 'Welcome snippets copy through the shared clipboard RPC',
+                    path: 'common.copyToClipboard', count: 1,
+                    input: { text: 'db.orders.explain("executionStats").count({ status: "pending" })' },
+                    steps: [{ action: 'click', role: 'button', name: 'Copy the count command' }],
+                },
+            ],
         },
+        configure: explorerConfigure(explorerInspection, [
+            'Provide your query data', 'Explain plan parsed.', 'Extracted query', 'Optional context',
+            'Not provided', 'demo.items', 'Copilot utility', 'Prompt: built-in', 'Analyze query sends your inputs to Copilot utility.',
+        ]),
+        'configure-invalid': explorerConfigure(
+            { explain: { ok: false, message: 'Unexpected token', line: 3, column: 7 }, ready: false },
+            ['Line 3, column 7: Unexpected token', 'Fix the explain plan to continue.'],
+        ),
+        'configure-context': explorerConfigure(
+            {
+                ...explorerInspection,
+                collectionStats: { ok: true, documentCount: 48210 },
+                indexes: { ok: true, names: ['_id_', 'status_1'] },
+            },
+            ['Provided · 48,210 documents', 'Provided · 2 indexes', '_id_, status_1', 'getIndexes()'],
+            {
+                config: { collectionStats: '{"count":48210}', indexes: '[{"name":"_id_"},{"name":"status_1"}]' },
+                steps: [{ action: 'click', role: 'button', name: 'Edit indexes' }],
+            },
+        ),
         analyze: {
             ...defaultScenario('queryInsightsStandalone'),
             steps: explorerSteps,
             readiness: {
-                content: ['Feature preview', 'Query Efficiency Analysis', 'Query Performance Analysis', 'Consider indexing the filter.', 'Copy command'],
+                content: ['Feature preview', 'Query Efficiency Analysis', 'Query Performance Analysis', 'Consider indexing the filter.',
+                    'Copy command', 'Edit inputs', 'Re-run', 'demo.items'],
                 selectors: ['.leftColumn', '.rightColumn'], noProgressbar: true,
             },
             assertions: [{
@@ -226,12 +277,18 @@ export const scenarios = {
             }, {
                 kind: 'calls', name: 'Raw explain uses the connectionless router',
                 path: 'queryInsightsStandalone.openRawExplain', count: 1,
-                input: {
-                    explain: explorerBase.config.explain ?? '', query: '{}', commandType: 'find',
-                    collectionStats: '', indexes: '', databaseName: 'demo', collectionName: 'items',
-                    clusterType: 'azure-documentdb', modelId: 'copilot-utility',
-                },
+                input: explorerAnalysisInput,
                 steps: [{ action: 'click', role: 'button', name: 'View Raw Execution Stats' }],
+            }, {
+                kind: 'calls', name: 'Re-run repeats the analysis with the same inputs',
+                path: 'queryInsightsStandalone.getStage2', count: 2,
+                input: explorerAnalysisInput,
+                steps: [{ action: 'click', role: 'button', name: 'Re-run' }],
+            }, {
+                // Waits for the re-run's recommendation, so readiness is checked on finished content.
+                kind: 'calls', name: 'Re-run streams recommendations again',
+                path: 'common.copyToClipboard', input: { text: 'db.items.createIndex({status: 1})' }, count: 2,
+                steps: [{ action: 'click', role: 'button', name: 'Copy command' }],
             }],
         },
         'analyze-aggregate': explorerProfile('aggregate'),

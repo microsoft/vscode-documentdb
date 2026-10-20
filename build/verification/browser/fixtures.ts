@@ -253,8 +253,8 @@ export const fixtures = {
     queryInsightsStandalone: {
         config: queryInsightsConfig,
         monaco: false,
-        content: ['Query Insights Explorer (POC)', 'Configure'],
-        styles: [{ selector: '.queryInsightsStandalone', property: 'min-width', expected: '0px' }],
+        content: ['Query Insights Explorer', 'What you\'ll need', 'Get the explain output', 'What is sent to GitHub Copilot'],
+        styles: [{ selector: 'body', property: 'padding-top', expected: '0px' }],
         rpc: {
             ...common,
             'ai.getAvailableModels': reply<Outputs['ai']['getAvailableModels']>('query', {
@@ -267,6 +267,14 @@ export const fixtures = {
             'ai.getPromptSourceInfo': reply<Outputs['ai']['getPromptSourceInfo']>('query', { source: 'built-in' }),
             'queryInsightsStandalone.validateInput': reply<Outputs['queryInsightsStandalone']['validateInput']>('query', {
                 commandType: 'find' as Outputs['queryInsightsStandalone']['validateInput']['commandType'], query: '{}',
+            }),
+            'queryInsightsStandalone.inspectInput': reply<Outputs['queryInsightsStandalone']['inspectInput']>('query', {
+                explain: {
+                    ok: true, detectedCommandType: 'find' as Outputs['queryInsightsStandalone']['validateInput']['commandType'],
+                    planStages: ['COLLSCAN'],
+                },
+                commandType: 'find' as Outputs['queryInsightsStandalone']['validateInput']['commandType'],
+                query: '{}', queryIsExtracted: true, ready: true,
             }),
             'queryInsightsStandalone.getStage1': reply<Outputs['queryInsightsStandalone']['getStage1']>('query', {
                 executionTime: 0, stages: [{ stage: 'COLLSCAN', name: 'Collection scan', nReturned: 0 }],

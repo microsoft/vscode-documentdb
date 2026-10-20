@@ -14,9 +14,14 @@ import { StreamingResponseParser } from '../../../documentdb/queryInsights/strea
 import { transformStage1Response } from '../../../documentdb/queryInsights/transformations';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import type { BaseRouterContext } from '../../_integration/appRouter';
-import { publicProcedureWithTelemetry, router } from '../../_integration/trpc';
+import { publicProcedure, publicProcedureWithTelemetry, router } from '../../_integration/trpc';
 import type { QueryInsightsStreamEvent } from '../collectionView/types/queryInsightsStream';
-import { parseStandaloneInput, queryInsightsPrefillSchema, standaloneInputSchema } from './queryInsightsStandaloneInput';
+import {
+    inspectStandaloneInput,
+    parseStandaloneInput,
+    queryInsightsPrefillSchema,
+    standaloneInputSchema,
+} from './queryInsightsStandaloneInput';
 import type { QueryInsightsPrefill } from './types';
 
 export type StandaloneRouterContext = BaseRouterContext & { prefill: QueryInsightsPrefill };
@@ -38,6 +43,10 @@ export const queryInsightsStandaloneRouter = router({
         const parsed = parseStandaloneInput(input);
         return { commandType: parsed.commandType, query: parsed.query };
     }),
+    // Runs on every (debounced) edit in Configure, so it stays out of telemetry.
+    inspectInput: publicProcedure
+        .input(standaloneInputSchema.extend({ explain: z.string() }))
+        .query(({ input }) => inspectStandaloneInput(input)),
     getStage1: publicProcedureWithTelemetry.input(standaloneInputSchema).query(({ input }) => {
         const parsed = parseStandaloneInput(input);
         return transformStage1Response(ExplainPlanAnalyzer.analyzeQueryPlanner(getInitialExplainPlan(parsed.explain, parsed.commandType)), 0);

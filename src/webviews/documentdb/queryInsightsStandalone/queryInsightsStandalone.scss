@@ -1,15 +1,30 @@
-.queryInsightsStandalone {
-    height: 100vh;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Like LocalQuickStart: the wizard owns its insets, so drop VS Code's default body gutter and let
+ * the footer's border and shadow span edge-to-edge. Local to this view's bundle. */
+body {
+    padding: 0;
+}
+
+/* The reused Query Insights layout is built for a fixed-height tab with its own scroll area
+ * (`.container` clips, `.contentArea` scrolls). Inside the wizard the body already scrolls, so a
+ * second scrollbar would nest inside the page. Flatten both here only; the tab is unaffected. */
+.queryInsightsExplorer-analysis {
     min-width: 0;
 
-    .queryInsightsStandalone-fields {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
+    > .container {
+        height: auto;
+        margin-inline: 0;
+        overflow: visible;
     }
 
-    .container {
-        height: auto;
-        min-height: 0;
+    > .container > .contentArea {
+        flex: none;
+        overflow: visible;
+        padding-block: 0;
+        padding-inline: 0;
     }
 }

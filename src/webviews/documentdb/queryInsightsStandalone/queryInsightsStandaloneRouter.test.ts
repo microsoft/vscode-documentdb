@@ -24,7 +24,7 @@ vi.mock('../../../utils/readOnlyJsonDocumentProvider', () => ({
 vi.mock('../../_integration/trpc', async () => {
     const { initTRPC } = await import('@trpc/server');
     const trpc = initTRPC.create();
-    return { router: trpc.router, publicProcedureWithTelemetry: trpc.procedure };
+    return { router: trpc.router, publicProcedure: trpc.procedure, publicProcedureWithTelemetry: trpc.procedure };
 });
 
 const explain = {
@@ -83,6 +83,8 @@ describe('Connectionless Query Insights', () => {
         const caller = queryInsightsStandaloneRouter.createCaller({ prefill: { databaseName: 'db' } } as StandaloneRouterContext);
         expect(await caller.getPrefill()).toEqual({ databaseName: 'db' });
         expect(await caller.validateInput(input)).toMatchObject({ commandType: 'find' });
+        expect(await caller.inspectInput(input)).toMatchObject({ ready: true, commandType: 'find', explain: { ok: true } });
+        expect(await caller.inspectInput({ ...input, explain: '' })).toMatchObject({ ready: false });
         expect(await caller.getStage1(input)).toBeDefined();
         const stage2 = await caller.getStage2(input);
         expect(stage2.executionTimeMs).toBe(12);

@@ -294,7 +294,7 @@ or interactive browser.
       both pickers show "Prompt: built-in" and the built-in template is used. Unit test.
     - _Outcome:_ The source helper trims the setting; blank/whitespace/null paths report `built-in`, load the built-in template (cacheable, no file read, no warning), and custom paths are trimmed. Two service tests added; the existing picker test already covers the "Prompt: built-in" line. Checks deferred to D.
 
-- [ ] **WI-13: Wizard UI revision + Checkpoint D**
+- [x] **WI-13: Wizard UI revision + Checkpoint D**
     - **Welcome:** `ContainerHeader` (title, subtitle, Feature preview badge), a value statement,
       a "What you'll need" list (required explain output; optional collection stats / indexes,
       each with a reason), copyable `explain("executionStats")` snippets for find / aggregate /
@@ -314,6 +314,7 @@ or interactive browser.
       `npx vitest run src/webviews/documentdb/queryInsightsStandalone src/webviews/documentdb/collectionView src/webviews/documentdb/queryInsightsShared src/services`;
       L2 scenarios updated/added and run headless in three themes; before/after screenshots
       saved outside the repo.
+    - _Outcome:_ Rebuilt the wizard on LocalQuickStart patterns: `ContainerHeader` with Feature preview, sticky navigation, "What you'll need" list (Required/Optional/Prefilled), copyable DocumentDB shell or mongosh snippets, privacy note; Configure has Explain plan / Optional context / AI model & prompt sections, live non-throwing `inspectInput` validation (line/column, command badge, namespace, plan chain, extracted query, sample plans), summary-row editors with `Collapse`, and a disabled-with-reason forward action; Analyze has an input summary bar with inline compact picker, Edit inputs and Re-run, and a single page scroll. Checkpoint D passed (see Phase D verification outcome).
 
 ## How to use (filled in at WI-8)
 
@@ -346,6 +347,15 @@ or interactive browser.
    **Analyze**. Stage 2 and Stage 3 start automatically; the Analyze step uses the same
    two-column component as the connected tab. Recommendations offer **Copy command**, never
    database-changing actions. **Back** preserves all text for another run with a changed model/prompt.
+
+   Phase D (UI revision): the Welcome page lists what you need and has copy buttons for the
+   `explain("executionStats")` commands (DocumentDB shell or mongosh). Configure checks the plan
+   as you type (line/column on errors), shows the detected command, namespace, plan and extracted
+   query, and offers **Load a sample plan: find · aggregate · count**. Optional context rows
+   ("Not provided" / "Provided · N indexes") open their editors with the pencil button. The
+   forward button is **Analyze query**; while it is disabled the footer says why. On Analyze,
+   the summary bar shows command, namespace, cluster type and the model picker; change the model
+   and select **Re-run**, or **Edit inputs** to return with everything kept.
 
    Phase C adds explicit preview scope: every standalone Analyze page says **Feature preview**;
    aggregate/count efficiency and plan cards say **Preview · tuned for find queries**.
@@ -424,6 +434,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Phase C scoping (lead): find-only evaluation (F6) + steering message | Lead agent | 14:30 | 14:40 | 10 | Read ExplainPlanAnalyzer / explain-plan-helper / fixup; screenshot of the L2 page |
 | Phase B+C review (lead) | Lead agent | 15:05 | 15:12 | 7 | Commits, plan log, count L2 page rendered and inspected |
 | Phase D setup + WI-12 | Coding agent (claude-opus-5.5) | 15:16 | 15:21 | 5 | Read plan/wizards/skills, headless L2 driver + "before" screenshots, Phase D section, prompt trim + tests; checks deferred to D. |
+| WI-13 + Checkpoint D | Coding agent (claude-opus-5.5) | 15:21 | 15:42 | 21 | Inspection RPC, wizard rewrite, scenarios, unit tests, build, Vitest, 21 headless L2 routes, screenshots, plan. |
 
 ## Deviation log
 
@@ -439,6 +450,12 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-11 | Count rating is an explicit preview heuristic: no document reads is excellent; indexed reads below 10% / 50% of known collection size are excellent / good; larger indexed scans are fair, while unindexed broad/unknown scans are poor. | Count does not return matching documents, so the find efficiency score cannot be reused. Index access plus scan work is the operator-requested basis; this POC heuristic is not a shipped count-rating design. |
 | WI-11 | Added an optional raw-explain action to the adapter; standalone uses its own read-only JSON RPC. Inferred aggregate queries include available cursor filter/stage operators and warn that extraction can be partial. | The reused plan component still contained a hidden session-only raw-plan action. Keeping its connected fallback preserves find behavior while avoiding a broken standalone button. Explain-only input cannot always recover the exact original command. |
 | Checkpoint C | Corrected only new test fixtures: the find-equivalence baseline now includes existing extended-stage enrichment, and the negative "No" assertion matches a full line rather than the prefix of "Not rated". No existing snapshots or TDD contracts changed. | These failures were test-setup/assertion mistakes, not intentional changes to find behavior. Source L2 readiness also waits for completed Analyze content, not merely profile labels that can appear before Stage 2 finishes. |
+| WI-12 | No picker change needed: `ModelPicker` already renders "Prompt: built-in" for any non-custom source and its existing test covers it; the fix is the trim in `getIndexAdvisorPromptSourceInfo`, which both the pickers and `PromptTemplateService` read. | The helper is the single source of truth, so one change covers the Configure picker, the tab picker and template loading. |
+| WI-13 | Added a non-throwing `inspectInput` query (plain `publicProcedure`, no telemetry) returning per-field results with 1-based line/column from the shell parser; `validateInput` stays for compatibility but the wizard no longer calls it. Analyze re-inspects once before switching steps. | Live validation runs on every debounced edit: a throwing RPC can only carry a message, cannot report several fields at once, and would emit a telemetry event per keystroke. |
+| WI-13 | Analyze actions (Edit inputs, Re-run) live in the summary bar as requested; the Analyze footer carries only the copy-only note, and the indicator never navigates to Analyze (`navigable={false}`). Re-run remounts the reused panel with a new key and the currently selected model. | Duplicating the same actions in the footer would put two "back to Configure" buttons on one page. Remounting reuses the existing Stage 1→3 pipeline and cancellation without touching `QueryInsightsMain`. |
+| WI-13 | Nested scroll fixed by a scoped wrapper (`.queryInsightsExplorer-analysis > .container / > .contentArea`) that removes the tab's fixed height and inner `overflow-y: scroll` only inside the wizard. Added `body { padding: 0 }` like LocalQuickStart. | `QueryInsightsMain` and the tab stylesheet are unchanged, so the Collection View keeps its own scroll area. Production inlines one stylesheet for all views, and LocalQuickStart already ships the identical body rule, so other views see no change. |
+| Checkpoint D | Updated stale harness counts (`scenarios.test.ts` 42→63 routes; `harness.test.ts` registry keys now include `queryInsightsStandalone`). The view fixture's style probe moved from the removed `.queryInsightsStandalone` wrapper to `body padding-top`. | The route and key counts had been stale since Phase B (57 routes vs 42 expected); my two new scenarios change the same numbers. Not TDD suites; no snapshots changed. |
+| Checkpoint D | Headless L2 used Playwright 1.54 from the local npx cache with `chromium_headless_shell-1181`; WSL lacked six system libraries and sudo needs a password, so the `.deb`s were fetched with `apt-get download` and extracted under `._local/` (gitignored, removed afterwards) via `LD_LIBRARY_PATH`. The page locale was set to `en-US`. | No interactive or shared browser was used. With the inherited POSIX locale, `navigator.language` was `en-US@posix`, which `Intl` rejects inside `formatTokenCount` and crashes the picker. That is a harness artefact (VS Code always supplies a BCP 47 tag) and was not changed in product code. |
 | WI-3 | Made `formatTokenCount` browser-safe with an optional locale argument; host logging passes the VS Code locale explicitly. | The existing utility imported `vscode` at runtime, which cannot ship in a webview bundle. Reusing a pure helper avoids duplicating formatting while preserving host output. |
 | Checkpoint A | Restored lockfile dependencies with `npm ci` after the initial commands could not start due to missing packages. | This worktree had no installed dependency set; no dependency manifests or lockfile changed. |
 | Checkpoint A | The new picker selection test replaces only Fluent's floating dropdown/option layer with a native test stand-in. | Opening the real popup in jsdom (no layout engine) timed out; picker state, RPC calls, ordering, token labels, hints, and disclosure tests remain exercised. Also isolated the new host test's cancellation-error mock. No existing snapshots or TDD contracts changed. |
@@ -490,6 +507,33 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
   of integrated-browser/tool waiting in Phase B (approximately **49 minutes excluding that wait**).
   All recorded coding/checkpoint time including the earlier Phase A: **215 minutes**.
 
+## Phase D verification outcome
+
+- Case 1 only: `npm run build` passed (2026-10-20, 15:38 UTC).
+- Exact Checkpoint D selector
+  (`npx vitest run src/webviews/documentdb/queryInsightsStandalone src/webviews/documentdb/collectionView src/webviews/documentdb/queryInsightsShared src/services`)
+  passed: **60 files, 1,231 tests, zero failures**. No TDD suite failed; no snapshots changed.
+  Because the L2 scenario tables changed, the harness's own unit tests
+  (`vitest run --config build/verification/browser/vitest.config.ts`) also ran: **6 files, 79 tests**
+  after the stale counts were corrected.
+- Headless L2 (own Playwright, no shared browser): **21/21 routes passed** in dark, light and
+  high-contrast, with zero harness errors: `default`, `configure`, `configure-invalid` (new),
+  `configure-context` (new), `analyze`, `analyze-aggregate`, `analyze-count`. Assertions passed for
+  Welcome snippet copy, copy-only recommendation, connectionless raw explain, and Re-run (Stage 2
+  called again with identical inputs, recommendations streamed again).
+- Keyboard-only run: Tab reaches the step list, each copy button and Continue; Enter moves focus
+  to the Configure heading; Tab then reaches the explain editor, the three sample links, command
+  type, Edit query, the four row editors, the model picker and **Analyze query**; Enter lands on
+  the Analyze heading. At 900 × 600 the Analyze page has exactly one scroll container (the
+  wizard body); before, the reused panel added its own `overflow-y: scroll` area.
+- Light-theme review caught and fixed an invisible "Optional" badge (`subtle` outline) and two
+  privacy-note sentences that ran together.
+- Before/after dark screenshots: `~/.copilot/session-state/<session>/files/wizard-ui/`
+  (`before-{default,configure,analyze}-dark.png`, `after-{default,configure,configure-invalid,configure-context,analyze,analyze-count}-dark.png`), not in the repo.
+- Dev server stopped. No lint, formatting, localization generation, packaging, live model
+  request or push. The real-Copilot/manual smoke steps above remain outstanding.
+- Phase D time: **26 minutes** (setup + WI-12 5, WI-13 + checkpoint 21).
+
 ## Lead review notes (2026-10-20, 15:12 UTC)
 
 - **Time planning takeaway:** coding work for WI-0..WI-11 was about **65 agent-minutes**
@@ -502,5 +546,6 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
   `COUNT_SCAN → COUNT` plan. (The `run-all.js` helper can't run inside the lead's browser tool:
   `setTimeout is not defined` in that sandbox, which is a tooling limit and not a product bug.)
 - **Open follow-ups (not done):**
-    - The Analyze step has a nested scroll area (the panel's own scrollbar inside the wizard page).
+    - ~~The Analyze step has a nested scroll area (the panel's own scrollbar inside the wizard page).~~
+      Fixed in WI-13.
     - Manual smoke with a real connection, real Copilot models and the local prompt (steps above).
