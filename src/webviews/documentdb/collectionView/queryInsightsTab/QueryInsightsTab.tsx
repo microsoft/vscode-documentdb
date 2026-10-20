@@ -40,6 +40,7 @@ import type { CommandType } from '../../../../commands/llmEnhancedCommands/index
 import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
+import { usageByline } from '../../queryInsightsShared/usageByline';
 import { QueryInsightsPreviewBadge } from '../../queryInsightsShared/QueryInsightsPreviewBadge';
 import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analysisProfilePresentation';
 import { useQueryInsightsDataSource } from './QueryInsightsDataSourceContext';
@@ -1046,11 +1047,8 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                         {/* Post-response "Powered by" byline.
                             Mirrors the (i) + model-dependent disclosure shown in the pre-invocation
-                            card. Token usage measurements are intentionally NOT rendered here:
-                            they live in the trace output channel and in telemetry only. Cost
-                            (credits) is not surfaced because the stable VS Code Language Model
-                            API does not expose pricing data; the extension stays on stable APIs
-                            and avoids the proposed `languageModelPricing` API by design.
+                            card. Known usage and billed credits come from the completed run,
+                            not from the currently selected model's pricing metadata.
 
                             Wrapped in `Fade` so it slides in over the same window the
                             GetPerformanceInsightsCard above is collapsing out — without the
@@ -1113,9 +1111,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                         'Powered by {0} via GitHub Copilot · {1}s',
                                                         modelName,
                                                         seconds,
-                                                    );
+                                                    ) + usageByline(pipeline.kind === 's3Success' ? pipeline.model.usage : undefined);
                                                 }
-                                                return l10n.t('Powered by {0} via GitHub Copilot', modelName);
+                                                return l10n.t('Powered by {0} via GitHub Copilot', modelName) +
+                                                    usageByline(pipeline.kind === 's3Success' ? pipeline.model.usage : undefined);
                                             })()}
                                         </Text>
                                     </div>

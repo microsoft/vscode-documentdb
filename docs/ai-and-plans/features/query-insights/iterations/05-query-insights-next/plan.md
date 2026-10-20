@@ -86,6 +86,29 @@ branch: dev/tnaum/query-insights-next
   estimate describes the whole pipeline, not cursor-only time; it cannot justify a fast
   initial-stage rating.
 
+- **F7: model pricing metadata (lead research, verified against `microsoft/vscode`).**
+  `selectChatModels` returns plain frozen objects with additional runtime properties:
+  `pricing?: string` (display label), `priceCategory?: string` (`low`, `medium`, `high`,
+  `very_high`), `category?: string` (`lightweight`, `versatile`, `powerful`, or others),
+  `capabilities?: { supportsImageToText, supportsToolCalling, ... }`, and numeric
+  `inputCost`, `outputCost`, `cacheCost`, `cacheWriteCost`, `longContextInputCost`,
+  `longContextOutputCost`, `longContextCacheCost`, `longContextCacheWriteCost`.
+  Costs are **AI credits per 1M tokens**. Typings are proposed
+  (`vscode.proposed.languageModelPricing.d.ts`), but property reads are not proposal-gated.
+  Copilot populates these from endpoint metadata in
+  `extensions/copilot/src/extension/conversation/vscode-node/languageModelAccess.ts`
+  (around line 375). The POC uses an `unknown`-typed, field-by-field defensive reader.
+- **F8: per-request credits are observable (lead research, verified against `microsoft/vscode`).**
+  At response completion Copilot emits a stable `LanguageModelDataPart` with MIME `usage`
+  containing UTF-8 JSON `APIUsage`: `prompt_tokens`, `completion_tokens`, `total_tokens`,
+  optional `prompt_tokens_details.{cached_tokens,cache_creation_input_tokens}`,
+  `completion_tokens_details.{reasoning_tokens,...}`, and
+  `copilot_usage.total_nano_aiu`. Credits = `total_nano_aiu / 1_000_000_000`
+  (Copilot's `nanoAiuToCredits`). `response.stream` forwards text/data/thinking/tool-call
+  parts; `response.text` drops non-text parts. `LanguageModelDataPart` is stable in this
+  repo's `@types/vscode` 1.109. Real token counts and exact billed credits therefore need
+  **no proposed API**.
+
 ## Rules for the implementing agent
 
 1. Work **WI by WI**, in order. Don't produce one giant changeset.
@@ -316,6 +339,47 @@ or interactive browser.
       saved outside the repo.
     - _Outcome:_ Rebuilt the wizard on LocalQuickStart patterns: `ContainerHeader` with Feature preview, sticky navigation, "What you'll need" list (Required/Optional/Prefilled), copyable DocumentDB shell or mongosh snippets, privacy note; Configure has Explain plan / Optional context / AI model & prompt sections, live non-throwing `inspectInput` validation (line/column, command badge, namespace, plan chain, extracted query, sample plans), summary-row editors with `Collapse`, and a disabled-with-reason forward action; Analyze has an input summary bar with inline compact picker, Edit inputs and Re-run, and a single page scroll. Checkpoint D passed (see Phase D verification outcome).
 
+### Phase E: usage transparency, richer models and slimmer JSON-input workflow
+
+Same per-WI commits, time logging and deviation rules apply. Verification is batched **once**
+at Checkpoint E. No push, lint, prettier-fix, l10n or package; nothing under `._local/` committed.
+
+- [x] **WI-14: Per-run usage and credits (host + UI byline)**
+    - Read text and defensively decoded `usage` data parts from the shared `response.stream`.
+      Prefer provider token counts/total over estimates; preserve fallback, add cached/reasoning
+      tokens, credits and usage source. Measure credits/reported tokens on buffered and streaming
+      telemetry, trace one summary, and retain usage through both Stage 3 routers/reducer.
+    - Append known billed credits (up to two decimals, `< 0.01` for tiny positive values) and
+      input/output tokens to the completion byline; retain the utility disclosure.
+    - Test provider usage, malformed usage and missing usage with fake streamed parts.
+    - _Outcome:_ Shared buffered/streamed primitive consumes stable text/data parts; valid provider
+      usage wins, malformed/missing data falls back to estimates. Credits/reported counts reach
+      telemetry and both Stage 3 completions/reducer/byline; formatting and stream tests added.
+      Verification deferred to E.
+- [ ] **WI-15: Richer model info in the picker**
+    - Defensive F7 metadata + version on `AvailableModelInfo`. Utility first; other models
+      grouped by category when present. Name left, price/context and rounded tint badge right.
+    - Full selected-model details; compact summary + information tooltip with the same details.
+      Only present prices/costs/context/capabilities/identity appear. Retain choice/prompt/premium
+      hints; theme tokens only, all three themes.
+- [ ] **WI-16: Slim Analyze header**
+    - One wrapping muted facts row: Reconfigure back arrow (inputs kept), command tint badge,
+      monospace namespace, cluster type, model and prompt. No dropdown or Re-run; reconfigure
+      to change a model. Keep heading focus and single page scroll.
+- [ ] **WI-17: Monaco for JSON inputs + Checkpoint E**
+    - Repo Monaco wrapper for explain (~16 lines), query/stats/indexes (~8 lines): JSON,
+      line numbers, no minimap, no wrapping, folding, automatic layout, VS Code theme,
+      accessible labels and Escape exit. Add parse-error markers at reported positions.
+      Adapt textarea-based scenarios to Monaco.
+    - **Checkpoint E:** `npm run build`;
+      `npx vitest run src/services src/commands/llmEnhancedCommands src/webviews/documentdb/queryInsightsStandalone src/webviews/documentdb/queryInsightsShared src/webviews/documentdb/collectionView build/verification`.
+      Stop on any failing `TDD:` suite; do not edit its contract.
+    - Own headless Playwright against the **existing** port 18080 watcher; never restart/kill it.
+      Run `/scenarios/run-all/queryInsightsStandalone/<theme>.js` in all three themes;
+      save `phase-e-` dark screenshots (marker, picker details, slim header) in the session
+      wizard-ui directory. If needed use gitignored local libraries and `en-US`, then remove
+      the libraries. Bound headless setup attempts to ~10 minutes.
+
 ## How to use (filled in at WI-8)
 
 1. Keep the internal prompt outside git, for example
@@ -437,11 +501,13 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-13 + Checkpoint D | Coding agent (claude-opus-5.5) | 15:21 | 15:42 | 21 | Inspection RPC, wizard rewrite, scenarios, unit tests, build, Vitest, 21 headless L2 routes, screenshots, plan. |
 | Phase D review (lead) | Lead agent | 15:43 | 15:47 | 4 | Screenshots reviewed; count cells shortened to "Not applicable" (full text kept in tooltip) because the long value clipped in the right column; build + 143 targeted tests passed |
 | Badge style + Required tag (lead) | Lead agent | 16:22 | 16:27 | 5 | Operator feedback; build + 143 targeted tests passed; Welcome + Analyze checked in the L2 browser |
+| WI-14 | Coding agent (gpt-6.1-sol) | 16:35 | 16:37 | 2 | Plan/F7/F8, stable usage data parts, telemetry and byline; checks deferred to E. |
 
 ## Deviation log
 
 | WI | Deviation | Rationale |
 | --- | --- | --- |
+| WI-14 | Both routers and the reducer already forward the entire usage object, so only the intervening shared usage shapes needed extending. Client-side counting runs only for missing provider counts. | Avoids disturbing the existing streaming lifecycle or adding redundant count requests; provider totals (including reasoning/overhead) remain authoritative. |
 | — | Coding started (WI-0, partial) before the operator had reviewed the plan. | Autopilot over-reach. Stopped on request; the partial work is kept and finished in WI-0. |
 | WI-5 | Keep the existing `QueryInsightsState` union and transition helpers; expose pipeline + dispatch on the adapter. Standalone synthesizes Stage 1 from the supplied explain. | Avoids moving Collection View state/prefetch or duplicating the layout. The standalone holder can use ordinary `useState`; synthesizing Stage 1 preserves all existing sequencing/plan-summary behaviour instead of special-casing a skipped stage. Common URL/error/model RPCs remain shared directly; only data/session operations move behind the adapter. |
 | WI-6 | The standalone subscription reuses the parser/service/event types but has a small separate streaming loop; no connected completion-event telemetry or survey activity. | Extracting the connected loop would disturb its detailed session telemetry/timing instrumentation. Copying the essential event lifecycle is lower risk for a POC; all cancellation paths still abort the model and both inputs are analyzed with one shared pure Stage 2 helper. |

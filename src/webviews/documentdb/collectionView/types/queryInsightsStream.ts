@@ -18,6 +18,12 @@ export interface QueryInsightsStreamUsage {
     totalTokens?: number;
     maxInputTokens?: number;
     promptUtilizationPct?: number;
+    reportedPromptTokens?: number;
+    reportedCompletionTokens?: number;
+    cachedPromptTokens?: number;
+    reasoningTokens?: number;
+    credits?: number;
+    usageSource?: 'provider' | 'estimated';
 }
 
 /**
