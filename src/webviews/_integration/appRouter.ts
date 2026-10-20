@@ -40,6 +40,7 @@ import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexVi
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
 import { queryInsightsModelsRouter } from '../documentdb/queryInsightsShared/queryInsightsModelsRouter';
+import { queryInsightsStandaloneRouter } from '../documentdb/queryInsightsStandalone/queryInsightsStandaloneRouter';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
@@ -279,6 +280,7 @@ const commonRouter = router({
 });
 
 export const appRouter = router({
+    queryInsightsStandalone: queryInsightsStandaloneRouter,
     ai: queryInsightsModelsRouter,
     common: commonRouter,
     atlasCredentials: atlasCredentialsRouter,

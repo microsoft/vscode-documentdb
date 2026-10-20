@@ -36,11 +36,9 @@ import {
     type ExecutionStatsAnalysis,
     type QueryPlannerAnalysis,
 } from '../../../../documentdb/queryInsights/ExplainPlanAnalyzer';
-import { StagePropertyExtractor } from '../../../../documentdb/queryInsights/StagePropertyExtractor';
+import { analyzeExplainForStage2 } from '../../../../documentdb/queryInsights/analyzeExplainForStage2';
 import {
-    createFailedQueryResponse,
     transformStage1Response,
-    transformStage2Response,
 } from '../../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
@@ -284,19 +282,7 @@ export const queryInsightsQueriesRouter = router({
             }
         }
 
-        // Extract extended stage info (as per design document)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
-        if (executionStages) {
-            analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
-
-            // Enrich with properties from queryPlanner (e.g., isBitmap is only in queryPlanner stages)
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            const winningPlan = explainResult?.queryPlanner?.winningPlan as Document | undefined;
-            if (winningPlan) {
-                StagePropertyExtractor.enrichWithQueryPlannerInfo(analyzed.extendedStageInfo, winningPlan);
-            }
-        }
+        const transformed = analyzeExplainForStage2(explainResult ?? {}, totalCollectionDocs, queryFilter, analyzed);
 
         // Check for execution error and return error response if found
         if (analyzed.executionError) {
@@ -305,20 +291,12 @@ export const queryInsightsQueriesRouter = router({
                     error: analyzed.executionError.errorMessage,
                 }),
             );
-            const errorResponse = createFailedQueryResponse(analyzed, explainResult);
-
             ext.outputChannel.trace(l10n.t('Query Insights Stage 2 completed with execution error'));
-            return errorResponse;
-        }
-
-        // Add index-strategy advisories (coverage, cardinality, multikey)
-        if (explainResult) {
-            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analyzed, totalCollectionDocs, explainResult, queryFilter);
+            return transformed;
         }
 
         // Transform to UI format (normal successful execution path)
         ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
-        const transformed = transformStage2Response(analyzed, totalCollectionDocs);
 
         // Cache the Stage 2 response for Stage 3's static analysis context
         if (!debugData) {

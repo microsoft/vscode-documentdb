@@ -31,6 +31,11 @@ import * as React from 'react';
  * {@link WebviewName} enforces that at compile time.
  */
 export const WebviewRegistry = {
+    queryInsightsStandalone: React.lazy(() =>
+        import('../documentdb/queryInsightsStandalone/QueryInsightsStandalone').then((module) => ({
+            default: module.QueryInsightsStandalone,
+        })),
+    ),
     clusterDashboard: React.lazy(() =>
         import('../documentdb/clusterDashboard/ClusterDashboard').then((module) => ({
             default: module.ClusterDashboard,
