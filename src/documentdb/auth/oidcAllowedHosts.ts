@@ -10,6 +10,11 @@ import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString'
 // which still resolve under *.azure.com).
 const DEFAULT_ALLOWED_HOSTS = ['*.azure.com'];
 
+// The registrable `azure.<tld>` suffixes owned by Microsoft for the public and
+// sovereign clouds. This is a closed list on purpose: `azure` under any other
+// top-level domain (for example a ccTLD with open registration) is not ours.
+const KNOWN_AZURE_TOP_LEVEL_DOMAINS: ReadonlySet<string> = new Set(['com', 'us', 'cn']);
+
 /**
  * Resolve the OIDC ALLOWED_HOSTS list from a connection string.
  *
@@ -19,11 +24,11 @@ const DEFAULT_ALLOWED_HOSTS = ['*.azure.com'];
  * back into the allowlist: doing so would let an attacker-supplied host (e.g.
  * `evil.com`) widen its own allowlist to `*.evil.com`, defeating the control.
  *
- * Instead we recognize the Azure-family registrable suffix (`azure.<tld>`) and
- * allow only `*.azure.<tld>`. This keeps the public-cloud posture identical to
- * the previous hardcoded `*.azure.com` while transparently extending it to
- * sovereign clouds (`azure.us`, `azure.cn`, ...). Anything we cannot positively
- * classify as Azure falls back to the safe public-cloud default.
+ * Instead we recognize the known Azure cloud suffixes (`azure.com`, `azure.us`,
+ * `azure.cn`) and allow only `*.<suffix>`. This keeps the public-cloud posture
+ * identical to the previous hardcoded `*.azure.com` while extending it to the
+ * sovereign clouds. Anything we cannot positively classify as one of these
+ * clouds falls back to the safe public-cloud default.
  *
  * Note: sovereign clouds also use a different Entra token endpoint; wiring that
  * up is tracked separately. This change only widens the host allowlist.
@@ -53,11 +58,12 @@ export function getOidcAllowedHosts(connectionString: string): string[] {
 }
 
 /**
- * Returns the Azure-family registrable suffix (`azure.<tld>`) for a host, or
- * `undefined` if the host is not an Azure endpoint.
+ * Returns the Azure cloud suffix (`azure.<tld>`) for a host, or `undefined` if
+ * the host is not an endpoint in a known Azure cloud.
  *
  * The `azure` label must be the registrable second level (immediately before the
- * top-level label) so that lookalikes such as `azure.com.evil.com` are rejected.
+ * top-level label) so that lookalikes such as `azure.com.evil.com` are rejected,
+ * and the top-level label must be one of {@link KNOWN_AZURE_TOP_LEVEL_DOMAINS}.
  */
 function getAzureHostSuffix(host: string): string | undefined {
     // `hosts` entries may carry a port (e.g. `cluster.azure.com:10255`) and an
@@ -80,7 +86,7 @@ function getAzureHostSuffix(host: string): string | undefined {
     const topLevel = labels[labels.length - 1];
     const secondLevel = labels[labels.length - 2];
 
-    if (secondLevel === 'azure' && topLevel.length > 0) {
+    if (secondLevel === 'azure' && KNOWN_AZURE_TOP_LEVEL_DOMAINS.has(topLevel)) {
         return `azure.${topLevel}`;
     }
 
