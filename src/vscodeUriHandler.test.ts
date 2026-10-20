@@ -89,6 +89,7 @@ beforeEach(() => {
         get: vi.fn(() => showUrlHandlingConfirmations),
     });
     (vscode.window.showInformationMessage as Mock).mockResolvedValue('Open setup');
+    (vscode.window.showWarningMessage as Mock).mockResolvedValue(undefined);
 });
 
 describe('globalUriHandler — route parsing', () => {
@@ -284,18 +285,82 @@ describe('globalUriHandler — TLS exception requested by a link', () => {
         expect(lastTelemetry.tlsBypassHonored).toBe('false');
     });
 
-    it('keeps the exception for a target on this machine', async () => {
+    const localTlsBypass = encodeURIComponent('mongodb://localhost:10260/?tls=true&tlsAllowInvalidCertificates=true');
+
+    it('keeps the exception for a target on this machine after the user turns validation off', async () => {
         acceptAddConnectionOnly();
-        const connectionString = 'mongodb://localhost:10260/?tls=true&tlsAllowInvalidCertificates=true';
+        (vscode.window.showWarningMessage as Mock).mockResolvedValue('Turn off validation');
 
-        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+        await runHandler('/connect', `connectionString=${localTlsBypass}`);
 
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+            'This link asks to turn off TLS certificate validation.',
+            expect.objectContaining({
+                modal: true,
+                detail: expect.stringContaining('Connection: localhost:10260'),
+            }),
+            'Turn off validation',
+            'Keep validation on',
+        );
         expect(savedConnection().properties.emulatorConfiguration).toEqual({
             isEmulator: true,
             disableEmulatorSecurity: true,
         });
         expect(savedConnection().secrets.connectionString).not.toMatch(/tlsAllowInvalid/i);
         expect(lastTelemetry.tlsBypassHonored).toBe('true');
+    });
+
+    it('keeps certificate validation on when the user chooses to', async () => {
+        acceptAddConnectionOnly();
+        (vscode.window.showWarningMessage as Mock).mockResolvedValue('Keep validation on');
+
+        await runHandler('/connect', `connectionString=${localTlsBypass}`);
+
+        expect(savedConnection().properties.emulatorConfiguration).toEqual({
+            isEmulator: true,
+            disableEmulatorSecurity: false,
+        });
+        expect(lastTelemetry.tlsBypassHonored).toBe('false');
+    });
+
+    it('adds nothing when the TLS prompt is dismissed', async () => {
+        acceptAddConnectionOnly();
+        (vscode.window.showWarningMessage as Mock).mockResolvedValue(undefined);
+
+        await runHandler('/connect', `connectionString=${localTlsBypass}`);
+
+        expect(mockSaveConnection).not.toHaveBeenCalled();
+        expect(lastTelemetry.userCancelledAtStep).toBe('TlsException');
+    });
+
+    it('asks before turning validation off even when URL handling confirmations are disabled', async () => {
+        showUrlHandlingConfirmations = false;
+        (vscode.window.showWarningMessage as Mock).mockResolvedValue(undefined);
+
+        await runHandler('/connect', `connectionString=${localTlsBypass}`);
+
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(1);
+        expect(mockSaveConnection).not.toHaveBeenCalled();
+    });
+
+    it('tells the user when a request to turn off validation was ignored', async () => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+        const connectionString = encodeURIComponent(
+            'mongodb://db.example.com:10260/?tls=true&tlsAllowInvalidCertificates=true',
+        );
+
+        await runHandler('/connect', `connectionString=${connectionString}`);
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            expect.objectContaining({
+                detail: expect.stringContaining(
+                    'This link asked to turn off TLS certificate validation. The request was ignored, and certificate validation stays on.',
+                ),
+            }),
+            'Yes, continue',
+        );
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
     });
 
     it('marks a localhost.<domain> host as neither an emulator nor eligible for the exception', async () => {

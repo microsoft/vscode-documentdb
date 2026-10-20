@@ -336,9 +336,10 @@ async function handleConnectionStringRequest(
     // (storageId, stored secret, reveal) uses the canonical form, and emulatorConfiguration is the
     // single source of truth.
     const { bypassRequested: tlsBypassRequested } = stripTlsBypassParams(parsedCS);
-    const disableEmulatorSecurity = tlsBypassRequested && areAllHostsLoopback(parsedCS);
+    const tlsBypassEligible = tlsBypassRequested && areAllHostsLoopback(parsedCS);
+    let disableEmulatorSecurity = false;
     context.telemetry.properties.tlsBypassRequested = String(tlsBypassRequested);
-    context.telemetry.properties.tlsBypassHonored = String(disableEmulatorSecurity);
+    context.telemetry.properties.tlsBypassHonored = 'false';
 
     // Pick the storage zone for this (possibly emulator) connection. The dedicated
     // Emulators zone is being retired (design §4): once the one-time migration has run,
@@ -371,6 +372,14 @@ async function handleConnectionStringRequest(
         if (showUrlHandlingConfirmations) {
             const detail = [
                 ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
+                ...(tlsBypassRequested && !tlsBypassEligible
+                    ? [
+                          '',
+                          l10n.t(
+                              'This link asked to turn off TLS certificate validation. The request was ignored, and certificate validation stays on.',
+                          ),
+                      ]
+                    : []),
                 '',
                 l10n.t('A new connection will be added to your Connections View.'),
                 l10n.t('Do you want to continue?'),
@@ -387,6 +396,36 @@ async function handleConnectionStringRequest(
                 context.telemetry.properties.userCancelledAtStep = 'CreateNewConnection';
                 return; // User cancelled
             }
+        }
+
+        // Relaxing certificate validation always needs the user's explicit consent, independent
+        // of the URL handling confirmation setting, and the prompt names the target it applies to.
+        if (tlsBypassEligible) {
+            const turnOff = l10n.t('Turn off validation');
+            const keepOn = l10n.t('Keep validation on');
+            const tlsChoice = await vscode.window.showWarningMessage(
+                l10n.t('This link asks to turn off TLS certificate validation.'),
+                {
+                    modal: true,
+                    detail: [
+                        ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
+                        '',
+                        l10n.t(
+                            'Without certificate validation, the identity of the server is not verified. Only turn it off for a local emulator or test instance you trust.',
+                        ),
+                    ].join('\n'),
+                },
+                turnOff,
+                keepOn,
+            );
+
+            if (tlsChoice === undefined) {
+                context.telemetry.properties.userCancelledAtStep = 'TlsException';
+                return; // User cancelled
+            }
+
+            disableEmulatorSecurity = tlsChoice === turnOff;
+            context.telemetry.properties.tlsBypassHonored = String(disableEmulatorSecurity);
         }
 
         // Show the Connections View
@@ -413,9 +452,7 @@ async function handleConnectionStringRequest(
                 // Match the wizard's shape: only carry an emulatorConfiguration when at least one
                 // flag is set, otherwise leave it undefined (a public deep link is a plain Cluster).
                 emulatorConfiguration:
-                    isEmulator || disableEmulatorSecurity
-                        ? { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity }
-                        : undefined,
+                    isEmulator || disableEmulatorSecurity ? { isEmulator, disableEmulatorSecurity } : undefined,
                 availableAuthMethods: [],
             },
             secrets: { connectionString: parsedCS.toString() },
