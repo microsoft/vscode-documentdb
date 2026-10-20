@@ -29,7 +29,7 @@ vi.mock('../../webviews/_integration/trpc', async () => {
 });
 
 describe('Shared Query Insights model RPCs', () => {
-    const result = { models: [], savedModelId: null, effectiveModelId: null };
+    const result = { models: [], savedModelId: null, effectiveModelId: null, effectiveReason: null };
     const caller = queryInsightsModelsRouter.createCaller({});
 
     beforeEach(() => {

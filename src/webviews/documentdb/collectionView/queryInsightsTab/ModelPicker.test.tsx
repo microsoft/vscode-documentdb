@@ -76,6 +76,7 @@ const available: AvailableModelsResult = {
     ],
     savedModelId: null,
     effectiveModelId: 'premium',
+    effectiveReason: 'first-available',
 };
 
 describe('Shared Query Insights ModelPicker', () => {
@@ -109,33 +110,35 @@ describe('Shared Query Insights ModelPicker', () => {
     it('shows the effective model, reason, premium hint and only the custom prompt basename', async () => {
         const onChange = vi.fn();
         await renderPicker(onChange, true);
-        expect(host.textContent).toContain('Using Premium model · First available model');
-        expect(host.textContent).toContain('May use premium requests');
-        expect(host.textContent).toContain('Prompt: custom file private.md');
+        expect(host.textContent).toContain('Default: first available model · May use premium requests');
+        expect(host.textContent).toContain('Prompt: Custom file private.md');
         expect(host.textContent).not.toContain('._local');
         expect(onChange).toHaveBeenLastCalledWith(available.models[0]);
         expect(host.querySelector('.query-insights-model-picker-compact')).not.toBeNull();
     });
 
     it('orders utility first, displays token counts and persists a selection', async () => {
-        mocks.setSelectedModel.mockResolvedValue({ ...available, savedModelId: 'utility', effectiveModelId: 'utility' });
+        mocks.setSelectedModel.mockResolvedValue({
+            ...available, savedModelId: 'utility', effectiveModelId: 'utility', effectiveReason: 'saved',
+        });
         await renderPicker();
         await act(async () => host.querySelector<HTMLButtonElement>('[role="combobox"]')?.click());
         const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
         expect(options.map((option) => option.textContent)).toEqual(['Utility model64KUtility', 'Premium model128KOther']);
         await act(async () => options[0].click());
         expect(mocks.setSelectedModel).toHaveBeenCalledWith({ modelId: 'utility' });
-        expect(host.textContent).toContain('Using Utility model · Saved choice');
+        expect(host.textContent).toContain('Saved choice');
         expect(host.textContent).not.toContain('May use premium requests');
     });
 
     it('shows an empty state and disables the picker when no models are available', async () => {
-        mocks.getAvailableModels.mockResolvedValue({ models: [], savedModelId: null, effectiveModelId: null });
+        mocks.getAvailableModels.mockResolvedValue({
+            models: [], savedModelId: null, effectiveModelId: null, effectiveReason: null,
+        });
         mocks.getPromptSourceInfo.mockResolvedValue({ source: 'built-in' });
         const onChange = vi.fn();
         await renderPicker(onChange);
         expect(host.textContent).toContain('No Copilot models available');
-        expect(host.textContent).toContain('Prompt: built-in');
         expect(host.querySelector<HTMLButtonElement>('[role="combobox"]')?.disabled).toBe(true);
         expect(onChange).toHaveBeenLastCalledWith(undefined);
     });
@@ -157,36 +160,37 @@ describe('Shared Query Insights ModelPicker', () => {
             .toEqual(['utility', 'premium', 'light', 'future']);
         expect([...host.querySelectorAll('[role="group"]')].map((element) => element.getAttribute('aria-label')))
             .toEqual(['Powerful', 'Lightweight', 'Other']);
-        const details = host.querySelector('.query-insights-model-details');
-        expect(details?.textContent).toContain('Pricing detailsHigh cost');
-        expect(details?.querySelector('details')?.open).toBe(true);
-        expect(details?.textContent).toContain('Credits per 1M tokens');
-        expect(details?.textContent).toContain('Input0');
-        expect(details?.textContent).toContain('Long contextInput4');
-        expect(details?.textContent).not.toContain('Cache Write');
-        expect(details?.textContent).toContain('Tools supported · No image input');
-        expect(details?.textContent).toContain('premium · v1');
-        expect(details?.textContent).toContain('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.');
+        const rows = Object.fromEntries([...host.querySelectorAll('tr')].map((row) => {
+            const cells = row.querySelectorAll(':scope > td');
+            return [cells[0]?.textContent ?? '', cells[1]?.textContent ?? ''];
+        }));
+        expect(rows.Cost).toContain('High cost');
+        expect(rows.Cost).toContain('Credits per 1M tokens');
+        expect(rows.Cost).toContain('Standard0');
+        expect(rows.Cost).toContain('Long context4');
+        expect(rows.Cost).not.toContain('Cache write');
+        expect(rows.Capabilities).toBe('Tool calling · No image input');
+        expect(rows['Model ID']).toBe('premium');
+        expect(rows.Prompt).toBe('Custom file private.md');
+        expect(host.querySelector('details')).toBeNull();
+        expect(host.textContent).toContain('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.');
     });
 
-    it('uses a one-line summary and accessible details tooltip trigger in the compact variant', async () => {
+    it('keeps the compact variant to one line plus an accessible details tooltip, without a toggle', async () => {
         mocks.getAvailableModels.mockResolvedValue({
-            ...available, models: [{ ...available.models[0], pricing: '1x' }, available.models[1]],
+            ...available, models: [{ ...available.models[0], priceCategory: 'very_high' }, available.models[1]],
         });
         await renderPicker(vi.fn(), true);
-        expect(host.querySelector('.query-insights-model-compact-details')?.textContent).toContain('128K context');
+        expect(host.querySelector('.query-insights-model-compact-details')?.textContent).toContain('Very high cost');
         expect(host.querySelector('button[aria-label="Selected model details"]')).not.toBeNull();
-        const details = host.querySelector('details');
-        expect(details?.open).toBe(false);
-        await act(async () => details?.querySelector('summary')?.click());
-        expect(details?.open).toBe(true);
+        expect(host.querySelector('details')).toBeNull();
     });
 
-    it('renders without optional pricing metadata and hides the Pricing details section', async () => {
+    it('says explicitly when a model reports no pricing instead of hiding the row', async () => {
         await renderPicker();
-        expect(host.textContent).toContain('Context window: 128,000 tokens');
-        expect(host.textContent).not.toContain('Pricing details');
+        const costRow = [...host.querySelectorAll('tr')].find((row) => row.querySelector('td')?.textContent === 'Cost');
+        expect(costRow?.textContent).toContain('Not reported for this model');
+        expect(host.textContent).toContain('128,000 tokens');
         expect(host.querySelector('details')).toBeNull();
-        expect(host.textContent).toContain('premium · v1');
     });
 });

@@ -766,7 +766,6 @@ export function QueryInsightsStandalone(): JSX.Element {
 
     // ---- Analyze ----------------------------------------------------------------------------
 
-    const analysisRunning = ['s1Loading', 's2Loading', 's3Loading'].includes(analysisKind);
     const summaryBar = analysisInput && (
         <div className={styles.summaryBar} role="region" aria-label={l10n.t('Analysis inputs')}>
             <Tooltip content={l10n.t('Back to Configure (inputs are kept)')} relationship="description">
@@ -880,8 +879,7 @@ export function QueryInsightsStandalone(): JSX.Element {
                 <WizardStep
                     value="analyze"
                     label={l10n.t('Analyze')}
-                    title={l10n.t('Query Insights')}
-                    subtitle={analysisRunning ? l10n.t('Analyzing…') : undefined}
+                    title={l10n.t('Query Insights analysis results')}
                     navigable={false}
                 >
                     {summaryBar}

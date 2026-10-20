@@ -53,8 +53,34 @@ export interface AvailableModelsResult {
     models: AvailableModelInfo[];
     /** The saved preference, or `null` when nothing was picked yet. */
     savedModelId: string | null;
-    /** The model that would be used right now (saved, else first in the list). */
+    /** The model that would be used right now (saved, else default). */
     effectiveModelId: string | null;
+    /** Why {@link effectiveModelId} was chosen. */
+    effectiveReason: ModelSelectionReason | null;
+}
+
+/**
+ * `saved`: the user's choice. `first-powerful`: no (available) saved choice, so the first model the
+ * Copilot API puts in its `powerful` category (F7). `first-available`: no category data at all.
+ */
+export type ModelSelectionReason = 'saved' | 'first-powerful' | 'first-available';
+
+function pickDefaultModel(
+    models: readonly vscode.LanguageModelChat[],
+): { model: vscode.LanguageModelChat; reason: Exclude<ModelSelectionReason, 'saved'> } | undefined {
+    const powerful = models.find((m) => !isUtilityModel(m) && readRuntimeModelMetadata(m).category === 'powerful');
+    if (powerful) {
+        return { model: powerful, reason: 'first-powerful' };
+    }
+    return models[0] ? { model: models[0], reason: 'first-available' } : undefined;
+}
+
+function pickEffectiveModel(
+    models: readonly vscode.LanguageModelChat[],
+    savedModelId: string | null,
+): { model: vscode.LanguageModelChat; reason: ModelSelectionReason } | undefined {
+    const saved = savedModelId ? models.find((m) => m.id === savedModelId) : undefined;
+    return saved ? { model: saved, reason: 'saved' } : pickDefaultModel(models);
 }
 
 function isAutoModel(model: vscode.LanguageModelChat): boolean {
@@ -132,11 +158,12 @@ export async function getAvailableModels(): Promise<AvailableModelsResult> {
     const savedModelId = getSavedModelId();
     try {
         const models = await listCopilotModels();
-        const effective = (savedModelId && models.find((m) => m.id === savedModelId)) || models[0];
+        const effective = pickEffectiveModel(models, savedModelId);
         return {
             models: models.map(toInfo),
             savedModelId,
-            effectiveModelId: effective?.id ?? null,
+            effectiveModelId: effective?.model.id ?? null,
+            effectiveReason: effective?.reason ?? null,
         };
     } catch (error) {
         ext.outputChannel.warn(
@@ -145,7 +172,7 @@ export async function getAvailableModels(): Promise<AvailableModelsResult> {
                 error instanceof Error ? error.message : String(error),
             ),
         );
-        return { models: [], savedModelId, effectiveModelId: null };
+        return { models: [], savedModelId, effectiveModelId: null, effectiveReason: null };
     }
 }
 
@@ -155,7 +182,7 @@ export async function getAvailableModels(): Promise<AvailableModelsResult> {
  */
 export async function resolveQueryInsightsModel(
     explicitModelId?: string,
-): Promise<{ model: vscode.LanguageModelChat; source: 'explicit' | 'saved' | 'first-available' } | undefined> {
+): Promise<{ model: vscode.LanguageModelChat; source: 'explicit' | ModelSelectionReason } | undefined> {
     const models = await listCopilotModels();
     if (models.length === 0) {
         return undefined;
@@ -168,13 +195,6 @@ export async function resolveQueryInsightsModel(
         }
     }
 
-    const savedModelId = getSavedModelId();
-    if (savedModelId) {
-        const saved = models.find((m) => m.id === savedModelId);
-        if (saved) {
-            return { model: saved, source: 'saved' };
-        }
-    }
-
-    return { model: models[0], source: 'first-available' };
+    const effective = pickEffectiveModel(models, getSavedModelId());
+    return effective ? { model: effective.model, source: effective.reason } : undefined;
 }

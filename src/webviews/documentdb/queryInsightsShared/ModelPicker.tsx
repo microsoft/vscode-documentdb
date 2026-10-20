@@ -3,10 +3,25 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, Dropdown, Field, Option, OptionGroup, Text, Tooltip } from '@fluentui/react-components';
-import { ChevronRightRegular, InfoRegular } from '@fluentui/react-icons';
+import {
+    Badge,
+    Button,
+    Dropdown,
+    Field,
+    Option,
+    OptionGroup,
+    Table,
+    TableBody,
+    TableCell,
+    TableCellLayout,
+    TableRow,
+    Text,
+    Tooltip,
+    useId,
+} from '@fluentui/react-components';
+import { InfoRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import type { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo, AvailableModelsResult } from '../../../services/ai/modelSelection';
 import type { IndexAdvisorPromptSourceInfo } from '../../../services/promptTemplateService';
@@ -38,14 +53,6 @@ function categoryLabel(category: string | undefined): string {
     }
 }
 
-function modelSummary(model: AvailableModelInfo): string {
-    return [
-        model.pricing,
-        model.maxInputTokens > 0 ? l10n.t('{0} context', formatTokenCount(model.maxInputTokens, navigator.language)) : undefined,
-        model.category ? categoryLabel(model.category) : undefined,
-    ].filter(Boolean).join(' · ');
-}
-
 function ModelCostBadge({ category }: { category: string | undefined }): JSX.Element | null {
     if (!category) return null;
     // VS Code modelPickerPresentation.ts: two tints, not a calculated per-token price.
@@ -62,81 +69,111 @@ function ModelCostBadge({ category }: { category: string | undefined }): JSX.Ele
         color={category === 'high' || category === 'very_high' ? 'warning' : 'informative'}>{label}</Badge>;
 }
 
-function ModelDetails({ model, compact = false, tooltip = false }: {
-    model: AvailableModelInfo; compact?: boolean; tooltip?: boolean;
-}): JSX.Element {
-    const costs: readonly [keyof AvailableModelInfo, string][] = [
-        ['inputCost', l10n.t('Input')], ['outputCost', l10n.t('Output')],
-        ['cacheCost', l10n.t('Cache Read')], ['cacheWriteCost', l10n.t('Cache Write')],
+type CostKey =
+    | 'inputCost' | 'outputCost' | 'cacheCost' | 'cacheWriteCost'
+    | 'longContextInputCost' | 'longContextOutputCost' | 'longContextCacheCost' | 'longContextCacheWriteCost';
+
+const standardCostKeys: readonly CostKey[] = ['inputCost', 'outputCost', 'cacheCost', 'cacheWriteCost'];
+const longContextCostKeys: readonly CostKey[] = [
+    'longContextInputCost', 'longContextOutputCost', 'longContextCacheCost', 'longContextCacheWriteCost',
+];
+
+/** Credits per 1M tokens as a small grid: one column per token kind, one row per context tier. */
+function CostGrid({ model }: { model: AvailableModelInfo }): JSX.Element | null {
+    const columns = [l10n.t('Input'), l10n.t('Output'), l10n.t('Cache read'), l10n.t('Cache write')];
+    const tiers = [
+        { label: l10n.t('Standard'), keys: standardCostKeys },
+        { label: l10n.t('Long context'), keys: longContextCostKeys },
+    ].filter((tier) => tier.keys.some((key) => model[key] !== undefined));
+    if (tiers.length === 0) {
+        return null;
+    }
+    const visible = columns.map((_, index) => tiers.some((tier) => model[tier.keys[index]] !== undefined));
+    return (
+        <table className="query-insights-model-cost-grid">
+            <caption>{l10n.t('Credits per 1M tokens')}</caption>
+            <thead>
+                <tr>
+                    <td />
+                    {columns.map((column, index) => visible[index] && <th key={column} scope="col">{column}</th>)}
+                </tr>
+            </thead>
+            <tbody>
+                {tiers.map((tier) => (
+                    <tr key={tier.label}>
+                        <th scope="row">{tier.label}</th>
+                        {tier.keys.map((key, index) => visible[index] && (
+                            <td key={key}>{model[key] !== undefined ? formatCredits(model[key]) : '—'}</td>
+                        ))}
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+}
+
+interface ModelFact {
+    readonly key: string;
+    readonly label: string;
+    readonly value: ReactNode;
+}
+
+/** Every fact is always listed, so a missing value reads as "not reported", never as a hidden section. */
+function modelFacts(model: AvailableModelInfo, promptLabel: string | undefined): ModelFact[] {
+    const notReported = <Text className="query-insights-model-muted">{l10n.t('Not reported for this model')}</Text>;
+    const hasCosts = [...standardCostKeys, ...longContextCostKeys].some((key) => model[key] !== undefined);
+    const capabilities: string[] = [];
+    if (model.supportsToolCalling !== undefined) {
+        capabilities.push(model.supportsToolCalling ? l10n.t('Tool calling') : l10n.t('No tool calling'));
+    }
+    if (model.supportsImageToText !== undefined) {
+        capabilities.push(model.supportsImageToText ? l10n.t('Image input') : l10n.t('No image input'));
+    }
+    const facts: ModelFact[] = [
+        {
+            key: 'cost',
+            label: l10n.t('Cost'),
+            value: model.priceCategory || hasCosts ? (
+                <div className="query-insights-model-cost">
+                    <ModelCostBadge category={model.priceCategory} />
+                    <CostGrid model={model} />
+                </div>
+            ) : notReported,
+        },
+        {
+            key: 'context',
+            label: l10n.t('Context window'),
+            value: model.maxInputTokens > 0
+                ? l10n.t('{0} tokens', model.maxInputTokens.toLocaleString(navigator.language))
+                : notReported,
+        },
+        {
+            key: 'capabilities',
+            label: l10n.t('Capabilities'),
+            value: capabilities.length > 0 ? capabilities.join(' · ') : notReported,
+        },
+        {
+            key: 'id',
+            label: l10n.t('Model ID'),
+            value: <span className="query-insights-model-identity">{model.id}</span>,
+        },
     ];
-    const longCosts: readonly [keyof AvailableModelInfo, string][] = [
-        ['longContextInputCost', l10n.t('Input')], ['longContextOutputCost', l10n.t('Output')],
-        ['longContextCacheCost', l10n.t('Cache Read')], ['longContextCacheWriteCost', l10n.t('Cache Write')],
-    ];
-    const hasPricing = !!model.pricing || !!model.priceCategory ||
-        [...costs, ...longCosts].some(([key]) => model[key] !== undefined);
-    const rows = (fields: readonly [keyof AvailableModelInfo, string][]): JSX.Element => (
-        <dl className="query-insights-model-costs">
-            {fields.filter(([key]) => model[key] !== undefined).map(([key, label]) => (
-                <div key={key}><dt>{label}</dt><dd>{formatCredits(model[key])}</dd></div>
+    if (promptLabel) {
+        facts.push({ key: 'prompt', label: l10n.t('Prompt'), value: promptLabel });
+    }
+    return facts;
+}
+
+function FactList({ facts }: { facts: readonly ModelFact[] }): JSX.Element {
+    return (
+        <dl className="query-insights-model-fact-list">
+            {facts.map((fact) => (
+                <div key={fact.key}>
+                    <dt>{fact.label}</dt>
+                    <dd>{fact.value}</dd>
+                </div>
             ))}
         </dl>
-    );
-    const capabilities: string[] = [];
-    if (model.supportsToolCalling !== undefined) capabilities.push(model.supportsToolCalling ? l10n.t('Tools supported') : l10n.t('No tool calling'));
-    if (model.supportsImageToText !== undefined) capabilities.push(model.supportsImageToText ? l10n.t('Images supported') : l10n.t('No image input'));
-    const metadata = (
-        <div className="query-insights-model-metadata query-insights-model-muted">
-            {model.maxInputTokens > 0 && <Text size={200}>{l10n.t('Context window: {0} tokens', model.maxInputTokens.toLocaleString(navigator.language))}</Text>}
-            {capabilities.length > 0 && <Text size={200}>{capabilities.join(' · ')}</Text>}
-            <Text size={100} className="query-insights-model-identity">
-                {[model.id, model.family !== model.id ? model.family : undefined, model.version ? `v${model.version}` : undefined].filter(Boolean).join(' · ')}
-            </Text>
-            <Text size={200}>{l10n.t('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.')}</Text>
-        </div>
-    );
-    const pricing = (
-        <div className="query-insights-model-pricing-body">
-            {(costs.some(([key]) => model[key] !== undefined) || longCosts.some(([key]) => model[key] !== undefined)) && (
-                <>
-                    <Text size={200} className="query-insights-model-muted">{l10n.t('Credits per 1M tokens')}</Text>
-                    {rows(costs)}
-                    {longCosts.some(([key]) => model[key] !== undefined) && (
-                        <>
-                            <span className="query-insights-model-cost-group">{l10n.t('Long context')}</span>
-                            {rows(longCosts)}
-                        </>
-                    )}
-                </>
-            )}
-        </div>
-    );
-    return (
-        <div className={`query-insights-model-details${compact || !hasPricing ? ' query-insights-model-details-compact' : ''}`}>
-            {!hasPricing ? (
-                compact && <Text size={200} className="query-insights-model-muted">{modelSummary(model)}</Text>
-            ) : tooltip ? (
-                <>
-                    <div className="query-insights-model-pricing-title">
-                        <Text weight="semibold">{l10n.t('Pricing details')}</Text>
-                        <ModelCostBadge category={model.priceCategory} />
-                    </div>
-                    {pricing}
-                </>
-            ) : (
-                <details open={!compact}>
-                    <summary>
-                        <ChevronRightRegular aria-hidden="true" className="query-insights-model-chevron" />
-                        <span>{l10n.t('Pricing details')}</span>
-                        {compact && <Text size={200} className="query-insights-model-muted">{modelSummary(model)}</Text>}
-                        <ModelCostBadge category={model.priceCategory} />
-                    </summary>
-                    {pricing}
-                    {compact && metadata}
-                </details>
-            )}
-            {!compact && metadata}
-        </div>
     );
 }
 
@@ -147,6 +184,7 @@ export function ModelPicker({
     onModelChange,
 }: ModelPickerProps): JSX.Element {
     const client = useTrpcClient();
+    const dropdownLabelId = useId('query-insights-model-label');
     const [available, setAvailable] = useState<AvailableModelsResult>();
     const [promptSource, setPromptSource] = useState<IndexAdvisorPromptSourceInfo>();
     const [loading, setLoading] = useState(true);
@@ -222,9 +260,19 @@ export function ModelPicker({
         ...(available?.models.filter((model) => model.isUtility) ?? []),
         ...(available?.models.filter((model) => !model.isUtility) ?? []),
     ];
-    const selectionReason =
-        selected && selected.id === available?.savedModelId ? l10n.t('Saved choice') : l10n.t('First available model');
+    const selectionReason = ((): string => {
+        switch (available?.effectiveReason) {
+            case 'saved': return l10n.t('Saved choice');
+            case 'first-powerful': return l10n.t('Default: first Powerful model');
+            default: return l10n.t('Default: first available model');
+        }
+    })();
     const promptBasename = promptSource?.path?.split(/[/\\]/).pop();
+    const promptLabel = promptSource
+        ? promptSource.source === 'custom-file'
+            ? l10n.t('Custom file {0}', promptBasename ?? '')
+            : l10n.t('Built-in')
+        : undefined;
     const utility = models.filter((model) => model.isUtility);
     const others = models.filter((model) => !model.isUtility);
     const option = (model: AvailableModelInfo): JSX.Element => (
@@ -243,54 +291,58 @@ export function ModelPicker({
         </Option>
     );
 
-    return (
-        <div className={`query-insights-model-picker${compact ? ' query-insights-model-picker-compact' : ''}`}>
-            <Field label={l10n.t('Copilot model')}>
-                <Dropdown
-                    size={compact ? 'small' : 'medium'}
-                    value={selected?.name ?? ''}
-                    selectedOptions={selected ? [selected.id] : []}
-                    placeholder={loading ? l10n.t('Loading models…') : l10n.t('No Copilot models available')}
-                    disabled={disabled || loading || saving || models.length === 0}
-                    onOptionSelect={(_event, data) => {
-                        if (data.optionValue) {
-                            void selectModel(data.optionValue);
-                        }
-                    }}
-                >
-                    {utility.map(option)}
-                    {others.some((model) => model.category)
-                        ? ['powerful', 'versatile', 'lightweight', 'other'].map((category) => {
-                            const group = others.filter((model) =>
-                                (['powerful', 'versatile', 'lightweight'].includes(model.category ?? '') ? model.category : 'other') === category);
-                            return group.length > 0 ? (
-                                <OptionGroup key={category} label={categoryLabel(category)}>{group.map(option)}</OptionGroup>
-                            ) : null;
-                        })
-                        : others.map(option)}
-                </Dropdown>
-            </Field>
-            {selected && (compact ? (
-                <div className="query-insights-model-compact-details">
-                    <ModelDetails model={selected} compact />
-                    <Tooltip content={<ModelDetails model={selected} tooltip />} relationship="description">
-                        <Button appearance="subtle" size="small" icon={<InfoRegular />} aria-label={l10n.t('Selected model details')} />
-                    </Tooltip>
-                </div>
-            ) : <ModelDetails model={selected} />)}
-            {selected && (
-                <Text size={200} className="query-insights-model-muted">
-                    {l10n.t('Using {0} · {1}', selected.name, selectionReason)}
-                    {!selected.isUtility && <> · {l10n.t('May use premium requests')}</>}
-                </Text>
-            )}
-            {promptSource && (
-                <Text size={200} className="query-insights-model-muted">
-                    {promptSource.source === 'custom-file'
-                        ? l10n.t('Prompt: custom file {0}', promptBasename ?? '')
-                        : l10n.t('Prompt: built-in')}
-                </Text>
-            )}
+    const dropdown = (
+        <Dropdown
+            aria-labelledby={compact ? undefined : dropdownLabelId}
+            size={compact ? 'small' : 'medium'}
+            value={selected?.name ?? ''}
+            selectedOptions={selected ? [selected.id] : []}
+            placeholder={loading ? l10n.t('Loading models…') : l10n.t('No Copilot models available')}
+            disabled={disabled || loading || saving || models.length === 0}
+            onOptionSelect={(_event, data) => {
+                if (data.optionValue) {
+                    void selectModel(data.optionValue);
+                }
+            }}
+        >
+            {utility.map(option)}
+            {others.some((model) => model.category)
+                ? ['powerful', 'versatile', 'lightweight', 'other'].map((category) => {
+                    const group = others.filter((model) =>
+                        (['powerful', 'versatile', 'lightweight'].includes(model.category ?? '') ? model.category : 'other') === category);
+                    return group.length > 0 ? (
+                        <OptionGroup key={category} label={categoryLabel(category)}>{group.map(option)}</OptionGroup>
+                    ) : null;
+                })
+                : others.map(option)}
+        </Dropdown>
+    );
+    const selectionNote = selected && (
+        <Text size={200} className="query-insights-model-muted">
+            {selectionReason}
+            {!selected.isUtility && <> · {l10n.t('May use premium requests')}</>}
+        </Text>
+    );
+
+    if (compact) {
+        return (
+            <div className="query-insights-model-picker query-insights-model-picker-compact">
+                <Field label={l10n.t('Copilot model')}>{dropdown}</Field>
+                {selected && (
+                    <div className="query-insights-model-compact-details">
+                        {selectionNote}
+                        <ModelCostBadge category={selected.priceCategory} />
+                        <Tooltip
+                            content={<FactList facts={modelFacts(selected, promptLabel)} />}
+                            relationship="description"
+                        >
+                            <Button appearance="subtle" size="small" icon={<InfoRegular />} aria-label={l10n.t('Selected model details')} />
+                        </Tooltip>
+                    </div>
+                )}
+                {promptLabel && (
+                    <Text size={200} className="query-insights-model-muted">{l10n.t('Prompt: {0}', promptLabel)}</Text>
+                )}
             {error && <Text size={200}>{error}</Text>}
             {!loading && models.length === 0 && (
                 <Button appearance="subtle" size="small" onClick={() => setRefreshKey((value) => value + 1)}>
@@ -298,6 +350,50 @@ export function ModelPicker({
                 </Button>
             )}
             <Announcer when={!!error} message={error ?? ''} />
-        </div>
-    );
+            </div>
+        );
+    }
+
+    const facts = selected ? modelFacts(selected, promptLabel) : [];
+    return (
+            <div className="query-insights-model-picker">
+                <Table size="small" className="query-insights-model-table">
+                    <colgroup>
+                        <col className="query-insights-model-table-label" />
+                        <col />
+                    </colgroup>
+                    <TableBody>
+                        <TableRow>
+                            <TableCell>
+                                <TableCellLayout appearance="primary">
+                                    <span id={dropdownLabelId}>{l10n.t('Copilot model')}</span>
+                                </TableCellLayout>
+                            </TableCell>
+                            <TableCell className="query-insights-model-table-value">
+                                {dropdown}
+                                {selectionNote}
+                            </TableCell>
+                        </TableRow>
+                        {facts.map((fact) => (
+                            <TableRow key={fact.key}>
+                                <TableCell><TableCellLayout appearance="primary">{fact.label}</TableCellLayout></TableCell>
+                                <TableCell className="query-insights-model-table-value">{fact.value}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+                {selected && (
+                    <Text size={200} className="query-insights-model-muted">
+                        {l10n.t('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.')}
+                    </Text>
+                )}
+            {error && <Text size={200}>{error}</Text>}
+            {!loading && models.length === 0 && (
+                <Button appearance="subtle" size="small" onClick={() => setRefreshKey((value) => value + 1)}>
+                    {l10n.t('Refresh models')}
+                </Button>
+            )}
+            <Announcer when={!!error} message={error ?? ''} />
+            </div>
+        );
 }

@@ -265,7 +265,7 @@ export const fixtures = {
                     inputCost: 0, outputCost: 0, cacheCost: 0,
                     supportsToolCalling: true, supportsImageToText: false,
                 }],
-                savedModelId: null, effectiveModelId: 'copilot-utility',
+                savedModelId: null, effectiveModelId: 'copilot-utility', effectiveReason: 'first-available',
             }),
             'ai.getPromptSourceInfo': reply<Outputs['ai']['getPromptSourceInfo']>('query', { source: 'built-in' }),
             'queryInsightsStandalone.validateInput': reply<Outputs['queryInsightsStandalone']['validateInput']>('query', {

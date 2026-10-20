@@ -44,86 +44,99 @@
     white-space: nowrap;
 }
 
-.query-insights-model-details {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacingVerticalXS);
-    padding: var(--spacingVerticalM) var(--spacingHorizontalL);
-    border-radius: var(--borderRadiusLarge);
-    border: var(--strokeWidthThin) solid var(--colorTransparentStroke);
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground1);
+// Same label/value grid as the wizard's "Optional context" table (LocalQuickStart settings pattern).
+.query-insights-model-table {
+    col.query-insights-model-table-label {
+        width: 200px;
 
-    summary {
-        display: flex;
-        align-items: center;
-        gap: var(--spacingHorizontalS);
-        cursor: pointer;
-        list-style: none;
-        font-weight: var(--fontWeightSemibold);
-        font-size: var(--fontSizeBase300);
-
-        &::-webkit-details-marker { display: none; }
-        .fui-Badge { margin-left: auto; }
+        @media (max-width: 560px) {
+            width: 110px;
+        }
     }
 
-    .query-insights-model-chevron {
-        flex-shrink: 0;
-        transition: transform var(--durationFast) var(--curveEasyEase);
-    }
+    .query-insights-model-table-value {
+        display: table-cell;
+        height: auto;
+        padding-top: var(--spacingVerticalS);
+        padding-bottom: var(--spacingVerticalS);
+        overflow-wrap: anywhere;
+        vertical-align: top;
 
-    details[open] > summary .query-insights-model-chevron { transform: rotate(90deg); }
-    summary:focus-visible {
-        outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2);
-        border-radius: var(--borderRadiusSmall);
+        > .fui-Text {
+            display: block;
+        }
+
+        > * + * {
+            margin-top: var(--spacingVerticalXS);
+        }
+
+        > .fui-Dropdown {
+            display: inline-flex;
+            width: 100%;
+            max-width: 480px;
+        }
     }
 }
 
-.query-insights-model-pricing-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.query-insights-model-pricing-body,
-.query-insights-model-metadata {
+.query-insights-model-cost {
     display: flex;
     flex-direction: column;
-    gap: var(--spacingVerticalXS);
-    margin-top: var(--spacingVerticalS);
+    align-items: flex-start;
+    gap: var(--spacingVerticalM);
 }
 
-.query-insights-model-pricing-body {
-    padding-left: calc(16px + var(--spacingHorizontalS));
-}
-
-.query-insights-model-details-compact {
-    padding: 0;
-    border: 0;
-    flex: 1;
-    min-width: 0;
-    background: none;
-}
-
-.query-insights-model-costs {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacingVerticalXS);
-    margin: 0;
-    font-size: var(--fontSizeBase300);
-    line-height: var(--lineHeightBase300);
-
-    > div { display: flex; justify-content: space-between; gap: var(--spacingHorizontalM); }
-    dt { color: var(--colorNeutralForeground2); }
-    dd { margin: 0; text-align: right; font-weight: var(--fontWeightSemibold); font-variant-numeric: tabular-nums; }
-}
-
-.query-insights-model-cost-group {
-    margin-top: var(--spacingVerticalXS);
+.query-insights-model-cost-grid {
+    border-collapse: collapse;
     font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightSemibold);
-    color: var(--colorNeutralForeground2);
+    line-height: var(--lineHeightBase200);
+    font-variant-numeric: tabular-nums;
+
+    caption {
+        text-align: left;
+        padding-bottom: var(--spacingVerticalXXS);
+        color: var(--colorNeutralForeground3);
+    }
+
+    th,
+    td {
+        padding: var(--spacingVerticalXXS) var(--spacingHorizontalM) var(--spacingVerticalXXS) 0;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    thead th {
+        font-weight: var(--fontWeightRegular);
+        color: var(--colorNeutralForeground3);
+    }
+
+    tbody th {
+        text-align: left;
+        font-weight: var(--fontWeightRegular);
+        color: var(--colorNeutralForeground2);
+    }
+
+    tbody td {
+        font-weight: var(--fontWeightSemibold);
+    }
+}
+
+.query-insights-model-fact-list {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--spacingVerticalXS) var(--spacingHorizontalL);
+    margin: 0;
+
+    > div {
+        display: contents;
+    }
+
+    dt {
+        color: var(--colorNeutralForeground3);
+    }
+
+    dd {
+        margin: 0;
+    }
 }
 
 .query-insights-model-identity {

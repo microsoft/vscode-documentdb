@@ -244,8 +244,43 @@ export const scenarios = {
         },
         configure: explorerConfigure(explorerInspection, [
             'Provide your query data', 'Explain plan parsed.', 'Extracted query', 'Optional context',
-            'Not provided', 'demo.items', 'Copilot utility', 'Prompt: built-in', 'Analyze query sends your inputs to Copilot utility.',
+            'Not provided', 'demo.items', 'Copilot utility', 'Built-in', 'Model ID', 'Analyze query sends your inputs to Copilot utility.',
         ]),
+        'configure-models': {
+            ...explorerConfigure(explorerInspection, [
+                'GPT Example', 'Default: first Powerful model', 'Very high cost', 'Credits per 1M tokens',
+                'Long context', '921,793 tokens', 'gpt-example',
+            ]),
+            rpc: {
+                ...explorerConfigure(explorerInspection, []).rpc,
+                'ai.getAvailableModels': {
+                    type: 'query',
+                    results: [{
+                        models: [
+                            {
+                                id: 'copilot-utility', name: 'Copilot utility', family: 'copilot-utility', vendor: 'copilot',
+                                version: '1', maxInputTokens: 64000, isUtility: true, pricing: 'Free', priceCategory: 'low',
+                                category: 'lightweight', inputCost: 0, outputCost: 0, cacheCost: 0,
+                            },
+                            {
+                                id: 'gpt-example', name: 'GPT Example', family: 'gpt-example', vendor: 'copilot',
+                                version: 'gpt-example', maxInputTokens: 921793, isUtility: false, pricing: '1x',
+                                priceCategory: 'very_high', category: 'powerful',
+                                inputCost: 800, outputCost: 4000, cacheCost: 80, cacheWriteCost: 1000,
+                                longContextInputCost: 1600, longContextOutputCost: 6000,
+                                longContextCacheCost: 160, longContextCacheWriteCost: 2000,
+                                supportsToolCalling: true, supportsImageToText: true,
+                            },
+                            {
+                                id: 'unpriced', name: 'Unpriced model', family: 'unpriced', vendor: 'copilot',
+                                version: '1', maxInputTokens: 200000, isUtility: false, category: 'versatile',
+                            },
+                        ],
+                        savedModelId: null, effectiveModelId: 'gpt-example', effectiveReason: 'first-powerful',
+                    }],
+                },
+            },
+        },
         'configure-invalid': explorerConfigure(
             { explain: { ok: false, message: 'Unexpected token', line: 3, column: 7 }, ready: false },
             ['Line 3, column 7: Unexpected token', 'Fix the explain plan to continue.'],

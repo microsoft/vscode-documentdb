@@ -74,10 +74,27 @@ describe('Query Insights model selection', () => {
         expect((await getAvailableModels()).effectiveModelId).toBe('first');
     });
 
+    it('defaults to the first Powerful model (API category) when nothing valid is saved', async () => {
+        mocks.get.mockReturnValue(null);
+        const powerful = (id: string): vscode.LanguageModelChat => Object.freeze({ ...model(id), category: 'powerful' });
+        const versatile = Object.freeze({ ...model('versatile'), category: 'versatile' });
+        mocks.selectChatModels.mockResolvedValue([model('copilot-utility'), versatile, powerful('strong'), powerful('stronger')]);
+
+        const result = await getAvailableModels();
+        expect(result.effectiveModelId).toBe('strong');
+        expect(result.effectiveReason).toBe('first-powerful');
+        expect((await resolveQueryInsightsModel())?.source).toBe('first-powerful');
+
+        mocks.get.mockReturnValue('versatile');
+        expect((await getAvailableModels()).effectiveReason).toBe('saved');
+    });
+
     it('returns an empty result when model discovery fails or no models exist', async () => {
         expect(await resolveQueryInsightsModel()).toBeUndefined();
         mocks.selectChatModels.mockRejectedValueOnce(new Error('unavailable'));
-        expect(await getAvailableModels()).toEqual({ models: [], savedModelId: null, effectiveModelId: null });
+        expect(await getAvailableModels()).toEqual({
+            models: [], savedModelId: null, effectiveModelId: null, effectiveReason: null,
+        });
     });
 
     it('persists and clears the shared preference', async () => {
