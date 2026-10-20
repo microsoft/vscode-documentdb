@@ -105,4 +105,24 @@ describe('Index advisor prompt iteration', () => {
         }
         expect(mocks.readFile).not.toHaveBeenCalled();
     });
+
+    it('treats an empty or whitespace-only path as not configured and uses the built-in prompt', async () => {
+        const builtIn = await PromptTemplateService.getIndexAdvisorPromptTemplate(CommandType.Find);
+        PromptTemplateService.clearCache();
+        for (const blank of ['', '   ', '\t\n', null]) {
+            mocks.settings.set(customSetting, blank);
+            expect(getIndexAdvisorPromptSourceInfo(CommandType.Find)).toEqual({ source: 'built-in' });
+            expect(await PromptTemplateService.getIndexAdvisorPromptTemplate(CommandType.Find)).toBe(builtIn);
+        }
+        expect(mocks.readFile).not.toHaveBeenCalled();
+        expect(mocks.showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it('trims surrounding whitespace from a configured custom path', () => {
+        mocks.settings.set(customSetting, '  prompts/local.md \n');
+        expect(getIndexAdvisorPromptSourceInfo(CommandType.Find)).toEqual({
+            source: 'custom-file',
+            path: 'prompts/local.md',
+        });
+    });
 });

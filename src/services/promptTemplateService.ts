@@ -41,7 +41,8 @@ export function getIndexAdvisorPromptSourceInfo(commandType: CommandType): Index
     if (!configKey) {
         throw new Error(vscode.l10n.t('Unknown command type: {type}', { type: commandType }));
     }
-    const customPath = vscode.workspace.getConfiguration().get<string | null>(configKey);
+    // An empty or whitespace-only setting means "not configured": fall back to the built-in prompt.
+    const customPath = vscode.workspace.getConfiguration().get<string | null>(configKey)?.trim();
     return customPath ? { source: 'custom-file', path: customPath } : { source: 'built-in' };
 }
 

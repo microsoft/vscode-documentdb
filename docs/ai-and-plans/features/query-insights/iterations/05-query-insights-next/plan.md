@@ -280,6 +280,41 @@ is bundled once at Checkpoint C after WI-11; do not build/test after WI-9 or WI-
     - Update Phase C results, minutes, deviations and manual smoke steps.
     - _Outcome:_ Applied Azure explain fixups to top-level/cursor plans, made non-find model summaries scope-aware, added a connectionless raw-plan action, corrected footer emphasis, and verified Analyze really renders Analyze. Checkpoint C passed: build, 21 files / 231 tests, and 15/15 L2 routes; real host/model smoke remains manual.
 
+### Phase D: wizard polish (operator follow-up)
+
+Operator verdict on Phase C: the wizard works but is "very basic". Bring it to the level of
+`LocalQuickStart.tsx` (the gold standard) and `AtlasCredentialsView.tsx`. Same per-WI commits,
+time logging, deviation rules and Case 1 restrictions apply. Verification is bundled once at the
+end of WI-13 (Checkpoint D). L2 runs use the agent's **own headless Playwright**, never a shared
+or interactive browser.
+
+- [x] **WI-12: Prompt fallback hardening (small)**
+    - Keep the built-in fallback through `getIndexAdvisorPromptSourceInfo` /
+      `PromptTemplateService`. Treat a whitespace-only path as "not configured" (trim it), so
+      both pickers show "Prompt: built-in" and the built-in template is used. Unit test.
+    - _Outcome:_ The source helper trims the setting; blank/whitespace/null paths report `built-in`, load the built-in template (cacheable, no file read, no warning), and custom paths are trimmed. Two service tests added; the existing picker test already covers the "Prompt: built-in" line. Checks deferred to D.
+
+- [ ] **WI-13: Wizard UI revision + Checkpoint D**
+    - **Welcome:** `ContainerHeader` (title, subtitle, Feature preview badge), a value statement,
+      a "What you'll need" list (required explain output; optional collection stats / indexes,
+      each with a reason), copyable `explain("executionStats")` snippets for find / aggregate /
+      count (DocumentDB shell or mongosh) using `common.copyToClipboard`, and a privacy note.
+    - **Configure:** sections **Explain plan** (required), **Optional context**, **AI model &
+      prompt**. Live explain validation (parsed / error with position, detected command badge,
+      namespace, extracted query preview, "Load sample plan" for find / aggregate / count).
+      Optional inputs use the LocalQuickStart summary-row → editor pattern with `Collapse`.
+      Monospace editors. Full `ModelPicker` with cost hint and prompt line. Inline validation;
+      the forward button is disabled with a visible reason until the plan is valid.
+    - **Analyze:** compact input summary bar (command, namespace, model, prompt source; "Edit
+      inputs" and "Re-run", with an inline model change). Remove the nested scroll: the page
+      scrolls once. `QueryInsightsMain` and the Collection View tab stay unchanged.
+    - **Overall:** theme tokens only; focus to step heading; Announcer live regions;
+      keyboard-only flow; `l10n.t()` strings; "DocumentDB shell or mongosh" terminology.
+    - **Checkpoint D:** `npm run build`;
+      `npx vitest run src/webviews/documentdb/queryInsightsStandalone src/webviews/documentdb/collectionView src/webviews/documentdb/queryInsightsShared src/services`;
+      L2 scenarios updated/added and run headless in three themes; before/after screenshots
+      saved outside the repo.
+
 ## How to use (filled in at WI-8)
 
 1. Keep the internal prompt outside git, for example
@@ -388,6 +423,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-11 + Checkpoint C | Coding agent (gpt-6.1-sol) | 14:41 | 15:03 | 22 | Correctness/summary refinements, Checkpoint C and 15 themed L2 routes. |
 | Phase C scoping (lead): find-only evaluation (F6) + steering message | Lead agent | 14:30 | 14:40 | 10 | Read ExplainPlanAnalyzer / explain-plan-helper / fixup; screenshot of the L2 page |
 | Phase B+C review (lead) | Lead agent | 15:05 | 15:12 | 7 | Commits, plan log, count L2 page rendered and inspected |
+| Phase D setup + WI-12 | Coding agent (claude-opus-5.5) | 15:16 | 15:21 | 5 | Read plan/wizards/skills, headless L2 driver + "before" screenshots, Phase D section, prompt trim + tests; checks deferred to D. |
 
 ## Deviation log
 
