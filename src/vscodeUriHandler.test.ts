@@ -12,6 +12,7 @@ import { globalUriHandler } from './vscodeUriHandler';
 let lastTelemetry: Record<string, string> = {};
 let showUrlHandlingConfirmations = true;
 const mockGetAllConnections = vi.fn().mockResolvedValue([]);
+const mockSaveConnection = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(
@@ -43,9 +44,12 @@ vi.mock('./commands/localQuickStart/openLocalQuickStart', () => ({
 // validation — but the imports still have to resolve.
 vi.mock('./commands/openCollectionView/openCollectionView', () => ({ openCollectionViewInternal: vi.fn() }));
 vi.mock('./services/connectionStorageService', () => ({
-    ConnectionStorageService: { getAll: (...args: unknown[]) => mockGetAllConnections(...args) },
+    ConnectionStorageService: {
+        getAll: (...args: unknown[]) => mockGetAllConnections(...args),
+        save: (...args: unknown[]) => mockSaveConnection(...args),
+    },
     ConnectionType: { Clusters: 'clusters', Emulators: 'emulators' },
-    ItemType: { Cluster: 'cluster' },
+    ItemType: { Cluster: 'cluster', Connection: 'connection' },
 }));
 vi.mock('./services/legacyEmulatorMigration', () => ({ isLegacyEmulatorMigrationComplete: () => true }));
 vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
@@ -55,7 +59,10 @@ vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
     withConnectionsViewProgress: vi.fn(),
 }));
 vi.mock('./extensionVariables', () => ({
-    ext: { settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' } },
+    ext: {
+        settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' },
+        connectionsBranchDataProvider: { refresh: vi.fn() },
+    },
 }));
 
 function uriFor(path: string, query: string = ''): vscode.Uri {
@@ -77,6 +84,7 @@ beforeEach(() => {
     lastTelemetry = {};
     showUrlHandlingConfirmations = true;
     mockGetAllConnections.mockResolvedValue([]);
+    mockSaveConnection.mockResolvedValue(undefined);
     (vscode.workspace.getConfiguration as Mock).mockReturnValue({
         get: vi.fn(() => showUrlHandlingConfirmations),
     });
@@ -239,6 +247,64 @@ describe('globalUriHandler — connection confirmation', () => {
             'Yes, open connection',
         );
         expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain('secret');
+    });
+});
+
+/** The item passed to `ConnectionStorageService.save`, or `undefined` when nothing was saved. */
+function savedConnection(): { properties: { emulatorConfiguration?: unknown }; secrets: { connectionString: string } } {
+    return mockSaveConnection.mock.calls[0]?.[1] as {
+        properties: { emulatorConfiguration?: unknown };
+        secrets: { connectionString: string };
+    };
+}
+
+/** Accepts the "add connection" prompt and dismisses everything after it. */
+function acceptAddConnectionOnly(): void {
+    (vscode.window.showInformationMessage as Mock).mockImplementation(
+        (_message: string, _options: unknown, ...items: string[]) =>
+            Promise.resolve(items.includes('Yes, continue') ? 'Yes, continue' : undefined),
+    );
+}
+
+describe('globalUriHandler — TLS exception requested by a link', () => {
+    it.each([
+        'mongodb://devbox:10260/?tls=true&tlsAllowInvalidCertificates=true',
+        'mongodb://10.0.0.5:10260/?tls=true&tlsAllowInvalidCertificates=true',
+        'mongodb://db.local:10260/?tls=true&tlsInsecure=true',
+        'mongodb://db.example.com:10260/?tls=true&tlsAllowInvalidCertificates=true',
+    ])('ignores the request for a host that is not on this machine: %s', async (connectionString) => {
+        acceptAddConnectionOnly();
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(mockSaveConnection).toHaveBeenCalledTimes(1);
+        expect(savedConnection().properties.emulatorConfiguration).toBeUndefined();
+        expect(savedConnection().secrets.connectionString).not.toMatch(/tlsAllowInvalid|tlsInsecure/i);
+        expect(lastTelemetry.tlsBypassRequested).toBe('true');
+        expect(lastTelemetry.tlsBypassHonored).toBe('false');
+    });
+
+    it('keeps the exception for a target on this machine', async () => {
+        acceptAddConnectionOnly();
+        const connectionString = 'mongodb://localhost:10260/?tls=true&tlsAllowInvalidCertificates=true';
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(savedConnection().properties.emulatorConfiguration).toEqual({
+            isEmulator: true,
+            disableEmulatorSecurity: true,
+        });
+        expect(savedConnection().secrets.connectionString).not.toMatch(/tlsAllowInvalid/i);
+        expect(lastTelemetry.tlsBypassHonored).toBe('true');
+    });
+
+    it('marks a localhost.<domain> host as neither an emulator nor eligible for the exception', async () => {
+        acceptAddConnectionOnly();
+        const connectionString = 'mongodb://localhost.example.com:10260/?tls=true&tlsAllowInvalidCertificates=true';
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(savedConnection().properties.emulatorConfiguration).toBeUndefined();
     });
 });
 

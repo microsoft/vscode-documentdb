@@ -5,6 +5,7 @@
 
 import { type MongoClientOptions } from 'mongodb';
 import { type CachedClusterCredentials } from '../CredentialCache';
+import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 
 /**
@@ -25,8 +26,14 @@ export class NoAuthHandler implements AuthHandler {
         if (this.clusterCredentials.emulatorConfiguration?.isEmulator) {
             options.serverSelectionTimeoutMS = 4000;
 
-            if (this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity) {
-                // Prevents self signed certificate error for emulator
+            // Prevents self signed certificate error for emulator. Host-gated like the other
+            // auth handlers, so a stored flag never relaxes TLS for a public host.
+            if (
+                resolveAllowInvalidCertificates(
+                    this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity,
+                    this.clusterCredentials.connectionString,
+                )
+            ) {
                 options.tlsAllowInvalidCertificates = true;
             }
         }

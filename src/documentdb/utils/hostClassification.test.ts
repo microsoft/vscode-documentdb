@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { extractHostname, isLocalOrPrivateHost } from './hostClassification';
+import { extractHostname, isLocalOrPrivateHost, isLoopbackHost } from './hostClassification';
 
 describe('hostClassification (TLS-exception gating, design §7.1)', () => {
     describe('extractHostname', () => {
@@ -108,6 +108,43 @@ describe('hostClassification (TLS-exception gating, design §7.1)', () => {
             'devbox', // legitimate single-label local host (no dots at all)
         ])('%s → true', (host) => {
             expect(isLocalOrPrivateHost(host)).toBe(true);
+        });
+    });
+
+    describe('isLoopbackHost', () => {
+        it.each([
+            'localhost',
+            'localhost:10260',
+            'LOCALHOST',
+            'dev.localhost',
+            '127.0.0.1',
+            '127.1.2.3:27017',
+            '[::1]:10260',
+            '::1',
+            '0:0:0:0:0:0:0:1',
+            '[::ffff:127.0.0.1]',
+        ])('treats %s as loopback', (host) => {
+            expect(isLoopbackHost(host)).toBe(true);
+        });
+
+        it.each([
+            'devbox',
+            'mongo-prod',
+            'db.local',
+            '10.0.0.5',
+            '192.168.1.10',
+            '172.16.0.1',
+            '169.254.1.1',
+            '0.0.0.0',
+            '::',
+            'fd00::1',
+            'fe80::1',
+            '[::ffff:10.0.0.1]',
+            'localhost.example.com',
+            'example.com',
+            '',
+        ])('does not treat %s as loopback', (host) => {
+            expect(isLoopbackHost(host)).toBe(false);
         });
     });
 });

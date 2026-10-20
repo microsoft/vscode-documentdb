@@ -9,7 +9,8 @@ import * as vscode from 'vscode';
 import { openLocalQuickStart } from './commands/localQuickStart/openLocalQuickStart';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
-import { canonicalizeTlsException, stripTlsBypassParams } from './documentdb/utils/tlsException';
+import { isLoopbackHost } from './documentdb/utils/hostClassification';
+import { stripTlsBypassParams } from './documentdb/utils/tlsException';
 import { Views } from './documentdb/Views';
 import { API } from './DocumentDBExperiences';
 import { ext } from './extensionVariables';
@@ -328,12 +329,16 @@ async function handleConnectionStringRequest(
 
     // Determine if this is an emulator connection
     const isEmulator = isEmulatorConnection(parsedCS);
-    // TLS exception (§7): only honor allow-invalid when EVERY host is local/private, and strip the
-    // bypass param from the parsed CS so every downstream use (storageId, stored secret, reveal)
-    // uses the canonical form — a public deep link can't silently disable certificate validation,
-    // and emulatorConfiguration is the single source of truth.
-    const disableEmulatorSecurity = canonicalizeTlsException(parsedCS.toString()).disableEmulatorSecurity;
-    stripTlsBypassParams(parsedCS);
+    // TLS exception (§7): a link comes from outside VS Code, so it may only request allow-invalid
+    // certificates for a target on this machine. Private-network, single-word and `.local` hosts
+    // can resolve to other machines and are not eligible here (users can still opt in through the
+    // connection settings). The bypass params are always stripped so every downstream use
+    // (storageId, stored secret, reveal) uses the canonical form, and emulatorConfiguration is the
+    // single source of truth.
+    const { bypassRequested: tlsBypassRequested } = stripTlsBypassParams(parsedCS);
+    const disableEmulatorSecurity = tlsBypassRequested && areAllHostsLoopback(parsedCS);
+    context.telemetry.properties.tlsBypassRequested = String(tlsBypassRequested);
+    context.telemetry.properties.tlsBypassHonored = String(disableEmulatorSecurity);
 
     // Pick the storage zone for this (possibly emulator) connection. The dedicated
     // Emulators zone is being retired (design §4): once the one-time migration has run,
@@ -552,7 +557,14 @@ function validateConnectionString(connectionString: string | undefined): void {
  * Determines if a connection is to a local emulator based on host information
  */
 function isEmulatorConnection(parsedCS: DocumentDBConnectionString): boolean {
-    return parsedCS.hosts?.length > 0 && parsedCS.hosts[0].includes('localhost');
+    return areAllHostsLoopback(parsedCS) && parsedCS.hosts.some((host) => host.toLowerCase().includes('localhost'));
+}
+
+/**
+ * Whether every host in the connection string addresses this machine only.
+ */
+function areAllHostsLoopback(parsedCS: DocumentDBConnectionString): boolean {
+    return parsedCS.hosts?.length > 0 && parsedCS.hosts.every((host) => isLoopbackHost(host));
 }
 
 /**

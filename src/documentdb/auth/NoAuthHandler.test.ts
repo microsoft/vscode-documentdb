@@ -83,4 +83,18 @@ describe('NoAuthHandler', () => {
         expect(options.tlsAllowInvalidCertificates).toBeUndefined();
         expect(options.serverSelectionTimeoutMS).toBe(4000);
     });
+
+    it('does not add tlsAllowInvalidCertificates for a public host even when the stored flag is set', async () => {
+        const handler = new NoAuthHandler(
+            buildCredentials({
+                connectionString: 'mongodb://db.example.com:27017/',
+                connectionStringWithPassword: 'mongodb://db.example.com:27017/',
+                emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
+            }),
+        );
+
+        const { options } = await handler.configureAuth();
+
+        expect(options.tlsAllowInvalidCertificates).toBeUndefined();
+    });
 });
