@@ -19,6 +19,9 @@ vi.mock('vscode', () => ({
     LanguageModelChatMessage: { User: (text: string): { text: string } => ({ text }) },
     l10n: { t: (message: string): string => message },
 }));
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    UserCancelledError: class extends Error {},
+}));
 vi.mock('../../documentdb/ClusterSession', () => ({ ClusterSession: { getSession: mocks.getSession } }));
 vi.mock('../../extensionVariables', () => ({ ext: { outputChannel: { trace: vi.fn() } } }));
 vi.mock('../../services/ai/modelSelection', () => ({ getAvailableModels: mocks.getAvailableModels }));

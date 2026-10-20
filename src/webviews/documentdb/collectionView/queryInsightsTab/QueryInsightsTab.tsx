@@ -37,7 +37,10 @@ import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
+import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
+import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
 import { CollectionViewContext } from '../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../collectionViewController';
 import {
@@ -153,6 +156,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     // None of these need to be in context.
 
     const [showErrorCard, setShowErrorCard] = useState(false);
+    const [selectedModel, setSelectedModel] = useState<AvailableModelInfo>();
 
     /**
      * Subscription handle for the in-flight Stage 3 streaming subscription
@@ -995,10 +999,21 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         // it false.
                                         isLoading={false}
                                         enabled={
-                                            pipeline.kind === 's3Idle' ||
-                                            pipeline.kind === 's3Error' ||
-                                            pipeline.kind === 's3Cancelled'
+                                            !!selectedModel &&
+                                            (pipeline.kind === 's3Idle' ||
+                                                pipeline.kind === 's3Error' ||
+                                                pipeline.kind === 's3Cancelled')
                                         }
+                                        modelPicker={
+                                            <ModelPicker
+                                                compact
+                                                commandType={'find' as CommandType}
+                                                onModelChange={setSelectedModel}
+                                            />
+                                        }
+                                        mayUsePremiumRequests={!selectedModel?.isUtility}
+                                        // WI-7 wires the standalone explorer entry point.
+                                        secondaryLink={false && <Link>{l10n.t('Explore with your own input…')}</Link>}
                                         errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
                                         onGetInsights={handleGetAISuggestions}
                                         onLearnMore={handleLearnMore}
@@ -1024,7 +1039,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <CardStack items={insightCards} visible={insightCards.length > 0} />
 
                         {/* Post-response "Powered by" byline.
-                            Mirrors the (i) + cost-neutral disclosure shown in the pre-invocation
+                            Mirrors the (i) + model-dependent disclosure shown in the pre-invocation
                             card. Token usage measurements are intentionally NOT rendered here:
                             they live in the trace output channel and in telemetry only. Cost
                             (credits) is not surfaced because the stable VS Code Language Model
@@ -1052,18 +1067,26 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                            {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
-                                            <Link
-                                                appearance="subtle"
-                                                onClick={handleLearnMoreUtilityModel}
-                                                inline
-                                                style={{
-                                                    fontSize: tokens.fontSizeBase200,
-                                                    lineHeight: tokens.lineHeightBase200,
-                                                }}
-                                            >
-                                                {l10n.t('Learn more about the utility model used.')}
-                                            </Link>
+                                            {pipeline.kind === 's3Success' &&
+                                            pipeline.model.modelId !== 'copilot-utility' &&
+                                            pipeline.model.modelFamily !== 'copilot-utility' ? (
+                                                l10n.t('The selected model may use premium requests.')
+                                            ) : (
+                                                <>
+                                                    {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
+                                                    <Link
+                                                        appearance="subtle"
+                                                        onClick={handleLearnMoreUtilityModel}
+                                                        inline
+                                                        style={{
+                                                            fontSize: tokens.fontSizeBase200,
+                                                            lineHeight: tokens.lineHeightBase200,
+                                                        }}
+                                                    >
+                                                        {l10n.t('Learn more about the utility model used.')}
+                                                    </Link>
+                                                </>
+                                            )}
                                         </Text>
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                                             {(() => {

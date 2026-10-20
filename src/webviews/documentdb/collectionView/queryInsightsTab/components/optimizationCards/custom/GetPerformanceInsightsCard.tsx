@@ -42,6 +42,10 @@ export interface GetPerformanceInsightsCardProps {
      */
     enabled?: boolean;
 
+    modelPicker?: React.ReactNode;
+    secondaryLink?: React.ReactNode;
+    mayUsePremiumRequests?: boolean;
+
     /**
      * Optional error message. If provided, shows error state with retry button
      */
@@ -99,6 +103,9 @@ export function GetPerformanceInsightsCard({
     recommendation,
     isLoading,
     enabled = true,
+    modelPicker,
+    secondaryLink,
+    mayUsePremiumRequests = false,
     errorMessage,
     onGetInsights,
     onLearnMore,
@@ -181,12 +188,14 @@ export function GetPerformanceInsightsCard({
                             >
                                 {errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}
                             </Button>
+                            {modelPicker}
                             <Button appearance="subtle" onClick={onLearnMore} disabled={!enabled}>
                                 {l10n.t('Learn more about AI Performance Insights')}
                             </Button>
                         </div>
                     )}
-                    {/* Cost-neutral disclosure row.
+                    {secondaryLink}
+                    {/* Model cost disclosure row.
                         Always rendered so users see the disclosure both before clicking and during loading.
                         The "Learn more" link wires to `onLearnMoreUtilityModel` (the utility-model
                         cost-disclosure page), distinct from the general feature `onLearnMore` used by
@@ -203,18 +212,24 @@ export function GetPerformanceInsightsCard({
                     >
                         <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                            {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
-                            <Link
-                                appearance="subtle"
-                                onClick={onLearnMoreUtilityModel}
-                                inline
-                                style={{
-                                    fontSize: tokens.fontSizeBase200,
-                                    lineHeight: tokens.lineHeightBase200,
-                                }}
-                            >
-                                {l10n.t('Learn more about the utility model used.')}
-                            </Link>
+                            {mayUsePremiumRequests ? (
+                                l10n.t('The selected model may use premium requests.')
+                            ) : (
+                                <>
+                                    {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
+                                    <Link
+                                        appearance="subtle"
+                                        onClick={onLearnMoreUtilityModel}
+                                        inline
+                                        style={{
+                                            fontSize: tokens.fontSizeBase200,
+                                            lineHeight: tokens.lineHeightBase200,
+                                        }}
+                                    >
+                                        {l10n.t('Learn more about the utility model used.')}
+                                    </Link>
+                                </>
+                            )}
                         </Text>
                     </div>
                 </div>

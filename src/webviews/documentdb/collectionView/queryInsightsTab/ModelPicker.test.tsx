@@ -6,7 +6,7 @@
 // @vitest-environment jsdom
 
 import { SSRProvider } from '@fluentui/react-components';
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
@@ -28,6 +28,39 @@ const client = {
     },
 };
 vi.mock('../../../_integration/useTrpcClient', () => ({ useTrpcClient: () => client }));
+// jsdom has no layout engine; leave Fluent's floating-popup positioning out of this state/selection test.
+vi.mock('@fluentui/react-components', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@fluentui/react-components')>();
+    return {
+        ...actual,
+        Dropdown: ({
+            children,
+            disabled,
+            value,
+            placeholder,
+            onOptionSelect,
+        }: {
+            children: ReactNode;
+            disabled?: boolean;
+            value: string;
+            placeholder: string;
+            onOptionSelect: (event: React.MouseEvent, data: { optionValue: string }) => void;
+        }): ReactNode => (
+            <div>
+                <button role="combobox" disabled={disabled}>{value || placeholder}</button>
+                <div onClick={(event) => {
+                    const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+                    if (option?.dataset.value && !disabled) {
+                        onOptionSelect(event, { optionValue: option.dataset.value });
+                    }
+                }}>{children}</div>
+            </div>
+        ),
+        Option: ({ children, value }: { children: ReactNode; value: string }): ReactNode => (
+            <button role="option" data-value={value}>{children}</button>
+        ),
+    };
+});
 vi.mock('@vscode/l10n', () => ({
     t: (message: string, ...args: unknown[]): string =>
         message.replace(/\{(\d+)\}/g, (_match, index: string) => String(args[Number(index)])),

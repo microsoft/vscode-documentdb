@@ -129,7 +129,7 @@ branch: dev/tnaum/query-insights-next
     - Compact variant for the tab card, full-width variant for the wizard.
     - _Outcome:_ Added compact/full-width Fluent picker, utility-first options with token counts, persisted-choice/premium hints, basename-only prompt source, and refresh/error/empty states with UI tests.
 
-- [ ] **WI-4: Tab integration**
+- [x] **WI-4: Tab integration**
     - `GetPerformanceInsightsCard`: add optional slots `modelPicker?: ReactNode` and
       `secondaryLink?: ReactNode`. Render the picker in the actions row next to the primary
       button. When the effective model isn't the utility model, the cost-disclosure line reads
@@ -139,6 +139,7 @@ branch: dev/tnaum/query-insights-next
       no-op or be hidden behind `false`).
     - **Checkpoint A** (bundled verification): `npm run build`;
       `npx vitest run src/services src/commands/llmEnhancedCommands src/documentdb/queryInsights src/webviews/documentdb/collectionView`.
+    - _Outcome:_ Integrated the compact picker and optional secondary-link slot (explorer hidden until WI-7); disclosures use the selected model before invocation and actual response identity afterward. Checkpoint A passed: build successful, 63 test files / 1,330 tests passed, zero failures; stopped before Phase B.
 
 ### Phase B: explore without a connection (standalone wizard)
 
@@ -230,10 +231,10 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Plan v2: decisions, org-default research (vscode source) | Lead agent | 11:02 | 11:17 | 15 | Includes WI-0 partial (~5 min) |
 | Plan v3: this file (CONTRIBUTING format, WIs) | Lead agent | 11:23 | 11:35 | 12 | |
 | WI-0 | Coding agent (gpt-6.1-sol) | 11:26 | 11:28 | 2 | Includes instruction/plan reading; checks deferred to A. |
-| WI-1 | Coding agent (gpt-6.1-sol) | 11:28 | 11:29 | 1 | Checks deferred to A. |
+| WI-1 | Coding agent (gpt-6.1-sol) | 11:28 | 11:30 | 2 | Includes the WI-1 commit; checks deferred to A. |
 | WI-2 | Coding agent (gpt-6.1-sol) | 11:30 | 11:31 | 1 | Checks deferred to A; shared RPC tests live under services/ai to join its selector. |
 | WI-3 | Coding agent (gpt-6.1-sol) | 11:31 | 11:34 | 3 | Checks deferred to A. |
-| WI-4 + Checkpoint A | | | | | |
+| WI-4 + Checkpoint A | Coding agent (gpt-6.1-sol) | 11:34 | 11:42 | 8 | Includes restoring missing dependencies and fixing new test fixtures; final build and all 1,330 targeted tests passed. |
 | WI-5 | | | | | |
 | WI-6 | | | | | |
 | WI-7 + Checkpoint B | | | | | |
@@ -245,3 +246,13 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | --- | --- | --- |
 | — | Coding started (WI-0, partial) before the operator had reviewed the plan. | Autopilot over-reach. Stopped on request; the partial work is kept and finished in WI-0. |
 | WI-3 | Made `formatTokenCount` browser-safe with an optional locale argument; host logging passes the VS Code locale explicitly. | The existing utility imported `vscode` at runtime, which cannot ship in a webview bundle. Reusing a pure helper avoids duplicating formatting while preserving host output. |
+| Checkpoint A | Restored lockfile dependencies with `npm ci` after the initial commands could not start due to missing packages. | This worktree had no installed dependency set; no dependency manifests or lockfile changed. |
+| Checkpoint A | The new picker selection test replaces only Fluent's floating dropdown/option layer with a native test stand-in. | Opening the real popup in jsdom (no layout engine) timed out; picker state, RPC calls, ordering, token labels, hints, and disclosure tests remain exercised. Also isolated the new host test's cancellation-error mock. No existing snapshots or TDD contracts changed. |
+
+## Phase A verification outcome
+
+- Case 1 only: `npm run build` passed; the exact Checkpoint A Vitest selector passed
+  **63 files, 1,330 tests, zero failures** (final run 2026-10-20, 11:41 UTC).
+- Total Phase A coding/checkpoint time: **16 minutes** (WI-0 2 + WI-1 2 + WI-2 1 + WI-3 3 + WI-4 8).
+- No push; no lint, formatting, localization generation, packaging, live model request, or manual UI smoke performed.
+- Phase B (WI-5 onward) remains untouched. The standalone explorer link is intentionally hidden.
