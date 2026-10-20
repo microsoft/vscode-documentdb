@@ -116,9 +116,10 @@ function OptionSection({
 }
 
 const IDLE = 'Idle · saved choice GPT-6.1 Sol (medium cost)';
-const UTILITY = 'Idle · Copilot utility (free)';
+const UTILITY = 'Idle · Copilot utility';
 
 function CurrentDesign(): JSX.Element {
+    const [promptLabel, setPromptLabel] = useState<string>();
     const [selected, setSelected] = useState<AvailableModelInfo>();
     const noop = (): void => undefined;
     return (
@@ -126,9 +127,10 @@ function CurrentDesign(): JSX.Element {
             bodyText={BODY_TEXT}
             isLoading={false}
             enabled={!!selected}
-            modelPicker={<ModelPicker compact commandType={'find' as CommandType} onModelChange={setSelected} />}
+            modelPicker={<ModelPicker compact commandType={'find' as CommandType} onModelChange={setSelected} onPromptLabelChange={setPromptLabel} />}
+            promptLabel={promptLabel}
             mayUsePremiumRequests={!selected?.isUtility}
-            secondaryLink={<Link>Explore with your own input…</Link>}
+            secondaryLink={<Link inline>Explore with your own input…</Link>}
             onGetInsights={noop}
             onLearnMore={noop}
             onCancel={noop}
@@ -148,7 +150,7 @@ export function QueryInsightsDesignPreview(): JSX.Element {
                 <Text size={300} className={styles.rationale}>
                     Dev-only design preview of the “AI Performance Insights” card in the Collection View. Mock data,
                     nothing is sent. Every option keeps the primary action, the model and how to change it, the cost
-                    tier (utility = free), the prompt source, “Explore with your own input…”, “Learn more” and the
+                    tier (utility: no badge, the careful footnote instead), the prompt source, “Explore with your own input…”, “Learn more” and the
                     “AI responses may be inaccurate” disclaimer. Menus and popovers are interactive; the “open”
                     frames show a static copy so they can be compared side by side.
                 </Text>
@@ -204,8 +206,8 @@ export function QueryInsightsDesignPreview(): JSX.Element {
             </OptionSection>
 
             <OptionSection
-                heading="Current — shipped POC layout"
-                rationale="The real GetPerformanceInsightsCard with the compact ModelPicker, fed by the same mock models through ai.getAvailableModels. Shown for comparison: the dropdown breaks the button row, premium requests appear twice and the label stack is uneven."
+                heading="Shipped — Option A in the real card"
+                rationale="The real GetPerformanceInsightsCard with the compact ModelPicker (now the Option A pill), fed by the same mock models through ai.getAvailableModels. The utility model shows no cost badge; the footnote carries the careful wording."
             >
                 <Frame caption={IDLE}><CurrentDesign /></Frame>
             </OptionSection>

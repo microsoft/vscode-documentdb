@@ -148,6 +148,7 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const [showErrorCard, setShowErrorCard] = useState(false);
     const [selectedModel, setSelectedModel] = useState<AvailableModelInfo>();
+    const [promptLabel, setPromptLabel] = useState<string>();
 
     /**
      * Subscription handle for the in-flight Stage 3 streaming subscription
@@ -1013,11 +1014,13 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                 compact
                                                 commandType={source.commandType ?? 'find' as CommandType}
                                                 onModelChange={setSelectedModel}
+                                                onPromptLabelChange={setPromptLabel}
                                             />
                                         }
+                                        promptLabel={promptLabel}
                                         mayUsePremiumRequests={!selectedModel?.isUtility}
                                         secondaryLink={source.explore && (
-                                            <Link onClick={() => void source.explore?.()}>
+                                            <Link inline onClick={() => void source.explore?.()}>
                                                 {l10n.t('Explore with your own input…')}
                                             </Link>
                                         )}

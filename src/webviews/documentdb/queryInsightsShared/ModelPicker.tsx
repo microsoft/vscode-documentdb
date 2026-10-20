@@ -7,7 +7,14 @@ import {
     Badge,
     Button,
     Dropdown,
-    Field,
+    Menu,
+    MenuButton,
+    MenuGroup,
+    MenuGroupHeader,
+    MenuItemRadio,
+    MenuList,
+    MenuPopover,
+    MenuTrigger,
     Option,
     OptionGroup,
     Table,
@@ -19,7 +26,6 @@ import {
     Tooltip,
     useId,
 } from '@fluentui/react-components';
-import { InfoRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import type { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
@@ -42,6 +48,8 @@ export interface ModelPickerProps {
     disabled?: boolean;
     /** Undefined while loading/saving, or when no model is available. */
     onModelChange?: (model: AvailableModelInfo | undefined) => void;
+    /** Compact variant only: the prompt source label, so the host card can show it in its footer. */
+    onPromptLabelChange?: (label: string | undefined) => void;
 }
 
 function categoryLabel(category: string | undefined): string {
@@ -133,7 +141,12 @@ function modelFacts(model: AvailableModelInfo, promptLabel: string | undefined):
         {
             key: 'cost',
             label: l10n.t('Cost'),
-            value: model.priceCategory || hasCosts ? (
+            value: model.isUtility ? (
+                <div className="query-insights-model-cost">
+                    <Text>{l10n.t('No additional cost for most GitHub Copilot subscribers.')}</Text>
+                    <CostGrid model={model} />
+                </div>
+            ) : model.priceCategory || hasCosts ? (
                 <div className="query-insights-model-cost">
                     <ModelCostBadge category={model.priceCategory} />
                     <CostGrid model={model} />
@@ -182,6 +195,7 @@ export function ModelPicker({
     compact = false,
     disabled = false,
     onModelChange,
+    onPromptLabelChange,
 }: ModelPickerProps): JSX.Element {
     const client = useTrpcClient();
     const dropdownLabelId = useId('query-insights-model-label');
@@ -193,6 +207,15 @@ export function ModelPicker({
     const [refreshKey, setRefreshKey] = useState(0);
     const mounted = useRef(false);
     const selected = available?.models.find((model) => model.id === available.effectiveModelId);
+    const promptLabelForCallback = promptSource
+        ? promptSource.source === 'custom-file'
+            ? l10n.t('Custom prompt {0}', promptSource.path?.split(/[/\\]/).pop() ?? '')
+            : l10n.t('Built-in prompt')
+        : undefined;
+
+    useEffect(() => {
+        onPromptLabelChange?.(promptLabelForCallback);
+    }, [promptLabelForCallback, onPromptLabelChange]);
 
     useEffect(() => {
         onModelChange?.(loading || saving ? undefined : selected);
@@ -281,7 +304,7 @@ export function ModelPicker({
                 <span>{model.name}</span>
                 <span className="query-insights-model-option-meta">
                     <Text size={200} className="query-insights-model-muted">
-                        {[model.pricing, model.maxInputTokens > 0 ? formatTokenCount(model.maxInputTokens, navigator.language) : undefined].filter(Boolean).join(' · ')}
+                        {[model.isUtility ? undefined : model.pricing, model.maxInputTokens > 0 ? formatTokenCount(model.maxInputTokens, navigator.language) : undefined].filter(Boolean).join(' · ')}
                     </Text>
                     <Badge appearance="tint" shape="rounded" size="small">
                         {model.isUtility ? l10n.t('Utility') : categoryLabel(model.category)}
@@ -325,32 +348,77 @@ export function ModelPicker({
     );
 
     if (compact) {
+        // Option A (Phase F): a VS Code chat-style model pill next to the primary action.
+        const groups = [
+            { key: 'utility', label: l10n.t('Utility'), models: utility },
+            ...['powerful', 'versatile', 'lightweight', 'other'].map((category) => ({
+                key: category,
+                label: categoryLabel(category),
+                models: others.filter((model) =>
+                    (['powerful', 'versatile', 'lightweight'].includes(model.category ?? '') ? model.category : 'other') === category),
+            })),
+        ].filter((group) => group.models.length > 0);
+        const pillLabel = selected
+            ? l10n.t('Copilot model: {0}', selected.name)
+            : loading ? l10n.t('Loading models…') : l10n.t('No Copilot models available');
         return (
-            <div className="query-insights-model-picker query-insights-model-picker-compact">
-                <Field label={l10n.t('Copilot model')}>{dropdown}</Field>
-                {selected && (
-                    <div className="query-insights-model-compact-details">
-                        {selectionNote}
-                        <ModelCostBadge category={selected.priceCategory} />
-                        <Tooltip
-                            content={<FactList facts={modelFacts(selected, promptLabel)} />}
-                            relationship="description"
-                        >
-                            <Button appearance="subtle" size="small" icon={<InfoRegular />} aria-label={l10n.t('Selected model details')} />
-                        </Tooltip>
-                    </div>
+            <span className="query-insights-model-pill">
+                <Menu
+                    positioning="below-start"
+                    hasCheckmarks
+                    checkedValues={{ model: selected ? [selected.id] : [] }}
+                    onCheckedValueChange={(_event, data) => {
+                        const modelId = data.checkedItems[0];
+                        if (data.name === 'model' && modelId && modelId !== selected?.id) {
+                            void selectModel(modelId);
+                        }
+                    }}
+                >
+                    <Tooltip
+                        content={selected ? <FactList facts={modelFacts(selected, promptLabel)} /> : pillLabel}
+                        relationship="description"
+                    >
+                        <MenuTrigger disableButtonEnhancement>
+                            <MenuButton
+                                appearance="subtle"
+                                aria-label={pillLabel}
+                                disabled={disabled || loading || saving || models.length === 0}
+                            >
+                                <span className="query-insights-model-pill-content">
+                                    {selected?.name ?? pillLabel}
+                                    {selected && !selected.isUtility && <ModelCostBadge category={selected.priceCategory} />}
+                                </span>
+                            </MenuButton>
+                        </MenuTrigger>
+                    </Tooltip>
+                    <MenuPopover>
+                        <MenuList>
+                            {groups.map((group) => (
+                                <MenuGroup key={group.key}>
+                                    <MenuGroupHeader>{group.label}</MenuGroupHeader>
+                                    {group.models.map((model) => (
+                                        <MenuItemRadio
+                                            key={model.id}
+                                            name="model"
+                                            value={model.id}
+                                            secondaryContent={!model.isUtility ? <ModelCostBadge category={model.priceCategory} /> : undefined}
+                                        >
+                                            {model.name}
+                                        </MenuItemRadio>
+                                    ))}
+                                </MenuGroup>
+                            ))}
+                        </MenuList>
+                    </MenuPopover>
+                </Menu>
+                {error && <Text size={200}>{error}</Text>}
+                {!loading && models.length === 0 && (
+                    <Button appearance="subtle" size="small" onClick={() => setRefreshKey((value) => value + 1)}>
+                        {l10n.t('Refresh models')}
+                    </Button>
                 )}
-                {promptLabel && (
-                    <Text size={200} className="query-insights-model-muted">{l10n.t('Prompt: {0}', promptLabel)}</Text>
-                )}
-            {error && <Text size={200}>{error}</Text>}
-            {!loading && models.length === 0 && (
-                <Button appearance="subtle" size="small" onClick={() => setRefreshKey((value) => value + 1)}>
-                    {l10n.t('Refresh models')}
-                </Button>
-            )}
-            <Announcer when={!!error} message={error ?? ''} />
-            </div>
+                <Announcer when={!!error} message={error ?? ''} />
+            </span>
         );
     }
 

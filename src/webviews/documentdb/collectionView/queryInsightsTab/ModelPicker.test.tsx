@@ -97,24 +97,31 @@ describe('Shared Query Insights ModelPicker', () => {
         host.remove();
     });
 
-    async function renderPicker(onModelChange = vi.fn(), compact = false): Promise<void> {
+    async function renderPicker(onModelChange = vi.fn(), compact = false, onPromptLabelChange = vi.fn()): Promise<void> {
         await act(async () => {
             root.render(
                 <SSRProvider>
-                    <ModelPicker commandType={'find' as CommandType} compact={compact} onModelChange={onModelChange} />
+                    <ModelPicker
+                        commandType={'find' as CommandType}
+                        compact={compact}
+                        onModelChange={onModelChange}
+                        onPromptLabelChange={onPromptLabelChange}
+                    />
                 </SSRProvider>,
             );
         });
     }
 
-    it('shows the effective model, reason, premium hint and only the custom prompt basename', async () => {
+    it('renders the compact variant as a model pill and reports only the custom prompt basename', async () => {
         const onChange = vi.fn();
-        await renderPicker(onChange, true);
-        expect(host.textContent).toContain('Default: first available model · May use premium requests');
-        expect(host.textContent).toContain('Prompt: Custom file private.md');
+        const onPrompt = vi.fn();
+        await renderPicker(onChange, true, onPrompt);
+        const pill = host.querySelector<HTMLButtonElement>('.query-insights-model-pill button');
+        expect(pill?.getAttribute('aria-label')).toBe('Copilot model: Premium model');
+        expect(pill?.textContent).toBe('Premium model');
+        expect(onPrompt).toHaveBeenLastCalledWith('Custom prompt private.md');
         expect(host.textContent).not.toContain('._local');
         expect(onChange).toHaveBeenLastCalledWith(available.models[0]);
-        expect(host.querySelector('.query-insights-model-picker-compact')).not.toBeNull();
     });
 
     it('orders utility first, displays token counts and persists a selection', async () => {
@@ -176,14 +183,22 @@ describe('Shared Query Insights ModelPicker', () => {
         expect(host.textContent).toContain('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.');
     });
 
-    it('keeps the compact variant to one line plus an accessible details tooltip, without a toggle', async () => {
+    it('shows the cost badge on the pill for priced models and never a "Free" label for the utility model', async () => {
         mocks.getAvailableModels.mockResolvedValue({
             ...available, models: [{ ...available.models[0], priceCategory: 'very_high' }, available.models[1]],
         });
         await renderPicker(vi.fn(), true);
-        expect(host.querySelector('.query-insights-model-compact-details')?.textContent).toContain('Very high cost');
-        expect(host.querySelector('button[aria-label="Selected model details"]')).not.toBeNull();
-        expect(host.querySelector('details')).toBeNull();
+        expect(host.querySelector('.query-insights-model-pill')?.textContent).toContain('Very high cost');
+
+        mocks.getAvailableModels.mockResolvedValue({
+            ...available, effectiveModelId: 'utility',
+            models: [available.models[0], { ...available.models[1], pricing: 'Free', priceCategory: 'low' }],
+        });
+        await act(async () => root.unmount());
+        root = createRoot(host);
+        await renderPicker(vi.fn(), true);
+        expect(host.querySelector('.query-insights-model-pill')?.textContent).toBe('Utility model');
+        expect(host.textContent).not.toMatch(/free/i);
     });
 
     it('says explicitly when a model reports no pricing instead of hiding the row', async () => {

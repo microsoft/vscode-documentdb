@@ -111,7 +111,7 @@ function toInfo(model: vscode.LanguageModelChat): AvailableModelInfo {
         ...readRuntimeModelMetadata(model),
         id: model.id,
         name: isUtilityModel(model)
-            ? vscode.l10n.t('{0} (utility, free)', model.name || model.id)
+            ? vscode.l10n.t('{0} (utility)', model.name || model.id)
             : model.name || model.id,
         family: model.family,
         vendor: model.vendor,

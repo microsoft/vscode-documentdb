@@ -83,7 +83,7 @@ export function contextLabel(model: AvailableModelInfo): string {
 }
 
 export function costLabel(model: AvailableModelInfo): string | undefined {
-    if (model.isUtility) return 'Free';
+    if (model.isUtility) return undefined;
     switch (model.priceCategory) {
         case 'low': return 'Low cost';
         case 'medium': return 'Medium cost';
@@ -101,7 +101,7 @@ export function costExplanation(model: AvailableModelInfo): string {
         : 'Uses premium requests from your Copilot plan.';
 }
 
-/** House style; VS Code tints: low/medium (and Free) neutral, high/very_high warning. */
+/** House style; VS Code tints: low/medium neutral, utility has no badge, high/very_high warning. */
 export function CostBadge({ model }: { model: AvailableModelInfo }): JSX.Element | null {
     const label = costLabel(model);
     if (!label) return null;

@@ -9,8 +9,25 @@
 
     &-actions {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 8px;
         flex-wrap: wrap;
+    }
+
+    &-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        column-gap: var(--spacingHorizontalS);
+        row-gap: var(--spacingVerticalXXS);
+        margin-top: var(--spacingVerticalS);
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+        line-height: var(--lineHeightBase200);
+
+        .fui-Link {
+            font-size: inherit;
+            line-height: inherit;
+        }
     }
 }

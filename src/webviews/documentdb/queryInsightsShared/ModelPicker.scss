@@ -143,3 +143,18 @@
     font-family: var(--fontFamilyMonospace);
     overflow-wrap: anywhere;
 }
+
+// Option A: model pill beside the primary action.
+.query-insights-model-pill {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacingHorizontalS);
+}
+
+.query-insights-model-pill-content {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
+    font-weight: var(--fontWeightRegular);
+}

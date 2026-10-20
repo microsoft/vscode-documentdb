@@ -16,6 +16,7 @@ import {
 } from '@fluentui/react-components';
 import { InfoRegular, SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
+import { Fragment } from 'react';
 import type * as React from 'react';
 import { Announcer } from '../../../../../../components/accessibility';
 import '../baseOptimizationCard.scss';
@@ -43,6 +44,8 @@ export interface GetPerformanceInsightsCardProps {
     enabled?: boolean;
 
     modelPicker?: React.ReactNode;
+    /** Prompt source shown first in the muted meta line, e.g. "Built-in prompt". */
+    promptLabel?: string;
     secondaryLink?: React.ReactNode;
     mayUsePremiumRequests?: boolean;
 
@@ -104,6 +107,7 @@ export function GetPerformanceInsightsCard({
     isLoading,
     enabled = true,
     modelPicker,
+    promptLabel,
     secondaryLink,
     mayUsePremiumRequests = false,
     errorMessage,
@@ -189,12 +193,31 @@ export function GetPerformanceInsightsCard({
                                 {errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}
                             </Button>
                             {modelPicker}
-                            <Button appearance="subtle" onClick={onLearnMore} disabled={!enabled}>
-                                {l10n.t('Learn more about AI Performance Insights')}
-                            </Button>
                         </div>
                     )}
-                    {secondaryLink}
+                    {/* One muted meta line: prompt source · explore · learn more (design Option A). */}
+                    <div className="get-performance-insights-card-meta">
+                        {[
+                            promptLabel ? <span key="prompt">{promptLabel}</span> : undefined,
+                            secondaryLink ? <span key="explore">{secondaryLink}</span> : undefined,
+                            <Link
+                                key="learn"
+                                inline
+                                onClick={onLearnMore}
+                                disabled={!enabled}
+                                aria-label={l10n.t('Learn more about AI Performance Insights')}
+                            >
+                                {l10n.t('Learn more')}
+                            </Link>,
+                        ]
+                            .filter(Boolean)
+                            .map((item, index) => (
+                                <Fragment key={index}>
+                                    {index > 0 && <span aria-hidden="true">·</span>}
+                                    {item}
+                                </Fragment>
+                            ))}
+                    </div>
                     {/* Model cost disclosure row.
                         Always rendered so users see the disclosure both before clicking and during loading.
                         The "Learn more" link wires to `onLearnMoreUtilityModel` (the utility-model

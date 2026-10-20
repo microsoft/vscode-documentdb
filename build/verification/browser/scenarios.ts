@@ -288,13 +288,20 @@ export const scenarios = {
             rpc: {
                 ...explorerBase.rpc,
                 'ai.getAvailableModels': { type: 'query', results: [previewAvailableModels] },
+                'ai.setSelectedModel': {
+                    type: 'mutation',
+                    results: [{
+                        ...previewAvailableModels,
+                        savedModelId: 'copilot-utility', effectiveModelId: 'copilot-utility', effectiveReason: 'saved',
+                    }],
+                },
             },
             readiness: {
                 content: [
                     'Option A — Model pill in the actions row', 'Option B — Split button',
                     'Option C — Settings footer strip', 'Option D — Native VS Code quick pick',
-                    'Option E — Header chip with a settings popover', 'Current — shipped POC layout',
-                    'Saved choice',
+                    'Option E — Header chip with a settings popover', 'Shipped — Option A in the real card',
+                    'Built-in prompt',
                 ],
                 noProgressbar: true,
             },
