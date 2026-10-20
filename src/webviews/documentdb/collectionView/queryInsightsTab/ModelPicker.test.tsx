@@ -59,6 +59,9 @@ vi.mock('@fluentui/react-components', async (importOriginal) => {
         Option: ({ children, value }: { children: ReactNode; value: string }): ReactNode => (
             <button role="option" data-value={value}>{children}</button>
         ),
+        OptionGroup: ({ children, label }: { children: ReactNode; label: string }): ReactNode => (
+            <div role="group" aria-label={label}>{children}</div>
+        ),
     };
 });
 vi.mock('@vscode/l10n', () => ({
@@ -119,7 +122,7 @@ describe('Shared Query Insights ModelPicker', () => {
         await renderPicker();
         await act(async () => host.querySelector<HTMLButtonElement>('[role="combobox"]')?.click());
         const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
-        expect(options.map((option) => option.textContent)).toEqual(['Utility model64K tokens', 'Premium model128K tokens']);
+        expect(options.map((option) => option.textContent)).toEqual(['Utility model64KUtility', 'Premium model128KOther']);
         await act(async () => options[0].click());
         expect(mocks.setSelectedModel).toHaveBeenCalledWith({ modelId: 'utility' });
         expect(host.textContent).toContain('Using Utility model · Saved choice');
@@ -135,5 +138,39 @@ describe('Shared Query Insights ModelPicker', () => {
         expect(host.textContent).toContain('Prompt: built-in');
         expect(host.querySelector<HTMLButtonElement>('[role="combobox"]')?.disabled).toBe(true);
         expect(onChange).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it('groups non-utility models and shows only present selected-model metadata', async () => {
+        mocks.getAvailableModels.mockResolvedValue({
+            ...available,
+            models: [
+                { ...available.models[0], category: 'powerful', pricing: '1x', priceCategory: 'high',
+                    inputCost: 0, outputCost: 6, cacheCost: 0.25, longContextInputCost: 4,
+                    supportsToolCalling: true, supportsImageToText: false },
+                available.models[1],
+                { ...available.models[0], id: 'light', name: 'Light model', category: 'lightweight' },
+                { ...available.models[0], id: 'future', name: 'Future model', category: 'new-category' },
+            ],
+        });
+        await renderPicker();
+        expect([...host.querySelectorAll('[role="option"]')].map((element) => element.getAttribute('data-value')))
+            .toEqual(['utility', 'premium', 'light', 'future']);
+        expect([...host.querySelectorAll('[role="group"]')].map((element) => element.getAttribute('aria-label')))
+            .toEqual(['Powerful', 'Lightweight', 'Other']);
+        const details = host.querySelector('.query-insights-model-details');
+        expect(details?.textContent).toContain('1x · Price tier 3/4');
+        expect(details?.textContent).toContain('AI credits per 1M tokens');
+        expect(details?.textContent).toContain('Input0');
+        expect(details?.textContent).toContain('Long-context input4');
+        expect(details?.textContent).not.toContain('Cache write');
+        expect(details?.textContent).toContain('Tools supported · No image input');
+        expect(details?.textContent).toContain('premium / 1 / premium');
+    });
+
+    it('uses a one-line summary and accessible details tooltip trigger in the compact variant', async () => {
+        await renderPicker(vi.fn(), true);
+        expect(host.querySelector('.query-insights-model-compact-details')?.textContent).toContain('128K context');
+        expect(host.querySelector('button[aria-label="Selected model details"]')).not.toBeNull();
+        expect(host.querySelector('.query-insights-model-details')).toBeNull();
     });
 });

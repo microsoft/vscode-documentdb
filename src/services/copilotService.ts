@@ -767,9 +767,10 @@ export class CopilotService {
      * Dumps the selected model's stable metadata (and any other own enumerable
      * properties present at runtime) to the trace stream.
      *
-     * Pricing and cost-per-token fields live on the proposed
-     * `languageModelPricing` API and are intentionally **not** consumed here —
-     * the extension stays on stable VS Code APIs. This dump is purely a
+     * Shipped code deliberately avoided the proposed `languageModelPricing`
+     * API. The Query Insights POC now reads its runtime fields defensively in
+     * modelSelection; shipping that needs finalization or proposal enablement.
+     * This dump remains purely a
      * diagnostic so we can observe what the runtime exposes today (and tell
      * when richer information becomes available on stable in the future)
      * without depending on it.
@@ -797,9 +798,7 @@ export class CopilotService {
         };
         ext.outputChannel.trace(l10n.t('[Copilot] Selected model metadata: {0}', JSON.stringify(stable)));
 
-        // 2) Best-effort runtime introspection. We never read pricing or other
-        // proposed-API fields by name; we only enumerate whatever the host
-        // happens to expose and skip methods. This is observation only.
+        // 2) Best-effort diagnostic introspection, skipping methods.
         try {
             const own: Record<string, unknown> = {};
             for (const [key, value] of Object.entries(model as unknown as Record<string, unknown>)) {

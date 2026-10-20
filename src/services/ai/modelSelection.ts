@@ -34,6 +34,19 @@ export interface AvailableModelInfo {
     version: string;
     maxInputTokens: number;
     isUtility: boolean;
+    pricing?: string;
+    priceCategory?: string;
+    category?: string;
+    inputCost?: number;
+    outputCost?: number;
+    cacheCost?: number;
+    cacheWriteCost?: number;
+    longContextInputCost?: number;
+    longContextOutputCost?: number;
+    longContextCacheCost?: number;
+    longContextCacheWriteCost?: number;
+    supportsToolCalling?: boolean;
+    supportsImageToText?: boolean;
 }
 
 export interface AvailableModelsResult {
@@ -69,6 +82,7 @@ async function listCopilotModels(): Promise<vscode.LanguageModelChat[]> {
 
 function toInfo(model: vscode.LanguageModelChat): AvailableModelInfo {
     return {
+        ...readRuntimeModelMetadata(model),
         id: model.id,
         name: isUtilityModel(model)
             ? vscode.l10n.t('{0} (utility, free)', model.name || model.id)
@@ -79,6 +93,31 @@ function toInfo(model: vscode.LanguageModelChat): AvailableModelInfo {
         maxInputTokens: model.maxInputTokens,
         isUtility: isUtilityModel(model),
     };
+}
+
+/** POC only: these runtime properties are typed by the proposed pricing API (F7). */
+function readRuntimeModelMetadata(value: unknown): Partial<AvailableModelInfo> {
+    if (typeof value !== 'object' || value === null) return {};
+    const model = value as Record<string, unknown>;
+    const metadata: Partial<AvailableModelInfo> = {};
+    for (const key of ['pricing', 'priceCategory', 'category'] as const) {
+        if (typeof model[key] === 'string') metadata[key] = model[key];
+    }
+    for (const key of [
+        'inputCost', 'outputCost', 'cacheCost', 'cacheWriteCost',
+        'longContextInputCost', 'longContextOutputCost', 'longContextCacheCost', 'longContextCacheWriteCost',
+    ] as const) {
+        const cost = model[key];
+        if (typeof cost === 'number' && Number.isFinite(cost) && cost >= 0) metadata[key] = cost;
+    }
+    const capabilities: unknown = model.capabilities;
+    if (typeof capabilities === 'object' && capabilities !== null) {
+        const record = capabilities as Record<string, unknown>;
+        for (const key of ['supportsToolCalling', 'supportsImageToText'] as const) {
+            if (typeof record[key] === 'boolean') metadata[key] = record[key];
+        }
+    }
+    return metadata;
 }
 
 export function getSavedModelId(): string | null {

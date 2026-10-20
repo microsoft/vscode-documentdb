@@ -356,12 +356,16 @@ at Checkpoint E. No push, lint, prettier-fix, l10n or package; nothing under `._
       usage wins, malformed/missing data falls back to estimates. Credits/reported counts reach
       telemetry and both Stage 3 completions/reducer/byline; formatting and stream tests added.
       Verification deferred to E.
-- [ ] **WI-15: Richer model info in the picker**
+- [x] **WI-15: Richer model info in the picker**
     - Defensive F7 metadata + version on `AvailableModelInfo`. Utility first; other models
       grouped by category when present. Name left, price/context and rounded tint badge right.
     - Full selected-model details; compact summary + information tooltip with the same details.
       Only present prices/costs/context/capabilities/identity appear. Retain choice/prompt/premium
       hints; theme tokens only, all three themes.
+    - _Outcome:_ Added guarded runtime price/cost/category/capability metadata, utility-first
+      category groups, muted option metadata/tint badges and selected-model details (full panel
+      or compact summary/info tooltip). Added malformed/frozen metadata and picker tests;
+      enriched the synthetic L2 utility fixture. Checks deferred to E.
 - [ ] **WI-16: Slim Analyze header**
     - One wrapping muted facts row: Reconfigure back arrow (inputs kept), command tint badge,
       monospace namespace, cluster type, model and prompt. No dropdown or Re-run; reconfigure
@@ -502,12 +506,14 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Phase D review (lead) | Lead agent | 15:43 | 15:47 | 4 | Screenshots reviewed; count cells shortened to "Not applicable" (full text kept in tooltip) because the long value clipped in the right column; build + 143 targeted tests passed |
 | Badge style + Required tag (lead) | Lead agent | 16:22 | 16:27 | 5 | Operator feedback; build + 143 targeted tests passed; Welcome + Analyze checked in the L2 browser |
 | WI-14 | Coding agent (gpt-6.1-sol) | 16:35 | 16:37 | 2 | Plan/F7/F8, stable usage data parts, telemetry and byline; checks deferred to E. |
+| WI-15 | Coding agent (gpt-6.1-sol) | 16:37 | 16:39 | 2 | Rich metadata, grouped options, details panel/tooltip and tests; checks deferred to E. |
 
 ## Deviation log
 
 | WI | Deviation | Rationale |
 | --- | --- | --- |
 | WI-14 | Both routers and the reducer already forward the entire usage object, so only the intervening shared usage shapes needed extending. Client-side counting runs only for missing provider counts. | Avoids disturbing the existing streaming lifecycle or adding redundant count requests; provider totals (including reasoning/overhead) remain authoritative. |
+| WI-15 | POC deliberately reads pricing properties that the shipped code avoided (see `copilotService.ts` comments); no proposal is enabled. Shipping this requires API finalization or enabling `languageModelPricing`. `version` was already in `AvailableModelInfo`. Unknown categories are grouped as Other; unknown price tiers remain visible as text. | F7 establishes plain property access but not a stable API contract. Defensive optional reads let the POC explore metadata without pretending it is ready to ship. |
 | — | Coding started (WI-0, partial) before the operator had reviewed the plan. | Autopilot over-reach. Stopped on request; the partial work is kept and finished in WI-0. |
 | WI-5 | Keep the existing `QueryInsightsState` union and transition helpers; expose pipeline + dispatch on the adapter. Standalone synthesizes Stage 1 from the supplied explain. | Avoids moving Collection View state/prefetch or duplicating the layout. The standalone holder can use ordinary `useState`; synthesizing Stage 1 preserves all existing sequencing/plan-summary behaviour instead of special-casing a skipped stage. Common URL/error/model RPCs remain shared directly; only data/session operations move behind the adapter. |
 | WI-6 | The standalone subscription reuses the parser/service/event types but has a small separate streaming loop; no connected completion-event telemetry or survey activity. | Extracting the connected loop would disturb its detailed session telemetry/timing instrumentation. Copying the essential event lifecycle is lower risk for a POC; all cancellation paths still abort the model and both inputs are analyzed with one shared pure Stage 2 helper. |

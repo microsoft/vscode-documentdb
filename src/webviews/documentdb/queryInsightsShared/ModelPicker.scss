@@ -31,3 +31,42 @@
     gap: 10px;
     width: 100%;
 }
+
+.query-insights-model-option-meta,
+.query-insights-model-compact-details {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.query-insights-model-option-meta {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.query-insights-model-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+    border-radius: 4px;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+}
+
+.query-insights-model-costs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 0;
+    font-size: 12px;
+
+    > div { display: flex; gap: 6px; }
+    dd { margin: 0; }
+}
+
+.query-insights-model-identity {
+    font-family: var(--vscode-editor-font-family);
+    overflow-wrap: anywhere;
+}
