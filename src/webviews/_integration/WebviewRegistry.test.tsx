@@ -16,6 +16,7 @@ const moduleLoads = vi.hoisted(() => ({
     documentView: vi.fn(() => ({ DocumentView: (): string => 'documentView' })),
     localQuickStart: vi.fn(() => ({ LocalQuickStart: (): string => 'localQuickStart' })),
     atlasCredentials: vi.fn(() => ({ AtlasCredentialsView: (): string => 'atlasCredentials' })),
+    queryInsightsStandalone: vi.fn(() => ({ QueryInsightsStandalone: (): string => 'queryInsightsStandalone' })),
 }));
 
 vi.mock('../documentdb/clusterDashboard/ClusterDashboard', moduleLoads.clusterDashboard);
@@ -23,13 +24,14 @@ vi.mock('../documentdb/collectionView/CollectionView', moduleLoads.collectionVie
 vi.mock('../documentdb/documentView/documentView', moduleLoads.documentView);
 vi.mock('../documentdb/localQuickStart/LocalQuickStart', moduleLoads.localQuickStart);
 vi.mock('../documentdb/atlasCredentials/AtlasCredentialsView', moduleLoads.atlasCredentials);
+vi.mock('../documentdb/queryInsightsStandalone/QueryInsightsStandalone', moduleLoads.queryInsightsStandalone);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('WebviewRegistry', () => {
     it('loads only the selected root module and renders each named export through Suspense', async () => {
         expectTypeOf<WebviewName>().toEqualTypeOf<
-            'clusterDashboard' | 'collectionView' | 'documentView' | 'localQuickStart' | 'atlasCredentials'
+            'clusterDashboard' | 'collectionView' | 'documentView' | 'localQuickStart' | 'atlasCredentials' | 'queryInsightsStandalone'
         >();
         expect(Object.keys(WebviewRegistry).sort()).toEqual(Object.keys(moduleLoads).sort());
         for (const load of Object.values(moduleLoads)) {
@@ -41,6 +43,7 @@ describe('WebviewRegistry', () => {
         const root = createRoot(host);
         const loaded = new Set<WebviewName>();
         const names: WebviewName[] = [
+            'queryInsightsStandalone',
             'atlasCredentials',
             'localQuickStart',
             'documentView',

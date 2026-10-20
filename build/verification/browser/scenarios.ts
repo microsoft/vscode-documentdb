@@ -144,6 +144,30 @@ function dockerMissing(
 }
 
 export const scenarios = {
+    queryInsightsStandalone: {
+        default: defaultScenario('queryInsightsStandalone'),
+        configure: {
+            ...defaultScenario('queryInsightsStandalone'),
+            steps: [{ action: 'click', role: 'button', name: 'Continue' }],
+            readiness: { content: ['Provide your query data', 'Explain plan', 'Copilot utility', 'Prompt: built-in'], noProgressbar: true },
+        },
+        analyze: {
+            ...defaultScenario('queryInsightsStandalone'),
+            steps: [
+                { action: 'click', role: 'button', name: 'Continue' },
+                { action: 'click', role: 'button', name: 'Analyze supplied data' },
+            ],
+            readiness: {
+                content: ['Query Efficiency Analysis', 'Query Performance Analysis', 'Consider indexing the filter.', 'Copy command'],
+                selectors: ['.leftColumn', '.rightColumn'], noProgressbar: true,
+            },
+            assertions: [{
+                kind: 'calls', name: 'Explorer recommendations are copy-only',
+                path: 'common.copyToClipboard', input: { text: 'db.items.createIndex({status: 1})' }, count: 1,
+                steps: [{ action: 'click', role: 'button', name: 'Copy command' }],
+            }],
+        },
+    },
     collectionView: { default: defaultScenario('collectionView') },
     documentView: { default: defaultScenario('documentView') },
     clusterDashboard: { default: defaultScenario('clusterDashboard') },

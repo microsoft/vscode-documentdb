@@ -74,6 +74,13 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
 
         const rootItems: TreeElement[] = [
             createGenericElement({
+                contextValue: 'actionItem',
+                id: `${parentId}/query-insights-explorer`,
+                label: vscode.l10n.t('Query Insights Explorer (POC)'),
+                iconPath: new vscode.ThemeIcon('beaker'),
+                commandId: 'vscode-documentdb.command.queryInsights.exploreWithOwnInput',
+            }) as TreeElement,
+            createGenericElement({
                 contextValue: 'helpItem',
                 id: `${parentId}/whats-new`,
                 label: vscode.l10n.t("What's New"),

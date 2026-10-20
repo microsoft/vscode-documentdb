@@ -95,6 +95,7 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
 const commonRouter = router({
     copyToClipboard: publicProcedure.input(z.object({ text: z.string() })).mutation(async ({ input }) => {
         await vscode.env.clipboard.writeText(input.text);
+        return true;
     }),
     openFeedback: publicProcedure
         .input(z.object({ collectionTab: z.enum(['documents', 'indexes', 'queryInsights']).optional() }))

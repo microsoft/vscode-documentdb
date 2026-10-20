@@ -17,8 +17,6 @@ import {
     tokens,
 } from '@fluentui/react-components';
 import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
-// TODO: Copy content feature will be added in the next release
-// import { CopyRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../types/queryInsights';
@@ -81,7 +79,6 @@ const priorityColors: Record<'high' | 'medium' | 'low', 'danger' | 'warning' | '
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-// TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
 export function ImprovementCard({
     config,
     actionsEnabled = true,

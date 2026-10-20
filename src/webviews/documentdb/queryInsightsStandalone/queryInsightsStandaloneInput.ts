@@ -10,6 +10,14 @@ import type { CollectionStats, IndexStats } from '../../../documentdb/LlmEnhance
 import { toFilterQueryObj } from '../../../documentdb/utils/toFilterQuery';
 import type { StandaloneInput } from './types';
 
+export const queryInsightsPrefillSchema = z.object({
+    explain: z.string().optional(), query: z.string().optional(),
+    commandType: z.enum(['find', 'aggregate', 'count']).optional(),
+    collectionStats: z.string().optional(), indexes: z.string().optional(),
+    databaseName: z.string().optional(), collectionName: z.string().optional(),
+    clusterType: z.enum(['azure-documentdb', 'documentdb', 'other']).optional(),
+});
+
 export const standaloneInputSchema = z.object({
     explain: z.string().min(1),
     query: z.string(),
@@ -26,7 +34,7 @@ function parseInput(text: string): unknown {
     try {
         return EJSON.parse(text, { relaxed: true }) as unknown;
     } catch {
-        return toFilterQueryObj(text) as unknown;
+        return EJSON.parse(EJSON.stringify(toFilterQueryObj(text)), { relaxed: true }) as unknown;
     }
 }
 

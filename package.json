@@ -391,6 +391,12 @@
         "icon": "$(add)"
       },
       {
+        "//": "[Query Insights] Open the connectionless explorer proof of concept",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.queryInsights.exploreWithOwnInput",
+        "title": "Query Insights: Explore with Your Own Input (POC)"
+      },
+      {
         "//": "[Local Quick Start] Open the DocumentDB Local setup webview",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.localQuickStart.open",

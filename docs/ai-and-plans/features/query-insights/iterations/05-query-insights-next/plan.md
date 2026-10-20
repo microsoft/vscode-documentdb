@@ -184,7 +184,7 @@ branch: dev/tnaum/query-insights-next
       `openFeedback` allow-list only if needed.
     - _Outcome:_ Registered connectionless panel/router with explain/query validation, synthesized Stage 1, shared pure Stage 2 and cancellable parser-driven Stage 3; service accepts supplied data, command type and model. Wizard placeholder replaced in WI-7.
 
-- [ ] **WI-7: Standalone wizard UI + entry points**
+- [x] **WI-7: Standalone wizard UI + entry points**
     - `QueryInsightsStandalone.tsx`, built on the `Wizard` / `WizardStep` pattern from
       `LocalQuickStart.tsx`:
         1. **Welcome:** what it does, what to paste (`explain("executionStats")` output), and
@@ -212,6 +212,7 @@ branch: dev/tnaum/query-insights-next
     - **Checkpoint B** (bundled verification): `npm run build`;
       `npx vitest run src/services src/commands src/documentdb/queryInsights src/webviews src/tree/help-and-feedback-view`;
       L2 scenario smoke of the new view, if a scenario is cheap to add (optional).
+    - _Outcome:_ Welcome/Configure/Analyze wizard reuses `QueryInsightsMain`, auto-starts Stage 3 and preserves inputs on Back; command, prefilled tab link and beaker Help item are wired. Checkpoint B passed: build, 130 files / 2,191 tests passed (1 skipped), plus 9/9 mocked L2 routes across three themes including copy-only actions.
 
 - [ ] **WI-8: Wrap-up**
     - Fill in the time log totals, the deviation log, and a short "How to use" section below
@@ -240,7 +241,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-4 + Checkpoint A | Coding agent (gpt-6.1-sol) | 11:34 | 11:42 | 8 | Includes restoring missing dependencies and fixing new test fixtures; final build and all 1,330 targeted tests passed. |
 | WI-5 | Coding agent (gpt-6.1-sol) | 11:44 | 11:46 | 2 | Shared adapter and copy-only cards; checks deferred to B. |
 | WI-6 | Coding agent (gpt-6.1-sol) | 11:46 | 11:48 | 2 | Host plumbing; checks deferred to B. |
-| WI-7 + Checkpoint B | | | | | |
+| WI-7 + Checkpoint B | Coding agent (gpt-6.1-sol) | 11:48 | 14:33 | 165 | Includes ~150 minutes waiting on integrated browser/tools (11:56–14:26); final build/tests and 9 L2 routes passed. |
 | WI-8 | | | | | |
 
 ## Deviation log
@@ -250,6 +251,8 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | — | Coding started (WI-0, partial) before the operator had reviewed the plan. | Autopilot over-reach. Stopped on request; the partial work is kept and finished in WI-0. |
 | WI-5 | Keep the existing `QueryInsightsState` union and transition helpers; expose pipeline + dispatch on the adapter. Standalone synthesizes Stage 1 from the supplied explain. | Avoids moving Collection View state/prefetch or duplicating the layout. The standalone holder can use ordinary `useState`; synthesizing Stage 1 preserves all existing sequencing/plan-summary behaviour instead of special-casing a skipped stage. Common URL/error/model RPCs remain shared directly; only data/session operations move behind the adapter. |
 | WI-6 | The standalone subscription reuses the parser/service/event types but has a small separate streaming loop; no connected completion-event telemetry or survey activity. | Extracting the connected loop would disturb its detailed session telemetry/timing instrumentation. Copying the essential event lifecycle is lower risk for a POC; all cancellation paths still abort the model and both inputs are analyzed with one shared pure Stage 2 helper. |
+| Checkpoint B | Updated the registry test's exhaustive view-name list and browser fixture/runtime/scenario tables for the new registered view. Added Welcome, Configure and Analyze fixtures in all three themes. No existing snapshots or TDD contracts changed. | The build makes these tables exhaustive over `WebviewName`; leaving them unchanged fails compilation. Browser smoke additionally caught ambiguous forward-button names and missing mutation acknowledgement values; both were corrected. The integrated runner needed a supplied timer shim (`page.waitForTimeout`) because its external execution context has no global `setTimeout`; the repository runner was not changed. |
+| WI-7 | Session prefill reads optional collStats/indexStats/metadata with a 1.5-second best-effort bound per parallel call. | They are not cached on `ClusterSession`; bounded lookups provide useful prefill without blocking opening the explorer when optional metadata is unavailable. |
 | WI-3 | Made `formatTokenCount` browser-safe with an optional locale argument; host logging passes the VS Code locale explicitly. | The existing utility imported `vscode` at runtime, which cannot ship in a webview bundle. Reusing a pure helper avoids duplicating formatting while preserving host output. |
 | Checkpoint A | Restored lockfile dependencies with `npm ci` after the initial commands could not start due to missing packages. | This worktree had no installed dependency set; no dependency manifests or lockfile changed. |
 | Checkpoint A | The new picker selection test replaces only Fluent's floating dropdown/option layer with a native test stand-in. | Opening the real popup in jsdom (no layout engine) timed out; picker state, RPC calls, ordering, token labels, hints, and disclosure tests remain exercised. Also isolated the new host test's cancellation-error mock. No existing snapshots or TDD contracts changed. |

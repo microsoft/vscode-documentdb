@@ -28,6 +28,7 @@ import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';
 import { z } from 'zod';
+import { EJSON } from 'bson';
 
 import * as l10n from '@vscode/l10n';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
@@ -45,6 +46,7 @@ import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIS
 import { mergeRouters, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { type RouterContext } from '../collectionViewRouter';
 import { queryInsightsEventsRouter } from './queryInsightsEventsRouter';
+import type { QueryInsightsPrefill } from '../../queryInsightsStandalone/types';
 
 /**
  * Debug helper: Read debug override file for Query Insights testing
@@ -90,6 +92,43 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
 }
 
 export const queryInsightsQueriesRouter = router({
+    getExplorePrefill: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<QueryInsightsPrefill> => {
+        const { sessionId, databaseName, collectionName } = ctx as RouterContext;
+        const session = ClusterSession.getSession(sessionId);
+        const query = session.getCurrentFindQueryParamsWithObjects();
+        const rawExplain = session.getRawExplainOutput(databaseName, collectionName);
+        const bestEffort = async <T,>(operation: Promise<T>): Promise<T | undefined> => {
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            try {
+                return await Promise.race([
+                    operation,
+                    new Promise<undefined>((resolve) => { timeout = setTimeout(() => resolve(undefined), 1500); }),
+                ]);
+            } catch {
+                return undefined;
+            } finally {
+                if (timeout) clearTimeout(timeout);
+            }
+        };
+        const client = session.getClient();
+        const [metadata, stats, indexes] = await Promise.all([
+            bestEffort(client.getClusterMetadata()),
+            bestEffort(client.getCollectionStats(databaseName, collectionName)),
+            bestEffort(client.getIndexStats(databaseName, collectionName)),
+        ]);
+        return {
+            databaseName, collectionName, commandType: 'find',
+            query: EJSON.stringify({
+                filter: query.filterObj, sort: query.sortObj, projection: query.projectionObj,
+                skip: query.skip, limit: query.limit,
+            }, { relaxed: true }, 2),
+            explain: rawExplain ? EJSON.stringify(rawExplain, { relaxed: true }, 2) : '',
+            collectionStats: stats ? EJSON.stringify(stats, { relaxed: true }, 2) : '',
+            indexes: indexes ? EJSON.stringify(indexes, { relaxed: true }, 2) : '',
+            clusterType: metadata?.domainInfo_isAzure === 'true'
+                ? 'azure-documentdb' : 'documentdb',
+        };
+    }),
     /**
      * Query Insights Stage 1 - Initial View
      * Returns cheap query plan data using explain("queryPlanner")

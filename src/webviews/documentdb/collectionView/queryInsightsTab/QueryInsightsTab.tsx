@@ -551,9 +551,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                     }
                 },
             },
+            selectedModel?.id,
         );
         stage3SubscriptionRef.current = subscription;
     };
+
+    const autoStarted = useRef(false);
+    useEffect(() => {
+        if (source.autoStartStage3 && pipeline.kind === 's3Idle' && !autoStarted.current) {
+            autoStarted.current = true;
+            handleGetAISuggestions();
+        }
+    }, [source.autoStartStage3, pipeline.kind, handleGetAISuggestions]);
 
     const handleCancelAI = (): void => {
         if (stage3TipsTimerRef.current) {
@@ -990,13 +999,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         modelPicker={
                                             <ModelPicker
                                                 compact
-                                                commandType={'find' as CommandType}
+                                                commandType={source.commandType ?? 'find' as CommandType}
                                                 onModelChange={setSelectedModel}
                                             />
                                         }
                                         mayUsePremiumRequests={!selectedModel?.isUtility}
-                                        // WI-7 wires the standalone explorer entry point.
-                                        secondaryLink={false && <Link>{l10n.t('Explore with your own input…')}</Link>}
+                                        secondaryLink={source.explore && (
+                                            <Link onClick={() => void source.explore?.()}>
+                                                {l10n.t('Explore with your own input…')}
+                                            </Link>
+                                        )}
                                         errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
                                         onGetInsights={handleGetAISuggestions}
                                         onLearnMore={handleLearnMore}

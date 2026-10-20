@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import { z } from 'zod';
+import * as vscode from 'vscode';
 import { analyzeExplainForStage2 } from '../../../documentdb/queryInsights/analyzeExplainForStage2';
 import { ExplainPlanAnalyzer } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
 import { buildStaticAnalysisSummary } from '../../../documentdb/queryInsights/staticAnalysisSummary';
@@ -12,12 +13,16 @@ import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIServ
 import type { BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router } from '../../_integration/trpc';
 import type { QueryInsightsStreamEvent } from '../collectionView/types/queryInsightsStream';
-import { parseStandaloneInput, standaloneInputSchema } from './queryInsightsStandaloneInput';
+import { parseStandaloneInput, queryInsightsPrefillSchema, standaloneInputSchema } from './queryInsightsStandaloneInput';
 import type { QueryInsightsPrefill } from './types';
 
 export type StandaloneRouterContext = BaseRouterContext & { prefill: QueryInsightsPrefill };
 
 export const queryInsightsStandaloneRouter = router({
+    openExplorer: publicProcedureWithTelemetry.input(queryInsightsPrefillSchema).mutation(async ({ input }) => {
+        await vscode.commands.executeCommand('vscode-documentdb.command.queryInsights.exploreWithOwnInput', input);
+        return true;
+    }),
     getPrefill: publicProcedureWithTelemetry.query(({ ctx }) => (ctx as StandaloneRouterContext).prefill),
     validateInput: publicProcedureWithTelemetry.input(standaloneInputSchema).query(({ input }) => {
         const parsed = parseStandaloneInput(input);

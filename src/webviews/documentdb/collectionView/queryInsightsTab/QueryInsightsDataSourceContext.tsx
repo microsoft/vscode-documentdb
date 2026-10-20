@@ -28,7 +28,7 @@ export interface QueryInsightsDataSource {
     commandType?: CommandType;
     getStage1: () => Promise<QueryInsightsStage1Response>;
     getStage2: () => Promise<QueryInsightsStage2Response>;
-    streamStage3: (requestKey: string, callbacks: Stage3Callbacks) => { unsubscribe: () => void };
+    streamStage3: (requestKey: string, callbacks: Stage3Callbacks, modelId?: string) => { unsubscribe: () => void };
     executeAction: (actionId: string, payload: unknown) => Promise<{ success: boolean; message?: string }>;
     explore?: () => Promise<void>;
 }
@@ -43,7 +43,7 @@ function useCollectionDataSource(): QueryInsightsDataSource {
         (transition) => setState((previous) => ({ ...previous, queryInsights: transition(previous.queryInsights) })),
         [setState],
     );
-    return useMemo(() => ({
+    return useMemo<QueryInsightsDataSource>(() => ({
         pipeline: state.queryInsights,
         dispatch,
         identity: configuration,
@@ -55,6 +55,10 @@ function useCollectionDataSource(): QueryInsightsDataSource {
             client.mongoClusters.collectionView.queryInsights.streamStage3.subscribe({ requestKey }, callbacks),
         executeAction: (actionId, payload) =>
             client.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({ actionId, payload }),
+        explore: async (): Promise<void> => {
+            const prefill = await client.mongoClusters.collectionView.queryInsights.getExplorePrefill.query();
+            await client.queryInsightsStandalone.openExplorer.mutate(prefill);
+        },
     }), [state.queryInsights, state.isLoading, dispatch, configuration, client]);
 }
 
@@ -65,7 +69,8 @@ export function CollectionQueryInsightsProvider({ children }: { children: ReactN
 
 export function useQueryInsightsDataSource(): QueryInsightsDataSource {
     const source = useContext(QueryInsightsDataSourceContext);
-    // Keep direct mounts (including existing component tests) compatible.
-    const collectionSource = useCollectionDataSource();
-    return source ?? collectionSource;
+    if (!source) {
+        throw new Error('Query Insights requires a data-source provider.');
+    }
+    return source;
 }

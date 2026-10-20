@@ -57,6 +57,7 @@ import {
     viewQuickStartLogs,
 } from '../commands/localQuickStart/localQuickStartCommands';
 import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
+import { exploreWithOwnInput } from '../commands/queryInsights/exploreWithOwnInput';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openClusterDashboard } from '../commands/openClusterDashboard/openClusterDashboard';
@@ -660,6 +661,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(
                     'vscode-documentdb.command.localQuickStart.open',
                     withCommandCorrelation(openLocalQuickStart),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.queryInsights.exploreWithOwnInput',
+                    withCommandCorrelation(exploreWithOwnInput),
                 );
                 registerCommand(
                     'vscode-documentdb.command.localQuickStart.start',

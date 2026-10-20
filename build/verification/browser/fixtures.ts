@@ -245,6 +245,60 @@ export const fixtures = {
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
         },
     },
+    queryInsightsStandalone: {
+        config: {
+            explain: '{"queryPlanner":{"winningPlan":{"stage":"COLLSCAN"}},"executionStats":{"nReturned":2,"executionTimeMillis":12,"totalDocsExamined":100,"totalKeysExamined":0}}',
+            databaseName: 'demo', collectionName: 'items',
+        },
+        monaco: false,
+        content: ['Query Insights Explorer (POC)', 'Configure'],
+        styles: [{ selector: '.queryInsightsStandalone', property: 'min-width', expected: '0px' }],
+        rpc: {
+            ...common,
+            'ai.getAvailableModels': reply<Outputs['ai']['getAvailableModels']>('query', {
+                models: [{
+                    id: 'copilot-utility', name: 'Copilot utility', family: 'copilot-utility',
+                    vendor: 'copilot', version: '1', maxInputTokens: 64000, isUtility: true,
+                }],
+                savedModelId: null, effectiveModelId: 'copilot-utility',
+            }),
+            'ai.getPromptSourceInfo': reply<Outputs['ai']['getPromptSourceInfo']>('query', { source: 'built-in' }),
+            'queryInsightsStandalone.validateInput': reply<Outputs['queryInsightsStandalone']['validateInput']>('query', {
+                commandType: 'find' as Outputs['queryInsightsStandalone']['validateInput']['commandType'], query: '{}',
+            }),
+            'queryInsightsStandalone.getStage1': reply<Outputs['queryInsightsStandalone']['getStage1']>('query', {
+                executionTime: 0, stages: [{ stage: 'COLLSCAN', name: 'Collection scan', nReturned: 0 }],
+                efficiencyAnalysis: { executionStrategy: 'Collection scan', indexUsed: null, hasInMemorySort: false },
+            }),
+            'queryInsightsStandalone.getStage2': reply<Outputs['queryInsightsStandalone']['getStage2']>('query', {
+                executionTimeMs: 12, documentsReturned: 2, totalDocsExamined: 100, totalKeysExamined: 0,
+                examinedToReturnedRatio: 50, keysToDocsRatio: 0, executionStrategy: 'Collection scan',
+                indexUsed: false, usedIndexNames: [], hadInMemorySort: false, hadCollectionScan: true,
+                isCoveringQuery: false, concerns: [], rawExecutionStats: {},
+                stages: [{ stage: 'COLLSCAN', name: 'Collection scan', nReturned: 2 }],
+                efficiencyAnalysis: {
+                    selectivity: null, indexUsed: null, fetchOverhead: 'Collection scan',
+                    fetchOverheadKind: 'collectionScan', hasInMemorySort: false,
+                    performanceRating: { score: 'poor', diagnostics: [] },
+                },
+            }),
+            'queryInsightsStandalone.streamStage3': {
+                type: 'subscription',
+                results: [
+                    { type: 'summary', markdown: 'Consider indexing the filter.', complete: true },
+                    { type: 'recommendationStarted', index: 0 },
+                    { type: 'recommendation', index: 0, recommendation: {
+                        action: 'create', indexSpec: { status: 1 }, indexName: 'status_1',
+                        shellCommand: 'db.items.createIndex({status: 1})',
+                        justification: 'Avoid a collection scan.', priority: 'high',
+                    } },
+                    { type: 'complete', modelId: 'copilot-utility', modelFamily: 'copilot-utility',
+                        modelDisplayName: 'Copilot utility', durationMs: 10 },
+                ] as const,
+            },
+            'common.copyToClipboard': reply<Outputs['common']['copyToClipboard']>('mutation', true),
+        },
+    },
     atlasCredentials: {
         config: atlasConfig,
         monaco: false,

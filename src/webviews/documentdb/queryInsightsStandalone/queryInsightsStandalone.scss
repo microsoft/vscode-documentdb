@@ -1,0 +1,15 @@
+.queryInsightsStandalone {
+    height: 100vh;
+    min-width: 0;
+
+    .queryInsightsStandalone-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .container {
+        height: auto;
+        min-height: 0;
+    }
+}
