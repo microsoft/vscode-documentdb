@@ -19,7 +19,6 @@ import {
     TableCellLayout,
     TableRow,
     Text,
-    Textarea,
     tokens,
     Tooltip,
 } from '@fluentui/react-components';
@@ -50,6 +49,7 @@ import { QueryInsightsMain } from '../collectionView/queryInsightsTab/QueryInsig
 import { ModelPicker } from '../queryInsightsShared/ModelPicker';
 import { QueryInsightsPreviewBadge } from '../queryInsightsShared/QueryInsightsPreviewBadge';
 import type { InputIssue, StandaloneInspection } from './queryInsightsStandaloneInput';
+import { JsonPlanEditor } from './JsonPlanEditor';
 import { contextSnippets, explainSnippets, samplePlan, type SampleCommand, type ShellSnippet } from './samplePlans';
 import type { QueryInsightsPrefill, StandaloneInput } from './types';
 import './queryInsightsStandalone.scss';
@@ -493,13 +493,11 @@ export function QueryInsightsStandalone(): JSX.Element {
                     : explainMessage}
                 validationMessageIcon={inspecting && form.explain.trim() ? null : undefined}
             >
-                <Textarea
-                    resize="vertical"
-                    rows={10}
+                <JsonPlanEditor
+                    ariaLabel={l10n.t('Explain output')}
                     value={form.explain}
-                    textarea={{ className: styles.mono, spellCheck: false }}
-                    placeholder='{ "queryPlanner": { … }, "executionStats": { … } }'
-                    onChange={(_event, data) => update('explain', data.value)}
+                    issue={!inspecting ? explainIssue : undefined}
+                    onChange={(value) => update('explain', value)}
                 />
             </Field>
             <div className={styles.sampleRow} role="group" aria-labelledby={`${noteId}-samples`}>
@@ -582,13 +580,12 @@ export function QueryInsightsStandalone(): JSX.Element {
                                 validationState={inspection?.queryIssue ? 'error' : 'none'}
                                 validationMessage={inspection?.queryIssue ? describeIssue(inspection.queryIssue) : undefined}
                             >
-                                <Textarea
-                                    resize="vertical"
-                                    rows={6}
+                                <JsonPlanEditor
+                                    compact
+                                    ariaLabel={l10n.t('Query or pipeline')}
                                     value={form.query}
-                                    textarea={{ className: styles.mono, spellCheck: false }}
-                                    placeholder={inspection?.queryIsExtracted ? inspection.query : undefined}
-                                    onChange={(_event, data) => update('query', data.value)}
+                                    issue={!inspecting ? inspection?.queryIssue : undefined}
+                                    onChange={(value) => update('query', value)}
                                 />
                             </Field>
                         </div>
@@ -629,10 +626,9 @@ export function QueryInsightsStandalone(): JSX.Element {
                     validationState={statsInfo?.ok === false ? 'error' : 'none'}
                     validationMessage={statsInfo?.ok === false ? describeIssue(statsInfo) : undefined}
                 >
-                    <Textarea resize="vertical" rows={8} value={form.collectionStats}
-                        textarea={{ className: styles.mono, spellCheck: false }}
-                        placeholder='{ "ns": "shop.orders", "count": 48210, … }'
-                        onChange={(_event, data) => update('collectionStats', data.value)} />
+                    <JsonPlanEditor compact ariaLabel={l10n.t('Collection statistics')} value={form.collectionStats}
+                        issue={!inspecting && statsInfo?.ok === false ? statsInfo : undefined}
+                        onChange={(value) => update('collectionStats', value)} />
                 </Field>
             ),
         },
@@ -657,10 +653,9 @@ export function QueryInsightsStandalone(): JSX.Element {
                     validationState={indexInfo?.ok === false ? 'error' : 'none'}
                     validationMessage={indexInfo?.ok === false ? describeIssue(indexInfo) : undefined}
                 >
-                    <Textarea resize="vertical" rows={8} value={form.indexes}
-                        textarea={{ className: styles.mono, spellCheck: false }}
-                        placeholder='[ { "v": 2, "key": { "_id": 1 }, "name": "_id_" } ]'
-                        onChange={(_event, data) => update('indexes', data.value)} />
+                    <JsonPlanEditor compact ariaLabel={l10n.t('Indexes')} value={form.indexes}
+                        issue={!inspecting && indexInfo?.ok === false ? indexInfo : undefined}
+                        onChange={(value) => update('indexes', value)} />
                 </Field>
             ),
         },

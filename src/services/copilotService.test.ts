@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { LanguageModelDataPart, LanguageModelTextPart } from 'vscode';
+const telemetry = vi.hoisted((): { event: string; measurements: IActionContext['telemetry']['measurements'] }[] => []);
 
 // Mock vscode-azext-utils — the real `callWithTelemetryAndErrorHandling`
 // returns `undefined` for unhandled errors; we simulate the success path and
@@ -21,13 +22,14 @@ vi.mock('@microsoft/vscode-azext-utils', () => {
     return {
         UserCancelledError: MockUserCancelledError,
         callWithTelemetryAndErrorHandling: vi.fn(
-            async (_callbackId: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
+            async (callbackId: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
                     errorHandling: { issueProperties: {} },
                     ui: {} as unknown,
                     valuesToMask: [],
                 } as unknown as IActionContext;
+                telemetry.push({ event: callbackId, measurements: context.telemetry.measurements });
                 try {
                     return await callback(context);
                 } catch (error) {
@@ -137,6 +139,7 @@ function makeFakeModel(fragments: string[], extraParts: unknown[] = []): unknown
 describe('CopilotService.streamMessage', () => {
     beforeEach(() => {
         selectChatModelsMock.mockReset();
+        telemetry.length = 0;
     });
 
     it('yields fragments in order and resolves completion with the full text + usage', async () => {
@@ -193,6 +196,23 @@ describe('CopilotService.streamMessage', () => {
             cachedPromptTokens: 100, reasoningTokens: 20,
             credits: 0.012345678, usageSource: 'provider',
         });
+        expect(telemetry.find((entry) => entry.event.endsWith(path === 'buffered' ? '.sendMessage' : '.streamMessage'))?.measurements)
+            .toMatchObject({ credits: 0.012345678, reportedPromptTokens: 120, reportedCompletionTokens: 45 });
+    });
+
+    it('keeps zero credits/counts and estimates only missing provider token fields', async () => {
+        selectChatModelsMock.mockResolvedValueOnce([makeFakeModel(['Hello'], [
+            new LanguageModelDataPart(new TextEncoder().encode(JSON.stringify({
+                prompt_tokens: 0, copilot_usage: { total_nano_aiu: 0 },
+            })), 'usage'),
+            new LanguageModelDataPart(new TextEncoder().encode('ignored'), 'other'),
+        ])]);
+        const result = await CopilotService.sendMessage([makeUserMessage('Hello') as never]);
+        expect(result.usage).toMatchObject({
+            promptTokens: 0, responseTokens: 5, totalTokens: 5,
+            reportedPromptTokens: 0, credits: 0, usageSource: 'provider',
+        });
+        expect(result.usage?.reportedCompletionTokens).toBeUndefined();
     });
 
     it.each(['{bad', 'null', '{"prompt_tokens":"invalid","completion_tokens":-5,"copilot_usage":{"total_nano_aiu":"bad"}}'])

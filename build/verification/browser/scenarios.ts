@@ -97,7 +97,7 @@ function explorerConfigure(
         config: { ...explorerBase.config, ...extra.config },
         rpc: { ...explorerBase.rpc, 'queryInsightsStandalone.inspectInput': { type: 'query', results: [inspection] } },
         steps: [{ action: 'click', role: 'button', name: 'Continue' }, ...(extra.steps ?? [])],
-        readiness: { content, noProgressbar: true },
+        readiness: { content, selectors: ['.monaco-editor .view-lines'], noProgressbar: true },
     };
 }
 
@@ -249,6 +249,7 @@ export const scenarios = {
         'configure-invalid': explorerConfigure(
             { explain: { ok: false, message: 'Unexpected token', line: 3, column: 7 }, ready: false },
             ['Line 3, column 7: Unexpected token', 'Fix the explain plan to continue.'],
+            { config: { explain: '{\n  "executionStats": {\n    !!bad\n  }\n}' } },
         ),
         'configure-context': explorerConfigure(
             {

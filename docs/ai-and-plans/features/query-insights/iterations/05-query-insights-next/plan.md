@@ -412,7 +412,7 @@ at Checkpoint E. No push, lint, prettier-fix, l10n or package; nothing under `._
     - _Outcome:_ Replaced the summary box/dropdown/actions with one wrapping row of muted
       facts and a Reconfigure back arrow/tooltip. Reconfigure preserves state and the L2
       assertion repeats Analyze with identical inputs. Checks deferred to E.
-- [ ] **WI-17: Monaco for JSON inputs + Checkpoint E**
+- [x] **WI-17: Monaco for JSON inputs + Checkpoint E**
     - Repo Monaco wrapper for explain (~16 lines), query/stats/indexes (~8 lines): JSON,
       line numbers, no minimap, no wrapping, folding, automatic layout, VS Code theme,
       accessible labels and Escape exit. Add parse-error markers at reported positions.
@@ -425,6 +425,11 @@ at Checkpoint E. No push, lint, prettier-fix, l10n or package; nothing under `._
       save `phase-e-` dark screenshots (marker, picker details, slim header) in the session
       wizard-ui directory. If needed use gitignored local libraries and `en-US`, then remove
       the libraries. Bound headless setup attempts to ~10 minutes.
+    - _Outcome:_ All four inputs use themed Monaco with line numbers, fixed ~16/~8-line
+      heights, positioned/cleared parse markers, folding/no-wrap and Escape exits. Added
+      editor marker/settings/focus tests and Monaco-ready scenarios. Checkpoint E passed
+      build, 64 files / 1,312 tests, browser harness 6 files / 79 tests and 21/21 themed L2
+      routes; dark screenshots saved. See the environment accommodation below.
 
 ## How to use (filled in at WI-8)
 
@@ -446,6 +451,12 @@ at Checkpoint E. No push, lint, prettier-fix, l10n or package; nothing under `._
 2. Pick a Copilot model in the existing Query Insights card (compact picker), or on the
    explorer's Configure page (full picker). One saved choice is shared across both surfaces.
    The picker shows the prompt source/basename and premium-request warning where applicable.
+   Phase E adds a collapsible **Pricing details** section when metadata is available:
+   a server-supplied relative cost tier and per-million-token prices, not an estimate of
+   your bill. Thinking level and context size follow this model's VS Code Chat picker
+   settings. The completed run's byline shows actual billed credits when Copilot reports
+   them, plus known input/output tokens; missing usage falls back to estimated token counts
+   and never invents credits.
 3. Open through any of the three entry points:
    - Command Palette → **DocumentDB: Query Insights: Explore with Your Own Input (POC)**.
    - **Help and Feedback → Query Insights Explorer (POC)** (beaker icon).
@@ -468,6 +479,11 @@ at Checkpoint E. No push, lint, prettier-fix, l10n or package; nothing under `._
    namespace, cluster type, model and prompt source. Select **Reconfigure** to change inputs
    or model, then **Analyze query** again; everything is kept. There is no inline model
    dropdown or Re-run button on Analyze.
+
+   Configure now uses Monaco JSON editors for explain, query, collection statistics and
+   indexes. Explain has about 16 lines, the optional editors about 8. Line numbers match the
+   inline parse locations; errors also have squiggles/overview markers. Escape leaves the
+   editor so Tab can continue through the form.
 
    Phase C adds explicit preview scope: every standalone Analyze page says **Feature preview**;
    aggregate/count efficiency and plan cards say **Preview · tuned for find queries**.
@@ -553,6 +569,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-15 | Coding agent (gpt-6.1-sol) | 16:37 | 16:38 | 1 | Rich metadata, grouped options, details panel/tooltip and tests; checks deferred to E. |
 | WI-16 | Coding agent (gpt-6.1-sol) | 16:38 | 16:39 | 1 | Slim facts row and reconfiguration scenario; checks deferred to E. |
 | WI-15 follow-up | Coding agent (gpt-6.1-sol) | 16:39 | 16:40 | 1 | Lead screenshot steering: VS Code-style collapsible pricing, tier badges and F9; checks deferred to E. |
+| WI-17 + Checkpoint E | Coding agent (gpt-6.1-sol) | 16:40 | 16:56 | 16 | Four Monaco editors, markers/focus tests, later lead F9/F10 clarifications, checkpoint fixes, build/tests, 21 headless routes, screenshot/theme inspection, cleanup and commit. |
 
 ## Deviation log
 
@@ -563,6 +580,9 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-16 | Removed the Analyze Re-run button and inline model picker at the operator's request, superseding WI-13's summary actions. | Model changes now intentionally go through Reconfigure; the reused panel's focus and scoped single-scroll rules stay intact. |
 | WI-15 follow-up | Lead steering arrived after WI-15 was committed, so the requested VS Code pricing layout/F9 is a separate follow-up commit. Compact pricing can expand inline; its info tooltip repeats the same details without interactive controls. | Preserves per-WI history and keyboard-operable disclosure without putting focusable controls in a tooltip. |
 | WI-15 correction | Replaced the lead's initial four-colour cost mapping with verified VS Code behaviour: neutral low/medium, warning high/very_high; unknown tiers retain a capitalized label. F10 adds the exact Marketplace/runtime distinction and hides absent Pricing details. | Follow-up lead research established CAPI supplies relative tiers, not computed token costs; sources are recorded in F9/F10 and the code comment. Folded into the WI-15 follow-up commit before final WI-17 handoff. |
+| WI-17 | All four inputs use one small wrapper around the repo Monaco editor. No existing standalone scenario used textarea `fill`, so no new driver action was necessary; Configure readiness now waits for Monaco and the invalid fixture contains genuinely malformed multiline text. | Avoids an unnecessary harness API while keeping existing typed click steps and proving a visible parse marker. |
+| Checkpoint E | The exact root Vitest selector does not discover browser-harness tests because they have their own config, so its existing `build/verification/browser/vitest.config.ts` was also run (6 files / 79 tests). Initial helper/test typing failures were corrected within this single checkpoint, without changing a TDD contract. | Covers the edited scenarios rather than claiming the root selector exercised them. The full root selector ultimately passed 64 files / 1,312 tests. |
+| Checkpoint E (headless environment) | Chromium required seven locally extracted libraries (the six previously noted plus transitive `libwayland-server0`); locale `en-US`. The existing watcher referenced a missing/stale optimized JSON-mode chunk (504). Its cache was regenerated without restarting it; headless-only routing served the restored JSON-mode module against the watcher's existing stable Monaco API namespace. Replacing the whole optimized graph was rejected after it duplicated React/Monaco identities. | Preserved the operator's running server and avoided an interactive browser. This is a transparent test-environment accommodation, not proof that the current watcher's stale cache works unmodified; a fresh watcher is not part of this task. Local libraries and scratch drivers are removed after screenshots. |
 | — | Coding started (WI-0, partial) before the operator had reviewed the plan. | Autopilot over-reach. Stopped on request; the partial work is kept and finished in WI-0. |
 | WI-5 | Keep the existing `QueryInsightsState` union and transition helpers; expose pipeline + dispatch on the adapter. Standalone synthesizes Stage 1 from the supplied explain. | Avoids moving Collection View state/prefetch or duplicating the layout. The standalone holder can use ordinary `useState`; synthesizing Stage 1 preserves all existing sequencing/plan-summary behaviour instead of special-casing a skipped stage. Common URL/error/model RPCs remain shared directly; only data/session operations move behind the adapter. |
 | WI-6 | The standalone subscription reuses the parser/service/event types but has a small separate streaming loop; no connected completion-event telemetry or survey activity. | Extracting the connected loop would disturb its detailed session telemetry/timing instrumentation. Copying the essential event lifecycle is lower risk for a POC; all cancellation paths still abort the model and both inputs are analyzed with one shared pure Stage 2 helper. |
@@ -657,6 +677,44 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 - Dev server stopped. No lint, formatting, localization generation, packaging, live model
   request or push. The real-Copilot/manual smoke steps above remain outstanding.
 - Phase D time: **26 minutes** (setup + WI-12 5, WI-13 + checkpoint 21).
+
+## Phase E verification outcome
+
+- Case 1 only; the only verification checkpoint was E. Final `npm run build` passed
+  (2026-10-20, 16:53 UTC). Initial attempts caught the new usage helper's class syntax,
+  an empty-array union in token counting, and the telemetry test's optional-number type;
+  all were fixed inside this checkpoint.
+- Exact requested root selector passed **64 files / 1,312 tests**, zero failures/skips
+  (final run started 16:51 UTC). The browser harness's separate config additionally
+  passed **6 files / 79 tests**. No TDD contract failed or changed; no snapshots changed.
+- Own headless Playwright passed **21/21 routes** across dark, light and high-contrast:
+  Welcome, Configure, invalid Configure, optional context, find/aggregate/count Analyze.
+  Final reports had zero harness errors and all clipboard/raw-explain/reconfiguration
+  assertions passed. The existing watcher was never restarted or stopped (still HTTP 200).
+  See the explicit stale-optimizer/headless accommodation in the Deviation log.
+- Visually inspected the error marker, dark details and Analyze screenshots, plus
+  light/high-contrast model details. The invalid explain shows a line-3 squiggle and overview
+  marker as well as the inline position. Escape moved focus to **Outside Explain output
+  editor**. Analyze has zero dropdowns/Re-run buttons; at 900×600 it has exactly one
+  scrolling container. The slim row remains one line at 1440 pixels.
+- Example completed fixture byline:
+  **Powered by Copilot utility via GitHub Copilot · 0.0s · 0 credits · 1200 in / 350 out tokens**.
+  Its utility-model disclosure/learn-more line remains above it. Tiny positive credits
+  display **< 0.01 credits**, and unknown credits are omitted.
+- Example synthetic picker: **Copilot utility**, **Free**, **Low cost**, **Credits per 1M
+  tokens**, Input **0**, Output **0**, Cache Read **0**; context **64,000**, tools supported,
+  no image input, family/version/id, inherited Chat-settings note, choice and prompt lines.
+  Full pricing is initially expanded; compact pricing is collapsed with an info tooltip;
+  absent optional prices hide Pricing details.
+- Dark screenshots (outside git), under
+  `/home/tnaum/.copilot/session-state/16353c9f-1823-4dfb-8b3a-7a9de94cf764/files/wizard-ui/`:
+  `phase-e-configure-error-dark.png`, `phase-e-model-details-dark.png`,
+  `phase-e-analyze-dark.png`.
+- Local extracted browser libraries, `.deb`s, profiles, scratch drivers/logs and extra theme
+  captures were removed. No push, lint, prettier-fix, l10n, package, live Copilot/database
+  call or installed-extension smoke. Real-Copilot/manual checks remain outstanding.
+- **Phase E total: 21 minutes** (WI-14 2 + WI-15 1 + WI-16 1 + WI-15 follow-up 1 +
+  WI-17/Checkpoint E 16), 16:35–16:56 UTC.
 
 ## Lead review notes (2026-10-20, 15:12 UTC)
 

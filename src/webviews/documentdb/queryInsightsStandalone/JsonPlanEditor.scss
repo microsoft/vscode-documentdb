@@ -1,0 +1,11 @@
+.query-insights-json-editor {
+    height: 324px;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+    border-radius: 4px;
+
+    &:focus-within { border-color: var(--vscode-focusBorder); }
+
+    &-compact { height: 172px; }
+}

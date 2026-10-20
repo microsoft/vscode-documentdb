@@ -587,7 +587,7 @@ export class CopilotService {
                     break;
                 }
                 if (part instanceof vscode.LanguageModelDataPart && part.mimeType === 'usage') {
-                    reportedUsage = { ...reportedUsage, ...readProviderUsage(part.data) };
+                    reportedUsage = { ...reportedUsage, ...this.readProviderUsage(part.data) };
                     continue;
                 }
                 if (!(part instanceof vscode.LanguageModelTextPart)) {
@@ -682,7 +682,9 @@ export class CopilotService {
         // message count fails the total is still useful as a lower bound, but
         // we err on the side of reporting `undefined` to avoid skewed metrics.
         const [perMessageCounts, estimatedResponseTokens] = await Promise.all([
-            reported.reportedPromptTokens === undefined ? Promise.all(messages.map((m) => countSafely(m))) : [],
+            reported.reportedPromptTokens === undefined
+                ? Promise.all(messages.map((m) => countSafely(m)))
+                : Promise.resolve<(number | undefined)[]>([]),
             reported.reportedCompletionTokens !== undefined
                 ? undefined
                 : responseText.length > 0 ? countSafely(responseText) : Promise.resolve<number | undefined>(0),
@@ -716,7 +718,7 @@ export class CopilotService {
         }
     }
 
-    function readProviderUsage(data: Uint8Array): Partial<CopilotTokenUsage> {
+    private static readProviderUsage(data: Uint8Array): Partial<CopilotTokenUsage> {
         try {
             const parsed: unknown = JSON.parse(new TextDecoder().decode(data));
             const object = (value: unknown): Record<string, unknown> =>
@@ -768,12 +770,12 @@ export class CopilotService {
      * properties present at runtime) to the trace stream.
      *
      * Shipped code deliberately avoided the proposed `languageModelPricing`
-     * API. The Query Insights POC now reads its runtime fields defensively in
-     * modelSelection; shipping that needs finalization or proposal enablement.
+     * API. Query Insights now defensively reads its ungated runtime properties
+     * in modelSelection (F7/F10), without declaring enabledApiProposals.
      * This dump remains purely a
      * diagnostic so we can observe what the runtime exposes today (and tell
      * when richer information becomes available on stable in the future)
-     * without depending on it.
+     * without assuming these undocumented fields remain available.
      *
      * Memoised by model id within a single extension host process — the
      * metadata is static for a given id, so we only need to emit it the first
