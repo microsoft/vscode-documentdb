@@ -267,7 +267,7 @@ export const scenarios = {
             steps: explorerSteps,
             readiness: {
                 content: ['Feature preview', 'Query Efficiency Analysis', 'Query Performance Analysis', 'Consider indexing the filter.',
-                    'Copy command', 'Edit inputs', 'Re-run', 'demo.items'],
+                    'Copy command', 'Reconfigure', 'demo.items', 'Prompt: built-in', '0 credits', '1200 in / 350 out tokens'],
                 selectors: ['.leftColumn', '.rightColumn'], noProgressbar: true,
             },
             assertions: [{
@@ -280,13 +280,16 @@ export const scenarios = {
                 input: explorerAnalysisInput,
                 steps: [{ action: 'click', role: 'button', name: 'View Raw Execution Stats' }],
             }, {
-                kind: 'calls', name: 'Re-run repeats the analysis with the same inputs',
+                kind: 'calls', name: 'Reconfigure preserves inputs for another analysis',
                 path: 'queryInsightsStandalone.getStage2', count: 2,
                 input: explorerAnalysisInput,
-                steps: [{ action: 'click', role: 'button', name: 'Re-run' }],
+                steps: [
+                    { action: 'click', role: 'button', name: 'Reconfigure' },
+                    { action: 'click', role: 'button', name: 'Analyze query' },
+                ],
             }, {
-                // Waits for the re-run's recommendation, so readiness is checked on finished content.
-                kind: 'calls', name: 'Re-run streams recommendations again',
+                // Wait for the new recommendation so readiness checks finished content.
+                kind: 'calls', name: 'Reconfigured analysis streams recommendations again',
                 path: 'common.copyToClipboard', input: { text: 'db.items.createIndex({status: 1})' }, count: 2,
                 steps: [{ action: 'click', role: 'button', name: 'Copy command' }],
             }],

@@ -24,7 +24,7 @@ import {
     Tooltip,
 } from '@fluentui/react-components';
 import {
-    ArrowClockwiseRegular,
+    ArrowLeftRegular,
     CheckmarkCircleRegular,
     CheckmarkRegular,
     CopyRegular,
@@ -40,6 +40,7 @@ import * as l10n from '@vscode/l10n';
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
 import type { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo } from '../../../services/ai/modelSelection';
+import type { IndexAdvisorPromptSourceInfo } from '../../../services/promptTemplateService';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import { MessageBlock } from '../../components/MessageBlock';
@@ -160,19 +161,11 @@ const useStyles = makeStyles({
     summaryBar: {
         display: 'flex',
         flexWrap: 'wrap',
-        alignItems: 'flex-end',
-        gap: '12px 24px',
-        padding: '12px 16px',
-        marginBottom: '20px',
-        borderRadius: tokens.borderRadiusMedium,
-        border: `1px solid ${tokens.colorNeutralStroke2}`,
-        backgroundColor: tokens.colorNeutralBackground2,
+        alignItems: 'center',
+        gap: '4px 8px',
+        marginBottom: '8px',
+        color: tokens.colorNeutralForeground2,
     },
-    summaryFacts: { display: 'flex', flexWrap: 'wrap', gap: '8px 24px', margin: 0, alignSelf: 'flex-start' },
-    summaryFact: { display: 'flex', flexDirection: 'column', gap: '4px', margin: 0, minWidth: 0 },
-    summaryPicker: { flex: '1 1 260px', minWidth: 0, maxWidth: '360px' },
-    summaryActions: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginLeft: 'auto' },
-    modelChanged: { flexBasis: '100%', color: tokens.colorNeutralForeground2 },
 });
 
 function describeIssue(issue: InputIssue): string {
@@ -272,6 +265,7 @@ export function QueryInsightsStandalone(): JSX.Element {
     const [openRows, setOpenRows] = useState<Partial<Record<OptionalRow, boolean>>>({});
     const [editingQuery, setEditingQuery] = useState(() => !!prefill.query?.trim());
     const [analysisInput, setAnalysisInput] = useState<StandaloneInput>();
+    const [analysisPrompt, setAnalysisPrompt] = useState<IndexAdvisorPromptSourceInfo>();
     const [runKey, setRunKey] = useState(0);
     const [analysisKind, setAnalysisKind] = useState<AnalysisKind>('idle');
     const [announcement, setAnnouncement] = useState<{ key: number; message: string }>({ key: 0, message: '' });
@@ -366,10 +360,17 @@ export function QueryInsightsStandalone(): JSX.Element {
         }
     };
 
-    const rerun = (): void => {
-        setAnalysisInput((previous) => previous && { ...previous, modelId: selectedModel?.id ?? previous.modelId });
-        setRunKey((value) => value + 1);
-    };
+    useEffect(() => {
+        if (step !== 'analyze' || !analysisInput) return;
+        const controller = new AbortController();
+        setAnalysisPrompt(undefined);
+        void client.ai.getPromptSourceInfo.query(
+            { commandType: analysisInput.commandType as CommandType }, { signal: controller.signal },
+        ).then((source) => {
+            if (!controller.signal.aborted) setAnalysisPrompt(source);
+        }).catch(() => { /* Optional header metadata must not interrupt analysis. */ });
+        return () => controller.abort();
+    }, [client, step, analysisInput]);
 
     const toggleRow = (row: OptionalRow): void => setOpenRows((previous) => ({ ...previous, [row]: !previous[row] }));
 
@@ -770,49 +771,29 @@ export function QueryInsightsStandalone(): JSX.Element {
 
     // ---- Analyze ----------------------------------------------------------------------------
 
-    const modelChanged = !!analysisInput && !!selectedModel && selectedModel.id !== analysisInput.modelId;
     const analysisRunning = ['s1Loading', 's2Loading', 's3Loading'].includes(analysisKind);
     const summaryBar = analysisInput && (
         <div className={styles.summaryBar} role="region" aria-label={l10n.t('Analysis inputs')}>
-            <dl className={styles.summaryFacts}>
-                <div className={styles.summaryFact}>
-                    <dt><Text className={styles.muted}>{l10n.t('Command')}</Text></dt>
-                    <dd className={styles.factValue}><Badge appearance="tint" shape="rounded" size="small" color="brand">{analysisInput.commandType}</Badge></dd>
-                </div>
-                <div className={styles.summaryFact}>
-                    <dt><Text className={styles.muted}>{l10n.t('Namespace')}</Text></dt>
-                    <dd className={styles.factValue}>
-                        <Text className={styles.mono}>
-                            {namespaceOf(analysisInput.databaseName, analysisInput.collectionName) ?? l10n.t('Not provided')}
-                        </Text>
-                    </dd>
-                </div>
-                <div className={styles.summaryFact}>
-                    <dt><Text className={styles.muted}>{l10n.t('Cluster type')}</Text></dt>
-                    <dd className={styles.factValue}><Text>{clusterTypeLabel(analysisInput.clusterType)}</Text></dd>
-                </div>
-            </dl>
-            <div className={styles.summaryPicker}>
-                <ModelPicker compact commandType={analysisInput.commandType as CommandType} onModelChange={setSelectedModel} />
-            </div>
-            <div className={styles.summaryActions}>
-                <Button appearance="secondary" icon={<EditRegular />} onClick={() => setStep('configure')}>
-                    {l10n.t('Edit inputs')}
+            <Tooltip content={l10n.t('Back to Configure (inputs are kept)')} relationship="description">
+                <Button appearance="subtle" size="small" icon={<ArrowLeftRegular />} onClick={() => setStep('configure')}>
+                    {l10n.t('Reconfigure')}
                 </Button>
-                <Button
-                    appearance={modelChanged ? 'primary' : 'secondary'}
-                    icon={<ArrowClockwiseRegular />}
-                    disabled={!selectedModel}
-                    onClick={rerun}
-                >
-                    {l10n.t('Re-run')}
-                </Button>
-            </div>
-            {modelChanged && (
-                <Text size={200} className={styles.modelChanged}>
-                    {l10n.t('Model changed. Select Re-run to analyze again with {0}.', selectedModel?.name ?? '')}
-                </Text>
-            )}
+            </Tooltip>
+            <Badge appearance="tint" shape="rounded" size="small" color="brand">{analysisInput.commandType}</Badge>
+            {[
+                <Text key="namespace" size={200} className={styles.mono}>
+                    {namespaceOf(analysisInput.databaseName, analysisInput.collectionName) ?? l10n.t('Namespace not provided')}
+                </Text>,
+                <Text key="cluster" size={200}>{clusterTypeLabel(analysisInput.clusterType)}</Text>,
+                selectedModel && <Text key="model" size={200}>{selectedModel.name}</Text>,
+                analysisPrompt && <Text key="prompt" size={200}>
+                    {analysisPrompt.source === 'custom-file'
+                        ? l10n.t('Prompt: custom file {0}', analysisPrompt.path?.split(/[/\\]/).pop() ?? '')
+                        : l10n.t('Prompt: built-in')}
+                </Text>,
+            ].filter(Boolean).map((fact, index) => (
+                <Fragment key={index}><span aria-hidden>·</span>{fact}</Fragment>
+            ))}
         </div>
     );
 
@@ -850,7 +831,7 @@ export function QueryInsightsStandalone(): JSX.Element {
         );
     } else {
         footer = (
-            // Edit inputs and Re-run live in the summary bar above the results; the footer only explains.
+            // Reconfigure lives above the results; the footer only explains.
             <ContainerFooter note={l10n.t('Recommendations are copy-only. The explorer never changes a database.')} />
         );
     }
