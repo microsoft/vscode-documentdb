@@ -600,6 +600,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Phase E style review (lead) | Lead agent | 16:58 | 17:12 | 14 | Pricing panel moved from raw SCSS (px, `'›'` text chevron, editor-background card) to Fluent tokens + `ChevronRightRegular` (VS Code-like subtle card), duplicate pricing label removed, cost values and byline token counts locale-formatted, identity line `id · family · vN`, HC stroke. Restarted the operator's stale Vite watcher (cleared `node_modules/.vite`). Headless screenshots in 3 themes; build + 149 targeted tests passed |
 | Operator feedback round (lead) | Lead agent | 17:40 | 18:02 | 22 | Model section as label/value table; explicit "Not reported"; no toggle; first-Powerful default; Analyze title; no transient subtitle; new `configure-models` scenario; build + 163 unit + 79 harness tests; headless screenshots in 3 themes |
 | Phase F: design exploration | Coding agent (claude-opus-5.5) | 19:06 | 19:23 | 17 | Five tab-card model-selection options + Current in one dev-only L2 scenario (`tab-model-options`); route counts 66→69 / 24→27; build, 34 + 79 tests, 27 headless routes, screenshots in three themes. |
+| Phase F review + Welcome list (lead) | Lead agent | 19:04 | 19:31 | 27 | Numbered "What you'll need" (LocalQuickStart CounterBadge, title badges); briefed Phase F; per-option headless captures of the design preview for review |
 
 ## Deviation log
 
