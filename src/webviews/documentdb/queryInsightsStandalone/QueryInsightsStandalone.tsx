@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 import {
     Badge,
+    CounterBadge,
     Button,
     Field,
     Input,
@@ -64,17 +65,13 @@ const useStyles = makeStyles({
     section: { display: 'flex', flexDirection: 'column', gap: '8px' },
     sections: { display: 'flex', flexDirection: 'column', gap: '28px', marginTop: '8px' },
     sectionHeading: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: 0 },
+    // Same numbered list as LocalQuickStart's "What will happen in the Set up step".
     needList: { display: 'flex', flexDirection: 'column', gap: '2px', margin: 0, padding: 0, listStyle: 'none' },
-    needItem: {
-        display: 'grid',
-        gridTemplateColumns: '84px minmax(0, 1fr)',
-        gap: '0 12px',
-        padding: '7px 0',
-        alignItems: 'start',
-    },
-    needBadge: { justifySelf: 'start', marginTop: '2px' },
-    prefilledNote: { display: 'inline-flex', alignItems: 'center', gap: '4px', color: tokens.colorPaletteGreenForeground1 },
+    needItem: { display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', gap: '0 10px', padding: '7px 0' },
+    needNumber: { justifySelf: 'start', alignSelf: 'start', marginTop: '1px' },
     needCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
+    needTitle: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' },
+    prefilledNote: { display: 'inline-flex', alignItems: 'center', gap: '4px', color: tokens.colorPaletteGreenForeground1 },
     snippetList: { display: 'flex', flexDirection: 'column', gap: '6px' },
     snippetGroupLabel: { marginTop: '6px' },
     snippet: {
@@ -411,16 +408,20 @@ export function QueryInsightsStandalone(): JSX.Element {
                 <Text as="h3" size={400} weight="semibold" id={`${noteId}-needs`} className={styles.sectionHeading}>
                     {l10n.t('What you\'ll need')}
                 </Text>
-                <ul className={styles.needList}>
-                    {needs.map((need) => (
+                <ol className={styles.needList}>
+                    {needs.map((need, index) => (
                         <li className={styles.needItem} key={need.label}>
-                            {need.required ? (
-                                <Badge appearance="tint" shape="rounded" size="small" color="brand" className={styles.needBadge}>{l10n.t('Required')}</Badge>
-                            ) : (
-                                <Badge appearance="tint" shape="rounded" size="small" color="informative" className={styles.needBadge}>{l10n.t('Optional')}</Badge>
-                            )}
+                            {/* Fluent's own default: filled, brand, circular (as in LocalQuickStart). */}
+                            <CounterBadge aria-hidden count={index + 1} className={styles.needNumber} />
                             <div className={styles.needCopy}>
-                                <Text>{need.label}</Text>
+                                <span className={styles.needTitle}>
+                                    <Text>{need.label}</Text>
+                                    {need.required ? (
+                                        <Badge appearance="tint" shape="rounded" size="small" color="brand">{l10n.t('Required')}</Badge>
+                                    ) : (
+                                        <Badge appearance="tint" shape="rounded" size="small" color="informative">{l10n.t('Optional')}</Badge>
+                                    )}
+                                </span>
                                 <Text size={200} className={styles.muted}>{need.detail}</Text>
                                 {need.provided && (
                                     <Text size={200} className={styles.prefilledNote}>
@@ -430,7 +431,7 @@ export function QueryInsightsStandalone(): JSX.Element {
                             </div>
                         </li>
                     ))}
-                </ul>
+                </ol>
             </section>
             <section className={styles.section} aria-labelledby={`${noteId}-snippets`}>
                 <Text as="h3" size={400} weight="semibold" id={`${noteId}-snippets`} className={styles.sectionHeading}>
