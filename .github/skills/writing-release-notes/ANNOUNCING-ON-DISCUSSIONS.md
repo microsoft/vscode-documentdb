@@ -6,13 +6,46 @@ from `docs/release-notes/X.Y.md`, so write and commit the release notes first.
 
 | Version type           | What to post                                                                                                              | Title                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Major or minor (X.Y.0) | One new discussion with the whole release notes file                                                                      | `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>` |
-| Patch (X.Y.Z, Z > 0)   | 1. A new discussion with the patch section<br>2. Then the same text as a comment on the X.Y.0 announcement, in that order | `Patch Release vX.Y.Z 📎` (the 📎 emoji is part of the title)        |
+| Major or minor (X.Y.0) | One discussion with the whole release notes file, reusing a confirmed placeholder if present                               | `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>` |
+| Patch (X.Y.Z, Z > 0)   | 1. Create or update the dedicated patch discussion<br>2. Then post the same text as a comment on the X.Y.0 announcement     | `Patch Release vX.Y.Z 📎` (the 📎 emoji is part of the title)        |
+
+## Ask about a placeholder before publishing
+
+Always ask the operator: **Is there already a placeholder discussion for this release? If so, what
+is its URL?** If the request already includes a placeholder URL, ask for confirmation that it is the
+one to update instead of asking for the URL again. Wait for the answer before publishing. Create a
+new discussion only after the operator confirms there is no placeholder.
+
+When a placeholder is confirmed, read it and verify that it belongs to this repository's
+**Announcements** category and is intended for this release. Ask the operator to resolve any
+mismatch before editing. Update that discussion's title and body instead of creating another one.
+For a patch, the placeholder must be the dedicated patch discussion, not the parent X.Y.0
+announcement; the parent still receives a comment afterward.
+
+Read the discussion using its number from the supplied URL, then use the returned node `id` to
+update it with the title and prepared body from the applicable workflow below:
+
+```bash
+gh api graphql -f query='
+query($number: Int!) {
+  repository(owner: "microsoft", name: "vscode-documentdb") {
+    discussion(number: $number) { id title url body category { name } }
+  }
+}' -F number=<discussion number> --jq '.data.repository.discussion'
+
+gh api graphql -f query='
+mutation($id: ID!, $title: String!, $body: String!) {
+  updateDiscussion(input: {discussionId: $id, title: $title, body: $body}) {
+    discussion { url }
+  }
+}' -f id=<discussion id> -f title='<release title>' -F body=@body.md \
+  --jq '.data.updateDiscussion.discussion.url'
+```
 
 ## Patch release: post, then comment
 
 The order matters. Discussions sorts Announcements by most recent activity, so the X.Y.0 announcement
-must receive its comment **after** the patch discussion is created. That keeps the main release
+must receive its comment **after** the patch discussion is created or updated. That keeps the main release
 announcement on top, with the patch post right below it.
 
 1. **Extract the patch section** from the release notes. It starts at `## Patch Release vX.Y.Z` and
@@ -22,7 +55,9 @@ announcement on top, with the patch post right below it.
    awk '/^## Patch Release vX.Y.Z$/{p=1} p&&/^---$/{exit} p' docs/release-notes/X.Y.md > patch-body.md
    ```
 
-2. **Create the patch discussion** in Announcements, titled `Patch Release vX.Y.Z 📎`:
+2. **Publish the patch discussion** in Announcements, titled `Patch Release vX.Y.Z 📎`. Update a
+   confirmed placeholder using the command above with `patch-body.md`; otherwise, after the
+   operator confirms there is no placeholder, create it:
 
    ```bash
    gh api graphql -f query='
@@ -84,7 +119,8 @@ announcement on top, with the patch post right below it.
 
 ## Major or minor release
 
-1. Create the discussion in Announcements with the release notes body (everything after the front
+1. Update the confirmed placeholder, or create the discussion only after the operator confirms
+   there is no placeholder. Publish in Announcements with the release notes body (everything after the front
    matter, `sed '1,/^---$/d' docs/release-notes/X.Y.md`, read with `-F body=@file`), titled
    `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>`. Pick one emoji that fits the
    release.
