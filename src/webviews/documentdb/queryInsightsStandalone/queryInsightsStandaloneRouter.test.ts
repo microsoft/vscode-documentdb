@@ -8,7 +8,7 @@ import { queryInsightsStandaloneRouter, type StandaloneRouterContext } from './q
 import type { StandaloneInput } from './types';
 import type { QueryInsightsStreamEvent } from '../collectionView/types/queryInsightsStream';
 
-const mocks = vi.hoisted(() => ({ stream: vi.fn(), executeCommand: vi.fn() }));
+const mocks = vi.hoisted(() => ({ stream: vi.fn(), executeCommand: vi.fn(), openDocument: vi.fn() }));
 vi.mock('vscode', () => ({ env: { language: 'en-US' }, l10n: { t: (text: string): string => text }, commands: { executeCommand: mocks.executeCommand } }));
 vi.mock('../../../commands/llmEnhancedCommands/indexAdvisorCommands', () => ({
     CommandType: { Find: 'find', Aggregate: 'aggregate', Count: 'count' },
@@ -17,6 +17,9 @@ vi.mock('../../../services/ai/QueryInsightsAIService', () => ({
     QueryInsightsAIService: class {
         getOptimizationRecommendationsStreaming = mocks.stream;
     },
+}));
+vi.mock('../../../utils/readOnlyJsonDocumentProvider', () => ({
+    readOnlyJsonDocumentProvider: { openDocument: mocks.openDocument },
 }));
 vi.mock('../../_integration/trpc', async () => {
     const { initTRPC } = await import('@trpc/server');
@@ -95,6 +98,43 @@ describe('Connectionless Query Insights', () => {
         );
     });
 
+    it('opens supplied raw explain without using a Collection View session', async () => {
+        const caller = queryInsightsStandaloneRouter.createCaller({});
+        expect(await caller.openRawExplain(input)).toBe(true);
+        expect(mocks.openDocument).toHaveBeenCalledWith('Raw Explain Output', expect.stringContaining('"queryPlanner"'));
+    });
+
+    it.each(['azure-documentdb', 'documentdb', 'other'] as const)('applies Azure DocumentDB explain fixups only for %s', (clusterType) => {
+        const raw = {
+            queryPlanner: { winningPlan: { stage: 'SORT', inputStage: { stage: 'COLLSCAN' } } },
+            executionStats: {
+                executionSuccess: true, nReturned: 2, totalDocsExamined: 2, totalKeysExamined: 2,
+                executionStages: { stage: 'SORT', totalDocsExamined: 2, totalKeysExamined: 2, inputStage: {
+                    stage: 'COLLSCAN', nReturned: 2, totalDocsExamined: 100, totalKeysExamined: 100, keysExamined: 100,
+                } },
+            },
+        };
+        for (const aggregate of [false, true]) {
+            const pasted = aggregate ? { stages: [{ $cursor: raw }, { $group: { _id: null }, nReturned: 1 }] } : raw;
+            const parsed = parseStandaloneInput({ ...input, clusterType, explain: JSON.stringify(pasted) });
+            const fixed = aggregate ? (parsed.explain.stages as Array<{ $cursor: typeof raw }>)[0].$cursor : parsed.explain as unknown as typeof raw;
+            expect(fixed.executionStats.totalDocsExamined).toBe(clusterType === 'azure-documentdb' ? 100 : 2);
+            expect(fixed.executionStats.totalKeysExamined).toBe(clusterType === 'azure-documentdb' ? 0 : 2);
+            if (clusterType === 'azure-documentdb') {
+                expect(parsed.clusterInfo).toMatchObject({ domainInfo_isAzure: 'true', domainInfo_api: 'vCore' });
+            }
+        }
+    });
+
+    it('auto-detects a cursor-format aggregate without command metadata and uses its parsed filter', () => {
+        const parsed = parseStandaloneInput({
+            ...input, explain: JSON.stringify({ stages: [{ $cursor: { queryPlanner: explain.queryPlanner, executionStats: explain.executionStats } }, { $group: { _id: null }, nReturned: 1 }] }),
+        });
+        expect(parsed.commandType).toBe('aggregate');
+        expect(parsed.filter).toEqual({ status: 'active' });
+        expect(JSON.parse(parsed.query)).toEqual([{ $match: { status: 'active' } }, { $group: { _id: null } }]);
+    });
+
     it('streams parser events, model metadata and supplied context; aborts on completion', async () => {
         const json = JSON.stringify({ analysis: 'Analysis', educationalContent: 'Education', improvements: [] });
         mocks.stream.mockResolvedValue({
@@ -127,5 +167,22 @@ describe('Connectionless Query Insights', () => {
         controller.abort();
         const cancelled = (await caller.streamStage3({ ...input, requestKey: 'already-cancelled' }))[Symbol.asyncIterator]();
         expect(await cancelled.next()).toEqual({ done: true, value: undefined });
+    });
+
+    it.each(['count', 'aggregate'] as const)('sends the %s applicability summary to Stage 3', async (commandType) => {
+        const json = '{"analysis":"Analysis","educationalContent":"Education","improvements":[]}';
+        mocks.stream.mockResolvedValue({
+            fragments: (async function* (): AsyncGenerator<string> { yield json; })(),
+            completion: Promise.resolve({ improvements: [] }),
+        });
+        const stream = await queryInsightsStandaloneRouter.createCaller({}).streamStage3({
+            ...input, commandType, query: commandType === 'aggregate' ? '[]' : '{}', requestKey: 'scope',
+        });
+        for await (const _event of stream) { /* drain the model response */ }
+        const args = mocks.stream.mock.calls[0] as unknown[];
+        expect(args[6]).toContain(`Analysis Profile: ${commandType.toUpperCase()}`);
+        if (commandType === 'count') expect(args[6]).toContain('Skipped rules: returned-document efficiency ratio');
+        else expect(args[6]).toContain('NOT final pipeline output');
+        expect(args[7]).toMatchObject({ commandType });
     });
 });

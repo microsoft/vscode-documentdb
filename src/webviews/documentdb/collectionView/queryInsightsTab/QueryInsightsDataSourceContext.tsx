@@ -31,6 +31,7 @@ export interface QueryInsightsDataSource {
     streamStage3: (requestKey: string, callbacks: Stage3Callbacks, modelId?: string) => { unsubscribe: () => void };
     executeAction: (actionId: string, payload: unknown) => Promise<{ success: boolean; message?: string }>;
     explore?: () => Promise<void>;
+    viewRawExplain?: () => Promise<void>;
 }
 
 export const QueryInsightsDataSourceContext = createContext<QueryInsightsDataSource | undefined>(undefined);

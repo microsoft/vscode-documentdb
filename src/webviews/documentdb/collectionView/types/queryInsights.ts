@@ -68,7 +68,7 @@ export interface QueryInsightsStage1Response {
 export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'multikey' | 'directFetch';
 
 export type QueryInsightsAnalysisProfile = 'find' | 'aggregate' | 'count';
-export type QueryInsightsMetric = 'selectivity' | 'fetchOverhead' | 'inMemorySort' | 'examinedToReturnedRatio' | 'documentsReturned';
+export type QueryInsightsMetric = 'selectivity' | 'fetchOverhead' | 'inMemorySort' | 'examinedToReturnedRatio' | 'documentsReturned' | 'performanceRating' | 'executionTime';
 
 /**
  * Response from Stage 2 - Detailed execution statistics
@@ -94,6 +94,7 @@ export interface QueryInsightsStage2Response {
     notApplicable?: QueryInsightsMetric[];
     analysisNotes?: string[];
     unassessedPipelineStages?: string[];
+    executionTimeScope?: 'cursor' | 'pipeline-estimate' | 'optimized-plan';
     executionTimeMs: number;
     totalKeysExamined: number;
     totalDocsExamined: number;

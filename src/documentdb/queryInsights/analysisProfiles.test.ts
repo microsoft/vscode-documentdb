@@ -4,9 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 import { describe, expect, it } from 'vitest';
 import { analyzeExplainForStage2 } from './analyzeExplainForStage2';
-import { getInitialExplainPlan } from './analysisProfiles';
+import { findCountedResult, getInitialExplainPlan } from './analysisProfiles';
 import { ExplainPlanAnalyzer } from './ExplainPlanAnalyzer';
 import { transformStage2Response } from './transformations';
+import { StagePropertyExtractor } from './StagePropertyExtractor';
 
 function cursorPlan(): Record<string, unknown> {
     return {
@@ -23,6 +24,12 @@ describe('Command-aware Stage 2 analysis profiles', () => {
     it('keeps the find transformation and advisories exactly as before', () => {
         const explain = cursorPlan();
         const baseline = ExplainPlanAnalyzer.analyzeExecutionStats(explain, { status: 'active' });
+        baseline.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(
+            (explain.executionStats as { executionStages: Record<string, unknown> }).executionStages,
+        );
+        StagePropertyExtractor.enrichWithQueryPlannerInfo(
+            baseline.extendedStageInfo, (explain.queryPlanner as { winningPlan: Record<string, unknown> }).winningPlan,
+        );
         ExplainPlanAnalyzer.addIndexStrategyAdvisories(baseline, 200, explain, { status: 'active' });
         expect(analyzeExplainForStage2(cursorPlan(), 200, { status: 'active' }))
             .toEqual(transformStage2Response(baseline, 200));
@@ -77,6 +84,44 @@ describe('Command-aware Stage 2 analysis profiles', () => {
         expect(response.notApplicable).not.toContain('inMemorySort');
     });
 
+    it('does not label an optimized GROUP result as initial cursor throughput or rate its selectivity', () => {
+        const base = cursorPlan();
+        const response = analyzeExplainForStage2({
+            ...base,
+            queryPlanner: { winningPlan: { stage: 'GROUP', inputStage: { stage: 'COLLSCAN' } } },
+            executionStats: { ...(base.executionStats as Record<string, unknown>), nReturned: 1,
+                executionStages: { stage: 'GROUP', nReturned: 1, inputStage: { stage: 'COLLSCAN', nReturned: 35, docsExamined: 100 } } },
+            command: { aggregate: 'items', pipeline: [{ $match: { status: 'active' } }, { $group: { _id: '$status' } }] },
+        }, 200, { status: 'active' }, 'aggregate');
+        expect(response.notApplicable).toEqual(expect.arrayContaining(['documentsReturned', 'selectivity', 'examinedToReturnedRatio', 'performanceRating']));
+        expect(response.efficiencyAnalysis.selectivity).toBeNull();
+        expect(response.analysisNotes?.[0]).toContain('does not expose a separate cursor boundary');
+        expect(response.efficiencyAnalysis.performanceRating.diagnostics.some((diagnostic) => diagnostic.diagnosticId.includes('efficiency_ratio'))).toBe(false);
+    });
+
+    it.each([true, false])('does not invent zero cursor time when only a pipeline estimate is available: %s', (hasEstimate) => {
+        const cursor = cursorPlan();
+        const stats = { ...cursor.executionStats as Record<string, unknown> };
+        delete stats.executionTimeMillis;
+        const response = analyzeExplainForStage2({
+            stages: [
+                { $cursor: { ...cursor, executionStats: stats } },
+                { $group: { _id: null }, nReturned: 1, ...(hasEstimate ? { executionTimeMillisEstimate: 500 } : {}) },
+            ],
+        }, 200, {}, 'aggregate');
+        expect(response.documentsReturned).toBe(35);
+        expect(response.notApplicable).toContain('performanceRating');
+        if (hasEstimate) {
+            expect(response.executionTimeMs).toBe(500);
+            expect(response.executionTimeScope).toBe('pipeline-estimate');
+            expect(response.notApplicable).not.toContain('executionTime');
+        } else {
+            expect(response.notApplicable).toContain('executionTime');
+        }
+        expect(response.efficiencyAnalysis.performanceRating.diagnostics.map((diagnostic) => diagnostic.diagnosticId))
+            .not.toContain('fast_execution');
+    });
+
     it('uses nCounted for COUNT_SCAN and does not punish an index-only count for nReturned=0', () => {
         const response = analyzeExplainForStage2({
             queryPlanner: { namespace: 'db.items', winningPlan: { stage: 'COUNT', inputStage: { stage: 'COUNT_SCAN', indexName: 'status_1', keyPattern: { status: 1 } } } },
@@ -119,5 +164,13 @@ describe('Command-aware Stage 2 analysis profiles', () => {
         const response = analyzeExplainForStage2(cursorPlan(), 100, {}, 'count');
         expect(response.notApplicable).toContain('documentsReturned');
         expect(response.analysisNotes?.some((note) => note.includes('unavailable, not zero'))).toBe(true);
+    });
+
+    it('sums per-shard counted results once when summary statistics also repeat shard data', () => {
+        const shards = [
+            { executionStages: { stage: 'COUNT', nCounted: 30 } },
+            { executionStages: { stage: 'COUNT', nCounted: 50 } },
+        ];
+        expect(findCountedResult({ executionStages: { stage: 'SHARD_MERGE', shards }, shards })).toBe(80);
     });
 });

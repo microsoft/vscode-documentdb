@@ -37,6 +37,7 @@ interface QueryPlanSummaryProps {
     stage2Loading: boolean;
     hasError: boolean;
     preview?: boolean;
+    onViewRawExplain?: () => Promise<void>;
 }
 
 export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
@@ -46,12 +47,15 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     stage2Loading,
     hasError,
     preview = false,
+    onViewRawExplain,
 }) => {
     const trpcClient = useTrpcClient();
     const profile = stage2Data?.analysisProfile ?? 'find';
     const resultSummary = stage2Data ? getAnalysisProfilePresentation(profile).resultSummary(
         stage2Data.notApplicable?.includes('documentsReturned') ? l10n.t('N/A') : stage2Data.documentsReturned.toLocaleString(),
     ) : '';
+    const timeSummary = stage2Data?.notApplicable?.includes('executionTime')
+        ? l10n.t('Time unavailable') : `${stage2Data?.executionTimeMs.toFixed(2) ?? ''}ms`;
 
     const handleStageDetailsToggle = (isExpanded: boolean) => {
         trpcClient.common.reportEvent
@@ -69,7 +73,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 
     const handleViewRawExplain = async () => {
         try {
-            await trpcClient.mongoClusters.collectionView.viewRawExplainOutput.mutate();
+            if (onViewRawExplain) await onViewRawExplain();
+            else await trpcClient.mongoClusters.collectionView.viewRawExplainOutput.mutate();
         } catch (error) {
             void trpcClient.common.displayErrorMessage.mutate({
                 message: l10n.t('Failed to open raw execution stats'),
@@ -149,8 +154,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                             stage1Data.shards.length,
                                             stage2Data.documentsReturned,
                                             stage2Data.executionTimeMs.toFixed(0),
-                                        ) : l10n.t('SHARD_MERGE · {0} shards · {1} · {2}ms',
-                                            stage1Data.shards.length, resultSummary, stage2Data.executionTimeMs.toFixed(0))}
+                                        ) : l10n.t('SHARD_MERGE · {0} shards · {1} · {2}',
+                                            stage1Data.shards.length, resultSummary, timeSummary)}
                                     </Text>
                                 )}
                             </div>
@@ -367,7 +372,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                         {profile === 'find' ? <>{stage2Data.documentsReturned} returned</> : resultSummary} ·{' '}
                                         {stage2Data.totalKeysExamined.toLocaleString()} keys ·{' '}
                                         {stage2Data.totalDocsExamined.toLocaleString()} docs ·{' '}
-                                        {stage2Data.executionTimeMs.toFixed(2)}ms
+                                        {timeSummary}
                                     </Text>
                                 )}
                             </div>

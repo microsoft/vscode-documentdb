@@ -15,6 +15,7 @@ import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webv
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
+import type { QueryInsightsPrefill } from '../../../src/webviews/documentdb/queryInsightsStandalone/types';
 import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';
 
 type Inputs = FixtureInputs;
@@ -82,6 +83,10 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
+const queryInsightsConfig: QueryInsightsPrefill = {
+    explain: '{"queryPlanner":{"winningPlan":{"stage":"COLLSCAN"}},"executionStats":{"nReturned":2,"executionTimeMillis":12,"totalDocsExamined":100,"totalKeysExamined":0}}',
+    databaseName: 'demo', collectionName: 'items',
+};
 interface FixtureTableRow {
     readonly id: string;
     readonly 'x-objectid': string;
@@ -246,10 +251,7 @@ export const fixtures = {
         },
     },
     queryInsightsStandalone: {
-        config: {
-            explain: '{"queryPlanner":{"winningPlan":{"stage":"COLLSCAN"}},"executionStats":{"nReturned":2,"executionTimeMillis":12,"totalDocsExamined":100,"totalKeysExamined":0}}',
-            databaseName: 'demo', collectionName: 'items',
-        },
+        config: queryInsightsConfig,
         monaco: false,
         content: ['Query Insights Explorer (POC)', 'Configure'],
         styles: [{ selector: '.queryInsightsStandalone', property: 'min-width', expected: '0px' }],
@@ -297,6 +299,7 @@ export const fixtures = {
                 ] as const,
             },
             'common.copyToClipboard': reply<Outputs['common']['copyToClipboard']>('mutation', true),
+            'queryInsightsStandalone.openRawExplain': reply<Outputs['queryInsightsStandalone']['openRawExplain']>('mutation', true),
         },
     },
     atlasCredentials: {

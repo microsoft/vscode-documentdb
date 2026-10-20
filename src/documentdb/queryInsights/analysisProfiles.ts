@@ -33,7 +33,9 @@ export function findCountedResult(value: unknown): number | undefined {
     if (typeof node.nCounted === 'number' && Number.isFinite(node.nCounted) && node.nCounted >= 0) {
         return node.nCounted;
     }
-    const children: unknown[] = [node.inputStage, node.executionStages];
+    const executionCount = findCountedResult(node.executionStages);
+    if (executionCount !== undefined) return executionCount;
+    const children: unknown[] = [node.inputStage];
     for (const key of ['inputStages', 'shards']) {
         if (Array.isArray(node[key])) children.push(...node[key] as unknown[]);
     }

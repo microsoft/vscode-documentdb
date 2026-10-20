@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 import { z } from 'zod';
 import * as vscode from 'vscode';
+import { EJSON } from 'bson';
+import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { analyzeExplainForStage2 } from '../../../documentdb/queryInsights/analyzeExplainForStage2';
 import { ExplainPlanAnalyzer } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
 import { getInitialExplainPlan } from '../../../documentdb/queryInsights/analysisProfiles';
@@ -25,6 +27,13 @@ export const queryInsightsStandaloneRouter = router({
         return true;
     }),
     getPrefill: publicProcedureWithTelemetry.query(({ ctx }) => (ctx as StandaloneRouterContext).prefill),
+    openRawExplain: publicProcedureWithTelemetry.input(standaloneInputSchema).mutation(async ({ input }) => {
+        const parsed = parseStandaloneInput(input);
+        await readOnlyJsonDocumentProvider.openDocument(
+            vscode.l10n.t('Raw Explain Output'), EJSON.stringify(parsed.explain, { relaxed: true }, 4),
+        );
+        return true;
+    }),
     validateInput: publicProcedureWithTelemetry.input(standaloneInputSchema).query(({ input }) => {
         const parsed = parseStandaloneInput(input);
         return { commandType: parsed.commandType, query: parsed.query };
@@ -55,7 +64,7 @@ export const queryInsightsStandaloneRouter = router({
                 const handle = await new QueryInsightsAIService().getOptimizationRecommendationsStreaming(
                     '', parsed.queryObject ?? parsed.query, input.databaseName, input.collectionName,
                     parsed.explain, controller.signal, buildStaticAnalysisSummary(stage2, parsed.totalDocs), {
-                        providedData: { clusterInfo: { platform: input.clusterType } },
+                        providedData: { clusterInfo: parsed.clusterInfo },
                         modelId: input.modelId, commandType: parsed.commandType,
                         collectionStats: parsed.collectionStats, indexStats: parsed.indexStats,
                     },

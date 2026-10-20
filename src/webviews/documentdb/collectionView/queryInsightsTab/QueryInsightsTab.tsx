@@ -437,11 +437,11 @@ export const QueryInsightsMain = (): JSX.Element => {
         return accessor(stage2Data) ?? unavailableValue;
     };
 
-    const executionTime = getMetricValue(stage2Data?.executionTimeMs);
     const analysisProfile = stage2Data?.analysisProfile ?? source.commandType ?? 'find';
     const presentation = getAnalysisProfilePresentation(analysisProfile);
     const notApplicable = stage2Data?.notApplicable ?? [];
     const notApplicableToCount = l10n.t('Not applicable to count queries');
+    const executionTime = getMetricValue(notApplicable.includes('executionTime') ? null : stage2Data?.executionTimeMs);
     const docsReturned = getMetricValue(
         notApplicable.includes('documentsReturned') ? null : stage2Data?.documentsReturned,
     );
@@ -788,7 +788,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                     {/* Metrics Row */}
                     <MetricGrid>
                         <TimeMetric
-                            label={l10n.t('Execution Time')}
+                            label={stage2Data?.executionTimeScope === 'pipeline-estimate'
+                                ? l10n.t('Overall execution time (estimate)') : l10n.t('Execution Time')}
                             valueMs={executionTime}
                             tooltipExplanation={l10n.t('Total time taken to execute the query on the server')}
                         />
@@ -984,6 +985,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     <GetPerformanceInsightsCard
                                         className="cardSpacing"
                                         bodyText={
+                                            !notApplicable.includes('performanceRating') &&
                                             stage2Data?.efficiencyAnalysis.performanceRating.score === 'excellent'
                                                 ? l10n.t(
                                                       'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
@@ -1237,14 +1239,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
                             rating={
-                                hasMetricsError
+                                hasMetricsError || notApplicable.includes('performanceRating')
                                     ? null
                                     : showMetricsSkeleton
                                       ? undefined
                                       : stage2Data?.efficiencyAnalysis.performanceRating.score
                             }
                             diagnostics={
-                                hasMetricsError || showMetricsSkeleton
+                                hasMetricsError || showMetricsSkeleton || notApplicable.includes('performanceRating')
                                     ? undefined
                                     : stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
                             }
@@ -1255,6 +1257,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     {/* Query Plan Summary */}
                     <QueryPlanSummary
                         preview={analysisProfile !== 'find'}
+                        onViewRawExplain={source.viewRawExplain}
                         stage1Data={stage1Data}
                         stage2Data={stage2Data}
                         stage1Loading={pipeline.kind === 's1Loading'}

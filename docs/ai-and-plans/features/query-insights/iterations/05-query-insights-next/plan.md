@@ -80,6 +80,11 @@ branch: dev/tnaum/query-insights-next
 
   A further coupling was found while checking F6: QueryPlanSummary's raw-explain button calls
   a Collection View session RPC directly. The standalone must supply its own raw-plan action.
+  Optimized single-plan aggregates containing transformations may not expose an initial cursor
+  boundary; those initial-return/selectivity/rating fields must be unavailable rather than
+  relabelling final output as cursor throughput. If cursor timing is missing, a last-stage
+  estimate describes the whole pipeline, not cursor-only time; it cannot justify a fast
+  initial-stage rating.
 
 ## Rules for the implementing agent
 
@@ -264,7 +269,7 @@ is bundled once at Checkpoint C after WI-11; do not build/test after WI-9 or WI-
       Connected find tab appearance and behavior stay unchanged.
     - _Outcome:_ Standalone Analyze has a Feature preview badge; non-find efficiency/plan cards carry the tuned-for-find preview. Aggregate throughput is relabelled and scope notes are visible; count-only-inapplicable cells are explicit and count plan details suppress misleading Returned counters. Added three presentation tests; checks deferred to C.
 
-- [ ] **WI-11: Standalone correctness + Checkpoint C**
+- [x] **WI-11: Standalone correctness + Checkpoint C**
     - Apply `fixupDocumentDbExplain` to supplied Azure DocumentDB plans, including cursor plans,
       with synthesized `domainInfo_isAzure='true'` / `domainInfo_api='vCore'` metadata.
     - Non-find static summaries tell the model which rules were skipped and why.
@@ -273,6 +278,7 @@ is bundled once at Checkpoint C after WI-11; do not build/test after WI-9 or WI-
     - **Checkpoint C:** `npm run build`;
       `npx vitest run src/documentdb/queryInsights src/webviews/documentdb/queryInsightsStandalone src/webviews/documentdb/collectionView src/services/ai`.
     - Update Phase C results, minutes, deviations and manual smoke steps.
+    - _Outcome:_ Applied Azure explain fixups to top-level/cursor plans, made non-find model summaries scope-aware, added a connectionless raw-plan action, corrected footer emphasis, and verified Analyze really renders Analyze. Checkpoint C passed: build, 21 files / 231 tests, and 15/15 L2 routes; real host/model smoke remains manual.
 
 ## How to use (filled in at WI-8)
 
@@ -306,6 +312,15 @@ is bundled once at Checkpoint C after WI-11; do not build/test after WI-9 or WI-
    two-column component as the connected tab. Recommendations offer **Copy command**, never
    database-changing actions. **Back** preserves all text for another run with a changed model/prompt.
 
+   Phase C adds explicit preview scope: every standalone Analyze page says **Feature preview**;
+   aggregate/count efficiency and plan cards say **Preview · tuned for find queries**.
+   Aggregate counters describe the initial cursor, not final pipeline output. A folded
+   single-plan pipeline without a recoverable cursor boundary shows unavailable initial
+   returns/selectivity/rating rather than a guessed score. Count reads `nCounted` and marks
+   selectivity, fetch overhead and sorting inapplicable. Select **Azure DocumentDB** to apply
+   the same explain-counter workarounds as the connected path. **View Raw Execution Stats**
+   opens the supplied, corrected explain without a session.
+
 ### Manual smoke still required (real VS Code + Copilot)
 
 1. Open the command from the palette with no connection. Continue, paste a real executionStats
@@ -320,6 +335,34 @@ is bundled once at Checkpoint C after WI-11; do not build/test after WI-9 or WI-
    the prefilled query, raw explain, database/collection and available stats/indexes.
 6. In the connected tab request AI recommendations, verify real index actions still work, then
    refresh/change the query and switch tabs during streaming to check reset/cancel behavior.
+
+### Additional Phase C manual smoke (real plans, not the mocked L2 fixtures)
+
+1. In Configure paste a count explain with `nReturned: 0` and a COUNT stage with `nCounted: 80`,
+   backed by COUNT_SCAN; supply collStats with `count: 100`. Select **count**, choose a model,
+   Analyze. Confirm **Documents counted = 80**, no false "No matching documents" badge, an
+   index-aware rating, and **Not applicable to count queries** for selectivity/fetch/sort.
+   An explain without `nCounted` must show an unavailable count, not zero.
+2. Back, clear the old query text, and paste an aggregate `stages[]` explain whose initial
+   `$cursor` returns 35 documents but `$group` returns one, followed by `$sort`. Select
+   **aggregate**, validate/extract, Analyze. Confirm **Documents passed to pipeline = 35**,
+   a populated cursor plan, a scope note naming `$group`/`$sort`, and no false "No" sort claim.
+   Query inference from explain-only data can be partial; review the editable pipeline.
+3. Repeat with a single-plan aggregate containing only pushed-down match/sort, then one with
+   a folded GROUP. The first supports normal initial metrics; the second must not invent
+   initial throughput/selectivity/rating from its final `nReturned`. Remove cursor time and
+   leave only a last-stage estimate: it must be labelled overall/estimated, not a fast cursor.
+4. Paste an Azure DocumentDB SORT→COLLSCAN explain with top-level docs/keys of 2 and a deeper
+   scan count of 100. Select **Azure DocumentDB** and Analyze: expect 100 documents examined and
+   0 keys for COLLSCAN. **View Raw Execution Stats** must open the corrected read-only input.
+   Back → select **Other** → rerun: the Azure-only fixups must not apply.
+5. On Configure confirm **Analyze** is the filled forward action and **Back** is secondary.
+   The connected find tab must have its original labels/layout/actions and no new preview badges.
+   Every standalone Analyze page has Feature preview; non-find cards have the two tuned-for-find badges.
+6. With real Copilot, compare count/aggregate recommendations: they must receive the summary's
+   skipped-rule/scope explanation, not a find-only assertion that zero count output means no
+   matches or final grouped output is filter selectivity. Cancel/back/close during streaming
+   and retry with a new model/local prompt as in Phase B.
 
 ## Time log
 
@@ -342,7 +385,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-8 | Coding agent (gpt-6.1-sol) | 14:33 | 14:34 | 1 | Usage, manual checks, timeline and Phase B totals. |
 | WI-9 | Coding agent (gpt-6.1-sol) | 14:34 | 14:38 | 4 | Verified/corrected F6 against installed helper; checks deferred to C. |
 | WI-10 | Coding agent (gpt-6.1-sol) | 14:38 | 14:41 | 3 | Preview/applicability UI; checks deferred to C. |
-| WI-11 + Checkpoint C | | | | | |
+| WI-11 + Checkpoint C | Coding agent (gpt-6.1-sol) | 14:41 | 15:03 | 22 | Correctness/summary refinements, Checkpoint C and 15 themed L2 routes. |
 
 ## Deviation log
 
@@ -354,6 +397,10 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Checkpoint B | Updated the registry test's exhaustive view-name list and browser fixture/runtime/scenario tables for the new registered view. Added Welcome, Configure and Analyze fixtures in all three themes. No existing snapshots or TDD contracts changed. | The build makes these tables exhaustive over `WebviewName`; leaving them unchanged fails compilation. Browser smoke additionally caught ambiguous forward-button names and missing mutation acknowledgement values; both were corrected. The integrated runner needed a supplied timer shim (`page.waitForTimeout`) because its external execution context has no global `setTimeout`; the repository runner was not changed. |
 | WI-7 | Session prefill reads optional collStats/indexStats/metadata with a 1.5-second best-effort bound per parallel call. | They are not cached on `ClusterSession`; bounded lookups provide useful prefill without blocking opening the explorer when optional metadata is unavailable. |
 | WI-9 | Corrected F6's aggregate-return/time assumptions against the installed helper, normalize to the cursor before invoking it, and leave profile metadata absent on the connected find path. Count results without `nCounted` are explicitly unavailable. | The helper mixes final pipeline returns with initial cursor examination and can mutate cursor counters; retaining that behavior would make selectivity misleading. Preserving the find response shape avoids fixture/shipped-behavior churn. Missing count evidence must not become a fabricated zero. |
+| WI-11 | Optimized aggregates without a separate cursor boundary suppress initial returns/selectivity/rating; missing cursor timing is unavailable or explicitly a whole-pipeline estimate, and does not produce a fast-cursor rating. | Inspecting both explain formats exposed cases where relabelling the top-level counters would still mix final output or pipeline time with initial-stage rules. Hiding unsupported conclusions is safer than guessing; small fixtures exercise these boundaries. |
+| WI-11 | Count rating is an explicit preview heuristic: no document reads is excellent; indexed reads below 10% / 50% of known collection size are excellent / good; larger indexed scans are fair, while unindexed broad/unknown scans are poor. | Count does not return matching documents, so the find efficiency score cannot be reused. Index access plus scan work is the operator-requested basis; this POC heuristic is not a shipped count-rating design. |
+| WI-11 | Added an optional raw-explain action to the adapter; standalone uses its own read-only JSON RPC. Inferred aggregate queries include available cursor filter/stage operators and warn that extraction can be partial. | The reused plan component still contained a hidden session-only raw-plan action. Keeping its connected fallback preserves find behavior while avoiding a broken standalone button. Explain-only input cannot always recover the exact original command. |
+| Checkpoint C | Corrected only new test fixtures: the find-equivalence baseline now includes existing extended-stage enrichment, and the negative "No" assertion matches a full line rather than the prefix of "Not rated". No existing snapshots or TDD contracts changed. | These failures were test-setup/assertion mistakes, not intentional changes to find behavior. Source L2 readiness also waits for completed Analyze content, not merely profile labels that can appear before Stage 2 finishes. |
 | WI-3 | Made `formatTokenCount` browser-safe with an optional locale argument; host logging passes the VS Code locale explicitly. | The existing utility imported `vscode` at runtime, which cannot ship in a webview bundle. Reusing a pure helper avoids duplicating formatting while preserving host output. |
 | Checkpoint A | Restored lockfile dependencies with `npm ci` after the initial commands could not start due to missing packages. | This worktree had no installed dependency set; no dependency manifests or lockfile changed. |
 | Checkpoint A | The new picker selection test replaces only Fluent's floating dropdown/option layer with a native test stand-in. | Opening the real popup in jsdom (no layout engine) timed out; picker state, RPC calls, ordering, token labels, hints, and disclosure tests remain exercised. Also isolated the new host test's cancellation-error mock. No existing snapshots or TDD contracts changed. |
@@ -381,3 +428,26 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 - Total Phase B elapsed time: **170 minutes** (WI-5 2 + WI-6 2 + WI-7/checkpoint 165 + WI-8 1).
   This includes approximately 150 minutes of integrated browser/tool waiting, not active coding.
 - Total recorded coding/checkpoint time for Phases A + B: **186 minutes** (16 + 170).
+
+## Phase C verification outcome
+
+- Case 1 only: final `npm run build` passed (2026-10-20, 15:00 UTC).
+- Exact Checkpoint C selector passed: **21 files, 231 tests, zero failures/skips**
+  (final run started 14:59 UTC). The find-equivalence test includes its existing extended-stage
+  enrichment; all existing find rating, advisory, transformation and summary tests passed.
+- Mocked source L2 smoke passed **15/15 routes**, zero harness/late errors: Welcome, Configure,
+  Analyze/find, Analyze/aggregate and Analyze/count in dark, light and high-contrast.
+  Clipboard and standalone raw-explain RPC assertions passed. Readiness requires actual Analyze
+  content, including completed recommendation cards, rather than a Configure/loading state.
+- Explicitly checked `/queryInsightsStandalone/analyze/dark` after Continue → Analyze: the active
+  heading was Query Insights, Feature preview was visible, readiness was true and no errors were
+  recorded. The browser was left on Analyze, not on the Back-persistence smoke state.
+- Explicitly measured Configure footer styles in dark mode: Analyze's filled background was
+  `rgb(0, 103, 184)` / white text, versus Back's secondary `rgb(31, 31, 31)` / neutral text.
+- The dev server was stopped. No live database/model request, installed-extension smoke, lint,
+  formatting, localization generation, packaging, extra verification scripts or push was performed.
+  The exact real-plan/real-Copilot smoke steps remain above; mocked UI fixtures are not backend proof.
+- Phase C time: **29 minutes** (WI-9 4 + WI-10 3 + WI-11/checkpoint 22).
+- This task's Phases B + C total: **199 elapsed minutes**, including approximately 150 minutes
+  of integrated-browser/tool waiting in Phase B (approximately **49 minutes excluding that wait**).
+  All recorded coding/checkpoint time including the earlier Phase A: **215 minutes**.

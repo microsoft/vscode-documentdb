@@ -75,6 +75,67 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
     };
 }
 
+const explorerBase = fixtures.queryInsightsStandalone;
+const explorerSteps = [
+    { action: 'click', role: 'button', name: 'Continue' },
+    { action: 'click', role: 'button', name: 'Analyze supplied data' },
+] as const satisfies readonly ScenarioStep[];
+const explorerStage2 = explorerBase.rpc['queryInsightsStandalone.getStage2'].results[0];
+
+function explorerProfile(profile: 'aggregate' | 'count'): Scenario<'queryInsightsStandalone'> {
+    const isCount = profile === 'count';
+    const commandType = profile as FixtureOutputs['queryInsightsStandalone']['validateInput']['commandType'];
+    const stage2: FixtureOutputs['queryInsightsStandalone']['getStage2'] = {
+        ...explorerStage2,
+        analysisProfile: profile, documentsReturned: isCount ? 80 : 35,
+        totalDocsExamined: isCount ? 0 : 100, totalKeysExamined: isCount ? 80 : 0,
+        notApplicable: isCount ? ['selectivity', 'fetchOverhead', 'inMemorySort', 'examinedToReturnedRatio'] : ['inMemorySort'],
+        analysisNotes: isCount ? [] : ['Only the initial cursor stage ($match/$sort) is analyzed; later pipeline stages ($group, $sort) are not rated.'],
+        efficiencyAnalysis: {
+            ...explorerStage2.efficiencyAnalysis,
+            selectivity: isCount ? null : 17.5,
+            ...(isCount ? { indexUsed: 'status_1', performanceRating: { score: 'excellent' as const, diagnostics: [] } } : {}),
+        },
+        ...(isCount ? {
+            executionStrategy: 'Index-only count', indexUsed: true, usedIndexNames: ['status_1'],
+            hadCollectionScan: false, isCoveringQuery: true, keysToDocsRatio: null,
+            stages: [{ stage: 'COUNT', name: 'Count', nReturned: 0 }, { stage: 'COUNT_SCAN', name: 'Index count scan', nReturned: 80 }],
+        } : {}),
+    };
+    const initial = explorerBase.rpc['queryInsightsStandalone.getStage1'].results[0];
+    const stage1: FixtureOutputs['queryInsightsStandalone']['getStage1'] = isCount ? {
+        ...initial, stages: stage2.stages,
+        efficiencyAnalysis: { executionStrategy: 'Index-only count', indexUsed: 'status_1', hasInMemorySort: false },
+    } : initial;
+    const cursor = {
+        queryPlanner: { winningPlan: { stage: 'COLLSCAN' }, parsedQuery: { status: 'active' } },
+        executionStats: { executionTimeMillis: 12, nReturned: 35, totalDocsExamined: 100, totalKeysExamined: 0,
+            executionStages: { stage: 'COLLSCAN', nReturned: 35, docsExamined: 100 } },
+    };
+    const explain = isCount ? {
+        queryPlanner: { winningPlan: { stage: 'COUNT', inputStage: { stage: 'COUNT_SCAN', indexName: 'status_1' } } },
+        executionStats: { executionTimeMillis: 12, nReturned: 0, totalDocsExamined: 0, totalKeysExamined: 80,
+            executionStages: { stage: 'COUNT', nCounted: 80, inputStage: { stage: 'COUNT_SCAN', indexName: 'status_1' } } },
+        command: { count: 'items', query: { status: 'active' } },
+    } : { stages: [{ $cursor: cursor }, { $group: { _id: '$status' }, nReturned: 1 }, { $sort: { _id: 1 }, nReturned: 1 }] };
+    return {
+        config: { ...explorerBase.config, explain: JSON.stringify(explain), commandType: profile },
+        rpc: {
+            ...explorerBase.rpc,
+            'queryInsightsStandalone.validateInput': { type: 'query', results: [{ commandType, query: isCount ? '{}' : '[]' }] },
+            'queryInsightsStandalone.getStage2': { type: 'query', results: [stage2] },
+            'queryInsightsStandalone.getStage1': { type: 'query', results: [stage1] },
+        },
+        steps: explorerSteps,
+        readiness: {
+            content: ['Feature preview', 'Preview · tuned for find queries', 'Query Plan Summary', 'Copy command',
+                isCount ? 'Documents counted' : 'Documents passed to pipeline',
+                isCount ? 'Not applicable to count queries' : 'Not rated for pipeline $sort'],
+            selectors: ['.leftColumn', '.rightColumn'], noProgressbar: true,
+        },
+    };
+}
+
 const base = fixtures.localQuickStart;
 const readyDocker = base.rpc['localQuickStart.getDockerStatus'].results[0];
 const completedStages = [
@@ -153,20 +214,28 @@ export const scenarios = {
         },
         analyze: {
             ...defaultScenario('queryInsightsStandalone'),
-            steps: [
-                { action: 'click', role: 'button', name: 'Continue' },
-                { action: 'click', role: 'button', name: 'Analyze supplied data' },
-            ],
+            steps: explorerSteps,
             readiness: {
-                content: ['Query Efficiency Analysis', 'Query Performance Analysis', 'Consider indexing the filter.', 'Copy command'],
+                content: ['Feature preview', 'Query Efficiency Analysis', 'Query Performance Analysis', 'Consider indexing the filter.', 'Copy command'],
                 selectors: ['.leftColumn', '.rightColumn'], noProgressbar: true,
             },
             assertions: [{
                 kind: 'calls', name: 'Explorer recommendations are copy-only',
                 path: 'common.copyToClipboard', input: { text: 'db.items.createIndex({status: 1})' }, count: 1,
                 steps: [{ action: 'click', role: 'button', name: 'Copy command' }],
+            }, {
+                kind: 'calls', name: 'Raw explain uses the connectionless router',
+                path: 'queryInsightsStandalone.openRawExplain', count: 1,
+                input: {
+                    explain: explorerBase.config.explain ?? '', query: '{}', commandType: 'find',
+                    collectionStats: '', indexes: '', databaseName: 'demo', collectionName: 'items',
+                    clusterType: 'azure-documentdb', modelId: 'copilot-utility',
+                },
+                steps: [{ action: 'click', role: 'button', name: 'View Raw Execution Stats' }],
             }],
         },
+        'analyze-aggregate': explorerProfile('aggregate'),
+        'analyze-count': explorerProfile('count'),
     },
     collectionView: { default: defaultScenario('collectionView') },
     documentView: { default: defaultScenario('documentView') },

@@ -8,6 +8,9 @@ import { z } from 'zod';
 import { CommandType, type QueryObject } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { CollectionStats, IndexStats } from '../../../documentdb/LlmEnhancedFeatureApis';
 import { toFilterQueryObj } from '../../../documentdb/utils/toFilterQuery';
+import { fixupDocumentDbExplain } from '../../../documentdb/utils/fixupDocumentDbExplain';
+import type { ClusterMetadata } from '../../../documentdb/utils/getClusterMetadata';
+import { getInitialExplainPlan } from '../../../documentdb/queryInsights/analysisProfiles';
 import type { StandaloneInput } from './types';
 
 export const queryInsightsPrefillSchema = z.object({
@@ -52,17 +55,35 @@ export function parseStandaloneInput(input: StandaloneInput): {
     indexStats?: IndexStats[];
     totalDocs?: number;
     filter?: Record<string, unknown>;
+    clusterInfo: ClusterMetadata;
 } {
     const explain = object(parseInput(input.explain));
     if (!explain || (!object(explain.queryPlanner) && !object(explain.executionStats) && !Array.isArray(explain.stages))) {
         throw new Error(vscode.l10n.t('Paste an explain plan containing queryPlanner, executionStats, or stages.'));
     }
+    const clusterInfo: ClusterMetadata = { platform: input.clusterType };
+    if (input.clusterType === 'azure-documentdb') {
+        clusterInfo.domainInfo_isAzure = 'true';
+        clusterInfo.domainInfo_api = 'vCore';
+        fixupDocumentDbExplain(explain, clusterInfo);
+        const cursor = getInitialExplainPlan(explain, 'aggregate');
+        if (cursor !== explain) fixupDocumentDbExplain(cursor, clusterInfo);
+    }
     const command = object(explain.command) ?? {};
-    const planner = object(explain.queryPlanner) ?? {};
-    const detected = 'aggregate' in command ? CommandType.Aggregate : 'count' in command ? CommandType.Count : CommandType.Find;
+    const planner = object(getInitialExplainPlan(explain, 'aggregate').queryPlanner) ?? {};
+    let detected = CommandType.Find;
+    if ('aggregate' in command || Array.isArray(explain.stages)) detected = CommandType.Aggregate;
+    else if ('count' in command) detected = CommandType.Count;
     const commandType = input.commandType === 'auto' ? detected : input.commandType as CommandType;
+    const inferredPipeline: Record<string, unknown>[] = Array.isArray(explain.stages)
+        ? (explain.stages as unknown[]).slice(1).flatMap((stage) => {
+            const operators = Object.fromEntries(Object.entries(object(stage) ?? {}).filter(([key]) => key.startsWith('$')));
+            return Object.keys(operators).length ? [operators] : [];
+        }) : [];
+    const initialFilter = object(planner.parsedQuery);
+    if (initialFilter && Object.keys(initialFilter).length) inferredPipeline.unshift({ $match: initialFilter });
     const extracted = commandType === CommandType.Aggregate
-        ? command.pipeline ?? [] : command.filter ?? command.query ?? planner.parsedQuery ?? {};
+        ? command.pipeline ?? inferredPipeline : command.filter ?? command.query ?? planner.parsedQuery ?? {};
     const query = input.query.trim() || EJSON.stringify(extracted, { relaxed: true }, 2);
     const parsedQuery = parseInput(query);
     const queryRecord = object(parsedQuery);
@@ -85,12 +106,17 @@ export function parseStandaloneInput(input: StandaloneInput): {
     if (indexes !== undefined && (!Array.isArray(indexes) || indexes.some((item: unknown) => !object(item)))) {
         throw new Error(vscode.l10n.t('Indexes must be a JSON array of index objects.'));
     }
+    let filter = queryObject?.filter;
+    if (commandType === CommandType.Count) filter = queryRecord;
+    else if (commandType === CommandType.Aggregate) {
+        filter = object(object(Array.isArray(parsedQuery) ? parsedQuery[0] : undefined)?.$match) ?? initialFilter;
+    }
     return {
-        explain, commandType, query, queryObject,
+        explain, commandType, query, queryObject, clusterInfo,
         // These supplied objects are serialized into the prompt, never used for database actions.
         collectionStats: stats as unknown as CollectionStats | undefined,
         indexStats: indexes as IndexStats[] | undefined,
         totalDocs: typeof stats?.count === 'number' && stats.count >= 0 ? stats.count : undefined,
-        filter: queryObject?.filter ?? (commandType === CommandType.Count ? queryRecord : undefined),
+        filter,
     };
 }

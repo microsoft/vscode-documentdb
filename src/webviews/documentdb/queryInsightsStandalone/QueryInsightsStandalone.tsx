@@ -32,6 +32,7 @@ function Analyze({ input }: { input: StandaloneInput }): JSX.Element {
         streamStage3: (requestKey, callbacks, modelId) =>
             client.queryInsightsStandalone.streamStage3.subscribe({ ...input, modelId: modelId ?? input.modelId, requestKey }, callbacks),
         executeAction: async () => ({ success: false, message: l10n.t('Index actions are disabled in the explorer.') }),
+        viewRawExplain: async (): Promise<void> => { await client.queryInsightsStandalone.openRawExplain.mutate(input); },
     }), [client, input, pipeline, dispatch]);
     return <QueryInsightsDataSourceContext.Provider value={source}><QueryInsightsMain /></QueryInsightsDataSourceContext.Provider>;
 }
@@ -83,13 +84,13 @@ export function QueryInsightsStandalone(): JSX.Element {
                 stepsAriaLabel={l10n.t('Query Insights Explorer steps')}
                 overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}
                 footer={<ContainerFooter>
-                    {step !== 'welcome' && <Button disabled={validating} onClick={() => setStep(step === 'analyze' ? 'configure' : 'welcome')}>
-                        {l10n.t('Back')}
-                    </Button>}
                     {step === 'welcome' && <Button appearance="primary" onClick={() => setStep('configure')}>{l10n.t('Continue')}</Button>}
                     {step === 'configure' && <Button appearance="primary" aria-label={l10n.t('Analyze supplied data')} disabled={!form.explain.trim() || !selectedModel || validating}
                         onClick={() => void validate(true)}>
                         {validating ? l10n.t('Validating…') : l10n.t('Analyze')}
+                    </Button>}
+                    {step !== 'welcome' && <Button appearance="secondary" disabled={validating} onClick={() => setStep(step === 'analyze' ? 'configure' : 'welcome')}>
+                        {l10n.t('Back')}
                     </Button>}
                 </ContainerFooter>}
             >
@@ -107,7 +108,7 @@ export function QueryInsightsStandalone(): JSX.Element {
                         <Button disabled={!form.explain.trim() || validating} onClick={() => void validate(false)}>
                             {l10n.t('Validate and extract query')}
                         </Button>
-                        <Field label={l10n.t('Query or pipeline')} hint={l10n.t('Leave empty to extract from explain.command or queryPlanner.parsedQuery. Find accepts a filter or {filter, sort, projection, skip, limit}.')}>
+                        <Field label={l10n.t('Query or pipeline')} hint={l10n.t('Leave empty to extract from explain.command or queryPlanner.parsedQuery. Find accepts a filter or {filter, sort, projection, skip, limit}. Explain-only extraction can be partial; review the query before Analyze.')}>
                             <Textarea resize="vertical" rows={5} value={form.query}
                                 onChange={(_event, data) => update('query', data.value)} />
                         </Field>
