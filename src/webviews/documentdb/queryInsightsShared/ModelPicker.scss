@@ -1,0 +1,33 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.query-insights-model-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+
+    .fui-Dropdown {
+        width: 100%;
+        min-width: 0;
+    }
+
+    &-compact {
+        width: min(100%, 340px);
+    }
+}
+
+.query-insights-model-muted {
+    color: var(--vscode-descriptionForeground);
+}
+
+.query-insights-model-option {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+}

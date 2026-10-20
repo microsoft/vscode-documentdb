@@ -613,13 +613,14 @@ export class CopilotService {
 
             // Trace token usage in compact form so the output channel stays scannable.
             // The numeric measurements are still emitted to telemetry verbatim.
+            const locale = vscode.env?.language || 'en-US';
             ext.outputChannel.trace(
                 l10n.t(
                     '[Copilot] Tokens: prompt={0}, response={1}, total={2}, context={3}, utilization={4}%',
-                    usage.promptTokens !== undefined ? formatTokenCount(usage.promptTokens) : '?',
-                    usage.responseTokens !== undefined ? formatTokenCount(usage.responseTokens) : '?',
-                    usage.totalTokens !== undefined ? formatTokenCount(usage.totalTokens) : '?',
-                    usage.maxInputTokens !== undefined ? formatTokenCount(usage.maxInputTokens) : '?',
+                    usage.promptTokens !== undefined ? formatTokenCount(usage.promptTokens, locale) : '?',
+                    usage.responseTokens !== undefined ? formatTokenCount(usage.responseTokens, locale) : '?',
+                    usage.totalTokens !== undefined ? formatTokenCount(usage.totalTokens, locale) : '?',
+                    usage.maxInputTokens !== undefined ? formatTokenCount(usage.maxInputTokens, locale) : '?',
                     usage.promptUtilizationPct !== undefined ? usage.promptUtilizationPct.toString() : '?',
                 ),
             );

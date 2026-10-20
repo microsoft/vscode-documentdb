@@ -118,7 +118,7 @@ branch: dev/tnaum/query-insights-next
     - _Acceptance:_ typed client calls compile from both webviews.
     - _Outcome:_ Mounted connection-independent `ai` discovery/preference/prompt-source procedures with validated inputs and RPC regression tests.
 
-- [ ] **WI-3: Shared `ModelPicker` component**
+- [x] **WI-3: Shared `ModelPicker` component**
     - `src/webviews/documentdb/queryInsightsShared/ModelPicker.tsx` (or similar). A Fluent
       `Dropdown` modelled on cosmosdb: option = name + muted "N tokens". The utility model comes
       first, then the rest in list order. Below it, a muted hint: which model is used and why
@@ -127,6 +127,7 @@ branch: dev/tnaum/query-insights-next
       `ai.setSelectedModel`. It also shows a one-line "Prompt: built-in / custom file
       `<basename>`" from `ai.getPromptSourceInfo`.
     - Compact variant for the tab card, full-width variant for the wizard.
+    - _Outcome:_ Added compact/full-width Fluent picker, utility-first options with token counts, persisted-choice/premium hints, basename-only prompt source, and refresh/error/empty states with UI tests.
 
 - [ ] **WI-4: Tab integration**
     - `GetPerformanceInsightsCard`: add optional slots `modelPicker?: ReactNode` and
@@ -231,7 +232,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-0 | Coding agent (gpt-6.1-sol) | 11:26 | 11:28 | 2 | Includes instruction/plan reading; checks deferred to A. |
 | WI-1 | Coding agent (gpt-6.1-sol) | 11:28 | 11:29 | 1 | Checks deferred to A. |
 | WI-2 | Coding agent (gpt-6.1-sol) | 11:30 | 11:31 | 1 | Checks deferred to A; shared RPC tests live under services/ai to join its selector. |
-| WI-3 | | | | | |
+| WI-3 | Coding agent (gpt-6.1-sol) | 11:31 | 11:34 | 3 | Checks deferred to A. |
 | WI-4 + Checkpoint A | | | | | |
 | WI-5 | | | | | |
 | WI-6 | | | | | |
@@ -243,3 +244,4 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI | Deviation | Rationale |
 | --- | --- | --- |
 | — | Coding started (WI-0, partial) before the operator had reviewed the plan. | Autopilot over-reach. Stopped on request; the partial work is kept and finished in WI-0. |
+| WI-3 | Made `formatTokenCount` browser-safe with an optional locale argument; host logging passes the VS Code locale explicitly. | The existing utility imported `vscode` at runtime, which cannot ship in a webview bundle. Reusing a pure helper avoids duplicating formatting while preserving host output. |
