@@ -11,6 +11,8 @@ export interface QueryInsightsPrefill {
     databaseName?: string;
     collectionName?: string;
     clusterType?: 'azure-documentdb' | 'documentdb' | 'other';
+    /** Dev-only (L2 scenario): render a design preview instead of the wizard. */
+    designPreview?: 'tab-model-selection';
 }
 
 export interface StandaloneInput {

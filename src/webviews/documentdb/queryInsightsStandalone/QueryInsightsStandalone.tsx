@@ -47,6 +47,7 @@ import { MessageBlock } from '../../components/MessageBlock';
 import type { QueryInsightsState } from '../collectionView/collectionViewContext';
 import { QueryInsightsDataSourceContext, type QueryInsightsDataSource } from '../collectionView/queryInsightsTab/QueryInsightsDataSourceContext';
 import { QueryInsightsMain } from '../collectionView/queryInsightsTab/QueryInsightsTab';
+import { QueryInsightsDesignPreview } from '../queryInsightsShared/designPreview/QueryInsightsDesignPreview';
 import { ModelPicker } from '../queryInsightsShared/ModelPicker';
 import { QueryInsightsPreviewBadge } from '../queryInsightsShared/QueryInsightsPreviewBadge';
 import type { InputIssue, StandaloneInspection } from './queryInsightsStandaloneInput';
@@ -242,6 +243,11 @@ function Analyze({ input, onKindChange }: { input: StandaloneInput; onKindChange
 }
 
 export function QueryInsightsStandalone(): JSX.Element {
+    const { designPreview } = useConfiguration<QueryInsightsPrefill>();
+    return designPreview === 'tab-model-selection' ? <QueryInsightsDesignPreview /> : <QueryInsightsWizard />;
+}
+
+function QueryInsightsWizard(): JSX.Element {
     const styles = useStyles();
     const prefill = useConfiguration<QueryInsightsPrefill>();
     const client = useTrpcClient();

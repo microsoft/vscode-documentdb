@@ -431,6 +431,33 @@ at Checkpoint E. No push, lint, prettier-fix, l10n or package; nothing under `._
       build, 64 files / 1,312 tests, browser harness 6 files / 79 tests and 21/21 themed L2
       routes; dark screenshots saved. See the environment accommodation below.
 
+### Phase F: design exploration (operator follow-up)
+
+The operator called the tab card's model picker (compact `ModelPicker` in the
+`GetPerformanceInsightsCard` actions row) "really bad design". Before changing the card, five
+options are rendered side by side with mock data in a dev-only L2 scenario,
+`/queryInsightsStandalone/tab-model-options/<theme>` (config flag
+`designPreview: 'tab-model-selection'`; components in
+`src/webviews/documentdb/queryInsightsShared/designPreview/`). `GetPerformanceInsightsCard` and
+`QueryInsightsTab` are unchanged; the operator picks first.
+
+- **Option A — Model pill in the actions row** (recommended): primary button + subtle
+  VS Code Chat-style pill "GPT-6.1 Sol [Medium cost] ⌄" opening a grouped radio menu with a cost
+  badge per model; prompt, Explore and Learn more in one muted footer line.
+- **Option B — Split button:** the chevron holds the model radio group and "Explore with your own
+  input…"; "Using GPT-6.1 Sol [Medium cost] · Built-in prompt" as meta text under the row.
+- **Option C — Settings footer strip:** shipped card body, then a divider and a Model / Prompt
+  label-value strip with a "Change" menu link and Explore on the right.
+- **Option D — Native VS Code quick pick:** the card names the model; "Change model…" would open a
+  host `showQuickPick` (category separators, description = cost tier · context, detail = credits).
+  Static mock of the quick pick shown.
+- **Option E — Header chip with a settings popover:** model chip in the card header opens a popover
+  with the model dropdown, cost and credits, context, prompt and Explore; disclaimer moves to the footer.
+- **Current:** the real card + compact picker fed the same mock models, for comparison.
+- _Outcome:_ Build, 34 + 79 targeted tests and all 27 `queryInsightsStandalone` L2 routes (three
+  themes) passed with zero harness errors; screenshots `tab-model-options-{dark,light,high-contrast}.png`
+  and `welcome-numbered-light.png` saved in the session `wizard-ui` folder.
+
 ## How to use (filled in at WI-8)
 
 1. Keep the internal prompt outside git, for example
@@ -572,6 +599,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-17 + Checkpoint E | Coding agent (gpt-6.1-sol) | 16:40 | 16:56 | 16 | Four Monaco editors, markers/focus tests, later lead F9/F10 clarifications, checkpoint fixes, build/tests, 21 headless routes, screenshot/theme inspection, cleanup and commit. |
 | Phase E style review (lead) | Lead agent | 16:58 | 17:12 | 14 | Pricing panel moved from raw SCSS (px, `'›'` text chevron, editor-background card) to Fluent tokens + `ChevronRightRegular` (VS Code-like subtle card), duplicate pricing label removed, cost values and byline token counts locale-formatted, identity line `id · family · vN`, HC stroke. Restarted the operator's stale Vite watcher (cleared `node_modules/.vite`). Headless screenshots in 3 themes; build + 149 targeted tests passed |
 | Operator feedback round (lead) | Lead agent | 17:40 | 18:02 | 22 | Model section as label/value table; explicit "Not reported"; no toggle; first-Powerful default; Analyze title; no transient subtitle; new `configure-models` scenario; build + 163 unit + 79 harness tests; headless screenshots in 3 themes |
+| Phase F: design exploration | Coding agent (claude-opus-5.5) | 19:06 | 19:23 | 17 | Five tab-card model-selection options + Current in one dev-only L2 scenario (`tab-model-options`); route counts 66→69 / 24→27; build, 34 + 79 tests, 27 headless routes, screenshots in three themes. |
 
 ## Deviation log
 
@@ -607,6 +635,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Operator feedback (16:22) | Welcome: the explain output always shows **Required**; when supplied, a green "Prefilled from your session" note appears below it instead of replacing the tag. All wizard and preview badges use the house style `appearance="tint" shape="rounded" size="small"` (as in the Indexes tab and the plan summary). | "Prefilled" replacing "Required" read like a stale state; the rounded-square tint badge is the convention across the other webviews. |
 | Phase E lead review | The Pricing details panel was restyled after Phase E; the operator's `watch:views` was restarted with a cleared dependency cache. | Phase E's panel used hand-rolled CSS outside the house style. The running watcher's pre-bundled Monaco chunk was stale (504 Outdated Optimize Dep), so Configure never loaded in the operator's browser; restart was the only fix because the dev origin is pinned to `localhost:18080`. |
 | Operator feedback (17:40) | (1) The wizard's model section is now a label/value table matching "Optional context" (Copilot model · Cost · Context window · Capabilities · Model ID · Prompt), with no collapsible: the `<details>` toggle did not work reliably and hid the fact that pricing was missing. Every row is always shown; absent data reads "Not reported for this model". Costs are a small grid (Standard / Long context × Input / Output / Cache read / Cache write). The compact tab variant keeps one line plus the info tooltip. (2) **Default model** with no valid saved choice = first non-utility model whose API `category` is `powerful` (F7), else the first model; the reason (`saved` / `first-powerful` / `first-available`) is returned by the host and shown. (3) The Analyze step title is "Query Insights analysis results", with no transient "Analyzing…" subtitle. | The operator saw pricing rendered for a different model and could not tell that the selected model reported none; the collapsible added a non-working control; `powerful` is the same category VS Code's own picker groups by. |
+| Phase F | The design preview is a scenario of the existing `queryInsightsStandalone` view (config flag), not a new registered view; preview strings are not localized; `playwright-core` was installed under gitignored `._local/pw` instead of `/tmp/pw` (the agent runtime forbids `/tmp`), then removed with the extracted Chromium libraries. Fluent caps menu items at 290px, so the menus show only the cost badge next to the name (context moves to tooltips/details). | Avoids touching the registry and its exhaustive harness tables; the preview is throwaway once the operator picks. |
 
 ## Phase A verification outcome
 

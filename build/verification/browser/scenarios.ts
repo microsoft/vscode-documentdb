@@ -11,6 +11,7 @@ import {
     type FixturePaths,
     type TypedRpcFixtures,
 } from './core/fixtures';
+import { previewAvailableModels } from '../../../src/webviews/documentdb/queryInsightsShared/designPreview/mockModels';
 import { fixtures, type StyleExpectation } from './fixtures';
 
 export interface ScenarioReadiness {
@@ -279,6 +280,23 @@ export const scenarios = {
                         savedModelId: null, effectiveModelId: 'gpt-example', effectiveReason: 'first-powerful',
                     }],
                 },
+            },
+        },
+        // Dev-only design comparison for the Collection View tab's AI card (not a wizard state).
+        'tab-model-options': {
+            config: { ...explorerBase.config, designPreview: 'tab-model-selection' },
+            rpc: {
+                ...explorerBase.rpc,
+                'ai.getAvailableModels': { type: 'query', results: [previewAvailableModels] },
+            },
+            readiness: {
+                content: [
+                    'Option A — Model pill in the actions row', 'Option B — Split button',
+                    'Option C — Settings footer strip', 'Option D — Native VS Code quick pick',
+                    'Option E — Header chip with a settings popover', 'Current — shipped POC layout',
+                    'Saved choice',
+                ],
+                noProgressbar: true,
             },
         },
         'configure-invalid': explorerConfigure(
