@@ -59,6 +59,27 @@ branch: dev/tnaum/query-insights-next
   `selectChatModels({vendor:'copilot'})` minus `auto`, `{id,name,family,vendor,maxInputTokens}`,
   saved id in `globalState`, and a Fluent `Dropdown` showing the name + "N tokens" (a recommended
   group first, then an "Others" `OptionGroup`).
+- **F6: non-find applicability (lead-agent evaluation, checked against installed code).**
+  Stage 2 and plan rendering were designed for find; accepting another command in the wizard
+  does not make its static rules applicable. Inspection of the installed
+  `@mongodb-js/explain-plan-helper/dist/get-execution-stats.js` corrects two lead hypotheses:
+  the helper **replaces cursor `nReturned` with the last pipeline stage's `nReturned`**, and
+  **prefers cursor `executionTimeMillis`**, falling back to the last stage's estimate. It also
+  collects `indexesUsed` from later pipeline stages. Therefore the old efficiency ratio can
+  mix final pipeline output with initial cursor examination; it is not already a valid
+  `$match` selectivity ratio. Normalizing to the initial cursor before analysis avoids that.
+
+  | Element | find | aggregate | count |
+  | --- | --- | --- | --- |
+  | Docs/keys examined, exec time | Valid | Cursor docs/keys; helper prefers cursor time, otherwise last-stage estimate | Valid |
+  | Docs returned + efficiency ratio | Valid | Helper uses final-stage returns with cursor examination; use cursor returns and relabel "Documents passed to pipeline" | COUNT `nReturned=0` is not a match count; use execution-stage `nCounted`, never infer no matches from zero returned documents |
+  | Selectivity / coverage advisories | Valid | Initial cursor / pushed-down filter only, explicitly scoped | Not applicable; suppress |
+  | In-memory sort detection | Valid | Only cursor SORT is detected; a later `$sort` must not be labelled "No" | Not applicable |
+  | Index usage, bitmap, low-cardinality, multikey | Valid | Cursor portion (helper can additionally report later-stage indexes) | Applicable; COUNT_SCAN is recognized as indexed |
+  | Plan visualization / extended stage info | Valid | Current transformer/extractor only read top-level fields; normalize `stages[0].$cursor` first | COUNT/COUNT_SCAN trees can be shown; numeric result remains `nCounted` |
+
+  A further coupling was found while checking F6: QueryPlanSummary's raw-explain button calls
+  a Collection View session RPC directly. The standalone must supply its own raw-plan action.
 
 ## Rules for the implementing agent
 
@@ -221,6 +242,37 @@ branch: dev/tnaum/query-insights-next
       table as "POC, not shipped".
     - _Outcome:_ Added local-prompt/model/entry-point instructions, exact manual smoke steps, Phase B verification and wall-clock totals; linked this iteration as POC, not shipped.
 
+### Phase C: command-aware analysis and explicit preview scope (operator follow-up)
+
+Same per-WI commits, time logging, deviation rules and Case 1 restrictions apply. Verification
+is bundled once at Checkpoint C after WI-11; do not build/test after WI-9 or WI-10.
+
+- [x] **WI-9: Command-type-aware Stage 2 (analysis profile)**
+    - Thread find/aggregate/count into the shared pure Stage 2 path. Find remains unchanged.
+    - Count uses `nCounted`, suppresses find selectivity/coverage/no-match/sort assumptions, and
+      rates index usage plus examined documents versus collection size.
+    - Aggregate normalizes the initial `$cursor` for metrics, plan and extended properties;
+      scopes the returned-document metric/diagnostics to the cursor and explains which later
+      pipeline stages are not rated. Never claim no sort when a pipeline `$sort` is present.
+    - Return profile/applicability metadata; add small aggregate (both explain formats) and count fixtures/tests.
+    - _Outcome:_ Added aggregate cursor normalization, pipeline-scope diagnostics/applicability, count `nCounted` extraction and count-specific index/scan-work ratings; shared helper accepts profiles while the find response remains unchanged. Added seven profile contract tests; checks deferred to C.
+
+- [ ] **WI-10: UI applicability and preview badges**
+    - Standalone Analyze always shows "Feature preview".
+    - Non-find efficiency and plan cards show "Preview · tuned for find queries".
+    - Relabel aggregate/count metrics and hide or explicitly mark inapplicable cells.
+      Connected find tab appearance and behavior stay unchanged.
+
+- [ ] **WI-11: Standalone correctness + Checkpoint C**
+    - Apply `fixupDocumentDbExplain` to supplied Azure DocumentDB plans, including cursor plans,
+      with synthesized `domainInfo_isAzure='true'` / `domainInfo_api='vCore'` metadata.
+    - Non-find static summaries tell the model which rules were skipped and why.
+    - Make the wizard's forward action primary, not Back; confirm the Analyze scenario lands
+      on Analyze. Give the standalone raw-explain button a connectionless action.
+    - **Checkpoint C:** `npm run build`;
+      `npx vitest run src/documentdb/queryInsights src/webviews/documentdb/queryInsightsStandalone src/webviews/documentdb/collectionView src/services/ai`.
+    - Update Phase C results, minutes, deviations and manual smoke steps.
+
 ## How to use (filled in at WI-8)
 
 1. Keep the internal prompt outside git, for example
@@ -287,6 +339,9 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-6 | Coding agent (gpt-6.1-sol) | 11:46 | 11:48 | 2 | Host plumbing; checks deferred to B. |
 | WI-7 + Checkpoint B | Coding agent (gpt-6.1-sol) | 11:48 | 14:33 | 165 | Includes ~150 minutes waiting on integrated browser/tools (11:56–14:26); final build/tests and 9 L2 routes passed. |
 | WI-8 | Coding agent (gpt-6.1-sol) | 14:33 | 14:34 | 1 | Usage, manual checks, timeline and Phase B totals. |
+| WI-9 | Coding agent (gpt-6.1-sol) | 14:34 | 14:38 | 4 | Verified/corrected F6 against installed helper; checks deferred to C. |
+| WI-10 | | | | | |
+| WI-11 + Checkpoint C | | | | | |
 
 ## Deviation log
 
@@ -297,6 +352,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-6 | The standalone subscription reuses the parser/service/event types but has a small separate streaming loop; no connected completion-event telemetry or survey activity. | Extracting the connected loop would disturb its detailed session telemetry/timing instrumentation. Copying the essential event lifecycle is lower risk for a POC; all cancellation paths still abort the model and both inputs are analyzed with one shared pure Stage 2 helper. |
 | Checkpoint B | Updated the registry test's exhaustive view-name list and browser fixture/runtime/scenario tables for the new registered view. Added Welcome, Configure and Analyze fixtures in all three themes. No existing snapshots or TDD contracts changed. | The build makes these tables exhaustive over `WebviewName`; leaving them unchanged fails compilation. Browser smoke additionally caught ambiguous forward-button names and missing mutation acknowledgement values; both were corrected. The integrated runner needed a supplied timer shim (`page.waitForTimeout`) because its external execution context has no global `setTimeout`; the repository runner was not changed. |
 | WI-7 | Session prefill reads optional collStats/indexStats/metadata with a 1.5-second best-effort bound per parallel call. | They are not cached on `ClusterSession`; bounded lookups provide useful prefill without blocking opening the explorer when optional metadata is unavailable. |
+| WI-9 | Corrected F6's aggregate-return/time assumptions against the installed helper, normalize to the cursor before invoking it, and leave profile metadata absent on the connected find path. Count results without `nCounted` are explicitly unavailable. | The helper mixes final pipeline returns with initial cursor examination and can mutate cursor counters; retaining that behavior would make selectivity misleading. Preserving the find response shape avoids fixture/shipped-behavior churn. Missing count evidence must not become a fabricated zero. |
 | WI-3 | Made `formatTokenCount` browser-safe with an optional locale argument; host logging passes the VS Code locale explicitly. | The existing utility imported `vscode` at runtime, which cannot ship in a webview bundle. Reusing a pure helper avoids duplicating formatting while preserving host output. |
 | Checkpoint A | Restored lockfile dependencies with `npm ci` after the initial commands could not start due to missing packages. | This worktree had no installed dependency set; no dependency manifests or lockfile changed. |
 | Checkpoint A | The new picker selection test replaces only Fluent's floating dropdown/option layer with a native test stand-in. | Opening the real popup in jsdom (no layout engine) timed out; picker state, RPC calls, ordering, token labels, hints, and disclosure tests remain exercised. Also isolated the new host test's cancellation-error mock. No existing snapshots or TDD contracts changed. |

@@ -31,6 +31,10 @@ const SCORE_ORDER: ReadonlyArray<ExecutionStatsAnalysis['performanceRating']['sc
     'poor',
 ];
 
+interface IndexStrategyAdvisoryOptions {
+    skipCoverage?: boolean;
+}
+
 /**
  * Diagnostic detail about query performance
  */
@@ -890,11 +894,12 @@ export class ExplainPlanAnalyzer {
         totalCollectionDocs: number | undefined,
         explainResult: Document,
         queryFilter?: Document,
+        options: IndexStrategyAdvisoryOptions = {},
     ): void {
         const diagnostics = analysis.performanceRating.diagnostics;
 
         // --- Coverage badges (gated on index scan) ---
-        if (analysis.isIndexScan && totalCollectionDocs && totalCollectionDocs > 0) {
+        if (!options.skipCoverage && analysis.isIndexScan && totalCollectionDocs && totalCollectionDocs > 0) {
             const coverage = Math.min(analysis.nReturned / totalCollectionDocs, 1);
 
             if (coverage >= COVERAGE_HIGH_RETURN) {
@@ -957,7 +962,7 @@ export class ExplainPlanAnalyzer {
                     indexUsage[0].scanKeys.length === 1;
 
                 const coverage =
-                    totalCollectionDocs && totalCollectionDocs > 0
+                    !options.skipCoverage && totalCollectionDocs && totalCollectionDocs > 0
                         ? Math.min(analysis.nReturned / totalCollectionDocs, 1)
                         : undefined;
 
@@ -988,7 +993,7 @@ export class ExplainPlanAnalyzer {
         // Skip when efficiency is high (≥90%) — the index is clearly working well
         // regardless of individual key cardinality (e.g., compound indexes with a
         // low-cardinality prefix followed by selective fields).
-        if (analysis.isIndexScan && analysis.efficiencyRatio < 0.9) {
+        if (analysis.isIndexScan && (options.skipCoverage || analysis.efficiencyRatio < 0.9)) {
             const filter =
                 queryFilter ?? ((explainResult.command as Document | undefined)?.filter as Document | undefined);
             const cardinalityResult = this.detectLowCardinalityIndex(explainResult, totalCollectionDocs, filter);

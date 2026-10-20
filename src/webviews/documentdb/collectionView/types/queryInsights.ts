@@ -67,6 +67,9 @@ export interface QueryInsightsStage1Response {
 /** Stable identifier for the fetch overhead state, independent of locale. */
 export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'multikey' | 'directFetch';
 
+export type QueryInsightsAnalysisProfile = 'find' | 'aggregate' | 'count';
+export type QueryInsightsMetric = 'selectivity' | 'fetchOverhead' | 'inMemorySort' | 'examinedToReturnedRatio' | 'documentsReturned';
+
 /**
  * Response from Stage 2 - Detailed execution statistics
  *
@@ -86,6 +89,11 @@ export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'mu
  * - `efficiencyAnalysis.fetchOverheadKind: FetchOverheadKind` - Stable key for UI branching
  */
 export interface QueryInsightsStage2Response {
+    /** Missing on the connected find path for backwards compatibility. */
+    analysisProfile?: QueryInsightsAnalysisProfile;
+    notApplicable?: QueryInsightsMetric[];
+    analysisNotes?: string[];
+    unassessedPipelineStages?: string[];
     executionTimeMs: number;
     totalKeysExamined: number;
     totalDocsExamined: number;

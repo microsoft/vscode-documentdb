@@ -321,7 +321,7 @@ export const queryInsightsQueriesRouter = router({
             }
         }
 
-        const transformed = analyzeExplainForStage2(explainResult ?? {}, totalCollectionDocs, queryFilter, analyzed);
+        const transformed = analyzeExplainForStage2(explainResult ?? {}, totalCollectionDocs, queryFilter, 'find', analyzed);
 
         // Check for execution error and return error response if found
         if (analyzed.executionError) {

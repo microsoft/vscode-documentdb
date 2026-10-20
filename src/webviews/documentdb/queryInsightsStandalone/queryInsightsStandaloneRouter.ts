@@ -6,6 +6,7 @@ import { z } from 'zod';
 import * as vscode from 'vscode';
 import { analyzeExplainForStage2 } from '../../../documentdb/queryInsights/analyzeExplainForStage2';
 import { ExplainPlanAnalyzer } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
+import { getInitialExplainPlan } from '../../../documentdb/queryInsights/analysisProfiles';
 import { buildStaticAnalysisSummary } from '../../../documentdb/queryInsights/staticAnalysisSummary';
 import { StreamingResponseParser } from '../../../documentdb/queryInsights/streamingResponseParser';
 import { transformStage1Response } from '../../../documentdb/queryInsights/transformations';
@@ -30,11 +31,11 @@ export const queryInsightsStandaloneRouter = router({
     }),
     getStage1: publicProcedureWithTelemetry.input(standaloneInputSchema).query(({ input }) => {
         const parsed = parseStandaloneInput(input);
-        return transformStage1Response(ExplainPlanAnalyzer.analyzeQueryPlanner(parsed.explain), 0);
+        return transformStage1Response(ExplainPlanAnalyzer.analyzeQueryPlanner(getInitialExplainPlan(parsed.explain, parsed.commandType)), 0);
     }),
     getStage2: publicProcedureWithTelemetry.input(standaloneInputSchema).query(({ input }) => {
         const parsed = parseStandaloneInput(input);
-        return analyzeExplainForStage2(parsed.explain, parsed.totalDocs, parsed.filter);
+        return analyzeExplainForStage2(parsed.explain, parsed.totalDocs, parsed.filter, parsed.commandType);
     }),
     streamStage3: publicProcedureWithTelemetry
         .input(standaloneInputSchema.extend({ requestKey: z.string() }))
@@ -50,7 +51,7 @@ export const queryInsightsStandaloneRouter = router({
                 if (controller.signal.aborted) return;
                 yield { type: 'status', phase: 'connecting', elapsedMs: elapsed(), charsReceived: 0 };
                 const parsed = parseStandaloneInput(input);
-                const stage2 = analyzeExplainForStage2(parsed.explain, parsed.totalDocs, parsed.filter);
+                const stage2 = analyzeExplainForStage2(parsed.explain, parsed.totalDocs, parsed.filter, parsed.commandType);
                 const handle = await new QueryInsightsAIService().getOptimizationRecommendationsStreaming(
                     '', parsed.queryObject ?? parsed.query, input.databaseName, input.collectionName,
                     parsed.explain, controller.signal, buildStaticAnalysisSummary(stage2, parsed.totalDocs), {
