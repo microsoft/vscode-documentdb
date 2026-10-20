@@ -12,6 +12,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
 import { formatTokenCount } from '../utils/formatTokenCount';
+import { resolveQueryInsightsModel } from './ai/modelSelection';
 
 /**
  * Identifies which extension feature is calling `CopilotService` so we can
@@ -36,6 +37,16 @@ export interface CopilotMessageOptions {
      * call that should be attributable in analytics.
      */
     featureSource?: CopilotFeatureSource;
+
+    /**
+     * POC: `'user'` resolves the model from the Query Insights model picker
+     * (explicit `modelId` → saved preference → first available). Defaults to
+     * the free `copilot-utility` alias.
+     */
+    modelSelection?: 'utility' | 'user';
+
+    /** POC: explicit model id, only honoured with `modelSelection: 'user'`. */
+    modelId?: string;
 }
 
 /**
@@ -58,8 +69,8 @@ export interface CopilotMessageOptions {
  * so we do NOT attempt to target those families directly — calling them by
  * name from a third-party extension would fall outside the chat-fallback
  * path and bill the user. The alias is the only target that preserves the
- * "free for the user" guarantee, and is therefore intentionally the only
- * model this service requests.
+ * "free for the user" guarantee. Query generation retains this default;
+ * Query Insights can explicitly opt into user-selected models.
  */
 const UTILITY_MODEL_FAMILY = 'copilot-utility';
 
@@ -200,10 +211,10 @@ export class CopilotService {
                 // review rather than at runtime).
                 context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
 
-                const selectedModel = await this.selectUtilityModel();
+                const { model: selectedModel, outcome } = await this.selectModel(options);
 
                 if (!selectedModel) {
-                    context.telemetry.properties.modelSelectionOutcome = 'no-utility-model-available';
+                    context.telemetry.properties.modelSelectionOutcome = outcome;
                     throw new Error(
                         l10n.t(
                             'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
@@ -218,7 +229,7 @@ export class CopilotService {
                 if (typeof selectedModel.maxInputTokens === 'number') {
                     context.telemetry.measurements.modelMaxInputTokens = selectedModel.maxInputTokens;
                 }
-                context.telemetry.properties.modelSelectionOutcome = 'utility-model';
+                context.telemetry.properties.modelSelectionOutcome = outcome;
 
                 try {
                     const response = await this.sendToModel(selectedModel, messages, options);
@@ -343,10 +354,10 @@ export class CopilotService {
                     // calling feature so analytics can split telemetry by source.
                     context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
 
-                    const selectedModel = await this.selectUtilityModel();
+                    const { model: selectedModel, outcome } = await this.selectModel(options);
 
                     if (!selectedModel) {
-                        context.telemetry.properties.modelSelectionOutcome = 'no-utility-model-available';
+                        context.telemetry.properties.modelSelectionOutcome = outcome;
                         throw new Error(
                             l10n.t(
                                 'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
@@ -361,7 +372,7 @@ export class CopilotService {
                     if (typeof selectedModel.maxInputTokens === 'number') {
                         context.telemetry.measurements.modelMaxInputTokens = selectedModel.maxInputTokens;
                     }
-                    context.telemetry.properties.modelSelectionOutcome = 'utility-model';
+                    context.telemetry.properties.modelSelectionOutcome = outcome;
 
                     try {
                         const response = await this.streamToModel(selectedModel, messages, options, (fragment) =>
@@ -439,20 +450,30 @@ export class CopilotService {
         );
     }
 
-    /**
-     * Resolves the Copilot **utility** model.
-     *
-     * We always ask for {@link UTILITY_MODEL_FAMILY} (`copilot-utility`) — the
-     * Copilot extension's documented alias for the chat-fallback path — and
-     * never fall back to billed picker models. If the alias is unavailable
-     * (e.g. the Copilot extension is not installed, the user is signed out,
-     * or the consent prompt has not been accepted) the caller is responsible
-     * for surfacing the failure; we never silently degrade onto a model that
-     * would consume the user's premium request budget.
-     *
-     * Returns `undefined` when no model is available so the caller can map
-     * that to its own user-facing error.
-     */
+    /** User model selection is opt-in; other callers remain utility-only. */
+    private static async selectModel(
+        options: CopilotMessageOptions | undefined,
+    ): Promise<{ model: vscode.LanguageModelChat | undefined; outcome: string }> {
+        if (options?.modelSelection !== 'user') {
+            const model = await this.selectUtilityModel();
+            return { model, outcome: model ? 'utility-model' : 'no-utility-model-available' };
+        }
+
+        const resolved = await resolveQueryInsightsModel(options.modelId);
+        if (!resolved) {
+            return { model: undefined, outcome: 'no-model-available' };
+        }
+        ext.outputChannel.trace(
+            l10n.t(
+                '[Copilot] Selected model ({0}): {1}',
+                resolved.source,
+                this.formatModelDetails(resolved.model),
+            ),
+        );
+        return { model: resolved.model, outcome: `user-${resolved.source}` };
+    }
+
+    /** Never fall back to a billed model for utility-only requests. */
     private static async selectUtilityModel(): Promise<vscode.LanguageModelChat | undefined> {
         const matches = await vscode.lm.selectChatModels({
             vendor: 'copilot',

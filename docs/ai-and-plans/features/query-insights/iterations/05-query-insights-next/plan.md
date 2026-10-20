@@ -83,7 +83,7 @@ branch: dev/tnaum/query-insights-next
 
 ### Phase A: model picker and local prompt in the existing tab
 
-- [ ] **WI-0: Model selection host plumbing** _(started before the review; finish it)_
+- [x] **WI-0: Model selection host plumbing** _(started before the review; finish it)_
     - Done: `src/services/ai/modelSelection.ts` (list the models minus `auto`, ensure
       `copilot-utility` is listed, shared key `documentDB.queryInsights.selectedModelId`, resolve
       explicit → saved → first). `CopilotService.{sendMessage,streamMessage}` options
@@ -98,6 +98,7 @@ branch: dev/tnaum/query-insights-next
       Factor the message-building tail so both branches share it. Record telemetry
       `connectionless='true'`.
     - _Acceptance:_ compiles. The existing behaviour is unchanged apart from the model choice.
+    - _Outcome:_ Completed provided-data prompt construction and shared three-message tail; added selection and connected/connectionless regression tests (verification batched at Checkpoint A).
 
 - [ ] **WI-1: Prompt iteration without a reload**
     - In `PromptTemplateService.getIndexAdvisorPromptTemplate`, don't read from or write to the
@@ -225,7 +226,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Plan v1: research (QI pipeline, prompt service, cosmosdb picker) + proposal | Lead agent | 10:46 | 10:58 | 12 | |
 | Plan v2: decisions, org-default research (vscode source) | Lead agent | 11:02 | 11:17 | 15 | Includes WI-0 partial (~5 min) |
 | Plan v3: this file (CONTRIBUTING format, WIs) | Lead agent | 11:23 | 11:35 | 12 | |
-| WI-0 | | | | | |
+| WI-0 | Coding agent (gpt-6.1-sol) | 11:26 | 11:28 | 2 | Includes instruction/plan reading; checks deferred to A. |
 | WI-1 | | | | | |
 | WI-2 | | | | | |
 | WI-3 | | | | | |
