@@ -368,34 +368,32 @@ async function handleConnectionStringRequest(
         // the connection already exists, let's just reveal it later in the Connections View
         storageId = existingDuplicateConnection.id;
     } else {
-        // First confirmation: Ask user about adding new connection (if enabled)
-        if (showUrlHandlingConfirmations) {
-            const detail = [
-                ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
-                ...(tlsBypassRequested && !tlsBypassEligible
-                    ? [
-                          '',
-                          l10n.t(
-                              'This link asked to turn off TLS certificate validation. The request was ignored, and certificate validation stays on.',
-                          ),
-                      ]
-                    : []),
-                '',
-                l10n.t('A new connection will be added to your Connections View.'),
-                l10n.t('Do you want to continue?'),
-                '',
-                l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
-            ].join('\n');
-            const connectionConfirmation = await vscode.window.showInformationMessage(
-                l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.'),
-                { modal: true, detail },
-                l10n.t('Yes, continue'),
-            );
+        // First confirmation: a link from outside VS Code must never add a connection without the
+        // user seeing its target, so this prompt is shown even when URL handling confirmations are
+        // disabled. The setting only skips the follow-up prompts and links to saved connections.
+        const detail = [
+            ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
+            ...(tlsBypassRequested && !tlsBypassEligible
+                ? [
+                      '',
+                      l10n.t(
+                          'This link asked to turn off TLS certificate validation. The request was ignored, and certificate validation stays on.',
+                      ),
+                  ]
+                : []),
+            '',
+            l10n.t('A new connection will be added to your Connections View.'),
+            l10n.t('Do you want to continue?'),
+        ].join('\n');
+        const connectionConfirmation = await vscode.window.showInformationMessage(
+            l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.'),
+            { modal: true, detail },
+            l10n.t('Yes, continue'),
+        );
 
-            if (connectionConfirmation !== l10n.t('Yes, continue')) {
-                context.telemetry.properties.userCancelledAtStep = 'CreateNewConnection';
-                return; // User cancelled
-            }
+        if (connectionConfirmation !== l10n.t('Yes, continue')) {
+            context.telemetry.properties.userCancelledAtStep = 'CreateNewConnection';
+            return; // User cancelled
         }
 
         // Relaxing certificate validation always needs the user's explicit consent, independent

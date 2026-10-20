@@ -218,8 +218,7 @@ describe('globalUriHandler — connection confirmation', () => {
                     'Database: sales\n' +
                     'Collection: orders\n\n' +
                     'A new connection will be added to your Connections View.\n' +
-                    'Do you want to continue?\n\n' +
-                    'Note: You can disable these URL handling confirmations in the extension settings.',
+                    'Do you want to continue?',
             },
             'Yes, continue',
         );
@@ -335,6 +334,7 @@ describe('globalUriHandler — TLS exception requested by a link', () => {
 
     it('asks before turning validation off even when URL handling confirmations are disabled', async () => {
         showUrlHandlingConfirmations = false;
+        acceptAddConnectionOnly();
         (vscode.window.showWarningMessage as Mock).mockResolvedValue(undefined);
 
         await runHandler('/connect', `connectionString=${localTlsBypass}`);
@@ -370,6 +370,61 @@ describe('globalUriHandler — TLS exception requested by a link', () => {
         await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
 
         expect(savedConnection().properties.emulatorConfiguration).toBeUndefined();
+    });
+});
+
+describe('globalUriHandler — URL handling confirmations disabled', () => {
+    const connectionString = 'mongodb://user@alpha.example:27017/sales';
+
+    beforeEach(() => {
+        showUrlHandlingConfirmations = false;
+    });
+
+    it('still asks before adding a new connection, and adds nothing when dismissed', async () => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            expect.objectContaining({
+                modal: true,
+                detail: expect.stringContaining('Connection: user@alpha.example:27017\nDatabase: sales'),
+            }),
+            'Yes, continue',
+        );
+        expect(mockSaveConnection).not.toHaveBeenCalled();
+        expect(lastTelemetry.userCancelledAtStep).toBe('CreateNewConnection');
+    });
+
+    it('does not advertise turning the add-connection prompt off', async () => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain(
+            'disable these URL handling confirmations',
+        );
+    });
+
+    it('adds the connection only after the user confirms', async () => {
+        acceptAddConnectionOnly();
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(mockSaveConnection).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens an already saved connection without prompting', async () => {
+        mockGetAllConnections.mockResolvedValue([
+            { id: 'existing-id', name: 'Production', secrets: { connectionString } },
+        ]);
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(mockSaveConnection).not.toHaveBeenCalled();
     });
 });
 
