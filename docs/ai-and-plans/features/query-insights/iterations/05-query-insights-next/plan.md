@@ -100,7 +100,7 @@ branch: dev/tnaum/query-insights-next
     - _Acceptance:_ compiles. The existing behaviour is unchanged apart from the model choice.
     - _Outcome:_ Completed provided-data prompt construction and shared three-message tail; added selection and connected/connectionless regression tests (verification batched at Checkpoint A).
 
-- [ ] **WI-1: Prompt iteration without a reload**
+- [x] **WI-1: Prompt iteration without a reload**
     - In `PromptTemplateService.getIndexAdvisorPromptTemplate`, don't read from or write to the
       cache when a custom template path is configured. Replace the per-run info toast with
       an `ext.outputChannel.trace` line (with the cache off it would fire on every run).
@@ -108,6 +108,7 @@ branch: dev/tnaum/query-insights-next
       `{ source: 'built-in' | 'custom-file'; path?: string }` (reads the setting only) for the UI.
     - _Acceptance:_ editing the custom file applies on the next "Get AI Performance Insights"
       click. The built-in path still uses the cache.
+    - _Outcome:_ Custom files bypass cache reads/writes and log only to trace; exported settings-only source info and added edit/retry/source regression tests.
 
 - [ ] **WI-2: Model RPCs**
     - A new small router `queryInsightsModels` mounted in `appRouter` (e.g. `ai: { ... }`):
@@ -227,7 +228,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Plan v2: decisions, org-default research (vscode source) | Lead agent | 11:02 | 11:17 | 15 | Includes WI-0 partial (~5 min) |
 | Plan v3: this file (CONTRIBUTING format, WIs) | Lead agent | 11:23 | 11:35 | 12 | |
 | WI-0 | Coding agent (gpt-6.1-sol) | 11:26 | 11:28 | 2 | Includes instruction/plan reading; checks deferred to A. |
-| WI-1 | | | | | |
+| WI-1 | Coding agent (gpt-6.1-sol) | 11:28 | 11:29 | 1 | Checks deferred to A. |
 | WI-2 | | | | | |
 | WI-3 | | | | | |
 | WI-4 + Checkpoint A | | | | | |
