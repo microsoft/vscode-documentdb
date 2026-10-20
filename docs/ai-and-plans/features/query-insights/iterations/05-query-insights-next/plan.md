@@ -386,6 +386,8 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-9 | Coding agent (gpt-6.1-sol) | 14:34 | 14:38 | 4 | Verified/corrected F6 against installed helper; checks deferred to C. |
 | WI-10 | Coding agent (gpt-6.1-sol) | 14:38 | 14:41 | 3 | Preview/applicability UI; checks deferred to C. |
 | WI-11 + Checkpoint C | Coding agent (gpt-6.1-sol) | 14:41 | 15:03 | 22 | Correctness/summary refinements, Checkpoint C and 15 themed L2 routes. |
+| Phase C scoping (lead): find-only evaluation (F6) + steering message | Lead agent | 14:30 | 14:40 | 10 | Read ExplainPlanAnalyzer / explain-plan-helper / fixup; screenshot of the L2 page |
+| Phase B+C review (lead) | Lead agent | 15:05 | 15:12 | 7 | Commits, plan log, count L2 page rendered and inspected |
 
 ## Deviation log
 
@@ -451,3 +453,18 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 - This task's Phases B + C total: **199 elapsed minutes**, including approximately 150 minutes
   of integrated-browser/tool waiting in Phase B (approximately **49 minutes excluding that wait**).
   All recorded coding/checkpoint time including the earlier Phase A: **215 minutes**.
+
+## Lead review notes (2026-10-20, 15:12 UTC)
+
+- **Time planning takeaway:** coding work for WI-0..WI-11 was about **65 agent-minutes**
+  (16 A + ~20 B + 29 C). The ~150-minute gap in WI-7 was the agent blocked on the integrated
+  browser tool, not coding. Next time, run L2 scenarios through the agent's own Playwright, or
+  share the browser page up front.
+- Lead-side L2 check: `/queryInsightsStandalone/analyze-count/dark` renders "Feature preview",
+  "Preview · tuned for find queries" on both right-column cards, "Not applicable to count
+  queries" for Selectivity / Fetch Overhead / In-Memory Sort, "Documents counted 80", and a
+  `COUNT_SCAN → COUNT` plan. (The `run-all.js` helper can't run inside the lead's browser tool:
+  `setTimeout is not defined` in that sandbox, which is a tooling limit and not a product bug.)
+- **Open follow-ups (not done):**
+    - The Analyze step has a nested scroll area (the panel's own scrollbar inside the wizard page).
+    - Manual smoke with a real connection, real Copilot models and the local prompt (steps above).
