@@ -214,15 +214,59 @@ branch: dev/tnaum/query-insights-next
       L2 scenario smoke of the new view, if a scenario is cheap to add (optional).
     - _Outcome:_ Welcome/Configure/Analyze wizard reuses `QueryInsightsMain`, auto-starts Stage 3 and preserves inputs on Back; command, prefilled tab link and beaker Help item are wired. Checkpoint B passed: build, 130 files / 2,191 tests passed (1 skipped), plus 9/9 mocked L2 routes across three themes including copy-only actions.
 
-- [ ] **WI-8: Wrap-up**
+- [x] **WI-8: Wrap-up**
     - Fill in the time log totals, the deviation log, and a short "How to use" section below
       (settings + prompt path + entry points).
     - Do not touch the feature `README.md` beyond adding this iteration to its timeline
       table as "POC, not shipped".
+    - _Outcome:_ Added local-prompt/model/entry-point instructions, exact manual smoke steps, Phase B verification and wall-clock totals; linked this iteration as POC, not shipped.
 
 ## How to use (filled in at WI-8)
 
-_TBD_
+1. Keep the internal prompt outside git, for example
+   `<repo>/._local/prompts/query-insights-find.prompt.md`. Set the appropriate absolute file
+   paths in VS Code's settings:
+   ```json
+   {
+     "documentDB.aiAssistant.indexAdvisorFindPromptPath": "<repo>/._local/prompts/query-insights-find.prompt.md",
+     "documentDB.aiAssistant.indexAdvisorAggregatePromptPath": "<repo>/._local/prompts/query-insights-aggregate.prompt.md",
+     "documentDB.aiAssistant.indexAdvisorCountPromptPath": "<repo>/._local/prompts/query-insights-count.prompt.md"
+   }
+   ```
+   Replace `<repo>` with this checkout's absolute path. Configure only the command types you
+   want to override; clear a setting to use the built-in template. Custom files are read on
+   every run, with no reload needed. The prompt must emit
+   `{ "educationalContent": "...", "analysis": "...", "improvements": [] }` in the existing
+   JSON contract; the extension does not append a format suffix.
+2. Pick a Copilot model in the existing Query Insights card (compact picker), or on the
+   explorer's Configure page (full picker). One saved choice is shared across both surfaces.
+   The picker shows the prompt source/basename and premium-request warning where applicable.
+3. Open through any of the three entry points:
+   - Command Palette → **DocumentDB: Query Insights: Explore with Your Own Input (POC)**.
+   - **Help and Feedback → Query Insights Explorer (POC)** (beaker icon).
+   - Query Insights tab → **Explore with your own input…**, before requesting AI insights:
+     carries the session query, raw explain, optional statistics/indexes and collection identity.
+4. In the explorer select **Continue**, paste the `explain("executionStats")` result, optionally
+   add collStats and a `getIndexes()` / `$indexStats` array, and validate/extract the query or
+   edit it yourself. Choose/override find, aggregate or count and the cluster type, then
+   **Analyze**. Stage 2 and Stage 3 start automatically; the Analyze step uses the same
+   two-column component as the connected tab. Recommendations offer **Copy command**, never
+   database-changing actions. **Back** preserves all text for another run with a changed model/prompt.
+
+### Manual smoke still required (real VS Code + Copilot)
+
+1. Open the command from the palette with no connection. Continue, paste a real executionStats
+   explain, validate/extract, pick a model and Analyze. Confirm metrics, plan and streaming cards.
+2. Copy a recommendation; verify clipboard contents and absence of Create/Drop/Hide actions.
+   Cancel an in-flight run, then retry; close the panel while streaming and confirm cancellation.
+3. Back → change the model and edit the local prompt file → Analyze again. Confirm inputs
+   survive, the new prompt is used without reload, and the response byline names the new model.
+4. Open via the Help and Feedback beaker item; confirm the same empty wizard.
+5. Run a real Collection View find query. Open Query Insights, confirm the existing metrics,
+   right-column plan and opt-in AI behavior are unchanged, then use the explorer link and check
+   the prefilled query, raw explain, database/collection and available stats/indexes.
+6. In the connected tab request AI recommendations, verify real index actions still work, then
+   refresh/change the query and switch tabs during streaming to check reset/cancel behavior.
 
 ## Time log
 
@@ -242,7 +286,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-5 | Coding agent (gpt-6.1-sol) | 11:44 | 11:46 | 2 | Shared adapter and copy-only cards; checks deferred to B. |
 | WI-6 | Coding agent (gpt-6.1-sol) | 11:46 | 11:48 | 2 | Host plumbing; checks deferred to B. |
 | WI-7 + Checkpoint B | Coding agent (gpt-6.1-sol) | 11:48 | 14:33 | 165 | Includes ~150 minutes waiting on integrated browser/tools (11:56–14:26); final build/tests and 9 L2 routes passed. |
-| WI-8 | | | | | |
+| WI-8 | Coding agent (gpt-6.1-sol) | 14:33 | 14:34 | 1 | Usage, manual checks, timeline and Phase B totals. |
 
 ## Deviation log
 
@@ -263,4 +307,20 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
   **63 files, 1,330 tests, zero failures** (final run 2026-10-20, 11:41 UTC).
 - Total Phase A coding/checkpoint time: **16 minutes** (WI-0 2 + WI-1 2 + WI-2 1 + WI-3 3 + WI-4 8).
 - No push; no lint, formatting, localization generation, packaging, live model request, or manual UI smoke performed.
-- Phase B (WI-5 onward) remains untouched. The standalone explorer link is intentionally hidden.
+- At the Phase A handoff, Phase B remained untouched and the standalone link was hidden;
+  Phase B is now implemented as recorded below.
+
+## Phase B verification outcome
+
+- Case 1 only: final `npm run build` passed (2026-10-20, 14:33 UTC).
+- Exact Checkpoint B Vitest selector passed: **130 files, 2,191 passed, 1 skipped, zero failures**
+  (final test run 14:31 UTC). No TDD suite failed; no snapshots were changed.
+- Mocked source L2 smoke passed **9/9 routes**: Welcome, Configure and Analyze in dark, light
+  and high-contrast. Analyze rendered the shared left/right-column layout and the copy-only
+  recommendation; clipboard RPC assertions passed. Back preserved supplied inputs without errors.
+- Real host/Copilot/manual Collection View smoke remains outstanding; see the exact steps above.
+  No live model request was sent. No lint, formatting, localization generation, packaging, extra
+  `node build/verification/...` checks or pushes were performed.
+- Total Phase B elapsed time: **170 minutes** (WI-5 2 + WI-6 2 + WI-7/checkpoint 165 + WI-8 1).
+  This includes approximately 150 minutes of integrated browser/tool waiting, not active coding.
+- Total recorded coding/checkpoint time for Phases A + B: **186 minutes** (16 + 170).
