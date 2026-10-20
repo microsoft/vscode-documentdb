@@ -9,6 +9,12 @@ name: Publish @documentdb-js packages
 # `npm-publish-documentdb-js-scope` environment's required-reviewer gate.
 # No long-lived token is stored in the repo.
 #
+# The publish job never installs dependencies, builds, or runs package scripts.
+# The verify job (no OIDC permission) builds and packs the selected packages and
+# records their SHA-256 hashes as a job output. The publish job downloads the
+# tarballs, checks the hashes and package names, and publishes the tarballs
+# with lifecycle scripts disabled.
+#
 # Trigger: workflow_dispatch only.
 
 on:
@@ -48,6 +54,8 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             contents: read
+        outputs:
+            tarball_sha256: ${{ steps.pack.outputs.tarball_sha256 }}
         env:
             VERIFY_ALL: >-
                 ${{
@@ -122,6 +130,43 @@ jobs:
               if: ${{ inputs.publish_srv_resolver || env.VERIFY_ALL == 'true' }}
               run: npm publish --dry-run --workspace @documentdb-js/srv-resolver
 
+            - name: 📦 Pack selected packages for publication
+              id: pack
+              if: ${{ !inputs.dry_run }}
+              env:
+                  PUBLISH_OPERATOR_REGISTRY: ${{ inputs.publish_operator_registry }}
+                  PUBLISH_SCHEMA_ANALYZER: ${{ inputs.publish_schema_analyzer }}
+                  PUBLISH_SHELL_API_TYPES: ${{ inputs.publish_shell_api_types }}
+                  PUBLISH_SHELL_RUNTIME: ${{ inputs.publish_shell_runtime }}
+                  PUBLISH_SRV_RESOLVER: ${{ inputs.publish_srv_resolver }}
+              run: |
+                  set -euo pipefail
+                  selected=()
+                  if [[ "$PUBLISH_OPERATOR_REGISTRY" == 'true' ]]; then selected+=('@documentdb-js/operator-registry'); fi
+                  if [[ "$PUBLISH_SCHEMA_ANALYZER" == 'true' ]]; then selected+=('@documentdb-js/schema-analyzer'); fi
+                  if [[ "$PUBLISH_SHELL_API_TYPES" == 'true' ]]; then selected+=('@documentdb-js/shell-api-types'); fi
+                  if [[ "$PUBLISH_SHELL_RUNTIME" == 'true' ]]; then selected+=('@documentdb-js/shell-runtime'); fi
+                  if [[ "$PUBLISH_SRV_RESOLVER" == 'true' ]]; then selected+=('@documentdb-js/srv-resolver'); fi
+
+                  mkdir -p publish-tarballs
+                  for pkg in "${selected[@]}"; do
+                      npm pack --ignore-scripts --pack-destination publish-tarballs --workspace "$pkg"
+                  done
+
+                  cd publish-tarballs
+                  sha256sum -- *.tgz | tee SHA256SUMS
+                  # One line, `<hash>  <file>` entries separated by `;`, for the publish job to verify.
+                  echo "tarball_sha256=$(tr '\n' ';' < SHA256SUMS)" >> "$GITHUB_OUTPUT"
+
+            - name: ⬆️ Upload tarballs for the publish job
+              if: ${{ !inputs.dry_run }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: publish-tarballs
+                  path: publish-tarballs/*.tgz
+                  if-no-files-found: error
+                  retention-days: 1
+
     publish:
         name: Publish to npmjs.com
         needs: verify
@@ -136,42 +181,78 @@ jobs:
             id-token: write # required for npm Trusted Publishing (OIDC)
             contents: read
         steps:
-            - name: ✅ Checkout Repository
+            # Only .nvmrc is needed: this job never installs, builds, or runs repository code.
+            - name: ✅ Checkout .nvmrc
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  sparse-checkout: .nvmrc
+                  sparse-checkout-cone-mode: false
+                  persist-credentials: false
 
-            - name: 🛠 Setup Node.js Environment (with cache)
+            # No npm cache: a cache restored into the job that can mint publish tokens is not trusted.
+            - name: 🛠 Setup Node.js Environment
               uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
               with:
                   node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
                   registry-url: 'https://registry.npmjs.org'
 
             - name: ⬆️ Use npm 11.20.0 (Node-compatible, supports Trusted Publishing)
-              run: npm install -g npm@11.20.0
+              run: npm install -g --ignore-scripts npm@11.20.0
 
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+            - name: ⬇️ Download tarballs from the verify job
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+              with:
+                  name: publish-tarballs
+                  path: publish-tarballs
 
-            - name: 🔨 Build Workspace Packages
-              run: npm run build --workspaces --if-present
+            - name: 🔎 Verify tarball hashes
+              env:
+                  TARBALL_SHA256: ${{ needs.verify.outputs.tarball_sha256 }}
+              working-directory: publish-tarballs
+              run: |
+                  set -euo pipefail
+                  if [[ -z "$TARBALL_SHA256" ]]; then
+                      echo "::error::The verify job did not record any tarball hashes."
+                      exit 1
+                  fi
+                  tr ';' '\n' <<< "$TARBALL_SHA256" | sed '/^$/d' > "$RUNNER_TEMP/SHA256SUMS"
+                  sha256sum --check --strict "$RUNNER_TEMP/SHA256SUMS"
+                  expected=$(wc -l < "$RUNNER_TEMP/SHA256SUMS")
+                  actual=$(find . -maxdepth 1 -type f | wc -l)
+                  if [[ "$expected" -ne "$actual" ]]; then
+                      echo "::error::Expected $expected tarball(s), found $actual."
+                      exit 1
+                  fi
 
-            - name: 🚀 Publish @documentdb-js/operator-registry
-              if: ${{ inputs.publish_operator_registry }}
-              run: npm publish --provenance --workspace @documentdb-js/operator-registry
+            - name: 🚀 Publish selected packages
+              env:
+                  PUBLISH_OPERATOR_REGISTRY: ${{ inputs.publish_operator_registry }}
+                  PUBLISH_SCHEMA_ANALYZER: ${{ inputs.publish_schema_analyzer }}
+                  PUBLISH_SHELL_API_TYPES: ${{ inputs.publish_shell_api_types }}
+                  PUBLISH_SHELL_RUNTIME: ${{ inputs.publish_shell_runtime }}
+                  PUBLISH_SRV_RESOLVER: ${{ inputs.publish_srv_resolver }}
+              run: |
+                  set -euo pipefail
+                  publish_package() {
+                      local name="$1"
+                      local prefix="${name#@}"
+                      prefix="${prefix//\//-}"
+                      local tarballs=(publish-tarballs/"$prefix"-[0-9]*.tgz)
+                      if [[ ${#tarballs[@]} -ne 1 || ! -f "${tarballs[0]}" ]]; then
+                          echo "::error::Expected exactly one tarball for $name."
+                          exit 1
+                      fi
+                      local packed_name
+                      packed_name=$(tar -xzOf "${tarballs[0]}" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).name')
+                      if [[ "$packed_name" != "$name" ]]; then
+                          echo "::error::${tarballs[0]} contains $packed_name, expected $name."
+                          exit 1
+                      fi
+                      npm publish "${tarballs[0]}" --provenance --access public --ignore-scripts
+                  }
 
-            - name: 🚀 Publish @documentdb-js/schema-analyzer
-              if: ${{ inputs.publish_schema_analyzer }}
-              run: npm publish --provenance --workspace @documentdb-js/schema-analyzer
-
-            - name: 🚀 Publish @documentdb-js/shell-api-types
-              if: ${{ inputs.publish_shell_api_types }}
-              run: npm publish --provenance --workspace @documentdb-js/shell-api-types
-
-            - name: 🚀 Publish @documentdb-js/shell-runtime
-              if: ${{ inputs.publish_shell_runtime }}
-              run: npm publish --provenance --workspace @documentdb-js/shell-runtime
-
-            - name: 🚀 Publish @documentdb-js/srv-resolver
-              if: ${{ inputs.publish_srv_resolver }}
-              run: npm publish --provenance --workspace @documentdb-js/srv-resolver
+                  if [[ "$PUBLISH_OPERATOR_REGISTRY" == 'true' ]]; then publish_package '@documentdb-js/operator-registry'; fi
+                  if [[ "$PUBLISH_SCHEMA_ANALYZER" == 'true' ]]; then publish_package '@documentdb-js/schema-analyzer'; fi
+                  if [[ "$PUBLISH_SHELL_API_TYPES" == 'true' ]]; then publish_package '@documentdb-js/shell-api-types'; fi
+                  if [[ "$PUBLISH_SHELL_RUNTIME" == 'true' ]]; then publish_package '@documentdb-js/shell-runtime'; fi
+                  if [[ "$PUBLISH_SRV_RESOLVER" == 'true' ]]; then publish_package '@documentdb-js/srv-resolver'; fi
