@@ -110,12 +110,13 @@ branch: dev/tnaum/query-insights-next
       click. The built-in path still uses the cache.
     - _Outcome:_ Custom files bypass cache reads/writes and log only to trace; exported settings-only source info and added edit/retry/source regression tests.
 
-- [ ] **WI-2: Model RPCs**
+- [x] **WI-2: Model RPCs**
     - A new small router `queryInsightsModels` mounted in `appRouter` (e.g. `ai: { ... }`):
       `getAvailableModels` (query → `AvailableModelsResult`), `setSelectedModel` (mutation,
       `{ modelId: string | null }`), and `getPromptSourceInfo` (query, `{ commandType }`).
       Usable from any webview.
     - _Acceptance:_ typed client calls compile from both webviews.
+    - _Outcome:_ Mounted connection-independent `ai` discovery/preference/prompt-source procedures with validated inputs and RPC regression tests.
 
 - [ ] **WI-3: Shared `ModelPicker` component**
     - `src/webviews/documentdb/queryInsightsShared/ModelPicker.tsx` (or similar). A Fluent
@@ -229,7 +230,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Plan v3: this file (CONTRIBUTING format, WIs) | Lead agent | 11:23 | 11:35 | 12 | |
 | WI-0 | Coding agent (gpt-6.1-sol) | 11:26 | 11:28 | 2 | Includes instruction/plan reading; checks deferred to A. |
 | WI-1 | Coding agent (gpt-6.1-sol) | 11:28 | 11:29 | 1 | Checks deferred to A. |
-| WI-2 | | | | | |
+| WI-2 | Coding agent (gpt-6.1-sol) | 11:30 | 11:31 | 1 | Checks deferred to A; shared RPC tests live under services/ai to join its selector. |
 | WI-3 | | | | | |
 | WI-4 + Checkpoint A | | | | | |
 | WI-5 | | | | | |
