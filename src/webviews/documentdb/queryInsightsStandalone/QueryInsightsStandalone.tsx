@@ -25,6 +25,7 @@ import {
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
+    CheckmarkCircleRegular,
     CheckmarkRegular,
     CopyRegular,
     DataUsageRegular,
@@ -70,7 +71,8 @@ const useStyles = makeStyles({
         padding: '7px 0',
         alignItems: 'start',
     },
-    needBadge: { justifySelf: 'start', marginTop: '1px' },
+    needBadge: { justifySelf: 'start', marginTop: '2px' },
+    prefilledNote: { display: 'inline-flex', alignItems: 'center', gap: '4px', color: tokens.colorPaletteGreenForeground1 },
     needCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
     snippetList: { display: 'flex', flexDirection: 'column', gap: '6px' },
     snippetGroupLabel: { marginTop: '6px' },
@@ -411,16 +413,19 @@ export function QueryInsightsStandalone(): JSX.Element {
                 <ul className={styles.needList}>
                     {needs.map((need) => (
                         <li className={styles.needItem} key={need.label}>
-                            {need.provided ? (
-                                <Badge appearance="tint" color="success" className={styles.needBadge}>{l10n.t('Prefilled')}</Badge>
-                            ) : need.required ? (
-                                <Badge appearance="tint" color="brand" className={styles.needBadge}>{l10n.t('Required')}</Badge>
+                            {need.required ? (
+                                <Badge appearance="tint" shape="rounded" size="small" color="brand" className={styles.needBadge}>{l10n.t('Required')}</Badge>
                             ) : (
-                                <Badge appearance="outline" color="informative" className={styles.needBadge}>{l10n.t('Optional')}</Badge>
+                                <Badge appearance="tint" shape="rounded" size="small" color="informative" className={styles.needBadge}>{l10n.t('Optional')}</Badge>
                             )}
                             <div className={styles.needCopy}>
                                 <Text>{need.label}</Text>
                                 <Text size={200} className={styles.muted}>{need.detail}</Text>
+                                {need.provided && (
+                                    <Text size={200} className={styles.prefilledNote}>
+                                        <CheckmarkCircleRegular aria-hidden="true" /> {l10n.t('Prefilled from your session')}
+                                    </Text>
+                                )}
                             </div>
                         </li>
                     ))}
@@ -473,7 +478,7 @@ export function QueryInsightsStandalone(): JSX.Element {
         <section className={styles.section} aria-labelledby={`${noteId}-explain`}>
             <Text as="h3" size={400} weight="semibold" id={`${noteId}-explain`} className={styles.sectionHeading}>
                 {l10n.t('Explain plan')}
-                <Badge appearance="tint" color="brand" size="small">{l10n.t('Required')}</Badge>
+                <Badge appearance="tint" shape="rounded" size="small" color="brand">{l10n.t('Required')}</Badge>
             </Text>
             <Field
                 label={l10n.t('Explain output')}
@@ -510,7 +515,7 @@ export function QueryInsightsStandalone(): JSX.Element {
                         <div className={styles.fact}>
                             <dt><Text size={200} className={styles.muted}>{l10n.t('Command')}</Text></dt>
                             <dd className={styles.factValue}>
-                                <Badge appearance="filled" color="brand">{effectiveCommand}</Badge>{' '}
+                                <Badge appearance="tint" shape="rounded" size="small" color="brand">{effectiveCommand}</Badge>{' '}
                                 <Text size={200} className={styles.muted}>
                                     {commandWasDetected ? l10n.t('detected') : l10n.t('selected')}
                                 </Text>
@@ -772,7 +777,7 @@ export function QueryInsightsStandalone(): JSX.Element {
             <dl className={styles.summaryFacts}>
                 <div className={styles.summaryFact}>
                     <dt><Text className={styles.muted}>{l10n.t('Command')}</Text></dt>
-                    <dd className={styles.factValue}><Badge appearance="filled" color="brand">{analysisInput.commandType}</Badge></dd>
+                    <dd className={styles.factValue}><Badge appearance="tint" shape="rounded" size="small" color="brand">{analysisInput.commandType}</Badge></dd>
                 </div>
                 <div className={styles.summaryFact}>
                     <dt><Text className={styles.muted}>{l10n.t('Namespace')}</Text></dt>

@@ -8,7 +8,7 @@ import type { JSX } from 'react';
 
 export function QueryInsightsPreviewBadge({ feature = false }: { feature?: boolean }): JSX.Element {
     return (
-        <Badge appearance="tint" color="informative">
+        <Badge appearance="tint" shape="rounded" size="small" color="informative">
             {feature ? l10n.t('Feature preview') : l10n.t('Preview · tuned for find queries')}
         </Badge>
     );

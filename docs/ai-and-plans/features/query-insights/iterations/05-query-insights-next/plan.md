@@ -436,6 +436,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | Phase D setup + WI-12 | Coding agent (claude-opus-5.5) | 15:16 | 15:21 | 5 | Read plan/wizards/skills, headless L2 driver + "before" screenshots, Phase D section, prompt trim + tests; checks deferred to D. |
 | WI-13 + Checkpoint D | Coding agent (claude-opus-5.5) | 15:21 | 15:42 | 21 | Inspection RPC, wizard rewrite, scenarios, unit tests, build, Vitest, 21 headless L2 routes, screenshots, plan. |
 | Phase D review (lead) | Lead agent | 15:43 | 15:47 | 4 | Screenshots reviewed; count cells shortened to "Not applicable" (full text kept in tooltip) because the long value clipped in the right column; build + 143 targeted tests passed |
+| Badge style + Required tag (lead) | Lead agent | 16:22 | 16:27 | 5 | Operator feedback; build + 143 targeted tests passed; Welcome + Analyze checked in the L2 browser |
 
 ## Deviation log
 
@@ -460,6 +461,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-3 | Made `formatTokenCount` browser-safe with an optional locale argument; host logging passes the VS Code locale explicitly. | The existing utility imported `vscode` at runtime, which cannot ship in a webview bundle. Reusing a pure helper avoids duplicating formatting while preserving host output. |
 | Checkpoint A | Restored lockfile dependencies with `npm ci` after the initial commands could not start due to missing packages. | This worktree had no installed dependency set; no dependency manifests or lockfile changed. |
 | Checkpoint A | The new picker selection test replaces only Fluent's floating dropdown/option layer with a native test stand-in. | Opening the real popup in jsdom (no layout engine) timed out; picker state, RPC calls, ordering, token labels, hints, and disclosure tests remain exercised. Also isolated the new host test's cancellation-error mock. No existing snapshots or TDD contracts changed. |
+| Operator feedback (16:22) | Welcome: the explain output always shows **Required**; when supplied, a green "Prefilled from your session" note appears below it instead of replacing the tag. All wizard and preview badges use the house style `appearance="tint" shape="rounded" size="small"` (as in the Indexes tab and the plan summary). | "Prefilled" replacing "Required" read like a stale state; the rounded-square tint badge is the convention across the other webviews. |
 
 ## Phase A verification outcome
 
