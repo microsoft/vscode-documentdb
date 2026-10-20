@@ -53,17 +53,55 @@
     border-radius: 4px;
     background: var(--vscode-editor-background);
     color: var(--vscode-foreground);
+
+    summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        list-style: none;
+        font-weight: 600;
+
+        &::before { content: '›'; }
+        .fui-Badge { margin-left: auto; }
+    }
+
+    details[open] > summary::before { transform: rotate(90deg); }
+    summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
+}
+
+.query-insights-model-pricing-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.query-insights-model-pricing-body,
+.query-insights-model-metadata {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.query-insights-model-details-compact {
+    padding: 0;
+    border: 0;
+    flex: 1;
+    min-width: 0;
+    background: none;
 }
 
 .query-insights-model-costs {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px 16px;
+    flex-direction: column;
+    gap: 6px;
     margin: 0;
     font-size: 12px;
 
-    > div { display: flex; gap: 6px; }
-    dd { margin: 0; }
+    > div { display: flex; justify-content: space-between; gap: 12px; }
+    dd { margin: 0; text-align: right; font-weight: 600; }
 }
 
 .query-insights-model-identity {

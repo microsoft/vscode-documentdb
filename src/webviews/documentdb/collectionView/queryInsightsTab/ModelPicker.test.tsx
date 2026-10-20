@@ -158,19 +158,35 @@ describe('Shared Query Insights ModelPicker', () => {
         expect([...host.querySelectorAll('[role="group"]')].map((element) => element.getAttribute('aria-label')))
             .toEqual(['Powerful', 'Lightweight', 'Other']);
         const details = host.querySelector('.query-insights-model-details');
-        expect(details?.textContent).toContain('1x · Price tier 3/4');
-        expect(details?.textContent).toContain('AI credits per 1M tokens');
+        expect(details?.textContent).toContain('Pricing detailsHigh cost');
+        expect(details?.querySelector('details')?.open).toBe(true);
+        expect(details?.textContent).toContain('Credits per 1M tokens');
         expect(details?.textContent).toContain('Input0');
-        expect(details?.textContent).toContain('Long-context input4');
-        expect(details?.textContent).not.toContain('Cache write');
+        expect(details?.textContent).toContain('Long contextInput4');
+        expect(details?.textContent).not.toContain('Cache Write');
         expect(details?.textContent).toContain('Tools supported · No image input');
         expect(details?.textContent).toContain('premium / 1 / premium');
+        expect(details?.textContent).toContain('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.');
     });
 
     it('uses a one-line summary and accessible details tooltip trigger in the compact variant', async () => {
+        mocks.getAvailableModels.mockResolvedValue({
+            ...available, models: [{ ...available.models[0], pricing: '1x' }, available.models[1]],
+        });
         await renderPicker(vi.fn(), true);
         expect(host.querySelector('.query-insights-model-compact-details')?.textContent).toContain('128K context');
         expect(host.querySelector('button[aria-label="Selected model details"]')).not.toBeNull();
-        expect(host.querySelector('.query-insights-model-details')).toBeNull();
+        const details = host.querySelector('details');
+        expect(details?.open).toBe(false);
+        await act(async () => details?.querySelector('summary')?.click());
+        expect(details?.open).toBe(true);
+    });
+
+    it('renders without optional pricing metadata and hides the Pricing details section', async () => {
+        await renderPicker();
+        expect(host.textContent).toContain('Context window: 128,000 tokens');
+        expect(host.textContent).not.toContain('Pricing details');
+        expect(host.querySelector('details')).toBeNull();
+        expect(host.textContent).toContain('premium / 1 / premium');
     });
 });

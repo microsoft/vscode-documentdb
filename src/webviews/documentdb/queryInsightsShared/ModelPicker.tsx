@@ -40,42 +40,96 @@ function modelSummary(model: AvailableModelInfo): string {
     ].filter(Boolean).join(' · ');
 }
 
-function ModelDetails({ model }: { model: AvailableModelInfo }): JSX.Element {
-    const tiers: Record<string, number> = { low: 1, medium: 2, high: 3, very_high: 4 };
-    const tier = model.priceCategory ? tiers[model.priceCategory] : undefined;
+function ModelCostBadge({ category }: { category: string | undefined }): JSX.Element | null {
+    if (!category) return null;
+    // VS Code modelPickerPresentation.ts: two tints, not a calculated per-token price.
+    // CAPI model_picker_price_category is read by Copilot's platform/endpoint/node/chatEndpoint.ts.
+    let label: string;
+    switch (category) {
+        case 'low': label = l10n.t('Low cost'); break;
+        case 'medium': label = l10n.t('Medium cost'); break;
+        case 'high': label = l10n.t('High cost'); break;
+        case 'very_high': label = l10n.t('Very high cost'); break;
+        default: label = l10n.t('{0} cost', category.charAt(0).toUpperCase() + category.slice(1));
+    }
+    return <Badge appearance="tint" shape="rounded" size="small"
+        color={category === 'high' || category === 'very_high' ? 'warning' : 'informative'}>{label}</Badge>;
+}
+
+function ModelDetails({ model, compact = false, tooltip = false }: {
+    model: AvailableModelInfo; compact?: boolean; tooltip?: boolean;
+}): JSX.Element {
     const costs: readonly [keyof AvailableModelInfo, string][] = [
         ['inputCost', l10n.t('Input')], ['outputCost', l10n.t('Output')],
-        ['cacheCost', l10n.t('Cached input')], ['cacheWriteCost', l10n.t('Cache write')],
-        ['longContextInputCost', l10n.t('Long-context input')],
-        ['longContextOutputCost', l10n.t('Long-context output')],
-        ['longContextCacheCost', l10n.t('Long-context cached input')],
-        ['longContextCacheWriteCost', l10n.t('Long-context cache write')],
+        ['cacheCost', l10n.t('Cache Read')], ['cacheWriteCost', l10n.t('Cache Write')],
     ];
+    const longCosts: readonly [keyof AvailableModelInfo, string][] = [
+        ['longContextInputCost', l10n.t('Input')], ['longContextOutputCost', l10n.t('Output')],
+        ['longContextCacheCost', l10n.t('Cache Read')], ['longContextCacheWriteCost', l10n.t('Cache Write')],
+    ];
+    const hasPricing = !!model.pricing || !!model.priceCategory ||
+        [...costs, ...longCosts].some(([key]) => model[key] !== undefined);
+    const rows = (fields: readonly [keyof AvailableModelInfo, string][]): JSX.Element => (
+        <dl className="query-insights-model-costs">
+            {fields.filter(([key]) => model[key] !== undefined).map(([key, label]) => (
+                <div key={key}><dt>{label}</dt><dd>{String(model[key])}</dd></div>
+            ))}
+        </dl>
+    );
     const capabilities: string[] = [];
     if (model.supportsToolCalling !== undefined) capabilities.push(model.supportsToolCalling ? l10n.t('Tools supported') : l10n.t('No tool calling'));
     if (model.supportsImageToText !== undefined) capabilities.push(model.supportsImageToText ? l10n.t('Images supported') : l10n.t('No image input'));
-    return (
-        <div className="query-insights-model-details">
-            {(model.pricing || model.priceCategory) && (
-                <Text size={200}>
-                    {[model.pricing, tier ? l10n.t('Price tier {0}/4', String(tier)) : model.priceCategory].filter(Boolean).join(' · ')}
-                </Text>
-            )}
-            {costs.some(([key]) => model[key] !== undefined) && (
-                <>
-                    <Text size={200} className="query-insights-model-muted">{l10n.t('AI credits per 1M tokens')}</Text>
-                    <dl className="query-insights-model-costs">
-                        {costs.filter(([key]) => model[key] !== undefined).map(([key, label]) => (
-                            <div key={key}><dt>{label}</dt><dd>{String(model[key])}</dd></div>
-                        ))}
-                    </dl>
-                </>
-            )}
+    const metadata = (
+        <div className="query-insights-model-metadata query-insights-model-muted">
             {model.maxInputTokens > 0 && <Text size={200}>{l10n.t('Context window: {0} tokens', model.maxInputTokens.toLocaleString(navigator.language))}</Text>}
             {capabilities.length > 0 && <Text size={200}>{capabilities.join(' · ')}</Text>}
-            <Text size={100} className="query-insights-model-identity query-insights-model-muted">
+            <Text size={100} className="query-insights-model-identity">
                 {[model.family, model.version, model.id].filter(Boolean).join(' / ')}
             </Text>
+            <Text size={200}>{l10n.t('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.')}</Text>
+        </div>
+    );
+    const pricing = (
+        <div className="query-insights-model-pricing-body">
+            {model.pricing && <Text size={200}>{model.pricing}</Text>}
+            {(costs.some(([key]) => model[key] !== undefined) || longCosts.some(([key]) => model[key] !== undefined)) && (
+                <>
+                    <Text size={200} className="query-insights-model-muted">{l10n.t('Credits per 1M tokens')}</Text>
+                    {rows(costs)}
+                    {longCosts.some(([key]) => model[key] !== undefined) && (
+                        <>
+                            <Text size={200} weight="semibold">{l10n.t('Long context')}</Text>
+                            {rows(longCosts)}
+                        </>
+                    )}
+                </>
+            )}
+        </div>
+    );
+    return (
+        <div className={`query-insights-model-details${compact || !hasPricing ? ' query-insights-model-details-compact' : ''}`}>
+            {!hasPricing ? (
+                compact && <Text size={200} className="query-insights-model-muted">{modelSummary(model)}</Text>
+            ) : tooltip ? (
+                <>
+                    <div className="query-insights-model-pricing-title">
+                        <Text weight="semibold">{l10n.t('Pricing details')}</Text>
+                        <ModelCostBadge category={model.priceCategory} />
+                    </div>
+                    {pricing}
+                </>
+            ) : (
+                <details open={!compact}>
+                    <summary>
+                        <span>{l10n.t('Pricing details')}</span>
+                        {compact && <Text size={200} className="query-insights-model-muted">{modelSummary(model)}</Text>}
+                        <ModelCostBadge category={model.priceCategory} />
+                    </summary>
+                    {pricing}
+                    {compact && metadata}
+                </details>
+            )}
+            {!compact && metadata}
         </div>
     );
 }
@@ -212,8 +266,8 @@ export function ModelPicker({
             </Field>
             {selected && (compact ? (
                 <div className="query-insights-model-compact-details">
-                    <Text size={200} className="query-insights-model-muted">{modelSummary(selected)}</Text>
-                    <Tooltip content={<ModelDetails model={selected} />} relationship="description">
+                    <ModelDetails model={selected} compact />
+                    <Tooltip content={<ModelDetails model={selected} tooltip />} relationship="description">
                         <Button appearance="subtle" size="small" icon={<InfoRegular />} aria-label={l10n.t('Selected model details')} />
                     </Tooltip>
                 </div>

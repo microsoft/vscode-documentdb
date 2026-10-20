@@ -109,6 +109,40 @@ branch: dev/tnaum/query-insights-next
   repo's `@types/vscode` 1.109. Real token counts and exact billed credits therefore need
   **no proposed API**.
 
+- **F9: Chat model settings already apply to extension requests (lead research, verified
+  against `microsoft/vscode`).** `languageModels.ts` `sendChatRequest` merges user model
+  configuration into **every** LM API request:
+  `mergedOptions = { ...options, configuration: { ...userConfig, ...options.configuration } }`.
+  Query Insights therefore already follows the thinking level (`reasoningEffort`) and context
+  size (`contextSize`) chosen for that model in the VS Code Chat model picker. The supported
+  values (`configurationSchema`) are **not** exposed on `LanguageModelChat`. An undocumented
+  `configuration` request option could override the merge but is a hack and is not implemented.
+  The details panel explains the inherited settings; no new thinking/context controls.
+  `priceCategory` is a **server-side relative tier**, not calculated from per-token prices:
+  Copilot reads CAPI model-list field `model_picker_price_category` in
+  `extensions/copilot/src/platform/endpoint/node/chatEndpoint.ts`.
+  VS Code `modelPickerPresentation.ts` `getPriceCategoryLabel` maps low/medium/high/very_high
+  to Low/Medium/High/Very high cost; unknown values become "{Capitalized} cost"; missing means
+  no badge. It uses only two styles: low/medium neutral (`informative` tint here),
+  high/very_high warning (VS Code mixes editorWarning-foreground at 14%; `warning` tint here).
+  No success/danger colour mapping.
+
+### F10 — What we can ship
+
+Lead research, verified in the `microsoft/vscode` and `microsoft/vscode-vsce` sources.
+
+| Data | API status | Gated at runtime? | Shippable on Marketplace without flags? | Fallback |
+|---|---|---|---|---|
+| Model list, id/name/family/version, maxInputTokens, countTokens, sendRequest, `response.stream`, `LanguageModelDataPart` | Stable (`vscode.d.ts`) | No | Yes | — |
+| Per-run usage/credits (`'usage'` data part, `copilot_usage.total_nano_aiu`) | Stable channel, but the payload is a Copilot-provider-internal contract (undocumented) | No | Yes | Missing/malformed → `countTokens` estimates, no credits shown |
+| Pricing/priceCategory/category on `LanguageModelChat` | Proposed (`languageModelPricing`); typed only in the proposed d.ts, but set as plain properties on the model object with no `checkProposedApiEnabled` | No (today) | Yes, as long as we do NOT declare `enabledApiProposals`, only read defensively via `unknown` | Absent → hide the Pricing details panel |
+| Thinking level / context size override (`configuration` in request options) | Undocumented pass-through | No | Technically yes, but not used | User's VS Code per-model settings apply automatically |
+
+Rules:
+- Declaring `enabledApiProposals` in package.json would block the release: vsce refuses to publish it to the Marketplace unless it's explicitly allowed. In stable VS Code, proposals only activate for extensions on the product's `extensionEnabledApiProposals` allow-list (GitHub Copilot Chat, for example) or with `--enable-proposed-api`. So we never declare it.
+- Gated proposals (e.g. `LanguageModelChatMessageRole.System`, which calls `checkProposedApiEnabled`) throw at runtime, so they're off-limits.
+- Risk of the ungated reads: VS Code may rename, remove or gate these fields in any release, or finalize them into the stable API, without notice. Hence feature detection on every read, a hidden UI when they're absent, and a unit test proving the picker renders with none of the optional fields.
+
 ## Rules for the implementing agent
 
 1. Work **WI by WI**, in order. Don't produce one giant changeset.
@@ -366,6 +400,11 @@ at Checkpoint E. No push, lint, prettier-fix, l10n or package; nothing under `._
       category groups, muted option metadata/tint badges and selected-model details (full panel
       or compact summary/info tooltip). Added malformed/frozen metadata and picker tests;
       enriched the synthetic L2 utility fixture. Checks deferred to E.
+    - _Lead steering:_ Mirror VS Code's **Pricing details**: native collapsible section
+      (full expanded, compact collapsed), right-aligned tinted cost-tier badge, **Credits per
+      1M tokens**, bold right-aligned Input/Output/Cache Read/Cache Write rows, and a separate
+      Long context group when present. Smaller muted context/capability/identity and F9
+      inherited-settings note below. Compact retains an info tooltip with noninteractive details.
 - [x] **WI-16: Slim Analyze header**
     - One wrapping muted facts row: Reconfigure back arrow (inputs kept), command tint badge,
       monospace namespace, cluster type, model and prompt. No dropdown or Re-run; reconfigure
@@ -513,14 +552,17 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-14 | Coding agent (gpt-6.1-sol) | 16:35 | 16:37 | 2 | Plan/F7/F8, stable usage data parts, telemetry and byline; checks deferred to E. |
 | WI-15 | Coding agent (gpt-6.1-sol) | 16:37 | 16:38 | 1 | Rich metadata, grouped options, details panel/tooltip and tests; checks deferred to E. |
 | WI-16 | Coding agent (gpt-6.1-sol) | 16:38 | 16:39 | 1 | Slim facts row and reconfiguration scenario; checks deferred to E. |
+| WI-15 follow-up | Coding agent (gpt-6.1-sol) | 16:39 | 16:40 | 1 | Lead screenshot steering: VS Code-style collapsible pricing, tier badges and F9; checks deferred to E. |
 
 ## Deviation log
 
 | WI | Deviation | Rationale |
 | --- | --- | --- |
 | WI-14 | Both routers and the reducer already forward the entire usage object, so only the intervening shared usage shapes needed extending. Client-side counting runs only for missing provider counts. | Avoids disturbing the existing streaming lifecycle or adding redundant count requests; provider totals (including reasoning/overhead) remain authoritative. |
-| WI-15 | POC deliberately reads pricing properties that the shipped code avoided (see `copilotService.ts` comments); no proposal is enabled. Shipping this requires API finalization or enabling `languageModelPricing`. `version` was already in `AvailableModelInfo`. Unknown categories are grouped as Other; unknown price tiers remain visible as text. | F7 establishes plain property access but not a stable API contract. Defensive optional reads let the POC explore metadata without pretending it is ready to ship. |
+| WI-15 | POC deliberately reads pricing properties that the shipped code avoided (see `copilotService.ts` comments); no proposal is enabled. The initial conservative shipping assumption (finalization or enabling the proposal) is superseded by the lead's F10: defensive ungated reads can ship without flags, and we must never declare `enabledApiProposals`. `version` was already in `AvailableModelInfo`. Unknown categories are grouped as Other; unknown price tiers remain visible as text. | F7 establishes plain property access but not a stable API contract; F10 distinguishes publishability from runtime-contract stability. Absent metadata hides the Pricing details section, with a regression test. |
 | WI-16 | Removed the Analyze Re-run button and inline model picker at the operator's request, superseding WI-13's summary actions. | Model changes now intentionally go through Reconfigure; the reused panel's focus and scoped single-scroll rules stay intact. |
+| WI-15 follow-up | Lead steering arrived after WI-15 was committed, so the requested VS Code pricing layout/F9 is a separate follow-up commit. Compact pricing can expand inline; its info tooltip repeats the same details without interactive controls. | Preserves per-WI history and keyboard-operable disclosure without putting focusable controls in a tooltip. |
+| WI-15 correction | Replaced the lead's initial four-colour cost mapping with verified VS Code behaviour: neutral low/medium, warning high/very_high; unknown tiers retain a capitalized label. F10 adds the exact Marketplace/runtime distinction and hides absent Pricing details. | Follow-up lead research established CAPI supplies relative tiers, not computed token costs; sources are recorded in F9/F10 and the code comment. Folded into the WI-15 follow-up commit before final WI-17 handoff. |
 | — | Coding started (WI-0, partial) before the operator had reviewed the plan. | Autopilot over-reach. Stopped on request; the partial work is kept and finished in WI-0. |
 | WI-5 | Keep the existing `QueryInsightsState` union and transition helpers; expose pipeline + dispatch on the adapter. Standalone synthesizes Stage 1 from the supplied explain. | Avoids moving Collection View state/prefetch or duplicating the layout. The standalone holder can use ordinary `useState`; synthesizing Stage 1 preserves all existing sequencing/plan-summary behaviour instead of special-casing a skipped stage. Common URL/error/model RPCs remain shared directly; only data/session operations move behind the adapter. |
 | WI-6 | The standalone subscription reuses the parser/service/event types but has a small separate streaming loop; no connected completion-event telemetry or survey activity. | Extracting the connected loop would disturb its detailed session telemetry/timing instrumentation. Copying the essential event lifecycle is lower risk for a POC; all cancellation paths still abort the model and both inputs are analyzed with one shared pure Stage 2 helper. |
