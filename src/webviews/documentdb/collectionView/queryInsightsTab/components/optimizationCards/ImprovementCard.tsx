@@ -29,6 +29,7 @@ export interface ImprovementCardProps {
      * Configuration for the improvement card
      */
     config: ImprovementCardConfig;
+    actionsEnabled?: boolean;
 
     /**
      * Optional callback when the copy button is clicked
@@ -83,7 +84,8 @@ const priorityColors: Record<'high' | 'medium' | 'low', 'danger' | 'warning' | '
 // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
 export function ImprovementCard({
     config,
-    onCopy: _onCopy,
+    actionsEnabled = true,
+    onCopy,
     onPrimaryAction,
     onSecondaryAction,
     ref,
@@ -279,7 +281,12 @@ export function ImprovementCard({
 
                         {/* Action Buttons */}
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {config.primaryButton && (
+                            {!actionsEnabled && (
+                                <Button size="small" onClick={onCopy}>
+                                    {l10n.t('Copy command')}
+                                </Button>
+                            )}
+                            {actionsEnabled && config.primaryButton && (
                                 <Button
                                     appearance="primary"
                                     size="small"
@@ -294,7 +301,7 @@ export function ImprovementCard({
                                           : config.primaryButton.label}
                                 </Button>
                             )}
-                            {config.secondaryButton && (
+                            {actionsEnabled && config.secondaryButton && (
                                 <Button
                                     appearance="subtle"
                                     size="small"

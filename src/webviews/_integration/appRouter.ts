@@ -92,6 +92,9 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
         measurements?: Record<string, number>
  */
 const commonRouter = router({
+    copyToClipboard: publicProcedure.input(z.object({ text: z.string() })).mutation(async ({ input }) => {
+        await vscode.env.clipboard.writeText(input.text);
+    }),
     openFeedback: publicProcedure
         .input(z.object({ collectionTab: z.enum(['documents', 'indexes', 'queryInsights']).optional() }))
         .mutation(async ({ input, ctx }): Promise<void> => {

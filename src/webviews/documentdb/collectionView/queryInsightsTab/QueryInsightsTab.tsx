@@ -34,15 +34,13 @@ import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens 
 import { ChatMailRegular, InfoRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview';
 import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
-import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
-import { CollectionViewContext } from '../collectionViewContext';
-import { type CollectionViewWebviewConfigurationType } from '../collectionViewController';
+import { useQueryInsightsDataSource } from './QueryInsightsDataSourceContext';
 import {
     applyStage3Event,
     cancelStage3,
@@ -91,19 +89,9 @@ export const QueryInsightsMain = (): JSX.Element => {
     /**
      * Use the configuration object to access the data passed to the webview at its creation.
      */
-    const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
-
     const trpcClient = useTrpcClient();
-    const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
-    const pipeline = currentContext.queryInsights;
-
-    /** Apply a pipeline transition. Wraps the global setState helper. */
-    const dispatch = useCallback(
-        (transition: (prev: typeof pipeline) => typeof pipeline): void => {
-            setCurrentContext((prev) => ({ ...prev, queryInsights: transition(prev.queryInsights) }));
-        },
-        [setCurrentContext],
-    );
+    const source = useQueryInsightsDataSource();
+    const { pipeline, dispatch, identity: configuration, isQueryLoading, getStage1, getStage2, streamStage3 } = source;
 
     // ---------- Derived values --------------------------------------------
     //
@@ -320,10 +308,9 @@ export const QueryInsightsMain = (): JSX.Element => {
     //
     // IMPORTANT: wait for query execution (isLoading=false) before fetching.
     useEffect(() => {
-        if (!currentContext.isLoading && pipeline.kind === 'idle') {
+        if (!isQueryLoading && pipeline.kind === 'idle') {
             dispatch(startStage1Load);
-            void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
-                .query()
+            void getStage1()
                 .then((data) => {
                     dispatch((prev) => stage1Succeeded(prev, data));
                 })
@@ -335,7 +322,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     displayStageError(1, errorMessage);
                 });
         }
-    }, [currentContext.isLoading, pipeline.kind, trpcClient, dispatch, displayStageError]);
+    }, [isQueryLoading, pipeline.kind, getStage1, dispatch, displayStageError]);
 
     // ---------- Surface errors as VS Code notifications -------------------
     //
@@ -380,8 +367,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 }
             };
 
-            void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage2
-                .query()
+            void getStage2()
                 .then(async (data) => {
                     await ensureMinDuration();
                     dispatch((prev) => stage2Succeeded(prev, data));
@@ -396,7 +382,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     stage2InFlightRef.current = false;
                 });
         }
-    }, [pipeline.kind, trpcClient, dispatch]);
+    }, [pipeline.kind, getStage2, dispatch]);
 
     // Debug logging for pipeline state changes
     useEffect(() => {
@@ -543,8 +529,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         // in lock step.
         stage3SubscriptionRef.current?.unsubscribe();
 
-        const subscription = trpcClient.mongoClusters.collectionView.queryInsights.streamStage3.subscribe(
-            { requestKey },
+        const subscription = streamStage3(
+            requestKey,
             {
                 onData(event) {
                     dispatch((prev) => applyStage3Event(prev, requestKey, event));
@@ -586,22 +572,16 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const handlePrimaryAction = useCallback(
         async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
-            return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
-                actionId,
-                payload,
-            });
+            return await source.executeAction(actionId, payload);
         },
-        [],
+        [source.executeAction],
     );
 
     const handleSecondaryAction = useCallback(
         async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
-            return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
-                actionId,
-                payload,
-            });
+            return await source.executeAction(actionId, payload);
         },
-        [],
+        [source.executeAction],
     );
 
     // ---------- Build the animated card list ------------------------------
@@ -703,7 +683,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         return;
                     }
                     const config = createImprovementCardConfig(rec, index, {
-                        clusterId: configuration.clusterId,
+                        clusterId: configuration.clusterId ?? '',
                         databaseName: configuration.databaseName,
                         collectionName: configuration.collectionName,
                     });
@@ -713,6 +693,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                         component: (
                             <ImprovementCard
                                 config={config}
+                                actionsEnabled={source.actionsEnabled}
+                                onCopy={() => void trpcClient.common.copyToClipboard.mutate({ text: rec.shellCommand })}
                                 onPrimaryAction={handlePrimaryAction}
                                 onSecondaryAction={handleSecondaryAction}
                             />
@@ -775,6 +757,7 @@ export const QueryInsightsMain = (): JSX.Element => {
         showErrorCard,
         stage2Data,
         configuration,
+        source.actionsEnabled,
         handlePrimaryAction,
         handleSecondaryAction,
     ]);

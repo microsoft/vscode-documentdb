@@ -143,7 +143,7 @@ branch: dev/tnaum/query-insights-next
 
 ### Phase B: explore without a connection (standalone wizard)
 
-- [ ] **WI-5: Make `QueryInsightsMain` mountable outside the Collection View** (D5, F4)
+- [x] **WI-5: Make `QueryInsightsMain` mountable outside the Collection View** (D5, F4)
     - Introduce a `QueryInsightsDataSource` interface + React context
       (`queryInsightsTab/QueryInsightsDataSourceContext.tsx`). It exposes: `getStage1()`,
       `getStage2()`, `streamStage3(callbacks) → unsubscribe`, `executeAction(...)`, plus flags
@@ -160,6 +160,7 @@ branch: dev/tnaum/query-insights-next
       create/drop/hide).
     - _Acceptance:_ the Collection View tab behaves exactly as before (manual smoke in
       Checkpoint B).
+    - _Outcome:_ Shared data-source context now drives the unchanged layout and pipeline; Collection View supplies the existing session calls/state, standalone cards can be copy-only. Verification deferred to B.
 
 - [ ] **WI-6: Standalone host**
     - `src/webviews/documentdb/queryInsightsStandalone/queryInsightsStandaloneRouter.ts`:
@@ -236,7 +237,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-2 | Coding agent (gpt-6.1-sol) | 11:30 | 11:31 | 1 | Checks deferred to A; shared RPC tests live under services/ai to join its selector. |
 | WI-3 | Coding agent (gpt-6.1-sol) | 11:31 | 11:34 | 3 | Checks deferred to A. |
 | WI-4 + Checkpoint A | Coding agent (gpt-6.1-sol) | 11:34 | 11:42 | 8 | Includes restoring missing dependencies and fixing new test fixtures; final build and all 1,330 targeted tests passed. |
-| WI-5 | | | | | |
+| WI-5 | Coding agent (gpt-6.1-sol) | 11:44 | 11:46 | 2 | Shared adapter and copy-only cards; checks deferred to B. |
 | WI-6 | | | | | |
 | WI-7 + Checkpoint B | | | | | |
 | WI-8 | | | | | |
@@ -246,6 +247,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI | Deviation | Rationale |
 | --- | --- | --- |
 | — | Coding started (WI-0, partial) before the operator had reviewed the plan. | Autopilot over-reach. Stopped on request; the partial work is kept and finished in WI-0. |
+| WI-5 | Keep the existing `QueryInsightsState` union and transition helpers; expose pipeline + dispatch on the adapter. Standalone synthesizes Stage 1 from the supplied explain. | Avoids moving Collection View state/prefetch or duplicating the layout. The standalone holder can use ordinary `useState`; synthesizing Stage 1 preserves all existing sequencing/plan-summary behaviour instead of special-casing a skipped stage. Common URL/error/model RPCs remain shared directly; only data/session operations move behind the adapter. |
 | WI-3 | Made `formatTokenCount` browser-safe with an optional locale argument; host logging passes the VS Code locale explicitly. | The existing utility imported `vscode` at runtime, which cannot ship in a webview bundle. Reusing a pure helper avoids duplicating formatting while preserving host output. |
 | Checkpoint A | Restored lockfile dependencies with `npm ci` after the initial commands could not start due to missing packages. | This worktree had no installed dependency set; no dependency manifests or lockfile changed. |
 | Checkpoint A | The new picker selection test replaces only Fluent's floating dropdown/option layer with a native test stand-in. | Opening the real popup in jsdom (no layout engine) timed out; picker state, RPC calls, ordering, token labels, hints, and disclosure tests remain exercised. Also isolated the new host test's cancellation-error mock. No existing snapshots or TDD contracts changed. |
