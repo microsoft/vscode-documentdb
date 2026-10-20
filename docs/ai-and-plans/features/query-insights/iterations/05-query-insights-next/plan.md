@@ -229,7 +229,8 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | --- | --- | --- | --- | --- | --- |
 | Plan v1: research (QI pipeline, prompt service, cosmosdb picker) + proposal | Lead agent | 10:46 | 10:58 | 12 | |
 | Plan v2: decisions, org-default research (vscode source) | Lead agent | 11:02 | 11:17 | 15 | Includes WI-0 partial (~5 min) |
-| Plan v3: this file (CONTRIBUTING format, WIs) | Lead agent | 11:23 | 11:35 | 12 | |
+| Plan v3: this file (CONTRIBUTING format, WIs) | Lead agent | 11:23 | 11:26 | 3 | |
+| Phase A review (lead) | Lead agent | 11:43 | 11:45 | 2 | Diff + logs reviewed; Phase B launched |
 | WI-0 | Coding agent (gpt-6.1-sol) | 11:26 | 11:28 | 2 | Includes instruction/plan reading; checks deferred to A. |
 | WI-1 | Coding agent (gpt-6.1-sol) | 11:28 | 11:30 | 2 | Includes the WI-1 commit; checks deferred to A. |
 | WI-2 | Coding agent (gpt-6.1-sol) | 11:30 | 11:31 | 1 | Checks deferred to A; shared RPC tests live under services/ai to join its selector. |
