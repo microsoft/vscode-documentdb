@@ -14,6 +14,7 @@ import type { QueryInsightsState } from '../collectionView/collectionViewContext
 import { QueryInsightsDataSourceContext, type QueryInsightsDataSource } from '../collectionView/queryInsightsTab/QueryInsightsDataSourceContext';
 import { QueryInsightsMain } from '../collectionView/queryInsightsTab/QueryInsightsTab';
 import { ModelPicker } from '../queryInsightsShared/ModelPicker';
+import { QueryInsightsPreviewBadge } from '../queryInsightsShared/QueryInsightsPreviewBadge';
 import type { QueryInsightsPrefill, StandaloneInput } from './types';
 import './queryInsightsStandalone.scss';
 
@@ -140,7 +141,7 @@ export function QueryInsightsStandalone(): JSX.Element {
                         {error && <MessageBar intent="error"><MessageBarBody>{error}</MessageBarBody></MessageBar>}
                     </div>
                 </WizardStep>
-                <WizardStep value="analyze" label={l10n.t('Analyze')} title={l10n.t('Query Insights')}>
+                <WizardStep value="analyze" label={l10n.t('Analyze')} title={l10n.t('Query Insights')} action={<QueryInsightsPreviewBadge feature />}>
                     {step === 'analyze' && analysisInput && <Analyze input={analysisInput} />}
                 </WizardStep>
             </Wizard>

@@ -257,11 +257,12 @@ is bundled once at Checkpoint C after WI-11; do not build/test after WI-9 or WI-
     - Return profile/applicability metadata; add small aggregate (both explain formats) and count fixtures/tests.
     - _Outcome:_ Added aggregate cursor normalization, pipeline-scope diagnostics/applicability, count `nCounted` extraction and count-specific index/scan-work ratings; shared helper accepts profiles while the find response remains unchanged. Added seven profile contract tests; checks deferred to C.
 
-- [ ] **WI-10: UI applicability and preview badges**
+- [x] **WI-10: UI applicability and preview badges**
     - Standalone Analyze always shows "Feature preview".
     - Non-find efficiency and plan cards show "Preview · tuned for find queries".
     - Relabel aggregate/count metrics and hide or explicitly mark inapplicable cells.
       Connected find tab appearance and behavior stay unchanged.
+    - _Outcome:_ Standalone Analyze has a Feature preview badge; non-find efficiency/plan cards carry the tuned-for-find preview. Aggregate throughput is relabelled and scope notes are visible; count-only-inapplicable cells are explicit and count plan details suppress misleading Returned counters. Added three presentation tests; checks deferred to C.
 
 - [ ] **WI-11: Standalone correctness + Checkpoint C**
     - Apply `fixupDocumentDbExplain` to supplied Azure DocumentDB plans, including cursor plans,
@@ -340,7 +341,7 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
 | WI-7 + Checkpoint B | Coding agent (gpt-6.1-sol) | 11:48 | 14:33 | 165 | Includes ~150 minutes waiting on integrated browser/tools (11:56–14:26); final build/tests and 9 L2 routes passed. |
 | WI-8 | Coding agent (gpt-6.1-sol) | 14:33 | 14:34 | 1 | Usage, manual checks, timeline and Phase B totals. |
 | WI-9 | Coding agent (gpt-6.1-sol) | 14:34 | 14:38 | 4 | Verified/corrected F6 against installed helper; checks deferred to C. |
-| WI-10 | | | | | |
+| WI-10 | Coding agent (gpt-6.1-sol) | 14:38 | 14:41 | 3 | Preview/applicability UI; checks deferred to C. |
 | WI-11 + Checkpoint C | | | | | |
 
 ## Deviation log

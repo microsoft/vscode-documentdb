@@ -40,6 +40,8 @@ import type { CommandType } from '../../../../commands/llmEnhancedCommands/index
 import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
+import { QueryInsightsPreviewBadge } from '../../queryInsightsShared/QueryInsightsPreviewBadge';
+import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analysisProfilePresentation';
 import { useQueryInsightsDataSource } from './QueryInsightsDataSourceContext';
 import {
     applyStage3Event,
@@ -436,7 +438,13 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     const executionTime = getMetricValue(stage2Data?.executionTimeMs);
-    const docsReturned = getMetricValue(stage2Data?.documentsReturned);
+    const analysisProfile = stage2Data?.analysisProfile ?? source.commandType ?? 'find';
+    const presentation = getAnalysisProfilePresentation(analysisProfile);
+    const notApplicable = stage2Data?.notApplicable ?? [];
+    const notApplicableToCount = l10n.t('Not applicable to count queries');
+    const docsReturned = getMetricValue(
+        notApplicable.includes('documentsReturned') ? null : stage2Data?.documentsReturned,
+    );
     const keysExamined = getMetricValue(stage2Data?.totalKeysExamined);
     const docsExamined = getMetricValue(stage2Data?.totalDocsExamined);
     const lowSelectivityLabel = `below ${(0.1).toLocaleString(navigator.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
@@ -785,9 +793,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                             tooltipExplanation={l10n.t('Total time taken to execute the query on the server')}
                         />
                         <CountMetric
-                            label={l10n.t('Documents Returned')}
+                            label={presentation.resultLabel}
                             value={docsReturned}
-                            tooltipExplanation={l10n.t('Number of documents returned by the query')}
+                            tooltipExplanation={presentation.resultTooltip}
                         />
                         <CountMetric
                             label={l10n.t('Keys Examined')}
@@ -1117,12 +1125,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                 {/* Right Column: Efficiency Analysis, Query Plan, Quick Actions */}
                 <div className="rightColumn">
                     {/* Query Efficiency Analysis */}
-                    <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
+                    <SummaryCard title={l10n.t('Query Efficiency Analysis')}
+                        titleBadge={analysisProfile !== 'find' && <QueryInsightsPreviewBadge />}
+                        description={analysisProfile === 'aggregate' && stage2Data?.analysisNotes?.length
+                            ? <Text>{stage2Data.analysisNotes.join(' ')}</Text> : undefined}>
                         <GenericCell
-                            label={l10n.t('Selectivity')}
-                            value={selectivity}
+                            label={analysisProfile === 'aggregate' ? l10n.t('Initial-stage selectivity') : l10n.t('Selectivity')}
+                            value={analysisProfile === 'count' ? notApplicableToCount : selectivity}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
+                                if (analysisProfile === 'count') return notApplicableToCount;
                                 const selectivity = stage2Data?.efficiencyAnalysis.selectivity;
                                 if (selectivity === null || selectivity === undefined) {
                                     return l10n.t(
@@ -1170,9 +1182,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('Fetch Overhead')}
-                            value={getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)}
+                            value={analysisProfile === 'count' ? notApplicableToCount : getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
+                                if (analysisProfile === 'count') return notApplicableToCount;
                                 const kind = stage2Data?.efficiencyAnalysis.fetchOverheadKind ?? 'directFetch';
                                 if (kind === 'covered') {
                                     return l10n.t(
@@ -1199,11 +1212,17 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={getCellValue((stage2) =>
+                            value={analysisProfile === 'count' ? notApplicableToCount
+                                : notApplicable.includes('inMemorySort') ? l10n.t('Not rated for pipeline $sort')
+                                : getCellValue((stage2) =>
                                 stage2.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
                             )}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
+                                if (analysisProfile === 'count') return notApplicableToCount;
+                                if (notApplicable.includes('inMemorySort')) {
+                                    return l10n.t('A later pipeline $sort is present. The initial cursor plan cannot determine its memory or disk usage.');
+                                }
                                 const hasSort = stage2Data?.efficiencyAnalysis.hasInMemorySort ?? false;
                                 if (hasSort) {
                                     return l10n.t(
@@ -1235,6 +1254,7 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                     {/* Query Plan Summary */}
                     <QueryPlanSummary
+                        preview={analysisProfile !== 'find'}
                         stage1Data={stage1Data}
                         stage2Data={stage2Data}
                         stage1Loading={pipeline.kind === 's1Loading'}
