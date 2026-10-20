@@ -154,7 +154,7 @@ function explorerProfile(profile: 'aggregate' | 'count'): Scenario<'queryInsight
         readiness: {
             content: ['Feature preview', 'Preview · tuned for find queries', 'Query Plan Summary', 'Copy command',
                 isCount ? 'Documents counted' : 'Documents passed to pipeline',
-                isCount ? 'Not applicable to count queries' : 'Not rated for pipeline $sort'],
+                isCount ? 'Not applicable' : 'Not rated for pipeline $sort'],
             selectors: ['.leftColumn', '.rightColumn'], noProgressbar: true,
         },
     };

@@ -441,6 +441,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     const presentation = getAnalysisProfilePresentation(analysisProfile);
     const notApplicable = stage2Data?.notApplicable ?? [];
     const notApplicableToCount = l10n.t('Not applicable to count queries');
+    const notApplicableShort = l10n.t('Not applicable');
     const executionTime = getMetricValue(notApplicable.includes('executionTime') ? null : stage2Data?.executionTimeMs);
     const docsReturned = getMetricValue(
         notApplicable.includes('documentsReturned') ? null : stage2Data?.documentsReturned,
@@ -1133,7 +1134,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             ? <Text>{stage2Data.analysisNotes.join(' ')}</Text> : undefined}>
                         <GenericCell
                             label={analysisProfile === 'aggregate' ? l10n.t('Initial-stage selectivity') : l10n.t('Selectivity')}
-                            value={analysisProfile === 'count' ? notApplicableToCount : selectivity}
+                            value={analysisProfile === 'count' ? notApplicableShort : selectivity}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 if (analysisProfile === 'count') return notApplicableToCount;
@@ -1184,7 +1185,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('Fetch Overhead')}
-                            value={analysisProfile === 'count' ? notApplicableToCount : getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)}
+                            value={analysisProfile === 'count' ? notApplicableShort : getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 if (analysisProfile === 'count') return notApplicableToCount;
@@ -1214,7 +1215,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={analysisProfile === 'count' ? notApplicableToCount
+                            value={analysisProfile === 'count' ? notApplicableShort
                                 : notApplicable.includes('inMemorySort') ? l10n.t('Not rated for pipeline $sort')
                                 : getCellValue((stage2) =>
                                 stage2.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
