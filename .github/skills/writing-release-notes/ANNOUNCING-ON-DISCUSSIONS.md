@@ -4,10 +4,10 @@ Every release is announced in the **Announcements** category of
 [GitHub Discussions](https://github.com/microsoft/vscode-documentdb/discussions). The body always comes
 from `docs/release-notes/X.Y.md`, so write and commit the release notes first.
 
-| Version type           | What to post                                                                                                              | Title                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Major or minor (X.Y.0) | One discussion with the whole release notes file, reusing a confirmed placeholder if present                               | `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>` |
-| Patch (X.Y.Z, Z > 0)   | 1. Create or update the dedicated patch discussion<br>2. Then post the same text as a comment on the X.Y.0 announcement     | `Patch Release vX.Y.Z 📎` (the 📎 emoji is part of the title)        |
+| Version type           | What to post                                                                                                            | Title                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Major or minor (X.Y.0) | One discussion with the whole release notes file, reusing a confirmed placeholder if present                            | `DocumentDB extension for Visual Studio Code vX.Y Released! <emoji>` |
+| Patch (X.Y.Z, Z > 0)   | 1. Create or update the dedicated patch discussion<br>2. Then post the same text as a comment on the X.Y.0 announcement | `Patch Release vX.Y.Z 📎` (the 📎 emoji is part of the title)        |
 
 ## Ask about a placeholder before publishing
 
