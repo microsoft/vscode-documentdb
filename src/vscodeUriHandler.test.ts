@@ -6,6 +6,9 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as vscode from 'vscode';
+import { AuthMethodId } from './documentdb/auth/AuthMethod';
+import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
+import { type EmulatorConfiguration } from './utils/emulatorConfiguration';
 import { globalUriHandler } from './vscodeUriHandler';
 
 /** Telemetry recorded by the mocked azext wrapper, so routing decisions can be asserted. */
@@ -371,6 +374,30 @@ describe('globalUriHandler — TLS exception requested by a link', () => {
 
         expect(savedConnection().properties.emulatorConfiguration).toBeUndefined();
     });
+
+    it.each(['127.0.0.1', '[::1]'])(
+        'applies the accepted exception to an anonymous connection on literal loopback %s',
+        async (host) => {
+            acceptAddConnectionOnly();
+            (vscode.window.showWarningMessage as Mock).mockResolvedValue('Turn off validation');
+            const connectionString = `mongodb://${host}:10260/?tls=true&tlsAllowInvalidCertificates=true`;
+
+            await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+            const { properties, secrets } = savedConnection();
+            expect(properties.emulatorConfiguration).toEqual({ isEmulator: false, disableEmulatorSecurity: true });
+
+            // The saved consent must reach the client, not only storage.
+            const { options } = await new NoAuthHandler({
+                clusterId: 'cluster-1',
+                connectionString: secrets.connectionString,
+                connectionStringWithPassword: secrets.connectionString,
+                authMechanism: AuthMethodId.NoAuth,
+                emulatorConfiguration: properties.emulatorConfiguration as EmulatorConfiguration,
+            }).configureAuth();
+            expect(options.tlsAllowInvalidCertificates).toBe(true);
+        },
+    );
 });
 
 describe('globalUriHandler — URL handling confirmations disabled', () => {
