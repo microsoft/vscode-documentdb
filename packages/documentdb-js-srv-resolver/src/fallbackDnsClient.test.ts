@@ -159,7 +159,8 @@ describe('fallback DNS client', (): void => {
                 request.send(compressedReply(request.query));
             }
         });
-        const emit = net.Socket.prototype.emit;
+        const emit: (this: net.Socket, event: string | symbol, ...args: unknown[]) => boolean =
+            net.Socket.prototype.emit;
         let fragments = 0;
         // TCP can coalesce writes, so split the client's data events rather than timing server writes.
         vi.spyOn(net.Socket.prototype, 'emit').mockImplementation(function (
