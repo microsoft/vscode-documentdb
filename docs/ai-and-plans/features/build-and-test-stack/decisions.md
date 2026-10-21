@@ -11,23 +11,24 @@ created: 2026-10-14
 > E2E iteration in particular. Decisions taken while executing the stages stay in
 > [build-and-test-stack.md](./iterations/01-modernization/build-and-test-stack.md), next to the stage they shaped.
 
-| #    | Decision                                                        | Status              | Changed from the proposal?                                                                                     | Date       | PR   |
-| ---- | --------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- | ---- |
-| 0001 | Workspace packages ship ESM only                                | Accepted            | Accepted as proposed                                                                                           | 2026-10-14 | #880 |
-| 0002 | CI runs verification in tiers and reports what it ran and why   | Accepted            | **Operator added the layer report, the one-shot request label and the merged comment**                         | 2026-10-14 | #880 |
-| 0003 | Negative controls run when their check changes, not every PR    | Accepted            | Accepted as proposed                                                                                           | 2026-10-14 | #880 |
-| 0004 | Use Vite for the host and webviews                              | Accepted            | The documented host-only esbuild fallback was not needed                                                       | 2026-09-30 | #880 |
-| 0005 | Replace Jest with Vitest in one sweep                           | Accepted            | Adopted for pipeline and ESM unification, not for speed                                                        | 2026-10-02 | #880 |
-| 0006 | Split each view with ordered named groups                       | Accepted            | Rolldown groups replaced planned `manualChunks`; ordering came from the build experiment                       | 2026-10-05 | #880 |
-| 0007 | Run the extension host as ESM through a thin loader             | Accepted            | Accepted as proposed                                                                                           | 2026-10-05 | #880 |
-| 0008 | Keep the TypeScript server plugin CommonJS                      | Accepted            | The shipped bundle moved to the root and a runtime stub supplies the package path                              | 2026-10-01 | #880 |
-| 0009 | Keep SlickGrid during modernization                             | Accepted            | Replacement remains a separate later iteration                                                                 | 2026-09-30 | #880 |
-| 0010 | Run L3 on GitHub Actions only                                   | Accepted            | ADO keeps only offline checks that can run before signing                                                      | 2026-09-30 | #880 |
-| 0011 | Keep L2-dev runner-free in this iteration                       | Accepted            | CI wiring stays with the E2E iteration                                                                         | 2026-10-05 | #880 |
-| 0012 | Use one branch and one PR, merging `main`                       | Accepted (modified) | The 2026-10-07 decision restored a merge from `main` before the PR merges                                      | 2026-10-01 | #880 |
-| 0013 | The required check passes only when every expected layer passed | Accepted            | Accepted as proposed by the Stage 8.5 review (S85-F01)                                                         | 2026-10-14 | #880 |
-| 0014 | CI jobs run in parallel where safe, under descriptive names     | Accepted (modified) | Accepted as proposed; prompted by the operator's comparison with PR #963; 0015 changes its `Merge gate` timing | 2026-10-14 | #880 |
-| 0015 | Rename the required check to `Merge gate` on #880               | Accepted            | Operator's call; reverses the order in 0014                                                                    | 2026-10-14 | #880 |
+| #    | Decision                                                           | Status              | Changed from the proposal?                                                                                     | Date       | PR    |
+| ---- | ------------------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- | ----- |
+| 0001 | Workspace packages ship ESM only                                   | Accepted            | Accepted as proposed                                                                                           | 2026-10-14 | #880  |
+| 0002 | CI runs verification in tiers and reports what it ran and why      | Accepted            | **Operator added the layer report, the one-shot request label and the merged comment**                         | 2026-10-14 | #880  |
+| 0003 | Negative controls run when their check changes, not every PR       | Accepted            | Accepted as proposed                                                                                           | 2026-10-14 | #880  |
+| 0004 | Use Vite for the host and webviews                                 | Accepted            | The documented host-only esbuild fallback was not needed                                                       | 2026-09-30 | #880  |
+| 0005 | Replace Jest with Vitest in one sweep                              | Accepted            | Adopted for pipeline and ESM unification, not for speed                                                        | 2026-10-02 | #880  |
+| 0006 | Split each view with ordered named groups                          | Accepted            | Rolldown groups replaced planned `manualChunks`; ordering came from the build experiment                       | 2026-10-05 | #880  |
+| 0007 | Run the extension host as ESM through a thin loader                | Accepted            | Accepted as proposed                                                                                           | 2026-10-05 | #880  |
+| 0008 | Keep the TypeScript server plugin CommonJS                         | Accepted            | The shipped bundle moved to the root and a runtime stub supplies the package path                              | 2026-10-01 | #880  |
+| 0009 | Keep SlickGrid during modernization                                | Accepted            | Replacement remains a separate later iteration                                                                 | 2026-09-30 | #880  |
+| 0010 | Run L3 on GitHub Actions only                                      | Accepted            | ADO keeps only offline checks that can run before signing                                                      | 2026-09-30 | #880  |
+| 0011 | Keep L2-dev runner-free in this iteration                          | Accepted            | CI wiring stays with the E2E iteration                                                                         | 2026-10-05 | #880  |
+| 0012 | Use one branch and one PR, merging `main`                          | Accepted (modified) | The 2026-10-07 decision restored a merge from `main` before the PR merges                                      | 2026-10-01 | #880  |
+| 0013 | The required check passes only when every expected layer passed    | Accepted            | Accepted as proposed by the Stage 8.5 review (S85-F01)                                                         | 2026-10-14 | #880  |
+| 0014 | CI jobs run in parallel where safe, under descriptive names        | Accepted (modified) | Accepted as proposed; prompted by the operator's comparison with PR #963; 0015 changes its `Merge gate` timing | 2026-10-14 | #880  |
+| 0015 | Rename the required check to `Merge gate` on #880                  | Accepted            | Operator's call; reverses the order in 0014                                                                    | 2026-10-14 | #880  |
+| 0016 | Prepare a version branch and an assigned issue instead of a bot PR | Accepted            | Operator approved the issue and prefilled-link alternative after bot PR creation was blocked                   | 2026-10-21 | #1043 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
@@ -647,3 +648,54 @@ The operator chose to finish the naming in one PR rather than leave one stale na
 Until #880 merges, other open PRs run `main`'s workflow, which has no `Merge gate` job, so they
 cannot satisfy the new required check and are blocked from merging (an admin bypass or the merge
 of #880 releases them). The operator accepted this.
+
+---
+
+## 0016: Prepare a version branch and an assigned issue instead of a bot PR
+
+**Status:** Accepted · **Date:** 2026-10-21 · **Raised by:** the operator after the first
+post-release bump run failed to create a PR
+
+### Question
+
+The workflow introduced in #1042 successfully pushed the version-only branch, but
+[run 39644385162](https://github.com/microsoft/vscode-documentdb/actions/runs/39644385162)
+was denied permission to create a PR even with `pull-requests: write`. The repository's
+**Allow GitHub Actions to create and approve pull requests** setting is locked, and the
+operator cannot access the governing organization settings. How can the workflow still
+prepare the change and prevent a forgotten version update?
+
+### Decision
+
+Prepare the version-specific branch and create or update a reminder issue assigned to
+`tnaum-ms`. Include the old/new version table and a prefilled **Create version-bump PR**
+link in the issue and workflow summary. The maintainer submits the PR under their own
+identity; normal PR CI runs. Reruns reuse the branch and issue rather than duplicate them.
+
+The operator confirmed the proposal: "perfect, so we basically create an issue, with a
+prepared branch, correct?" and then requested its implementation on a new branch from `main`.
+
+### Reasoning
+
+The branch preparation already worked. An assigned issue provides a persistent reminder and
+notification, while the prefilled link leaves only submission to the maintainer. This keeps
+the automation useful without bot PR creation, a direct push to `main`, or an additional
+credential. Issue write permission remains a prerequisite and errors remain explicit.
+
+### Rejected alternatives
+
+- **Change only the PR-creation action:** GitHub CLI or an official action with the same
+  `GITHUB_TOKEN` cannot override the PR-creation policy.
+- **Add a personal token to bypass the locked setting:** not the accepted approach; no new
+  credential is introduced.
+- **Only print a link in the workflow summary:** retains a recovery path, but does not provide
+  the assigned reminder the operator wants.
+
+### Consequences
+
+- Only contents and issues write permissions remain; automatic full-CI dispatch is removed.
+- Git and GitHub CLI replace the third-party PR action.
+- Existing matching branches are reused without force pushes; conflicting changes require
+  maintainer intervention.
+- A closed reminder is reopened if the bump is still needed. The maintainer closes it after
+  merging the manually submitted PR.

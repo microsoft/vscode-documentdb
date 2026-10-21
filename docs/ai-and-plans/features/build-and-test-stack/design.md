@@ -169,12 +169,20 @@ Both automatic and manual runs propose only the next patch's `alpha.0`; they nev
 existing development version to `alpha.1`. The root manifest and both root lockfile versions must
 agree before and after npm runs. Workspace package and dependency versions stay unchanged.
 
-The workflow creates or updates a version-specific, ready-for-review PR using `GITHUB_TOKEN`,
-with explicit actions, contents and pull-request write permissions. It dispatches `main.yml` on
-the PR branch with `enforce_full_run=true`, so the complete CI suite and required `Merge gate`
-run without a separate token secret or approval. Additional PR-triggered workflows may require
-a maintainer's approval under GitHub's token-event rules. No release is published or tag modified.
-The development alpha must be replaced with a numeric release version before publication.
+The workflow pushes a version-specific branch and creates or updates an assigned reminder issue
+using `GITHUB_TOKEN`, with only contents and issues write permissions. A version marker identifies
+the reminder independently of its title or state; closed reminders are reopened on a retry.
+REST pagination avoids search-index delays causing duplicate issues. Matching branches are reused
+without rewriting commits. Branches with conflicting version content or unrelated changes fail
+explicitly instead of being overwritten.
+
+The issue and workflow summary include a formatted old/new version table and prefilled PR link.
+A maintainer submits the PR manually and normal PR CI runs; there is no bot PR or automatic CI
+dispatch. The prepared branch and link are summarized before the issue API call so they remain
+available if issue creation fails, without treating that failure as success. No release is
+published or tag modified. The development alpha must be replaced with a numeric release version
+before publication. [Decision 0016](./decisions.md#0016-prepare-a-version-branch-and-an-assigned-issue-instead-of-a-bot-pr)
+records the policy constraint and operator's approved alternative.
 
 ## Change discipline
 
