@@ -11,7 +11,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelsResult } from '../../../../services/ai/modelSelection';
-import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
+import { ModelPicker, type ModelPickerProps } from '../../queryInsightsShared/ModelPicker';
+import { PerformanceInsightsCardComparison } from './components/optimizationCards/custom/PerformanceInsightsCardComparison';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -72,6 +73,7 @@ vi.mock('@fluentui/react-components', async (importOriginal) => {
         PopoverSurface: ({ children, 'aria-label': ariaLabel }: { children: ReactNode; 'aria-label'?: string }): ReactNode => (
             <div role="dialog" aria-label={ariaLabel}>{children}</div>
         ),
+        MenuPopover: ({ children }: { children: ReactNode }): ReactNode => <div>{children}</div>,
     };
 });
 vi.mock('@vscode/l10n', () => ({
@@ -107,7 +109,11 @@ describe('Shared Query Insights ModelPicker', () => {
         host.remove();
     });
 
-    async function renderPicker(onModelChange = vi.fn(), onPromptLabelChange = vi.fn()): Promise<void> {
+    async function renderPicker(
+        onModelChange = vi.fn(),
+        onPromptLabelChange = vi.fn(),
+        children?: ModelPickerProps['children'],
+    ): Promise<void> {
         await act(async () => {
             root.render(
                 <SSRProvider>
@@ -115,6 +121,7 @@ describe('Shared Query Insights ModelPicker', () => {
                         commandType={'find' as CommandType}
                         onModelChange={onModelChange}
                         onPromptLabelChange={onPromptLabelChange}
+                        children={children}
                     />
                 </SSRProvider>,
             );
@@ -230,5 +237,76 @@ describe('Shared Query Insights ModelPicker', () => {
         expect(details().Cost).toBe('Not reported for this model');
         expect(details()['Credits per 1M tokens']).toBe('Not reported for this model');
         expect(details()['Context window']).toBe('128,000 tokens');
+    });
+
+    it('shares one saved selection across all six live comparison controls', async () => {
+        mocks.setSelectedModel.mockResolvedValue({
+            ...available, savedModelId: 'utility', effectiveModelId: 'utility', effectiveReason: 'saved',
+        });
+        const onChange = vi.fn();
+        await renderPicker(onChange, vi.fn(), (renderControl) => (
+            <>
+                {renderControl('label-change')}
+                {renderControl('compound')}
+                {renderControl('outline-button')}
+                {renderControl('outline')}
+                {renderControl('filled-darker')}
+                {renderControl('underline')}
+            </>
+        ));
+        expect(mocks.getAvailableModels).toHaveBeenCalledTimes(1);
+        expect(host.querySelectorAll('button[aria-label="Model details"]')).toHaveLength(6);
+        expect(host.querySelector('.fui-CompoundButton')?.textContent).toContain('Premium model');
+        const firstUtilityOption = host.querySelector<HTMLButtonElement>('[role="option"][data-value="utility"]');
+        await act(async () => firstUtilityOption?.click());
+        expect(mocks.setSelectedModel).toHaveBeenCalledTimes(1);
+        expect(onChange).toHaveBeenLastCalledWith(available.models[1]);
+        expect([...host.querySelectorAll('[role="combobox"]')].map((element) => element.textContent))
+            .toEqual(['Utility model', 'Utility model', 'Utility model']);
+        expect(host.querySelector('.fui-CompoundButton')?.textContent).toContain('Utility model');
+        expect(host.querySelector('.query-insights-model-picker-row > .fui-Text')?.textContent).toBe('Utility model');
+    });
+
+    it('opens the CompoundButton radio menu, refreshes models and saves a choice', async () => {
+        mocks.setSelectedModel.mockResolvedValue({
+            ...available, savedModelId: 'utility', effectiveModelId: 'utility', effectiveReason: 'saved',
+        });
+        await renderPicker(vi.fn(), vi.fn(), (renderControl) => renderControl('compound'));
+        await act(async () => host.querySelector<HTMLButtonElement>('.fui-CompoundButton')?.click());
+        expect(mocks.getAvailableModels).toHaveBeenCalledTimes(2);
+        const utilityOption = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')]
+            .find((element) => element.textContent === 'Utility model');
+        expect(utilityOption).toBeDefined();
+        await act(async () => utilityOption?.click());
+        expect(mocks.setSelectedModel).toHaveBeenCalledWith({ modelId: 'utility' });
+        expect(host.querySelector('.fui-CompoundButton')?.textContent).toContain('Utility model');
+    });
+
+    it('wires every comparison card to the same analysis action without running it on mount', async () => {
+        const onAnalyze = vi.fn();
+        await act(async () => {
+            root.render(
+                <SSRProvider>
+                    <PerformanceInsightsCardComparison
+                        commandType={'find' as CommandType}
+                        bodyText="Analyze this plan"
+                        isLoading={false}
+                        onGetInsights={onAnalyze}
+                        onLearnMore={vi.fn()}
+                        onCancel={vi.fn()}
+                        onLearnMoreUtilityModel={vi.fn()}
+                    />
+                </SSRProvider>,
+            );
+        });
+        expect(host.querySelectorAll('.get-performance-insights-card-experiment')).toHaveLength(6);
+        expect(onAnalyze).not.toHaveBeenCalled();
+        const actions = [...host.querySelectorAll<HTMLButtonElement>('.get-performance-insights-card-actions > button')];
+        expect(actions).toHaveLength(6);
+        for (const action of actions) {
+            await act(async () => action.click());
+        }
+        expect(onAnalyze).toHaveBeenCalledTimes(6);
+        expect(mocks.getAvailableModels).toHaveBeenCalledTimes(1);
     });
 });

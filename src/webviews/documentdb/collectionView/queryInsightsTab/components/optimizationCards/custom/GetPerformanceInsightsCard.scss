@@ -7,6 +7,11 @@
     padding: 20px;
     position: relative;
 
+    &-experiment {
+        margin-bottom: var(--spacingVerticalM);
+        color: var(--colorBrandForeground1);
+    }
+
     &-actions {
         display: flex;
         align-items: center;

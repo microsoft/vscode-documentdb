@@ -10,8 +10,7 @@ import { Badge, Link, makeStyles, Text, tokens } from '@fluentui/react-component
 import { useRef, useState, useId, type ComponentType, type JSX, type ReactNode } from 'react';
 import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
-import { GetPerformanceInsightsCard } from '../../collectionView/queryInsightsTab/components/optimizationCards/custom/GetPerformanceInsightsCard';
-import { ModelPicker } from '../ModelPicker';
+import { PerformanceInsightsCardComparison } from '../../collectionView/queryInsightsTab/components/optimizationCards/custom/PerformanceInsightsCardComparison';
 import { HeaderChipOption, StaticModelSettings } from './HeaderChipOption';
 import { PREVIEW_SAVED_MODEL_ID } from './mockModels';
 import { ModelPillOption, type OptionProps } from './ModelPillOption';
@@ -123,11 +122,14 @@ function CurrentDesign(): JSX.Element {
     const [selected, setSelected] = useState<AvailableModelInfo>();
     const noop = (): void => undefined;
     return (
-        <GetPerformanceInsightsCard
+        <PerformanceInsightsCardComparison
+            commandType={'find' as CommandType}
+            onModelChange={setSelected}
+            onPromptLabelChange={setPromptLabel}
+            className="cardSpacing"
             bodyText={BODY_TEXT}
             isLoading={false}
             enabled={!!selected}
-            modelPicker={<ModelPicker commandType={'find' as CommandType} onModelChange={setSelected} onPromptLabelChange={setPromptLabel} />}
             promptLabel={promptLabel}
             mayUsePremiumRequests={!selected?.isUtility}
             secondaryLink={<Link inline>Explore with your own input…</Link>}
@@ -206,8 +208,8 @@ export function QueryInsightsDesignPreview(): JSX.Element {
             </OptionSection>
 
             <OptionSection
-                heading="Shipped — the real card"
-                rationale="The real GetPerformanceInsightsCard with the shared ModelPicker (Fluent Dropdown plus a details popover), fed by the same mock models through ai.getAvailableModels. The utility model shows no cost badge; the footnote carries the careful wording."
+                heading="Live comparison — six real cards"
+                rationale="The same comparison component used in the Collection View tab, with working Fluent controls and a shared selection. Only the model data and analysis action are mocked on this preview page."
             >
                 <Frame caption={IDLE}><CurrentDesign /></Frame>
             </OptionSection>

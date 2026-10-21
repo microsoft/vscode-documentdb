@@ -6,8 +6,16 @@
 import {
     Badge,
     Button,
+    CompoundButton,
     Dropdown,
     Label,
+    Menu,
+    MenuGroup,
+    MenuGroupHeader,
+    MenuItemRadio,
+    MenuList,
+    MenuPopover,
+    MenuTrigger,
     Option,
     OptionGroup,
     Popover,
@@ -16,7 +24,7 @@ import {
     Text,
     useId,
 } from '@fluentui/react-components';
-import { InfoRegular } from '@fluentui/react-icons';
+import { ChevronDownRegular, InfoRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { Fragment, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import type { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
@@ -25,6 +33,8 @@ import type { IndexAdvisorPromptSourceInfo } from '../../../services/promptTempl
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import './ModelPicker.scss';
+
+export type ModelPickerVariant = 'label-change' | 'compound' | 'outline-button' | 'outline' | 'filled-darker' | 'underline';
 
 export interface ModelPickerProps {
     commandType: CommandType;
@@ -37,6 +47,8 @@ export interface ModelPickerProps {
     onModelChange?: (model: AvailableModelInfo | undefined) => void;
     /** The prompt source label, so the host can show it in its meta line. */
     onPromptLabelChange?: (label: string | undefined) => void;
+    /** POC comparison: render several presentations backed by one selection and request lifecycle. */
+    children?: (renderPicker: (variant: ModelPickerVariant) => JSX.Element) => ReactNode;
 }
 
 const knownCategories = ['powerful', 'versatile', 'lightweight'];
@@ -193,6 +205,7 @@ export function ModelPicker({
     disabled = false,
     onModelChange,
     onPromptLabelChange,
+    children,
 }: ModelPickerProps): JSX.Element {
     const client = useTrpcClient();
     const labelId = useId('query-insights-model-label');
@@ -314,57 +327,127 @@ export function ModelPicker({
         })
         : others.map(option);
 
-    return (
-        <div className="query-insights-model-picker">
-            {showLabel && <Label id={labelId} size="small">{l10n.t('Copilot model')}</Label>}
-            <div className="query-insights-model-picker-row">
-                <Dropdown
-                    aria-label={showLabel ? undefined : l10n.t('Copilot model')}
-                    aria-labelledby={showLabel ? labelId : undefined}
-                    size={size}
-                    value={selected?.name ?? ''}
-                    selectedOptions={selected ? [selected.id] : []}
-                    placeholder={loading ? l10n.t('Loading models…') : l10n.t('No Copilot models available')}
-                    disabled={disabled || loading || saving || !hasModels}
-                    // The listbox sizes to its content (names and cost badges) instead of the trigger width and
-                    // scrolls within a CSS height cap, so it fits fully below or above the trigger instead of
-                    // covering it. Height autoSize would replace that cap with all the space left in the webview.
-                    positioning={{
-                        position: 'below', align: 'start', fallbackPositions: ['above-start'],
-                        autoSize: 'width', matchTargetSize: undefined,
-                    }}
-                    listbox={{ className: 'query-insights-model-listbox' }}
-                    onOpenChange={(_event, data) => {
-                        // Copilot registers models lazily: an early mount can see only part of the list.
-                        if (data.open) void refreshRef.current();
-                    }}
-                    onOptionSelect={(_event, data) => {
-                        if (data.optionValue && data.optionValue !== selected?.id) {
-                            void selectModel(data.optionValue);
-                        }
-                    }}
-                >
-                    {utility.map(option)}
-                    {groupedOthers}
-                </Dropdown>
-                {selected && (
-                    <Popover openOnHover withArrow size="small" positioning={{ position: 'below', align: 'start', autoSize: 'height' }}>
-                        <PopoverTrigger disableButtonEnhancement>
-                            <Button appearance="subtle" size={size} icon={<InfoRegular />} aria-label={l10n.t('Model details')} />
-                        </PopoverTrigger>
-                        <PopoverSurface aria-label={l10n.t('Model details')} className="query-insights-model-details-surface">
-                            <ModelDetails model={selected} facts={modelFacts(selected, promptLabel, selectionReason)} />
-                        </PopoverSurface>
-                    </Popover>
-                )}
-                {!loading && !hasModels && (
-                    <Button appearance="subtle" size={size} onClick={() => setRefreshKey((value) => value + 1)}>
-                        {l10n.t('Refresh models')}
-                    </Button>
-                )}
+    const renderPicker = (variant: ModelPickerVariant): JSX.Element => {
+        const useMenu = variant === 'label-change' || variant === 'compound' || variant === 'outline-button';
+        const modelName = selected?.name ?? (loading ? l10n.t('Loading models…') : l10n.t('No Copilot models available'));
+        const menuOption = (model: AvailableModelInfo): JSX.Element => (
+            <MenuItemRadio key={model.id} name="model" value={model.id}
+                secondaryContent={model.isUtility ? undefined : <ModelCostBadge category={model.priceCategory} />}>
+                {model.name}
+            </MenuItemRadio>
+        );
+        const menuGroups = [
+            { key: 'utility', label: l10n.t('Utility'), models: utility },
+            ...[...knownCategories, 'other'].map((category) => ({
+                key: category,
+                label: categoryLabel(category),
+                models: others.filter((model) =>
+                    (knownCategories.includes(model.category ?? '') ? model.category : 'other') === category),
+            })),
+        ].filter((group) => group.models.length > 0);
+        return (
+            <div className="query-insights-model-picker">
+                {showLabel && <Label id={`${labelId}-${variant}`} size="small">{l10n.t('Copilot model')}</Label>}
+                <div className="query-insights-model-picker-row">
+                    {variant === 'label-change' && <Text weight="semibold">{modelName}</Text>}
+                    {useMenu ? (
+                        <Menu
+                            checkedValues={{ model: selected ? [selected.id] : [] }}
+                            onOpenChange={(_event, data) => {
+                                if (data.open) void refreshRef.current();
+                            }}
+                            onCheckedValueChange={(_event, data) => {
+                                const modelId = data.checkedItems[0];
+                                if (modelId && modelId !== selected?.id) void selectModel(modelId);
+                            }}
+                        >
+                            <MenuTrigger disableButtonEnhancement>
+                                {variant === 'compound' ? (
+                                    <CompoundButton
+                                        appearance="outline"
+                                        size={size}
+                                        secondaryContent={modelName}
+                                        disabled={disabled || loading || saving || !hasModels}
+                                    >
+                                        {l10n.t('Change model')}
+                                    </CompoundButton>
+                                ) : (
+                                    <Button
+                                        appearance={variant === 'outline-button' ? 'outline' : 'subtle'}
+                                        size={size}
+                                        icon={variant === 'outline-button' ? <ChevronDownRegular /> : undefined}
+                                        iconPosition="after"
+                                        disabled={disabled || loading || saving || !hasModels}
+                                    >
+                                        {variant === 'label-change' ? l10n.t('Change') : modelName}
+                                    </Button>
+                                )}
+                            </MenuTrigger>
+                            <MenuPopover>
+                                <MenuList className="query-insights-model-menu">
+                                    {menuGroups.map((group) => (
+                                        <MenuGroup key={group.key}>
+                                            <MenuGroupHeader>{group.label}</MenuGroupHeader>
+                                            {group.models.map(menuOption)}
+                                        </MenuGroup>
+                                    ))}
+                                </MenuList>
+                            </MenuPopover>
+                        </Menu>
+                    ) : (
+                        <Dropdown
+                            appearance={variant === 'filled-darker' || variant === 'underline' ? variant : 'outline'}
+                            aria-label={showLabel ? undefined : l10n.t('Copilot model')}
+                            aria-labelledby={showLabel ? `${labelId}-${variant}` : undefined}
+                            size={size}
+                            value={selected?.name ?? ''}
+                            selectedOptions={selected ? [selected.id] : []}
+                            placeholder={loading ? l10n.t('Loading models…') : l10n.t('No Copilot models available')}
+                            disabled={disabled || loading || saving || !hasModels}
+                            // Cap list height on one side of the trigger; autoSize height can cover the trigger.
+                            positioning={{
+                                position: 'below', align: 'start', fallbackPositions: ['above-start'],
+                                autoSize: 'width', matchTargetSize: undefined,
+                            }}
+                            listbox={{ className: 'query-insights-model-listbox' }}
+                            onOpenChange={(_event, data) => {
+                                if (data.open) void refreshRef.current();
+                            }}
+                            onOptionSelect={(_event, data) => {
+                                if (data.optionValue && data.optionValue !== selected?.id) {
+                                    void selectModel(data.optionValue);
+                                }
+                            }}
+                        >
+                            {utility.map(option)}
+                            {groupedOthers}
+                        </Dropdown>
+                    )}
+                    {selected && (
+                        <Popover openOnHover withArrow size="small" positioning={{ position: 'below', align: 'start', autoSize: 'height' }}>
+                            <PopoverTrigger disableButtonEnhancement>
+                                <Button appearance="subtle" size={size} icon={<InfoRegular />} aria-label={l10n.t('Model details')} />
+                            </PopoverTrigger>
+                            <PopoverSurface aria-label={l10n.t('Model details')} className="query-insights-model-details-surface">
+                                <ModelDetails model={selected} facts={modelFacts(selected, promptLabel, selectionReason)} />
+                            </PopoverSurface>
+                        </Popover>
+                    )}
+                    {!loading && !hasModels && (
+                        <Button appearance="subtle" size={size} onClick={() => setRefreshKey((value) => value + 1)}>
+                            {l10n.t('Refresh models')}
+                        </Button>
+                    )}
+                </div>
             </div>
+        );
+    };
+
+    return (
+        <>
+            {children ? children(renderPicker) : renderPicker('outline')}
             {error && <Text size={200}>{error}</Text>}
             <Announcer when={!!error} message={error ?? ''} />
-        </div>
+        </>
     );
 }

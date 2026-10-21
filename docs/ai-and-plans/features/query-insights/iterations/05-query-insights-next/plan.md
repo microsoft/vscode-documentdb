@@ -799,3 +799,34 @@ L2 routes, screenshots, plan, commit).
   `configure-models` clicks "Model details" and has 14 extra models to prove scrolling. The design
   preview's "Shipped" section was renamed. (5) `/tmp/pw` was absent and `/tmp` is off-limits for
   this agent, so `playwright-core@1.54` and the browser libraries lived in `._local/` (removed after).
+
+## Phase H: live card-control comparisons (2026-10-21)
+
+14:08–14:19 UTC, approximately **11 minutes** including implementation, browser interaction,
+build and focused tests. Operator requested experiments in the actual Collection View panel,
+not another set of hand-crafted mock cards. No winning presentation has been selected.
+
+- The Stage 3 request area temporarily renders six copies of the real AI Performance Insights
+  card, labelled A–F: model label + subtle Change button; outline CompoundButton with the model
+  as secondary content; outline Button with model name and chevron; Dropdown with explicit
+  outline, filled-darker and underline appearances.
+- Button variants open a standard Fluent Menu with grouped MenuItemRadio choices. Dropdown
+  variants keep the standard Fluent options. Every variant retains the model-details Popover.
+  Both types of list are height-capped and scrollable.
+- One ModelPicker owns model fetching, saved selection, prompt source and errors for all six
+  presentations. Changing a model updates every card; the analysis buttons all invoke the
+  existing Stage 3 handler. Rendering the comparisons does not send any model requests.
+  The wizard Configure picker is unchanged.
+- The existing `tab-model-options` preview also uses this same comparison component at the
+  bottom, with fixture models and a no-op analysis action. The installed/live tab uses the real
+  RPCs and analysis pipeline, not those fixtures.
+- Light-theme browser measurements: outline Dropdown remains white, filled-darker is light
+  grey, underline is transparent. Outline Button and CompoundButton are transparent. These
+  are Fluent appearances, with no custom background overrides.
+- Case 1 verification: `npm run build`; **152 targeted tests**; **79 scenario-harness tests**.
+  Interactive browser smoke in light, dark and high-contrast confirmed all six cards, menu and
+  dropdown choices, shared selection updates, and keyboard Enter/Escape with focus restored
+  to the CompoundButton. Dark model-details surface measured 359 px client and scroll width
+  (no horizontal content overflow).
+- No real Copilot request, live-database smoke, full 27-route replay, lint, formatting,
+  localization generation, packaging or push. Quick/Advanced remains a proposal only.

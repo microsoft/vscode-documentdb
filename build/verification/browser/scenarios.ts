@@ -309,7 +309,10 @@ export const scenarios = {
                 content: [
                     'Option A — Model pill in the actions row', 'Option B — Split button',
                     'Option C — Settings footer strip', 'Option D — Native VS Code quick pick',
-                    'Option E — Header chip with a settings popover', 'Shipped — the real card',
+                    'Option E — Header chip with a settings popover', 'Live comparison — six real cards',
+                    'A — Model label, Change button and info', 'B — Outline CompoundButton',
+                    'C — Outline button with model name', 'D — Dropdown: outline',
+                    'E — Dropdown: filled-darker', 'F — Dropdown: underline',
                     'Built-in prompt',
                 ],
                 noProgressbar: true,
