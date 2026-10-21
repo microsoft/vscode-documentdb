@@ -433,6 +433,29 @@ Always ship the signed artifact from the pipeline. A locally packaged `.vsix` is
 3. Attach the **signed** `.vsix` downloaded in the previous step.
 4. Save the release.
 
+Publishing a stable GitHub release also starts [Bump version after release](.github/workflows/bump-version-pr.yaml).
+When its tag matches the version on `main`, the workflow opens a ready-for-review PR for the next patch's
+first development version, for example `1.0.1` → `1.0.2-alpha.0`. It updates `package.json` and
+both root version entries in `package-lock.json`, leaving workspace package versions unchanged.
+The workflow explicitly starts full CI on the PR's branch. Review and merge it once the required
+checks pass. If GitHub requests approval for additional PR-triggered workflows, select
+**Approve workflows to run**. The published release and tag are not modified.
+The alpha suffix is for development only; use the intended numeric release
+version at [§7.4](#74-bump-the-version) before the next publication.
+
+To catch up after a release, select **Actions → Bump version after release → Run workflow** on
+`main`, or run:
+
+```bash
+gh workflow run bump-version-pr.yaml --ref main
+```
+
+The workflow always operates on `main`. Re-running it reuses the same version-specific PR while
+`main` is still on the released version; after the bump is merged, it leaves the existing alpha
+version alone. GitHub prereleases are ignored, as are releases whose tags do not match the version
+on `main` (for example, a patch release from an older release branch). The repository's
+**Settings → Actions → General → Workflow permissions** must allow Actions to create pull requests.
+
 ### 7.9 Publish to the Marketplace
 
 Run the second internal Azure DevOps pipeline, the **release** pipeline, which publishes to the Visual Studio Marketplace from whichever branch holds the release commit — `main` for a normal release, or the `release/<X.Y.Z>` branch when a patch was cut off a tag ([§1.3](#13-releases)). This is a separate pipeline from the build in §7.7: one produces and signs the artifact, the other ships it.

@@ -161,6 +161,21 @@ representative calls through every public entry point. The real-VS-Code unbundle
 CommonJS `await import()` and ESM loading to pass, and records synchronous CommonJS `require()` as the
 known unsupported case.
 
+### Post-release version bumps are root-only, idempotent, and reviewed
+
+The release-bump workflow checks out `main`, not the release tag or the manually selected ref.
+Automatic runs ignore GitHub prereleases and tags that do not match `main`'s package version.
+Both automatic and manual runs propose only the next patch's `alpha.0`; they never increment an
+existing development version to `alpha.1`. The root manifest and both root lockfile versions must
+agree before and after npm runs. Workspace package and dependency versions stay unchanged.
+
+The workflow creates or updates a version-specific, ready-for-review PR using `GITHUB_TOKEN`,
+with explicit actions, contents and pull-request write permissions. It dispatches `main.yml` on
+the PR branch with `enforce_full_run=true`, so the complete CI suite and required `Merge gate`
+run without a separate token secret or approval. Additional PR-triggered workflows may require
+a maintainer's approval under GitHub's token-event rules. No release is published or tag modified.
+The development alpha must be replaced with a numeric release version before publication.
+
 ## Change discipline
 
 Change a config and the relevant rationale together. Package before claiming a bundle change works,
