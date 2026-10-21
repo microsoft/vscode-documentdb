@@ -242,6 +242,9 @@ jobs:
             - name: 🧪 Run Unit Tests (Vitest)
               run: npm test
 
+            - name: Test release automation
+              run: node --test .github/scripts/*.test.cjs
+
     package-checks:
         name: 'npm packages: verify tarballs'
         needs: [plan]

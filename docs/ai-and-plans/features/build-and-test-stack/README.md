@@ -127,6 +127,16 @@ coverage into installed-workbench E2E; see the
 5. Tests for verification tooling belong beside that tool and run through
    `npm run test:verification`, not the main Vitest project unless the local config says otherwise.
 
+## Post-release version automation
+
+[`bump-version-pr.yaml`](../../../../.github/workflows/bump-version-pr.yaml) runs after stable
+GitHub releases and on manual dispatch. It always operates on `main`, requires release tags to
+match its current version, and proposes the next patch's first alpha in a ready-for-review PR. The root
+manifest and both lockfile version entries stay synchronized; workspace versions are not bumped.
+Reruns reuse the same PR or skip an existing development version. The workflow explicitly
+dispatches full CI on the PR branch without a separate token secret.
+See [the release process](../../../../CONTRIBUTING.md#78-create-the-github-release).
+
 ## Durable documents
 
 - [Design and invariants](./design.md)
