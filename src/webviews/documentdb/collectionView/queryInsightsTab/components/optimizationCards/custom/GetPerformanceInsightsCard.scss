@@ -14,6 +14,21 @@
         flex-wrap: wrap;
     }
 
+    &-model-disclosure {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        column-gap: var(--spacingHorizontalS);
+        row-gap: var(--spacingVerticalXS);
+        margin-top: var(--spacingVerticalM);
+        color: var(--colorNeutralForeground3);
+    }
+
+    &-cost-disclosure {
+        min-width: 0;
+        color: var(--colorNeutralForeground3);
+    }
+
     &-meta {
         display: flex;
         align-items: center;

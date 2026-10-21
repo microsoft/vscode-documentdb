@@ -856,3 +856,19 @@ focused tests and browser smoke.
   on Escape, Fast option visible, and the wizard still outlined/white with no model icon.
   No live Copilot request, full route replay, lint, formatting, localization generation,
   packaging or push.
+
+## Phase J: move model controls into the disclosure footer (2026-10-21)
+
+16:38–16:41 UTC, approximately **3 minutes** including implementation, build, focused tests
+and browser checks.
+
+- Operator requested the existing underline model picker and cost-info button on the bottom
+  row, followed by the existing cost disclosure and utility-model link, without the redundant
+  decorative info icon. The primary action and prompt/explore/learn-more line stay above.
+  Wizard Configure is unchanged.
+- The footer aligns controls and text centrally and wraps on narrow cards. During loading,
+  the picker remains hidden while the cost disclosure stays visible, preserving prior behavior.
+- Case 1: build and **16 focused card/picker tests** passed. Browser checks confirmed the
+  cost Popover still opens, utility selection updates the disclosure, and the 1440 px and
+  600 px layouts have no horizontal footer overflow. No live AI request, full suite, lint,
+  formatting, localization generation, packaging or push.

@@ -14,7 +14,7 @@ import {
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { InfoRegular, SparkleRegular } from '@fluentui/react-icons';
+import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { Fragment } from 'react';
 import type * as React from 'react';
@@ -192,7 +192,6 @@ export function GetPerformanceInsightsCard({
                             >
                                 {errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}
                             </Button>
-                            {modelPicker}
                         </div>
                     )}
                     {/* One muted meta line: prompt source · explore · learn more (design Option A). */}
@@ -224,17 +223,9 @@ export function GetPerformanceInsightsCard({
                         cost-disclosure page), distinct from the general feature `onLearnMore` used by
                         the button above. Keeping the two URLs separate lets the parent panel update
                         each independently. */}
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '6px',
-                            marginTop: '12px',
-                            color: tokens.colorNeutralForeground3,
-                        }}
-                    >
-                        <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
-                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                    <div className="get-performance-insights-card-model-disclosure">
+                        {!isLoading && modelPicker}
+                        <Text size={200} className="get-performance-insights-card-cost-disclosure">
                             {mayUsePremiumRequests ? (
                                 l10n.t('The selected model may use premium requests.')
                             ) : (

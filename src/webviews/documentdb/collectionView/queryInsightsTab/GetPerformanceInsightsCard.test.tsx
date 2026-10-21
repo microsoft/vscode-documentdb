@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+// @vitest-environment jsdom
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { GetPerformanceInsightsCard } from './components/optimizationCards/custom/GetPerformanceInsightsCard';
@@ -10,11 +12,11 @@ import { GetPerformanceInsightsCard } from './components/optimizationCards/custo
 vi.mock('@vscode/l10n', () => ({ t: (message: string): string => message }));
 
 describe('GetPerformanceInsightsCard model disclosure', () => {
-    function render(mayUsePremiumRequests?: boolean): string {
+    function render(mayUsePremiumRequests?: boolean, isLoading = false): string {
         return renderToStaticMarkup(
             <GetPerformanceInsightsCard
                 bodyText="Analysis"
-                isLoading={false}
+                isLoading={isLoading}
                 onGetInsights={vi.fn()}
                 onLearnMore={vi.fn()}
                 onCancel={vi.fn()}
@@ -40,5 +42,27 @@ describe('GetPerformanceInsightsCard model disclosure', () => {
         expect(html).toContain('The selected model may use premium requests.');
         expect(html).not.toContain('No additional cost');
         expect(html).not.toContain('Learn more about the utility model used.');
+    });
+
+    it.each([false, true])('places the picker before the cost text in the bottom row (premium: %s)', (premium) => {
+        const container = document.createElement('div');
+        container.innerHTML = render(premium);
+        const actions = container.querySelector('.get-performance-insights-card-actions');
+        const footer = container.querySelector('.get-performance-insights-card-model-disclosure');
+        expect(actions?.textContent).toBe('Get AI Performance Insights');
+        expect(footer?.firstElementChild?.textContent).toBe('Model picker slot');
+        expect(footer?.lastElementChild?.textContent).toContain(premium
+            ? 'The selected model may use premium requests.'
+            : 'No additional cost for most GitHub Copilot subscribers.');
+        expect(footer?.querySelector('svg')).toBeNull();
+        expect(container.querySelector('.get-performance-insights-card-meta')?.textContent)
+            .toContain('Secondary link slot');
+    });
+
+    it('keeps the disclosure visible but hides the picker during loading', () => {
+        const html = render(false, true);
+        expect(html).toContain('Cancel');
+        expect(html).toContain('No additional cost for most GitHub Copilot subscribers.');
+        expect(html).not.toContain('Model picker slot');
     });
 });
