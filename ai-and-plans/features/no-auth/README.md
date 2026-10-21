@@ -32,7 +32,10 @@ the connection string's own TLS settings are honored rather than overridden.
   would have been smaller, but it is not discoverable in the auth-method quick pick, it muddies
   native-auth semantics, and it does not fit the auth-handler `switch`.
 - **The connection string is passed verbatim, and TLS is never forced.** The only exception is the
-  emulator's `tlsAllowInvalidCertificates` rule, which mirrors the native handler. Connections whose
+  stored TLS exception (`tlsAllowInvalidCertificates`), applied exactly as the native handler does:
+  for any local or private host, whether or not it is classified as an emulator, and never for a
+  public host. Before PR #1040, this handler applied it only to connections classified as
+  emulators, so an accepted exception for `127.0.0.1` or `::1` was ignored. Connections whose
   string disables TLS carry a visible description and tooltip line, mirroring the emulator's
   "disable security" treatment.
 - **Pasted credentials are ignored unless native auth is actually selected.** Previously, pasting
