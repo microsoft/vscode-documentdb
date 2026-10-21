@@ -83,4 +83,68 @@ describe('NoAuthHandler', () => {
         expect(options.tlsAllowInvalidCertificates).toBeUndefined();
         expect(options.serverSelectionTimeoutMS).toBe(4000);
     });
+
+    it('does not add tlsAllowInvalidCertificates for a public host even when the stored flag is set', async () => {
+        const handler = new NoAuthHandler(
+            buildCredentials({
+                connectionString: 'mongodb://db.example.com:27017/',
+                connectionStringWithPassword: 'mongodb://db.example.com:27017/',
+                emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
+            }),
+        );
+
+        const { options } = await handler.configureAuth();
+
+        expect(options.tlsAllowInvalidCertificates).toBeUndefined();
+    });
+
+    it.each(['127.0.0.1', '[::1]'])(
+        'honors the stored exception for a non-emulator connection on loopback %s',
+        async (host) => {
+            const cs = `mongodb://${host}:10260/?tls=true`;
+            const handler = new NoAuthHandler(
+                buildCredentials({
+                    connectionString: cs,
+                    connectionStringWithPassword: cs,
+                    emulatorConfiguration: { isEmulator: false, disableEmulatorSecurity: true },
+                }),
+            );
+
+            const { options } = await handler.configureAuth();
+
+            expect(options.tlsAllowInvalidCertificates).toBe(true);
+            expect(options.serverSelectionTimeoutMS).toBe(4000);
+            expect(options.tls).toBeUndefined();
+        },
+    );
+
+    it('adds no options for a non-emulator loopback connection without the stored exception', async () => {
+        const cs = 'mongodb://127.0.0.1:10260/?tls=true';
+        const handler = new NoAuthHandler(
+            buildCredentials({
+                connectionString: cs,
+                connectionStringWithPassword: cs,
+                emulatorConfiguration: { isEmulator: false, disableEmulatorSecurity: false },
+            }),
+        );
+
+        const { options } = await handler.configureAuth();
+
+        expect(options).toEqual({});
+    });
+
+    it('adds no options for a non-emulator public host even when the stored flag is set', async () => {
+        const cs = 'mongodb://db.example.com:27017/?tls=true';
+        const handler = new NoAuthHandler(
+            buildCredentials({
+                connectionString: cs,
+                connectionStringWithPassword: cs,
+                emulatorConfiguration: { isEmulator: false, disableEmulatorSecurity: true },
+            }),
+        );
+
+        const { options } = await handler.configureAuth();
+
+        expect(options).toEqual({});
+    });
 });

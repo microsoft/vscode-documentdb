@@ -36,6 +36,18 @@ describe('getOidcAllowedHosts', () => {
         expect(getOidcAllowedHosts('mongodb://node.azure.com.evil.com:10255/')).toEqual(['*.azure.com']);
     });
 
+    it('does not trust an azure second-level label under an unknown top-level domain', () => {
+        expect(getOidcAllowedHosts('mongodb://db.azure.tk:10255/')).toEqual(['*.azure.com']);
+        expect(getOidcAllowedHosts('mongodb://db.azure.io:10255/')).toEqual(['*.azure.com']);
+        expect(getOidcAllowedHosts('mongodb://db.azure.co:10255/')).toEqual(['*.azure.com']);
+    });
+
+    it('does not let one known-cloud host carry an unknown-TLD host into the allowlist', () => {
+        expect(
+            getOidcAllowedHosts('mongodb://a.mongocluster.cosmos.azure.com:10255,b.azure.tk:10255/?replicaSet=rs0'),
+        ).toEqual(['*.azure.com']);
+    });
+
     it('collapses multiple same-cloud hosts to a single suffix entry', () => {
         const result = getOidcAllowedHosts(
             'mongodb://a.mongocluster.cosmos.azure.com:10255,b.mongocluster.cosmos.azure.com:10255/?replicaSet=rs0',

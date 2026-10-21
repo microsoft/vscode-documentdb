@@ -321,6 +321,14 @@ extends:
                                   # Calculate the exact name because one package name may prefix another.
                                   $scopeFlattenedName = $fullPackageName.TrimStart('@').Replace('/', '-')
                                   $expectedTgzFileName = "$scopeFlattenedName-$actualVersion.tgz"
+
+                                  # The file name is written into an agent logging command and later
+                                  # joined to a path, so it must be a plain npm tarball name: no path
+                                  # separators, control characters or other special characters.
+                                  if ($expectedTgzFileName -cnotmatch '^[a-z0-9][a-z0-9._~-]*-[0-9A-Za-z.+-]+\.tgz\z') {
+                                      Write-Error "[Error] Derived .tgz file name is not a plain npm tarball name"
+                                      exit 1
+                                  }
                                   $tgzFiles = @(Get-ChildItem -Path $npmPackagesDir -Filter $expectedTgzFileName -File)
 
                                   if ($tgzFiles.Count -ne 1) {
@@ -329,6 +337,10 @@ extends:
                                   }
 
                                   $tgzFile = $tgzFiles[0]
+                                  if ($tgzFile.Name -cne $expectedTgzFileName) {
+                                      Write-Error "[Error] Found .tgz file name does not match the expected name"
+                                      exit 1
+                                  }
                                   $tgzSize = [math]::Round($tgzFile.Length / 1KB, 2)
                                   Write-Output ""
                                   Write-Output "[Success] Found .tgz file: $($tgzFile.Name) (${tgzSize} KB)"
@@ -425,13 +437,19 @@ extends:
 
                                         New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
 
+                                        # Same rule as the find step: a plain file name, never a path.
+                                        if ($tgzFileName -cnotmatch '^[a-z0-9][a-z0-9._~-]*-[0-9A-Za-z.+-]+\.tgz\z') {
+                                            Write-Error "[Error] tgzFileName is not a plain npm tarball name"
+                                            exit 1
+                                        }
+
                                         $sourcePath = Join-Path $npmPackagesDir $tgzFileName
-                                        if (-not (Test-Path $sourcePath)) {
+                                        if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
                                             Write-Error "[Error] .tgz file not found: $sourcePath"
                                             exit 1
                                         }
 
-                                        Copy-Item -Path $sourcePath -Destination $publishDir
+                                        Copy-Item -LiteralPath $sourcePath -Destination $publishDir
                                         Write-Output "Prepared for publishing:"
                                         Get-ChildItem -Path $publishDir | ForEach-Object {
                                             Write-Output "  $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)"

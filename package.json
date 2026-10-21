@@ -1926,7 +1926,7 @@
             "order": 2,
             "type": "boolean",
             "default": true,
-            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB resources or setup experiences in VS Code."
+            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB resources or setup experiences in VS Code. A link that adds a new connection or turns off TLS certificate validation always asks for confirmation."
           },
           "documentDB.userInterface.showOperationSummaries": {
             "order": 3,

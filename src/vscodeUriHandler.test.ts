@@ -6,12 +6,16 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as vscode from 'vscode';
+import { AuthMethodId } from './documentdb/auth/AuthMethod';
+import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
+import { type EmulatorConfiguration } from './utils/emulatorConfiguration';
 import { globalUriHandler } from './vscodeUriHandler';
 
 /** Telemetry recorded by the mocked azext wrapper, so routing decisions can be asserted. */
 let lastTelemetry: Record<string, string> = {};
 let showUrlHandlingConfirmations = true;
 const mockGetAllConnections = vi.fn().mockResolvedValue([]);
+const mockSaveConnection = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(
@@ -43,9 +47,12 @@ vi.mock('./commands/localQuickStart/openLocalQuickStart', () => ({
 // validation — but the imports still have to resolve.
 vi.mock('./commands/openCollectionView/openCollectionView', () => ({ openCollectionViewInternal: vi.fn() }));
 vi.mock('./services/connectionStorageService', () => ({
-    ConnectionStorageService: { getAll: (...args: unknown[]) => mockGetAllConnections(...args) },
+    ConnectionStorageService: {
+        getAll: (...args: unknown[]) => mockGetAllConnections(...args),
+        save: (...args: unknown[]) => mockSaveConnection(...args),
+    },
     ConnectionType: { Clusters: 'clusters', Emulators: 'emulators' },
-    ItemType: { Cluster: 'cluster' },
+    ItemType: { Cluster: 'cluster', Connection: 'connection' },
 }));
 vi.mock('./services/legacyEmulatorMigration', () => ({ isLegacyEmulatorMigrationComplete: () => true }));
 vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
@@ -55,7 +62,10 @@ vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
     withConnectionsViewProgress: vi.fn(),
 }));
 vi.mock('./extensionVariables', () => ({
-    ext: { settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' } },
+    ext: {
+        settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' },
+        connectionsBranchDataProvider: { refresh: vi.fn() },
+    },
 }));
 
 function uriFor(path: string, query: string = ''): vscode.Uri {
@@ -77,10 +87,12 @@ beforeEach(() => {
     lastTelemetry = {};
     showUrlHandlingConfirmations = true;
     mockGetAllConnections.mockResolvedValue([]);
+    mockSaveConnection.mockResolvedValue(undefined);
     (vscode.workspace.getConfiguration as Mock).mockReturnValue({
         get: vi.fn(() => showUrlHandlingConfirmations),
     });
     (vscode.window.showInformationMessage as Mock).mockResolvedValue('Open setup');
+    (vscode.window.showWarningMessage as Mock).mockResolvedValue(undefined);
 });
 
 describe('globalUriHandler — route parsing', () => {
@@ -209,8 +221,7 @@ describe('globalUriHandler — connection confirmation', () => {
                     'Database: sales\n' +
                     'Collection: orders\n\n' +
                     'A new connection will be added to your Connections View.\n' +
-                    'Do you want to continue?\n\n' +
-                    'Note: You can disable these URL handling confirmations in the extension settings.',
+                    'Do you want to continue?',
             },
             'Yes, continue',
         );
@@ -239,6 +250,208 @@ describe('globalUriHandler — connection confirmation', () => {
             'Yes, open connection',
         );
         expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain('secret');
+    });
+});
+
+/** The item passed to `ConnectionStorageService.save`, or `undefined` when nothing was saved. */
+function savedConnection(): { properties: { emulatorConfiguration?: unknown }; secrets: { connectionString: string } } {
+    return mockSaveConnection.mock.calls[0]?.[1] as {
+        properties: { emulatorConfiguration?: unknown };
+        secrets: { connectionString: string };
+    };
+}
+
+/** Accepts the "add connection" prompt and dismisses everything after it. */
+function acceptAddConnectionOnly(): void {
+    (vscode.window.showInformationMessage as Mock).mockImplementation(
+        (_message: string, _options: unknown, ...items: string[]) =>
+            Promise.resolve(items.includes('Yes, continue') ? 'Yes, continue' : undefined),
+    );
+}
+
+describe('globalUriHandler — TLS exception requested by a link', () => {
+    it.each([
+        'mongodb://devbox:10260/?tls=true&tlsAllowInvalidCertificates=true',
+        'mongodb://10.0.0.5:10260/?tls=true&tlsAllowInvalidCertificates=true',
+        'mongodb://db.local:10260/?tls=true&tlsInsecure=true',
+        'mongodb://db.example.com:10260/?tls=true&tlsAllowInvalidCertificates=true',
+    ])('ignores the request for a host that is not on this machine: %s', async (connectionString) => {
+        acceptAddConnectionOnly();
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(mockSaveConnection).toHaveBeenCalledTimes(1);
+        expect(savedConnection().properties.emulatorConfiguration).toBeUndefined();
+        expect(savedConnection().secrets.connectionString).not.toMatch(/tlsAllowInvalid|tlsInsecure/i);
+        expect(lastTelemetry.tlsBypassRequested).toBe('true');
+        expect(lastTelemetry.tlsBypassHonored).toBe('false');
+    });
+
+    const localTlsBypass = encodeURIComponent('mongodb://localhost:10260/?tls=true&tlsAllowInvalidCertificates=true');
+
+    it('keeps the exception for a target on this machine after the user turns validation off', async () => {
+        acceptAddConnectionOnly();
+        (vscode.window.showWarningMessage as Mock).mockResolvedValue('Turn off validation');
+
+        await runHandler('/connect', `connectionString=${localTlsBypass}`);
+
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+            'This link asks to turn off TLS certificate validation.',
+            expect.objectContaining({
+                modal: true,
+                detail: expect.stringContaining('Connection: localhost:10260'),
+            }),
+            'Turn off validation',
+            'Keep validation on',
+        );
+        expect(savedConnection().properties.emulatorConfiguration).toEqual({
+            isEmulator: true,
+            disableEmulatorSecurity: true,
+        });
+        expect(savedConnection().secrets.connectionString).not.toMatch(/tlsAllowInvalid/i);
+        expect(lastTelemetry.tlsBypassHonored).toBe('true');
+    });
+
+    it('keeps certificate validation on when the user chooses to', async () => {
+        acceptAddConnectionOnly();
+        (vscode.window.showWarningMessage as Mock).mockResolvedValue('Keep validation on');
+
+        await runHandler('/connect', `connectionString=${localTlsBypass}`);
+
+        expect(savedConnection().properties.emulatorConfiguration).toEqual({
+            isEmulator: true,
+            disableEmulatorSecurity: false,
+        });
+        expect(lastTelemetry.tlsBypassHonored).toBe('false');
+    });
+
+    it('adds nothing when the TLS prompt is dismissed', async () => {
+        acceptAddConnectionOnly();
+        (vscode.window.showWarningMessage as Mock).mockResolvedValue(undefined);
+
+        await runHandler('/connect', `connectionString=${localTlsBypass}`);
+
+        expect(mockSaveConnection).not.toHaveBeenCalled();
+        expect(lastTelemetry.userCancelledAtStep).toBe('TlsException');
+    });
+
+    it('asks before turning validation off even when URL handling confirmations are disabled', async () => {
+        showUrlHandlingConfirmations = false;
+        acceptAddConnectionOnly();
+        (vscode.window.showWarningMessage as Mock).mockResolvedValue(undefined);
+
+        await runHandler('/connect', `connectionString=${localTlsBypass}`);
+
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(1);
+        expect(mockSaveConnection).not.toHaveBeenCalled();
+    });
+
+    it('tells the user when a request to turn off validation was ignored', async () => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+        const connectionString = encodeURIComponent(
+            'mongodb://db.example.com:10260/?tls=true&tlsAllowInvalidCertificates=true',
+        );
+
+        await runHandler('/connect', `connectionString=${connectionString}`);
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            expect.objectContaining({
+                detail: expect.stringContaining(
+                    'This link asked to turn off TLS certificate validation. The request was ignored, and certificate validation stays on.',
+                ),
+            }),
+            'Yes, continue',
+        );
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it('marks a localhost.<domain> host as neither an emulator nor eligible for the exception', async () => {
+        acceptAddConnectionOnly();
+        const connectionString = 'mongodb://localhost.example.com:10260/?tls=true&tlsAllowInvalidCertificates=true';
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(savedConnection().properties.emulatorConfiguration).toBeUndefined();
+    });
+
+    it.each(['127.0.0.1', '[::1]'])(
+        'applies the accepted exception to an anonymous connection on literal loopback %s',
+        async (host) => {
+            acceptAddConnectionOnly();
+            (vscode.window.showWarningMessage as Mock).mockResolvedValue('Turn off validation');
+            const connectionString = `mongodb://${host}:10260/?tls=true&tlsAllowInvalidCertificates=true`;
+
+            await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+            const { properties, secrets } = savedConnection();
+            expect(properties.emulatorConfiguration).toEqual({ isEmulator: false, disableEmulatorSecurity: true });
+
+            // The saved consent must reach the client, not only storage.
+            const { options } = await new NoAuthHandler({
+                clusterId: 'cluster-1',
+                connectionString: secrets.connectionString,
+                connectionStringWithPassword: secrets.connectionString,
+                authMechanism: AuthMethodId.NoAuth,
+                emulatorConfiguration: properties.emulatorConfiguration as EmulatorConfiguration,
+            }).configureAuth();
+            expect(options.tlsAllowInvalidCertificates).toBe(true);
+        },
+    );
+});
+
+describe('globalUriHandler — URL handling confirmations disabled', () => {
+    const connectionString = 'mongodb://user@alpha.example:27017/sales';
+
+    beforeEach(() => {
+        showUrlHandlingConfirmations = false;
+    });
+
+    it('still asks before adding a new connection, and adds nothing when dismissed', async () => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            expect.objectContaining({
+                modal: true,
+                detail: expect.stringContaining('Connection: user@alpha.example:27017\nDatabase: sales'),
+            }),
+            'Yes, continue',
+        );
+        expect(mockSaveConnection).not.toHaveBeenCalled();
+        expect(lastTelemetry.userCancelledAtStep).toBe('CreateNewConnection');
+    });
+
+    it('does not advertise turning the add-connection prompt off', async () => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain(
+            'disable these URL handling confirmations',
+        );
+    });
+
+    it('adds the connection only after the user confirms', async () => {
+        acceptAddConnectionOnly();
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(mockSaveConnection).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens an already saved connection without prompting', async () => {
+        mockGetAllConnections.mockResolvedValue([
+            { id: 'existing-id', name: 'Production', secrets: { connectionString } },
+        ]);
+
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
+
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(mockSaveConnection).not.toHaveBeenCalled();
     });
 });
 

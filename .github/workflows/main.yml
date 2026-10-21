@@ -187,6 +187,17 @@ jobs:
             - name: ✅ Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+            # Pipelines inject registry credentials at build time; a committed .npmrc must never set a
+            # credential key, not even to a ${VAR} reference. Any non-comment line naming one fails,
+            # whatever its quoting or spacing. Only file names are printed, so a leaked token is not
+            # repeated in the log.
+            - name: 🔐 Fail if a committed .npmrc sets npm credential keys
+              run: |
+                  if git grep -lIiE '^[[:space:]]*([^#;[:space:]].*)?(_authToken|_auth|_password)' -- '.npmrc' '**/.npmrc'; then
+                      echo "::error::The .npmrc file(s) above set npm credential keys (_authToken, _auth or _password). Pipelines inject credentials at build time, so remove these keys. If a real credential was committed, revoke it."
+                      exit 1
+                  fi
+
             - name: 🛠 Set up Node.js and dependencies
               uses: ./.github/actions/setup
 
