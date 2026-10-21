@@ -768,7 +768,8 @@ function QueryInsightsWizard(): JSX.Element {
             </Text>
             <ModelPicker
                 commandType={effectiveCommand}
-                size="medium"
+                size="small"
+                showLabel
                 onModelChange={setSelectedModel}
                 onPromptLabelChange={setModelPromptLabel}
                 disabled={submitting}

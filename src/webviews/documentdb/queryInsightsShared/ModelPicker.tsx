@@ -7,12 +7,14 @@ import {
     Badge,
     Button,
     Dropdown,
+    Label,
     Option,
     OptionGroup,
     Popover,
     PopoverSurface,
     PopoverTrigger,
     Text,
+    useId,
 } from '@fluentui/react-components';
 import { InfoRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
@@ -28,6 +30,8 @@ export interface ModelPickerProps {
     commandType: CommandType;
     /** Control size; the Collection View card uses `small`, the wizard matches its other fields. */
     size?: 'small' | 'medium';
+    /** Show a visible "Copilot model" label above the dropdown (wizard form layout). */
+    showLabel?: boolean;
     disabled?: boolean;
     /** Undefined while loading/saving, or when no model is available. */
     onModelChange?: (model: AvailableModelInfo | undefined) => void;
@@ -185,11 +189,13 @@ function ModelDetails({ model, facts }: { model: AvailableModelInfo; facts: read
 export function ModelPicker({
     commandType,
     size = 'small',
+    showLabel = false,
     disabled = false,
     onModelChange,
     onPromptLabelChange,
 }: ModelPickerProps): JSX.Element {
     const client = useTrpcClient();
+    const labelId = useId('query-insights-model-label');
     const [available, setAvailable] = useState<AvailableModelsResult>();
     const [promptSource, setPromptSource] = useState<IndexAdvisorPromptSourceInfo>();
     const [loading, setLoading] = useState(true);
@@ -310,9 +316,11 @@ export function ModelPicker({
 
     return (
         <div className="query-insights-model-picker">
+            {showLabel && <Label id={labelId} size="small">{l10n.t('Copilot model')}</Label>}
             <div className="query-insights-model-picker-row">
                 <Dropdown
-                    aria-label={l10n.t('Copilot model')}
+                    aria-label={showLabel ? undefined : l10n.t('Copilot model')}
+                    aria-labelledby={showLabel ? labelId : undefined}
                     size={size}
                     value={selected?.name ?? ''}
                     selectedOptions={selected ? [selected.id] : []}
