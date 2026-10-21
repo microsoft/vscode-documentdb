@@ -162,8 +162,8 @@ test('Pushes only the version files and creates an assigned issue with a prefill
     assert.match(url.searchParams.get('body'), /Old version \| New version/);
     assert.match(url.searchParams.get('body'), /already released version/);
     const summary = fs.readFileSync(context.env.GITHUB_STEP_SUMMARY, 'utf8');
-    assert.ok(summary.includes(link));
-    assert.ok(summary.includes(issueUrl));
+    assert.equal(summary.match(/\[Create version-bump PR\]\(([^)]+)\)/)[1], link);
+    assert.equal(summary.trimEnd().split('\n').at(-1), `Reminder assigned to @release-maintainer: ${issueUrl}`);
     assert.deepEqual(calls.map((call) => call.method), ['GET', 'POST']);
 });
 
