@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as dnsPacket from 'dns-packet';
 import dgram from 'node:dgram';
 import dns from 'node:dns';
+import net from 'node:net';
 
 import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient.js';
 import { DnsStubServer } from './test/dnsStubServer.js';
@@ -72,11 +73,22 @@ function compressedReply(query: dnsPacket.Packet, targets = ['fc-abc-000']): Buf
 describe('fallback DNS client', (): void => {
     const stubs: DnsStubServer[] = [];
 
+    beforeEach((): void => {
+        vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+        vi.spyOn(dns, 'getServers').mockImplementation((): string[] => {
+            throw new Error('Tests must explicitly supply loopback DNS servers');
+        });
+    });
+
     afterEach(async (): Promise<void> => {
-        vi.useRealTimers();
-        await Promise.all(stubs.map((stub): Promise<void> => stub.close()));
-        stubs.length = 0;
-        vi.restoreAllMocks();
+        try {
+            await Promise.all(stubs.map((stub): Promise<void> => stub.close()));
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            stubs.length = 0;
+            vi.restoreAllMocks();
+            vi.useRealTimers();
+        }
     });
 
     async function stub(handler: (request: StubRequest) => void): Promise<DnsStubServer> {
@@ -119,7 +131,7 @@ describe('fallback DNS client', (): void => {
         );
     });
 
-    it('ignores replies that do not match the query or come from another source', async (): Promise<void> => {
+    it('ignores malformed replies and replies that do not match the query', async (): Promise<void> => {
         const server = await stub((request): void => {
             const wrongId = reply(request);
             wrongId.writeUInt16BE(((request.query.id ?? 0) + 1) % 65536, 0);
@@ -133,7 +145,7 @@ describe('fallback DNS client', (): void => {
                 }),
             );
             request.send(Buffer.from([0xff, 0xff, 0xff]));
-            server.later((): void => request.send(reply(request)), 10);
+            request.send(reply(request));
         });
         const result = await resolveSrvFallback(srvName, options([server]));
         expect(result.records.map((record): string => record.name)).toEqual([targetName]);
@@ -144,13 +156,32 @@ describe('fallback DNS client', (): void => {
             if (request.transport === 'udp') {
                 request.send(reply(request, [], dnsPacket.TRUNCATED_RESPONSE));
             } else {
-                request.send(compressedReply(request.query), true);
+                request.send(compressedReply(request.query));
             }
+        });
+        const emit = net.Socket.prototype.emit;
+        let fragments = 0;
+        // TCP can coalesce writes, so split the client's data events rather than timing server writes.
+        vi.spyOn(net.Socket.prototype, 'emit').mockImplementation(function (
+            this: net.Socket,
+            event: string | symbol,
+            ...args: unknown[]
+        ): boolean {
+            if (event === 'data' && `127.0.0.1:${this.remotePort}` === server.address && Buffer.isBuffer(args[0])) {
+                const bytes = args[0];
+                for (let offset = 0; offset < bytes.length; offset++) {
+                    fragments++;
+                    emit.call(this, event, bytes.subarray(offset, offset + 1));
+                }
+                return true;
+            }
+            return emit.call(this, event, ...args);
         });
         const result = await resolveSrvFallback(srvName, options([server]));
         expect(result).toMatchObject({ transport: 'tcp', serversTried: 1 });
         expect(result.records[0].name).toBe(targetName);
         expect(server.queries.map((request): string => request.transport)).toEqual(['udp', 'tcp']);
+        expect(fragments).toBeGreaterThan(2);
     });
 
     it.each([
@@ -180,7 +211,6 @@ describe('fallback DNS client', (): void => {
     });
 
     it('tries the next server after a silent server times out', async (): Promise<void> => {
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         const first = await stub((): void => {
             vi.advanceTimersByTime(25);
         });
@@ -190,7 +220,6 @@ describe('fallback DNS client', (): void => {
     });
 
     it('retries a server once after a UDP timeout', async (): Promise<void> => {
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         const server = await stub((request): void => {
             if (server.queries.length === 1) {
                 vi.advanceTimersByTime(25);
@@ -202,7 +231,6 @@ describe('fallback DNS client', (): void => {
 
         expect(result.serversTried).toBe(1);
         expect(server.queries).toHaveLength(2);
-        expect(server.queries[0].query.id).not.toBe(server.queries[1].query.id);
     });
 
     it('does not retry a server after SERVFAIL', async (): Promise<void> => {
@@ -226,7 +254,6 @@ describe('fallback DNS client', (): void => {
     });
 
     it('bounds all servers by one shared deadline', async (): Promise<void> => {
-        vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
         const first = await stub((): void => {
             vi.advanceTimersByTime(200);
         });
@@ -272,23 +299,25 @@ describe('fallback DNS client', (): void => {
         await expect(outcome).rejects.toMatchObject({ code: dns.CONNREFUSED, syscall: 'queryTxt', serversTried: 0 });
     });
 
-    it('fails fast when a UDP server refuses the query', async (): Promise<void> => {
-        const port = await new Promise<number>((resolve, reject): void => {
-            const socket = dgram.createSocket('udp4');
-            socket.once('error', reject);
-            socket.bind(0, '127.0.0.1', (): void => {
-                const address = socket.address();
-                socket.close((): void => resolve(address.port));
+    it.each(['ECONNREFUSED', 'ECONNRESET'])('fails fast when a UDP socket reports %s', async (code): Promise<void> => {
+        const connect = vi.spyOn(dgram.Socket.prototype, 'connect');
+        const close = vi.spyOn(dgram.Socket.prototype, 'close');
+        // Closed-port ICMP errors are not reliably delivered on every OS or restricted runner.
+        const send = vi.spyOn(dgram.Socket.prototype, 'send').mockImplementation(function (this: dgram.Socket): void {
+            queueMicrotask((): void => {
+                this.emit('error', Object.assign(new Error(code), { code }));
             });
         });
-        const started = Date.now();
         const outcome = resolveSrvFallback(srvName, {
-            servers: [`127.0.0.1:${port}`],
-            deadlineAt: started + 3000,
+            servers: ['127.0.0.1:53'],
+            deadlineAt: Date.now() + 3000,
             udpTimeoutMs: 2000,
         });
 
         await expect(outcome).rejects.toMatchObject({ code: dns.CONNREFUSED, serversTried: 1 });
-        expect(Date.now() - started).toBeLessThan(1000);
+        expect(connect).toHaveBeenCalledExactlyOnceWith(53, '127.0.0.1', expect.any(Function));
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(close).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
     });
 });

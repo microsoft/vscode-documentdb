@@ -85,6 +85,20 @@ Increment 1 ([plan](./iterations/01-srv-fallback/plan.md), progress recorded per
 | `docs/user-manual/troubleshooting-srv-dns.md`                                                        | Docs                          | Symptoms, confirmation, workarounds, timing, trace, switches                                                                                                                                                                                              |
 | `src/services/localQuickStart/QuickStartService.ts`, `connectToClient.ts`                            | —                             | Out of scope (D0007); `connectToClient` is deprecated                                                                                                                                                                                                     |
 
+## Test isolation
+
+The resolver package tests do not query external DNS servers. Transport tests use UDP/TCP
+stubs bound to `127.0.0.1`; system DNS server discovery and driver resolver probes are mocked.
+Transport tests freeze both the clock and resolver timers, advancing time only for timeout
+scenarios, so slow loopback I/O cannot exhaust the resolver's time budget. TCP frame assembly
+is tested by splitting client data events into individual bytes, not by delaying server writes.
+Retry tests do not assume randomly generated query IDs differ. Stub startup cleans up partial
+binds and retries address-in-use conflicts up to three attempts; other bind failures remain errors.
+The UDP refusal tests inject `ECONNREFUSED` and `ECONNRESET` without sending a datagram, and
+check immediate rejection and timer cleanup without advancing fake timers. They do not rely on
+closed-port ICMP errors, which may be suppressed on Windows or restricted runners.
+Loopback sockets must still be permitted.
+
 ## Timeline
 
 | Date       | PR   | What changed                                                                                                   | Docs                                                                                                                           |

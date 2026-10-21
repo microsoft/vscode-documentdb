@@ -12,7 +12,7 @@ import { type DnsTransport } from '../fallbackDnsClient.js';
 export interface StubRequest {
     readonly query: dnsPacket.DecodedPacket;
     readonly transport: DnsTransport;
-    send(bytes: Buffer, split?: boolean): void;
+    send(bytes: Buffer): void;
 }
 
 export class DnsStubServer {
@@ -21,7 +21,7 @@ export class DnsStubServer {
     public address = '';
     private readonly udp = dgram.createSocket('udp4');
     private readonly tcp = net.createServer();
-    private readonly timers = new Set<NodeJS.Timeout>();
+    private udpBound = false;
     private closed = false;
 
     private constructor(private readonly handler: (request: StubRequest) => void) {
@@ -50,21 +50,10 @@ export class DnsStubServer {
                     }
                     const bytes = received.subarray(2, length + 2);
                     received = received.subarray(length + 2);
-                    this.dispatch(bytes, 'tcp', (response, split): void => {
+                    this.dispatch(bytes, 'tcp', (response): void => {
                         const prefix = Buffer.alloc(2);
                         prefix.writeUInt16BE(response.length);
-                        const framed = Buffer.concat([prefix, response]);
-                        if (!split) {
-                            socket.write(framed);
-                            return;
-                        }
-                        socket.write(framed.subarray(0, 1));
-                        this.later((): void => {
-                            socket.write(framed.subarray(1, 5));
-                        }, 5);
-                        this.later((): void => {
-                            socket.write(framed.subarray(5));
-                        }, 10);
+                        socket.write(Buffer.concat([prefix, response]));
                     });
                 }
             });
@@ -72,55 +61,66 @@ export class DnsStubServer {
     }
 
     public static async start(handler: (request: StubRequest) => void): Promise<DnsStubServer> {
-        const stub = new DnsStubServer(handler);
-        await new Promise<void>((resolve, reject): void => {
-            stub.udp.once('error', reject);
-            stub.udp.bind(0, '127.0.0.1', (): void => {
-                stub.udp.removeListener('error', reject);
-                resolve();
-            });
-        });
-        const port = stub.udp.address().port;
-        await new Promise<void>((resolve, reject): void => {
-            stub.tcp.once('error', reject);
-            stub.tcp.listen(port, '127.0.0.1', (): void => {
-                stub.tcp.removeListener('error', reject);
-                resolve();
-            });
-        });
-        stub.address = `127.0.0.1:${port}`;
-        return stub;
-    }
-
-    public later(callback: () => void, delayMs: number): void {
-        const timer = setTimeout((): void => {
-            this.timers.delete(timer);
-            if (!this.closed) {
-                callback();
+        for (let attempt = 0; ; attempt++) {
+            const stub = new DnsStubServer(handler);
+            try {
+                await new Promise<void>((resolve, reject): void => {
+                    stub.udp.once('error', reject);
+                    stub.udp.bind(0, '127.0.0.1', (): void => {
+                        stub.udpBound = true;
+                        stub.udp.removeListener('error', reject);
+                        resolve();
+                    });
+                });
+                const port = stub.udp.address().port;
+                await new Promise<void>((resolve, reject): void => {
+                    stub.tcp.once('error', reject);
+                    stub.tcp.listen(port, '127.0.0.1', (): void => {
+                        stub.tcp.removeListener('error', reject);
+                        resolve();
+                    });
+                });
+                stub.address = `127.0.0.1:${port}`;
+                return stub;
+            } catch (error) {
+                await stub.close();
+                // A UDP-assigned port can already be occupied by an unrelated TCP listener.
+                if (!(error instanceof Error && 'code' in error && error.code === 'EADDRINUSE' && attempt < 2)) {
+                    throw error;
+                }
             }
-        }, delayMs);
-        this.timers.add(timer);
+        }
     }
 
     public async close(): Promise<void> {
-        this.closed = true;
-        for (const timer of this.timers) {
-            clearTimeout(timer);
+        if (this.closed) {
+            return;
         }
+        this.closed = true;
         for (const socket of this.tcpSockets) {
             socket.destroy();
         }
         await Promise.all([
-            new Promise<void>((resolve): void => {
-                this.udp.close((): void => resolve());
-            }),
-            new Promise<void>((resolve): void => {
-                this.tcp.close((): void => resolve());
-            }),
+            this.udpBound
+                ? new Promise<void>((resolve): void => {
+                      this.udp.close((): void => resolve());
+                  })
+                : Promise.resolve(),
+            this.tcp.listening
+                ? new Promise<void>((resolve, reject): void => {
+                      this.tcp.close((error): void => {
+                          if (error) {
+                              reject(error);
+                          } else {
+                              resolve();
+                          }
+                      });
+                  })
+                : Promise.resolve(),
         ]);
     }
 
-    private dispatch(bytes: Buffer, transport: DnsTransport, send: (response: Buffer, split?: boolean) => void): void {
+    private dispatch(bytes: Buffer, transport: DnsTransport, send: (response: Buffer) => void): void {
         const request: StubRequest = { query: dnsPacket.decode(bytes), transport, send };
         this.queries.push(request);
         this.handler(request);
