@@ -78,6 +78,10 @@ function prepareBranch(branch, newVersion, title) {
 
     git('switch', '-c', branch);
     git('add', '--', ...versionFiles);
+    // GitHub.com no-reply emails use "{account ID}+{login}@users.noreply.github.com".
+    // These shared bot account IDs are not our user, organization, or repository IDs:
+    // 41898282: GitHub Actions committer (https://api.github.com/users/github-actions%5Bbot%5D).
+    // 223556219: Copilot co-author (https://api.github.com/user/223556219).
     git(
         '-c',
         'user.name=github-actions[bot]',
