@@ -6,7 +6,7 @@
 
 - **Connection Links**: A link that would add a new connection now always asks for confirmation and shows the connection target, even when URL handling confirmations are disabled. A link can request turning off TLS certificate validation only for a target on your own machine, and only after you confirm; for any other target, validation stays on.
 - **Microsoft Entra ID Sign-in**: Limits the hosts that can receive a Microsoft Entra ID access token to the known Azure public and sovereign cloud domains.
-- **No-Authentication Connections**: Applies the same host check as the other authentication methods before relaxing TLS certificate validation.
+- **No-Authentication Connections**: Applies the same host check as the other authentication methods before relaxing TLS certificate validation, and applies a TLS exception you accepted for a local IP address such as `127.0.0.1` or `::1`.
 - **Build and Release Pipelines**: Hardens the npm package build, release and publishing pipelines, and adds a CI check that rejects committed npm registry credentials. The installed extension is not affected.
 
 ## 1.0.1
