@@ -175,7 +175,7 @@ describe('fallback DNS client', (): void => {
                 }
                 return true;
             }
-            return emit.call(this, event, ...args);
+            return emit.call(this, event, ...args) === true;
         });
         const result = await resolveSrvFallback(srvName, options([server]));
         expect(result).toMatchObject({ transport: 'tcp', serversTried: 1 });
