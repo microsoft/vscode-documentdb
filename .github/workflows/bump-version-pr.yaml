@@ -1,30 +1,98 @@
 name: Bump version after release
 
-# Disabled for now — comment out the trigger block to prevent execution
 on:
-    #   release:
-    #     types: [published]
+    release:
+        types: [published]
     workflow_dispatch:
+
+permissions:
+    actions: write
+    contents: write
+    pull-requests: write
+
+concurrency:
+    group: bump-version-after-release
+    cancel-in-progress: false
 
 jobs:
     bump:
+        if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
         runs-on: ubuntu-latest
+        timeout-minutes: 5
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  ref: main
+
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
 
             - name: Bump version
               id: bump
-              uses: alexweininger/bump-prerelease-version@91183ecfa908d49e9e7c1c62e9c781a49aa7c307 # v0.1.1
+              run: node .github/scripts/bump-version.cjs
+              env:
+                  RELEASE_TAG: ${{ github.event.release.tag_name }}
 
             - name: Create pull request
+              id: pr
+              if: steps.bump.outputs.changed == 'true'
               uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
               with:
-                  title: ${{ env.MESSAGE }}
-                  body: Automatically created by ${{ env.RUN_LINK }}
-                  commit-message: ${{ env.MESSAGE }}
+                  title: 'chore: prepare ${{ steps.bump.outputs.new-version }} development'
+                  body: |
+                      ## Why this PR exists
+
+                      Move `main` to the next development version after a release, so ongoing
+                      development is no longer labelled with an already released version.
+                      The published release and its tag are unchanged.
+
+                      ## Version change
+
+                      | File | Old version | New version |
+                      | --- | --- | --- |
+                      | `package.json` | `${{ steps.bump.outputs.old-version }}` | **`${{ steps.bump.outputs.new-version }}`** |
+                      | `package-lock.json` (both root version entries) | `${{ steps.bump.outputs.old-version }}` | **`${{ steps.bump.outputs.new-version }}`** |
+
+                      `alpha.0` means the **first alpha of the next patch version**. The `.0`
+                      is the prerelease counter, not an additional patch number. Re-running
+                      this workflow does not advance it to `alpha.1`.
+
+                      Only the root extension version is updated; workspace package versions
+                      and dependency versions are unchanged. This PR does **not** publish an
+                      extension, create a release, or change release notes. Before publishing
+                      the next release, replace the alpha version with its intended numeric
+                      release version.
+
+                      ## Review and merge
+
+                      This PR is **ready for review**, not a draft. The workflow explicitly
+                      starts **full CI** on this branch, so no separate token secret or manual
+                      CI dispatch is needed. Review the changes and merge after the required
+                      checks pass.
+
+                      GitHub may also request approval for PR-triggered workflows because
+                      this PR was created with `GITHUB_TOKEN`. If shown, select
+                      **Approve workflows to run** for those additional runs.
+
+                      ## Source
+
+                      - Trigger: ${{ github.event_name == 'release' && format('[Release {0}]({1})', github.event.release.tag_name, github.event.release.html_url) || 'Manual workflow run' }}
+                      - [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+                  commit-message: 'chore: prepare ${{ steps.bump.outputs.new-version }} development'
                   branch: bot/bump-${{ steps.bump.outputs.new-version }}
                   base: main
+                  draft: false
+                  delete-branch: true
+                  add-paths: |
+                      package.json
+                      package-lock.json
                   author: GitHub <noreply@github.com>
+
+            - name: Start full CI for the pull request
+              if: steps.pr.outputs.pull-request-number != ''
+              run: gh workflow run main.yml --ref "$PR_BRANCH" -f enforce_full_run=true
               env:
-                  RUN_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-                  MESSAGE: Bump version after release
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  PR_BRANCH: ${{ steps.pr.outputs.pull-request-branch }}

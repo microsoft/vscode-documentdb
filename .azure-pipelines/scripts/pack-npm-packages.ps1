@@ -29,6 +29,22 @@ $publishablePackages = @(
     'vscode-ext-webview-fluentui'
 )
 
+# Lifecycle scripts that npm runs while packing, publishing or installing a package.
+# Release-bound packages must not declare any of them: packing runs with
+# --ignore-scripts, and the tarball must be exactly the output of the build step.
+$forbiddenLifecycleScripts = @(
+    'prepare'
+    'prepack'
+    'postpack'
+    'prepublish'
+    'prepublishOnly'
+    'publish'
+    'postpublish'
+    'preinstall'
+    'install'
+    'postinstall'
+)
+
 $npmPackagesDir = Join-Path $OutputDirectory 'npm-packages'
 New-Item -ItemType Directory -Force -Path $npmPackagesDir | Out-Null
 
@@ -53,8 +69,17 @@ foreach ($pkgDirName in $publishablePackages) {
         exit 1
     }
 
+    if ($null -ne $packageJson.scripts) {
+        $declaredScripts = @($packageJson.scripts.PSObject.Properties.Name)
+        $blockedScripts = @($forbiddenLifecycleScripts | Where-Object { $declaredScripts -contains $_ })
+        if ($blockedScripts.Count -gt 0) {
+            Write-Error "[Error] Configured publishable package '$pkgName' declares lifecycle script(s) that are not allowed for release packages: $($blockedScripts -join ', ')"
+            exit 1
+        }
+    }
+
     Write-Output "Packing $pkgName@$pkgVersion from $pkgDirName..."
-    npm pack --pack-destination $npmPackagesDir --workspace "packages/$pkgDirName"
+    npm pack --ignore-scripts --pack-destination $npmPackagesDir --workspace "packages/$pkgDirName"
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "[Error] Failed to pack $pkgName"

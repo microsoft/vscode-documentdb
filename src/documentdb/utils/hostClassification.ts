@@ -190,6 +190,46 @@ export function isLocalOrPrivateHost(host: string): boolean {
     return false;
 }
 
+/**
+ * Whether a host addresses this machine only: `localhost`, `*.localhost`, `127.0.0.0/8`, or `::1`
+ * (in any spelling, including IPv4-mapped `::ffff:127.0.0.1`).
+ *
+ * This is deliberately narrower than {@link isLocalOrPrivateHost}: private-network addresses,
+ * single-word names and `*.local` can all resolve to other machines, so a decision taken without
+ * the user's direct involvement (for example, from an external link) must use this check instead.
+ */
+export function isLoopbackHost(host: string): boolean {
+    const extracted = extractHostname(host);
+    if (!extracted) {
+        return false;
+    }
+    const hostname = normalizeHostForClassification(extracted);
+    if (!hostname) {
+        return false;
+    }
+
+    if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+        return true;
+    }
+
+    const octets = ipv4Octets(hostname);
+    if (octets) {
+        return octets[0] === 127;
+    }
+
+    const hextets = hostname.includes(':') ? expandIpv6(hostname) : undefined;
+    if (hextets) {
+        if (hextets.slice(0, 7).every((hextet) => hextet === 0) && hextets[7] === 1) {
+            return true;
+        }
+        if (hextets.slice(0, 5).every((hextet) => hextet === 0) && (hextets[5] === 0xffff || hextets[5] === 0)) {
+            return hextets[6] >> 8 === 127;
+        }
+    }
+
+    return false;
+}
+
 /** Classify parsed IPv4 octets against the loopback / private / link-local ranges. */
 function isLocalOrPrivateIpv4(octets: number[]): boolean {
     const [a, b] = octets;
