@@ -40,6 +40,10 @@ export const previewModels: readonly AvailableModelInfo[] = [
         inputCost: 30, outputCost: 250, cacheCost: 3,
         supportsToolCalling: true, supportsImageToText: true,
     },
+    {
+        id: 'gpt-5.6-sol-fast', name: 'GPT-5.6 Sol Fast', family: 'gpt-5.6-sol', vendor: 'copilot', version: '5.6',
+        maxInputTokens: 128000, isUtility: false,
+    },
 ];
 
 export const PREVIEW_SAVED_MODEL_ID = 'gpt-6.1-sol';

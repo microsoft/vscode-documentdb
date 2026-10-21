@@ -12,7 +12,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelsResult } from '../../../../services/ai/modelSelection';
 import { ModelPicker, type ModelPickerProps } from '../../queryInsightsShared/ModelPicker';
-import { PerformanceInsightsCardComparison } from './components/optimizationCards/custom/PerformanceInsightsCardComparison';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,6 +38,9 @@ vi.mock('@fluentui/react-components', async (importOriginal) => {
             disabled,
             value,
             placeholder,
+            appearance,
+            button,
+            'aria-labelledby': ariaLabelledBy,
             'aria-label': ariaLabel,
             onOpenChange,
             onOptionSelect,
@@ -47,13 +49,17 @@ vi.mock('@fluentui/react-components', async (importOriginal) => {
             disabled?: boolean;
             value: string;
             placeholder: string;
+            appearance?: string;
+            button?: { children: ReactNode };
             'aria-label'?: string;
+            'aria-labelledby'?: string;
             onOpenChange?: (event: React.MouseEvent, data: { open: boolean }) => void;
             onOptionSelect: (event: React.MouseEvent, data: { optionValue: string }) => void;
         }): ReactNode => (
             <div>
-                <button role="combobox" aria-label={ariaLabel} disabled={disabled}
-                    onClick={(event) => onOpenChange?.(event, { open: true })}>{value || placeholder}</button>
+                <button role="combobox" aria-label={ariaLabel} aria-labelledby={ariaLabelledBy}
+                    data-appearance={appearance} disabled={disabled}
+                    onClick={(event) => onOpenChange?.(event, { open: true })}>{button?.children ?? (value || placeholder)}</button>
                 <div role="listbox" onClick={(event) => {
                     const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
                     if (option?.dataset.value && !disabled) {
@@ -73,7 +79,6 @@ vi.mock('@fluentui/react-components', async (importOriginal) => {
         PopoverSurface: ({ children, 'aria-label': ariaLabel }: { children: ReactNode; 'aria-label'?: string }): ReactNode => (
             <div role="dialog" aria-label={ariaLabel}>{children}</div>
         ),
-        MenuPopover: ({ children }: { children: ReactNode }): ReactNode => <div>{children}</div>,
     };
 });
 vi.mock('@vscode/l10n', () => ({
@@ -112,7 +117,7 @@ describe('Shared Query Insights ModelPicker', () => {
     async function renderPicker(
         onModelChange = vi.fn(),
         onPromptLabelChange = vi.fn(),
-        children?: ModelPickerProps['children'],
+        props?: Partial<ModelPickerProps>,
     ): Promise<void> {
         await act(async () => {
             root.render(
@@ -121,7 +126,7 @@ describe('Shared Query Insights ModelPicker', () => {
                         commandType={'find' as CommandType}
                         onModelChange={onModelChange}
                         onPromptLabelChange={onPromptLabelChange}
-                        children={children}
+                        {...props}
                     />
                 </SSRProvider>,
             );
@@ -239,74 +244,54 @@ describe('Shared Query Insights ModelPicker', () => {
         expect(details()['Context window']).toBe('128,000 tokens');
     });
 
-    it('shares one saved selection across all six live comparison controls', async () => {
-        mocks.setSelectedModel.mockResolvedValue({
-            ...available, savedModelId: 'utility', effectiveModelId: 'utility', effectiveReason: 'saved',
-        });
-        const onChange = vi.fn();
-        await renderPicker(onChange, vi.fn(), (renderControl) => (
-            <>
-                {renderControl('label-change')}
-                {renderControl('compound')}
-                {renderControl('outline-button')}
-                {renderControl('outline')}
-                {renderControl('filled-darker')}
-                {renderControl('underline')}
-            </>
-        ));
-        expect(mocks.getAvailableModels).toHaveBeenCalledTimes(1);
-        expect(host.querySelectorAll('button[aria-label="Model details"]')).toHaveLength(6);
-        expect(host.querySelector('.fui-CompoundButton')?.textContent).toContain('Premium model');
-        const firstUtilityOption = host.querySelector<HTMLButtonElement>('[role="option"][data-value="utility"]');
-        await act(async () => firstUtilityOption?.click());
-        expect(mocks.setSelectedModel).toHaveBeenCalledTimes(1);
-        expect(onChange).toHaveBeenLastCalledWith(available.models[1]);
-        expect([...host.querySelectorAll('[role="combobox"]')].map((element) => element.textContent))
-            .toEqual(['Utility model', 'Utility model', 'Utility model']);
-        expect(host.querySelector('.fui-CompoundButton')?.textContent).toContain('Utility model');
-        expect(host.querySelector('.query-insights-model-picker-row > .fui-Text')?.textContent).toBe('Utility model');
+    it('uses underline with a decorative model icon only on the closed card trigger', async () => {
+        await renderPicker(vi.fn(), vi.fn(), { appearance: 'underline', showModelIcon: true });
+        const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]');
+        expect(trigger?.dataset.appearance).toBe('underline');
+        expect(trigger?.textContent).toBe('Premium model');
+        expect(trigger?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+        await act(async () => trigger?.click());
+        expect(trigger?.querySelector('svg')).toBeNull();
+        expect(host.querySelectorAll('[role="option"]')).toHaveLength(2);
     });
 
-    it('opens the CompoundButton radio menu, refreshes models and saves a choice', async () => {
-        mocks.setSelectedModel.mockResolvedValue({
-            ...available, savedModelId: 'utility', effectiveModelId: 'utility', effectiveReason: 'saved',
-        });
-        await renderPicker(vi.fn(), vi.fn(), (renderControl) => renderControl('compound'));
-        await act(async () => host.querySelector<HTMLButtonElement>('.fui-CompoundButton')?.click());
-        expect(mocks.getAvailableModels).toHaveBeenCalledTimes(2);
-        const utilityOption = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')]
-            .find((element) => element.textContent === 'Utility model');
-        expect(utilityOption).toBeDefined();
-        await act(async () => utilityOption?.click());
-        expect(mocks.setSelectedModel).toHaveBeenCalledWith({ modelId: 'utility' });
-        expect(host.querySelector('.fui-CompoundButton')?.textContent).toContain('Utility model');
+    it('preserves the wizard outline appearance and visible label without a model icon', async () => {
+        await renderPicker(vi.fn(), vi.fn(), { showLabel: true });
+        const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]');
+        expect(trigger?.dataset.appearance).toBe('outline');
+        expect(trigger?.querySelector('svg')).toBeNull();
+        expect(document.getElementById(trigger?.getAttribute('aria-labelledby') ?? '')?.textContent).toBe('Copilot model');
     });
 
-    it('wires every comparison card to the same analysis action without running it on mount', async () => {
-        const onAnalyze = vi.fn();
-        await act(async () => {
-            root.render(
-                <SSRProvider>
-                    <PerformanceInsightsCardComparison
-                        commandType={'find' as CommandType}
-                        bodyText="Analyze this plan"
-                        isLoading={false}
-                        onGetInsights={onAnalyze}
-                        onLearnMore={vi.fn()}
-                        onCancel={vi.fn()}
-                        onLearnMoreUtilityModel={vi.fn()}
-                    />
-                </SSRProvider>,
-            );
+    it.each(['outline', 'underline'] as const)('keeps Fast model ids and provider labels in the %s list', async (appearance) => {
+        const models = [
+            { ...available.models[0], id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', category: 'powerful' },
+            { ...available.models[0], id: 'gpt-5.6-sol-fast', name: 'GPT-5.6 Sol Fast', category: undefined },
+            available.models[1],
+        ];
+        mocks.getAvailableModels.mockResolvedValue({ ...available, models, effectiveModelId: models[0].id });
+        await renderPicker(vi.fn(), vi.fn(), { appearance });
+        expect([...host.querySelectorAll('[role="option"]')].map((element) => [
+            element.getAttribute('data-value'), element.textContent,
+        ])).toEqual([
+            ['utility', 'Utility model'],
+            ['gpt-5.6-sol', 'GPT-5.6 Sol'],
+            ['gpt-5.6-sol-fast', 'GPT-5.6 Sol Fast'],
+        ]);
+    });
+
+    it('disambiguates identical provider labels with model ids instead of merging entries', async () => {
+        mocks.getAvailableModels.mockResolvedValue({
+            ...available,
+            models: [
+                { ...available.models[0], id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' },
+                { ...available.models[0], id: 'gpt-5.6-sol-fast', name: 'GPT-5.6 Sol' },
+            ],
+            effectiveModelId: 'gpt-5.6-sol-fast',
         });
-        expect(host.querySelectorAll('.get-performance-insights-card-experiment')).toHaveLength(6);
-        expect(onAnalyze).not.toHaveBeenCalled();
-        const actions = [...host.querySelectorAll<HTMLButtonElement>('.get-performance-insights-card-actions > button')];
-        expect(actions).toHaveLength(6);
-        for (const action of actions) {
-            await act(async () => action.click());
-        }
-        expect(onAnalyze).toHaveBeenCalledTimes(6);
-        expect(mocks.getAvailableModels).toHaveBeenCalledTimes(1);
+        await renderPicker();
+        expect(host.querySelector('[data-value="gpt-5.6-sol"]')?.textContent).toBe('GPT-5.6 Solgpt-5.6-sol');
+        expect(host.querySelector('[data-value="gpt-5.6-sol-fast"]')?.textContent).toBe('GPT-5.6 Solgpt-5.6-sol-fast');
+        expect(details()['Model ID']).toBe('gpt-5.6-sol-fast');
     });
 });

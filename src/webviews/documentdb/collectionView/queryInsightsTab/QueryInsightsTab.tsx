@@ -39,6 +39,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'rea
 import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
+import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
 import { usageByline } from '../../queryInsightsShared/usageByline';
 import { QueryInsightsPreviewBadge } from '../../queryInsightsShared/QueryInsightsPreviewBadge';
 import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analysisProfilePresentation';
@@ -60,8 +61,8 @@ import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDispla
 import { CardStack, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
-import { PerformanceInsightsCardComparison } from './components/optimizationCards/custom/PerformanceInsightsCardComparison';
 import {
+    GetPerformanceInsightsCard,
     ImprovementCard,
     ImprovementCardShell,
     MarkdownCard,
@@ -984,10 +985,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         canCancel={isStage3Loading}
                                     />
                                 ) : (
-                                    <PerformanceInsightsCardComparison
-                                        commandType={source.commandType ?? 'find' as CommandType}
-                                        onModelChange={setSelectedModel}
-                                        onPromptLabelChange={setPromptLabel}
+                                    <GetPerformanceInsightsCard
+                                        modelPicker={
+                                            <ModelPicker
+                                                commandType={source.commandType ?? 'find' as CommandType}
+                                                appearance="underline"
+                                                showModelIcon
+                                                onModelChange={setSelectedModel}
+                                                onPromptLabelChange={setPromptLabel}
+                                            />
+                                        }
                                         className="cardSpacing"
                                         bodyText={
                                             !notApplicable.includes('performanceRating') &&

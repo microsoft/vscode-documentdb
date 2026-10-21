@@ -830,3 +830,29 @@ not another set of hand-crafted mock cards. No winning presentation has been sel
   (no horizontal content overflow).
 - No real Copilot request, live-database smoke, full 27-route replay, lint, formatting,
   localization generation, packaging or push. Quick/Advanced remains a proposal only.
+
+## Phase I: select F for the live card (2026-10-21)
+
+14:38–14:44 UTC, approximately **6 minutes** including investigation, implementation, build,
+focused tests and browser smoke.
+
+- Operator chose F: one real AI Performance Insights card with a Fluent underline Dropdown.
+  A decorative Fluent Bot icon precedes the selected name while the list is closed. The
+  existing info Popover remains. Removed the temporary six-card comparison component and
+  its menu/CompoundButton alternatives from the live picker.
+- Wizard Configure retains its previous small outlined Dropdown, visible Copilot model
+  label and info button; no model icon or underline appearance there.
+- Investigated model identity: live hosts share `ai.getAvailableModels`; no Fast-specific
+  filter or name rewriting exists. Names come from the provider; deduplication uses IDs,
+  not names. Added service and UI regressions for Fast IDs, missing category metadata and
+  duplicate display names. Duplicate names now show model IDs in the options for clarity.
+- The old design-preview options used a fixed five-model catalog, while wizard scenarios
+  use other fixture catalogs. Removed the old mock option gallery from the browser route;
+  it now shows only the selected real card component and explicitly identifies its data as
+  fixtures. Added a category-less Fast fixture to exercise the Other group. This is not
+  evidence about availability in the operator's live Copilot catalog.
+- Case 1: build passed; **169 targeted tests** and **79 harness tests** passed. Browser
+  smoke confirmed one card, transparent underline trigger, icon removed on open/restored
+  on Escape, Fast option visible, and the wizard still outlined/white with no model icon.
+  No live Copilot request, full route replay, lint, formatting, localization generation,
+  packaging or push.

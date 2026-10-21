@@ -74,6 +74,19 @@ describe('Query Insights model selection', () => {
         expect((await getAvailableModels()).effectiveModelId).toBe('first');
     });
 
+    it('retains Fast variants by id and preserves the provider name even when display names coincide', async () => {
+        mocks.selectChatModels.mockResolvedValue([
+            { ...model('gpt-5.6-sol'), name: 'GPT-5.6 Sol' },
+            { ...model('gpt-5.6-sol-fast'), name: 'GPT-5.6 Sol' },
+            model('copilot-utility'),
+        ]);
+        const result = await getAvailableModels();
+        expect(result.models.filter((entry) => !entry.isUtility).map(({ id, name }) => ({ id, name }))).toEqual([
+            { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' },
+            { id: 'gpt-5.6-sol-fast', name: 'GPT-5.6 Sol' },
+        ]);
+    });
+
     it('defaults to the first Powerful model (API category) when nothing valid is saved', async () => {
         mocks.get.mockReturnValue(null);
         const powerful = (id: string): vscode.LanguageModelChat => Object.freeze({ ...model(id), category: 'powerful' });

@@ -44,7 +44,6 @@ export interface GetPerformanceInsightsCardProps {
     enabled?: boolean;
 
     modelPicker?: React.ReactNode;
-    experimentLabel?: string;
     /** Prompt source shown first in the muted meta line, e.g. "Built-in prompt". */
     promptLabel?: string;
     secondaryLink?: React.ReactNode;
@@ -108,7 +107,6 @@ export function GetPerformanceInsightsCard({
     isLoading,
     enabled = true,
     modelPicker,
-    experimentLabel,
     promptLabel,
     secondaryLink,
     mayUsePremiumRequests = false,
@@ -135,7 +133,6 @@ export function GetPerformanceInsightsCard({
                     style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }}
                 />
                 <div style={{ flex: 1 }}>
-                    {experimentLabel && <Text block weight="semibold" className="get-performance-insights-card-experiment">{experimentLabel}</Text>}
                     <CardHeader
                         header={
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>

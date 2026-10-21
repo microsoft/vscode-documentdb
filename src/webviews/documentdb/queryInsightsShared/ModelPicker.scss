@@ -33,9 +33,10 @@
     max-height: min(360px, 45vh);
 }
 
-.query-insights-model-menu {
-    max-height: min(360px, 45vh);
-    overflow-y: auto;
+.query-insights-model-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
 }
 
 // Option content: model name, cost badge pushed to the end of the row.
