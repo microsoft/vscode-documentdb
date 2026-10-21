@@ -20,8 +20,9 @@ Review of [PR #1040](https://github.com/microsoft/vscode-documentdb/pull/1040), 
   confirmed finding concerns its CI credential guard. Related intent is recorded under
   [No Authentication](../../../no-auth/README.md) and
   [Local Quick Start](../../../local-quickstart/README.md).
-- **Boundary:** review only. No fixes, publication, GitHub review submission, thread
-  resolution, or ready-for-review transition were requested or performed.
+- **Boundary:** review only at first. On 2026-10-21 the author asked for both findings to be
+  fixed; see [Fix progress](#fix-progress). No publication, GitHub review submission, thread
+  resolution, or ready-for-review transition was requested or performed.
 
 ## Review stages
 
@@ -33,18 +34,18 @@ Review of [PR #1040](https://github.com/microsoft/vscode-documentdb/pull/1040), 
 | Independent sweep | The validation agent also reviewed beyond R1. It reported no additional high-confidence bugs introduced by this diff. |
 | Different-vendor/model/context requirement | **Not certified.** The separate pass used the harness-selected agent configuration. Its vendor/model/context provenance was not exposed sufficiently to establish the specific section 6.1 requirement. Do not count this as completion of the required cross-vendor gate. |
 | Severity and solution re-evaluation (2026-10-21) | R1 re-rated **Medium → Low**. A probe matrix compared the current guard with two replacement checks (one of them new, option C), using npm's bundled INI parser as the reference. The rejected loopback candidate was promoted to **R2 (Low)** because this PR rewrote the affected lines and added a consent prompt whose answer that path ignores. |
-| Author decisions | Pending. Recommendations below are reviewer recommendations, not author approvals. |
+| Author decisions | 2026-10-21: the author asked for both findings to be fixed ("please fix both"), so the recommended options were implemented: C for R1 and A for R2. The author gave no further reasoning. |
 
-The review record is ready for the author's section 6.2 decisions. Section 6.1 still needs
-the explicitly different-vendor validation pass, and any later Copilot comments must be merged
-and revalidated. Findings R1 and R2 have not been fixed.
+The author's section 6.2 decisions are recorded, and both findings are fixed. Section 6.1 still
+needs the explicitly different-vendor validation pass, and any later Copilot comments must be
+merged and revalidated.
 
 ## Summary
 
 | ID | Source | Severity | Confidence | Finding | Author decision |
 | --- | --- | --- | --- | --- | --- |
-| R1 | Primary review; independently validated; re-rated | Low (was Medium) | High | New npm credential guard misses valid quoted configuration keys | Pending |
-| R2 | Re-evaluation (promoted from rejected candidates) | Low | High | Anonymous link connections to `127.x` / `::1` ask for TLS consent, then ignore it | Pending |
+| R1 | Primary review; independently validated; re-rated | Low (was Medium) | High | New npm credential guard misses valid quoted configuration keys | Fix (option C). Fixed in `93f8a8a4`. |
+| R2 | Re-evaluation (promoted from rejected candidates) | Low | High | Anonymous link connections to `127.x` / `::1` ask for TLS consent, then ignore it | Fix (option A). Fixed in `e0533846`, release notes in `2111d471`. |
 
 R1 is an omission in a newly introduced preventive check, not evidence of a credential leak
 or a demonstrated compromise. The review did not discover any actual committed credentials.
@@ -184,10 +185,23 @@ matrix above is the evidence for the change. Re-run it against the final pattern
 in the commit message that it passed. Add a scripted test only if the check is moved into a
 standalone script.
 
-**Author decision and reasoning:** Pending.
+**Author decision and reasoning:** Fix, using the recommended option C (2026-10-21, "please fix
+both"). The author gave no further reasoning.
 
-**Implementation / commit / Copilot thread:** Not started; there is no corresponding Copilot
-comment to link or reply to.
+**Implementation / commit / Copilot thread:** Fixed in
+[`93f8a8a4`](https://github.com/microsoft/vscode-documentdb/commit/93f8a8a447e5e002bd0d36926581c1132d2fbd3b)
+(`ci: reject any npm credential key in a committed .npmrc`). The step now uses the option C
+pattern and the clearer error message. It was renamed to "Fail if a committed .npmrc sets npm
+credential keys", and its comment now says that `${VAR}` references are rejected too. There is
+no corresponding Copilot comment to link or reply to.
+
+**Fix verification:** the step script was extracted from the committed YAML and run against the
+probe matrix as both a root and a nested tracked `.npmrc`. Every credential key form fails, with
+exit code 1: unquoted, double-quoted, single-quoted, spaced, indented unscoped, upper-case,
+`_password` and `${VAR}`. Commented lines (`#` and `;`), `registry=` and `always-auth=true`
+pass. The repository's own `.azure-pipelines/.npmrc` passes. The output contained file names
+only, with no fixture values. As expected for option C, the escaped `\u005f` key is still not
+detected.
 
 ## R2: Honor the link's TLS consent for anonymous loopback connections
 
@@ -243,9 +257,34 @@ beyond those already reviewed.
 `tlsAllowInvalidCertificates: true`. Also check that the same flags on a public host produce no
 TLS option. Cover the client options, not only the saved flags.
 
-**Author decision and reasoning:** Pending.
+**Author decision and reasoning:** Fix, using the recommended option A (2026-10-21, "please fix
+both"). The author gave no further reasoning.
 
-## Rejected candidates and scope boundaries
+**Implementation / commit / Copilot thread:** Fixed in
+[`e0533846`](https://github.com/microsoft/vscode-documentdb/commit/e05338469206fa1304d44c3d20929a2f46f69d0f)
+(`fix(auth): apply an accepted TLS exception to anonymous loopback connections`).
+`NoAuthHandler` now calls `resolveAllowInvalidCertificates` outside the `isEmulator` branch. It
+applies the 4-second server-selection timeout when the connection is an emulator or the
+exception resolves, exactly as `NativeAuthHandler` does. The same commit updates the
+[No Authentication README](../../../no-auth/README.md) and adds the tests. The 1.0.2
+changelog and release notes mention the user-visible fix in
+[`2111d471`](https://github.com/microsoft/vscode-documentdb/commit/2111d4714b9b29e39a3e282d7cb64f64552cbe94).
+There is no corresponding Copilot comment.
+
+**Fix verification:** the new tests cover these cases:
+
+- `NoAuthHandler.test.ts`: `127.0.0.1` and `[::1]` with `isEmulator: false` and
+  `disableEmulatorSecurity: true` produce `tlsAllowInvalidCertificates: true` and the 4-second
+  timeout.
+- `NoAuthHandler.test.ts`: the same loopback host without the flag produces no options.
+- `NoAuthHandler.test.ts`: a public host with the flag produces no options.
+- `vscodeUriHandler.test.ts`: an end-to-end test for `127.0.0.1` and `[::1]`. It accepts the
+  link's TLS prompt, checks the saved flags (`isEmulator: false`, `disableEmulatorSecurity:
+  true`), and then passes the saved connection to `NoAuthHandler` to check the resulting client
+  option.
+
+With the handler change reverted, all four loopback tests fail. With the change in place, the
+whole run passes.
 
 ### Other rejected assumptions
 
@@ -256,6 +295,26 @@ TLS option. Cover the client options, not only the saved flags.
 - The directly configured local/private TLS policy and the stricter loopback-only external
   link policy are deliberate separate boundaries.
 - Deferred localization and version updates are known draft work, not newly discovered bugs.
+
+## Fix progress
+
+| Date | Commit | Change |
+| --- | --- | --- |
+| 2026-10-21 | [`1e1ca935`](https://github.com/microsoft/vscode-documentdb/commit/1e1ca9351837d7da5dd45ae1e7bcde9aad180c92) | Severity and solution re-evaluation: R1 re-rated to Low, R2 added. |
+| 2026-10-21 | [`93f8a8a4`](https://github.com/microsoft/vscode-documentdb/commit/93f8a8a447e5e002bd0d36926581c1132d2fbd3b) | R1 fixed (option C): the credential guard rejects any non-comment credential key line. |
+| 2026-10-21 | [`e0533846`](https://github.com/microsoft/vscode-documentdb/commit/e05338469206fa1304d44c3d20929a2f46f69d0f) | R2 fixed (option A): `NoAuthHandler` applies the TLS exception exactly as `NativeAuthHandler` does. Tests and the No Authentication README were updated. |
+| 2026-10-21 | [`2111d471`](https://github.com/microsoft/vscode-documentdb/commit/2111d4714b9b29e39a3e282d7cb64f64552cbe94) | The 1.0.2 changelog and release notes mention the R2 fix. |
+| 2026-10-21 | This commit | The review records the decisions, fixes and verification. |
+
+Fix verification (Case 1):
+
+- `npm run build` passed.
+- `npx vitest run src/vscodeUriHandler.test.ts src/documentdb/auth/NoAuthHandler.test.ts
+  src/documentdb/utils/tlsException.test.ts` passed: **3 suites, 82 tests**.
+- The R1 probe matrix ran against the step script extracted from the committed workflow. The
+  results are under R1.
+
+The fixes have not yet been revalidated by an independent reviewer.
 
 ## Verification and handoff
 
@@ -291,16 +350,21 @@ Remote lint/format results above are not a claim that these checks were run loca
 
 ### Remaining gates, not performed by this review
 
-1. The author records a decision and rationale for R1 and R2 before implementation.
+1. Done: the author decided to fix R1 and R2, and both fixes are committed (see
+   [Fix progress](#fix-progress)). An independent reviewer should still revalidate both fixes
+   in the gate below.
 2. Run the required explicitly different-vendor validation gate; revalidate later Copilot
    feedback if any arrives.
 3. Complete the declared 1.0.2 version and localization updates before handoff.
 4. Exercise the prompts in VS Code: a new connection with confirmations disabled, localhost
-   TLS consent choices and cancellation, and a public host requesting the same exception.
-5. Validate real Trusted Publishing of a tarball with provenance through the approved release
+   TLS consent choices and cancellation, and a public host requesting the same exception. For
+   R2, also test anonymous authentication against a `127.0.0.1` instance with a self-signed
+   certificate: after the user accepts the exception, the connection should succeed.
+5. Push the branch and confirm that the renamed credential-guard step passes in GitHub CI.
+6. Validate real Trusted Publishing of a tarball with provenance through the approved release
    process. A dry-run is not evidence that registry authentication/provenance succeeds; this
    review did not publish or dispatch a release workflow.
-6. When the author requests ready-for-review handoff, run the full Case 2 list from
+7. When the author requests ready-for-review handoff, run the full Case 2 list from
    [CONTRIBUTING.md](../../../../../../CONTRIBUTING.md#4-pr-submission-checklist).
    **Full checks, including `prettier-fix`, were deferred while this PR remains a draft.**
 
