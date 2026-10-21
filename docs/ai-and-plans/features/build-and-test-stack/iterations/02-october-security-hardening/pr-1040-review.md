@@ -32,24 +32,27 @@ Review of [PR #1040](https://github.com/microsoft/vscode-documentdb/pull/1040), 
 | Independent validation gate | A separate code-review agent checked the candidate against the code and independently reproduced it with synthetic input, including npm's bundled INI parser. R1 remains valid at Medium severity. |
 | Independent sweep | The validation agent also reviewed beyond R1. It reported no additional high-confidence bugs introduced by this diff. |
 | Different-vendor/model/context requirement | **Not certified.** The separate pass used the harness-selected agent configuration. Its vendor/model/context provenance was not exposed sufficiently to establish the specific section 6.1 requirement. Do not count this as completion of the required cross-vendor gate. |
+| Severity and solution re-evaluation (2026-10-21) | R1 re-rated **Medium → Low**. A probe matrix compared the current guard with two replacement checks (one of them new, option C), using npm's bundled INI parser as the reference. The rejected loopback candidate was promoted to **R2 (Low)** because this PR rewrote the affected lines and added a consent prompt whose answer that path ignores. |
 | Author decisions | Pending. Recommendations below are reviewer recommendations, not author approvals. |
 
 The review record is ready for the author's section 6.2 decisions. Section 6.1 still needs
 the explicitly different-vendor validation pass, and any later Copilot comments must be merged
-and revalidated. Finding R1 has not been fixed.
+and revalidated. Findings R1 and R2 have not been fixed.
 
 ## Summary
 
 | ID | Source | Severity | Confidence | Finding | Author decision |
 | --- | --- | --- | --- | --- | --- |
-| R1 | Primary review; independently validated | Medium | High | New npm credential guard misses valid quoted configuration keys | Pending |
+| R1 | Primary review; independently validated; re-rated | Low (was Medium) | High | New npm credential guard misses valid quoted configuration keys | Pending |
+| R2 | Re-evaluation (promoted from rejected candidates) | Low | High | Anonymous link connections to `127.x` / `::1` ask for TLS consent, then ignore it | Pending |
 
 R1 is an omission in a newly introduced preventive check, not evidence of a credential leak
 or a demonstrated compromise. The review did not discover any actual committed credentials.
 
 ## R1: Recognize quoted npm configuration keys in the credential guard
 
-**Severity:** Medium. **Confidence:** High. **Introduced in this PR:** yes, as incomplete
+**Severity:** Low (re-rated from Medium; see [Severity re-evaluation](#severity-re-evaluation)).
+**Confidence:** High that the omission exists. **Introduced in this PR:** yes, as incomplete
 coverage in the new guard.
 
 **Location:** [main.yml, line 194](../../../../../../.github/workflows/main.yml#L194).
@@ -88,43 +91,161 @@ Synthetic probes reproduced the distinction:
 The scoped quoted-key case establishes the finding independently of whether current npm
 accepts an unscoped authentication key. No real credentials were used in the probes.
 
+### Severity re-evaluation
+
+The omission is real and reproducible, but Medium overstates its impact:
+
+- **The guard detects; it cannot prevent.** The repository is public, and the check runs on
+  `pull_request` and `push` events, after the commit already exists on GitHub. Its value is
+  fast, loud notice. A missed case delays that notice; it does not cause the exposure.
+- **The main control does not depend on syntax.** npm is a GitHub secret-scanning partner. An
+  `npm_…` token pushed to a public repository is matched by its value, whatever the INI key
+  syntax, and is revoked. This guard is defense in depth behind that control. The reviewer's
+  token could not read this repository's security settings, so whether push protection is
+  enabled was not confirmed.
+- **The threat is an accident, and the missed syntax is uncommon.** `npm login` and
+  `npm config set` write unquoted keys, which the current guard already rejects. Quoted keys
+  appear only in hand-written files. Someone with commit access gains nothing by committing a
+  credential in a form the guard misses.
+- **Residual gap:** `_auth` and `_password` hold base64 basic credentials that have no
+  recognizable prefix, so secret scanning is unlikely to match them. For those values this
+  guard is the only check in the repository, which is why the gap is still worth closing
+  when the fix is cheap.
+
+**Re-rated: Low.** A defense-in-depth gap with no demonstrated exposure and a one-line fix.
+
+The re-evaluation also found two behaviors of the current guard. Neither is a separate finding:
+
+- A commented-out line, such as `# //registry.npmjs.org/:_authToken=x`, is rejected, because
+  `(^|:)` matches the colon inside the comment. This is a loud false positive.
+- An environment reference, such as `_authToken=${NPM_TOKEN}`, is rejected. That is consistent
+  with the stated policy (pipelines inject credentials, and none belong in the repository).
+  However, the error tells the author to "revoke the token", even when the file contains no
+  token.
+
+### Probe matrix
+
+Fixtures were committed as tracked `.npmrc` files in a scratch repository and checked with
+`git grep`. *Flag* means the step fails. npm's bundled `ini` parser was the reference for what is
+actually a credential key. Option B is the quote-tolerant regex
+`(^|:|^[[:space:]]*["']?)(_authToken|_auth|_password)["']?[[:space:]]*=`. Option C is defined in
+the Solutions section below.
+
+| Fixture | Credential key? | Current guard | B | C |
+| --- | --- | --- | --- | --- |
+| `//registry.npmjs.org/:_authToken=x` | yes | flag | flag | flag |
+| `"//registry.npmjs.org/:_authToken"=x` | yes | **miss** | flag | flag |
+| `'//registry.npmjs.org/:_authToken'=x` | yes | **miss** | flag | flag |
+| `//registry.npmjs.org/:_authToken = x` | yes | flag | flag | flag |
+| `  _authToken=x` | yes (unscoped) | **miss** | flag | flag |
+| `//host/:_AUTH=x` | yes | flag | flag | flag |
+| `//host/:_password=eA==` | yes | flag | flag | flag |
+| `"//host/:\u005fauthToken"=x` (JSON escape in a quoted key) | yes | **miss** | **miss** | **miss** |
+| `//registry.npmjs.org/:_authToken=${NPM_TOKEN}` | reference only | flag | flag | flag |
+| `# //registry.npmjs.org/:_authToken=x` | no (comment) | *false flag* | *false flag* | pass |
+| `; _auth=x` | no (comment) | pass | pass | pass |
+| `registry=https://pkgs.dev.azure.com/org/_packaging/feed/npm/registry/` | no | pass | pass | pass |
+| `always-auth=true` | no | pass | pass | pass |
+
+Option C was also checked against a root `.npmrc` and a nested multi-line file. Both were
+rejected. Only a real parser (option A) catches the escaped key. Writing a key that way takes
+deliberate obfuscation, which is outside the accidental-commit threat model for this guard.
+
 ### Solutions
 
 | Option | Pros | Cons |
 | --- | --- | --- |
-| **A. Parse tracked `.npmrc` files with npm-compatible INI semantics, then check normalized credential keys.** Report filenames only and fail explicitly on checker errors. | Handles valid quoting, whitespace and parser-supported escapes instead of approximating the syntax. | A pinned parser must be available before dependency installation without executing workspace lifecycle scripts. |
-| **B. Extend the text check to recognize leading key whitespace and quoted credential keys.** | Small, dependency-free patch at the existing early CI boundary. | Still approximates INI parsing; quote and escape coverage needs explicit tests and a documented boundary. |
+| A. Parse tracked `.npmrc` files with npm-compatible INI semantics, then check the normalized keys. | The only option that handles every quote and escape form, including the escaped key above. | Needs a parser before `./.github/actions/setup`. The choices are fetching a package from the registry inside a security check, or depending on the runner image's bundled npm internals, whose path and version can drift. This is the most code to maintain for a Low finding. It still rejects `${VAR}` references unless more logic is added. |
+| B. Extend the anchored `key=` regex to accept quotes and leading whitespace. | Small. No dependency. | Still approximates `key=value` syntax, so each new syntax needs another regex branch. Keeps the commented-line false positive. |
+| **C. Reject any non-comment line that contains a credential key name, regardless of syntax.** | One-line change. No dependency. Runs in the same early step. Enforces the stated policy (no credential keys in a committed `.npmrc`) directly instead of parsing `key=value`, so quoting, spacing and case do not matter. Ignores `#` and `;` comments. | Would also reject a non-credential line that happens to contain `_auth` or `_password`, such as a registry URL path. That is unlikely, and the failure is loud and easy to fix. Rejects `${VAR}` references by design. Misses deliberately escaped keys, as B does. |
+| D. Accept the gap and rely on GitHub secret scanning. | No change. | Leaves base64 `_auth` and `_password` values without a check in the repository. The step's comment and name would promise more than the step checks. |
 
-**Recommendation:** A for the stated guarantee that committed npm credentials are rejected.
-B is a smaller immediate mitigation for the demonstrated omission, but should not be presented
-as complete parser-equivalent coverage.
+**Recommendation: C**, together with clearer error wording. It closes every accidental case in
+the matrix and removes the comment false positive. It has fewer drawbacks than B, and A's
+dependency and maintenance cost is not justified for a Low finding:
 
-**Regression coverage:** unquoted and quoted registry-scoped `_authToken`, `_auth`, and
-`_password`; supported quote/escape forms and leading whitespace; harmless configuration;
-tracked root and nested `.npmrc` files; checker errors; and an assertion that output contains
-only filenames, never credential values.
+```bash
+if git grep -lIiE '^[[:space:]]*([^#;[:space:]].*)?(_authToken|_auth|_password)' -- '.npmrc' '**/.npmrc'; then
+    echo "::error::The .npmrc file(s) above set npm credential keys (_authToken, _auth or _password). Pipelines inject credentials at build time, so remove these keys. If a real credential was committed, revoke it."
+    exit 1
+fi
+```
+
+Also reword the step's YAML comment to say that it rejects credential **keys**, including
+`${VAR}` references. Then the stated behavior and the real behavior match.
+
+**Alternative with the fewest drawbacks if the author prefers no workflow change: D.** It
+accepts the residual base64 `_auth` / `_password` gap. In that case, reword the step comment
+so that it does not claim full coverage. Choose A only if the guard is ever expected to resist
+deliberate evasion. That is a different threat model from the one this PR states.
+
+**Regression coverage:** this is an inline workflow step with no test harness, so the probe
+matrix above is the evidence for the change. Re-run it against the final pattern, and record
+in the commit message that it passed. Add a scripted test only if the check is moved into a
+standalone script.
 
 **Author decision and reasoning:** Pending.
 
 **Implementation / commit / Copilot thread:** Not started; there is no corresponding Copilot
 comment to link or reply to.
 
+## R2: Honor the link's TLS consent for anonymous loopback connections
+
+**Severity:** Low. **Confidence:** High. **Introduced in this PR:** partly. The mismatch existed
+before this PR, but the PR made it visible to users, as described below.
+
+**Location:** [NoAuthHandler.ts, line 26](../../../../../../src/documentdb/auth/NoAuthHandler.ts#L26)
+and [isEmulatorConnection](../../../../../../src/vscodeUriHandler.ts#L594).
+
+### Evidence and impact
+
+The link handler now shows a TLS consent prompt for every loopback target, including `127.x`
+and `::1`. However, `isEmulatorConnection` still requires a `localhost` substring to set
+`isEmulator`. The anonymous `NoAuthHandler` checks the stored exception only inside its
+`isEmulator` branch. So when a user chooses **Turn off validation** for
+`mongodb://127.0.0.1:10260/?tlsAllowInvalidCertificates=true` with anonymous authentication, the
+choice is saved and then ignored. The connection still fails with a self-signed certificate
+error.
+
+The original review rejected this issue as pre-existing. This re-evaluation reclassifies it
+for three reasons:
+
+- This PR rewrote the exact lines involved. The new comment says the check is "host-gated like
+  the other auth handlers", but
+  [NativeAuthHandler](../../../../../../src/documentdb/auth/NativeAuthHandler.ts#L45), the
+  Entra ID handler and the Managed Identity handler apply `resolveAllowInvalidCertificates`
+  without an `isEmulator` gate. `NoAuthHandler` is the only handler with that gate.
+- This PR added an explicit consent prompt whose acceptance has no effect on this path. Before
+  this PR, the flag was ignored silently. Now the user is asked a question, and the answer is
+  ignored.
+- The failure is safe: certificate validation stays on, so there is no security impact. That
+  is why the severity is Low and not higher.
+
+### Solutions
+
+| Option | Pros | Cons |
+| --- | --- | --- |
+| **A. Move the TLS check in `NoAuthHandler` out of the `isEmulator` branch, matching `NativeAuthHandler`.** Also apply the 4-second server-selection timeout when the exception resolves, as `NativeAuthHandler` does. | About five lines. Makes all four handlers behave the same, so the comment becomes true. `resolveAllowInvalidCertificates` still enforces the host gate, so a public host remains protected. It also fixes the same mismatch for anonymous connections that opt in through connection settings. | Changes runtime behavior in a security patch, so it needs one handler test. Existing saved anonymous `127.x` connections that already carry the flag start honoring it. That is the intended behavior, and those hosts are local only. |
+| B. Make `isEmulatorConnection` treat every loopback host as an emulator. | Fixes the link flow at its origin. | Widens the meaning of "emulator", which also drives labels, timeouts and other branches. A larger behavior change, and anonymous connections created another way are still not fixed. |
+| C. Skip the TLS prompt for anonymous non-`localhost` targets. | No runtime change. | Hides the inconsistency instead of fixing it. The user cannot reach a local test instance by IP address through a link. |
+| D. Defer to a follow-up issue. | Keeps the patch scope smallest. | Ships a consent prompt that is known to be ignored on one path. |
+
+**Recommendation: A.** It is the smallest change that makes the new consent prompt truthful,
+and it aligns `NoAuthHandler` with the other three handlers. The existing host gate keeps it
+safe.
+
+**Alternative with the fewest drawbacks: D**, with a linked issue and a short note in the 1.0.2
+release notes. Choose D only if the author wants this patch to contain no runtime auth changes
+beyond those already reviewed.
+
+**Regression coverage:** in `NoAuthHandler.test.ts`, check the client options returned for
+`127.0.0.1` and `::1` with `isEmulator: false` and `disableEmulatorSecurity: true`. Expect
+`tlsAllowInvalidCertificates: true`. Also check that the same flags on a public host produce no
+TLS option. Cover the client options, not only the saved flags.
+
+**Author decision and reasoning:** Pending.
+
 ## Rejected candidates and scope boundaries
-
-### Anonymous authentication on literal loopback addresses
-
-The link handler offers the new TLS consent prompt for `127.x` and `::1`, but
-[isEmulatorConnection](../../../../../../src/vscodeUriHandler.ts#L594) still requires a
-`localhost` substring to set `isEmulator`. The anonymous
-[NoAuthHandler](../../../../../../src/documentdb/auth/NoAuthHandler.ts#L25) applies the stored
-exception only inside its `isEmulator` branch. Consequently an anonymous connection using a
-literal loopback address can have an accepted exception that the handler does not apply.
-
-**Not reported as a new regression:** the base revision already classified these literal
-addresses as non-emulators, stored their requested exception, and ignored it in this handler.
-The new prompt exposes that existing mismatch; it does not introduce the runtime defect.
-If followed up separately, cover both the saved flags and the eventual client options, rather
-than testing consent/storage alone. No author decision to fix or defer this issue is implied.
 
 ### Other rejected assumptions
 
@@ -170,7 +291,7 @@ Remote lint/format results above are not a claim that these checks were run loca
 
 ### Remaining gates, not performed by this review
 
-1. The author records a decision and rationale for R1 before implementation.
+1. The author records a decision and rationale for R1 and R2 before implementation.
 2. Run the required explicitly different-vendor validation gate; revalidate later Copilot
    feedback if any arrives.
 3. Complete the declared 1.0.2 version and localization updates before handoff.
