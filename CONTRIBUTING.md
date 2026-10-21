@@ -248,13 +248,21 @@ Nothing else. `l10n`, `prettier-fix`, `lint`, and `package` each cost minutes an
 All of these must pass locally. The same checks run in CI, so catching failures here saves time.
 
 ```bash
-npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
+npm run l10n             # only if a vscode.l10n.t() string was added, changed, or removed
 npm run prettier-fix
+npm run l10n:check       # always; CI validates localization even when generation is skipped
 npm run lint
-npx vitest run          # full suite
 npm run build
-npm run package         # catches bundling and missing-asset failures
+npm run typecheck:tests  # strict package-test checks across all workspaces, as in CI
+npx vitest run           # full runtime suite; does not replace typecheck:tests
+npm run package          # catches bundling and missing-asset failures
 ```
+
+`npm run build` checks the root project and package source, but does not check package
+tests under their stricter `tsconfig.test.json` settings. Vitest runtime success (or
+an ad hoc `vitest --typecheck` invocation) is not a substitute for the exact
+`npm run typecheck:tests` script. Keep this list aligned with the
+[CI static-check job](.github/workflows/main.yml), and report that script's result separately.
 
 Commit whatever these change, including regenerated files under `l10n/` and anything Prettier reformats.
 
@@ -263,7 +271,9 @@ Case 2 is also where the AI pre-review in [§6](#6-ai-assisted-review-workflow) 
 ### 4.3. Notes on individual steps
 
 - **`npm run l10n`** regenerates the localization bundle from the strings passed to `vscode.l10n.t()`. **Never resolve a conflict in `l10n/bundle.l10n.json` by hand** — the file is generated. Take either side, or delete it, then re-run `npm run l10n` and commit the result.
+- **`npm run l10n:check`** validates localization against the source without regenerating files. Run it even when no strings changed, matching CI.
 - **`npm run prettier-fix`** covers Markdown as well as source, so documentation formatting does not drift whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and reformatting them to the Markdown tab width would leave every example disagreeing with the code it documents.
+- **`npm run typecheck:tests`** checks every participating workspace's tests with its own TypeScript configuration, including strict checks that the root build and Vitest runtime do not cover.
 - **`npm run package`** catches Vite host and webview bundling issues and missing assets that unit tests alone will not surface.
 
 ## 5. Documenting Work with AI
