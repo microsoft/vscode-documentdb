@@ -28,6 +28,7 @@ created: 2026-10-14
 | 0013 | The required check passes only when every expected layer passed | Accepted            | Accepted as proposed by the Stage 8.5 review (S85-F01)                                                         | 2026-10-14 | #880 |
 | 0014 | CI jobs run in parallel where safe, under descriptive names     | Accepted (modified) | Accepted as proposed; prompted by the operator's comparison with PR #963; 0015 changes its `Merge gate` timing | 2026-10-14 | #880 |
 | 0015 | Rename the required check to `Merge gate` on #880               | Accepted            | Operator's call; reverses the order in 0014                                                                    | 2026-10-14 | #880 |
+| 0016 | Prepare a version branch and an assigned issue instead of a bot PR | Accepted | Operator approved the issue and prefilled-link alternative after bot PR creation was blocked | 2026-10-21 | |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old
 > ones, and record reversals as a new entry plus a status change above. Heading text is frozen
@@ -647,3 +648,54 @@ The operator chose to finish the naming in one PR rather than leave one stale na
 Until #880 merges, other open PRs run `main`'s workflow, which has no `Merge gate` job, so they
 cannot satisfy the new required check and are blocked from merging (an admin bypass or the merge
 of #880 releases them). The operator accepted this.
+
+---
+
+## 0016: Prepare a version branch and an assigned issue instead of a bot PR
+
+**Status:** Accepted · **Date:** 2026-10-21 · **Raised by:** the operator after the first
+post-release bump run failed to create a PR
+
+### Question
+
+The workflow introduced in #1042 successfully pushed the version-only branch, but
+[run 39644385162](https://github.com/microsoft/vscode-documentdb/actions/runs/39644385162)
+was denied permission to create a PR even with `pull-requests: write`. The repository's
+**Allow GitHub Actions to create and approve pull requests** setting is locked, and the
+operator cannot access the governing organization settings. How can the workflow still
+prepare the change and prevent a forgotten version update?
+
+### Decision
+
+Prepare the version-specific branch and create or update a reminder issue assigned to
+`tnaum-ms`. Include the old/new version table and a prefilled **Create version-bump PR**
+link in the issue and workflow summary. The maintainer submits the PR under their own
+identity; normal PR CI runs. Reruns reuse the branch and issue rather than duplicate them.
+
+The operator confirmed the proposal: "perfect, so we basically create an issue, with a
+prepared branch, correct?" and then requested its implementation on a new branch from `main`.
+
+### Reasoning
+
+The branch preparation already worked. An assigned issue provides a persistent reminder and
+notification, while the prefilled link leaves only submission to the maintainer. This keeps
+the automation useful without bot PR creation, a direct push to `main`, or an additional
+credential. Issue write permission remains a prerequisite and errors remain explicit.
+
+### Rejected alternatives
+
+- **Change only the PR-creation action:** GitHub CLI or an official action with the same
+  `GITHUB_TOKEN` cannot override the PR-creation policy.
+- **Add a personal token to bypass the locked setting:** not the accepted approach; no new
+  credential is introduced.
+- **Only print a link in the workflow summary:** retains a recovery path, but does not provide
+  the assigned reminder the operator wants.
+
+### Consequences
+
+- Only contents and issues write permissions remain; automatic full-CI dispatch is removed.
+- Git and GitHub CLI replace the third-party PR action.
+- Existing matching branches are reused without force pushes; conflicting changes require
+  maintainer intervention.
+- A closed reminder is reopened if the bump is still needed. The maintainer closes it after
+  merging the manually submitted PR.

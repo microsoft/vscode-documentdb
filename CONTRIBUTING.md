@@ -436,14 +436,20 @@ Always ship the signed artifact from the pipeline. A locally packaged `.vsix` is
 4. Save the release.
 
 Publishing a stable GitHub release also starts [Bump version after release](.github/workflows/bump-version-pr.yaml).
-When its tag matches the version on `main`, the workflow opens a ready-for-review PR for the next patch's
+When its tag matches the version on `main`, the workflow prepares a branch for the next patch's
 first development version, for example `1.0.1` → `1.0.2-alpha.0`. It updates `package.json` and
 both root version entries in `package-lock.json`, leaving workspace package versions unchanged.
-The workflow explicitly starts full CI on the PR's branch. Review and merge it once the required
-checks pass. If GitHub requests approval for additional PR-triggered workflows, select
-**Approve workflows to run**. The published release and tag are not modified.
-The alpha suffix is for development only; use the intended numeric release
-version at [§7.4](#74-bump-the-version) before the next publication.
+It creates or updates a reminder issue assigned to `tnaum-ms`, with an old/new version table and
+a **Create version-bump PR** link that prefills the branch, title, and description.
+
+Open that link and submit the PR yourself so normal pull-request CI runs. Review and merge it
+after the required checks pass, then close the reminder issue. The workflow summary also contains
+the prepared branch and PR link. No bot-created PR, direct push to `main`, additional credential,
+or permission to create PRs is needed; the workflow requires contents and issues write access.
+If issue creation fails, the run fails explicitly but the prepared branch and PR link remain
+available in the summary. The published release and tag are not modified.
+The alpha suffix is for development only; use the intended numeric release version at
+[§7.4](#74-bump-the-version) before the next publication.
 
 To catch up after a release, select **Actions → Bump version after release → Run workflow** on
 `main`, or run:
@@ -452,11 +458,13 @@ To catch up after a release, select **Actions → Bump version after release →
 gh workflow run bump-version-pr.yaml --ref main
 ```
 
-The workflow always operates on `main`. Re-running it reuses the same version-specific PR while
-`main` is still on the released version; after the bump is merged, it leaves the existing alpha
+The workflow always operates on `main`. Re-running it reuses the same version-specific branch and
+reminder issue while `main` is still on the released version; a prematurely closed reminder is
+reopened. Existing matching branches, including a branch pushed by an earlier failed run, are
+preserved without force-pushing. Conflicting branch changes cause an explicit failure so a
+maintainer can reconcile them. After the bump is merged, the workflow leaves the existing alpha
 version alone. GitHub prereleases are ignored, as are releases whose tags do not match the version
-on `main` (for example, a patch release from an older release branch). The repository's
-**Settings → Actions → General → Workflow permissions** must allow Actions to create pull requests.
+on `main` (for example, a patch release from an older release branch).
 
 ### 7.9 Publish to the Marketplace
 
