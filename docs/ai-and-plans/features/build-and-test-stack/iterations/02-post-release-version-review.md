@@ -63,8 +63,8 @@ created: 2026-10-21
 - This record does not claim completion of the different-vendor validation gate or independent
   sweep in [CONTRIBUTING.md section 6.1](../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor).
   Those stages remain prerequisites before requesting human review.
-- Keep PR #1042 in draft: this is **Case 1**, not a ready-for-review handoff. The full Case 2
-  checks, including repository-wide `prettier-fix`, remain deferred until that handoff.
+- At the initial follow-up, PR #1042 remained in draft under **Case 1**. The full Case 2
+  checks, including repository-wide `prettier-fix`, were deferred until the handoff below.
 
 ## Outcome
 
@@ -72,4 +72,33 @@ The confirmed formatting failure is fixed, validated locally, and pushed without
 automation implementation. F01 records the implementation commit and verification inline.
 The review record and its feature-index link accompany the fix, and implementation comments are
 posted on the PR. Live bot permissions and end-to-end operation remain explicitly unverified.
-PR #1042 remains a draft; this is not a claim that the full pre-review or Case 2 checks have run.
+The initial follow-up did not claim that the full pre-review or Case 2 checks had run.
+
+## Ready-for-review handoff checks, 2026-10-21
+
+The operator requested: "review completed, move forward to marking it as ready for review."
+The full **Case 2** suite ran on the branch at `c99ebd82`, even though the review-stage
+evidence described above remains incomplete.
+
+| Check                                               | Result                                          |
+| --------------------------------------------------- | ----------------------------------------------- |
+| `npm run prettier-fix`                              | Passed; no tracked changes                      |
+| `npm run lint`                                      | Passed                                          |
+| `npx vitest run`                                    | 314 files passed; 5,184 tests passed, 1 skipped |
+| `npm run build`                                     | Passed                                          |
+| `npm run package`                                   | Passed; VSIX produced                           |
+| `node --test .github/scripts/bump-version.test.cjs` | All 13 tests passed                             |
+| `npm run l10n`                                      | Not applicable; no localized strings changed    |
+
+The PR was assigned to milestone **1.0.2**. Packaging emitted non-failing CSS warnings; no
+unrelated source changes were made.
+
+**Remaining handoff blocker:** this committed record explicitly leaves the cross-vendor
+validation gate and independent sweep incomplete. The operator's review-completed statement
+does not identify those stages or their results. A follow-up request for confirmation was
+unanswered; no completion evidence or author decisions have been invented. The PR remains a
+draft until those stages are confirmed and recorded. The successful Case 2 checks are no
+longer deferred.
+
+The separate operational limitation in C01 remains: Actions PR-creation permission and a live
+bot-PR/CI-dispatch run still require observation after merge.
