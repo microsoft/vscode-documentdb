@@ -144,5 +144,6 @@ See [the release process](../../../../CONTRIBUTING.md#78-create-the-github-relea
 - [Pipeline guide](./pipelines.md)
 - [Deferred work](./future-work.md)
 - [Modernization iteration](./iterations/01-modernization/build-and-test-stack.md) and its reviews
+- [Post-release version automation review](./iterations/02-post-release-version-review.md)
 - [E2E strategy](../e2e-testing/strategy.md)
 - [Data-grid replacement plan](../data-grid/slickgrid-removal.md)
