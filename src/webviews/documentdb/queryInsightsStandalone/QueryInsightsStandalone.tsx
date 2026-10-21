@@ -31,6 +31,7 @@ import {
     DataUsageRegular,
     EditRegular,
     ErrorCircleRegular,
+    InfoRegular,
     ShieldLockRegular,
 } from '@fluentui/react-icons';
 import { Collapse } from '@fluentui/react-motion-components-preview';
@@ -72,6 +73,14 @@ const useStyles = makeStyles({
     needNumber: { justifySelf: 'start', alignSelf: 'start', marginTop: '1px' },
     needCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
     needTitle: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' },
+    // Same meta and cost-disclosure lines as the Collection View card under its model picker.
+    modelMeta: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: tokens.spacingHorizontalXS,
+        color: tokens.colorNeutralForeground3,
+    },
+    modelMetaIcon: { flexShrink: 0, marginTop: tokens.spacingVerticalXXS },
     prefilledNote: { display: 'inline-flex', alignItems: 'center', gap: '4px', color: tokens.colorPaletteGreenForeground1 },
     snippetList: { display: 'flex', flexDirection: 'column', gap: '6px' },
     snippetGroupLabel: { marginTop: '6px' },
@@ -265,6 +274,7 @@ function QueryInsightsWizard(): JSX.Element {
     const [inspectFailure, setInspectFailure] = useState<string>();
     const [submitting, setSubmitting] = useState(false);
     const [selectedModel, setSelectedModel] = useState<AvailableModelInfo>();
+    const [modelPromptLabel, setModelPromptLabel] = useState<string>();
     const [openRows, setOpenRows] = useState<Partial<Record<OptionalRow, boolean>>>({});
     const [editingQuery, setEditingQuery] = useState(() => !!prefill.query?.trim());
     const [analysisInput, setAnalysisInput] = useState<StandaloneInput>();
@@ -421,7 +431,7 @@ function QueryInsightsWizard(): JSX.Element {
                             <CounterBadge aria-hidden count={index + 1} className={styles.needNumber} />
                             <div className={styles.needCopy}>
                                 <span className={styles.needTitle}>
-                                    <Text>{need.label}</Text>
+                                    <Text weight="semibold">{need.label}</Text>
                                     {need.required ? (
                                         <Badge appearance="tint" shape="rounded" size="small" color="brand">{l10n.t('Required')}</Badge>
                                     ) : (
@@ -756,7 +766,24 @@ function QueryInsightsWizard(): JSX.Element {
             <Text size={200} className={styles.muted}>
                 {l10n.t('Your choice is saved and shared with the Query Insights tab.')}
             </Text>
-            <ModelPicker commandType={effectiveCommand} onModelChange={setSelectedModel} disabled={submitting} />
+            <ModelPicker
+                commandType={effectiveCommand}
+                size="medium"
+                onModelChange={setSelectedModel}
+                onPromptLabelChange={setModelPromptLabel}
+                disabled={submitting}
+            />
+            {modelPromptLabel && <Text size={200} className={styles.modelMeta}>{modelPromptLabel}</Text>}
+            {selectedModel && (
+                <div className={styles.modelMeta}>
+                    <InfoRegular aria-hidden="true" className={styles.modelMetaIcon} />
+                    <Text size={200}>
+                        {selectedModel.isUtility
+                            ? l10n.t('No additional cost for most GitHub Copilot subscribers.')
+                            : l10n.t('The selected model may use premium requests.')}
+                    </Text>
+                </div>
+            )}
         </section>
     );
 

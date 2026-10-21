@@ -40,7 +40,8 @@ describe('Query Insights JSON editor', () => {
         expect(props.language).toBe('json');
         expect(props.options).toMatchObject({
             ariaLabel: 'Explain output', wordWrap: 'off', lineNumbers: 'on',
-            minimap: { enabled: false }, folding: true, automaticLayout: true,
+            minimap: { enabled: false }, folding: false, automaticLayout: true,
+            glyphMargin: false, lineNumbersMinChars: 3, lineDecorationsWidth: 6,
         });
         const editor = { getModel: () => model } as unknown as Parameters<NonNullable<MonacoEditorProps['onMount']>>[0];
         const monaco = { editor: { setModelMarkers }, MarkerSeverity: { Error: 8 } } as unknown as Parameters<NonNullable<MonacoEditorProps['onMount']>>[1];

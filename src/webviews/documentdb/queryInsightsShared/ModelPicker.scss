@@ -6,17 +6,19 @@
 .query-insights-model-picker {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    width: 100%;
+    gap: var(--spacingVerticalXS);
     min-width: 0;
 
-    .fui-Dropdown {
-        width: 100%;
+    &-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--spacingHorizontalXS);
         min-width: 0;
-    }
 
-    &-compact {
-        width: min(100%, 340px);
+        > .fui-Dropdown {
+            max-width: 100%;
+        }
     }
 }
 
@@ -24,106 +26,46 @@
     color: var(--colorNeutralForeground3);
 }
 
+// Fluent's default listbox cap is 80vh; this cap fits on one side of the trigger, so positioning can
+// place the list fully below or above it. Two classes so these win over Fluent's Griffel rules.
+.fui-Listbox.query-insights-model-listbox {
+    min-width: 240px;
+    max-height: min(360px, 45vh);
+}
+
+// Option content: model name, cost badge pushed to the end of the row.
 .query-insights-model-option {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-}
-
-.query-insights-model-option-meta,
-.query-insights-model-compact-details {
-    display: flex;
+    flex: 1;
     align-items: center;
-    gap: 8px;
-}
+    justify-content: space-between;
+    gap: var(--spacingHorizontalL);
+    min-width: 0;
 
-.query-insights-model-option-meta {
-    margin-left: auto;
-    white-space: nowrap;
-}
-
-// Same label/value grid as the wizard's "Optional context" table (LocalQuickStart settings pattern).
-.query-insights-model-table {
-    col.query-insights-model-table-label {
-        width: 200px;
-
-        @media (max-width: 560px) {
-            width: 110px;
-        }
-    }
-
-    .query-insights-model-table-value {
-        display: table-cell;
-        height: auto;
-        padding-top: var(--spacingVerticalS);
-        padding-bottom: var(--spacingVerticalS);
-        overflow-wrap: anywhere;
-        vertical-align: top;
-
-        > .fui-Text {
-            display: block;
-        }
-
-        > * + * {
-            margin-top: var(--spacingVerticalXS);
-        }
-
-        > .fui-Dropdown {
-            display: inline-flex;
-            width: 100%;
-            max-width: 480px;
-        }
-    }
-}
-
-.query-insights-model-cost {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacingVerticalM);
-}
-
-.query-insights-model-cost-grid {
-    border-collapse: collapse;
-    font-size: var(--fontSizeBase200);
-    line-height: var(--lineHeightBase200);
-    font-variant-numeric: tabular-nums;
-
-    caption {
-        text-align: left;
-        padding-bottom: var(--spacingVerticalXXS);
-        color: var(--colorNeutralForeground3);
-    }
-
-    th,
-    td {
-        padding: var(--spacingVerticalXXS) var(--spacingHorizontalM) var(--spacingVerticalXXS) 0;
-        text-align: right;
+    > .fui-Badge {
+        flex-shrink: 0;
         white-space: nowrap;
     }
+}
 
-    thead th {
-        font-weight: var(--fontWeightRegular);
-        color: var(--colorNeutralForeground3);
-    }
+// The surface sizes to its content; the cap keeps long model IDs and credit lines wrapping inside it
+// (the popover autoSizes only its height, so this width cap holds).
+.fui-PopoverSurface.query-insights-model-details-surface {
+    max-width: min(360px, calc(100vw - 2 * var(--spacingHorizontalL)));
+    box-sizing: border-box;
+}
 
-    tbody th {
-        text-align: left;
-        font-weight: var(--fontWeightRegular);
-        color: var(--colorNeutralForeground2);
-    }
-
-    tbody td {
-        font-weight: var(--fontWeightSemibold);
-    }
+.query-insights-model-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalS);
 }
 
 .query-insights-model-fact-list {
     display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--spacingVerticalXS) var(--spacingHorizontalL);
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--spacingVerticalXS) var(--spacingHorizontalM);
+    align-items: baseline;
     margin: 0;
 
     > div {
@@ -136,25 +78,15 @@
 
     dd {
         margin: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
 }
 
+.query-insights-model-nowrap {
+    white-space: nowrap;
+}
+
 .query-insights-model-identity {
-    font-family: var(--fontFamilyMonospace);
     overflow-wrap: anywhere;
-}
-
-// Option A: model pill beside the primary action.
-.query-insights-model-pill {
-    display: inline-flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--spacingHorizontalS);
-}
-
-.query-insights-model-pill-content {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacingHorizontalS);
-    font-weight: var(--fontWeightRegular);
 }

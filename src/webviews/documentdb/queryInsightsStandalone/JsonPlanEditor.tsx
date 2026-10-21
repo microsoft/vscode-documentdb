@@ -64,8 +64,10 @@ export function JsonPlanEditor({ value, onChange, ariaLabel, issue, compact = fa
                 onEscapeEditor={() => exitRef.current?.focus()}
                 options={{
                     ariaLabel, lineNumbers: 'on', minimap: { enabled: false },
-                    wordWrap: 'off', folding: true, automaticLayout: true,
-                    fontSize: 13, lineHeight: 19, glyphMargin: true,
+                    wordWrap: 'off', folding: false, automaticLayout: true,
+                    fontSize: 13, lineHeight: 19, glyphMargin: false,
+                    // Narrow gutter: line numbers stay (parse errors cite them); markers render as squiggles.
+                    lineNumbersMinChars: 3, lineDecorationsWidth: 6,
                     scrollBeyondLastLine: false,
                     scrollbar: { alwaysConsumeMouseWheel: false },
                     renderValidationDecorations: 'on',

@@ -245,13 +245,15 @@ export const scenarios = {
         },
         configure: explorerConfigure(explorerInspection, [
             'Provide your query data', 'Explain plan parsed.', 'Extracted query', 'Optional context',
-            'Not provided', 'demo.items', 'Copilot utility', 'Built-in', 'Model ID', 'Analyze query sends your inputs to Copilot utility.',
+            'Not provided', 'demo.items', 'Copilot utility', 'Built-in prompt',
+            'No additional cost for most GitHub Copilot subscribers.', 'Analyze query sends your inputs to Copilot utility.',
         ]),
         'configure-models': {
+            // Opens the details popover, so its facts are part of the readiness text.
             ...explorerConfigure(explorerInspection, [
-                'GPT Example', 'Default: first Powerful model', 'Very high cost', 'Credits per 1M tokens',
-                'Long context', '921,793 tokens', 'gpt-example',
-            ]),
+                'GPT Example', 'The selected model may use premium requests.', 'Default: first Powerful model',
+                'Very high cost', 'Credits per 1M tokens', 'Long context', '921,793 tokens', 'gpt-example',
+            ], { steps: [{ action: 'click', role: 'button', name: 'Model details' }] }),
             rpc: {
                 ...explorerConfigure(explorerInspection, []).rpc,
                 'ai.getAvailableModels': {
@@ -276,6 +278,13 @@ export const scenarios = {
                                 id: 'unpriced', name: 'Unpriced model', family: 'unpriced', vendor: 'copilot',
                                 version: '1', maxInputTokens: 200000, isUtility: false, category: 'versatile',
                             },
+                            // Enough models that the listbox must scroll within the webview.
+                            ...Array.from({ length: 14 }, (_, index) => ({
+                                id: `example-${index + 1}`, name: `Example model ${index + 1}`, family: `example-${index + 1}`,
+                                vendor: 'copilot', version: '1', maxInputTokens: 128000, isUtility: false,
+                                category: ['powerful', 'versatile', 'lightweight'][index % 3],
+                                priceCategory: ['low', 'medium', 'high'][index % 3],
+                            })),
                         ],
                         savedModelId: null, effectiveModelId: 'gpt-example', effectiveReason: 'first-powerful',
                     }],
@@ -300,7 +309,7 @@ export const scenarios = {
                 content: [
                     'Option A — Model pill in the actions row', 'Option B — Split button',
                     'Option C — Settings footer strip', 'Option D — Native VS Code quick pick',
-                    'Option E — Header chip with a settings popover', 'Shipped — Option A in the real card',
+                    'Option E — Header chip with a settings popover', 'Shipped — the real card',
                     'Built-in prompt',
                 ],
                 noProgressbar: true,

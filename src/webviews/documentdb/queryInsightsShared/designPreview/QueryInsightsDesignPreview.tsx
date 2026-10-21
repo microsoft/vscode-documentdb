@@ -127,7 +127,7 @@ function CurrentDesign(): JSX.Element {
             bodyText={BODY_TEXT}
             isLoading={false}
             enabled={!!selected}
-            modelPicker={<ModelPicker compact commandType={'find' as CommandType} onModelChange={setSelected} onPromptLabelChange={setPromptLabel} />}
+            modelPicker={<ModelPicker commandType={'find' as CommandType} onModelChange={setSelected} onPromptLabelChange={setPromptLabel} />}
             promptLabel={promptLabel}
             mayUsePremiumRequests={!selected?.isUtility}
             secondaryLink={<Link inline>Explore with your own input…</Link>}
@@ -206,8 +206,8 @@ export function QueryInsightsDesignPreview(): JSX.Element {
             </OptionSection>
 
             <OptionSection
-                heading="Shipped — Option A in the real card"
-                rationale="The real GetPerformanceInsightsCard with the compact ModelPicker (now the Option A pill), fed by the same mock models through ai.getAvailableModels. The utility model shows no cost badge; the footnote carries the careful wording."
+                heading="Shipped — the real card"
+                rationale="The real GetPerformanceInsightsCard with the shared ModelPicker (Fluent Dropdown plus a details popover), fed by the same mock models through ai.getAvailableModels. The utility model shows no cost badge; the footnote carries the careful wording."
             >
                 <Frame caption={IDLE}><CurrentDesign /></Frame>
             </OptionSection>

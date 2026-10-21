@@ -767,3 +767,35 @@ Wall-clock UTC, 2026-10-20. Minutes are agent working time, including waiting on
     - ~~The Analyze step has a nested scroll area (the panel's own scrollbar inside the wizard page).~~
       Fixed in WI-13.
     - Manual smoke with a real connection, real Copilot models and the local prompt (steps above).
+
+## Phase G: standard Fluent model picker, wizard polish (2026-10-21)
+
+Coding agent, 09:24–09:41 UTC, **17 minutes** (reading, implementation, build/tests, 27 headless
+L2 routes, screenshots, plan, commit).
+
+- `ModelPicker` has one layout for both hosts: a Fluent `Dropdown` (`aria-label` "Copilot model"),
+  utility model first without a badge, then `OptionGroup`s Powerful / Versatile / Lightweight / Other
+  with tint/rounded/small cost `Badge`s (high/very high = warning), plus a subtle info `Button`
+  ("Model details") opening a `Popover` (`openOnHover`, `withArrow`, small) with a label/value list:
+  cost, credits per 1M tokens, context window, capabilities, model ID, prompt, selection reason.
+  The pill (`Menu`/`MenuItemRadio`), the `Tooltip`, the credits grid and the wizard details table are
+  gone; `compact` became `size` (card `small`, wizard `medium`). The list is refetched silently on
+  open (and on window focus), so lazily registered Copilot models appear without disabling the list.
+- Wizard model section = dropdown + popover + prompt meta line + cost note ("No additional cost for
+  most GitHub Copilot subscribers." / "The selected model may use premium requests.").
+- Welcome "What you'll need" titles are semibold. JSON editors: `glyphMargin: false`,
+  `folding: false`, `lineNumbersMinChars: 3`, `lineDecorationsWidth: 6` (gutter 29 px); parse errors
+  still show as squiggles plus the inline position.
+- Verification: build; 163 targeted unit tests; 79 harness tests; 27/27 `queryInsightsStandalone`
+  L2 routes headless (zero errors/failed assertions). Screenshots `phase-g-*.png` in the session
+  `wizard-ui` folder (dropdown open and scrolled, popover in dark/light, tab card, Welcome, editors).
+- **Deviations:** (1) Fluent's height `autoSize` replaced any CSS cap with all remaining webview
+  height and, for 17 models, placed the list *beside* the trigger, covering it. The listbox now has
+  a CSS cap `min(360px, 45vh)`, width-only `autoSize`, `fallbackPositions: ['above-start']` and no
+  trigger-width matching (names + badges fit). The popover autoSizes height only so its 360 px width
+  cap holds. (2) `Popover` chosen over `InfoLabel`: `InfoLabel` opens on click only and carries a
+  visible label the card does not have. (3) Credits are text lines (parts never split) instead of
+  the grid table. (4) L2: `configure` no longer expects "Model ID" (now in the popover);
+  `configure-models` clicks "Model details" and has 14 extra models to prove scrolling. The design
+  preview's "Shipped" section was renamed. (5) `/tmp/pw` was absent and `/tmp` is off-limits for
+  this agent, so `playwright-core@1.54` and the browser libraries lived in `._local/` (removed after).

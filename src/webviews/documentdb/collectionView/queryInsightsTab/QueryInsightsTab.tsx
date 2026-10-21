@@ -1011,7 +1011,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         }
                                         modelPicker={
                                             <ModelPicker
-                                                compact
                                                 commandType={source.commandType ?? 'find' as CommandType}
                                                 onModelChange={setSelectedModel}
                                                 onPromptLabelChange={setPromptLabel}
