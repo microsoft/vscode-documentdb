@@ -12,7 +12,7 @@ import {
     type TypedRpcFixtures,
 } from './core/fixtures';
 import { previewAvailableModels } from '../../../src/webviews/documentdb/queryInsightsShared/designPreview/mockModels';
-import { fixtures, type StyleExpectation } from './fixtures';
+import { fixtures, queryInsightsSampleExplain, type StyleExpectation } from './fixtures';
 
 export interface ScenarioReadiness {
     readonly content: readonly string[];
@@ -77,15 +77,16 @@ function defaultScenario<V extends WebviewName>(view: V, steps: readonly Scenari
 }
 
 const explorerBase = fixtures.queryInsightsStandalone;
+// A prefilled explain output opens the explorer on Configure.
+const explorerPrefilled = { ...explorerBase.config, explain: queryInsightsSampleExplain };
 const explorerSteps = [
-    { action: 'click', role: 'button', name: 'Continue' },
     { action: 'click', role: 'button', name: 'Analyze query' },
 ] as const satisfies readonly ScenarioStep[];
 const explorerStage2 = explorerBase.rpc['queryInsightsStandalone.getStage2'].results[0];
 const explorerInspection = explorerBase.rpc['queryInsightsStandalone.inspectInput'].results[0];
 type ExplorerInspection = FixtureOutputs['queryInsightsStandalone']['inspectInput'];
 const explorerAnalysisInput = {
-    explain: explorerBase.config.explain ?? '', query: '{}', commandType: 'find', collectionStats: '', indexes: '',
+    explain: queryInsightsSampleExplain, query: '{}', commandType: 'find', collectionStats: '', indexes: '',
     databaseName: 'demo', collectionName: 'items', clusterType: 'azure-documentdb', modelId: 'copilot-utility',
 } as const;
 
@@ -95,9 +96,9 @@ function explorerConfigure(
     extra: { config?: Partial<typeof explorerBase.config>; steps?: readonly ScenarioStep[] } = {},
 ): Scenario<'queryInsightsStandalone'> {
     return {
-        config: { ...explorerBase.config, ...extra.config },
+        config: { ...explorerPrefilled, ...extra.config },
         rpc: { ...explorerBase.rpc, 'queryInsightsStandalone.inspectInput': { type: 'query', results: [inspection] } },
-        steps: [{ action: 'click', role: 'button', name: 'Continue' }, ...(extra.steps ?? [])],
+        steps: [...(extra.steps ?? [])],
         readiness: { content, selectors: ['.monaco-editor .view-lines'], noProgressbar: true },
     };
 }
@@ -139,7 +140,7 @@ function explorerProfile(profile: 'aggregate' | 'count'): Scenario<'queryInsight
         command: { count: 'items', query: { status: 'active' } },
     } : { stages: [{ $cursor: cursor }, { $group: { _id: '$status' }, nReturned: 1 }, { $sort: { _id: 1 }, nReturned: 1 }] };
     return {
-        config: { ...explorerBase.config, explain: JSON.stringify(explain), commandType: profile },
+        config: { ...explorerPrefilled, explain: JSON.stringify(explain), commandType: profile },
         rpc: {
             ...explorerBase.rpc,
             'queryInsightsStandalone.inspectInput': { type: 'query', results: [{
@@ -244,9 +245,10 @@ export const scenarios = {
             ],
         },
         configure: explorerConfigure(explorerInspection, [
-            'Provide your query data', 'Explain plan parsed.', 'Extracted query', 'Optional context',
-            'Not provided', 'demo.items', 'Copilot utility', 'Built-in prompt',
+            'Provide your query data', 'Explain output parsed.', 'Extracted query', 'Optional context',
+            'Not provided', 'demo.items', 'Copilot utility',
             'No additional cost for most GitHub Copilot subscribers.', 'Analyze query sends your inputs to Copilot utility.',
+            'AI responses may be inaccurate',
         ]),
         'configure-models': {
             // Opens the details popover, so its facts are part of the readiness text.
@@ -308,14 +310,14 @@ export const scenarios = {
             readiness: {
                 content: [
                     'Query Insights — selected card design', 'Preview fixture models only.',
-                    'Built-in prompt',
+                    'Get AI Performance Insights', 'Learn more about AI Performance Insights',
                 ],
                 noProgressbar: true,
             },
         },
         'configure-invalid': explorerConfigure(
             { explain: { ok: false, message: 'Unexpected token', line: 3, column: 7 }, ready: false },
-            ['Line 3, column 7: Unexpected token', 'Fix the explain plan to continue.'],
+            ['Line 3, column 7: Unexpected token', 'Fix the explain output to continue.'],
             { config: { explain: '{\n  "executionStats": {\n    !!bad\n  }\n}' } },
         ),
         'configure-context': explorerConfigure(
@@ -332,10 +334,11 @@ export const scenarios = {
         ),
         analyze: {
             ...defaultScenario('queryInsightsStandalone'),
+            config: explorerPrefilled,
             steps: explorerSteps,
             readiness: {
                 content: ['Feature preview', 'Query Efficiency Analysis', 'Query Performance Analysis', 'Consider indexing the filter.',
-                    'Copy command', 'Reconfigure', 'demo.items', 'Prompt: built-in', '0 credits', '1,200 in / 350 out tokens'],
+                    'Copy command', 'Reconfigure', 'demo.items', '0 credits', '1,200 in / 350 out tokens'],
                 selectors: ['.leftColumn', '.rightColumn'], noProgressbar: true,
             },
             assertions: [{

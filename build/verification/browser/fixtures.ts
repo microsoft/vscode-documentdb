@@ -83,10 +83,10 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
-const queryInsightsConfig: QueryInsightsPrefill = {
-    explain: '{"queryPlanner":{"winningPlan":{"stage":"COLLSCAN"}},"executionStats":{"nReturned":2,"executionTimeMillis":12,"totalDocsExamined":100,"totalKeysExamined":0}}',
-    databaseName: 'demo', collectionName: 'items',
-};
+/** A fresh open opens on Welcome; scenarios add {@link queryInsightsSampleExplain} to start on Configure. */
+const queryInsightsConfig: QueryInsightsPrefill = { databaseName: 'demo', collectionName: 'items' };
+export const queryInsightsSampleExplain =
+    '{"queryPlanner":{"winningPlan":{"stage":"COLLSCAN"}},"executionStats":{"nReturned":2,"executionTimeMillis":12,"totalDocsExamined":100,"totalKeysExamined":0}}';
 interface FixtureTableRow {
     readonly id: string;
     readonly 'x-objectid': string;
@@ -267,7 +267,6 @@ export const fixtures = {
                 }],
                 savedModelId: null, effectiveModelId: 'copilot-utility', effectiveReason: 'first-available',
             }),
-            'ai.getPromptSourceInfo': reply<Outputs['ai']['getPromptSourceInfo']>('query', { source: 'built-in' }),
             'queryInsightsStandalone.validateInput': reply<Outputs['queryInsightsStandalone']['validateInput']>('query', {
                 commandType: 'find' as Outputs['queryInsightsStandalone']['validateInput']['commandType'], query: '{}',
             }),

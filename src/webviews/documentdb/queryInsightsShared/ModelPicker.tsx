@@ -19,15 +19,12 @@ import {
 import { BotRegular, InfoRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { Fragment, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
-import type { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo, AvailableModelsResult } from '../../../services/ai/modelSelection';
-import type { IndexAdvisorPromptSourceInfo } from '../../../services/promptTemplateService';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import './ModelPicker.scss';
 
 export interface ModelPickerProps {
-    commandType: CommandType;
     /** Control size; the Collection View card uses `small`, the wizard matches its other fields. */
     size?: 'small' | 'medium';
     /** Show a visible "Copilot model" label above the dropdown (wizard form layout). */
@@ -37,8 +34,6 @@ export interface ModelPickerProps {
     disabled?: boolean;
     /** Undefined while loading/saving, or when no model is available. */
     onModelChange?: (model: AvailableModelInfo | undefined) => void;
-    /** The prompt source label, so the host can show it in its meta line. */
-    onPromptLabelChange?: (label: string | undefined) => void;
 }
 
 const knownCategories = ['powerful', 'versatile', 'lightweight'];
@@ -104,7 +99,7 @@ interface ModelFact {
 }
 
 /** Every fact is always listed, so a missing value reads as "not reported", never as a hidden row. */
-function modelFacts(model: AvailableModelInfo, promptLabel: string | undefined, selectionReason: string): ModelFact[] {
+function modelFacts(model: AvailableModelInfo, selectionReason: string): ModelFact[] {
     const notReported = <Text size={200} className="query-insights-model-muted">{l10n.t('Not reported for this model')}</Text>;
     const credits = creditLines(model);
     const capabilities: string[] = [];
@@ -157,11 +152,8 @@ function modelFacts(model: AvailableModelInfo, promptLabel: string | undefined, 
             label: l10n.t('Model ID'),
             value: <Text size={200} font="monospace" className="query-insights-model-identity">{model.id}</Text>,
         },
+        { key: 'selection', label: l10n.t('Selection'), value: <Text size={200}>{selectionReason}</Text> },
     ];
-    if (promptLabel) {
-        facts.push({ key: 'prompt', label: l10n.t('Prompt'), value: <Text size={200}>{promptLabel}</Text> });
-    }
-    facts.push({ key: 'selection', label: l10n.t('Selection'), value: <Text size={200}>{selectionReason}</Text> });
     return facts;
 }
 
@@ -189,19 +181,16 @@ function ModelDetails({ model, facts }: { model: AvailableModelInfo; facts: read
  * a Fluent Dropdown grouped by model category, plus an info button whose popover holds the details.
  */
 export function ModelPicker({
-    commandType,
     size = 'small',
     showLabel = false,
     appearance = 'outline',
     showModelIcon = false,
     disabled = false,
     onModelChange,
-    onPromptLabelChange,
 }: ModelPickerProps): JSX.Element {
     const client = useTrpcClient();
     const labelId = useId('query-insights-model-label');
     const [available, setAvailable] = useState<AvailableModelsResult>();
-    const [promptSource, setPromptSource] = useState<IndexAdvisorPromptSourceInfo>();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string>();
@@ -211,17 +200,6 @@ export function ModelPicker({
     const requestId = useRef(0);
     const refreshRef = useRef<() => Promise<void>>(async () => undefined);
     const selected = available?.models.find((model) => model.id === available.effectiveModelId);
-    const promptBasename = promptSource?.path?.split(/[/\\]/).pop() ?? '';
-    let promptLabel: string | undefined;
-    if (promptSource) {
-        promptLabel = promptSource.source === 'custom-file'
-            ? l10n.t('Custom prompt {0}', promptBasename)
-            : l10n.t('Built-in prompt');
-    }
-
-    useEffect(() => {
-        onPromptLabelChange?.(promptLabel);
-    }, [promptLabel, onPromptLabelChange]);
 
     useEffect(() => {
         onModelChange?.(loading || saving ? undefined : selected);
@@ -237,14 +215,10 @@ export function ModelPicker({
             const currentRequest = ++requestId.current;
             if (!hasLoaded) setLoading(true);
             try {
-                const [models, source] = await Promise.all([
-                    client.ai.getAvailableModels.query(undefined, { signal: controller.signal }),
-                    client.ai.getPromptSourceInfo.query({ commandType }, { signal: controller.signal }),
-                ]);
+                const models = await client.ai.getAvailableModels.query(undefined, { signal: controller.signal });
                 if (!controller.signal.aborted && currentRequest === requestId.current) {
                     hasLoaded = true;
                     setAvailable(models);
-                    setPromptSource(source);
                     setError(undefined);
                 }
             } catch (cause) {
@@ -268,7 +242,7 @@ export function ModelPicker({
             controller.abort();
             window.removeEventListener('focus', onFocus);
         };
-    }, [client, commandType, refreshKey]);
+    }, [client, refreshKey]);
 
     const selectModel = async (modelId: string): Promise<void> => {
         // Drop any in-flight refresh so it cannot overwrite the saved choice with older data.
@@ -372,7 +346,7 @@ export function ModelPicker({
                                 <Button appearance="subtle" size={size} icon={<InfoRegular />} aria-label={l10n.t('Model details')} />
                             </PopoverTrigger>
                             <PopoverSurface aria-label={l10n.t('Model details')} className="query-insights-model-details-surface">
-                                <ModelDetails model={selected} facts={modelFacts(selected, promptLabel, selectionReason)} />
+                                <ModelDetails model={selected} facts={modelFacts(selected, selectionReason)} />
                             </PopoverSurface>
                         </Popover>
                     )}

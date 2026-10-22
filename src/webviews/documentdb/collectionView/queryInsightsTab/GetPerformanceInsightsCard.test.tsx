@@ -44,22 +44,27 @@ describe('GetPerformanceInsightsCard model disclosure', () => {
         expect(html).not.toContain('Learn more about the utility model used.');
     });
 
-    it.each([false, true])('places the picker before the cost text in the bottom row (premium: %s)', (premium) => {
+    it.each([false, true])('puts the model picker before the action, then one footer line (premium: %s)', (premium) => {
         const container = document.createElement('div');
         container.innerHTML = render(premium);
         const actions = container.querySelector('.get-performance-insights-card-actions');
-        const footer = container.querySelector('.get-performance-insights-card-model-disclosure');
-        expect(actions?.textContent).toBe('Get AI Performance Insights');
-        expect(footer?.firstElementChild?.textContent).toBe('Model picker slot');
-        expect(footer?.lastElementChild?.textContent).toContain(premium
+        expect([...(actions?.children ?? [])].map((child) => child.textContent)).toEqual([
+            'Model picker slot',
+            'Get AI Performance Insights',
+        ]);
+        const footer = container.querySelector('.get-performance-insights-card-meta');
+        const footerText = footer?.textContent ?? '';
+        expect(footerText.startsWith(premium
             ? 'The selected model may use premium requests.'
-            : 'No additional cost for most GitHub Copilot subscribers.');
-        expect(footer?.querySelector('svg')).toBeNull();
-        expect(container.querySelector('.get-performance-insights-card-meta')?.textContent)
-            .toContain('Secondary link slot');
+            : 'No additional cost for most GitHub Copilot subscribers.')).toBe(true);
+        expect(footerText).toContain('AI responses may be inaccurate');
+        expect(footerText).toContain('Secondary link slot');
+        expect(footer?.lastElementChild?.textContent).toBe('Learn more about AI Performance Insights');
+        expect(container.querySelector('.fui-CardHeader')?.textContent).not.toContain('inaccurate');
+        expect(container.textContent).not.toMatch(/prompt/i);
     });
 
-    it('keeps the disclosure visible but hides the picker during loading', () => {
+    it('keeps the footer visible but hides the picker during loading', () => {
         const html = render(false, true);
         expect(html).toContain('Cancel');
         expect(html).toContain('No additional cost for most GitHub Copilot subscribers.');

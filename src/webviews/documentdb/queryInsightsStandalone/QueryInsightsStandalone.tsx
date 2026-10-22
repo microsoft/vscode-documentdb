@@ -31,7 +31,6 @@ import {
     DataUsageRegular,
     EditRegular,
     ErrorCircleRegular,
-    InfoRegular,
     ShieldLockRegular,
 } from '@fluentui/react-icons';
 import { Collapse } from '@fluentui/react-motion-components-preview';
@@ -41,7 +40,6 @@ import * as l10n from '@vscode/l10n';
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
 import type { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo } from '../../../services/ai/modelSelection';
-import type { IndexAdvisorPromptSourceInfo } from '../../../services/promptTemplateService';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import { MessageBlock } from '../../components/MessageBlock';
@@ -73,14 +71,9 @@ const useStyles = makeStyles({
     needNumber: { justifySelf: 'start', alignSelf: 'start', marginTop: '1px' },
     needCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
     needTitle: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' },
-    // Same meta and cost-disclosure lines as the Collection View card under its model picker.
-    modelMeta: {
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: tokens.spacingHorizontalXS,
-        color: tokens.colorNeutralForeground3,
-    },
-    modelMetaIcon: { flexShrink: 0, marginTop: tokens.spacingVerticalXXS },
+    footerNote: { overflowWrap: 'anywhere' },
+    // Keeps the picker's own error text under the dropdown instead of between the buttons.
+    footerModel: { minWidth: 0, maxWidth: '100%' },
     prefilledNote: { display: 'inline-flex', alignItems: 'center', gap: '4px', color: tokens.colorPaletteGreenForeground1 },
     snippetList: { display: 'flex', flexDirection: 'column', gap: '6px' },
     snippetGroupLabel: { marginTop: '6px' },
@@ -261,7 +254,8 @@ function QueryInsightsWizard(): JSX.Element {
     const prefill = useConfiguration<QueryInsightsPrefill>();
     const client = useTrpcClient();
     const noteId = useId();
-    const [step, setStep] = useState<StepId>('welcome');
+    // Welcome only explains how to get an explain output; skip it when one is already supplied.
+    const [step, setStep] = useState<StepId>(() => (prefill.explain?.trim() ? 'configure' : 'welcome'));
     const [form, setForm] = useState<StandaloneInput>(() => ({
         explain: prefill.explain ?? '', query: prefill.query ?? '',
         commandType: prefill.commandType ?? 'auto',
@@ -274,11 +268,9 @@ function QueryInsightsWizard(): JSX.Element {
     const [inspectFailure, setInspectFailure] = useState<string>();
     const [submitting, setSubmitting] = useState(false);
     const [selectedModel, setSelectedModel] = useState<AvailableModelInfo>();
-    const [modelPromptLabel, setModelPromptLabel] = useState<string>();
     const [openRows, setOpenRows] = useState<Partial<Record<OptionalRow, boolean>>>({});
     const [editingQuery, setEditingQuery] = useState(() => !!prefill.query?.trim());
     const [analysisInput, setAnalysisInput] = useState<StandaloneInput>();
-    const [analysisPrompt, setAnalysisPrompt] = useState<IndexAdvisorPromptSourceInfo>();
     const [runKey, setRunKey] = useState(0);
     const [analysisKind, setAnalysisKind] = useState<AnalysisKind>('idle');
     const [announcement, setAnnouncement] = useState<{ key: number; message: string }>({ key: 0, message: '' });
@@ -329,8 +321,8 @@ function QueryInsightsWizard(): JSX.Element {
     const pending = inspecting || submitting;
 
     let blockedReason: string | undefined;
-    if (!form.explain.trim()) blockedReason = l10n.t('Paste an explain plan to continue.');
-    else if (explainIssue) blockedReason = l10n.t('Fix the explain plan to continue.');
+    if (!form.explain.trim()) blockedReason = l10n.t('Paste the explain output to continue.');
+    else if (explainIssue) blockedReason = l10n.t('Fix the explain output to continue.');
     else if (inspection?.queryIssue) blockedReason = l10n.t('Fix the query to continue.');
     else if (inspection?.collectionStats?.ok === false) blockedReason = l10n.t('Fix the collection statistics to continue.');
     else if (inspection?.indexes?.ok === false) blockedReason = l10n.t('Fix the indexes to continue.');
@@ -372,18 +364,6 @@ function QueryInsightsWizard(): JSX.Element {
             setSubmitting(false);
         }
     };
-
-    useEffect(() => {
-        if (step !== 'analyze' || !analysisInput) return;
-        const controller = new AbortController();
-        setAnalysisPrompt(undefined);
-        void client.ai.getPromptSourceInfo.query(
-            { commandType: analysisInput.commandType as CommandType }, { signal: controller.signal },
-        ).then((source) => {
-            if (!controller.signal.aborted) setAnalysisPrompt(source);
-        }).catch(() => { /* Optional header metadata must not interrupt analysis. */ });
-        return () => controller.abort();
-    }, [client, step, analysisInput]);
 
     const toggleRow = (row: OptionalRow): void => setOpenRows((previous) => ({ ...previous, [row]: !previous[row] }));
 
@@ -487,20 +467,18 @@ function QueryInsightsWizard(): JSX.Element {
         explainMessage = describeIssue(explainIssue);
     } else if (form.explain.trim() && !inspecting && explainInfo) {
         explainState = 'success';
-        explainMessage = l10n.t('Explain plan parsed.');
+        explainMessage = l10n.t('Explain output parsed.');
     }
-    const detectedNamespace = namespaceOf(explainInfo?.databaseName, explainInfo?.collectionName);
     const commandWasDetected = form.commandType === 'auto';
 
     const explainSection = (
         <section className={styles.section} aria-labelledby={`${noteId}-explain`}>
             <Text as="h3" size={400} weight="semibold" id={`${noteId}-explain`} className={styles.sectionHeading}>
-                {l10n.t('Explain plan')}
+                {l10n.t('Explain output')}
                 <Badge appearance="tint" shape="rounded" size="small" color="brand">{l10n.t('Required')}</Badge>
             </Text>
+            {/* The section heading names the field; the editor carries its own accessible name. */}
             <Field
-                label={l10n.t('Explain output')}
-                required
                 hint={explainState === 'none' && !inspecting
                     ? l10n.t('Paste the complete result of explain("executionStats"). JSON, Extended JSON and shell output are accepted.')
                     : undefined}
@@ -526,7 +504,7 @@ function QueryInsightsWizard(): JSX.Element {
                 ))}
             </div>
             <Collapse visible={!!explainInfo} unmountOnExit>
-                <div className={styles.detected} aria-label={l10n.t('Detected from the explain plan')} role="group">
+                <div className={styles.detected} aria-label={l10n.t('Detected from the explain output')} role="group">
                     <dl className={styles.facts}>
                         <div className={styles.fact}>
                             <dt><Text size={200} className={styles.muted}>{l10n.t('Command')}</Text></dt>
@@ -534,14 +512,6 @@ function QueryInsightsWizard(): JSX.Element {
                                 <Badge appearance="tint" shape="rounded" size="small" color="brand">{effectiveCommand}</Badge>{' '}
                                 <Text size={200} className={styles.muted}>
                                     {commandWasDetected ? l10n.t('detected') : l10n.t('selected')}
-                                </Text>
-                            </dd>
-                        </div>
-                        <div className={styles.fact}>
-                            <dt><Text size={200} className={styles.muted}>{l10n.t('Namespace')}</Text></dt>
-                            <dd className={styles.factValue}>
-                                <Text size={200} className={detectedNamespace ? styles.mono : styles.muted}>
-                                    {detectedNamespace ?? l10n.t('Not in the plan')}
                                 </Text>
                             </dd>
                         </div>
@@ -683,7 +653,7 @@ function QueryInsightsWizard(): JSX.Element {
                 <>
                     <Text className={styles.mono}>{namespaceOf(effectiveDatabase, effectiveCollection)}</Text>
                     {!form.databaseName.trim() && !form.collectionName.trim() && (
-                        <Text size={200} className={styles.muted}> · {l10n.t('from the explain plan')}</Text>
+                        <Text size={200} className={styles.muted}> · {l10n.t('from the explain output')}</Text>
                     )}
                 </>
             ) : notProvided,
@@ -758,41 +728,10 @@ function QueryInsightsWizard(): JSX.Element {
         </section>
     );
 
-    const modelSection = (
-        <section className={styles.section} aria-labelledby={`${noteId}-model`}>
-            <Text as="h3" size={400} weight="semibold" id={`${noteId}-model`} className={styles.sectionHeading}>
-                {l10n.t('AI model & prompt')}
-            </Text>
-            <Text size={200} className={styles.muted}>
-                {l10n.t('Your choice is saved and shared with the Query Insights tab.')}
-            </Text>
-            <ModelPicker
-                commandType={effectiveCommand}
-                size="small"
-                showLabel
-                onModelChange={setSelectedModel}
-                onPromptLabelChange={setModelPromptLabel}
-                disabled={submitting}
-            />
-            {modelPromptLabel && <Text size={200} className={styles.modelMeta}>{modelPromptLabel}</Text>}
-            {selectedModel && (
-                <div className={styles.modelMeta}>
-                    <InfoRegular aria-hidden="true" className={styles.modelMetaIcon} />
-                    <Text size={200}>
-                        {selectedModel.isUtility
-                            ? l10n.t('No additional cost for most GitHub Copilot subscribers.')
-                            : l10n.t('The selected model may use premium requests.')}
-                    </Text>
-                </div>
-            )}
-        </section>
-    );
-
     const configure = (
         <div className={styles.sections}>
             {explainSection}
             {optionalSection}
-            {modelSection}
             {inspectFailure && (
                 <MessageBlock intent="error" title={l10n.t('Could not check the inputs')}>{inspectFailure}</MessageBlock>
             )}
@@ -815,11 +754,6 @@ function QueryInsightsWizard(): JSX.Element {
                 </Text>,
                 <Text key="cluster" size={200}>{clusterTypeLabel(analysisInput.clusterType)}</Text>,
                 selectedModel && <Text key="model" size={200}>{selectedModel.name}</Text>,
-                analysisPrompt && <Text key="prompt" size={200}>
-                    {analysisPrompt.source === 'custom-file'
-                        ? l10n.t('Prompt: custom file {0}', analysisPrompt.path?.split(/[/\\]/).pop() ?? '')
-                        : l10n.t('Prompt: built-in')}
-                </Text>,
             ].filter(Boolean).map((fact, index) => (
                 <Fragment key={index}><span aria-hidden>·</span>{fact}</Fragment>
             ))}
@@ -838,12 +772,30 @@ function QueryInsightsWizard(): JSX.Element {
     } else if (step === 'configure') {
         footer = (
             <ContainerFooter
-                note={<span id={`${noteId}-reason`}>
-                    {blockedReason ?? (selectedModel
-                        ? l10n.t('Analyze query sends your inputs to {0}.', selectedModel.name)
-                        : l10n.t('Analyze query sends your inputs to the selected model.'))}
+                note={<span id={`${noteId}-reason`} className={styles.footerNote}>
+                    {[
+                        blockedReason ?? (selectedModel
+                            ? l10n.t('Analyze query sends your inputs to {0}.', selectedModel.name)
+                            : l10n.t('Analyze query sends your inputs to the selected model.')),
+                        selectedModel && (selectedModel.isUtility
+                            ? l10n.t('No additional cost for most GitHub Copilot subscribers.')
+                            : l10n.t('The selected model may use premium requests.')),
+                        l10n.t('AI responses may be inaccurate'),
+                    ].filter(Boolean).map((part, index) => (
+                        <Fragment key={index}>{index > 0 && <span aria-hidden> · </span>}{part}</Fragment>
+                    ))}
                 </span>}
             >
+                {/* Configuration first, then the action (as in the VS Code Chat input). */}
+                <div className={styles.footerModel}>
+                    <ModelPicker
+                        size="medium"
+                        appearance="underline"
+                        showModelIcon
+                        onModelChange={setSelectedModel}
+                        disabled={submitting}
+                    />
+                </div>
                 <Button
                     appearance="primary"
                     disabledFocusable={!canAnalyze}
@@ -871,11 +823,11 @@ function QueryInsightsWizard(): JSX.Element {
             <Announcer key={`announce-${announcement.key}`} when={announcement.key > 0} message={announcement.message} />
             <Announcer
                 when={step === 'configure' && !inspecting && !!explainInfo}
-                message={l10n.t('Explain plan is valid. Detected a {0} command.', effectiveCommand)}
+                message={l10n.t('Explain output is valid. Detected a {0} command.', effectiveCommand)}
             />
             <Announcer
                 when={step === 'configure' && !inspecting && !!explainIssue}
-                message={explainIssue ? l10n.t('Explain plan error. {0}', describeIssue(explainIssue)) : ''}
+                message={explainIssue ? l10n.t('Explain output error. {0}', describeIssue(explainIssue)) : ''}
             />
             <Announcer when={step === 'analyze' && analysisKind === 's1Loading'} message={l10n.t('Analyzing the explain plan.')} />
             <Announcer when={step === 'analyze' && analysisKind === 's3Success'} message={l10n.t('Analysis complete. Recommendations are ready.')} />
@@ -907,7 +859,7 @@ function QueryInsightsWizard(): JSX.Element {
                     value="configure"
                     label={l10n.t('Configure')}
                     title={l10n.t('Provide your query data')}
-                    subtitle={l10n.t('Only the explain plan is required. It is checked as you type.')}
+                    subtitle={l10n.t('Only the explain output is required. It is checked as you type.')}
                 >
                     {configure}
                 </WizardStep>

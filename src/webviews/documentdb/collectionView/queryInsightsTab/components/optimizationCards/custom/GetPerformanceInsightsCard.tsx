@@ -44,8 +44,7 @@ export interface GetPerformanceInsightsCardProps {
     enabled?: boolean;
 
     modelPicker?: React.ReactNode;
-    /** Prompt source shown first in the muted meta line, e.g. "Built-in prompt". */
-    promptLabel?: string;
+    /** Optional link to the Query Insights Explorer, shown in the footer line. */
     secondaryLink?: React.ReactNode;
     mayUsePremiumRequests?: boolean;
 
@@ -107,7 +106,6 @@ export function GetPerformanceInsightsCard({
     isLoading,
     enabled = true,
     modelPicker,
-    promptLabel,
     secondaryLink,
     mayUsePremiumRequests = false,
     errorMessage,
@@ -135,15 +133,8 @@ export function GetPerformanceInsightsCard({
                 <div style={{ flex: 1 }}>
                     <CardHeader
                         header={
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                <Text weight="semibold" size={500}>
-                                    {l10n.t('AI Performance Insights')}
-                                </Text>
-                            </div>
-                        }
-                        action={
-                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                {l10n.t('AI responses may be inaccurate')}
+                            <Text weight="semibold" size={500}>
+                                {l10n.t('AI Performance Insights')}
                             </Text>
                         }
                         style={{ marginBottom: '8px' }}
@@ -183,7 +174,9 @@ export function GetPerformanceInsightsCard({
                             </Button>
                         </div>
                     ) : (
+                        // Configuration first, then the action (as in the VS Code Chat input).
                         <div className="get-performance-insights-card-actions">
+                            {modelPicker && <div className="get-performance-insights-card-model">{modelPicker}</div>}
                             <Button
                                 appearance="primary"
                                 icon={<SparkleRegular />}
@@ -194,19 +187,24 @@ export function GetPerformanceInsightsCard({
                             </Button>
                         </div>
                     )}
-                    {/* One muted meta line: prompt source · explore · learn more (design Option A). */}
+                    {/* One muted footer line, shown before and during loading. The utility-model link opens
+                        `onLearnMoreUtilityModel`, separate from the feature docs behind `onLearnMore`. */}
                     <div className="get-performance-insights-card-meta">
                         {[
-                            promptLabel ? <span key="prompt">{promptLabel}</span> : undefined,
+                            mayUsePremiumRequests ? (
+                                <span key="cost">{l10n.t('The selected model may use premium requests.')}</span>
+                            ) : (
+                                <span key="cost">
+                                    {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
+                                    <Link inline onClick={onLearnMoreUtilityModel}>
+                                        {l10n.t('Learn more about the utility model used.')}
+                                    </Link>
+                                </span>
+                            ),
+                            <span key="accuracy">{l10n.t('AI responses may be inaccurate')}</span>,
                             secondaryLink ? <span key="explore">{secondaryLink}</span> : undefined,
-                            <Link
-                                key="learn"
-                                inline
-                                onClick={onLearnMore}
-                                disabled={!enabled}
-                                aria-label={l10n.t('Learn more about AI Performance Insights')}
-                            >
-                                {l10n.t('Learn more')}
+                            <Link key="learn" inline onClick={onLearnMore}>
+                                {l10n.t('Learn more about AI Performance Insights')}
                             </Link>,
                         ]
                             .filter(Boolean)
@@ -216,35 +214,6 @@ export function GetPerformanceInsightsCard({
                                     {item}
                                 </Fragment>
                             ))}
-                    </div>
-                    {/* Model cost disclosure row.
-                        Always rendered so users see the disclosure both before clicking and during loading.
-                        The "Learn more" link wires to `onLearnMoreUtilityModel` (the utility-model
-                        cost-disclosure page), distinct from the general feature `onLearnMore` used by
-                        the button above. Keeping the two URLs separate lets the parent panel update
-                        each independently. */}
-                    <div className="get-performance-insights-card-model-disclosure">
-                        {!isLoading && modelPicker}
-                        <Text size={200} className="get-performance-insights-card-cost-disclosure">
-                            {mayUsePremiumRequests ? (
-                                l10n.t('The selected model may use premium requests.')
-                            ) : (
-                                <>
-                                    {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
-                                    <Link
-                                        appearance="subtle"
-                                        onClick={onLearnMoreUtilityModel}
-                                        inline
-                                        style={{
-                                            fontSize: tokens.fontSizeBase200,
-                                            lineHeight: tokens.lineHeightBase200,
-                                        }}
-                                    >
-                                        {l10n.t('Learn more about the utility model used.')}
-                                    </Link>
-                                </>
-                            )}
-                        </Text>
                     </div>
                 </div>
             </div>

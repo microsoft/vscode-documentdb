@@ -4,23 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommandType } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { queryInsightsModelsRouter } from '../../webviews/documentdb/queryInsightsShared/queryInsightsModelsRouter';
 
 const mocks = vi.hoisted(() => ({
     getAvailableModels: vi.fn(),
     setSavedModelId: vi.fn(),
-    getPromptSourceInfo: vi.fn(),
 }));
 vi.mock('./modelSelection', () => ({
     getAvailableModels: mocks.getAvailableModels,
     setSavedModelId: mocks.setSavedModelId,
-}));
-vi.mock('../promptTemplateService', () => ({
-    getIndexAdvisorPromptSourceInfo: mocks.getPromptSourceInfo,
-}));
-vi.mock('../../commands/llmEnhancedCommands/indexAdvisorCommands', () => ({
-    CommandType: { Find: 'find', Aggregate: 'aggregate', Count: 'count' },
 }));
 vi.mock('../../webviews/_integration/trpc', async () => {
     const { initTRPC } = await import('@trpc/server');
@@ -47,19 +39,8 @@ describe('Shared Query Insights model RPCs', () => {
         expect(mocks.setSavedModelId.mock.calls).toEqual([['picked'], [null]]);
     });
 
-    it('reads prompt settings for the requested command type', async () => {
-        mocks.getPromptSourceInfo.mockReturnValue({ source: 'custom-file', path: 'local.md' });
-        expect(await caller.getPromptSourceInfo({ commandType: CommandType.Aggregate })).toEqual({
-            source: 'custom-file',
-            path: 'local.md',
-        });
-        expect(mocks.getPromptSourceInfo).toHaveBeenCalledWith(CommandType.Aggregate);
-    });
-
-    it('rejects empty model ids and unsupported command types', async () => {
+    it('rejects empty model ids', async () => {
         await expect(caller.setSelectedModel({ modelId: '' })).rejects.toThrow();
-        await expect(caller.getPromptSourceInfo({ commandType: 'drop' as CommandType })).rejects.toThrow();
         expect(mocks.setSavedModelId).not.toHaveBeenCalled();
-        expect(mocks.getPromptSourceInfo).not.toHaveBeenCalled();
     });
 });

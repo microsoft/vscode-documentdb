@@ -4,12 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { z } from 'zod';
-import { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { getAvailableModels, setSavedModelId, type AvailableModelsResult } from '../../../services/ai/modelSelection';
-import {
-    getIndexAdvisorPromptSourceInfo,
-    type IndexAdvisorPromptSourceInfo,
-} from '../../../services/promptTemplateService';
 import { publicProcedureWithTelemetry, router } from '../../_integration/trpc';
 
 export const queryInsightsModelsRouter = router({
@@ -21,10 +16,5 @@ export const queryInsightsModelsRouter = router({
         .mutation(async ({ input }): Promise<AvailableModelsResult> => {
             await setSavedModelId(input.modelId);
             return getAvailableModels();
-        }),
-    getPromptSourceInfo: publicProcedureWithTelemetry
-        .input(z.object({ commandType: z.nativeEnum(CommandType) }))
-        .query(({ input }): IndexAdvisorPromptSourceInfo => {
-            return getIndexAdvisorPromptSourceInfo(input.commandType);
         }),
 });

@@ -872,3 +872,52 @@ and browser checks.
   cost Popover still opens, utility selection updates the disclosure, and the 1440 px and
   600 px layouts have no horizontal footer overflow. No live AI request, full suite, lint,
   formatting, localization generation, packaging or push.
+
+## Phase K: configuration before the action; prompt source to the output channel (2026-10-22)
+
+Supersedes Phase J's layout after an operator UX review of the tab card.
+
+- **Order follows the VS Code Chat input: configuration, then the action.** The tab card's
+  actions row is now model picker (underline, `size="medium"` to match the button height) → ⓘ
+  details → **Get AI Performance Insights**. Phase J had the picker on a separate bottom row, after
+  the button, so users often found the model choice only after running.
+- **One muted footer line** replaces the meta line and the disclosure row: cost note (with the
+  utility-model link when applicable) · "AI responses may be inaccurate" (moved out of the
+  header) · Explore with your own input… · **Learn more about AI Performance Insights**. The
+  general link names its target instead of reading as "learn more about the prompt", and it is
+  no longer disabled when no model is available.
+- **Prompt source is no longer shown in any UI** (operator: a leftover from prototyping; not
+  needed). Removed from the tab card, the model-details popover, the Explorer's Configure section
+  (renamed "AI model") and the Analyze summary bar. The `ai.getPromptSourceInfo` RPC and the
+  `ModelPicker` `commandType` / `onPromptLabelChange` props are gone. Instead
+  `PromptTemplateService` traces the source on **every** index-advisor request (custom file,
+  built-in with its `resource-file`/`inline-fallback` source, cached, or built-in after a failed
+  custom read) to `ext.outputChannel` at trace level.
+- Case 1: build passed; focused tests (prompt service, router, picker, card, tab, explorer) and
+  the browser scenario/harness tests passed. Visual check of `tab-model-options` (light) for both
+  premium and utility models. l10n not regenerated (draft).
+
+## Phase L: Explorer Configure review fixes; AI disclaimer said once (2026-10-22)
+
+Operator-approved fixes from the UX review of the Explorer wizard.
+
+- **Model picker in the Configure footer, before Analyze query** (same order as the tab card):
+  picker (underline, medium) → ⓘ details → **Analyze query** → Back. The "AI model" section is gone,
+  with its decorative ⓘ cost line and the "Your choice is saved and shared…" sentence (operator:
+  noise; nobody cares). The footer note joins the send/blocked reason, the cost note and "AI
+  responses may be inaccurate" with `·`.
+- **One term, one marker:** the section is "Explain output" with the Required badge; the duplicate
+  field label and asterisk are gone, and validation/announcer strings say "explain output".
+- **Explain editors auto-size** with the content (120–400 px; compact 96–240 px) and wrap long
+  lines; one-line plans no longer need horizontal scrolling.
+- **Namespace shown once:** the "Detected from the explain output" box no longer has a Namespace
+  fact; the Optional context row shows the value and whether it came from the explain output.
+- **Prefilled explain output opens on Configure;** Welcome stays reachable from the step list and
+  Back. The browser fixture is now a fresh open (Welcome); scenarios add `queryInsightsSampleExplain`.
+- **"AI responses may be inaccurate" is said once:** removed from every AI card header (MarkdownCard,
+  MarkdownCardEx, ImprovementCard, ImprovementCardShell; `showAiDisclaimer` prop removed). It is
+  stated where the user prompts (tab card footer, Explorer Configure footer) and once under the
+  results in the "Powered by" byline, in both the tab and the Explorer.
+- Case 1: build passed; 72 focused unit tests and 79 browser harness tests passed; L2 explorer
+  routes ready in all three themes (one high-contrast route timed out under the agent's
+  substitute timer; driven manually it is ready with no harness errors). l10n not regenerated.

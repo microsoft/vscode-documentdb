@@ -183,11 +183,6 @@ export function ImprovementCard({
                                 </Badge>
                             </div>
                         }
-                        action={
-                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                {l10n.t('AI responses may be inaccurate')}
-                            </Text>
-                        }
                     />
                     <div style={{ marginTop: '12px' }}>
                         {/* Description */}

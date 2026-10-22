@@ -124,12 +124,6 @@ interface MarkdownCardProps {
     onCopy?: () => void;
 
     /**
-     * Whether to show the AI disclaimer. Default: true
-     * Set to false for non-AI generated content (e.g., error messages)
-     */
-    showAiDisclaimer?: boolean;
-
-    /**
      * When `true`, render a {@link StreamingInlineProgress} (spinner + label)
      * below the rendered markdown to make it visually obvious that the
      * value is still streaming in. Used by the Stage 3 progressive
@@ -178,7 +172,6 @@ export function MarkdownCard({
     content,
     icon,
     onCopy: _onCopy,
-    showAiDisclaimer = true,
     inFlight = false,
     inFlightLabel,
     ref,
@@ -197,13 +190,6 @@ export function MarkdownCard({
                             <Text weight="semibold" size={400}>
                                 {title}
                             </Text>
-                        }
-                        action={
-                            showAiDisclaimer ? (
-                                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                    {l10n.t('AI responses may be inaccurate')}
-                                </Text>
-                            ) : undefined
                         }
                     />
                     <div className={styles.content}>

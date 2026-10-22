@@ -30,7 +30,10 @@ vi.mock('vscode', () => ({
         showInformationMessage: mocks.showInformationMessage,
         showWarningMessage: mocks.showWarningMessage,
     },
-    l10n: { t: (message: string): string => message },
+    l10n: {
+        t: (message: string, args?: Record<string, unknown>): string =>
+            message.replace(/\{(\w+)\}/g, (match, key: string) => (args && key in args ? String(args[key]) : match)),
+    },
 }));
 vi.mock('../extensionVariables', () => ({ ext: { outputChannel: { trace: mocks.trace } } }));
 vi.mock('@microsoft/vscode-azext-utils', () => ({
@@ -74,12 +77,19 @@ describe('Index advisor prompt iteration', () => {
         expect(await PromptTemplateService.getIndexAdvisorPromptTemplate(CommandType.Find)).toBe('Second edit');
         expect(getLastPromptSource()).toBe('custom-file');
         expect(mocks.readFile).toHaveBeenCalledTimes(2);
-        expect(mocks.trace).toHaveBeenCalledTimes(2);
+        expect(mocks.trace.mock.calls.map(([message]) => message as string)).toEqual([
+            expect.stringMatching(/^Query Insights prompt for find query: built-in \((resource-file|inline-fallback)/),
+            'Query Insights prompt for find query: custom file prompts/local.md',
+            'Query Insights prompt for find query: custom file prompts/local.md',
+        ]);
         expect(mocks.showInformationMessage).not.toHaveBeenCalled();
 
         mocks.settings.delete(customSetting);
         expect(await PromptTemplateService.getIndexAdvisorPromptTemplate(CommandType.Find)).toBe(builtIn);
         expect(getLastPromptSource()).not.toBe('custom-file');
+        // Served from the cache, still traced.
+        expect(mocks.trace).toHaveBeenCalledTimes(4);
+        expect(mocks.trace.mock.lastCall?.[0]).toMatch(/^Query Insights prompt for find query: built-in \(/);
     });
 
     it('does not cache a failed custom-file read and retries on the next request', async () => {
@@ -87,6 +97,9 @@ describe('Index advisor prompt iteration', () => {
         mocks.readFile.mockRejectedValueOnce(new Error('not yet saved')).mockResolvedValueOnce('Fixed prompt');
         expect(await PromptTemplateService.getIndexAdvisorPromptTemplate(CommandType.Find)).not.toBe('Fixed prompt');
         expect(mocks.showWarningMessage).toHaveBeenCalledOnce();
+        expect(mocks.trace.mock.lastCall?.[0]).toMatch(
+            /^Query Insights prompt for find query: built-in \(.+\); the custom file prompts\/local\.md could not be read$/,
+        );
         expect(await PromptTemplateService.getIndexAdvisorPromptTemplate(CommandType.Find)).toBe('Fixed prompt');
     });
 

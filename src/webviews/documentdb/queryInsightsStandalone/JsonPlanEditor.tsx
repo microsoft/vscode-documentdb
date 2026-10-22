@@ -25,8 +25,13 @@ interface MountedEditor {
 
 const markerOwner = 'query-insights-input';
 
+/** The editor grows with its content between these heights (px), then scrolls. */
+const heightLimits = { full: { min: 120, max: 400 }, compact: { min: 96, max: 240 } } as const;
+
 export function JsonPlanEditor({ value, onChange, ariaLabel, issue, compact = false }: JsonPlanEditorProps): JSX.Element {
     const [mounted, setMounted] = useState<MountedEditor>();
+    const limits = compact ? heightLimits.compact : heightLimits.full;
+    const [height, setHeight] = useState<number>(limits.min);
     const exitRef = useRef<HTMLDivElement>(null);
     const onMount = useCallback((editor: MountedEditor['editor'], monaco: MountedEditor['monaco']): void => {
         setMounted({ editor, monaco });
@@ -52,8 +57,20 @@ export function JsonPlanEditor({ value, onChange, ariaLabel, issue, compact = fa
         };
     }, [mounted, issue, value]);
 
+    useEffect(() => {
+        if (!mounted) return undefined;
+        const { editor } = mounted;
+        const fit = (): void => setHeight(Math.min(limits.max, Math.max(limits.min, editor.getContentHeight())));
+        fit();
+        const subscription = editor.onDidContentSizeChange(fit);
+        return () => subscription.dispose();
+    }, [mounted, limits.min, limits.max]);
+
     return (
-        <div className={`query-insights-json-editor${compact ? ' query-insights-json-editor-compact' : ''}`}>
+        <div
+            className={`query-insights-json-editor${compact ? ' query-insights-json-editor-compact' : ''}`}
+            style={{ height }}
+        >
             <MonacoEditor
                 language="json"
                 height="100%"
@@ -64,7 +81,7 @@ export function JsonPlanEditor({ value, onChange, ariaLabel, issue, compact = fa
                 onEscapeEditor={() => exitRef.current?.focus()}
                 options={{
                     ariaLabel, lineNumbers: 'on', minimap: { enabled: false },
-                    wordWrap: 'off', folding: false, automaticLayout: true,
+                    wordWrap: 'on', folding: false, automaticLayout: true,
                     fontSize: 13, lineHeight: 19, glyphMargin: false,
                     // Narrow gutter: line numbers stay (parse errors cite them); markers render as squiggles.
                     lineNumbersMinChars: 3, lineDecorationsWidth: 6,

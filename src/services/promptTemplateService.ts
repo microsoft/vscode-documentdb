@@ -74,6 +74,7 @@ export class PromptTemplateService {
             const cached = this.templateCache.get(commandType);
             if (cached) {
                 setLastPromptSource(cached.source);
+                this.traceIndexAdvisorPrompt(commandType, cached.source);
                 return cached.template;
             }
         }
@@ -85,12 +86,6 @@ export class PromptTemplateService {
                 // Load custom template from file
                 template = await this.loadTemplateFromFile(customTemplatePath, commandType.toString());
                 setLastPromptSource('custom-file');
-                ext.outputChannel.trace(
-                    vscode.l10n.t('Using custom prompt template for {type} query: {path}', {
-                        type: commandType,
-                        path: customTemplatePath,
-                    }),
-                );
             } catch (error) {
                 // Log telemetry for template load operation (automatically includes result='Failed' when error is thrown)
                 void callWithTelemetryAndErrorHandling(
@@ -123,7 +118,34 @@ export class PromptTemplateService {
             this.templateCache.set(commandType, { template, source });
         }
 
+        this.traceIndexAdvisorPrompt(commandType, source, customTemplatePath);
         return template;
+    }
+
+    /** The UI no longer shows the prompt source; the output channel records it for every request. */
+    private static traceIndexAdvisorPrompt(
+        commandType: CommandType,
+        source: PromptSource,
+        customTemplatePath?: string,
+    ): void {
+        let message: string;
+        if (source === 'custom-file') {
+            message = vscode.l10n.t('Query Insights prompt for {type} query: custom file {path}', {
+                type: commandType,
+                path: customTemplatePath ?? '',
+            });
+        } else if (customTemplatePath) {
+            message = vscode.l10n.t(
+                'Query Insights prompt for {type} query: built-in ({source}); the custom file {path} could not be read',
+                { type: commandType, source, path: customTemplatePath },
+            );
+        } else {
+            message = vscode.l10n.t('Query Insights prompt for {type} query: built-in ({source})', {
+                type: commandType,
+                source,
+            });
+        }
+        ext.outputChannel.trace(message);
     }
 
     /**

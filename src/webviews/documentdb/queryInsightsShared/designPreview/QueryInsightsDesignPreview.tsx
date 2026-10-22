@@ -5,7 +5,6 @@
 
 import { Link, makeStyles, Text, tokens } from '@fluentui/react-components';
 import { useState, type JSX } from 'react';
-import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { GetPerformanceInsightsCard } from '../../collectionView/queryInsightsTab/components/optimizationCards/custom/GetPerformanceInsightsCard';
 import { ModelPicker } from '../ModelPicker';
@@ -23,7 +22,6 @@ const useStyles = makeStyles({
 /** Dev-only L2 route: the selected card design with fixture models, not the live Copilot catalog. */
 export function QueryInsightsDesignPreview(): JSX.Element {
     const styles = useStyles();
-    const [promptLabel, setPromptLabel] = useState<string>();
     const [selected, setSelected] = useState<AvailableModelInfo>();
     const noop = (): void => undefined;
     return (
@@ -36,14 +34,12 @@ export function QueryInsightsDesignPreview(): JSX.Element {
                 enabled={!!selected}
                 modelPicker={
                     <ModelPicker
-                        commandType={'find' as CommandType}
+                        size="medium"
                         appearance="underline"
                         showModelIcon
                         onModelChange={setSelected}
-                        onPromptLabelChange={setPromptLabel}
                     />
                 }
-                promptLabel={promptLabel}
                 mayUsePremiumRequests={!selected?.isUtility}
                 secondaryLink={<Link inline>Explore with your own input…</Link>}
                 onGetInsights={noop}

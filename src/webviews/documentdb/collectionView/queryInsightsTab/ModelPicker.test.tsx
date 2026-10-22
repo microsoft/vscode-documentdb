@@ -9,7 +9,6 @@ import { SSRProvider } from '@fluentui/react-components';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelsResult } from '../../../../services/ai/modelSelection';
 import { ModelPicker, type ModelPickerProps } from '../../queryInsightsShared/ModelPicker';
 
@@ -17,13 +16,11 @@ import { ModelPicker, type ModelPickerProps } from '../../queryInsightsShared/Mo
 
 const mocks = vi.hoisted(() => ({
     getAvailableModels: vi.fn(),
-    getPromptSourceInfo: vi.fn(),
     setSelectedModel: vi.fn(),
 }));
 const client = {
     ai: {
         getAvailableModels: { query: mocks.getAvailableModels },
-        getPromptSourceInfo: { query: mocks.getPromptSourceInfo },
         setSelectedModel: { mutate: mocks.setSelectedModel },
     },
 };
@@ -103,7 +100,6 @@ describe('Shared Query Insights ModelPicker', () => {
     beforeEach(() => {
         vi.resetAllMocks();
         mocks.getAvailableModels.mockResolvedValue(available);
-        mocks.getPromptSourceInfo.mockResolvedValue({ source: 'custom-file', path: '._local/prompts/private.md' });
         host = document.createElement('div');
         document.body.appendChild(host);
         root = createRoot(host);
@@ -114,20 +110,11 @@ describe('Shared Query Insights ModelPicker', () => {
         host.remove();
     });
 
-    async function renderPicker(
-        onModelChange = vi.fn(),
-        onPromptLabelChange = vi.fn(),
-        props?: Partial<ModelPickerProps>,
-    ): Promise<void> {
+    async function renderPicker(onModelChange = vi.fn(), props?: Partial<ModelPickerProps>): Promise<void> {
         await act(async () => {
             root.render(
                 <SSRProvider>
-                    <ModelPicker
-                        commandType={'find' as CommandType}
-                        onModelChange={onModelChange}
-                        onPromptLabelChange={onPromptLabelChange}
-                        {...props}
-                    />
+                    <ModelPicker onModelChange={onModelChange} {...props} />
                 </SSRProvider>,
             );
         });
@@ -139,17 +126,15 @@ describe('Shared Query Insights ModelPicker', () => {
         ]));
     }
 
-    it('labels the dropdown and details button and reports only the custom prompt basename', async () => {
+    it('labels the dropdown and details button and does not show prompt information', async () => {
         const onChange = vi.fn();
-        const onPrompt = vi.fn();
-        await renderPicker(onChange, onPrompt);
+        await renderPicker(onChange);
         const combobox = host.querySelector<HTMLButtonElement>('[role="combobox"]');
         expect(combobox?.getAttribute('aria-label')).toBe('Copilot model');
         expect(combobox?.textContent).toBe('Premium model');
         expect(host.querySelector('button[aria-label="Model details"]')).not.toBeNull();
-        expect(onPrompt).toHaveBeenLastCalledWith('Custom prompt private.md');
-        expect(details().Prompt).toBe('Custom prompt private.md');
-        expect(host.textContent).not.toContain('._local');
+        expect(details()).not.toHaveProperty('Prompt');
+        expect(host.textContent).not.toMatch(/prompt/i);
         expect(onChange).toHaveBeenLastCalledWith(available.models[0]);
     });
 
@@ -178,7 +163,6 @@ describe('Shared Query Insights ModelPicker', () => {
         mocks.getAvailableModels.mockResolvedValue({
             models: [], savedModelId: null, effectiveModelId: null, effectiveReason: null,
         });
-        mocks.getPromptSourceInfo.mockResolvedValue({ source: 'built-in' });
         const onChange = vi.fn();
         await renderPicker(onChange);
         expect(host.textContent).toContain('No Copilot models available');
@@ -245,7 +229,7 @@ describe('Shared Query Insights ModelPicker', () => {
     });
 
     it('uses underline with a decorative model icon only on the closed card trigger', async () => {
-        await renderPicker(vi.fn(), vi.fn(), { appearance: 'underline', showModelIcon: true });
+        await renderPicker(vi.fn(), { appearance: 'underline', showModelIcon: true });
         const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]');
         expect(trigger?.dataset.appearance).toBe('underline');
         expect(trigger?.textContent).toBe('Premium model');
@@ -256,7 +240,7 @@ describe('Shared Query Insights ModelPicker', () => {
     });
 
     it('preserves the wizard outline appearance and visible label without a model icon', async () => {
-        await renderPicker(vi.fn(), vi.fn(), { showLabel: true });
+        await renderPicker(vi.fn(), { showLabel: true });
         const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]');
         expect(trigger?.dataset.appearance).toBe('outline');
         expect(trigger?.querySelector('svg')).toBeNull();
@@ -270,7 +254,7 @@ describe('Shared Query Insights ModelPicker', () => {
             available.models[1],
         ];
         mocks.getAvailableModels.mockResolvedValue({ ...available, models, effectiveModelId: models[0].id });
-        await renderPicker(vi.fn(), vi.fn(), { appearance });
+        await renderPicker(vi.fn(), { appearance });
         expect([...host.querySelectorAll('[role="option"]')].map((element) => [
             element.getAttribute('data-value'), element.textContent,
         ])).toEqual([

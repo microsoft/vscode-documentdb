@@ -10,23 +10,14 @@
     &-actions {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: var(--spacingHorizontalM);
         flex-wrap: wrap;
     }
 
-    &-model-disclosure {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        column-gap: var(--spacingHorizontalS);
-        row-gap: var(--spacingVerticalXS);
-        margin-top: var(--spacingVerticalM);
-        color: var(--colorNeutralForeground3);
-    }
-
-    &-cost-disclosure {
+    // Keeps the picker's own error text under the dropdown instead of beside the button.
+    &-model {
         min-width: 0;
-        color: var(--colorNeutralForeground3);
+        max-width: 100%;
     }
 
     &-meta {
@@ -35,7 +26,7 @@
         flex-wrap: wrap;
         column-gap: var(--spacingHorizontalS);
         row-gap: var(--spacingVerticalXXS);
-        margin-top: var(--spacingVerticalS);
+        margin-top: var(--spacingVerticalM);
         color: var(--colorNeutralForeground3);
         font-size: var(--fontSizeBase200);
         line-height: var(--lineHeightBase200);

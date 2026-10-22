@@ -36,7 +36,6 @@ import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview
 import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
@@ -148,7 +147,6 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const [showErrorCard, setShowErrorCard] = useState(false);
     const [selectedModel, setSelectedModel] = useState<AvailableModelInfo>();
-    const [promptLabel, setPromptLabel] = useState<string>();
 
     /**
      * Subscription handle for the in-flight Stage 3 streaming subscription
@@ -672,7 +670,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <MarkdownCard
                         title={l10n.t('Query Execution Failed')}
                         icon={<WarningRegular />}
-                        showAiDisclaimer={false}
                         content={
                             stage2Data.concerns.join('\n\n') +
                             '\n\n---\n\n' +
@@ -829,7 +826,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                             <MarkdownCardEx
                                 title={l10n.t('Query Insights Not Available')}
                                 icon={<ChatMailRegular />}
-                                showAiDisclaimer={false}
                                 content={l10n.t(
                                     'This feature is currently not enabled for RU-based accounts. We recognize that these accounts have unique performance characteristics, and standard optimization patterns from other DocumentDB environments may not be applicable.\n\n' +
                                         'To ensure our recommendations are accurate and genuinely helpful, a specific analysis tailored to the Request Unit (RU) model is required. For this reason, we have disabled the feature for this account type.\n\n' +
@@ -988,11 +984,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     <GetPerformanceInsightsCard
                                         modelPicker={
                                             <ModelPicker
-                                                commandType={source.commandType ?? 'find' as CommandType}
+                                                size="medium"
                                                 appearance="underline"
                                                 showModelIcon
                                                 onModelChange={setSelectedModel}
-                                                onPromptLabelChange={setPromptLabel}
                                             />
                                         }
                                         className="cardSpacing"
@@ -1018,7 +1013,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                 pipeline.kind === 's3Error' ||
                                                 pipeline.kind === 's3Cancelled')
                                         }
-                                        promptLabel={promptLabel}
                                         mayUsePremiumRequests={!selectedModel?.isUtility}
                                         secondaryLink={source.explore && (
                                             <Link inline onClick={() => void source.explore?.()}>
@@ -1120,6 +1114,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                 return l10n.t('Powered by {0} via GitHub Copilot', modelName) +
                                                     usageByline(pipeline.kind === 's3Success' ? pipeline.model.usage : undefined);
                                             })()}
+                                        </Text>
+                                        {/* Said once for every AI card above, instead of in each card header. */}
+                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                            {l10n.t('AI responses may be inaccurate')}
                                         </Text>
                                     </div>
                                 </div>
