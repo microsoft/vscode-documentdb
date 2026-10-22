@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 // eslint-disable-next-line import/no-internal-modules
-import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import * as l10n from '@vscode/l10n';
+import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { MonacoEditor } from '../../components/MonacoEditor';
-import type { InputIssue } from './queryInsightsStandaloneInput';
 import './JsonPlanEditor.scss';
+import type { InputIssue } from './queryInsightsStandaloneInput';
 
 interface JsonPlanEditorProps {
     value: string;
@@ -28,7 +28,13 @@ const markerOwner = 'query-insights-input';
 /** The editor grows with its content between these heights (px), then scrolls. */
 const heightLimits = { full: { min: 120, max: 400 }, compact: { min: 96, max: 240 } } as const;
 
-export function JsonPlanEditor({ value, onChange, ariaLabel, issue, compact = false }: JsonPlanEditorProps): JSX.Element {
+export function JsonPlanEditor({
+    value,
+    onChange,
+    ariaLabel,
+    issue,
+    compact = false,
+}: JsonPlanEditorProps): JSX.Element {
     const [mounted, setMounted] = useState<MountedEditor>();
     const limits = compact ? heightLimits.compact : heightLimits.full;
     const [height, setHeight] = useState<number>(limits.min);
@@ -47,8 +53,10 @@ export function JsonPlanEditor({ value, onChange, ariaLabel, issue, compact = fa
             markers.push({
                 severity: mounted.monaco.MarkerSeverity.Error,
                 message: issue.message,
-                startLineNumber: line, endLineNumber: line,
-                startColumn: column, endColumn: column + 1,
+                startLineNumber: line,
+                endLineNumber: line,
+                startColumn: column,
+                endColumn: column + 1,
             });
         }
         mounted.monaco.editor.setModelMarkers(model, markerOwner, markers);
@@ -80,18 +88,24 @@ export function JsonPlanEditor({ value, onChange, ariaLabel, issue, compact = fa
                 onMount={onMount}
                 onEscapeEditor={() => exitRef.current?.focus()}
                 options={{
-                    ariaLabel, lineNumbers: 'on', minimap: { enabled: false },
-                    wordWrap: 'on', folding: false, automaticLayout: true,
-                    fontSize: 13, lineHeight: 19, glyphMargin: false,
+                    ariaLabel,
+                    lineNumbers: 'on',
+                    minimap: { enabled: false },
+                    wordWrap: 'on',
+                    folding: false,
+                    automaticLayout: true,
+                    fontSize: 13,
+                    lineHeight: 19,
+                    glyphMargin: false,
                     // Narrow gutter: line numbers stay (parse errors cite them); markers render as squiggles.
-                    lineNumbersMinChars: 3, lineDecorationsWidth: 6,
+                    lineNumbersMinChars: 3,
+                    lineDecorationsWidth: 6,
                     scrollBeyondLastLine: false,
                     scrollbar: { alwaysConsumeMouseWheel: false },
                     renderValidationDecorations: 'on',
                 }}
             />
-            <div ref={exitRef} tabIndex={-1} role="group"
-                aria-label={l10n.t('Outside {0} editor', ariaLabel)} />
+            <div ref={exitRef} tabIndex={-1} role="group" aria-label={l10n.t('Outside {0} editor', ariaLabel)} />
         </div>
     );
 }

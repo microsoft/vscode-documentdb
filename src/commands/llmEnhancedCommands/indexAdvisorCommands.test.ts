@@ -5,7 +5,12 @@
 
 import type { IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommandType, optimizeQuery, optimizeQueryStreaming, type QueryOptimizationContext } from './indexAdvisorCommands';
+import {
+    CommandType,
+    optimizeQuery,
+    optimizeQueryStreaming,
+    type QueryOptimizationContext,
+} from './indexAdvisorCommands';
 
 const mocks = vi.hoisted(() => ({
     getSession: vi.fn(),
@@ -86,9 +91,9 @@ describe('Query Insights optimization inputs', () => {
     });
 
     it('requires an execution plan in provided-data mode', async () => {
-        await expect(optimizeQuery(actionContext(), { ...providedContext(), executionPlan: undefined })).rejects.toThrow(
-            /execution plan is required/,
-        );
+        await expect(
+            optimizeQuery(actionContext(), { ...providedContext(), executionPlan: undefined }),
+        ).rejects.toThrow(/execution plan is required/);
         expect(mocks.sendMessage).not.toHaveBeenCalled();
         expect(mocks.getSession).not.toHaveBeenCalled();
     });

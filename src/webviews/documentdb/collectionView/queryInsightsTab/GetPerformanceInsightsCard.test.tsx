@@ -54,9 +54,13 @@ describe('GetPerformanceInsightsCard model disclosure', () => {
         ]);
         const footer = container.querySelector('.get-performance-insights-card-meta');
         const footerText = footer?.textContent ?? '';
-        expect(footerText.startsWith(premium
-            ? 'The selected model may use premium requests.'
-            : 'No additional cost for most GitHub Copilot subscribers.')).toBe(true);
+        expect(
+            footerText.startsWith(
+                premium
+                    ? 'The selected model may use premium requests.'
+                    : 'No additional cost for most GitHub Copilot subscribers.',
+            ),
+        ).toBe(true);
         expect(footerText).toContain('AI responses may be inaccurate');
         expect(footerText).toContain('Secondary link slot');
         expect(footer?.lastElementChild?.textContent).toBe('Learn more about AI Performance Insights');

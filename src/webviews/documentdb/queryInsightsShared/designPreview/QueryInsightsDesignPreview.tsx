@@ -26,19 +26,18 @@ export function QueryInsightsDesignPreview(): JSX.Element {
     const noop = (): void => undefined;
     return (
         <main className={styles.page}>
-            <Text as="h1" size={600} weight="semibold">Query Insights — selected card design</Text>
-            <Text>Preview fixture models only. The installed Query Insights tab and wizard use the live Copilot catalog.</Text>
+            <Text as="h1" size={600} weight="semibold">
+                Query Insights — selected card design
+            </Text>
+            <Text>
+                Preview fixture models only. The installed Query Insights tab and wizard use the live Copilot catalog.
+            </Text>
             <GetPerformanceInsightsCard
                 bodyText={BODY_TEXT}
                 isLoading={false}
                 enabled={!!selected}
                 modelPicker={
-                    <ModelPicker
-                        size="medium"
-                        appearance="underline"
-                        showModelIcon
-                        onModelChange={setSelected}
-                    />
+                    <ModelPicker size="medium" appearance="underline" showModelIcon onModelChange={setSelected} />
                 }
                 mayUsePremiumRequests={!selected?.isUtility}
                 secondaryLink={<Link inline>Explore with your own input…</Link>}

@@ -11,7 +11,6 @@ import {
     Card,
     CardHeader,
     makeStyles,
-    mergeClasses,
     Menu,
     MenuGroup,
     MenuGroupHeader,
@@ -19,6 +18,7 @@ import {
     MenuList,
     MenuPopover,
     MenuTrigger,
+    mergeClasses,
     Text,
     tokens,
     type MenuProps,
@@ -57,7 +57,12 @@ export const usePreviewStyles = makeStyles({
     },
     smallLink: { fontSize: tokens.fontSizeBase200, lineHeight: tokens.lineHeightBase200 },
     strong: { color: tokens.colorNeutralForeground1, fontWeight: tokens.fontWeightSemibold },
-    pillContent: { display: 'inline-flex', alignItems: 'center', gap: tokens.spacingHorizontalS, fontWeight: tokens.fontWeightRegular },
+    pillContent: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: tokens.spacingHorizontalS,
+        fontWeight: tokens.fontWeightRegular,
+    },
 
     staticSurface: {
         width: 'max-content',
@@ -85,12 +90,18 @@ export function contextLabel(model: AvailableModelInfo): string {
 export function costLabel(model: AvailableModelInfo): string | undefined {
     if (model.isUtility) return undefined;
     switch (model.priceCategory) {
-        case 'low': return 'Low cost';
-        case 'medium': return 'Medium cost';
-        case 'high': return 'High cost';
-        case 'very_high': return 'Very high cost';
-        case undefined: return undefined;
-        default: return `${model.priceCategory.charAt(0).toUpperCase()}${model.priceCategory.slice(1)} cost`;
+        case 'low':
+            return 'Low cost';
+        case 'medium':
+            return 'Medium cost';
+        case 'high':
+            return 'High cost';
+        case 'very_high':
+            return 'Very high cost';
+        case undefined:
+            return undefined;
+        default:
+            return `${model.priceCategory.charAt(0).toUpperCase()}${model.priceCategory.slice(1)} cost`;
     }
 }
 
@@ -107,7 +118,12 @@ export function CostBadge({ model }: { model: AvailableModelInfo }): JSX.Element
     if (!label) return null;
     const warning = model.priceCategory === 'high' || model.priceCategory === 'very_high';
     return (
-        <Badge appearance="tint" shape="rounded" size="small" color={!model.isUtility && warning ? 'warning' : 'informative'}>
+        <Badge
+            appearance="tint"
+            shape="rounded"
+            size="small"
+            color={!model.isUtility && warning ? 'warning' : 'informative'}
+        >
             {label}
         </Badge>
     );
@@ -132,23 +148,42 @@ export function MetaItems({ items }: { items: readonly ReactNode[] }): JSX.Eleme
 }
 
 /** Same shell as GetPerformanceInsightsCard: brand tint, sparkle, title and disclaimer. */
-export function InsightsCardShell({ children, headerAction }: { children: ReactNode; headerAction?: JSX.Element }): JSX.Element {
+export function InsightsCardShell({
+    children,
+    headerAction,
+}: {
+    children: ReactNode;
+    headerAction?: JSX.Element;
+}): JSX.Element {
     const styles = usePreviewStyles();
-    const disclaimer = <Text size={200} className={styles.muted}>AI responses may be inaccurate</Text>;
+    const disclaimer = (
+        <Text size={200} className={styles.muted}>
+            AI responses may be inaccurate
+        </Text>
+    );
     return (
         <Card
             className="get-performance-insights-card"
             style={{ backgroundColor: tokens.colorBrandBackground2, border: `1px solid ${tokens.colorBrandStroke1}` }}
         >
             <div className="optimization-card-container">
-                <SparkleRegular className="optimization-card-icon" style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
+                <SparkleRegular
+                    className="optimization-card-icon"
+                    style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }}
+                />
                 <div className={styles.cardContent}>
                     <CardHeader
                         className={styles.cardHeader}
-                        header={<Text weight="semibold" size={500}>AI Performance Insights</Text>}
+                        header={
+                            <Text weight="semibold" size={500}>
+                                AI Performance Insights
+                            </Text>
+                        }
                         action={headerAction ?? disclaimer}
                     />
-                    <Text size={300} className={styles.cardBody}>{BODY_TEXT}</Text>
+                    <Text size={300} className={styles.cardBody}>
+                        {BODY_TEXT}
+                    </Text>
                     {children}
                     {headerAction && <div className={styles.metaLine}>{disclaimer}</div>}
                 </div>
@@ -191,7 +226,13 @@ export interface ModelMenuProps {
 }
 
 /** Interactive model menu: radio items grouped by category, cost badge per item. */
-export function ModelMenu({ selectedId, onSelect, children, extra, positioning = 'below-start' }: ModelMenuProps): JSX.Element {
+export function ModelMenu({
+    selectedId,
+    onSelect,
+    children,
+    extra,
+    positioning = 'below-start',
+}: ModelMenuProps): JSX.Element {
     return (
         <Menu
             positioning={positioning}
@@ -261,8 +302,14 @@ export function PopoverFrame({
                 minHeight: Math.ceil(top + floating.offsetHeight + 8),
             };
             setPlacement((previous) =>
-                previous && previous.top === next.top && previous.left === next.left &&
-                previous.right === next.right && previous.minHeight === next.minHeight ? previous : next);
+                previous &&
+                previous.top === next.top &&
+                previous.left === next.left &&
+                previous.right === next.right &&
+                previous.minHeight === next.minHeight
+                    ? previous
+                    : next,
+            );
         };
         update();
         const frameId = requestAnimationFrame(update);

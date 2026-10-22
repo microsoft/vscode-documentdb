@@ -84,8 +84,15 @@ vi.mock('vscode', () => {
             }),
         },
         CancellationTokenSource,
-        LanguageModelTextPart: class { constructor(public value: string) {} },
-        LanguageModelDataPart: class { constructor(public data: Uint8Array, public mimeType: string) {} },
+        LanguageModelTextPart: class {
+            constructor(public value: string) {}
+        },
+        LanguageModelDataPart: class {
+            constructor(
+                public data: Uint8Array,
+                public mimeType: string,
+            ) {}
+        },
         lm: { selectChatModels: (...args: unknown[]) => selectChatModelsMock(...args) as unknown },
     };
 });
@@ -170,15 +177,22 @@ describe('CopilotService.streamMessage', () => {
 
     it.each(['buffered', 'streaming'])('uses provider counts and exact credits in the %s path', async (path) => {
         const usage = {
-            prompt_tokens: 120, completion_tokens: 45, total_tokens: 170,
+            prompt_tokens: 120,
+            completion_tokens: 45,
+            total_tokens: 170,
             prompt_tokens_details: { cached_tokens: 100 },
             completion_tokens_details: { reasoning_tokens: 20 },
             copilot_usage: { total_nano_aiu: 12_345_678 },
         };
-        selectChatModelsMock.mockResolvedValueOnce([makeFakeModel(['Hi'], [
-            { ignored: 'tool/thinking part' },
-            new LanguageModelDataPart(new TextEncoder().encode(JSON.stringify(usage)), 'usage'),
-        ])]);
+        selectChatModelsMock.mockResolvedValueOnce([
+            makeFakeModel(
+                ['Hi'],
+                [
+                    { ignored: 'tool/thinking part' },
+                    new LanguageModelDataPart(new TextEncoder().encode(JSON.stringify(usage)), 'usage'),
+                ],
+            ),
+        ]);
         const messages = [makeUserMessage('Hello') as never];
         let result;
         if (path === 'buffered') {
@@ -191,40 +205,65 @@ describe('CopilotService.streamMessage', () => {
             result = await handle.completion;
         }
         expect(result.usage).toMatchObject({
-            promptTokens: 120, responseTokens: 45, totalTokens: 170,
-            reportedPromptTokens: 120, reportedCompletionTokens: 45,
-            cachedPromptTokens: 100, reasoningTokens: 20,
-            credits: 0.012345678, usageSource: 'provider',
+            promptTokens: 120,
+            responseTokens: 45,
+            totalTokens: 170,
+            reportedPromptTokens: 120,
+            reportedCompletionTokens: 45,
+            cachedPromptTokens: 100,
+            reasoningTokens: 20,
+            credits: 0.012345678,
+            usageSource: 'provider',
         });
-        expect(telemetry.find((entry) => entry.event.endsWith(path === 'buffered' ? '.sendMessage' : '.streamMessage'))?.measurements)
-            .toMatchObject({ credits: 0.012345678, reportedPromptTokens: 120, reportedCompletionTokens: 45 });
+        expect(
+            telemetry.find((entry) => entry.event.endsWith(path === 'buffered' ? '.sendMessage' : '.streamMessage'))
+                ?.measurements,
+        ).toMatchObject({ credits: 0.012345678, reportedPromptTokens: 120, reportedCompletionTokens: 45 });
     });
 
     it('keeps zero credits/counts and estimates only missing provider token fields', async () => {
-        selectChatModelsMock.mockResolvedValueOnce([makeFakeModel(['Hello'], [
-            new LanguageModelDataPart(new TextEncoder().encode(JSON.stringify({
-                prompt_tokens: 0, copilot_usage: { total_nano_aiu: 0 },
-            })), 'usage'),
-            new LanguageModelDataPart(new TextEncoder().encode('ignored'), 'other'),
-        ])]);
+        selectChatModelsMock.mockResolvedValueOnce([
+            makeFakeModel(
+                ['Hello'],
+                [
+                    new LanguageModelDataPart(
+                        new TextEncoder().encode(
+                            JSON.stringify({
+                                prompt_tokens: 0,
+                                copilot_usage: { total_nano_aiu: 0 },
+                            }),
+                        ),
+                        'usage',
+                    ),
+                    new LanguageModelDataPart(new TextEncoder().encode('ignored'), 'other'),
+                ],
+            ),
+        ]);
         const result = await CopilotService.sendMessage([makeUserMessage('Hello') as never]);
         expect(result.usage).toMatchObject({
-            promptTokens: 0, responseTokens: 5, totalTokens: 5,
-            reportedPromptTokens: 0, credits: 0, usageSource: 'provider',
+            promptTokens: 0,
+            responseTokens: 5,
+            totalTokens: 5,
+            reportedPromptTokens: 0,
+            credits: 0,
+            usageSource: 'provider',
         });
         expect(result.usage?.reportedCompletionTokens).toBeUndefined();
     });
 
-    it.each(['{bad', 'null', '{"prompt_tokens":"invalid","completion_tokens":-5,"copilot_usage":{"total_nano_aiu":"bad"}}'])
-        ('falls back safely on malformed usage: %s', async (data) => {
-            selectChatModelsMock.mockResolvedValueOnce([makeFakeModel(['Safe text'], [
-                new LanguageModelDataPart(new TextEncoder().encode(data), 'usage'),
-            ])]);
-            const result = await CopilotService.sendMessage([makeUserMessage('Hello') as never]);
-            expect(result.text).toBe('Safe text');
-            expect(result.usage).toMatchObject({ responseTokens: 9, usageSource: 'estimated' });
-            expect(result.usage?.credits).toBeUndefined();
-        });
+    it.each([
+        '{bad',
+        'null',
+        '{"prompt_tokens":"invalid","completion_tokens":-5,"copilot_usage":{"total_nano_aiu":"bad"}}',
+    ])('falls back safely on malformed usage: %s', async (data) => {
+        selectChatModelsMock.mockResolvedValueOnce([
+            makeFakeModel(['Safe text'], [new LanguageModelDataPart(new TextEncoder().encode(data), 'usage')]),
+        ]);
+        const result = await CopilotService.sendMessage([makeUserMessage('Hello') as never]);
+        expect(result.text).toBe('Safe text');
+        expect(result.usage).toMatchObject({ responseTokens: 9, usageSource: 'estimated' });
+        expect(result.usage?.credits).toBeUndefined();
+    });
 
     it('ends iteration and rejects completion when the signal is aborted mid-stream', async () => {
         // Use a model that yields fragments slowly so the test can abort in the middle.

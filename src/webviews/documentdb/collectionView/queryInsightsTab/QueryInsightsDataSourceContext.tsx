@@ -44,23 +44,29 @@ function useCollectionDataSource(): QueryInsightsDataSource {
         (transition) => setState((previous) => ({ ...previous, queryInsights: transition(previous.queryInsights) })),
         [setState],
     );
-    return useMemo<QueryInsightsDataSource>(() => ({
-        pipeline: state.queryInsights,
-        dispatch,
-        identity: configuration,
-        actionsEnabled: true,
-        isQueryLoading: state.isLoading,
-        getStage1: () => client.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1.query(),
-        getStage2: () => client.mongoClusters.collectionView.queryInsights.getQueryInsightsStage2.query(),
-        streamStage3: (requestKey, callbacks) =>
-            client.mongoClusters.collectionView.queryInsights.streamStage3.subscribe({ requestKey }, callbacks),
-        executeAction: (actionId, payload) =>
-            client.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({ actionId, payload }),
-        explore: async (): Promise<void> => {
-            const prefill = await client.mongoClusters.collectionView.queryInsights.getExplorePrefill.query();
-            await client.queryInsightsStandalone.openExplorer.mutate(prefill);
-        },
-    }), [state.queryInsights, state.isLoading, dispatch, configuration, client]);
+    return useMemo<QueryInsightsDataSource>(
+        () => ({
+            pipeline: state.queryInsights,
+            dispatch,
+            identity: configuration,
+            actionsEnabled: true,
+            isQueryLoading: state.isLoading,
+            getStage1: () => client.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1.query(),
+            getStage2: () => client.mongoClusters.collectionView.queryInsights.getQueryInsightsStage2.query(),
+            streamStage3: (requestKey, callbacks) =>
+                client.mongoClusters.collectionView.queryInsights.streamStage3.subscribe({ requestKey }, callbacks),
+            executeAction: (actionId, payload) =>
+                client.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
+                    actionId,
+                    payload,
+                }),
+            explore: async (): Promise<void> => {
+                const prefill = await client.mongoClusters.collectionView.queryInsights.getExplorePrefill.query();
+                await client.queryInsightsStandalone.openExplorer.mutate(prefill);
+            },
+        }),
+        [state.queryInsights, state.isLoading, dispatch, configuration, client],
+    );
 }
 
 export function CollectionQueryInsightsProvider({ children }: { children: ReactNode }): JSX.Element {

@@ -8,10 +8,18 @@
 import { Button, Link, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 import { CheckmarkRegular, SparkleRegular } from '@fluentui/react-icons';
 import { type JSX } from 'react';
+import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { groupPreviewModels, previewModel } from './mockModels';
 import type { OptionProps } from './ModelPillOption';
-import { contextLabel, CostBadge, costExplanation, costLabel, InsightsCardShell, MetaItems, usePreviewStyles } from './previewParts';
-import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
+import {
+    contextLabel,
+    CostBadge,
+    costExplanation,
+    costLabel,
+    InsightsCardShell,
+    MetaItems,
+    usePreviewStyles,
+} from './previewParts';
 
 /** Option D: the card names the model; "Change model…" asks the host for vscode.window.showQuickPick. */
 export function QuickPickOption({ initialModelId, anchorRef }: OptionProps): JSX.Element {
@@ -20,21 +28,34 @@ export function QuickPickOption({ initialModelId, anchorRef }: OptionProps): JSX
     return (
         <InsightsCardShell>
             <div className={styles.actions}>
-                <Button appearance="primary" icon={<SparkleRegular />}>Get AI Performance Insights</Button>
-                <Button appearance="subtle" aria-label="Learn more about AI Performance Insights">Learn more</Button>
+                <Button appearance="primary" icon={<SparkleRegular />}>
+                    Get AI Performance Insights
+                </Button>
+                <Button appearance="subtle" aria-label="Learn more about AI Performance Insights">
+                    Learn more
+                </Button>
             </div>
             <div className={styles.metaLine}>
                 <span className={styles.pillContent}>
-                    <span>Uses <span className={styles.strong}>{model.name}</span></span>
+                    <span>
+                        Uses <span className={styles.strong}>{model.name}</span>
+                    </span>
                     <CostBadge model={model} />
                 </span>
                 <span ref={anchorRef} className={styles.anchor}>
-                    <Link inline className={styles.smallLink}>Change model…</Link>
+                    <Link inline className={styles.smallLink}>
+                        Change model…
+                    </Link>
                 </span>
             </div>
             <div className={styles.metaLine}>
                 <MetaItems
-                    items={['Built-in prompt', <Link key="explore" inline className={styles.smallLink}>Explore with your own input…</Link>]}
+                    items={[
+                        'Built-in prompt',
+                        <Link key="explore" inline className={styles.smallLink}>
+                            Explore with your own input…
+                        </Link>,
+                    ]}
                 />
             </div>
         </InsightsCardShell>
@@ -83,8 +104,19 @@ const useQuickPickStyles = makeStyles({
         color: tokens.colorNeutralForeground1Selected,
         '& span': { color: 'inherit' },
     },
-    label: { display: 'flex', alignItems: 'baseline', gap: tokens.spacingHorizontalS, minWidth: 0, whiteSpace: 'nowrap' },
-    description: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200, overflow: 'hidden', textOverflow: 'ellipsis' },
+    label: {
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: tokens.spacingHorizontalS,
+        minWidth: 0,
+        whiteSpace: 'nowrap',
+    },
+    description: {
+        color: tokens.colorNeutralForeground3,
+        fontSize: tokens.fontSizeBase200,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
     detail: {
         gridColumn: 2,
         color: tokens.colorNeutralForeground3,
@@ -118,13 +150,19 @@ export function QuickPickMock({ selectedId }: { selectedId: string }): JSX.Eleme
                 group.models.map((model, index) => (
                     <div
                         key={model.id}
-                        className={mergeClasses(qp.row, groupIndex > 0 && index === 0 && qp.separator, model.id === selectedId && qp.active)}
+                        className={mergeClasses(
+                            qp.row,
+                            groupIndex > 0 && index === 0 && qp.separator,
+                            model.id === selectedId && qp.active,
+                        )}
                     >
                         <span>{model.id === selectedId && <CheckmarkRegular aria-hidden />}</span>
                         <span className={qp.label}>
                             <span>{model.name}</span>
                             <span className={qp.description}>
-                                {[costLabel(model), contextLabel(model) && `${contextLabel(model)} context`].filter(Boolean).join(' · ')}
+                                {[costLabel(model), contextLabel(model) && `${contextLabel(model)} context`]
+                                    .filter(Boolean)
+                                    .join(' · ')}
                             </span>
                         </span>
                         <span className={qp.groupLabel}>{index === 0 ? group.label : ''}</span>

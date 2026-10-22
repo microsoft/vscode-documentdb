@@ -37,25 +37,42 @@ export function SettingsStripOption({ initialModelId, anchorRef }: OptionProps):
     return (
         <InsightsCardShell>
             <div className={styles.actions}>
-                <Button appearance="primary" icon={<SparkleRegular />}>Get AI Performance Insights</Button>
-                <Button appearance="subtle" aria-label="Learn more about AI Performance Insights">Learn more</Button>
+                <Button appearance="primary" icon={<SparkleRegular />}>
+                    Get AI Performance Insights
+                </Button>
+                <Button appearance="subtle" aria-label="Learn more about AI Performance Insights">
+                    Learn more
+                </Button>
             </div>
             <Divider className={strip.divider} />
             <div className={strip.strip}>
-                <Text size={200} className={strip.label}>Model</Text>
+                <Text size={200} className={strip.label}>
+                    Model
+                </Text>
                 <span className={strip.value}>
-                    <Text size={200} weight="semibold">{model.name}</Text>
+                    <Text size={200} weight="semibold">
+                        {model.name}
+                    </Text>
                     <CostBadge model={model} />
                     <span ref={anchorRef} className={styles.anchor}>
                         <ModelMenu selectedId={modelId} onSelect={setModelId}>
-                            <Link as="button" inline className={styles.smallLink} aria-label={`Change model (current: ${model.name})`}>
+                            <Link
+                                as="button"
+                                inline
+                                className={styles.smallLink}
+                                aria-label={`Change model (current: ${model.name})`}
+                            >
                                 Change
                             </Link>
                         </ModelMenu>
                     </span>
                 </span>
-                <Link inline className={mergeClasses(styles.smallLink, strip.explore)}>Explore with your own input…</Link>
-                <Text size={200} className={strip.label}>Prompt</Text>
+                <Link inline className={mergeClasses(styles.smallLink, strip.explore)}>
+                    Explore with your own input…
+                </Link>
+                <Text size={200} className={strip.label}>
+                    Prompt
+                </Text>
                 <Text size={200}>Built-in</Text>
             </div>
         </InsightsCardShell>

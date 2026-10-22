@@ -61,10 +61,14 @@ function makeStage2Response(overrides: Partial<QueryInsightsStage2Response> = {}
 
 describe('buildStaticAnalysisSummary', () => {
     it('explains skipped count rules instead of presenting find selectivity or returned-document claims', () => {
-        const summary = buildStaticAnalysisSummary(makeStage2Response({
-            analysisProfile: 'count', documentsReturned: 123,
-            notApplicable: ['selectivity', 'fetchOverhead', 'inMemorySort', 'examinedToReturnedRatio'],
-        }), 1000);
+        const summary = buildStaticAnalysisSummary(
+            makeStage2Response({
+                analysisProfile: 'count',
+                documentsReturned: 123,
+                notApplicable: ['selectivity', 'fetchOverhead', 'inMemorySort', 'examinedToReturnedRatio'],
+            }),
+            1000,
+        );
         expect(summary).toContain('Analysis Profile: COUNT');
         expect(summary).toContain('Documents counted (nCounted): 123');
         expect(summary).toContain('Skipped rules: returned-document efficiency ratio');
@@ -76,18 +80,25 @@ describe('buildStaticAnalysisSummary', () => {
     });
 
     it('does not tell the model a missing nCounted means zero', () => {
-        const summary = buildStaticAnalysisSummary(makeStage2Response({
-            analysisProfile: 'count', documentsReturned: 0, notApplicable: ['documentsReturned'],
-        }));
+        const summary = buildStaticAnalysisSummary(
+            makeStage2Response({
+                analysisProfile: 'count',
+                documentsReturned: 0,
+                notApplicable: ['documentsReturned'],
+            }),
+        );
         expect(summary).toContain('Documents counted (nCounted): Unavailable');
         expect(summary).not.toContain('Documents counted (nCounted): 0');
     });
 
     it('scopes aggregate metrics to the cursor and explains unrated stages and pipeline sorting', () => {
-        const summary = buildStaticAnalysisSummary(makeStage2Response({
-            analysisProfile: 'aggregate', notApplicable: ['inMemorySort'],
-            unassessedPipelineStages: ['$group', '$sort'],
-        }));
+        const summary = buildStaticAnalysisSummary(
+            makeStage2Response({
+                analysisProfile: 'aggregate',
+                notApplicable: ['inMemorySort'],
+                unassessedPipelineStages: ['$group', '$sort'],
+            }),
+        );
         expect(summary).toContain('Documents passed to pipeline (initial cursor): 50');
         expect(summary).toContain('Later pipeline stages not rated: $group, $sort');
         expect(summary).toContain('NOT final pipeline output');

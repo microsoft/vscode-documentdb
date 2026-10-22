@@ -32,8 +32,8 @@ import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigatio
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
 import { IndexesTab } from './indexesTab/IndexesTab';
 import { stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
-import { QueryInsightsMain } from './queryInsightsTab/QueryInsightsTab';
 import { CollectionQueryInsightsProvider } from './queryInsightsTab/QueryInsightsDataSourceContext';
+import { QueryInsightsMain } from './queryInsightsTab/QueryInsightsTab';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 
 interface QueryResults {
@@ -769,7 +769,9 @@ export const CollectionView = (): JSX.Element => {
                     {selectedTab === 'tab_indexes' && <IndexesTab />}
 
                     {selectedTab === 'tab_queryInsights' && (
-                        <CollectionQueryInsightsProvider><QueryInsightsMain /></CollectionQueryInsightsProvider>
+                        <CollectionQueryInsightsProvider>
+                            <QueryInsightsMain />
+                        </CollectionQueryInsightsProvider>
                     )}
                 </div>
             </div>

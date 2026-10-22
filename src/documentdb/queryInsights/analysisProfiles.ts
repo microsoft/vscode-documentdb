@@ -8,7 +8,7 @@ import type { QueryInsightsAnalysisProfile } from '../../webviews/documentdb/col
 import type { ExecutionStatsAnalysis } from './ExplainPlanAnalyzer';
 
 export function asExplainObject(value: unknown): Document | undefined {
-    return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Document : undefined;
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Document) : undefined;
 }
 
 export function getInitialExplainPlan(explain: Document, profile: QueryInsightsAnalysisProfile): Document {
@@ -19,8 +19,9 @@ export function getInitialExplainPlan(explain: Document, profile: QueryInsightsA
 
 export function getPipelineStageNames(explain: Document): string[] {
     if (Array.isArray(explain.stages)) {
-        return (explain.stages as unknown[]).slice(1).flatMap((stage) =>
-            Object.keys(asExplainObject(stage) ?? {}).filter((key) => key.startsWith('$')));
+        return (explain.stages as unknown[])
+            .slice(1)
+            .flatMap((stage) => Object.keys(asExplainObject(stage) ?? {}).filter((key) => key.startsWith('$')));
     }
     const pipeline = asExplainObject(explain.command)?.pipeline as unknown;
     if (!Array.isArray(pipeline)) return [];
@@ -37,7 +38,7 @@ export function findCountedResult(value: unknown): number | undefined {
     if (executionCount !== undefined) return executionCount;
     const children: unknown[] = [node.inputStage];
     for (const key of ['inputStages', 'shards']) {
-        if (Array.isArray(node[key])) children.push(...node[key] as unknown[]);
+        if (Array.isArray(node[key])) children.push(...(node[key] as unknown[]));
     }
     const counts = children.map(findCountedResult).filter((count): count is number => count !== undefined);
     return counts.length > 0 ? counts.reduce((sum, count) => sum + count, 0) : undefined;
@@ -53,8 +54,14 @@ export function applyCountRating(analysis: ExecutionStatsAnalysis, totalDocs?: n
     else if (indexed || (examinedFraction !== undefined && examinedFraction < 0.5)) score = 'fair';
     else score = 'poor';
     const skipped = new Set([
-        'no_matching_documents', 'high_efficiency_ratio', 'moderate_efficiency_ratio',
-        'low_efficiency_ratio', 'very_low_efficiency_ratio', 'in_memory_sort', 'efficient_sorting', 'no_sorting_required',
+        'no_matching_documents',
+        'high_efficiency_ratio',
+        'moderate_efficiency_ratio',
+        'low_efficiency_ratio',
+        'very_low_efficiency_ratio',
+        'in_memory_sort',
+        'efficient_sorting',
+        'no_sorting_required',
     ]);
     analysis.performanceRating = {
         score,
@@ -64,9 +71,16 @@ export function applyCountRating(analysis: ExecutionStatsAnalysis, totalDocs?: n
                 diagnosticId: 'count_scan_work',
                 type: score === 'excellent' || score === 'good' ? 'positive' : 'neutral',
                 message: l10n.t('Count scan work'),
-                details: examinedFraction === undefined
-                    ? l10n.t('The count examined {0} documents. Collection size is unavailable; the rating uses index access and examined documents, not returned-document selectivity.', analysis.totalDocsExamined)
-                    : l10n.t('The count examined {0}% of the collection. The rating uses index access and examined documents, not returned-document selectivity.', (examinedFraction * 100).toFixed(1)),
+                details:
+                    examinedFraction === undefined
+                        ? l10n.t(
+                              'The count examined {0} documents. Collection size is unavailable; the rating uses index access and examined documents, not returned-document selectivity.',
+                              analysis.totalDocsExamined,
+                          )
+                        : l10n.t(
+                              'The count examined {0}% of the collection. The rating uses index access and examined documents, not returned-document selectivity.',
+                              (examinedFraction * 100).toFixed(1),
+                          ),
             },
         ],
     };

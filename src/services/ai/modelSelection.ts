@@ -110,9 +110,7 @@ function toInfo(model: vscode.LanguageModelChat): AvailableModelInfo {
     return {
         ...readRuntimeModelMetadata(model),
         id: model.id,
-        name: isUtilityModel(model)
-            ? vscode.l10n.t('{0} (utility)', model.name || model.id)
-            : model.name || model.id,
+        name: isUtilityModel(model) ? vscode.l10n.t('{0} (utility)', model.name || model.id) : model.name || model.id,
         family: model.family,
         vendor: model.vendor,
         version: model.version,
@@ -130,8 +128,14 @@ function readRuntimeModelMetadata(value: unknown): Partial<AvailableModelInfo> {
         if (typeof model[key] === 'string') metadata[key] = model[key];
     }
     for (const key of [
-        'inputCost', 'outputCost', 'cacheCost', 'cacheWriteCost',
-        'longContextInputCost', 'longContextOutputCost', 'longContextCacheCost', 'longContextCacheWriteCost',
+        'inputCost',
+        'outputCost',
+        'cacheCost',
+        'cacheWriteCost',
+        'longContextInputCost',
+        'longContextOutputCost',
+        'longContextCacheCost',
+        'longContextCacheWriteCost',
     ] as const) {
         const cost = model[key];
         if (typeof cost === 'number' && Number.isFinite(cost) && cost >= 0) metadata[key] = cost;

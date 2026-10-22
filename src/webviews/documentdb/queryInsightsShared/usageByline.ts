@@ -8,9 +8,10 @@ import type { QueryInsightsStreamUsage } from '../collectionView/types/queryInsi
 export function usageByline(usage: QueryInsightsStreamUsage | undefined): string {
     const parts: string[] = [];
     if (usage?.credits !== undefined) {
-        const credits = usage.credits > 0 && usage.credits < 0.01
-            ? '< 0.01'
-            : new Intl.NumberFormat(navigator.language, { maximumFractionDigits: 2 }).format(usage.credits);
+        const credits =
+            usage.credits > 0 && usage.credits < 0.01
+                ? '< 0.01'
+                : new Intl.NumberFormat(navigator.language, { maximumFractionDigits: 2 }).format(usage.credits);
         parts.push(l10n.t('{0} credits', credits));
     }
     if (usage?.promptTokens !== undefined && usage.responseTokens !== undefined) {

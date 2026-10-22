@@ -12,8 +12,8 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
-import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { getAvailableModels } from '../../services/ai/modelSelection';
+import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 

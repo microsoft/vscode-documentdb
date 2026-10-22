@@ -170,14 +170,25 @@ describe('QueryInsightsAIService.getOptimizationRecommendationsStreaming (WI-3)'
     it('forwards connectionless context and a non-find command without changing connected defaults', async () => {
         optimizeQueryStreamingMock.mockResolvedValueOnce(makeStubHandle([completeJsonResponse]));
         const handle = await service.getOptimizationRecommendationsStreaming(
-            '', '[]', 'db', 'items', {}, undefined, undefined, {
+            '',
+            '[]',
+            'db',
+            'items',
+            {},
+            undefined,
+            undefined,
+            {
                 providedData: { clusterInfo: { platform: 'documentdb' } },
-                modelId: 'picked', commandType: 'aggregate' as import('../../commands/llmEnhancedCommands/indexAdvisorCommands').CommandType,
+                modelId: 'picked',
+                commandType:
+                    'aggregate' as import('../../commands/llmEnhancedCommands/indexAdvisorCommands').CommandType,
             },
         );
         await handle.completion;
         expect(optimizeQueryStreamingMock.mock.calls[0][1]).toMatchObject({
-            query: '[]', commandType: 'aggregate', modelId: 'picked',
+            query: '[]',
+            commandType: 'aggregate',
+            modelId: 'picked',
             providedData: { clusterInfo: { platform: 'documentdb' } },
         });
     });

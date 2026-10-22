@@ -473,11 +473,7 @@ export class CopilotService {
             return { model: undefined, outcome: 'no-model-available' };
         }
         ext.outputChannel.trace(
-            l10n.t(
-                '[Copilot] Selected model ({0}): {1}',
-                resolved.source,
-                this.formatModelDetails(resolved.model),
-            ),
+            l10n.t('[Copilot] Selected model ({0}): {1}', resolved.source, this.formatModelDetails(resolved.model)),
         );
         return { model: resolved.model, outcome: `user-${resolved.source}` };
     }
@@ -687,7 +683,9 @@ export class CopilotService {
                 : Promise.resolve<(number | undefined)[]>([]),
             reported.reportedCompletionTokens !== undefined
                 ? undefined
-                : responseText.length > 0 ? countSafely(responseText) : Promise.resolve<number | undefined>(0),
+                : responseText.length > 0
+                  ? countSafely(responseText)
+                  : Promise.resolve<number | undefined>(0),
         ]);
 
         let promptTokens = reported.reportedPromptTokens;
@@ -696,7 +694,8 @@ export class CopilotService {
         }
 
         const responseTokens = reported.reportedCompletionTokens ?? estimatedResponseTokens;
-        const totalTokens = reported.totalTokens ??
+        const totalTokens =
+            reported.totalTokens ??
             (promptTokens !== undefined && responseTokens !== undefined ? promptTokens + responseTokens : undefined);
 
         let promptUtilizationPct: number | undefined;
@@ -705,7 +704,12 @@ export class CopilotService {
         }
 
         return {
-            ...reported, promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct,
+            ...reported,
+            promptTokens,
+            responseTokens,
+            totalTokens,
+            maxInputTokens,
+            promptUtilizationPct,
             usageSource: Object.keys(reported).length > 0 ? 'provider' : 'estimated',
         };
     }
@@ -723,7 +727,8 @@ export class CopilotService {
             const parsed: unknown = JSON.parse(new TextDecoder().decode(data));
             const object = (value: unknown): Record<string, unknown> =>
                 typeof value === 'object' && value !== null && !Array.isArray(value)
-                    ? value as Record<string, unknown> : {};
+                    ? (value as Record<string, unknown>)
+                    : {};
             const number = (value: unknown): number | undefined =>
                 typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
             const usage = object(parsed);

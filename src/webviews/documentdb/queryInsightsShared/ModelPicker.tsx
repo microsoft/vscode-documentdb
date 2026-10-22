@@ -40,10 +40,14 @@ const knownCategories = ['powerful', 'versatile', 'lightweight'];
 
 function categoryLabel(category: string | undefined): string {
     switch (category) {
-        case 'powerful': return l10n.t('Powerful');
-        case 'versatile': return l10n.t('Versatile');
-        case 'lightweight': return l10n.t('Lightweight');
-        default: return l10n.t('Other');
+        case 'powerful':
+            return l10n.t('Powerful');
+        case 'versatile':
+            return l10n.t('Versatile');
+        case 'lightweight':
+            return l10n.t('Lightweight');
+        default:
+            return l10n.t('Other');
     }
 }
 
@@ -57,19 +61,42 @@ function ModelCostBadge({ category }: { category: string | undefined }): JSX.Ele
     // CAPI model_picker_price_category is read by Copilot's platform/endpoint/node/chatEndpoint.ts.
     let label: string;
     switch (category) {
-        case 'low': label = l10n.t('Low cost'); break;
-        case 'medium': label = l10n.t('Medium cost'); break;
-        case 'high': label = l10n.t('High cost'); break;
-        case 'very_high': label = l10n.t('Very high cost'); break;
-        default: label = l10n.t('{0} cost', category.charAt(0).toUpperCase() + category.slice(1));
+        case 'low':
+            label = l10n.t('Low cost');
+            break;
+        case 'medium':
+            label = l10n.t('Medium cost');
+            break;
+        case 'high':
+            label = l10n.t('High cost');
+            break;
+        case 'very_high':
+            label = l10n.t('Very high cost');
+            break;
+        default:
+            label = l10n.t('{0} cost', category.charAt(0).toUpperCase() + category.slice(1));
     }
-    return <Badge appearance="tint" shape="rounded" size="small"
-        color={category === 'high' || category === 'very_high' ? 'warning' : 'informative'}>{label}</Badge>;
+    return (
+        <Badge
+            appearance="tint"
+            shape="rounded"
+            size="small"
+            color={category === 'high' || category === 'very_high' ? 'warning' : 'informative'}
+        >
+            {label}
+        </Badge>
+    );
 }
 
 type CostKey =
-    | 'inputCost' | 'outputCost' | 'cacheCost' | 'cacheWriteCost'
-    | 'longContextInputCost' | 'longContextOutputCost' | 'longContextCacheCost' | 'longContextCacheWriteCost';
+    | 'inputCost'
+    | 'outputCost'
+    | 'cacheCost'
+    | 'cacheWriteCost'
+    | 'longContextInputCost'
+    | 'longContextOutputCost'
+    | 'longContextCacheCost'
+    | 'longContextCacheWriteCost';
 
 /** One line per context tier, each a list of parts such as "Input 125", "Output 1,000". */
 function creditLines(model: AvailableModelInfo): { key: string; label?: string; parts: string[] }[] {
@@ -79,7 +106,12 @@ function creditLines(model: AvailableModelInfo): { key: string; label?: string; 
         {
             key: 'long-context',
             label: l10n.t('Long context'),
-            keys: ['longContextInputCost', 'longContextOutputCost', 'longContextCacheCost', 'longContextCacheWriteCost'],
+            keys: [
+                'longContextInputCost',
+                'longContextOutputCost',
+                'longContextCacheCost',
+                'longContextCacheWriteCost',
+            ],
         },
     ];
     return tiers.flatMap((tier) => {
@@ -100,7 +132,11 @@ interface ModelFact {
 
 /** Every fact is always listed, so a missing value reads as "not reported", never as a hidden row. */
 function modelFacts(model: AvailableModelInfo, selectionReason: string): ModelFact[] {
-    const notReported = <Text size={200} className="query-insights-model-muted">{l10n.t('Not reported for this model')}</Text>;
+    const notReported = (
+        <Text size={200} className="query-insights-model-muted">
+            {l10n.t('Not reported for this model')}
+        </Text>
+    );
     const credits = creditLines(model);
     const capabilities: string[] = [];
     if (model.supportsToolCalling !== undefined) {
@@ -120,27 +156,33 @@ function modelFacts(model: AvailableModelInfo, selectionReason: string): ModelFa
         {
             key: 'credits',
             label: l10n.t('Credits per 1M tokens'),
-            value: credits.length > 0
-                ? credits.map((line) => (
-                    // Each part stays on one line, so wrapping happens only between parts.
-                    <Text key={line.key} size={200} block>
-                        {line.label && <>{l10n.t('{0}:', line.label)} </>}
-                        {line.parts.map((part, index) => (
-                            <Fragment key={part}>
-                                {index > 0 && ' · '}
-                                <span className="query-insights-model-nowrap">{part}</span>
-                            </Fragment>
-                        ))}
-                    </Text>
-                ))
-                : notReported,
+            value:
+                credits.length > 0
+                    ? credits.map((line) => (
+                          // Each part stays on one line, so wrapping happens only between parts.
+                          <Text key={line.key} size={200} block>
+                              {line.label && <>{l10n.t('{0}:', line.label)} </>}
+                              {line.parts.map((part, index) => (
+                                  <Fragment key={part}>
+                                      {index > 0 && ' · '}
+                                      <span className="query-insights-model-nowrap">{part}</span>
+                                  </Fragment>
+                              ))}
+                          </Text>
+                      ))
+                    : notReported,
         },
         {
             key: 'context',
             label: l10n.t('Context window'),
-            value: model.maxInputTokens > 0
-                ? <Text size={200}>{l10n.t('{0} tokens', model.maxInputTokens.toLocaleString(navigator.language))}</Text>
-                : notReported,
+            value:
+                model.maxInputTokens > 0 ? (
+                    <Text size={200}>
+                        {l10n.t('{0} tokens', model.maxInputTokens.toLocaleString(navigator.language))}
+                    </Text>
+                ) : (
+                    notReported
+                ),
         },
         {
             key: 'capabilities',
@@ -150,7 +192,11 @@ function modelFacts(model: AvailableModelInfo, selectionReason: string): ModelFa
         {
             key: 'id',
             label: l10n.t('Model ID'),
-            value: <Text size={200} font="monospace" className="query-insights-model-identity">{model.id}</Text>,
+            value: (
+                <Text size={200} font="monospace" className="query-insights-model-identity">
+                    {model.id}
+                </Text>
+            ),
         },
         { key: 'selection', label: l10n.t('Selection'), value: <Text size={200}>{selectionReason}</Text> },
     ];
@@ -164,13 +210,17 @@ function ModelDetails({ model, facts }: { model: AvailableModelInfo; facts: read
             <dl className="query-insights-model-fact-list">
                 {facts.map((fact) => (
                     <div key={fact.key}>
-                        <dt><Text size={200}>{fact.label}</Text></dt>
+                        <dt>
+                            <Text size={200}>{fact.label}</Text>
+                        </dt>
                         <dd>{fact.value}</dd>
                     </div>
                 ))}
             </dl>
             <Text size={200} className="query-insights-model-muted">
-                {l10n.t('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.')}
+                {l10n.t(
+                    "Thinking level and context size follow this model's settings in the VS Code Chat model picker.",
+                )}
             </Text>
         </div>
     );
@@ -223,7 +273,12 @@ export function ModelPicker({
                 }
             } catch (cause) {
                 if (!controller.signal.aborted && currentRequest === requestId.current) {
-                    setError(l10n.t('Failed to load model settings: {0}', cause instanceof Error ? cause.message : String(cause)));
+                    setError(
+                        l10n.t(
+                            'Failed to load model settings: {0}',
+                            cause instanceof Error ? cause.message : String(cause),
+                        ),
+                    );
                 }
             } finally {
                 if (!controller.signal.aborted && currentRequest === requestId.current) {
@@ -256,7 +311,9 @@ export function ModelPicker({
             }
         } catch (cause) {
             if (mounted.current) {
-                setError(l10n.t('Failed to save model choice: {0}', cause instanceof Error ? cause.message : String(cause)));
+                setError(
+                    l10n.t('Failed to save model choice: {0}', cause instanceof Error ? cause.message : String(cause)),
+                );
             }
         } finally {
             if (mounted.current) {
@@ -270,9 +327,14 @@ export function ModelPicker({
     const hasModels = utility.length + others.length > 0;
     let selectionReason: string;
     switch (available?.effectiveReason) {
-        case 'saved': selectionReason = l10n.t('Saved choice'); break;
-        case 'first-powerful': selectionReason = l10n.t('Default: first Powerful model'); break;
-        default: selectionReason = l10n.t('Default: first available model');
+        case 'saved':
+            selectionReason = l10n.t('Saved choice');
+            break;
+        case 'first-powerful':
+            selectionReason = l10n.t('Default: first Powerful model');
+            break;
+        default:
+            selectionReason = l10n.t('Default: first available model');
     }
 
     const option = (model: AvailableModelInfo): JSX.Element => {
@@ -282,7 +344,11 @@ export function ModelPicker({
                 <span className="query-insights-model-option">
                     <span>
                         {model.name}
-                        {duplicateName && <Text block size={100} font="monospace">{model.id}</Text>}
+                        {duplicateName && (
+                            <Text block size={100} font="monospace">
+                                {model.id}
+                            </Text>
+                        )}
                     </span>
                     {!model.isUtility && <ModelCostBadge category={model.priceCategory} />}
                 </span>
@@ -291,31 +357,42 @@ export function ModelPicker({
     };
     const groupedOthers = others.some((model) => model.category)
         ? [...knownCategories, 'other'].map((category) => {
-            const group = others.filter((model) =>
-                (knownCategories.includes(model.category ?? '') ? model.category : 'other') === category);
-            return group.length > 0
-                ? <OptionGroup key={category} label={categoryLabel(category)}>{group.map(option)}</OptionGroup>
-                : null;
-        })
+              const group = others.filter(
+                  (model) => (knownCategories.includes(model.category ?? '') ? model.category : 'other') === category,
+              );
+              return group.length > 0 ? (
+                  <OptionGroup key={category} label={categoryLabel(category)}>
+                      {group.map(option)}
+                  </OptionGroup>
+              ) : null;
+          })
         : others.map(option);
 
     return (
         <>
             <div className="query-insights-model-picker">
-                {showLabel && <Label id={labelId} size="small">{l10n.t('Copilot model')}</Label>}
+                {showLabel && (
+                    <Label id={labelId} size="small">
+                        {l10n.t('Copilot model')}
+                    </Label>
+                )}
                 <div className="query-insights-model-picker-row">
                     <Dropdown
                         appearance={appearance}
                         aria-label={showLabel ? undefined : l10n.t('Copilot model')}
                         aria-labelledby={showLabel ? labelId : undefined}
-                        button={showModelIcon && selected ? {
-                            children: (
-                                <span className="query-insights-model-trigger">
-                                    {!open && <BotRegular aria-hidden="true" />}
-                                    <span>{selected.name}</span>
-                                </span>
-                            ),
-                        } : undefined}
+                        button={
+                            showModelIcon && selected
+                                ? {
+                                      children: (
+                                          <span className="query-insights-model-trigger">
+                                              {!open && <BotRegular aria-hidden="true" />}
+                                              <span>{selected.name}</span>
+                                          </span>
+                                      ),
+                                  }
+                                : undefined
+                        }
                         size={size}
                         value={selected?.name ?? ''}
                         selectedOptions={selected ? [selected.id] : []}
@@ -323,8 +400,11 @@ export function ModelPicker({
                         disabled={disabled || loading || saving || !hasModels}
                         // Cap list height on one side of the trigger; autoSize height can cover the trigger.
                         positioning={{
-                            position: 'below', align: 'start', fallbackPositions: ['above-start'],
-                            autoSize: 'width', matchTargetSize: undefined,
+                            position: 'below',
+                            align: 'start',
+                            fallbackPositions: ['above-start'],
+                            autoSize: 'width',
+                            matchTargetSize: undefined,
                         }}
                         listbox={{ className: 'query-insights-model-listbox' }}
                         onOpenChange={(_event, data) => {
@@ -341,11 +421,24 @@ export function ModelPicker({
                         {groupedOthers}
                     </Dropdown>
                     {selected && (
-                        <Popover openOnHover withArrow size="small" positioning={{ position: 'below', align: 'start', autoSize: 'height' }}>
+                        <Popover
+                            openOnHover
+                            withArrow
+                            size="small"
+                            positioning={{ position: 'below', align: 'start', autoSize: 'height' }}
+                        >
                             <PopoverTrigger disableButtonEnhancement>
-                                <Button appearance="subtle" size={size} icon={<InfoRegular />} aria-label={l10n.t('Model details')} />
+                                <Button
+                                    appearance="subtle"
+                                    size={size}
+                                    icon={<InfoRegular />}
+                                    aria-label={l10n.t('Model details')}
+                                />
                             </PopoverTrigger>
-                            <PopoverSurface aria-label={l10n.t('Model details')} className="query-insights-model-details-surface">
+                            <PopoverSurface
+                                aria-label={l10n.t('Model details')}
+                                className="query-insights-model-details-surface"
+                            >
                                 <ModelDetails model={selected} facts={modelFacts(selected, selectionReason)} />
                             </PopoverSurface>
                         </Popover>

@@ -24,11 +24,11 @@ import {
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
 } from '../../../../../documentdb/collectionView/types/queryInsights';
+import { QueryInsightsPreviewBadge } from '../../../../queryInsightsShared/QueryInsightsPreviewBadge';
+import { getAnalysisProfilePresentation } from '../../../../queryInsightsShared/analysisProfilePresentation';
 import '../../queryInsights.scss';
 import './QueryPlanSummary.scss';
 import { StageDetailCard, type StageType } from './StageDetailCard';
-import { QueryInsightsPreviewBadge } from '../../../../queryInsightsShared/QueryInsightsPreviewBadge';
-import { getAnalysisProfilePresentation } from '../../../../queryInsightsShared/analysisProfilePresentation';
 
 interface QueryPlanSummaryProps {
     stage1Data: QueryInsightsStage1Response | null;
@@ -51,11 +51,16 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 }) => {
     const trpcClient = useTrpcClient();
     const profile = stage2Data?.analysisProfile ?? 'find';
-    const resultSummary = stage2Data ? getAnalysisProfilePresentation(profile).resultSummary(
-        stage2Data.notApplicable?.includes('documentsReturned') ? l10n.t('N/A') : stage2Data.documentsReturned.toLocaleString(),
-    ) : '';
+    const resultSummary = stage2Data
+        ? getAnalysisProfilePresentation(profile).resultSummary(
+              stage2Data.notApplicable?.includes('documentsReturned')
+                  ? l10n.t('N/A')
+                  : stage2Data.documentsReturned.toLocaleString(),
+          )
+        : '';
     const timeSummary = stage2Data?.notApplicable?.includes('executionTime')
-        ? l10n.t('Time unavailable') : `${stage2Data?.executionTimeMs.toFixed(2) ?? ''}ms`;
+        ? l10n.t('Time unavailable')
+        : `${stage2Data?.executionTimeMs.toFixed(2) ?? ''}ms`;
 
     const handleStageDetailsToggle = (isExpanded: boolean) => {
         trpcClient.common.reportEvent
@@ -93,7 +98,12 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
             >
                 <Text id="query-plan-summary-label" size={400} weight="semibold">
                     {l10n.t('Query Plan Summary')}
-                    {preview && <> <QueryInsightsPreviewBadge /></>}
+                    {preview && (
+                        <>
+                            {' '}
+                            <QueryInsightsPreviewBadge />
+                        </>
+                    )}
                 </Text>
                 {stage2Data && (
                     <Button
@@ -149,13 +159,19 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                 )}
                                 {stage2Data && !stage2Loading && (
                                     <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                        {profile === 'find' ? l10n.t(
-                                            'SHARD_MERGE · {0} shards · {1} docs · {2}ms',
-                                            stage1Data.shards.length,
-                                            stage2Data.documentsReturned,
-                                            stage2Data.executionTimeMs.toFixed(0),
-                                        ) : l10n.t('SHARD_MERGE · {0} shards · {1} · {2}',
-                                            stage1Data.shards.length, resultSummary, timeSummary)}
+                                        {profile === 'find'
+                                            ? l10n.t(
+                                                  'SHARD_MERGE · {0} shards · {1} docs · {2}ms',
+                                                  stage1Data.shards.length,
+                                                  stage2Data.documentsReturned,
+                                                  stage2Data.executionTimeMs.toFixed(0),
+                                              )
+                                            : l10n.t(
+                                                  'SHARD_MERGE · {0} shards · {1} · {2}',
+                                                  stage1Data.shards.length,
+                                                  resultSummary,
+                                                  timeSummary,
+                                              )}
                                     </Text>
                                 )}
                             </div>
@@ -231,7 +247,15 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                             )}
                                             {shard2Data && !stage2Loading && (
                                                 <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                                    {profile !== 'count' && <>{shard2Data.nReturned || 0} {profile === 'aggregate' ? l10n.t('passed to pipeline') : 'returned'} · </>}
+                                                    {profile !== 'count' && (
+                                                        <>
+                                                            {shard2Data.nReturned || 0}{' '}
+                                                            {profile === 'aggregate'
+                                                                ? l10n.t('passed to pipeline')
+                                                                : 'returned'}{' '}
+                                                            ·{' '}
+                                                        </>
+                                                    )}
                                                     {(shard2Data.keysExamined || 0).toLocaleString()} keys ·{' '}
                                                     {(shard2Data.docsExamined || 0).toLocaleString()} docs ·{' '}
                                                     {shard2Data.executionTimeMs || 0}ms
@@ -290,7 +314,11 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                                     ? `Index: ${stage.indexName}`
                                                                                     : undefined
                                                                             }
-                                                                            returned={profile === 'count' ? undefined : stage.nReturned}
+                                                                            returned={
+                                                                                profile === 'count'
+                                                                                    ? undefined
+                                                                                    : stage.nReturned
+                                                                            }
                                                                             executionTimeMs={stage.executionTimeMs}
                                                                             metrics={
                                                                                 metrics.length > 0 ? metrics : undefined
@@ -369,10 +397,13 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                 )}
                                 {stage2Data && !stage2Loading && (
                                     <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                        {profile === 'find' ? <>{stage2Data.documentsReturned} returned</> : resultSummary} ·{' '}
-                                        {stage2Data.totalKeysExamined.toLocaleString()} keys ·{' '}
-                                        {stage2Data.totalDocsExamined.toLocaleString()} docs ·{' '}
-                                        {timeSummary}
+                                        {profile === 'find' ? (
+                                            <>{stage2Data.documentsReturned} returned</>
+                                        ) : (
+                                            resultSummary
+                                        )}{' '}
+                                        · {stage2Data.totalKeysExamined.toLocaleString()} keys ·{' '}
+                                        {stage2Data.totalDocsExamined.toLocaleString()} docs · {timeSummary}
                                     </Text>
                                 )}
                             </div>
@@ -453,7 +484,9 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                         ? `Index: ${stage.indexName}`
                                                                         : undefined
                                                                 }
-                                                                returned={profile === 'count' ? undefined : stage.nReturned}
+                                                                returned={
+                                                                    profile === 'count' ? undefined : stage.nReturned
+                                                                }
                                                                 executionTimeMs={stage.executionTimeMs}
                                                                 metrics={metrics.length > 0 ? metrics : undefined}
                                                                 hasFailed={hasFailed}

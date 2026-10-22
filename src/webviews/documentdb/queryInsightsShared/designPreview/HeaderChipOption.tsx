@@ -38,14 +38,26 @@ const useChipStyles = makeStyles({
         fontSize: tokens.fontSizeBase200,
         lineHeight: tokens.lineHeightBase200,
         '& dt': { color: tokens.colorNeutralForeground3 },
-        '& dd': { margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: tokens.spacingVerticalXXS },
+        '& dd': {
+            margin: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: tokens.spacingVerticalXXS,
+        },
     },
     surface: { padding: tokens.spacingHorizontalL },
     muted: { color: tokens.colorNeutralForeground3 },
 });
 
 /** The popover body: model dropdown, cost and context facts, prompt, Explore. */
-export function ModelSettingsPanel({ modelId, onSelect }: { modelId: string; onSelect?: (id: string) => void }): JSX.Element {
+export function ModelSettingsPanel({
+    modelId,
+    onSelect,
+}: {
+    modelId: string;
+    onSelect?: (id: string) => void;
+}): JSX.Element {
     const chip = useChipStyles();
     const model = previewModel(modelId);
     const credits = model.isUtility
@@ -59,24 +71,35 @@ export function ModelSettingsPanel({ modelId, onSelect }: { modelId: string; onS
                     size="small"
                     value={model.name}
                     selectedOptions={[model.id]}
-                    onOptionSelect={(_event, data) => { if (data.optionValue) onSelect?.(data.optionValue); }}
+                    onOptionSelect={(_event, data) => {
+                        if (data.optionValue) onSelect?.(data.optionValue);
+                    }}
                 >
                     {groupPreviewModels().map((group) => (
                         <OptionGroup key={group.key} label={group.label}>
-                            {group.models.map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}
+                            {group.models.map((item) => (
+                                <Option key={item.id} value={item.id}>
+                                    {item.name}
+                                </Option>
+                            ))}
                         </OptionGroup>
                     ))}
                 </Dropdown>
             </Field>
             <dl className={chip.facts}>
                 <dt>Cost</dt>
-                <dd><CostBadge model={model} /><span>{credits}</span></dd>
+                <dd>
+                    <CostBadge model={model} />
+                    <span>{credits}</span>
+                </dd>
                 <dt>Context</dt>
                 <dd>{contextLabel(model)} tokens</dd>
                 <dt>Prompt</dt>
                 <dd>Built-in</dd>
             </dl>
-            <Text size={200} className={chip.muted}>Saved for Query Insights everywhere. Thinking level follows VS Code Chat.</Text>
+            <Text size={200} className={chip.muted}>
+                Saved for Query Insights everywhere. Thinking level follows VS Code Chat.
+            </Text>
             <Divider />
             <Link inline>Explore with your own input…</Link>
         </div>
@@ -109,7 +132,10 @@ export function HeaderChipOption({ initialModelId, anchorRef }: OptionProps): JS
                         iconPosition="after"
                         aria-label={`Model settings: ${model.name}`}
                     >
-                        <span className={styles.pillContent}>{model.name}<CostBadge model={model} /></span>
+                        <span className={styles.pillContent}>
+                            {model.name}
+                            <CostBadge model={model} />
+                        </span>
                     </Button>
                 </PopoverTrigger>
                 <PopoverSurface aria-label="Model settings">
@@ -121,8 +147,12 @@ export function HeaderChipOption({ initialModelId, anchorRef }: OptionProps): JS
     return (
         <InsightsCardShell headerAction={headerChip}>
             <div className={styles.actions}>
-                <Button appearance="primary" icon={<SparkleRegular />}>Get AI Performance Insights</Button>
-                <Button appearance="subtle" aria-label="Learn more about AI Performance Insights">Learn more</Button>
+                <Button appearance="primary" icon={<SparkleRegular />}>
+                    Get AI Performance Insights
+                </Button>
+                <Button appearance="subtle" aria-label="Learn more about AI Performance Insights">
+                    Learn more
+                </Button>
             </div>
         </InsightsCardShell>
     );

@@ -89,9 +89,15 @@ describe('Query Insights model selection', () => {
 
     it('defaults to the first Powerful model (API category) when nothing valid is saved', async () => {
         mocks.get.mockReturnValue(null);
-        const powerful = (id: string): vscode.LanguageModelChat => Object.freeze({ ...model(id), category: 'powerful' });
+        const powerful = (id: string): vscode.LanguageModelChat =>
+            Object.freeze({ ...model(id), category: 'powerful' });
         const versatile = Object.freeze({ ...model('versatile'), category: 'versatile' });
-        mocks.selectChatModels.mockResolvedValue([model('copilot-utility'), versatile, powerful('strong'), powerful('stronger')]);
+        mocks.selectChatModels.mockResolvedValue([
+            model('copilot-utility'),
+            versatile,
+            powerful('strong'),
+            powerful('stronger'),
+        ]);
 
         const result = await getAvailableModels();
         expect(result.effectiveModelId).toBe('strong');
@@ -106,7 +112,10 @@ describe('Query Insights model selection', () => {
         expect(await resolveQueryInsightsModel()).toBeUndefined();
         mocks.selectChatModels.mockRejectedValueOnce(new Error('unavailable'));
         expect(await getAvailableModels()).toEqual({
-            models: [], savedModelId: null, effectiveModelId: null, effectiveReason: null,
+            models: [],
+            savedModelId: null,
+            effectiveModelId: null,
+            effectiveReason: null,
         });
     });
 
@@ -121,31 +130,61 @@ describe('Query Insights model selection', () => {
 
     it('defensively reads pricing and capabilities from frozen runtime models', async () => {
         const priced = Object.freeze({
-            ...model('priced'), pricing: '0.33x', priceCategory: 'low', category: 'versatile',
-            inputCost: 0, outputCost: 2, cacheCost: 0.1, cacheWriteCost: 0.2,
-            longContextInputCost: 4, longContextOutputCost: 8,
-            longContextCacheCost: 0.5, longContextCacheWriteCost: 0.6,
+            ...model('priced'),
+            pricing: '0.33x',
+            priceCategory: 'low',
+            category: 'versatile',
+            inputCost: 0,
+            outputCost: 2,
+            cacheCost: 0.1,
+            cacheWriteCost: 0.2,
+            longContextInputCost: 4,
+            longContextOutputCost: 8,
+            longContextCacheCost: 0.5,
+            longContextCacheWriteCost: 0.6,
             capabilities: { supportsToolCalling: true, supportsImageToText: false },
         });
         mocks.selectChatModels.mockResolvedValue([priced, model('copilot-utility')]);
         expect((await getAvailableModels()).models[0]).toMatchObject({
-            pricing: '0.33x', priceCategory: 'low', category: 'versatile', version: '1',
-            inputCost: 0, outputCost: 2, cacheCost: 0.1, cacheWriteCost: 0.2,
-            longContextInputCost: 4, longContextOutputCost: 8,
-            longContextCacheCost: 0.5, longContextCacheWriteCost: 0.6,
-            supportsToolCalling: true, supportsImageToText: false,
+            pricing: '0.33x',
+            priceCategory: 'low',
+            category: 'versatile',
+            version: '1',
+            inputCost: 0,
+            outputCost: 2,
+            cacheCost: 0.1,
+            cacheWriteCost: 0.2,
+            longContextInputCost: 4,
+            longContextOutputCost: 8,
+            longContextCacheCost: 0.5,
+            longContextCacheWriteCost: 0.6,
+            supportsToolCalling: true,
+            supportsImageToText: false,
         });
     });
 
     it('omits malformed optional metadata without discarding the model', async () => {
-        mocks.selectChatModels.mockResolvedValue([{
-            ...model('bad'), pricing: 3, category: null, inputCost: '1', outputCost: NaN,
-            cacheCost: -1, longContextInputCost: Infinity,
-            capabilities: { supportsToolCalling: 'yes', supportsImageToText: 1 },
-        }, model('copilot-utility')]);
+        mocks.selectChatModels.mockResolvedValue([
+            {
+                ...model('bad'),
+                pricing: 3,
+                category: null,
+                inputCost: '1',
+                outputCost: NaN,
+                cacheCost: -1,
+                longContextInputCost: Infinity,
+                capabilities: { supportsToolCalling: 'yes', supportsImageToText: 1 },
+            },
+            model('copilot-utility'),
+        ]);
         expect((await getAvailableModels()).models[0]).toEqual({
-            id: 'bad', name: 'bad', family: 'bad', vendor: 'copilot', version: '1',
-            maxInputTokens: 1000, isUtility: false,
+            id: 'bad',
+            name: 'bad',
+            family: 'bad',
+            vendor: 'copilot',
+            version: '1',
+            maxInputTokens: 1000,
+            isUtility: false,
         });
     });
 });

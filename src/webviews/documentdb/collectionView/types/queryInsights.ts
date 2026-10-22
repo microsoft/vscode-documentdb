@@ -68,7 +68,14 @@ export interface QueryInsightsStage1Response {
 export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'multikey' | 'directFetch';
 
 export type QueryInsightsAnalysisProfile = 'find' | 'aggregate' | 'count';
-export type QueryInsightsMetric = 'selectivity' | 'fetchOverhead' | 'inMemorySort' | 'examinedToReturnedRatio' | 'documentsReturned' | 'performanceRating' | 'executionTime';
+export type QueryInsightsMetric =
+    | 'selectivity'
+    | 'fetchOverhead'
+    | 'inMemorySort'
+    | 'examinedToReturnedRatio'
+    | 'documentsReturned'
+    | 'performanceRating'
+    | 'executionTime';
 
 /**
  * Response from Stage 2 - Detailed execution statistics

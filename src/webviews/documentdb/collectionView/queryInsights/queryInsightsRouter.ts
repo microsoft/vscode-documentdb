@@ -24,11 +24,11 @@
  * updated.
  */
 
+import { EJSON } from 'bson';
 import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';
 import { z } from 'zod';
-import { EJSON } from 'bson';
 
 import * as l10n from '@vscode/l10n';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
@@ -38,15 +38,13 @@ import {
     type QueryPlannerAnalysis,
 } from '../../../../documentdb/queryInsights/ExplainPlanAnalyzer';
 import { analyzeExplainForStage2 } from '../../../../documentdb/queryInsights/analyzeExplainForStage2';
-import {
-    transformStage1Response,
-} from '../../../../documentdb/queryInsights/transformations';
+import { transformStage1Response } from '../../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
 import { mergeRouters, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
+import type { QueryInsightsPrefill } from '../../queryInsightsStandalone/types';
 import { type RouterContext } from '../collectionViewRouter';
 import { queryInsightsEventsRouter } from './queryInsightsEventsRouter';
-import type { QueryInsightsPrefill } from '../../queryInsightsStandalone/types';
 
 /**
  * Debug helper: Read debug override file for Query Insights testing
@@ -97,12 +95,14 @@ export const queryInsightsQueriesRouter = router({
         const session = ClusterSession.getSession(sessionId);
         const query = session.getCurrentFindQueryParamsWithObjects();
         const rawExplain = session.getRawExplainOutput(databaseName, collectionName);
-        const bestEffort = async <T,>(operation: Promise<T>): Promise<T | undefined> => {
+        const bestEffort = async <T>(operation: Promise<T>): Promise<T | undefined> => {
             let timeout: ReturnType<typeof setTimeout> | undefined;
             try {
                 return await Promise.race([
                     operation,
-                    new Promise<undefined>((resolve) => { timeout = setTimeout(() => resolve(undefined), 1500); }),
+                    new Promise<undefined>((resolve) => {
+                        timeout = setTimeout(() => resolve(undefined), 1500);
+                    }),
                 ]);
             } catch {
                 return undefined;
@@ -117,16 +117,24 @@ export const queryInsightsQueriesRouter = router({
             bestEffort(client.getIndexStats(databaseName, collectionName)),
         ]);
         return {
-            databaseName, collectionName, commandType: 'find',
-            query: EJSON.stringify({
-                filter: query.filterObj, sort: query.sortObj, projection: query.projectionObj,
-                skip: query.skip, limit: query.limit,
-            }, { relaxed: true }, 2),
+            databaseName,
+            collectionName,
+            commandType: 'find',
+            query: EJSON.stringify(
+                {
+                    filter: query.filterObj,
+                    sort: query.sortObj,
+                    projection: query.projectionObj,
+                    skip: query.skip,
+                    limit: query.limit,
+                },
+                { relaxed: true },
+                2,
+            ),
             explain: rawExplain ? EJSON.stringify(rawExplain, { relaxed: true }, 2) : '',
             collectionStats: stats ? EJSON.stringify(stats, { relaxed: true }, 2) : '',
             indexes: indexes ? EJSON.stringify(indexes, { relaxed: true }, 2) : '',
-            clusterType: metadata?.domainInfo_isAzure === 'true'
-                ? 'azure-documentdb' : 'documentdb',
+            clusterType: metadata?.domainInfo_isAzure === 'true' ? 'azure-documentdb' : 'documentdb',
         };
     }),
     /**
@@ -321,7 +329,13 @@ export const queryInsightsQueriesRouter = router({
             }
         }
 
-        const transformed = analyzeExplainForStage2(explainResult ?? {}, totalCollectionDocs, queryFilter, 'find', analyzed);
+        const transformed = analyzeExplainForStage2(
+            explainResult ?? {},
+            totalCollectionDocs,
+            queryFilter,
+            'find',
+            analyzed,
+        );
 
         // Check for execution error and return error response if found
         if (analyzed.executionError) {

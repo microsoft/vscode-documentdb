@@ -8,17 +8,20 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { CommandType, type QueryObject } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import type { CollectionStats, IndexStats } from '../../../documentdb/LlmEnhancedFeatureApis';
-import { toFilterQueryObj } from '../../../documentdb/utils/toFilterQuery';
+import { getInitialExplainPlan } from '../../../documentdb/queryInsights/analysisProfiles';
 import { fixupDocumentDbExplain } from '../../../documentdb/utils/fixupDocumentDbExplain';
 import type { ClusterMetadata } from '../../../documentdb/utils/getClusterMetadata';
-import { getInitialExplainPlan } from '../../../documentdb/queryInsights/analysisProfiles';
+import { toFilterQueryObj } from '../../../documentdb/utils/toFilterQuery';
 import type { StandaloneInput } from './types';
 
 export const queryInsightsPrefillSchema = z.object({
-    explain: z.string().optional(), query: z.string().optional(),
+    explain: z.string().optional(),
+    query: z.string().optional(),
     commandType: z.enum(['find', 'aggregate', 'count']).optional(),
-    collectionStats: z.string().optional(), indexes: z.string().optional(),
-    databaseName: z.string().optional(), collectionName: z.string().optional(),
+    collectionStats: z.string().optional(),
+    indexes: z.string().optional(),
+    databaseName: z.string().optional(),
+    collectionName: z.string().optional(),
     clusterType: z.enum(['azure-documentdb', 'documentdb', 'other']).optional(),
 });
 
@@ -44,7 +47,8 @@ function parseInput(text: string): unknown {
 
 function object(value: unknown): Record<string, unknown> | undefined {
     return value !== null && typeof value === 'object' && !Array.isArray(value)
-        ? value as Record<string, unknown> : undefined;
+        ? (value as Record<string, unknown>)
+        : undefined;
 }
 
 export function parseStandaloneInput(input: StandaloneInput): {
@@ -59,7 +63,10 @@ export function parseStandaloneInput(input: StandaloneInput): {
     clusterInfo: ClusterMetadata;
 } {
     const explain = object(parseInput(input.explain));
-    if (!explain || (!object(explain.queryPlanner) && !object(explain.executionStats) && !Array.isArray(explain.stages))) {
+    if (
+        !explain ||
+        (!object(explain.queryPlanner) && !object(explain.executionStats) && !Array.isArray(explain.stages))
+    ) {
         throw new Error(vscode.l10n.t('Paste an explain plan containing queryPlanner, executionStats, or stages.'));
     }
     const clusterInfo: ClusterMetadata = { platform: input.clusterType };
@@ -75,30 +82,41 @@ export function parseStandaloneInput(input: StandaloneInput): {
     let detected = CommandType.Find;
     if ('aggregate' in command || Array.isArray(explain.stages)) detected = CommandType.Aggregate;
     else if ('count' in command) detected = CommandType.Count;
-    const commandType = input.commandType === 'auto' ? detected : input.commandType as CommandType;
+    const commandType = input.commandType === 'auto' ? detected : (input.commandType as CommandType);
     const inferredPipeline: Record<string, unknown>[] = Array.isArray(explain.stages)
         ? (explain.stages as unknown[]).slice(1).flatMap((stage) => {
-            const operators = Object.fromEntries(Object.entries(object(stage) ?? {}).filter(([key]) => key.startsWith('$')));
-            return Object.keys(operators).length ? [operators] : [];
-        }) : [];
+              const operators = Object.fromEntries(
+                  Object.entries(object(stage) ?? {}).filter(([key]) => key.startsWith('$')),
+              );
+              return Object.keys(operators).length ? [operators] : [];
+          })
+        : [];
     const initialFilter = object(planner.parsedQuery);
     if (initialFilter && Object.keys(initialFilter).length) inferredPipeline.unshift({ $match: initialFilter });
-    const extracted = commandType === CommandType.Aggregate
-        ? command.pipeline ?? inferredPipeline : command.filter ?? command.query ?? planner.parsedQuery ?? {};
+    const extracted =
+        commandType === CommandType.Aggregate
+            ? (command.pipeline ?? inferredPipeline)
+            : (command.filter ?? command.query ?? planner.parsedQuery ?? {});
     const query = input.query.trim() || EJSON.stringify(extracted, { relaxed: true }, 2);
     const parsedQuery = parseInput(query);
     const queryRecord = object(parsedQuery);
     if (commandType === CommandType.Aggregate ? !Array.isArray(parsedQuery) : !queryRecord) {
         throw new Error(vscode.l10n.t('Use a JSON array for an aggregate pipeline, or a JSON object for find/count.'));
     }
-    const isQueryObject = commandType === CommandType.Find && queryRecord !== undefined &&
+    const isQueryObject =
+        commandType === CommandType.Find &&
+        queryRecord !== undefined &&
         ['filter', 'sort', 'projection', 'skip', 'limit'].some((key) => key in queryRecord);
-    const queryObject = commandType === CommandType.Find
-        ? isQueryObject ? queryRecord as QueryObject : {
-            filter: queryRecord,
-            sort: object(command.sort),
-            projection: object(command.projection),
-        } : undefined;
+    const queryObject =
+        commandType === CommandType.Find
+            ? isQueryObject
+                ? (queryRecord as QueryObject)
+                : {
+                      filter: queryRecord,
+                      sort: object(command.sort),
+                      projection: object(command.projection),
+                  }
+            : undefined;
     const stats = input.collectionStats.trim() ? object(parseInput(input.collectionStats)) : undefined;
     if (input.collectionStats.trim() && !stats) {
         throw new Error(vscode.l10n.t('Collection statistics must be a JSON object.'));
@@ -113,7 +131,11 @@ export function parseStandaloneInput(input: StandaloneInput): {
         filter = object(object(Array.isArray(parsedQuery) ? parsedQuery[0] : undefined)?.$match) ?? initialFilter;
     }
     return {
-        explain, commandType, query, queryObject, clusterInfo,
+        explain,
+        commandType,
+        query,
+        queryObject,
+        clusterInfo,
         // These supplied objects are serialized into the prompt, never used for database actions.
         collectionStats: stats as unknown as CollectionStats | undefined,
         indexStats: indexes as IndexStats[] | undefined,
@@ -148,8 +170,8 @@ export interface StandaloneInspection {
     query?: string;
     queryIsExtracted?: boolean;
     queryIssue?: InputIssue;
-    collectionStats?: ({ ok: true; documentCount?: number } | ({ ok: false } & InputIssue));
-    indexes?: ({ ok: true; names: string[] } | ({ ok: false } & InputIssue));
+    collectionStats?: { ok: true; documentCount?: number } | ({ ok: false } & InputIssue);
+    indexes?: { ok: true; names: string[] } | ({ ok: false } & InputIssue);
     /** True when Analyze can run with these inputs. */
     ready: boolean;
 }
@@ -202,10 +224,15 @@ function inspectExplain(explain: Record<string, unknown>): ExplainInspection {
         databaseName = typeof command.$db === 'string' ? command.$db : undefined;
     }
     const laterStages = Array.isArray(explain.stages)
-        ? (explain.stages as unknown[]).slice(1).flatMap((stage) => Object.keys(object(stage) ?? {}).filter((key) => key.startsWith('$')))
+        ? (explain.stages as unknown[])
+              .slice(1)
+              .flatMap((stage) => Object.keys(object(stage) ?? {}).filter((key) => key.startsWith('$')))
         : [];
     return {
-        ok: true, detectedCommandType, databaseName, collectionName,
+        ok: true,
+        detectedCommandType,
+        databaseName,
+        collectionName,
         planStages: [
             ...planStageChain(object(planner.winningPlan) ?? object(object(initial.executionStats)?.executionStages)),
             ...laterStages,
@@ -218,17 +245,28 @@ export function inspectStandaloneInput(input: StandaloneInput): StandaloneInspec
     if (input.collectionStats.trim()) {
         const parsed = parseWithLocation(input.collectionStats);
         const stats = 'value' in parsed ? object(parsed.value) : undefined;
-        result.collectionStats = 'issue' in parsed ? { ok: false, ...parsed.issue }
-            : stats ? { ok: true, documentCount: typeof stats.count === 'number' ? stats.count : undefined }
-                : { ok: false, message: vscode.l10n.t('Collection statistics must be a JSON object.') };
+        result.collectionStats =
+            'issue' in parsed
+                ? { ok: false, ...parsed.issue }
+                : stats
+                  ? { ok: true, documentCount: typeof stats.count === 'number' ? stats.count : undefined }
+                  : { ok: false, message: vscode.l10n.t('Collection statistics must be a JSON object.') };
     }
     if (input.indexes.trim()) {
         const parsed = parseWithLocation(input.indexes);
-        const list = 'value' in parsed && Array.isArray(parsed.value) && parsed.value.every((item: unknown) => object(item))
-            ? parsed.value as Record<string, unknown>[] : undefined;
-        result.indexes = 'issue' in parsed ? { ok: false, ...parsed.issue }
-            : list ? { ok: true, names: list.map((item) => typeof item.name === 'string' ? item.name : '').filter(Boolean) }
-                : { ok: false, message: vscode.l10n.t('Indexes must be a JSON array of index objects.') };
+        const list =
+            'value' in parsed && Array.isArray(parsed.value) && parsed.value.every((item: unknown) => object(item))
+                ? (parsed.value as Record<string, unknown>[])
+                : undefined;
+        result.indexes =
+            'issue' in parsed
+                ? { ok: false, ...parsed.issue }
+                : list
+                  ? {
+                        ok: true,
+                        names: list.map((item) => (typeof item.name === 'string' ? item.name : '')).filter(Boolean),
+                    }
+                  : { ok: false, message: vscode.l10n.t('Indexes must be a JSON array of index objects.') };
     }
     if (!input.explain.trim()) return result;
     const parsedExplain = parseWithLocation(input.explain);
@@ -237,8 +275,14 @@ export function inspectStandaloneInput(input: StandaloneInput): StandaloneInspec
         return result;
     }
     const explain = object(parsedExplain.value);
-    if (!explain || (!object(explain.queryPlanner) && !object(explain.executionStats) && !Array.isArray(explain.stages))) {
-        result.explain = { ok: false, message: vscode.l10n.t('Paste an explain plan containing queryPlanner, executionStats, or stages.') };
+    if (
+        !explain ||
+        (!object(explain.queryPlanner) && !object(explain.executionStats) && !Array.isArray(explain.stages))
+    ) {
+        result.explain = {
+            ok: false,
+            message: vscode.l10n.t('Paste an explain plan containing queryPlanner, executionStats, or stages.'),
+        };
         return result;
     }
     result.explain = inspectExplain(explain);

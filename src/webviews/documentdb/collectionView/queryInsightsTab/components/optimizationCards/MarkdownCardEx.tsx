@@ -148,14 +148,7 @@ interface MarkdownCardExProps {
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
 // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
-export function MarkdownCardEx({
-    title,
-    content,
-    icon,
-    onCopy: _onCopy,
-    children,
-    ref,
-}: MarkdownCardExProps) {
+export function MarkdownCardEx({ title, content, icon, onCopy: _onCopy, children, ref }: MarkdownCardExProps) {
     const styles = useStyles();
 
     return (

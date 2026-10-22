@@ -2,17 +2,17 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import { z } from 'zod';
-import * as vscode from 'vscode';
 import { EJSON } from 'bson';
-import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
+import * as vscode from 'vscode';
+import { z } from 'zod';
+import { getInitialExplainPlan } from '../../../documentdb/queryInsights/analysisProfiles';
 import { analyzeExplainForStage2 } from '../../../documentdb/queryInsights/analyzeExplainForStage2';
 import { ExplainPlanAnalyzer } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
-import { getInitialExplainPlan } from '../../../documentdb/queryInsights/analysisProfiles';
 import { buildStaticAnalysisSummary } from '../../../documentdb/queryInsights/staticAnalysisSummary';
 import { StreamingResponseParser } from '../../../documentdb/queryInsights/streamingResponseParser';
 import { transformStage1Response } from '../../../documentdb/queryInsights/transformations';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
+import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import type { BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router } from '../../_integration/trpc';
 import type { QueryInsightsStreamEvent } from '../collectionView/types/queryInsightsStream';
@@ -35,7 +35,8 @@ export const queryInsightsStandaloneRouter = router({
     openRawExplain: publicProcedureWithTelemetry.input(standaloneInputSchema).mutation(async ({ input }) => {
         const parsed = parseStandaloneInput(input);
         await readOnlyJsonDocumentProvider.openDocument(
-            vscode.l10n.t('Raw Explain Output'), EJSON.stringify(parsed.explain, { relaxed: true }, 4),
+            vscode.l10n.t('Raw Explain Output'),
+            EJSON.stringify(parsed.explain, { relaxed: true }, 4),
         );
         return true;
     }),
@@ -49,7 +50,10 @@ export const queryInsightsStandaloneRouter = router({
         .query(({ input }) => inspectStandaloneInput(input)),
     getStage1: publicProcedureWithTelemetry.input(standaloneInputSchema).query(({ input }) => {
         const parsed = parseStandaloneInput(input);
-        return transformStage1Response(ExplainPlanAnalyzer.analyzeQueryPlanner(getInitialExplainPlan(parsed.explain, parsed.commandType)), 0);
+        return transformStage1Response(
+            ExplainPlanAnalyzer.analyzeQueryPlanner(getInitialExplainPlan(parsed.explain, parsed.commandType)),
+            0,
+        );
     }),
     getStage2: publicProcedureWithTelemetry.input(standaloneInputSchema).query(({ input }) => {
         const parsed = parseStandaloneInput(input);
@@ -69,13 +73,26 @@ export const queryInsightsStandaloneRouter = router({
                 if (controller.signal.aborted) return;
                 yield { type: 'status', phase: 'connecting', elapsedMs: elapsed(), charsReceived: 0 };
                 const parsed = parseStandaloneInput(input);
-                const stage2 = analyzeExplainForStage2(parsed.explain, parsed.totalDocs, parsed.filter, parsed.commandType);
+                const stage2 = analyzeExplainForStage2(
+                    parsed.explain,
+                    parsed.totalDocs,
+                    parsed.filter,
+                    parsed.commandType,
+                );
                 const handle = await new QueryInsightsAIService().getOptimizationRecommendationsStreaming(
-                    '', parsed.queryObject ?? parsed.query, input.databaseName, input.collectionName,
-                    parsed.explain, controller.signal, buildStaticAnalysisSummary(stage2, parsed.totalDocs), {
+                    '',
+                    parsed.queryObject ?? parsed.query,
+                    input.databaseName,
+                    input.collectionName,
+                    parsed.explain,
+                    controller.signal,
+                    buildStaticAnalysisSummary(stage2, parsed.totalDocs),
+                    {
                         providedData: { clusterInfo: parsed.clusterInfo },
-                        modelId: input.modelId, commandType: parsed.commandType,
-                        collectionStats: parsed.collectionStats, indexStats: parsed.indexStats,
+                        modelId: input.modelId,
+                        commandType: parsed.commandType,
+                        collectionStats: parsed.collectionStats,
+                        indexStats: parsed.indexStats,
                     },
                 );
                 if (controller.signal.aborted) return;
@@ -104,8 +121,12 @@ export const queryInsightsStandaloneRouter = router({
                     yield event;
                 }
                 yield {
-                    type: 'complete', durationMs: elapsed(), modelId: response.modelId,
-                    modelFamily: response.modelFamily, modelDisplayName: response.modelDisplayName, usage: response.usage,
+                    type: 'complete',
+                    durationMs: elapsed(),
+                    modelId: response.modelId,
+                    modelFamily: response.modelFamily,
+                    modelDisplayName: response.modelDisplayName,
+                    usage: response.usage,
                 };
             } finally {
                 signal?.removeEventListener('abort', abort);

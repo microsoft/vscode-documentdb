@@ -13,8 +13,14 @@ vi.mock('../../../commands/llmEnhancedCommands/indexAdvisorCommands', () => ({
 }));
 
 const blank: StandaloneInput = {
-    explain: '', query: '', commandType: 'auto', collectionStats: '', indexes: '',
-    databaseName: '', collectionName: '', clusterType: 'documentdb',
+    explain: '',
+    query: '',
+    commandType: 'auto',
+    collectionStats: '',
+    indexes: '',
+    databaseName: '',
+    collectionName: '',
+    clusterType: 'documentdb',
 };
 
 describe('Configure-step inspection', () => {
@@ -30,7 +36,11 @@ describe('Configure-step inspection', () => {
         const result = inspectStandaloneInput({ ...blank, explain: samplePlan(sample) });
         expect(result.ready).toBe(true);
         expect(result.explain).toEqual({
-            ok: true, detectedCommandType: command, databaseName: 'shop', collectionName: 'orders', planStages: stages,
+            ok: true,
+            detectedCommandType: command,
+            databaseName: 'shop',
+            collectionName: 'orders',
+            planStages: stages,
         });
         expect(result.commandType).toBe(command);
         expect(result.queryIsExtracted).toBe(true);
@@ -51,7 +61,9 @@ describe('Configure-step inspection', () => {
     it('summarizes optional context and flags each invalid field on its own', () => {
         const explain = samplePlan('find');
         const ok = inspectStandaloneInput({
-            ...blank, explain, collectionStats: '{ count: 48210 }',
+            ...blank,
+            explain,
+            collectionStats: '{ count: 48210 }',
             indexes: "[ { v: 2, key: { _id: 1 }, name: '_id_' }, { key: { status: 1 }, name: 'status_1' } ]",
         });
         expect(ok.collectionStats).toEqual({ ok: true, documentCount: 48210 });
@@ -59,7 +71,10 @@ describe('Configure-step inspection', () => {
         expect(ok.ready).toBe(true);
 
         const bad = inspectStandaloneInput({ ...blank, explain, collectionStats: '[]', indexes: '[{ name: }]' });
-        expect(bad.collectionStats).toMatchObject({ ok: false, message: 'Collection statistics must be a JSON object.' });
+        expect(bad.collectionStats).toMatchObject({
+            ok: false,
+            message: 'Collection statistics must be a JSON object.',
+        });
         expect(bad.indexes).toMatchObject({ ok: false, line: 1 });
         expect(bad.explain?.ok).toBe(true);
         expect(bad.ready).toBe(false);
@@ -68,12 +83,15 @@ describe('Configure-step inspection', () => {
     it('keeps a user query override and reports an invalid one without blocking explain detection', () => {
         const explain = samplePlan('find');
         expect(inspectStandaloneInput({ ...blank, explain, query: '{ priority: 1 }' })).toMatchObject({
-            ready: true, queryIsExtracted: false,
+            ready: true,
+            queryIsExtracted: false,
         });
         const invalid = inspectStandaloneInput({ ...blank, explain, query: '{ priority: }' });
         expect(invalid.queryIssue).toMatchObject({ line: 1 });
         expect(invalid.explain?.ok).toBe(true);
         expect(invalid.ready).toBe(false);
-        expect(inspectStandaloneInput({ ...blank, explain, commandType: 'aggregate', query: '{}' }).queryIssue).toBeDefined();
+        expect(
+            inspectStandaloneInput({ ...blank, explain, commandType: 'aggregate', query: '{}' }).queryIssue,
+        ).toBeDefined();
     });
 });

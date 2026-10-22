@@ -52,7 +52,11 @@ const samples: Record<SampleCommand, unknown> = {
                     queryPlanner: {
                         namespace: 'shop.orders',
                         parsedQuery: { status: { $eq: 'shipped' } },
-                        winningPlan: { stage: 'COLLSCAN', filter: { status: { $eq: 'shipped' } }, direction: 'forward' },
+                        winningPlan: {
+                            stage: 'COLLSCAN',
+                            filter: { status: { $eq: 'shipped' } },
+                            direction: 'forward',
+                        },
                     },
                     executionStats: {
                         executionSuccess: true,
@@ -124,7 +128,11 @@ export interface ShellSnippet {
 
 /** What to run in the DocumentDB shell or mongosh. Shell syntax, so never localized. */
 export const explainSnippets: readonly ShellSnippet[] = [
-    { id: 'find', label: 'find', code: 'db.orders.find({ status: "shipped" }).sort({ orderDate: -1 }).explain("executionStats")' },
+    {
+        id: 'find',
+        label: 'find',
+        code: 'db.orders.find({ status: "shipped" }).sort({ orderDate: -1 }).explain("executionStats")',
+    },
     {
         id: 'aggregate',
         label: 'aggregate',

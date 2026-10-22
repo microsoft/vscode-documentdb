@@ -20,7 +20,14 @@ import { OpenRegular, SparkleRegular } from '@fluentui/react-icons';
 import { useState, type JSX } from 'react';
 import { previewModel, previewModels } from './mockModels';
 import type { OptionProps } from './ModelPillOption';
-import { CostBadge, InsightsCardShell, MetaItems, ModelMenuGroups, StaticModelMenu, usePreviewStyles } from './previewParts';
+import {
+    CostBadge,
+    InsightsCardShell,
+    MetaItems,
+    ModelMenuGroups,
+    StaticModelMenu,
+    usePreviewStyles,
+} from './previewParts';
 
 function SplitMenuExtra(): JSX.Element {
     return (
@@ -58,7 +65,10 @@ export function SplitButtonOption({ initialModelId, anchorRef }: OptionProps): J
                                 <SplitButton
                                     appearance="primary"
                                     icon={<SparkleRegular />}
-                                    menuButton={{ ...triggerProps, 'aria-label': 'Choose the Copilot model and more options' }}
+                                    menuButton={{
+                                        ...triggerProps,
+                                        'aria-label': 'Choose the Copilot model and more options',
+                                    }}
                                 >
                                     Get AI Performance Insights
                                 </SplitButton>
@@ -72,13 +82,17 @@ export function SplitButtonOption({ initialModelId, anchorRef }: OptionProps): J
                         </MenuPopover>
                     </Menu>
                 </span>
-                <Button appearance="subtle" aria-label="Learn more about AI Performance Insights">Learn more</Button>
+                <Button appearance="subtle" aria-label="Learn more about AI Performance Insights">
+                    Learn more
+                </Button>
             </div>
             <div className={styles.metaLine}>
                 <MetaItems
                     items={[
                         <span key="model" className={styles.pillContent}>
-                            <span>Using <span className={styles.strong}>{model.name}</span></span>
+                            <span>
+                                Using <span className={styles.strong}>{model.name}</span>
+                            </span>
                             <CostBadge model={model} />
                         </span>,
                         'Built-in prompt',

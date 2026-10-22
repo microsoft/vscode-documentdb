@@ -8,7 +8,8 @@ import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analys
 describe('Query Insights result metric applicability', () => {
     it('keeps find labels and explanations unchanged', () => {
         expect(getAnalysisProfilePresentation('find')).toMatchObject({
-            resultLabel: 'Documents Returned', resultTooltip: 'Number of documents returned by the query',
+            resultLabel: 'Documents Returned',
+            resultTooltip: 'Number of documents returned by the query',
         });
         expect(getAnalysisProfilePresentation('find').resultSummary('12')).toBe('12 returned');
     });

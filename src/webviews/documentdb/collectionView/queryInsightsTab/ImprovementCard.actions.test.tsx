@@ -15,10 +15,18 @@ import { ImprovementCard } from './components/optimizationCards/ImprovementCard'
 describe('ImprovementCard action capabilities', () => {
     let host: HTMLDivElement;
     let root: Root;
-    const config = createImprovementCardConfig({
-        action: 'create', indexSpec: { status: 1 }, indexName: 'status_1',
-        shellCommand: 'db.items.createIndex({status: 1})', justification: 'Avoid a collection scan.', priority: 'high',
-    }, 0, { clusterId: 'cluster', databaseName: 'db', collectionName: 'items' });
+    const config = createImprovementCardConfig(
+        {
+            action: 'create',
+            indexSpec: { status: 1 },
+            indexName: 'status_1',
+            shellCommand: 'db.items.createIndex({status: 1})',
+            justification: 'Avoid a collection scan.',
+            priority: 'high',
+        },
+        0,
+        { clusterId: 'cluster', databaseName: 'db', collectionName: 'items' },
+    );
 
     beforeEach(() => {
         host = document.createElement('div');
@@ -32,7 +40,13 @@ describe('ImprovementCard action capabilities', () => {
 
     it('preserves the connected primary action by default', async () => {
         const action = vi.fn().mockResolvedValue({ success: true });
-        await act(async () => root.render(<SSRProvider><ImprovementCard config={config} onPrimaryAction={action} /></SSRProvider>));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <ImprovementCard config={config} onPrimaryAction={action} />
+                </SSRProvider>,
+            ),
+        );
         const button = host.querySelector('button');
         expect(button?.textContent).toBe('Create Index…');
         expect(host.textContent).not.toContain('Copy command');
@@ -43,9 +57,13 @@ describe('ImprovementCard action capabilities', () => {
     it('shows only Copy command when index actions are disabled', async () => {
         const copy = vi.fn();
         const action = vi.fn();
-        await act(async () => root.render(
-            <SSRProvider><ImprovementCard config={config} actionsEnabled={false} onCopy={copy} onPrimaryAction={action} /></SSRProvider>,
-        ));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <ImprovementCard config={config} actionsEnabled={false} onCopy={copy} onPrimaryAction={action} />
+                </SSRProvider>,
+            ),
+        );
         const buttons = host.querySelectorAll('button');
         expect(buttons).toHaveLength(1);
         expect(buttons[0].textContent).toBe('Copy command');

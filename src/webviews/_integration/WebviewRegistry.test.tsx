@@ -31,7 +31,12 @@ vi.mock('../documentdb/queryInsightsStandalone/QueryInsightsStandalone', moduleL
 describe('WebviewRegistry', () => {
     it('loads only the selected root module and renders each named export through Suspense', async () => {
         expectTypeOf<WebviewName>().toEqualTypeOf<
-            'clusterDashboard' | 'collectionView' | 'documentView' | 'localQuickStart' | 'atlasCredentials' | 'queryInsightsStandalone'
+            | 'clusterDashboard'
+            | 'collectionView'
+            | 'documentView'
+            | 'localQuickStart'
+            | 'atlasCredentials'
+            | 'queryInsightsStandalone'
         >();
         expect(Object.keys(WebviewRegistry).sort()).toEqual(Object.keys(moduleLoads).sort());
         for (const load of Object.values(moduleLoads)) {

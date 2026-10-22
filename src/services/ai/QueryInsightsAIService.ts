@@ -206,7 +206,10 @@ export class QueryInsightsAIService {
         executionPlan?: unknown,
         signal?: AbortSignal,
         staticAnalysisSummary?: string,
-        options?: Pick<QueryOptimizationContext, 'providedData' | 'modelId' | 'collectionStats' | 'indexStats' | 'commandType'>,
+        options?: Pick<
+            QueryOptimizationContext,
+            'providedData' | 'modelId' | 'collectionStats' | 'indexStats' | 'commandType'
+        >,
     ): Promise<AIOptimizationStreamHandle> {
         const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming',

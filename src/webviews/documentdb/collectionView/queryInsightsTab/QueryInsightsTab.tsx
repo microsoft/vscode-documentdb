@@ -38,11 +38,10 @@ import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
-import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
-import { usageByline } from '../../queryInsightsShared/usageByline';
-import { QueryInsightsPreviewBadge } from '../../queryInsightsShared/QueryInsightsPreviewBadge';
 import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analysisProfilePresentation';
-import { useQueryInsightsDataSource } from './QueryInsightsDataSourceContext';
+import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
+import { QueryInsightsPreviewBadge } from '../../queryInsightsShared/QueryInsightsPreviewBadge';
+import { usageByline } from '../../queryInsightsShared/usageByline';
 import {
     applyStage3Event,
     cancelStage3,
@@ -71,6 +70,7 @@ import {
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
+import { useQueryInsightsDataSource } from './QueryInsightsDataSourceContext';
 import './QueryInsightsTab.scss';
 
 export const QueryInsightsMain = (): JSX.Element => {
@@ -788,8 +788,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                     {/* Metrics Row */}
                     <MetricGrid>
                         <TimeMetric
-                            label={stage2Data?.executionTimeScope === 'pipeline-estimate'
-                                ? l10n.t('Overall execution time (estimate)') : l10n.t('Execution Time')}
+                            label={
+                                stage2Data?.executionTimeScope === 'pipeline-estimate'
+                                    ? l10n.t('Overall execution time (estimate)')
+                                    : l10n.t('Execution Time')
+                            }
                             valueMs={executionTime}
                             tooltipExplanation={l10n.t('Total time taken to execute the query on the server')}
                         />
@@ -1014,11 +1017,13 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                 pipeline.kind === 's3Cancelled')
                                         }
                                         mayUsePremiumRequests={!selectedModel?.isUtility}
-                                        secondaryLink={source.explore && (
-                                            <Link inline onClick={() => void source.explore?.()}>
-                                                {l10n.t('Explore with your own input…')}
-                                            </Link>
-                                        )}
+                                        secondaryLink={
+                                            source.explore && (
+                                                <Link inline onClick={() => void source.explore?.()}>
+                                                    {l10n.t('Explore with your own input…')}
+                                                </Link>
+                                            )
+                                        }
                                         errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
                                         onGetInsights={handleGetAISuggestions}
                                         onLearnMore={handleLearnMore}
@@ -1105,14 +1110,27 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                         : undefined;
                                                 if (durationMs !== undefined) {
                                                     const seconds = (durationMs / 1000).toFixed(1);
-                                                    return l10n.t(
-                                                        'Powered by {0} via GitHub Copilot · {1}s',
-                                                        modelName,
-                                                        seconds,
-                                                    ) + usageByline(pipeline.kind === 's3Success' ? pipeline.model.usage : undefined);
+                                                    return (
+                                                        l10n.t(
+                                                            'Powered by {0} via GitHub Copilot · {1}s',
+                                                            modelName,
+                                                            seconds,
+                                                        ) +
+                                                        usageByline(
+                                                            pipeline.kind === 's3Success'
+                                                                ? pipeline.model.usage
+                                                                : undefined,
+                                                        )
+                                                    );
                                                 }
-                                                return l10n.t('Powered by {0} via GitHub Copilot', modelName) +
-                                                    usageByline(pipeline.kind === 's3Success' ? pipeline.model.usage : undefined);
+                                                return (
+                                                    l10n.t('Powered by {0} via GitHub Copilot', modelName) +
+                                                    usageByline(
+                                                        pipeline.kind === 's3Success'
+                                                            ? pipeline.model.usage
+                                                            : undefined,
+                                                    )
+                                                );
                                             })()}
                                         </Text>
                                         {/* Said once for every AI card above, instead of in each card header. */}
@@ -1129,12 +1147,21 @@ export const QueryInsightsMain = (): JSX.Element => {
                 {/* Right Column: Efficiency Analysis, Query Plan, Quick Actions */}
                 <div className="rightColumn">
                     {/* Query Efficiency Analysis */}
-                    <SummaryCard title={l10n.t('Query Efficiency Analysis')}
+                    <SummaryCard
+                        title={l10n.t('Query Efficiency Analysis')}
                         titleBadge={analysisProfile !== 'find' && <QueryInsightsPreviewBadge />}
-                        description={analysisProfile === 'aggregate' && stage2Data?.analysisNotes?.length
-                            ? <Text>{stage2Data.analysisNotes.join(' ')}</Text> : undefined}>
+                        description={
+                            analysisProfile === 'aggregate' && stage2Data?.analysisNotes?.length ? (
+                                <Text>{stage2Data.analysisNotes.join(' ')}</Text>
+                            ) : undefined
+                        }
+                    >
                         <GenericCell
-                            label={analysisProfile === 'aggregate' ? l10n.t('Initial-stage selectivity') : l10n.t('Selectivity')}
+                            label={
+                                analysisProfile === 'aggregate'
+                                    ? l10n.t('Initial-stage selectivity')
+                                    : l10n.t('Selectivity')
+                            }
                             value={analysisProfile === 'count' ? notApplicableShort : selectivity}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
@@ -1186,7 +1213,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('Fetch Overhead')}
-                            value={analysisProfile === 'count' ? notApplicableShort : getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)}
+                            value={
+                                analysisProfile === 'count'
+                                    ? notApplicableShort
+                                    : getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)
+                            }
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 if (analysisProfile === 'count') return notApplicableToCount;
@@ -1216,16 +1247,22 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={analysisProfile === 'count' ? notApplicableShort
-                                : notApplicable.includes('inMemorySort') ? l10n.t('Not rated for pipeline $sort')
-                                : getCellValue((stage2) =>
-                                stage2.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
-                            )}
+                            value={
+                                analysisProfile === 'count'
+                                    ? notApplicableShort
+                                    : notApplicable.includes('inMemorySort')
+                                      ? l10n.t('Not rated for pipeline $sort')
+                                      : getCellValue((stage2) =>
+                                            stage2.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
+                                        )
+                            }
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 if (analysisProfile === 'count') return notApplicableToCount;
                                 if (notApplicable.includes('inMemorySort')) {
-                                    return l10n.t('A later pipeline $sort is present. The initial cursor plan cannot determine its memory or disk usage.');
+                                    return l10n.t(
+                                        'A later pipeline $sort is present. The initial cursor plan cannot determine its memory or disk usage.',
+                                    );
                                 }
                                 const hasSort = stage2Data?.efficiencyAnalysis.hasInMemorySort ?? false;
                                 if (hasSort) {

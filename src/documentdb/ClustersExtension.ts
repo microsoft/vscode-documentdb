@@ -57,7 +57,6 @@ import {
     viewQuickStartLogs,
 } from '../commands/localQuickStart/localQuickStartCommands';
 import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
-import { exploreWithOwnInput } from '../commands/queryInsights/exploreWithOwnInput';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openClusterDashboard } from '../commands/openClusterDashboard/openClusterDashboard';
@@ -78,6 +77,7 @@ import { playgroundOpenQueryInShell } from '../commands/playground/playgroundOpe
 import { runAll } from '../commands/playground/runAll';
 import { runSelected } from '../commands/playground/runSelected';
 import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
+import { exploreWithOwnInput } from '../commands/queryInsights/exploreWithOwnInput';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';

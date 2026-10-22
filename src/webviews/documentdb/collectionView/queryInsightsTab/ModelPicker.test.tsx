@@ -54,27 +54,51 @@ vi.mock('@fluentui/react-components', async (importOriginal) => {
             onOptionSelect: (event: React.MouseEvent, data: { optionValue: string }) => void;
         }): ReactNode => (
             <div>
-                <button role="combobox" aria-label={ariaLabel} aria-labelledby={ariaLabelledBy}
-                    data-appearance={appearance} disabled={disabled}
-                    onClick={(event) => onOpenChange?.(event, { open: true })}>{button?.children ?? (value || placeholder)}</button>
-                <div role="listbox" onClick={(event) => {
-                    const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
-                    if (option?.dataset.value && !disabled) {
-                        onOptionSelect(event, { optionValue: option.dataset.value });
-                    }
-                }}>{children}</div>
+                <button
+                    role="combobox"
+                    aria-label={ariaLabel}
+                    aria-labelledby={ariaLabelledBy}
+                    data-appearance={appearance}
+                    disabled={disabled}
+                    onClick={(event) => onOpenChange?.(event, { open: true })}
+                >
+                    {button?.children ?? (value || placeholder)}
+                </button>
+                <div
+                    role="listbox"
+                    onClick={(event) => {
+                        const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+                        if (option?.dataset.value && !disabled) {
+                            onOptionSelect(event, { optionValue: option.dataset.value });
+                        }
+                    }}
+                >
+                    {children}
+                </div>
             </div>
         ),
         Option: ({ children, value }: { children: ReactNode; value: string }): ReactNode => (
-            <button role="option" data-value={value}>{children}</button>
+            <button role="option" data-value={value}>
+                {children}
+            </button>
         ),
         OptionGroup: ({ children, label }: { children: ReactNode; label: string }): ReactNode => (
-            <div role="group" aria-label={label}>{children}</div>
+            <div role="group" aria-label={label}>
+                {children}
+            </div>
         ),
         Popover: ({ children }: { children: ReactNode }): ReactNode => <>{children}</>,
         PopoverTrigger: ({ children }: { children: ReactNode }): ReactNode => <>{children}</>,
-        PopoverSurface: ({ children, 'aria-label': ariaLabel }: { children: ReactNode; 'aria-label'?: string }): ReactNode => (
-            <div role="dialog" aria-label={ariaLabel}>{children}</div>
+        PopoverSurface: ({
+            children,
+            'aria-label': ariaLabel,
+        }: {
+            children: ReactNode;
+            'aria-label'?: string;
+        }): ReactNode => (
+            <div role="dialog" aria-label={ariaLabel}>
+                {children}
+            </div>
         ),
     };
 });
@@ -85,8 +109,24 @@ vi.mock('@vscode/l10n', () => ({
 
 const available: AvailableModelsResult = {
     models: [
-        { id: 'premium', name: 'Premium model', family: 'premium', vendor: 'copilot', version: '1', maxInputTokens: 128000, isUtility: false },
-        { id: 'utility', name: 'Utility model', family: 'copilot-utility', vendor: 'copilot', version: '1', maxInputTokens: 64000, isUtility: true },
+        {
+            id: 'premium',
+            name: 'Premium model',
+            family: 'premium',
+            vendor: 'copilot',
+            version: '1',
+            maxInputTokens: 128000,
+            isUtility: false,
+        },
+        {
+            id: 'utility',
+            name: 'Utility model',
+            family: 'copilot-utility',
+            vendor: 'copilot',
+            version: '1',
+            maxInputTokens: 64000,
+            isUtility: true,
+        },
     ],
     savedModelId: null,
     effectiveModelId: 'premium',
@@ -121,9 +161,12 @@ describe('Shared Query Insights ModelPicker', () => {
     }
 
     function details(): Record<string, string> {
-        return Object.fromEntries([...host.querySelectorAll('[role="dialog"] dl > div')].map((row) => [
-            row.querySelector('dt')?.textContent ?? '', row.querySelector('dd')?.textContent ?? '',
-        ]));
+        return Object.fromEntries(
+            [...host.querySelectorAll('[role="dialog"] dl > div')].map((row) => [
+                row.querySelector('dt')?.textContent ?? '',
+                row.querySelector('dd')?.textContent ?? '',
+            ]),
+        );
     }
 
     it('labels the dropdown and details button and does not show prompt information', async () => {
@@ -140,7 +183,10 @@ describe('Shared Query Insights ModelPicker', () => {
 
     it('orders utility first, refetches the list on open and persists a selection', async () => {
         mocks.setSelectedModel.mockResolvedValue({
-            ...available, savedModelId: 'utility', effectiveModelId: 'utility', effectiveReason: 'saved',
+            ...available,
+            savedModelId: 'utility',
+            effectiveModelId: 'utility',
+            effectiveReason: 'saved',
         });
         await renderPicker();
         expect(mocks.getAvailableModels).toHaveBeenCalledTimes(1);
@@ -161,7 +207,10 @@ describe('Shared Query Insights ModelPicker', () => {
 
     it('shows an empty state and disables the picker when no models are available', async () => {
         mocks.getAvailableModels.mockResolvedValue({
-            models: [], savedModelId: null, effectiveModelId: null, effectiveReason: null,
+            models: [],
+            savedModelId: null,
+            effectiveModelId: null,
+            effectiveReason: null,
         });
         const onChange = vi.fn();
         await renderPicker(onChange);
@@ -176,22 +225,46 @@ describe('Shared Query Insights ModelPicker', () => {
         mocks.getAvailableModels.mockResolvedValue({
             ...available,
             models: [
-                { ...available.models[0], category: 'powerful', pricing: '1x', priceCategory: 'high',
-                    inputCost: 0, outputCost: 6, cacheCost: 0.25, longContextInputCost: 4,
-                    supportsToolCalling: true, supportsImageToText: false },
+                {
+                    ...available.models[0],
+                    category: 'powerful',
+                    pricing: '1x',
+                    priceCategory: 'high',
+                    inputCost: 0,
+                    outputCost: 6,
+                    cacheCost: 0.25,
+                    longContextInputCost: 4,
+                    supportsToolCalling: true,
+                    supportsImageToText: false,
+                },
                 available.models[1],
-                { ...available.models[0], id: 'light', name: 'Light model', category: 'lightweight', priceCategory: 'low' },
+                {
+                    ...available.models[0],
+                    id: 'light',
+                    name: 'Light model',
+                    category: 'lightweight',
+                    priceCategory: 'low',
+                },
                 { ...available.models[0], id: 'future', name: 'Future model', category: 'new-category' },
             ],
         });
         await renderPicker();
         const options = [...host.querySelectorAll('[role="option"]')];
-        expect(options.map((element) => element.getAttribute('data-value'))).toEqual(['utility', 'premium', 'light', 'future']);
-        expect(options.map((element) => element.textContent)).toEqual([
-            'Utility model', 'Premium modelHigh cost', 'Light modelLow cost', 'Future model',
+        expect(options.map((element) => element.getAttribute('data-value'))).toEqual([
+            'utility',
+            'premium',
+            'light',
+            'future',
         ]);
-        expect([...host.querySelectorAll('[role="group"]')].map((element) => element.getAttribute('aria-label')))
-            .toEqual(['Powerful', 'Lightweight', 'Other']);
+        expect(options.map((element) => element.textContent)).toEqual([
+            'Utility model',
+            'Premium modelHigh cost',
+            'Light modelLow cost',
+            'Future model',
+        ]);
+        expect(
+            [...host.querySelectorAll('[role="group"]')].map((element) => element.getAttribute('aria-label')),
+        ).toEqual(['Powerful', 'Lightweight', 'Other']);
         const facts = details();
         expect(host.querySelector('[role="dialog"]')?.textContent).toContain('Premium model');
         expect(facts.Cost).toBe('High cost');
@@ -199,18 +272,22 @@ describe('Shared Query Insights ModelPicker', () => {
         expect(facts.Capabilities).toBe('Tool calling · No image input');
         expect(facts['Model ID']).toBe('premium');
         expect(facts.Selection).toBe('Default: first available model');
-        expect(host.textContent).toContain('Thinking level and context size follow this model\'s settings in the VS Code Chat model picker.');
+        expect(host.textContent).toContain(
+            "Thinking level and context size follow this model's settings in the VS Code Chat model picker.",
+        );
     });
 
     it('shows the cost category and never a "Free" label or cost badge for the utility model', async () => {
         mocks.getAvailableModels.mockResolvedValue({
-            ...available, models: [{ ...available.models[0], priceCategory: 'very_high' }, available.models[1]],
+            ...available,
+            models: [{ ...available.models[0], priceCategory: 'very_high' }, available.models[1]],
         });
         await renderPicker();
         expect(details().Cost).toBe('Very high cost');
 
         mocks.getAvailableModels.mockResolvedValue({
-            ...available, effectiveModelId: 'utility',
+            ...available,
+            effectiveModelId: 'utility',
             models: [available.models[0], { ...available.models[1], pricing: 'Free', priceCategory: 'low' }],
         });
         await act(async () => root.unmount());
@@ -244,25 +321,33 @@ describe('Shared Query Insights ModelPicker', () => {
         const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]');
         expect(trigger?.dataset.appearance).toBe('outline');
         expect(trigger?.querySelector('svg')).toBeNull();
-        expect(document.getElementById(trigger?.getAttribute('aria-labelledby') ?? '')?.textContent).toBe('Copilot model');
+        expect(document.getElementById(trigger?.getAttribute('aria-labelledby') ?? '')?.textContent).toBe(
+            'Copilot model',
+        );
     });
 
-    it.each(['outline', 'underline'] as const)('keeps Fast model ids and provider labels in the %s list', async (appearance) => {
-        const models = [
-            { ...available.models[0], id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', category: 'powerful' },
-            { ...available.models[0], id: 'gpt-5.6-sol-fast', name: 'GPT-5.6 Sol Fast', category: undefined },
-            available.models[1],
-        ];
-        mocks.getAvailableModels.mockResolvedValue({ ...available, models, effectiveModelId: models[0].id });
-        await renderPicker(vi.fn(), { appearance });
-        expect([...host.querySelectorAll('[role="option"]')].map((element) => [
-            element.getAttribute('data-value'), element.textContent,
-        ])).toEqual([
-            ['utility', 'Utility model'],
-            ['gpt-5.6-sol', 'GPT-5.6 Sol'],
-            ['gpt-5.6-sol-fast', 'GPT-5.6 Sol Fast'],
-        ]);
-    });
+    it.each(['outline', 'underline'] as const)(
+        'keeps Fast model ids and provider labels in the %s list',
+        async (appearance) => {
+            const models = [
+                { ...available.models[0], id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', category: 'powerful' },
+                { ...available.models[0], id: 'gpt-5.6-sol-fast', name: 'GPT-5.6 Sol Fast', category: undefined },
+                available.models[1],
+            ];
+            mocks.getAvailableModels.mockResolvedValue({ ...available, models, effectiveModelId: models[0].id });
+            await renderPicker(vi.fn(), { appearance });
+            expect(
+                [...host.querySelectorAll('[role="option"]')].map((element) => [
+                    element.getAttribute('data-value'),
+                    element.textContent,
+                ]),
+            ).toEqual([
+                ['utility', 'Utility model'],
+                ['gpt-5.6-sol', 'GPT-5.6 Sol'],
+                ['gpt-5.6-sol-fast', 'GPT-5.6 Sol Fast'],
+            ]);
+        },
+    );
 
     it('disambiguates identical provider labels with model ids instead of merging entries', async () => {
         mocks.getAvailableModels.mockResolvedValue({
