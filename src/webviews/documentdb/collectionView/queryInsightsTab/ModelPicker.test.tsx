@@ -6,10 +6,11 @@
 // @vitest-environment jsdom
 
 import { SSRProvider } from '@fluentui/react-components';
-import { act, type ReactNode } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import type * as FluentUI from '@fluentui/react-components';
+import { act, useId, type ReactNode } from 'react';
+import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules -- Public React DOM client entry point.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AvailableModelsResult } from '../../../../services/ai/modelSelection';
+import { type AvailableModelsResult } from '../../../../services/ai/modelSelection';
 import { ModelPicker, type ModelPickerProps } from '../../queryInsightsShared/ModelPicker';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,7 +28,7 @@ const client = {
 vi.mock('../../../_integration/useTrpcClient', () => ({ useTrpcClient: () => client }));
 // jsdom has no layout engine; leave Fluent's floating-popup positioning out of this state/selection test.
 vi.mock('@fluentui/react-components', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@fluentui/react-components')>();
+    const actual = await importOriginal<typeof FluentUI>();
     return {
         ...actual,
         Dropdown: ({
@@ -52,33 +53,46 @@ vi.mock('@fluentui/react-components', async (importOriginal) => {
             'aria-labelledby'?: string;
             onOpenChange?: (event: React.MouseEvent, data: { open: boolean }) => void;
             onOptionSelect: (event: React.MouseEvent, data: { optionValue: string }) => void;
-        }): ReactNode => (
-            <div>
-                <button
-                    role="combobox"
-                    aria-label={ariaLabel}
-                    aria-labelledby={ariaLabelledBy}
-                    data-appearance={appearance}
-                    disabled={disabled}
-                    onClick={(event) => onOpenChange?.(event, { open: true })}
-                >
-                    {button?.children ?? (value || placeholder)}
-                </button>
-                <div
-                    role="listbox"
-                    onClick={(event) => {
-                        const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
-                        if (option?.dataset.value && !disabled) {
-                            onOptionSelect(event, { optionValue: option.dataset.value });
-                        }
-                    }}
-                >
-                    {children}
+        }): ReactNode => {
+            const listboxId = useId();
+            return (
+                <div>
+                    <button
+                        role="combobox"
+                        aria-label={ariaLabel}
+                        aria-labelledby={ariaLabelledBy}
+                        aria-controls={listboxId}
+                        aria-expanded={true}
+                        data-appearance={appearance}
+                        disabled={disabled}
+                        onClick={(event) => onOpenChange?.(event, { open: true })}
+                    >
+                        {button?.children ?? (value || placeholder)}
+                    </button>
+                    <div
+                        id={listboxId}
+                        role="listbox"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                if (event.target instanceof HTMLElement) event.target.click();
+                            }
+                        }}
+                        onClick={(event) => {
+                            const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+                            if (option?.dataset.value && !disabled) {
+                                onOptionSelect(event, { optionValue: option.dataset.value });
+                            }
+                        }}
+                    >
+                        {children}
+                    </div>
                 </div>
-            </div>
-        ),
+            );
+        },
         Option: ({ children, value }: { children: ReactNode; value: string }): ReactNode => (
-            <button role="option" data-value={value}>
+            <button role="option" aria-selected={false} data-value={value}>
                 {children}
             </button>
         ),

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { IActionContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommandType } from '../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { getLastPromptSource } from '../commands/llmEnhancedCommands/promptTemplates';

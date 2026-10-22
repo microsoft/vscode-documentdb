@@ -2,10 +2,11 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 import * as l10n from '@vscode/l10n';
-import type { Document } from 'mongodb';
-import type { QueryInsightsAnalysisProfile } from '../../webviews/documentdb/collectionView/types/queryInsights';
-import type { ExecutionStatsAnalysis } from './ExplainPlanAnalyzer';
+import { type Document } from 'mongodb';
+import { type QueryInsightsAnalysisProfile } from '../../webviews/documentdb/collectionView/types/queryInsights';
+import { type ExecutionStatsAnalysis } from './ExplainPlanAnalyzer';
 
 export function asExplainObject(value: unknown): Document | undefined {
     return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Document) : undefined;

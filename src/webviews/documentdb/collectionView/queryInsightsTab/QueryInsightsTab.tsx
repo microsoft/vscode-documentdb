@@ -36,7 +36,7 @@ import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview
 import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
+import { type AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analysisProfilePresentation';
 import { ModelPicker } from '../../queryInsightsShared/ModelPicker';

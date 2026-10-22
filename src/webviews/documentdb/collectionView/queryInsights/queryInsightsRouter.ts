@@ -42,7 +42,7 @@ import { transformStage1Response } from '../../../../documentdb/queryInsights/tr
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
 import { mergeRouters, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
-import type { QueryInsightsPrefill } from '../../queryInsightsStandalone/types';
+import { type QueryInsightsPrefill } from '../../queryInsightsStandalone/types';
 import { type RouterContext } from '../collectionViewRouter';
 import { queryInsightsEventsRouter } from './queryInsightsEventsRouter';
 

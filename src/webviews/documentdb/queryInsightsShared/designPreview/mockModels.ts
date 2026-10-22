@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AvailableModelInfo, AvailableModelsResult } from '../../../../services/ai/modelSelection';
+import { type AvailableModelInfo, type AvailableModelsResult } from '../../../../services/ai/modelSelection';
 
 /**
  * Mock data for the dev-only design preview (also served to the "Current" card by the L2 scenario).

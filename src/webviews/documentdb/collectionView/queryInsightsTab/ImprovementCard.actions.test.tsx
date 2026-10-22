@@ -2,10 +2,11 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 // @vitest-environment jsdom
 import { SSRProvider } from '@fluentui/react-components';
 import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules -- Public React DOM client entry point.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createImprovementCardConfig } from '../utils/createImprovementCard';
 import { ImprovementCard } from './components/optimizationCards/ImprovementCard';

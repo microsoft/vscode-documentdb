@@ -5,7 +5,7 @@
 
 import { Link, makeStyles, Text, tokens } from '@fluentui/react-components';
 import { useState, type JSX } from 'react';
-import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
+import { type AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { GetPerformanceInsightsCard } from '../../collectionView/queryInsightsTab/components/optimizationCards/custom/GetPerformanceInsightsCard';
 import { ModelPicker } from '../ModelPicker';
 import { BODY_TEXT } from './previewParts';

@@ -9,7 +9,7 @@ import { Button, Divider, Link, makeStyles, mergeClasses, Text, tokens } from '@
 import { SparkleRegular } from '@fluentui/react-icons';
 import { useState, type JSX } from 'react';
 import { previewModel } from './mockModels';
-import type { OptionProps } from './ModelPillOption';
+import { type OptionProps } from './ModelPillOption';
 import { CostBadge, InsightsCardShell, ModelMenu, usePreviewStyles } from './previewParts';
 
 const useStripStyles = makeStyles({

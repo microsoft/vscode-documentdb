@@ -15,7 +15,7 @@ import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webv
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
-import type { QueryInsightsPrefill } from '../../../src/webviews/documentdb/queryInsightsStandalone/types';
+import { type QueryInsightsPrefill } from '../../../src/webviews/documentdb/queryInsightsStandalone/types';
 import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';
 
 type Inputs = FixtureInputs;

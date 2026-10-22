@@ -2,6 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { z } from 'zod';
@@ -13,16 +14,16 @@ import { StreamingResponseParser } from '../../../documentdb/queryInsights/strea
 import { transformStage1Response } from '../../../documentdb/queryInsights/transformations';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
-import type { BaseRouterContext } from '../../_integration/appRouter';
+import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router } from '../../_integration/trpc';
-import type { QueryInsightsStreamEvent } from '../collectionView/types/queryInsightsStream';
+import { type QueryInsightsStreamEvent } from '../collectionView/types/queryInsightsStream';
 import {
     inspectStandaloneInput,
     parseStandaloneInput,
     queryInsightsPrefillSchema,
     standaloneInputSchema,
 } from './queryInsightsStandaloneInput';
-import type { QueryInsightsPrefill } from './types';
+import { type QueryInsightsPrefill } from './types';
 
 export type StandaloneRouterContext = BaseRouterContext & { prefill: QueryInsightsPrefill };
 

@@ -19,7 +19,7 @@ import {
 import { BotRegular, InfoRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { Fragment, useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
-import type { AvailableModelInfo, AvailableModelsResult } from '../../../services/ai/modelSelection';
+import { type AvailableModelInfo, type AvailableModelsResult } from '../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import './ModelPicker.scss';

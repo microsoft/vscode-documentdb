@@ -5,12 +5,12 @@
 
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import { createContext, useCallback, useContext, useMemo, type JSX, type ReactNode } from 'react';
-import type { CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
+import { type CommandType } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { CollectionViewContext, type QueryInsightsState } from '../collectionViewContext';
-import type { CollectionViewWebviewConfigurationType } from '../collectionViewController';
-import type { QueryInsightsStage1Response, QueryInsightsStage2Response } from '../types/queryInsights';
-import type { QueryInsightsStreamEvent } from '../types/queryInsightsStream';
+import { type CollectionViewWebviewConfigurationType } from '../collectionViewController';
+import { type QueryInsightsStage1Response, type QueryInsightsStage2Response } from '../types/queryInsights';
+import { type QueryInsightsStreamEvent } from '../types/queryInsightsStream';
 
 export interface Stage3Callbacks {
     onData: (event: QueryInsightsStreamEvent) => void;

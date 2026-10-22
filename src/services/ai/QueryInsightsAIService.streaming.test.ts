@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { CommandType } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
 
 // Mock the telemetry wrapper so the SUT's callWithTelemetryAndErrorHandling
 // callback runs directly. We re-throw on errors so the caller's error path is
@@ -180,8 +181,7 @@ describe('QueryInsightsAIService.getOptimizationRecommendationsStreaming (WI-3)'
             {
                 providedData: { clusterInfo: { platform: 'documentdb' } },
                 modelId: 'picked',
-                commandType:
-                    'aggregate' as import('../../commands/llmEnhancedCommands/indexAdvisorCommands').CommandType,
+                commandType: CommandType.Aggregate,
             },
         );
         await handle.completion;

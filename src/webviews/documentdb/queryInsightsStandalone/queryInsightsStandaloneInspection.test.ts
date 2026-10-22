@@ -2,10 +2,11 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 import { describe, expect, it, vi } from 'vitest';
 import { inspectStandaloneInput } from './queryInsightsStandaloneInput';
 import { samplePlan } from './samplePlans';
-import type { StandaloneInput } from './types';
+import { type StandaloneInput } from './types';
 
 vi.mock('vscode', () => ({ l10n: { t: (text: string): string => text } }));
 vi.mock('../../../commands/llmEnhancedCommands/indexAdvisorCommands', () => ({

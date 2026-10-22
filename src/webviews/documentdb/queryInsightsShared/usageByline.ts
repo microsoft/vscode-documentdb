@@ -2,8 +2,9 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 import * as l10n from '@vscode/l10n';
-import type { QueryInsightsStreamUsage } from '../collectionView/types/queryInsightsStream';
+import { type QueryInsightsStreamUsage } from '../collectionView/types/queryInsightsStream';
 
 export function usageByline(usage: QueryInsightsStreamUsage | undefined): string {
     const parts: string[] = [];

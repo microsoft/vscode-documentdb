@@ -1,8 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 // @vitest-environment jsdom
 import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules -- Public React DOM client entry point.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MonacoEditorProps } from '../../components/MonacoEditor';
+import { type MonacoEditorProps } from '../../components/MonacoEditor';
 import { JsonPlanEditor } from './JsonPlanEditor';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

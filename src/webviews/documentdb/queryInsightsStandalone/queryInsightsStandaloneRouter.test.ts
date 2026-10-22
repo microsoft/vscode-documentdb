@@ -2,11 +2,12 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { QueryInsightsStreamEvent } from '../collectionView/types/queryInsightsStream';
+import { type QueryInsightsStreamEvent } from '../collectionView/types/queryInsightsStream';
 import { parseStandaloneInput } from './queryInsightsStandaloneInput';
 import { queryInsightsStandaloneRouter, type StandaloneRouterContext } from './queryInsightsStandaloneRouter';
-import type { StandaloneInput } from './types';
+import { type StandaloneInput } from './types';
 
 const mocks = vi.hoisted(() => ({ stream: vi.fn(), executeCommand: vi.fn(), openDocument: vi.fn() }));
 vi.mock('vscode', () => ({
@@ -260,9 +261,9 @@ describe('Connectionless Query Insights', () => {
             query: commandType === 'aggregate' ? '[]' : '{}',
             requestKey: 'scope',
         });
-        for await (const _event of stream) {
-            /* drain the model response */
-        }
+        const events: QueryInsightsStreamEvent[] = [];
+        for await (const event of stream) events.push(event);
+        expect(events.at(-1)).toMatchObject({ type: 'complete' });
         const args = mocks.stream.mock.calls[0] as unknown[];
         expect(args[6]).toContain(`Analysis Profile: ${commandType.toUpperCase()}`);
         if (commandType === 'count') expect(args[6]).toContain('Skipped rules: returned-document efficiency ratio');

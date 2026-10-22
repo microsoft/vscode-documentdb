@@ -8,9 +8,9 @@
 import { Button, Link, makeStyles, mergeClasses, tokens } from '@fluentui/react-components';
 import { CheckmarkRegular, SparkleRegular } from '@fluentui/react-icons';
 import { type JSX } from 'react';
-import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
+import { type AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { groupPreviewModels, previewModel } from './mockModels';
-import type { OptionProps } from './ModelPillOption';
+import { type OptionProps } from './ModelPillOption';
 import {
     contextLabel,
     CostBadge,

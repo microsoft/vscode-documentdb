@@ -5,7 +5,7 @@
 
 // @vitest-environment jsdom
 
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from 'react-dom/server'; // eslint-disable-line import/no-internal-modules -- Public React DOM server entry point.
 import { describe, expect, it, vi } from 'vitest';
 import { GetPerformanceInsightsCard } from './components/optimizationCards/custom/GetPerformanceInsightsCard';
 

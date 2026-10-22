@@ -2,6 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 import {
     Badge,
     Button,
@@ -43,12 +44,12 @@ import {
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
-import type { CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
-import type { AvailableModelInfo } from '../../../services/ai/modelSelection';
+import { type CommandType } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
+import { type AvailableModelInfo } from '../../../services/ai/modelSelection';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import { MessageBlock } from '../../components/MessageBlock';
-import type { QueryInsightsState } from '../collectionView/collectionViewContext';
+import { type QueryInsightsState } from '../collectionView/collectionViewContext';
 import {
     QueryInsightsDataSourceContext,
     type QueryInsightsDataSource,
@@ -59,9 +60,9 @@ import { ModelPicker } from '../queryInsightsShared/ModelPicker';
 import { QueryInsightsPreviewBadge } from '../queryInsightsShared/QueryInsightsPreviewBadge';
 import { JsonPlanEditor } from './JsonPlanEditor';
 import './queryInsightsStandalone.scss';
-import type { InputIssue, StandaloneInspection } from './queryInsightsStandaloneInput';
+import { type InputIssue, type StandaloneInspection } from './queryInsightsStandaloneInput';
 import { contextSnippets, explainSnippets, samplePlan, type SampleCommand, type ShellSnippet } from './samplePlans';
-import type { QueryInsightsPrefill, StandaloneInput } from './types';
+import { type QueryInsightsPrefill, type StandaloneInput } from './types';
 
 type StepId = 'welcome' | 'configure' | 'analyze';
 type OptionalRow = 'collectionStats' | 'indexes' | 'namespace' | 'clusterType';

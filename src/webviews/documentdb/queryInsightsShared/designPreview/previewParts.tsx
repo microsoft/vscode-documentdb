@@ -25,7 +25,7 @@ import {
 } from '@fluentui/react-components';
 import { SparkleRegular } from '@fluentui/react-icons';
 import { Fragment, useLayoutEffect, useRef, useState, type JSX, type ReactNode, type RefObject } from 'react';
-import type { AvailableModelInfo } from '../../../../services/ai/modelSelection';
+import { type AvailableModelInfo } from '../../../../services/ai/modelSelection';
 import { formatTokenCount } from '../../../../utils/formatTokenCount';
 import '../../collectionView/queryInsightsTab/components/optimizationCards/baseOptimizationCard.scss';
 import '../../collectionView/queryInsightsTab/components/optimizationCards/custom/GetPerformanceInsightsCard.scss';

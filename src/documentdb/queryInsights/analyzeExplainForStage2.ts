@@ -2,12 +2,13 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 import * as l10n from '@vscode/l10n';
-import type { Document } from 'mongodb';
-import type {
-    QueryInsightsAnalysisProfile,
-    QueryInsightsMetric,
-    QueryInsightsStage2Response,
+import { type Document } from 'mongodb';
+import {
+    type QueryInsightsAnalysisProfile,
+    type QueryInsightsMetric,
+    type QueryInsightsStage2Response,
 } from '../../webviews/documentdb/collectionView/types/queryInsights';
 import {
     applyCountRating,

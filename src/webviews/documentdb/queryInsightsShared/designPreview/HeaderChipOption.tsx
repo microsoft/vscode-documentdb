@@ -24,7 +24,7 @@ import {
 import { ChevronDownRegular, SparkleRegular } from '@fluentui/react-icons';
 import { useState, type JSX } from 'react';
 import { groupPreviewModels, previewModel } from './mockModels';
-import type { OptionProps } from './ModelPillOption';
+import { type OptionProps } from './ModelPillOption';
 import { contextLabel, CostBadge, costExplanation, InsightsCardShell, usePreviewStyles } from './previewParts';
 
 const useChipStyles = makeStyles({

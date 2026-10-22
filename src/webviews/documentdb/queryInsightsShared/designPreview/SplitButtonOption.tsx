@@ -19,7 +19,7 @@ import {
 import { OpenRegular, SparkleRegular } from '@fluentui/react-icons';
 import { useState, type JSX } from 'react';
 import { previewModel, previewModels } from './mockModels';
-import type { OptionProps } from './ModelPillOption';
+import { type OptionProps } from './ModelPillOption';
 import {
     CostBadge,
     InsightsCardShell,

@@ -2,17 +2,18 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { CommandType, type QueryObject } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
-import type { CollectionStats, IndexStats } from '../../../documentdb/LlmEnhancedFeatureApis';
+import { type CollectionStats, type IndexStats } from '../../../documentdb/LlmEnhancedFeatureApis';
 import { getInitialExplainPlan } from '../../../documentdb/queryInsights/analysisProfiles';
 import { fixupDocumentDbExplain } from '../../../documentdb/utils/fixupDocumentDbExplain';
-import type { ClusterMetadata } from '../../../documentdb/utils/getClusterMetadata';
+import { type ClusterMetadata } from '../../../documentdb/utils/getClusterMetadata';
 import { toFilterQueryObj } from '../../../documentdb/utils/toFilterQuery';
-import type { StandaloneInput } from './types';
+import { type StandaloneInput } from './types';
 
 export const queryInsightsPrefillSchema = z.object({
     explain: z.string().optional(),
