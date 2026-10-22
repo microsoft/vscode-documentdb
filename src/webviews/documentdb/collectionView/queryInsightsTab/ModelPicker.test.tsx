@@ -5,8 +5,8 @@
 
 // @vitest-environment jsdom
 
-import { SSRProvider } from '@fluentui/react-components';
 import type * as FluentUI from '@fluentui/react-components';
+import { SSRProvider } from '@fluentui/react-components';
 import { act, useId, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules -- Public React DOM client entry point.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
