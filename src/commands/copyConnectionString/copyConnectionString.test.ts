@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 
 const mockClipboardWriteText = vi.fn();

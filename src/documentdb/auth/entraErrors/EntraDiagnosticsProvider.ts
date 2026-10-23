@@ -8,10 +8,10 @@ import {
     type ConnectionDiagnosticsProvider,
     type ConnectionDiagnosticsRequest,
 } from '../../../services/connectionDiagnosticsService';
+import { traceAuthFlow } from '../../../utils/authTrace';
 import { classifyEntraError } from './classifyEntraError';
 import { entraErrorRules } from './entraErrorRules';
 import { getRecentEntraTokenFailure } from './entraTokenFailures';
-import { traceAuthFlow } from '../../../utils/authTrace';
 
 export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
     public readonly id = 'entra-sign-in';

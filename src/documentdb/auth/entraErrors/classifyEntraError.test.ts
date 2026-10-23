@@ -15,7 +15,11 @@ const broker = 'platform_broker_error: See https://aka.ms/msal.js.errors#platfor
 
 const fixtures = [
     { text: `invalid_request - AADSTS65002: ${preauthorization}`, ruleId: 'firstPartyPreauthorization', code: '65002' },
-    { text: 'AADSTS500011: Resource principal was not found in the tenant', ruleId: 'resourceNotInTenant', code: '500011' },
+    {
+        text: 'AADSTS500011: Resource principal was not found in the tenant',
+        ruleId: 'resourceNotInTenant',
+        code: '500011',
+    },
     { text: 'AADSTS50001: Resource identifier is not valid', ruleId: 'invalidResource', code: '50001' },
     { text: 'AADSTS50020: Account is not in tenant', ruleId: 'accountNotInTenant', code: '50020' },
     { text: 'AADSTS90072: Account is not in tenant', ruleId: 'accountNotInTenant', code: '90072' },
@@ -109,12 +113,19 @@ describe('Entra error rule table', () => {
 
     it('has a fixture for every rule and every listed code', (): void => {
         for (const rule of entraErrorRules) {
-            expect(fixtures.some((fixture): boolean => fixture.ruleId === rule.id), rule.id).toBe(true);
+            expect(
+                fixtures.some((fixture): boolean => fixture.ruleId === rule.id),
+                rule.id,
+            ).toBe(true);
             for (const code of rule.aadsts ?? []) {
-                expect(fixtures.some((fixture): boolean => fixture.ruleId === rule.id && fixture.code === code)).toBe(true);
+                expect(fixtures.some((fixture): boolean => fixture.ruleId === rule.id && fixture.code === code)).toBe(
+                    true,
+                );
             }
             for (const code of rule.msal ?? []) {
-                expect(fixtures.some((fixture): boolean => fixture.ruleId === rule.id && fixture.text.includes(code))).toBe(true);
+                expect(
+                    fixtures.some((fixture): boolean => fixture.ruleId === rule.id && fixture.text.includes(code)),
+                ).toBe(true);
             }
         }
     });

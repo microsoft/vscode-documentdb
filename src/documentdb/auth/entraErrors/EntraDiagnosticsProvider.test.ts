@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Links } from '../../../constants';
 import { EntraDiagnosticsProvider } from './EntraDiagnosticsProvider';
 import { recordEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraTokenFailures';
@@ -117,15 +117,18 @@ describe('EntraDiagnosticsProvider', () => {
         ['usgov', 'Azure US Government'],
         ['china', 'Azure China'],
         ['custom', 'a custom cloud'],
-    ] as const)('hedges an opaque broker failure in %s after a DocumentDB token failure', async (cloudCategory, cloud): Promise<void> => {
-        recordEntraTokenFailure(clusterId, { cloudCategory, authMethod: 'interactive' });
-        const message = await provider.explain({ clusterId, error: broker });
-        expect(message).toContain(`Sign-in failed in ${cloud}. If the sign-in window showed AADSTS65002`);
-        expect(message).toContain('must be configured via preauthorization');
-        expect(message).toContain('Only Microsoft can change this');
-        expect(message).toContain('native DocumentDB authentication or managed identity on an Azure VM');
-        expect(message).not.toContain('msal-no-broker');
-    });
+    ] as const)(
+        'hedges an opaque broker failure in %s after a DocumentDB token failure',
+        async (cloudCategory, cloud): Promise<void> => {
+            recordEntraTokenFailure(clusterId, { cloudCategory, authMethod: 'interactive' });
+            const message = await provider.explain({ clusterId, error: broker });
+            expect(message).toContain(`Sign-in failed in ${cloud}. If the sign-in window showed AADSTS65002`);
+            expect(message).toContain('must be configured via preauthorization');
+            expect(message).toContain('Only Microsoft can change this');
+            expect(message).toContain('native DocumentDB authentication or managed identity on an Azure VM');
+            expect(message).not.toContain('msal-no-broker');
+        },
+    );
 
     it('keeps a public-cloud opaque broker failure generic even with a recent token failure', async (): Promise<void> => {
         recordEntraTokenFailure(clusterId, { cloudCategory: 'public', authMethod: 'interactive' });

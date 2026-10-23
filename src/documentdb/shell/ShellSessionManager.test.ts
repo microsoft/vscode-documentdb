@@ -6,9 +6,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type AuthenticationSession } from 'vscode';
-import type * as documentdbTokenResource from '../auth/documentdbTokenResource';
 import { ext } from '../../extensionVariables';
 import { AuthMethodId } from '../auth/AuthMethod';
+import type * as documentdbTokenResource from '../auth/documentdbTokenResource';
 import {
     resolveInteractiveTokenResource,
     resolveManagedIdentityTokenResource,
@@ -277,9 +277,7 @@ describe('ShellSessionManager', () => {
             postResponse,
         );
         expect(resolver).toHaveBeenCalledWith(connectionString);
-        expect(provider.mock.calls.at(-1)?.[0]).toEqual([
-            'https://ossrdbms-aad.database.usgovcloudapi.net/.default',
-        ]);
+        expect(provider.mock.calls.at(-1)?.[0]).toEqual(['https://ossrdbms-aad.database.usgovcloudapi.net/.default']);
         expect(postResponse).toHaveBeenCalledWith({
             type: 'tokenResponse',
             requestId: 'token-request',
@@ -304,7 +302,8 @@ describe('ShellSessionManager', () => {
                     errorKind: source === 'vscode' ? 'cloudMismatch' : 'managedIdentityCloudUnknown',
                 },
             );
-            const resolver = source === 'vscode' ? resolveInteractiveTokenResource : resolveManagedIdentityTokenResource;
+            const resolver =
+                source === 'vscode' ? resolveInteractiveTokenResource : resolveManagedIdentityTokenResource;
             vi.mocked(resolver).mockRejectedValueOnce(error);
             const manager =
                 surface === 'shell'
@@ -332,47 +331,51 @@ describe('ShellSessionManager', () => {
         ['shell', 'managedIdentity'],
         ['playground', 'vscode'],
         ['playground', 'managedIdentity'],
-    ] as const)('records the cloud and auth method for a failed %s %s token call', async (surface, source): Promise<void> => {
-        const resolver = source === 'vscode' ? resolveInteractiveTokenResource : resolveManagedIdentityTokenResource;
-        vi.mocked(resolver).mockResolvedValueOnce({
-            resource: 'https://ossrdbms-aad.database.chinacloudapi.cn',
-            scope: 'https://ossrdbms-aad.database.chinacloudapi.cn/.default',
-            cloudCategory: 'china',
-            reason: source === 'vscode' ? 'setting' : 'host',
-            details: {
-                flow: source === 'vscode' ? 'interactive' : 'managedIdentity',
-                tokenResource: 'https://ossrdbms-aad.database.chinacloudapi.cn',
-            },
-        });
-        const error = Object.freeze(
-            Object.assign(new Error('AADSTS65002: Token failed'), { code: 'original-code' }),
-        );
-        const provider = source === 'vscode' ? mockGetSessionFromVSCode : mockGetManagedIdentityAccessToken;
-        provider.mockRejectedValueOnce(error);
-        const manager =
-            surface === 'shell'
-                ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
-                : new PlaygroundEvaluator();
-        const postResponse = vi.fn();
+    ] as const)(
+        'records the cloud and auth method for a failed %s %s token call',
+        async (surface, source): Promise<void> => {
+            const resolver =
+                source === 'vscode' ? resolveInteractiveTokenResource : resolveManagedIdentityTokenResource;
+            vi.mocked(resolver).mockResolvedValueOnce({
+                resource: 'https://ossrdbms-aad.database.chinacloudapi.cn',
+                scope: 'https://ossrdbms-aad.database.chinacloudapi.cn/.default',
+                cloudCategory: 'china',
+                reason: source === 'vscode' ? 'setting' : 'host',
+                details: {
+                    flow: source === 'vscode' ? 'interactive' : 'managedIdentity',
+                    tokenResource: 'https://ossrdbms-aad.database.chinacloudapi.cn',
+                },
+            });
+            const error = Object.freeze(
+                Object.assign(new Error('AADSTS65002: Token failed'), { code: 'original-code' }),
+            );
+            const provider = source === 'vscode' ? mockGetSessionFromVSCode : mockGetManagedIdentityAccessToken;
+            provider.mockRejectedValueOnce(error);
+            const manager =
+                surface === 'shell'
+                    ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
+                    : new PlaygroundEvaluator();
+            const postResponse = vi.fn();
 
-        await workerCallbacks.onTokenRequest?.(
-            { type: 'tokenRequest', requestId: 'token-request', source },
-            postResponse,
-        );
+            await workerCallbacks.onTokenRequest?.(
+                { type: 'tokenRequest', requestId: 'token-request', source },
+                postResponse,
+            );
 
-        expect(postResponse).toHaveBeenCalledExactlyOnceWith({
-            type: 'tokenError',
-            requestId: 'token-request',
-            error: error.message,
-        });
-        expect(error.code).toBe('original-code');
-        expect(getRecentEntraTokenFailure(clusterId)).toEqual({
-            cloudCategory: 'china',
-            authMethod: source === 'vscode' ? 'interactive' : 'managedIdentity',
-            timestamp: expect.any(Number),
-        });
-        manager.dispose();
-    });
+            expect(postResponse).toHaveBeenCalledExactlyOnceWith({
+                type: 'tokenError',
+                requestId: 'token-request',
+                error: error.message,
+            });
+            expect(error.code).toBe('original-code');
+            expect(getRecentEntraTokenFailure(clusterId)).toEqual({
+                cloudCategory: 'china',
+                authMethod: source === 'vscode' ? 'interactive' : 'managedIdentity',
+                timestamp: expect.any(Number),
+            });
+            manager.dispose();
+        },
+    );
 
     it.each(['shell', 'playground'] as const)(
         'records a failed %s interactive token request when no session is returned',

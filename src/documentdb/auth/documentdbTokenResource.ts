@@ -3,10 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    getConfiguredAuthProviderId,
-    getConfiguredAzureEnv,
-} from '@microsoft/vscode-azext-azureauth';
+import { getConfiguredAuthProviderId, getConfiguredAzureEnv } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import * as http from 'http';
 import * as vscode from 'vscode';
@@ -341,7 +338,10 @@ function toBuiltInCloud(name: string): DocumentDBEntraCloud {
     }
 }
 
-function fromBuiltInCloud(cloud: DocumentDBEntraCloud, reason: TokenResourceReason): Omit<ResolvedTokenResource, 'details'> {
+function fromBuiltInCloud(
+    cloud: DocumentDBEntraCloud,
+    reason: TokenResourceReason,
+): Omit<ResolvedTokenResource, 'details'> {
     return fromResource(getTokenResourceForCloud(cloud), reason);
 }
 

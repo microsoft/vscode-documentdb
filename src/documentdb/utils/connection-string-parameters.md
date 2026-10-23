@@ -84,11 +84,11 @@ Azure DocumentDB documents a machine authentication form that carries two proper
 `TOKEN_RESOURCE` is the cloud's open-source database resource, as published by ARM's
 `/metadata/endpoints?api-version=2022-09-01` and Azure CLI's `cloud.py`:
 
-| Azure cloud         | `TOKEN_RESOURCE`                                       |
-| ------------------- | ------------------------------------------------------ |
-| Public              | `https://ossrdbms-aad.database.windows.net`              |
-| US Government       | `https://ossrdbms-aad.database.usgovcloudapi.net`        |
-| China               | `https://ossrdbms-aad.database.chinacloudapi.cn`         |
+| Azure cloud   | `TOKEN_RESOURCE`                                  |
+| ------------- | ------------------------------------------------- |
+| Public        | `https://ossrdbms-aad.database.windows.net`       |
+| US Government | `https://ossrdbms-aad.database.usgovcloudapi.net` |
+| China         | `https://ossrdbms-aad.database.chinacloudapi.cn`  |
 
 The extension **produces** this form (see `copyConnectionString`) and **reads** it on paste (see
 `getConnectionStringAuthFacts`), but it does not hand it to the driver. On paste, the parser reports

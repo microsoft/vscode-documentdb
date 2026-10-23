@@ -53,7 +53,7 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         aadsts: ['50020', '90072'],
         explain: (): string =>
             l10n.t(
-                'This account does not appear to be a member or guest of the organization that owns the cluster. Use Update Credentials to choose another account or tenant, or ask that organization\'s administrator to grant access. See {link}',
+                "This account does not appear to be a member or guest of the organization that owns the cluster. Use Update Credentials to choose another account or tenant, or ask that organization's administrator to grant access. See {link}",
                 { link: Links.SovereignClouds },
             ),
     },
@@ -80,7 +80,7 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         aadsts: ['1000104'],
         explain: (): string =>
             l10n.t(
-                'Sign-in appears to be blocked because the account is from another Azure cloud. Sign in with an account from the cluster\'s cloud, or ask the organizations\' administrators to check their cross-cloud access settings. See {link}',
+                "Sign-in appears to be blocked because the account is from another Azure cloud. Sign in with an account from the cluster's cloud, or ask the organizations' administrators to check their cross-cloud access settings. See {link}",
                 { link: Links.SovereignClouds },
             ),
     },
@@ -89,7 +89,7 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         aadsts: ['53003'],
         explain: (): string =>
             l10n.t(
-                'Your organization\'s policy appears to have blocked this sign-in. Contact your IT help desk with code AADSTS53003 and the time of the failure so they can check the sign-in policy. See {link}',
+                "Your organization's policy appears to have blocked this sign-in. Contact your IT help desk with code AADSTS53003 and the time of the failure so they can check the sign-in policy. See {link}",
                 { link: Links.SovereignClouds },
             ),
     },

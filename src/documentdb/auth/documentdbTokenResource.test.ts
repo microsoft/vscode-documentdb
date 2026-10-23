@@ -284,7 +284,9 @@ describe('resolveInteractiveTokenResource', () => {
         useCustomCloud(deps);
         vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: publicResource });
         await resolveInteractiveTokenResource(privateConnection, deps);
-        expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('documentDB.customEnvironment.ossrdbmsEndpoint'));
+        expect(deps.warn).toHaveBeenCalledWith(
+            expect.stringContaining('documentDB.customEnvironment.ossrdbmsEndpoint'),
+        );
     });
 });
 

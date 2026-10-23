@@ -40,11 +40,11 @@ Full evidence: [research-findings.md](research-findings.md).
 
 ## What is being done
 
-| #   | Track                                                                                       | Who                                  | State                                                                                                                       |
-| --- | ------------------------------------------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Microsoft preauthorizes VS Code for the Azure OSSRDBMS Database resource in US Government and China | Microsoft, outside the code | Not tracked in this repository |
-| 2   | Request the DocumentDB token for the selected cloud, not always the public one              | This repo                            | Implemented: [iteration 01, part A](iterations/01-cloud-aware-scope-and-entra-diagnostics.md#part-a-cloud-aware-token-audience) |
-| 3   | Explain Entra sign-in failures (AADSTS codes, broker errors) through one classifier table   | This repo                            | Implemented: [iteration 01, part B](iterations/01-cloud-aware-scope-and-entra-diagnostics.md#part-b-entra-error-classifier)     |
+| #   | Track                                                                                               | Who                         | State                                                                                                                           |
+| --- | --------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Microsoft preauthorizes VS Code for the Azure OSSRDBMS Database resource in US Government and China | Microsoft, outside the code | Not tracked in this repository                                                                                                  |
+| 2   | Request the DocumentDB token for the selected cloud, not always the public one                      | This repo                   | Implemented: [iteration 01, part A](iterations/01-cloud-aware-scope-and-entra-diagnostics.md#part-a-cloud-aware-token-audience) |
+| 3   | Explain Entra sign-in failures (AADSTS codes, broker errors) through one classifier table           | This repo                   | Implemented: [iteration 01, part B](iterations/01-cloud-aware-scope-and-entra-diagnostics.md#part-b-entra-error-classifier)     |
 
 Track 2 alone does not fix the reported failure; track 1 does. Track 2 is needed so that the token
 is issued for the right audience once track 1 lands. Track 3 makes the next failure of this kind

@@ -61,7 +61,8 @@ export function describeAuthError(error: unknown): string {
             ? statusCode
             : 'unknown';
     const aadstsCode = error instanceof Error ? /\bAADSTS\d{5,9}\b/.exec(error.message)?.[0] : undefined;
-    const broker = error instanceof Error && error.message.includes('platform_broker_error') ? 'platform_broker_error' : 'none';
+    const broker =
+        error instanceof Error && error.message.includes('platform_broker_error') ? 'platform_broker_error' : 'none';
     return `type=${errorName}; code=${code}; httpStatus=${httpStatus}; aadsts=${aadstsCode ?? 'none'}; broker=${broker}`;
 }
 

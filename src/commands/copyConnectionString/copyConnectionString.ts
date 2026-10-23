@@ -151,7 +151,9 @@ function buildParsedConnectionString(credentials: EphemeralClusterCredentials): 
         parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');
         parsedConnectionString.searchParams.set(
             'authMechanismProperties',
-            getManagedIdentityAuthMechanismProperties(resolveTokenResourceForCopy(credentials.connectionString).resource),
+            getManagedIdentityAuthMechanismProperties(
+                resolveTokenResourceForCopy(credentials.connectionString).resource,
+            ),
         );
         // The client ID rides in the username position. Empty for the system-assigned identity.
         parsedConnectionString.username = credentials.managedIdentityAuthConfig?.clientId ?? '';
