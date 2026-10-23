@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { CommandType } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
 
 // Mock the telemetry wrapper so the SUT's callWithTelemetryAndErrorHandling
 // callback runs directly. We re-throw on errors so the caller's error path is
@@ -165,5 +166,30 @@ describe('QueryInsightsAIService.getOptimizationRecommendationsStreaming (WI-3)'
         // The final parse must surface as a rejected completion so callers
         // can render a clean error state.
         await expect(handle.completion).rejects.toThrow(/Failed to parse AI optimization response/);
+    });
+
+    it('forwards connectionless context and a non-find command without changing connected defaults', async () => {
+        optimizeQueryStreamingMock.mockResolvedValueOnce(makeStubHandle([completeJsonResponse]));
+        const handle = await service.getOptimizationRecommendationsStreaming(
+            '',
+            '[]',
+            'db',
+            'items',
+            {},
+            undefined,
+            undefined,
+            {
+                providedData: { clusterInfo: { platform: 'documentdb' } },
+                modelId: 'picked',
+                commandType: CommandType.Aggregate,
+            },
+        );
+        await handle.completion;
+        expect(optimizeQueryStreamingMock.mock.calls[0][1]).toMatchObject({
+            query: '[]',
+            commandType: 'aggregate',
+            modelId: 'picked',
+            providedData: { clusterInfo: { platform: 'documentdb' } },
+        });
     });
 });

@@ -69,7 +69,7 @@ export class StagePropertyExtractor {
         if (stage.inputStage) {
             this.collectPlannerStages(stage.inputStage as Document, accumulator);
         }
-        if (stage.inputStages) {
+        if (Array.isArray(stage.inputStages)) {
             (stage.inputStages as Document[]).forEach((child: Document) => {
                 this.collectPlannerStages(child, accumulator);
             });
@@ -99,12 +99,12 @@ export class StagePropertyExtractor {
         if (stage.inputStage) {
             this.traverseStages(stage.inputStage as Document, accumulator);
         }
-        if (stage.inputStages) {
+        if (Array.isArray(stage.inputStages)) {
             (stage.inputStages as Document[]).forEach((childStage: Document) => {
                 this.traverseStages(childStage, accumulator);
             });
         }
-        if (stage.shards) {
+        if (Array.isArray(stage.shards)) {
             (stage.shards as Document[]).forEach((shard: Document) => {
                 this.traverseStages(shard, accumulator);
             });

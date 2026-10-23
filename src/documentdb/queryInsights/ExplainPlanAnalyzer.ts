@@ -7,6 +7,7 @@ import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
 import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
 import { type ExtendedStageInfo } from '../../webviews/documentdb/collectionView/types/queryInsights';
+import { refineDocumentDbPlanFacts, type PlanAccessFacts, type PlanRefinementId } from './documentDbPlanRefinements';
 
 // ============================================================================
 // Index strategy advisory thresholds
@@ -30,6 +31,10 @@ const SCORE_ORDER: ReadonlyArray<ExecutionStatsAnalysis['performanceRating']['sc
     'fair',
     'poor',
 ];
+
+interface IndexStrategyAdvisoryOptions {
+    skipCoverage?: boolean;
+}
 
 /**
  * Diagnostic detail about query performance
@@ -107,6 +112,47 @@ export class ExplainPlanAnalyzer {
     }
 
     /**
+     * `@mongodb-js/explain-plan-helper` (and `mongodb-explain-compat`) iterate a stage's `shards`
+     * and `inputStages` with `yield*` / `.map()` and fail with "x is not iterable" when a server
+     * returns them as anything but an array. Returns a copy in which, for every stage node (an
+     * object with a `stage` field), such values become arrays: plain objects contribute their
+     * values, anything else is dropped. Non-plain values (BSON types) are kept by reference.
+     */
+    private static toExplainPlanHelperInput(explainResult: Document): Document {
+        const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+            typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype;
+
+        const normalize = (value: unknown): unknown => {
+            if (Array.isArray(value)) {
+                return value.map(normalize);
+            }
+            if (!isPlainObject(value)) {
+                return value;
+            }
+            const copy: Record<string, unknown> = {};
+            for (const [key, child] of Object.entries(value)) {
+                copy[key] = normalize(child);
+            }
+            if (typeof value.stage === 'string') {
+                for (const key of ['shards', 'inputStages']) {
+                    const children = copy[key];
+                    if (children === undefined || Array.isArray(children)) {
+                        continue;
+                    }
+                    if (isPlainObject(children)) {
+                        copy[key] = Object.values(children).filter(isPlainObject);
+                    } else {
+                        delete copy[key];
+                    }
+                }
+            }
+            return copy;
+        };
+
+        return normalize(explainResult) as Document;
+    }
+
+    /**
      * Analyzes explain("queryPlanner") output
      * Provides basic query characteristics without execution metrics
      *
@@ -115,13 +161,18 @@ export class ExplainPlanAnalyzer {
      */
     public static analyzeQueryPlanner(explainResult: Document): QueryPlannerAnalysis {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-        const explainPlan = new ExplainPlan(explainResult as any);
+        const explainPlan = new ExplainPlan(this.toExplainPlanHelperInput(explainResult) as any);
 
-        // Extract metrics using helper methods
+        // Extract metrics using helper methods (first pass), then the DocumentDB corrections
         const usedIndexesInfo = explainPlan.usedIndexes || [];
-        const usedIndexes = usedIndexesInfo.map((idx) => (typeof idx === 'string' ? idx : idx.index || 'unknown'));
-        const isCollectionScan = explainPlan.isCollectionScan;
-        const isCovered = explainPlan.isCovered;
+        const extractedIndexes = usedIndexesInfo.map((idx) => (typeof idx === 'string' ? idx : idx.index || 'unknown'));
+        const { facts } = refineDocumentDbPlanFacts(explainResult, {
+            usedIndexes: extractedIndexes,
+            isCollectionScan: explainPlan.isCollectionScan,
+            isCovered: explainPlan.isCovered,
+            isIndexScan: extractedIndexes.length > 0 && !explainPlan.isCollectionScan,
+        });
+        const { usedIndexes, isCollectionScan, isCovered } = facts;
         const hasInMemorySort = explainPlan.inMemorySort;
         const namespace = explainPlan.namespace;
 
@@ -149,7 +200,7 @@ export class ExplainPlanAnalyzer {
      */
     public static analyzeExecutionStats(explainResult: Document, queryFilter?: Document): ExecutionStatsAnalysis {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-        const explainPlan = new ExplainPlan(explainResult as any);
+        const explainPlan = new ExplainPlan(this.toExplainPlanHelperInput(explainResult) as any);
 
         // STEP 1: Check for execution errors FIRST
         const executionStats = explainResult.executionStats as Document | undefined;
@@ -164,18 +215,48 @@ export class ExplainPlanAnalyzer {
         // Calculate efficiency ratio
         const efficiencyRatio = this.calculateEfficiencyRatio(nReturned, totalDocsExamined);
 
-        // Extract query characteristics
+        // Extract query characteristics (first pass: engine-neutral, via explain-plan-helper)
         const usedIndexesInfo = explainPlan.usedIndexes || [];
-        const usedIndexes = usedIndexesInfo.map((idx) => (typeof idx === 'string' ? idx : idx.index || 'unknown'));
-        const isCollectionScan = explainPlan.isCollectionScan;
-        const isCovered = explainPlan.isCovered;
-        const hasInMemorySort = explainPlan.inMemorySort;
+        const extracted: PlanAccessFacts = {
+            usedIndexes: usedIndexesInfo.map((idx) => (typeof idx === 'string' ? idx : idx.index || 'unknown')),
+            isCollectionScan: explainPlan.isCollectionScan,
+            isCovered: explainPlan.isCovered,
+            isIndexScan: false,
+        };
         // Note: isIndexScan is derived from whether indexes are used
-        const isIndexScan = usedIndexes.length > 0 && !isCollectionScan;
+        extracted.isIndexScan = extracted.usedIndexes.length > 0 && !extracted.isCollectionScan;
+
+        // Second pass: DocumentDB-specific corrections, applied before the rating is computed
+        const refined = refineDocumentDbPlanFacts(explainResult, extracted);
+        const { usedIndexes, isCollectionScan, isCovered, isIndexScan } = refined.facts;
+        const hasInMemorySort = explainPlan.inMemorySort;
 
         // Check if sorting is being performed (either in-memory or index-based)
         // We detect this by checking if there's a SORT stage in the execution plan
         const hasSorting = this.detectSortingInPlan(explainResult);
+
+        const performanceRating = executionError
+            ? this.createFailedQueryRating(executionError)
+            : this.calculatePerformanceRating(
+                  executionTimeMillis,
+                  efficiencyRatio,
+                  hasInMemorySort,
+                  hasSorting,
+                  isIndexScan,
+                  isCollectionScan,
+                  queryFilter,
+              );
+        if (!executionError && refined.diagnostics.length > 0) {
+            // Place the explanation right after the index usage badge it qualifies.
+            const indexBadge = performanceRating.diagnostics.findIndex(
+                (d) => d.diagnosticId === 'full_collection_scan',
+            );
+            performanceRating.diagnostics.splice(
+                indexBadge >= 0 ? indexBadge + 1 : performanceRating.diagnostics.length,
+                0,
+                ...refined.diagnostics,
+            );
+        }
 
         // Build response structure
         return {
@@ -189,19 +270,10 @@ export class ExplainPlanAnalyzer {
             isCovered,
             hasInMemorySort,
             isIndexScan,
-            performanceRating: executionError
-                ? this.createFailedQueryRating(executionError)
-                : this.calculatePerformanceRating(
-                      executionTimeMillis,
-                      efficiencyRatio,
-                      hasInMemorySort,
-                      hasSorting,
-                      isIndexScan,
-                      isCollectionScan,
-                      queryFilter,
-                  ),
+            performanceRating,
             rawStats: explainResult,
             executionError,
+            planRefinements: refined.refinements,
         };
     }
 
@@ -838,13 +910,14 @@ export class ExplainPlanAnalyzer {
                 | Document
                 | undefined;
             const ixscanExec = this.findStageInPlan(executionStages, 'IXSCAN');
-            const indexUsage = ixscanExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+            // DocumentDB reports `indexUsage: {}` (not an array) when the index only provides order.
+            const indexUsage: unknown = ixscanExec?.indexUsage;
 
-            if (indexUsage) {
-                for (const usage of indexUsage) {
+            if (Array.isArray(indexUsage)) {
+                for (const usage of indexUsage as Array<{ scanKeys?: unknown }>) {
                     // Skip compound indexes — per-key cardinality check is not meaningful
-                    if (usage.scanKeys && usage.scanKeys.length === 1) {
-                        const scanKey = usage.scanKeys[0];
+                    if (Array.isArray(usage?.scanKeys) && usage.scanKeys.length === 1) {
+                        const scanKey = String(usage.scanKeys[0]);
                         // Parse: "key N: [(isInequality: false, estimatedEntryCount: 22074)]"
                         const match = /estimatedEntryCount:\s*(\d+)/.exec(scanKey);
                         if (match) {
@@ -890,11 +963,12 @@ export class ExplainPlanAnalyzer {
         totalCollectionDocs: number | undefined,
         explainResult: Document,
         queryFilter?: Document,
+        options: IndexStrategyAdvisoryOptions = {},
     ): void {
         const diagnostics = analysis.performanceRating.diagnostics;
 
         // --- Coverage badges (gated on index scan) ---
-        if (analysis.isIndexScan && totalCollectionDocs && totalCollectionDocs > 0) {
+        if (!options.skipCoverage && analysis.isIndexScan && totalCollectionDocs && totalCollectionDocs > 0) {
             const coverage = Math.min(analysis.nReturned / totalCollectionDocs, 1);
 
             if (coverage >= COVERAGE_HIGH_RETURN) {
@@ -946,18 +1020,18 @@ export class ExplainPlanAnalyzer {
                     ixscanExec && bitmapIndexName && (ixscanExec.indexName as string) === bitmapIndexName
                         ? ixscanExec
                         : undefined;
-                const indexUsage = correlatedExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+                const indexUsage: unknown = correlatedExec?.indexUsage;
                 // We require exactly one indexUsage entry with exactly one scanKey.
                 // If there are multiple entries (e.g., mixed single/compound), we
                 // conservatively treat the index as compound to avoid false demotions.
                 const isSingleField =
-                    indexUsage !== undefined &&
+                    Array.isArray(indexUsage) &&
                     indexUsage.length === 1 &&
-                    indexUsage[0].scanKeys !== undefined &&
-                    indexUsage[0].scanKeys.length === 1;
+                    Array.isArray((indexUsage[0] as { scanKeys?: unknown } | undefined)?.scanKeys) &&
+                    (indexUsage[0] as { scanKeys: unknown[] }).scanKeys.length === 1;
 
                 const coverage =
-                    totalCollectionDocs && totalCollectionDocs > 0
+                    !options.skipCoverage && totalCollectionDocs && totalCollectionDocs > 0
                         ? Math.min(analysis.nReturned / totalCollectionDocs, 1)
                         : undefined;
 
@@ -988,7 +1062,7 @@ export class ExplainPlanAnalyzer {
         // Skip when efficiency is high (≥90%) — the index is clearly working well
         // regardless of individual key cardinality (e.g., compound indexes with a
         // low-cardinality prefix followed by selective fields).
-        if (analysis.isIndexScan && analysis.efficiencyRatio < 0.9) {
+        if (analysis.isIndexScan && (options.skipCoverage || analysis.efficiencyRatio < 0.9)) {
             const filter =
                 queryFilter ?? ((explainResult.command as Document | undefined)?.filter as Document | undefined);
             const cardinalityResult = this.detectLowCardinalityIndex(explainResult, totalCollectionDocs, filter);
@@ -1098,4 +1172,6 @@ export interface ExecutionStatsAnalysis {
     rawStats: Document;
     extendedStageInfo?: ExtendedStageInfo[];
     executionError?: QueryExecutionError;
+    /** DocumentDB-specific corrections applied by the second analysis pass (empty for other engines). */
+    planRefinements?: PlanRefinementId[];
 }

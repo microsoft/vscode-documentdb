@@ -24,6 +24,7 @@
  * updated.
  */
 
+import { EJSON } from 'bson';
 import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';
@@ -36,15 +37,12 @@ import {
     type ExecutionStatsAnalysis,
     type QueryPlannerAnalysis,
 } from '../../../../documentdb/queryInsights/ExplainPlanAnalyzer';
-import { StagePropertyExtractor } from '../../../../documentdb/queryInsights/StagePropertyExtractor';
-import {
-    createFailedQueryResponse,
-    transformStage1Response,
-    transformStage2Response,
-} from '../../../../documentdb/queryInsights/transformations';
+import { analyzeExplainForStage2 } from '../../../../documentdb/queryInsights/analyzeExplainForStage2';
+import { transformStage1Response } from '../../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
 import { mergeRouters, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
+import { type QueryInsightsPrefill } from '../../queryInsightsStandalone/types';
 import { type RouterContext } from '../collectionViewRouter';
 import { queryInsightsEventsRouter } from './queryInsightsEventsRouter';
 
@@ -92,6 +90,53 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
 }
 
 export const queryInsightsQueriesRouter = router({
+    getExplorePrefill: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<QueryInsightsPrefill> => {
+        const { sessionId, databaseName, collectionName } = ctx as RouterContext;
+        const session = ClusterSession.getSession(sessionId);
+        const query = session.getCurrentFindQueryParamsWithObjects();
+        const rawExplain = session.getRawExplainOutput(databaseName, collectionName);
+        const bestEffort = async <T>(operation: Promise<T>): Promise<T | undefined> => {
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            try {
+                return await Promise.race([
+                    operation,
+                    new Promise<undefined>((resolve) => {
+                        timeout = setTimeout(() => resolve(undefined), 1500);
+                    }),
+                ]);
+            } catch {
+                return undefined;
+            } finally {
+                if (timeout) clearTimeout(timeout);
+            }
+        };
+        const client = session.getClient();
+        const [metadata, stats, indexes] = await Promise.all([
+            bestEffort(client.getClusterMetadata()),
+            bestEffort(client.getCollectionStats(databaseName, collectionName)),
+            bestEffort(client.getIndexStats(databaseName, collectionName)),
+        ]);
+        return {
+            databaseName,
+            collectionName,
+            commandType: 'find',
+            query: EJSON.stringify(
+                {
+                    filter: query.filterObj,
+                    sort: query.sortObj,
+                    projection: query.projectionObj,
+                    skip: query.skip,
+                    limit: query.limit,
+                },
+                { relaxed: true },
+                2,
+            ),
+            explain: rawExplain ? EJSON.stringify(rawExplain, { relaxed: true }, 2) : '',
+            collectionStats: stats ? EJSON.stringify(stats, { relaxed: true }, 2) : '',
+            indexes: indexes ? EJSON.stringify(indexes, { relaxed: true }, 2) : '',
+            clusterType: metadata?.domainInfo_isAzure === 'true' ? 'azure-documentdb' : 'documentdb',
+        };
+    }),
     /**
      * Query Insights Stage 1 - Initial View
      * Returns cheap query plan data using explain("queryPlanner")
@@ -229,7 +274,7 @@ export const queryInsightsQueriesRouter = router({
         );
 
         let analyzed: ExecutionStatsAnalysis;
-        let explainResult: Document | undefined;
+        let explainResult: Document;
         let totalCollectionDocs: number | undefined;
 
         // Check for debug override file first
@@ -237,8 +282,6 @@ export const queryInsightsQueriesRouter = router({
         let queryFilter: Document | undefined;
         if (debugData) {
             ext.outputChannel.trace(l10n.t('[Query Insights Stage 2] Using debug data file'));
-            // Use debug data - analyze it the same way as real data
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
             explainResult = debugData;
             // totalCollectionDocs not available in debug mode — advisories will simply not fire
         } else {
@@ -270,8 +313,7 @@ export const queryInsightsQueriesRouter = router({
                 }),
             );
 
-            // Analyze with ExplainPlanAnalyzer (pass the user's actual filter for empty-query detection)
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult, queryParams.filterObj);
+            // The user's actual filter is passed for empty-query detection
             explainResult = executionStatsResult;
             queryFilter = queryParams.filterObj as Document | undefined;
 
@@ -284,18 +326,27 @@ export const queryInsightsQueriesRouter = router({
             }
         }
 
-        // Extract extended stage info (as per design document)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
-        if (executionStages) {
-            analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
-
-            // Enrich with properties from queryPlanner (e.g., isBitmap is only in queryPlanner stages)
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            const winningPlan = explainResult?.queryPlanner?.winningPlan as Document | undefined;
-            if (winningPlan) {
-                StagePropertyExtractor.enrichWithQueryPlannerInfo(analyzed.extendedStageInfo, winningPlan);
+        let transformed: ReturnType<typeof analyzeExplainForStage2>;
+        try {
+            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(explainResult, queryFilter);
+            transformed = analyzeExplainForStage2(explainResult, totalCollectionDocs, queryFilter, 'find', analyzed);
+        } catch (error) {
+            // The explain is already cached in the session, so "View Raw Execution Stats" still works;
+            // the plan is logged as well so the failure can be reproduced.
+            const message = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('[Query Insights Stage 2] Analysis of the execution plan failed: {error}', { error: message }),
+            );
+            if (error instanceof Error && error.stack) {
+                ext.outputChannel.error(error.stack);
             }
+            ext.outputChannel.error(
+                l10n.t('[Query Insights Stage 2] Execution plan that failed analysis:\n{plan}', {
+                    plan: EJSON.stringify(explainResult, { relaxed: true }, 2),
+                }),
+            );
+            myCtx.actionContext.telemetry.properties.stage2AnalysisFailed = 'true';
+            throw error;
         }
 
         // Check for execution error and return error response if found
@@ -305,20 +356,12 @@ export const queryInsightsQueriesRouter = router({
                     error: analyzed.executionError.errorMessage,
                 }),
             );
-            const errorResponse = createFailedQueryResponse(analyzed, explainResult);
-
             ext.outputChannel.trace(l10n.t('Query Insights Stage 2 completed with execution error'));
-            return errorResponse;
-        }
-
-        // Add index-strategy advisories (coverage, cardinality, multikey)
-        if (explainResult) {
-            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analyzed, totalCollectionDocs, explainResult, queryFilter);
+            return transformed;
         }
 
         // Transform to UI format (normal successful execution path)
         ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
-        const transformed = transformStage2Response(analyzed, totalCollectionDocs);
 
         // Cache the Stage 2 response for Stage 3's static analysis context
         if (!debugData) {
@@ -337,6 +380,7 @@ export const queryInsightsQueriesRouter = router({
         myCtx.actionContext.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
         myCtx.actionContext.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
         myCtx.actionContext.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
+        myCtx.actionContext.telemetry.properties.planRefinements = (analyzed.planRefinements ?? []).join(',');
 
         myCtx.actionContext.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
         myCtx.actionContext.telemetry.measurements.documentsReturned = transformed.documentsReturned;

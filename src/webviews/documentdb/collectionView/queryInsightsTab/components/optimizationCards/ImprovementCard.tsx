@@ -17,11 +17,10 @@ import {
     tokens,
 } from '@fluentui/react-components';
 import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
-// TODO: Copy content feature will be added in the next release
-// import { CopyRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../types/queryInsights';
+import { CopyButton } from '../../../../queryInsightsShared/CopyButton';
 import './baseOptimizationCard.scss';
 
 export interface ImprovementCardProps {
@@ -29,11 +28,13 @@ export interface ImprovementCardProps {
      * Configuration for the improvement card
      */
     config: ImprovementCardConfig;
+    actionsEnabled?: boolean;
 
     /**
-     * Optional callback when the copy button is clicked
+     * Copies the card's command. Shown as a secondary action next to the primary one, or alone
+     * when actions are disabled. A resolved `false` or a rejection is reported as a failed copy.
      */
-    onCopy?: () => void;
+    onCopy?: () => Promise<unknown> | unknown;
 
     /**
      * Callback when the primary button is clicked
@@ -80,10 +81,10 @@ const priorityColors: Record<'high' | 'medium' | 'low', 'danger' | 'warning' | '
  * **Important**: The component applies `marginBottom: '16px'` by default for proper spacing in animated lists.
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
-// TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
 export function ImprovementCard({
     config,
-    onCopy: _onCopy,
+    actionsEnabled = true,
+    onCopy,
     onPrimaryAction,
     onSecondaryAction,
     ref,
@@ -184,11 +185,6 @@ export function ImprovementCard({
                                 </Badge>
                             </div>
                         }
-                        action={
-                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                {l10n.t('AI responses may be inaccurate')}
-                            </Text>
-                        }
                     />
                     <div style={{ marginTop: '12px' }}>
                         {/* Description */}
@@ -279,7 +275,7 @@ export function ImprovementCard({
 
                         {/* Action Buttons */}
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {config.primaryButton && (
+                            {actionsEnabled && config.primaryButton && (
                                 <Button
                                     appearance="primary"
                                     size="small"
@@ -294,7 +290,7 @@ export function ImprovementCard({
                                           : config.primaryButton.label}
                                 </Button>
                             )}
-                            {config.secondaryButton && (
+                            {actionsEnabled && config.secondaryButton && (
                                 <Button
                                     appearance="subtle"
                                     size="small"
@@ -308,6 +304,9 @@ export function ImprovementCard({
                                           ? l10n.t('Retry')
                                           : config.secondaryButton.label}
                                 </Button>
+                            )}
+                            {onCopy && config.shellCommand && (
+                                <CopyButton label={l10n.t('Copy command')} onCopy={onCopy} />
                             )}
                         </div>
                     </div>

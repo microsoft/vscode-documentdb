@@ -193,6 +193,7 @@
     "bson": "^7.2.0",
     "denque": "~2.1.0",
     "es-toolkit": "~1.45.1",
+    "micromark": "~4.0.2",
     "monaco-editor": "~0.52.2",
     "mongodb": "^7.1.0",
     "mongodb-connection-string-url": "~3.0.2",
@@ -389,6 +390,12 @@
         "command": "vscode-documentdb.command.connectionsView.newEmulatorConnection",
         "title": "New Local Connection…",
         "icon": "$(add)"
+      },
+      {
+        "//": "[Query Insights] Open the connectionless explorer proof of concept",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.queryInsights.exploreWithOwnInput",
+        "title": "Query Insights: Explore with Your Own Input (POC)"
       },
       {
         "//": "[Local Quick Start] Open the DocumentDB Local setup webview",

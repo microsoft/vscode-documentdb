@@ -21,7 +21,30 @@ import {
     type PromptSource,
 } from '../commands/llmEnhancedCommands/promptTemplates';
 import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenerationCommands';
+import { ext } from '../extensionVariables';
 import { settingsKeys } from '../settingsKeys';
+
+export interface IndexAdvisorPromptSourceInfo {
+    source: 'built-in' | 'custom-file';
+    path?: string;
+}
+
+const indexAdvisorConfigKeys: Record<CommandType, string> = {
+    [CommandType.Find]: settingsKeys.indexAdvisorFindPromptPath,
+    [CommandType.Aggregate]: settingsKeys.indexAdvisorAggregatePromptPath,
+    [CommandType.Count]: settingsKeys.indexAdvisorCountPromptPath,
+};
+
+/** Describes the configured source without reading the prompt file. */
+export function getIndexAdvisorPromptSourceInfo(commandType: CommandType): IndexAdvisorPromptSourceInfo {
+    const configKey = indexAdvisorConfigKeys[commandType];
+    if (!configKey) {
+        throw new Error(vscode.l10n.t('Unknown command type: {type}', { type: commandType }));
+    }
+    // An empty or whitespace-only setting means "not configured": fall back to the built-in prompt.
+    const customPath = vscode.workspace.getConfiguration().get<string | null>(configKey)?.trim();
+    return customPath ? { source: 'custom-file', path: customPath } : { source: 'built-in' };
+}
 
 /**
  * Service for loading prompt templates from custom files or built-in templates
@@ -42,22 +65,19 @@ export class PromptTemplateService {
     public static async getIndexAdvisorPromptTemplate(commandType: CommandType): Promise<string> {
         // Get configuration
         const config = vscode.workspace.getConfiguration();
-        const cacheEnabled = config.get<boolean>(this.enablePromptCacheKey, true);
+        const promptSource = getIndexAdvisorPromptSourceInfo(commandType);
+        const customTemplatePath = promptSource.path;
+        const cacheEnabled = !customTemplatePath && config.get<boolean>(this.enablePromptCacheKey, true);
 
         // Check if have a cached template
         if (cacheEnabled) {
             const cached = this.templateCache.get(commandType);
             if (cached) {
                 setLastPromptSource(cached.source);
+                this.traceIndexAdvisorPrompt(commandType, cached.source);
                 return cached.template;
             }
         }
-
-        // Get the configuration key for this command type
-        const configKey = this.getIndexAdvisorConfigKey(commandType);
-
-        // Check if a custom template path is configured
-        const customTemplatePath = config.get<string | null>(configKey);
 
         let template: string;
 
@@ -66,12 +86,6 @@ export class PromptTemplateService {
                 // Load custom template from file
                 template = await this.loadTemplateFromFile(customTemplatePath, commandType.toString());
                 setLastPromptSource('custom-file');
-                void vscode.window.showInformationMessage(
-                    l10n.t('Using custom prompt template for {type} query: {path}', {
-                        type: commandType,
-                        path: customTemplatePath,
-                    }),
-                );
             } catch (error) {
                 // Log telemetry for template load operation (automatically includes result='Failed' when error is thrown)
                 void callWithTelemetryAndErrorHandling(
@@ -104,7 +118,34 @@ export class PromptTemplateService {
             this.templateCache.set(commandType, { template, source });
         }
 
+        this.traceIndexAdvisorPrompt(commandType, source, customTemplatePath);
         return template;
+    }
+
+    /** The UI no longer shows the prompt source; the output channel records it for every request. */
+    private static traceIndexAdvisorPrompt(
+        commandType: CommandType,
+        source: PromptSource,
+        customTemplatePath?: string,
+    ): void {
+        let message: string;
+        if (source === 'custom-file') {
+            message = vscode.l10n.t('Query Insights prompt for {type} query: custom file {path}', {
+                type: commandType,
+                path: customTemplatePath ?? '',
+            });
+        } else if (customTemplatePath) {
+            message = vscode.l10n.t(
+                'Query Insights prompt for {type} query: built-in ({source}); the custom file {path} could not be read',
+                { type: commandType, source, path: customTemplatePath },
+            );
+        } else {
+            message = vscode.l10n.t('Query Insights prompt for {type} query: built-in ({source})', {
+                type: commandType,
+                source,
+            });
+        }
+        ext.outputChannel.trace(message);
     }
 
     /**
@@ -163,24 +204,6 @@ export class PromptTemplateService {
      */
     public static clearCache(): void {
         this.templateCache.clear();
-    }
-
-    /**
-     * Gets the configuration key for a command type
-     * @param commandType The command type
-     * @returns The configuration key
-     */
-    private static getIndexAdvisorConfigKey(commandType: CommandType): string {
-        switch (commandType) {
-            case CommandType.Find:
-                return settingsKeys.indexAdvisorFindPromptPath;
-            case CommandType.Aggregate:
-                return settingsKeys.indexAdvisorAggregatePromptPath;
-            case CommandType.Count:
-                return settingsKeys.indexAdvisorCountPromptPath;
-            default:
-                throw new Error(l10n.t('Unknown command type: {type}', { type: commandType }));
-        }
     }
 
     /**

@@ -64,6 +64,16 @@
     flex-direction: column;
 }
 
+// Section title with the "Share" menu on the right. Fixed min-height so the
+// title does not shift when the button appears after the AI analysis completes.
+.optimizationSectionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 24px;
+}
+
 .optimizationTitle {
     margin-bottom: 12px;
     display: block;

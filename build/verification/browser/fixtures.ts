@@ -15,6 +15,7 @@ import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webv
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
+import { type QueryInsightsPrefill } from '../../../src/webviews/documentdb/queryInsightsStandalone/types';
 import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';
 
 type Inputs = FixtureInputs;
@@ -82,6 +83,10 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
+/** A fresh open opens on Welcome; scenarios add {@link queryInsightsSampleExplain} to start on Configure. */
+const queryInsightsConfig: QueryInsightsPrefill = { databaseName: 'demo', collectionName: 'items' };
+export const queryInsightsSampleExplain =
+    '{"queryPlanner":{"winningPlan":{"stage":"COLLSCAN"}},"executionStats":{"nReturned":2,"executionTimeMillis":12,"totalDocsExamined":100,"totalKeysExamined":0}}';
 interface FixtureTableRow {
     readonly id: string;
     readonly 'x-objectid': string;
@@ -243,6 +248,131 @@ export const fixtures = {
             'localQuickStart.checkPassword': reply<Outputs['localQuickStart']['checkPassword']>('query', 'ok'),
             'localQuickStart.reportStepChange': reply<void>('mutation', undefined),
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
+        },
+    },
+    queryInsightsStandalone: {
+        config: queryInsightsConfig,
+        monaco: false,
+        content: [
+            'Query Insights Explorer',
+            "What you'll need",
+            'Get the explain output',
+            'What is sent to GitHub Copilot',
+        ],
+        styles: [{ selector: 'body', property: 'padding-top', expected: '0px' }],
+        rpc: {
+            ...common,
+            'ai.getAvailableModels': reply<Outputs['ai']['getAvailableModels']>('query', {
+                models: [
+                    {
+                        id: 'copilot-utility',
+                        name: 'Copilot utility',
+                        family: 'copilot-utility',
+                        vendor: 'copilot',
+                        version: '1',
+                        maxInputTokens: 64000,
+                        isUtility: true,
+                        pricing: 'Free',
+                        priceCategory: 'low',
+                        category: 'lightweight',
+                        inputCost: 0,
+                        outputCost: 0,
+                        cacheCost: 0,
+                        supportsToolCalling: true,
+                        supportsImageToText: false,
+                    },
+                ],
+                savedModelId: null,
+                effectiveModelId: 'copilot-utility',
+                effectiveReason: 'first-available',
+            }),
+            'queryInsightsStandalone.validateInput': reply<Outputs['queryInsightsStandalone']['validateInput']>(
+                'query',
+                {
+                    commandType: 'find' as Outputs['queryInsightsStandalone']['validateInput']['commandType'],
+                    query: '{}',
+                },
+            ),
+            'queryInsightsStandalone.inspectInput': reply<Outputs['queryInsightsStandalone']['inspectInput']>('query', {
+                explain: {
+                    ok: true,
+                    detectedCommandType: 'find' as Outputs['queryInsightsStandalone']['validateInput']['commandType'],
+                    planStages: ['COLLSCAN'],
+                },
+                commandType: 'find' as Outputs['queryInsightsStandalone']['validateInput']['commandType'],
+                query: '{}',
+                queryIsExtracted: true,
+                ready: true,
+            }),
+            'queryInsightsStandalone.getStage1': reply<Outputs['queryInsightsStandalone']['getStage1']>('query', {
+                executionTime: 0,
+                stages: [{ stage: 'COLLSCAN', name: 'Collection scan', nReturned: 0 }],
+                efficiencyAnalysis: { executionStrategy: 'Collection scan', indexUsed: null, hasInMemorySort: false },
+            }),
+            'queryInsightsStandalone.getStage2': reply<Outputs['queryInsightsStandalone']['getStage2']>('query', {
+                executionTimeMs: 12,
+                documentsReturned: 2,
+                totalDocsExamined: 100,
+                totalKeysExamined: 0,
+                examinedToReturnedRatio: 50,
+                keysToDocsRatio: 0,
+                executionStrategy: 'Collection scan',
+                indexUsed: false,
+                usedIndexNames: [],
+                hadInMemorySort: false,
+                hadCollectionScan: true,
+                isCoveringQuery: false,
+                concerns: [],
+                rawExecutionStats: {},
+                stages: [{ stage: 'COLLSCAN', name: 'Collection scan', nReturned: 2 }],
+                efficiencyAnalysis: {
+                    selectivity: null,
+                    indexUsed: null,
+                    fetchOverhead: 'Collection scan',
+                    fetchOverheadKind: 'collectionScan',
+                    hasInMemorySort: false,
+                    performanceRating: { score: 'poor', diagnostics: [] },
+                },
+            }),
+            'queryInsightsStandalone.streamStage3': {
+                type: 'subscription',
+                results: [
+                    { type: 'summary', markdown: 'Consider indexing the filter.', complete: true },
+                    { type: 'recommendationStarted', index: 0 },
+                    {
+                        type: 'recommendation',
+                        index: 0,
+                        recommendation: {
+                            action: 'create',
+                            indexSpec: { status: 1 },
+                            indexName: 'status_1',
+                            shellCommand: 'db.items.createIndex({status: 1})',
+                            justification: 'Avoid a collection scan.',
+                            priority: 'high',
+                        },
+                    },
+                    {
+                        type: 'complete',
+                        modelId: 'copilot-utility',
+                        modelFamily: 'copilot-utility',
+                        modelDisplayName: 'Copilot utility',
+                        durationMs: 10,
+                        usage: {
+                            promptTokens: 1200,
+                            responseTokens: 350,
+                            credits: 0,
+                            reportedPromptTokens: 1200,
+                            reportedCompletionTokens: 350,
+                            usageSource: 'provider',
+                        },
+                    },
+                ] as const,
+            },
+            'common.copyToClipboard': reply<Outputs['common']['copyToClipboard']>('mutation', true),
+            'queryInsightsStandalone.openRawExplain': reply<Outputs['queryInsightsStandalone']['openRawExplain']>(
+                'mutation',
+                true,
+            ),
         },
     },
     atlasCredentials: {

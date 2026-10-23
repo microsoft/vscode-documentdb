@@ -23,17 +23,21 @@ import './SummaryCard.scss';
 export interface SummaryCardProps {
     /** The title displayed at the top of the card */
     title: string;
+    titleBadge?: React.ReactNode;
+    description?: React.ReactNode;
 
     /** Cell components to display in the card */
     children: React.ReactNode;
 }
 
-export const SummaryCard: React.FC<SummaryCardProps> = ({ title, children }) => {
+export const SummaryCard: React.FC<SummaryCardProps> = ({ title, titleBadge, description, children }) => {
     return (
         <Card className="summaryCard">
             <Text weight="semibold" size={400} style={{ marginBottom: '8px', display: 'block' }}>
                 {title}
+                {titleBadge && <> {titleBadge}</>}
             </Text>
+            {description}
             <div className="summaryGrid">{children}</div>
         </Card>
     );

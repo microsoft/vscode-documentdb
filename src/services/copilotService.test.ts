@@ -6,6 +6,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { LanguageModelDataPart, LanguageModelTextPart } from 'vscode';
+const telemetry = vi.hoisted((): { event: string; measurements: IActionContext['telemetry']['measurements'] }[] => []);
 
 // Mock vscode-azext-utils — the real `callWithTelemetryAndErrorHandling`
 // returns `undefined` for unhandled errors; we simulate the success path and
@@ -20,13 +22,14 @@ vi.mock('@microsoft/vscode-azext-utils', () => {
     return {
         UserCancelledError: MockUserCancelledError,
         callWithTelemetryAndErrorHandling: vi.fn(
-            async (_callbackId: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
+            async (callbackId: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
                     errorHandling: { issueProperties: {} },
                     ui: {} as unknown,
                     valuesToMask: [],
                 } as unknown as IActionContext;
+                telemetry.push({ event: callbackId, measurements: context.telemetry.measurements });
                 try {
                     return await callback(context);
                 } catch (error) {
@@ -81,6 +84,15 @@ vi.mock('vscode', () => {
             }),
         },
         CancellationTokenSource,
+        LanguageModelTextPart: class {
+            constructor(public value: string) {}
+        },
+        LanguageModelDataPart: class {
+            constructor(
+                public data: Uint8Array,
+                public mimeType: string,
+            ) {}
+        },
         lm: { selectChatModels: (...args: unknown[]) => selectChatModelsMock(...args) as unknown },
     };
 });
@@ -100,20 +112,21 @@ function makeUserMessage(content: string): { role: number; content: string } {
 
 /**
  * Builds a synthetic `LanguageModelChat` whose `sendRequest` returns a
- * response whose `.text` is an async iterable of the supplied fragments.
+ * response whose `.stream` contains text parts followed by optional data parts.
  * `countTokens` is wired to a tiny deterministic estimate so the
  * usage-on-completion assertion has stable expected values.
  */
-function makeFakeModel(fragments: string[]): unknown {
+function makeFakeModel(fragments: string[], extraParts: unknown[] = []): unknown {
     const sendRequest = vi.fn(async () => {
         const text = (async function* () {
             for (const fragment of fragments) {
                 // Yield on a microtask so consumers can interleave aborts.
                 await Promise.resolve();
-                yield fragment;
+                yield new LanguageModelTextPart(fragment);
             }
+            yield* extraParts;
         })();
-        return { text };
+        return { stream: text };
     });
     return {
         id: 'fake-model-id',
@@ -133,6 +146,7 @@ function makeFakeModel(fragments: string[]): unknown {
 describe('CopilotService.streamMessage', () => {
     beforeEach(() => {
         selectChatModelsMock.mockReset();
+        telemetry.length = 0;
     });
 
     it('yields fragments in order and resolves completion with the full text + usage', async () => {
@@ -157,6 +171,98 @@ describe('CopilotService.streamMessage', () => {
         expect(response.modelDisplayName).toBe('Fake Model');
         expect(typeof response.durationMs).toBe('number');
         expect(response.usage?.responseTokens).toBe(response.text.length);
+        expect(response.usage?.usageSource).toBe('estimated');
+        expect(response.usage?.credits).toBeUndefined();
+    });
+
+    it.each(['buffered', 'streaming'])('uses provider counts and exact credits in the %s path', async (path) => {
+        const usage = {
+            prompt_tokens: 120,
+            completion_tokens: 45,
+            total_tokens: 170,
+            prompt_tokens_details: { cached_tokens: 100 },
+            completion_tokens_details: { reasoning_tokens: 20 },
+            copilot_usage: { total_nano_aiu: 12_345_678 },
+        };
+        selectChatModelsMock.mockResolvedValueOnce([
+            makeFakeModel(
+                ['Hi'],
+                [
+                    { ignored: 'tool/thinking part' },
+                    new LanguageModelDataPart(new TextEncoder().encode(JSON.stringify(usage)), 'usage'),
+                ],
+            ),
+        ]);
+        const messages = [makeUserMessage('Hello') as never];
+        let result;
+        if (path === 'buffered') {
+            result = await CopilotService.sendMessage(messages);
+        } else {
+            const handle = CopilotService.streamMessage(messages);
+            const received: string[] = [];
+            for await (const fragment of handle.fragments) received.push(fragment);
+            expect(received).toEqual(['Hi']);
+            result = await handle.completion;
+        }
+        expect(result.usage).toMatchObject({
+            promptTokens: 120,
+            responseTokens: 45,
+            totalTokens: 170,
+            reportedPromptTokens: 120,
+            reportedCompletionTokens: 45,
+            cachedPromptTokens: 100,
+            reasoningTokens: 20,
+            credits: 0.012345678,
+            usageSource: 'provider',
+        });
+        expect(
+            telemetry.find((entry) => entry.event.endsWith(path === 'buffered' ? '.sendMessage' : '.streamMessage'))
+                ?.measurements,
+        ).toMatchObject({ credits: 0.012345678, reportedPromptTokens: 120, reportedCompletionTokens: 45 });
+    });
+
+    it('keeps zero credits/counts and estimates only missing provider token fields', async () => {
+        selectChatModelsMock.mockResolvedValueOnce([
+            makeFakeModel(
+                ['Hello'],
+                [
+                    new LanguageModelDataPart(
+                        new TextEncoder().encode(
+                            JSON.stringify({
+                                prompt_tokens: 0,
+                                copilot_usage: { total_nano_aiu: 0 },
+                            }),
+                        ),
+                        'usage',
+                    ),
+                    new LanguageModelDataPart(new TextEncoder().encode('ignored'), 'other'),
+                ],
+            ),
+        ]);
+        const result = await CopilotService.sendMessage([makeUserMessage('Hello') as never]);
+        expect(result.usage).toMatchObject({
+            promptTokens: 0,
+            responseTokens: 5,
+            totalTokens: 5,
+            reportedPromptTokens: 0,
+            credits: 0,
+            usageSource: 'provider',
+        });
+        expect(result.usage?.reportedCompletionTokens).toBeUndefined();
+    });
+
+    it.each([
+        '{bad',
+        'null',
+        '{"prompt_tokens":"invalid","completion_tokens":-5,"copilot_usage":{"total_nano_aiu":"bad"}}',
+    ])('falls back safely on malformed usage: %s', async (data) => {
+        selectChatModelsMock.mockResolvedValueOnce([
+            makeFakeModel(['Safe text'], [new LanguageModelDataPart(new TextEncoder().encode(data), 'usage')]),
+        ]);
+        const result = await CopilotService.sendMessage([makeUserMessage('Hello') as never]);
+        expect(result.text).toBe('Safe text');
+        expect(result.usage).toMatchObject({ responseTokens: 9, usageSource: 'estimated' });
+        expect(result.usage?.credits).toBeUndefined();
     });
 
     it('ends iteration and rejects completion when the signal is aborted mid-stream', async () => {

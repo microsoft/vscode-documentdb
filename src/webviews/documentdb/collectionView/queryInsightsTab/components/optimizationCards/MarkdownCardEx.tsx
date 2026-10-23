@@ -5,7 +5,6 @@
 
 import { Card, CardHeader, makeStyles, Text, tokens } from '@fluentui/react-components';
 import { SparkleRegular } from '@fluentui/react-icons';
-import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './baseOptimizationCard.scss';
@@ -114,12 +113,6 @@ interface MarkdownCardExProps {
     onCopy?: () => void;
 
     /**
-     * Whether to show the AI disclaimer. Default: true
-     * Set to false for non-AI generated content (e.g., error messages)
-     */
-    showAiDisclaimer?: boolean;
-
-    /**
      * Optional children to render between the title and content
      */
     children?: React.ReactNode;
@@ -155,15 +148,7 @@ interface MarkdownCardExProps {
  * The margin is on the Card itself to ensure borders and shadows render immediately during collapse animations.
  */
 // TODO: Copy content feature will be added in the next release - _onCopy parameter will be used then
-export function MarkdownCardEx({
-    title,
-    content,
-    icon,
-    onCopy: _onCopy,
-    showAiDisclaimer = true,
-    children,
-    ref,
-}: MarkdownCardExProps) {
+export function MarkdownCardEx({ title, content, icon, onCopy: _onCopy, children, ref }: MarkdownCardExProps) {
     const styles = useStyles();
 
     return (
@@ -178,13 +163,6 @@ export function MarkdownCardEx({
                             <Text weight="semibold" size={400}>
                                 {title}
                             </Text>
-                        }
-                        action={
-                            showAiDisclaimer ? (
-                                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                    {l10n.t('AI responses may be inaccurate')}
-                                </Text>
-                            ) : undefined
                         }
                         style={{ marginBottom: '16px' }}
                     />

@@ -12,7 +12,7 @@ import { parseScenarioRoute, runnerRoutes, scenarioHtml, scenarioIndex, scenario
 import { findScenario, scenarioRoutes, scenarios, type Scenario } from './scenarios';
 
 describe('L2-dev manifest and routes', (): void => {
-    it('imports, rather than duplicates, all five settled L2 fixtures', (): void => {
+    it('imports, rather than duplicates, all six settled L2 fixtures', (): void => {
         for (const route of scenarioRoutes().filter((route): boolean => route.scenario === 'default')) {
             const scenario = findScenario(route);
             expect(scenario.config).toBe(fixtures[route.view].config);
@@ -23,8 +23,8 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(42);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(42);
+        expect(routes).toHaveLength(72);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(72);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
@@ -50,7 +50,8 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(42);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(72);
+        expect(runnerRoutes('/scenarios/run-all/queryInsightsStandalone.js')).toHaveLength(30);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(30);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(10);
         expect(runnerRoutes('/scenarios/run-all/unknown.js')).toBeUndefined();

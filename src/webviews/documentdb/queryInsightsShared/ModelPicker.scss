@@ -1,0 +1,98 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.query-insights-model-picker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalXS);
+    min-width: 0;
+
+    &-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--spacingHorizontalXS);
+        min-width: 0;
+
+        > .fui-Dropdown {
+            max-width: 100%;
+        }
+    }
+}
+
+.query-insights-model-muted {
+    color: var(--colorNeutralForeground3);
+}
+
+// Fluent's default listbox cap is 80vh; this cap fits on one side of the trigger, so positioning can
+// place the list fully below or above it. Two classes so these win over Fluent's Griffel rules.
+.fui-Listbox.query-insights-model-listbox {
+    min-width: 240px;
+    max-height: min(360px, 45vh);
+}
+
+.query-insights-model-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
+}
+
+// Option content: model name, cost badge pushed to the end of the row.
+.query-insights-model-option {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacingHorizontalL);
+    min-width: 0;
+
+    > .fui-Badge {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+}
+
+// The surface sizes to its content; the cap keeps long model IDs and credit lines wrapping inside it
+// (the popover autoSizes only its height, so this width cap holds).
+.fui-PopoverSurface.query-insights-model-details-surface {
+    max-width: min(360px, calc(100vw - 2 * var(--spacingHorizontalL)));
+    box-sizing: border-box;
+}
+
+.query-insights-model-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalS);
+}
+
+.query-insights-model-fact-list {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--spacingVerticalXS) var(--spacingHorizontalM);
+    align-items: baseline;
+    margin: 0;
+
+    > div {
+        display: contents;
+    }
+
+    dt {
+        color: var(--colorNeutralForeground3);
+    }
+
+    dd {
+        margin: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+}
+
+.query-insights-model-nowrap {
+    white-space: nowrap;
+}
+
+.query-insights-model-identity {
+    overflow-wrap: anywhere;
+}

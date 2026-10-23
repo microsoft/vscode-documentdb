@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
-
 /**
  * Formats a token count for display in trace logs and telemetry-driven UI.
  *
@@ -14,9 +12,10 @@ import * as vscode from 'vscode';
  * supply their own unit/suffix (e.g., `"tokens"`, `"of context"`).
  *
  * @param count The token count to format
+ * @param locale Display locale (host callers can pass the VS Code locale).
  * @returns Formatted string representation of the count
  */
-export function formatTokenCount(count: number): string {
+export function formatTokenCount(count: number, locale = 'en-US'): string {
     if (!Number.isFinite(count) || count < 0) {
         return String(count);
     }
@@ -26,9 +25,6 @@ export function formatTokenCount(count: number): string {
     }
 
     // Use Intl.NumberFormat for compact notation
-    // Try to use the user's VS Code locale, fall back to 'en-US' if unavailable
-    const locale = vscode.env?.language || 'en-US';
-
     const formatter = new Intl.NumberFormat(locale, {
         notation: 'compact',
         maximumFractionDigits: 1,

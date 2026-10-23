@@ -52,6 +52,21 @@ export interface AIOptimizationResponse {
         totalTokens?: number;
         maxInputTokens?: number;
         promptUtilizationPct?: number;
+        reportedPromptTokens?: number;
+        reportedCompletionTokens?: number;
+        cachedPromptTokens?: number;
+        reasoningTokens?: number;
+        credits?: number;
+        usageSource?: 'provider' | 'estimated';
+    };
+    /**
+     * The data messages sent with the request (user query + context data) and the
+     * prompt source. Never the instruction prompt itself. Used by "copy as Markdown".
+     */
+    modelInputs?: {
+        userQuery: string;
+        contextData: string;
+        promptSource: string;
     };
 }
 
@@ -60,6 +75,11 @@ export interface AIOptimizationResponse {
  */
 export interface AIIndexRecommendation {
     action: 'create' | 'drop' | 'none' | 'modify';
+    /**
+     * For `action: "none"` only: what kind of non-index advice this is. Optional; older prompts
+     * prefix `justification` with the kind instead (see `createInsightCardConfig`).
+     */
+    kind?: string;
     indexSpec: Record<string, number>; // e.g., { user_id: 1, status: 1 }
     indexOptions?: Record<string, unknown>;
     indexName: string; // Name of the index

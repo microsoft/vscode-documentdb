@@ -34,12 +34,16 @@ import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens 
 import { ChatMailRegular, InfoRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview';
 import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
-import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { type AvailableModelInfo } from '../../../../services/ai/modelSelection';
+import { type AIIndexRecommendation } from '../../../../services/ai/types';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
-import { CollectionViewContext } from '../collectionViewContext';
-import { type CollectionViewWebviewConfigurationType } from '../collectionViewController';
+import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analysisProfilePresentation';
+import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
+import { QueryInsightsPreviewBadge } from '../../queryInsightsShared/QueryInsightsPreviewBadge';
+import { ShareMenu, type ShareReportContent } from '../../queryInsightsShared/ShareMenu';
+import { usageByline } from '../../queryInsightsShared/usageByline';
 import {
     applyStage3Event,
     cancelStage3,
@@ -51,9 +55,12 @@ import {
     startStage1Load,
     startStage3Load,
 } from '../queryInsightsReducer';
+import { buildOptimizationMarkdown } from '../utils/buildOptimizationMarkdown';
 import { createImprovementCardConfig } from '../utils/createImprovementCard';
+import { createInsightCardConfig } from '../utils/createInsightCard';
 import { extractErrorCode } from '../utils/errorCodeExtractor';
 import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDisplay';
+import { markdownToEmailHtml } from '../utils/markdownToEmailHtml';
 import { CardStack, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
@@ -61,6 +68,7 @@ import {
     GetPerformanceInsightsCard,
     ImprovementCard,
     ImprovementCardShell,
+    InsightCard,
     MarkdownCard,
     MarkdownCardEx,
     Stage3AnalyzingCard,
@@ -68,6 +76,7 @@ import {
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
+import { useQueryInsightsDataSource } from './QueryInsightsDataSourceContext';
 import './QueryInsightsTab.scss';
 
 export const QueryInsightsMain = (): JSX.Element => {
@@ -88,19 +97,9 @@ export const QueryInsightsMain = (): JSX.Element => {
     /**
      * Use the configuration object to access the data passed to the webview at its creation.
      */
-    const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
-
     const trpcClient = useTrpcClient();
-    const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
-    const pipeline = currentContext.queryInsights;
-
-    /** Apply a pipeline transition. Wraps the global setState helper. */
-    const dispatch = useCallback(
-        (transition: (prev: typeof pipeline) => typeof pipeline): void => {
-            setCurrentContext((prev) => ({ ...prev, queryInsights: transition(prev.queryInsights) }));
-        },
-        [setCurrentContext],
-    );
+    const source = useQueryInsightsDataSource();
+    const { pipeline, dispatch, identity: configuration, isQueryLoading, getStage1, getStage2, streamStage3 } = source;
 
     // ---------- Derived values --------------------------------------------
     //
@@ -153,6 +152,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     // None of these need to be in context.
 
     const [showErrorCard, setShowErrorCard] = useState(false);
+    const [selectedModel, setSelectedModel] = useState<AvailableModelInfo>();
 
     /**
      * Subscription handle for the in-flight Stage 3 streaming subscription
@@ -316,10 +316,9 @@ export const QueryInsightsMain = (): JSX.Element => {
     //
     // IMPORTANT: wait for query execution (isLoading=false) before fetching.
     useEffect(() => {
-        if (!currentContext.isLoading && pipeline.kind === 'idle') {
+        if (!isQueryLoading && pipeline.kind === 'idle') {
             dispatch(startStage1Load);
-            void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
-                .query()
+            void getStage1()
                 .then((data) => {
                     dispatch((prev) => stage1Succeeded(prev, data));
                 })
@@ -331,7 +330,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     displayStageError(1, errorMessage);
                 });
         }
-    }, [currentContext.isLoading, pipeline.kind, trpcClient, dispatch, displayStageError]);
+    }, [isQueryLoading, pipeline.kind, getStage1, dispatch, displayStageError]);
 
     // ---------- Surface errors as VS Code notifications -------------------
     //
@@ -376,8 +375,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 }
             };
 
-            void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage2
-                .query()
+            void getStage2()
                 .then(async (data) => {
                     await ensureMinDuration();
                     dispatch((prev) => stage2Succeeded(prev, data));
@@ -392,7 +390,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     stage2InFlightRef.current = false;
                 });
         }
-    }, [pipeline.kind, trpcClient, dispatch]);
+    }, [pipeline.kind, getStage2, dispatch]);
 
     // Debug logging for pipeline state changes
     useEffect(() => {
@@ -445,8 +443,15 @@ export const QueryInsightsMain = (): JSX.Element => {
         return accessor(stage2Data) ?? unavailableValue;
     };
 
-    const executionTime = getMetricValue(stage2Data?.executionTimeMs);
-    const docsReturned = getMetricValue(stage2Data?.documentsReturned);
+    const analysisProfile = stage2Data?.analysisProfile ?? source.commandType ?? 'find';
+    const presentation = getAnalysisProfilePresentation(analysisProfile);
+    const notApplicable = stage2Data?.notApplicable ?? [];
+    const notApplicableToCount = l10n.t('Not applicable to count queries');
+    const notApplicableShort = l10n.t('Not applicable');
+    const executionTime = getMetricValue(notApplicable.includes('executionTime') ? null : stage2Data?.executionTimeMs);
+    const docsReturned = getMetricValue(
+        notApplicable.includes('documentsReturned') ? null : stage2Data?.documentsReturned,
+    );
     const keysExamined = getMetricValue(stage2Data?.totalKeysExamined);
     const docsExamined = getMetricValue(stage2Data?.totalDocsExamined);
     const lowSelectivityLabel = `below ${(0.1).toLocaleString(navigator.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
@@ -539,8 +544,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         // in lock step.
         stage3SubscriptionRef.current?.unsubscribe();
 
-        const subscription = trpcClient.mongoClusters.collectionView.queryInsights.streamStage3.subscribe(
-            { requestKey },
+        const subscription = streamStage3(
+            requestKey,
             {
                 onData(event) {
                     dispatch((prev) => applyStage3Event(prev, requestKey, event));
@@ -561,9 +566,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                     }
                 },
             },
+            selectedModel?.id,
         );
         stage3SubscriptionRef.current = subscription;
     };
+
+    const autoStarted = useRef(false);
+    useEffect(() => {
+        if (source.autoStartStage3 && pipeline.kind === 's3Idle' && !autoStarted.current) {
+            autoStarted.current = true;
+            handleGetAISuggestions();
+        }
+    }, [source.autoStartStage3, pipeline.kind, handleGetAISuggestions]);
 
     const handleCancelAI = (): void => {
         if (stage3TipsTimerRef.current) {
@@ -582,22 +596,45 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const handlePrimaryAction = useCallback(
         async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
-            return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
-                actionId,
-                payload,
-            });
+            return await source.executeAction(actionId, payload);
         },
-        [],
+        [source.executeAction],
+    );
+
+    /** The report as Markdown, the single source for both copy formats. */
+    const buildShareMarkdown = useCallback((): string => {
+        if (pipeline.kind !== 's3Success') throw new Error('The AI analysis has not completed.');
+        return buildOptimizationMarkdown({
+            databaseName: configuration.databaseName,
+            collectionName: configuration.collectionName,
+            staticAnalysis: stage2Data ?? undefined,
+            analysis: pipeline.streaming.summary?.markdown,
+            executionErrors: showErrorCard ? stage2Data?.concerns : undefined,
+            recommendations: pipeline.streaming.recommendations.filter(
+                (rec): rec is AIIndexRecommendation => rec !== null,
+            ),
+            educational: pipeline.streaming.educational?.markdown,
+            model: pipeline.model,
+            generatedAt: new Date(),
+        });
+    }, [pipeline, configuration, showErrorCard, stage2Data]);
+
+    /** The same report, rendered with inline styles for email, Teams and Word. */
+    const buildShareRichText = useCallback((): ShareReportContent => {
+        const markdown = buildShareMarkdown();
+        return { html: markdownToEmailHtml(markdown), plainText: markdown };
+    }, [buildShareMarkdown]);
+
+    const copyShareText = useCallback(
+        (text: string): Promise<boolean> => trpcClient.common.copyToClipboard.mutate({ text }),
+        [trpcClient],
     );
 
     const handleSecondaryAction = useCallback(
         async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
-            return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
-                actionId,
-                payload,
-            });
+            return await source.executeAction(actionId, payload);
         },
-        [],
+        [source.executeAction],
     );
 
     // ---------- Build the animated card list ------------------------------
@@ -668,7 +705,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <MarkdownCard
                         title={l10n.t('Query Execution Failed')}
                         icon={<WarningRegular />}
-                        showAiDisclaimer={false}
                         content={
                             stage2Data.concerns.join('\n\n') +
                             '\n\n---\n\n' +
@@ -698,8 +734,21 @@ export const QueryInsightsMain = (): JSX.Element => {
                         cards.push({ key, motion: 'fade', component: <ImprovementCardShell /> });
                         return;
                     }
+                    if (rec.action === 'none') {
+                        cards.push({
+                            key,
+                            motion: 'fade',
+                            component: (
+                                <InsightCard
+                                    config={createInsightCardConfig(rec, index)}
+                                    onCopy={(text) => trpcClient.common.copyToClipboard.mutate({ text })}
+                                />
+                            ),
+                        });
+                        return;
+                    }
                     const config = createImprovementCardConfig(rec, index, {
-                        clusterId: configuration.clusterId,
+                        clusterId: configuration.clusterId ?? '',
                         databaseName: configuration.databaseName,
                         collectionName: configuration.collectionName,
                     });
@@ -709,6 +758,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                         component: (
                             <ImprovementCard
                                 config={config}
+                                actionsEnabled={source.actionsEnabled}
+                                onCopy={() => trpcClient.common.copyToClipboard.mutate({ text: rec.shellCommand })}
                                 onPrimaryAction={handlePrimaryAction}
                                 onSecondaryAction={handleSecondaryAction}
                             />
@@ -771,6 +822,7 @@ export const QueryInsightsMain = (): JSX.Element => {
         showErrorCard,
         stage2Data,
         configuration,
+        source.actionsEnabled,
         handlePrimaryAction,
         handleSecondaryAction,
     ]);
@@ -784,14 +836,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                     {/* Metrics Row */}
                     <MetricGrid>
                         <TimeMetric
-                            label={l10n.t('Execution Time')}
+                            label={
+                                stage2Data?.executionTimeScope === 'pipeline-estimate'
+                                    ? l10n.t('Overall execution time (estimate)')
+                                    : l10n.t('Execution Time')
+                            }
                             valueMs={executionTime}
                             tooltipExplanation={l10n.t('Total time taken to execute the query on the server')}
                         />
                         <CountMetric
-                            label={l10n.t('Documents Returned')}
+                            label={presentation.resultLabel}
                             value={docsReturned}
-                            tooltipExplanation={l10n.t('Number of documents returned by the query')}
+                            tooltipExplanation={presentation.resultTooltip}
                         />
                         <CountMetric
                             label={l10n.t('Keys Examined')}
@@ -811,17 +867,25 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                     {/* Optimization Opportunities */}
                     <div className="optimizationSection">
-                        {/* Section title */}
-                        <Text size={400} weight="semibold" className="cardSpacing" style={{ display: 'block' }}>
-                            {l10n.t('Optimization Opportunities')}
-                        </Text>
+                        {/* Section title, with the Share menu once the AI analysis is complete */}
+                        <div className="cardSpacing optimizationSectionHeader">
+                            <Text size={400} weight="semibold" id="optimization-opportunities-title">
+                                {l10n.t('Optimization Opportunities')}
+                            </Text>
+                            {isStage3Success && (
+                                <ShareMenu
+                                    buildMarkdown={buildShareMarkdown}
+                                    buildRichText={buildShareRichText}
+                                    copyText={copyShareText}
+                                />
+                            )}
+                        </div>
 
                         {/* Platform-specific error card for RU clusters */}
                         {stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
                             <MarkdownCardEx
                                 title={l10n.t('Query Insights Not Available')}
                                 icon={<ChatMailRegular />}
-                                showAiDisclaimer={false}
                                 content={l10n.t(
                                     'This feature is currently not enabled for RU-based accounts. We recognize that these accounts have unique performance characteristics, and standard optimization patterns from other DocumentDB environments may not be applicable.\n\n' +
                                         'To ensure our recommendations are accurate and genuinely helpful, a specific analysis tailored to the Request Unit (RU) model is required. For this reason, we have disabled the feature for this account type.\n\n' +
@@ -978,8 +1042,17 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     />
                                 ) : (
                                     <GetPerformanceInsightsCard
+                                        modelPicker={
+                                            <ModelPicker
+                                                size="medium"
+                                                appearance="underline"
+                                                showModelIcon
+                                                onModelChange={setSelectedModel}
+                                            />
+                                        }
                                         className="cardSpacing"
                                         bodyText={
+                                            !notApplicable.includes('performanceRating') &&
                                             stage2Data?.efficiencyAnalysis.performanceRating.score === 'excellent'
                                                 ? l10n.t(
                                                       'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
@@ -995,9 +1068,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         // it false.
                                         isLoading={false}
                                         enabled={
-                                            pipeline.kind === 's3Idle' ||
-                                            pipeline.kind === 's3Error' ||
-                                            pipeline.kind === 's3Cancelled'
+                                            !!selectedModel &&
+                                            (pipeline.kind === 's3Idle' ||
+                                                pipeline.kind === 's3Error' ||
+                                                pipeline.kind === 's3Cancelled')
+                                        }
+                                        mayUsePremiumRequests={!selectedModel?.isUtility}
+                                        secondaryLink={
+                                            source.explore && (
+                                                <Link inline onClick={() => void source.explore?.()}>
+                                                    {l10n.t('Explore with your own input…')}
+                                                </Link>
+                                            )
                                         }
                                         errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
                                         onGetInsights={handleGetAISuggestions}
@@ -1024,12 +1106,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <CardStack items={insightCards} visible={insightCards.length > 0} />
 
                         {/* Post-response "Powered by" byline.
-                            Mirrors the (i) + cost-neutral disclosure shown in the pre-invocation
-                            card. Token usage measurements are intentionally NOT rendered here:
-                            they live in the trace output channel and in telemetry only. Cost
-                            (credits) is not surfaced because the stable VS Code Language Model
-                            API does not expose pricing data; the extension stays on stable APIs
-                            and avoids the proposed `languageModelPricing` API by design.
+                            Mirrors the (i) + model-dependent disclosure shown in the pre-invocation
+                            card. Known usage and billed credits come from the completed run,
+                            not from the currently selected model's pricing metadata.
 
                             Wrapped in `Fade` so it slides in over the same window the
                             GetPerformanceInsightsCard above is collapsing out — without the
@@ -1052,18 +1131,26 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                            {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
-                                            <Link
-                                                appearance="subtle"
-                                                onClick={handleLearnMoreUtilityModel}
-                                                inline
-                                                style={{
-                                                    fontSize: tokens.fontSizeBase200,
-                                                    lineHeight: tokens.lineHeightBase200,
-                                                }}
-                                            >
-                                                {l10n.t('Learn more about the utility model used.')}
-                                            </Link>
+                                            {pipeline.kind === 's3Success' &&
+                                            pipeline.model.modelId !== 'copilot-utility' &&
+                                            pipeline.model.modelFamily !== 'copilot-utility' ? (
+                                                l10n.t('The selected model may use premium requests.')
+                                            ) : (
+                                                <>
+                                                    {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
+                                                    <Link
+                                                        appearance="subtle"
+                                                        onClick={handleLearnMoreUtilityModel}
+                                                        inline
+                                                        style={{
+                                                            fontSize: tokens.fontSizeBase200,
+                                                            lineHeight: tokens.lineHeightBase200,
+                                                        }}
+                                                    >
+                                                        {l10n.t('Learn more about the utility model used.')}
+                                                    </Link>
+                                                </>
+                                            )}
                                         </Text>
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                                             {(() => {
@@ -1080,14 +1167,32 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                         : undefined;
                                                 if (durationMs !== undefined) {
                                                     const seconds = (durationMs / 1000).toFixed(1);
-                                                    return l10n.t(
-                                                        'Powered by {0} via GitHub Copilot · {1}s',
-                                                        modelName,
-                                                        seconds,
+                                                    return (
+                                                        l10n.t(
+                                                            'Powered by {0} via GitHub Copilot · {1}s',
+                                                            modelName,
+                                                            seconds,
+                                                        ) +
+                                                        usageByline(
+                                                            pipeline.kind === 's3Success'
+                                                                ? pipeline.model.usage
+                                                                : undefined,
+                                                        )
                                                     );
                                                 }
-                                                return l10n.t('Powered by {0} via GitHub Copilot', modelName);
+                                                return (
+                                                    l10n.t('Powered by {0} via GitHub Copilot', modelName) +
+                                                    usageByline(
+                                                        pipeline.kind === 's3Success'
+                                                            ? pipeline.model.usage
+                                                            : undefined,
+                                                    )
+                                                );
                                             })()}
+                                        </Text>
+                                        {/* Said once for every AI card above, instead of in each card header. */}
+                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                            {l10n.t('AI responses may be inaccurate')}
                                         </Text>
                                     </div>
                                 </div>
@@ -1099,12 +1204,25 @@ export const QueryInsightsMain = (): JSX.Element => {
                 {/* Right Column: Efficiency Analysis, Query Plan, Quick Actions */}
                 <div className="rightColumn">
                     {/* Query Efficiency Analysis */}
-                    <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
+                    <SummaryCard
+                        title={l10n.t('Query Efficiency Analysis')}
+                        titleBadge={analysisProfile !== 'find' && <QueryInsightsPreviewBadge />}
+                        description={
+                            analysisProfile === 'aggregate' && stage2Data?.analysisNotes?.length ? (
+                                <Text>{stage2Data.analysisNotes.join(' ')}</Text>
+                            ) : undefined
+                        }
+                    >
                         <GenericCell
-                            label={l10n.t('Selectivity')}
-                            value={selectivity}
+                            label={
+                                analysisProfile === 'aggregate'
+                                    ? l10n.t('Initial-stage selectivity')
+                                    : l10n.t('Selectivity')
+                            }
+                            value={analysisProfile === 'count' ? notApplicableShort : selectivity}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
+                                if (analysisProfile === 'count') return notApplicableToCount;
                                 const selectivity = stage2Data?.efficiencyAnalysis.selectivity;
                                 if (selectivity === null || selectivity === undefined) {
                                     return l10n.t(
@@ -1152,9 +1270,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('Fetch Overhead')}
-                            value={getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)}
+                            value={
+                                analysisProfile === 'count'
+                                    ? notApplicableShort
+                                    : getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)
+                            }
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
+                                if (analysisProfile === 'count') return notApplicableToCount;
                                 const kind = stage2Data?.efficiencyAnalysis.fetchOverheadKind ?? 'directFetch';
                                 if (kind === 'covered') {
                                     return l10n.t(
@@ -1181,11 +1304,23 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={getCellValue((stage2) =>
-                                stage2.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
-                            )}
+                            value={
+                                analysisProfile === 'count'
+                                    ? notApplicableShort
+                                    : notApplicable.includes('inMemorySort')
+                                      ? l10n.t('Not rated for pipeline $sort')
+                                      : getCellValue((stage2) =>
+                                            stage2.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
+                                        )
+                            }
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
+                                if (analysisProfile === 'count') return notApplicableToCount;
+                                if (notApplicable.includes('inMemorySort')) {
+                                    return l10n.t(
+                                        'A later pipeline $sort is present. The initial cursor plan cannot determine its memory or disk usage.',
+                                    );
+                                }
                                 const hasSort = stage2Data?.efficiencyAnalysis.hasInMemorySort ?? false;
                                 if (hasSort) {
                                     return l10n.t(
@@ -1200,14 +1335,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
                             rating={
-                                hasMetricsError
+                                hasMetricsError || notApplicable.includes('performanceRating')
                                     ? null
                                     : showMetricsSkeleton
                                       ? undefined
                                       : stage2Data?.efficiencyAnalysis.performanceRating.score
                             }
                             diagnostics={
-                                hasMetricsError || showMetricsSkeleton
+                                hasMetricsError || showMetricsSkeleton || notApplicable.includes('performanceRating')
                                     ? undefined
                                     : stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
                             }
@@ -1217,11 +1352,14 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                     {/* Query Plan Summary */}
                     <QueryPlanSummary
+                        preview={analysisProfile !== 'find'}
+                        onViewRawExplain={source.viewRawExplain}
                         stage1Data={stage1Data}
                         stage2Data={stage2Data}
                         stage1Loading={pipeline.kind === 's1Loading'}
                         stage2Loading={pipeline.kind === 's2Loading'}
                         hasError={hasMetricsError}
+                        rawExplainAvailable={pipeline.kind === 's2Error'}
                     />
                 </div>
             </div>

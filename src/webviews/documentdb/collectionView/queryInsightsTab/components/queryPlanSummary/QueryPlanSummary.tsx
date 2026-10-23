@@ -24,6 +24,8 @@ import {
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
 } from '../../../../../documentdb/collectionView/types/queryInsights';
+import { QueryInsightsPreviewBadge } from '../../../../queryInsightsShared/QueryInsightsPreviewBadge';
+import { getAnalysisProfilePresentation } from '../../../../queryInsightsShared/analysisProfilePresentation';
 import '../../queryInsights.scss';
 import './QueryPlanSummary.scss';
 import { StageDetailCard, type StageType } from './StageDetailCard';
@@ -34,6 +36,10 @@ interface QueryPlanSummaryProps {
     stage1Loading: boolean;
     stage2Loading: boolean;
     hasError: boolean;
+    /** True when Stage 2 failed after the explain ran, so the raw plan can still be opened. */
+    rawExplainAvailable?: boolean;
+    preview?: boolean;
+    onViewRawExplain?: () => Promise<void>;
 }
 
 export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
@@ -42,8 +48,22 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     stage1Loading,
     stage2Loading,
     hasError,
+    rawExplainAvailable = false,
+    preview = false,
+    onViewRawExplain,
 }) => {
     const trpcClient = useTrpcClient();
+    const profile = stage2Data?.analysisProfile ?? 'find';
+    const resultSummary = stage2Data
+        ? getAnalysisProfilePresentation(profile).resultSummary(
+              stage2Data.notApplicable?.includes('documentsReturned')
+                  ? l10n.t('N/A')
+                  : stage2Data.documentsReturned.toLocaleString(),
+          )
+        : '';
+    const timeSummary = stage2Data?.notApplicable?.includes('executionTime')
+        ? l10n.t('Time unavailable')
+        : `${stage2Data?.executionTimeMs.toFixed(2) ?? ''}ms`;
 
     const handleStageDetailsToggle = (isExpanded: boolean) => {
         trpcClient.common.reportEvent
@@ -61,7 +81,8 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 
     const handleViewRawExplain = async () => {
         try {
-            await trpcClient.mongoClusters.collectionView.viewRawExplainOutput.mutate();
+            if (onViewRawExplain) await onViewRawExplain();
+            else await trpcClient.mongoClusters.collectionView.viewRawExplainOutput.mutate();
         } catch (error) {
             void trpcClient.common.displayErrorMessage.mutate({
                 message: l10n.t('Failed to open raw execution stats'),
@@ -80,8 +101,14 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
             >
                 <Text id="query-plan-summary-label" size={400} weight="semibold">
                     {l10n.t('Query Plan Summary')}
+                    {preview && (
+                        <>
+                            {' '}
+                            <QueryInsightsPreviewBadge />
+                        </>
+                    )}
                 </Text>
-                {stage2Data && (
+                {(stage2Data || rawExplainAvailable) && (
                     <Button
                         appearance="subtle"
                         size="small"
@@ -135,12 +162,19 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                 )}
                                 {stage2Data && !stage2Loading && (
                                     <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                        {l10n.t(
-                                            'SHARD_MERGE · {0} shards · {1} docs · {2}ms',
-                                            stage1Data.shards.length,
-                                            stage2Data.documentsReturned,
-                                            stage2Data.executionTimeMs.toFixed(0),
-                                        )}
+                                        {profile === 'find'
+                                            ? l10n.t(
+                                                  'SHARD_MERGE · {0} shards · {1} docs · {2}ms',
+                                                  stage1Data.shards.length,
+                                                  stage2Data.documentsReturned,
+                                                  stage2Data.executionTimeMs.toFixed(0),
+                                              )
+                                            : l10n.t(
+                                                  'SHARD_MERGE · {0} shards · {1} · {2}',
+                                                  stage1Data.shards.length,
+                                                  resultSummary,
+                                                  timeSummary,
+                                              )}
                                     </Text>
                                 )}
                             </div>
@@ -216,7 +250,15 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                             )}
                                             {shard2Data && !stage2Loading && (
                                                 <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                                    {shard2Data.nReturned || 0} returned ·{' '}
+                                                    {profile !== 'count' && (
+                                                        <>
+                                                            {shard2Data.nReturned || 0}{' '}
+                                                            {profile === 'aggregate'
+                                                                ? l10n.t('passed to pipeline')
+                                                                : 'returned'}{' '}
+                                                            ·{' '}
+                                                        </>
+                                                    )}
                                                     {(shard2Data.keysExamined || 0).toLocaleString()} keys ·{' '}
                                                     {(shard2Data.docsExamined || 0).toLocaleString()} docs ·{' '}
                                                     {shard2Data.executionTimeMs || 0}ms
@@ -275,7 +317,11 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                                     ? `Index: ${stage.indexName}`
                                                                                     : undefined
                                                                             }
-                                                                            returned={stage.nReturned}
+                                                                            returned={
+                                                                                profile === 'count'
+                                                                                    ? undefined
+                                                                                    : stage.nReturned
+                                                                            }
                                                                             executionTimeMs={stage.executionTimeMs}
                                                                             metrics={
                                                                                 metrics.length > 0 ? metrics : undefined
@@ -354,10 +400,13 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                 )}
                                 {stage2Data && !stage2Loading && (
                                     <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                        {stage2Data.documentsReturned} returned ·{' '}
-                                        {stage2Data.totalKeysExamined.toLocaleString()} keys ·{' '}
-                                        {stage2Data.totalDocsExamined.toLocaleString()} docs ·{' '}
-                                        {stage2Data.executionTimeMs.toFixed(2)}ms
+                                        {profile === 'find' ? (
+                                            <>{stage2Data.documentsReturned} returned</>
+                                        ) : (
+                                            resultSummary
+                                        )}{' '}
+                                        · {stage2Data.totalKeysExamined.toLocaleString()} keys ·{' '}
+                                        {stage2Data.totalDocsExamined.toLocaleString()} docs · {timeSummary}
                                     </Text>
                                 )}
                             </div>
@@ -438,7 +487,9 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                                                         ? `Index: ${stage.indexName}`
                                                                         : undefined
                                                                 }
-                                                                returned={stage.nReturned}
+                                                                returned={
+                                                                    profile === 'count' ? undefined : stage.nReturned
+                                                                }
                                                                 executionTimeMs={stage.executionTimeMs}
                                                                 metrics={metrics.length > 0 ? metrics : undefined}
                                                                 hasFailed={hasFailed}

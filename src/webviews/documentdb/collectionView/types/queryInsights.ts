@@ -67,6 +67,16 @@ export interface QueryInsightsStage1Response {
 /** Stable identifier for the fetch overhead state, independent of locale. */
 export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'multikey' | 'directFetch';
 
+export type QueryInsightsAnalysisProfile = 'find' | 'aggregate' | 'count';
+export type QueryInsightsMetric =
+    | 'selectivity'
+    | 'fetchOverhead'
+    | 'inMemorySort'
+    | 'examinedToReturnedRatio'
+    | 'documentsReturned'
+    | 'performanceRating'
+    | 'executionTime';
+
 /**
  * Response from Stage 2 - Detailed execution statistics
  *
@@ -86,6 +96,12 @@ export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'mu
  * - `efficiencyAnalysis.fetchOverheadKind: FetchOverheadKind` - Stable key for UI branching
  */
 export interface QueryInsightsStage2Response {
+    /** Missing on the connected find path for backwards compatibility. */
+    analysisProfile?: QueryInsightsAnalysisProfile;
+    notApplicable?: QueryInsightsMetric[];
+    analysisNotes?: string[];
+    unassessedPipelineStages?: string[];
+    executionTimeScope?: 'cursor' | 'pipeline-estimate' | 'optimized-plan';
     executionTimeMs: number;
     totalKeysExamined: number;
     totalDocsExamined: number;
@@ -254,6 +270,28 @@ export interface ImprovementCard {
     // Action buttons with complete context for execution (both optional)
     primaryButton?: ActionButton;
     secondaryButton?: ActionButton;
+}
+
+/**
+ * Kinds of non-index advice (`action: "none"`). `other` covers anything unrecognized.
+ */
+export type InsightKind = 'query-change' | 'verify' | 'maintenance' | 'data-model' | 'support' | 'other';
+
+/**
+ * Configuration for a non-index recommendation card (`action: "none"`).
+ * Advisory only: it never executes anything; an optional command can be copied.
+ */
+export interface InsightCard {
+    type: 'insight';
+    cardId: string;
+    kind: InsightKind;
+    title: string;
+    priority: 'high' | 'medium' | 'low';
+    description: string;
+    /** Runnable command the user can copy, when the advice has one. */
+    shellCommand?: string;
+    /** Risks or side effects, only when the model provided them. */
+    details?: string;
 }
 
 /**
