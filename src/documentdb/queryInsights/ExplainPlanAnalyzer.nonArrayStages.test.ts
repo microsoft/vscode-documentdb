@@ -125,7 +125,9 @@ describe('DocumentDB plan with indexUsage as an empty object', () => {
 
         expect(stage2.documentsReturned).toBe(0);
         expect(stage2.totalDocsExamined).toBe(1000);
-        expect(stage2.usedIndexNames).toContain('_id_');
+        // The `_id_` walk is a primary-key order scan, so it is reported as a collection scan.
+        expect(stage2.usedIndexNames).toEqual([]);
+        expect(stage2.hadCollectionScan).toBe(true);
         expect(() => buildStaticAnalysisSummary(stage2, 1000)).not.toThrow();
     });
 });

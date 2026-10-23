@@ -380,6 +380,7 @@ export const queryInsightsQueriesRouter = router({
         myCtx.actionContext.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
         myCtx.actionContext.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
         myCtx.actionContext.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
+        myCtx.actionContext.telemetry.properties.planRefinements = (analyzed.planRefinements ?? []).join(',');
 
         myCtx.actionContext.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
         myCtx.actionContext.telemetry.measurements.documentsReturned = transformed.documentsReturned;

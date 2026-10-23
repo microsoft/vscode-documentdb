@@ -7,6 +7,7 @@ import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
 import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
 import { type ExtendedStageInfo } from '../../webviews/documentdb/collectionView/types/queryInsights';
+import { refineDocumentDbPlanFacts, type PlanAccessFacts, type PlanRefinementId } from './documentDbPlanRefinements';
 
 // ============================================================================
 // Index strategy advisory thresholds
@@ -162,11 +163,16 @@ export class ExplainPlanAnalyzer {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
         const explainPlan = new ExplainPlan(this.toExplainPlanHelperInput(explainResult) as any);
 
-        // Extract metrics using helper methods
+        // Extract metrics using helper methods (first pass), then the DocumentDB corrections
         const usedIndexesInfo = explainPlan.usedIndexes || [];
-        const usedIndexes = usedIndexesInfo.map((idx) => (typeof idx === 'string' ? idx : idx.index || 'unknown'));
-        const isCollectionScan = explainPlan.isCollectionScan;
-        const isCovered = explainPlan.isCovered;
+        const extractedIndexes = usedIndexesInfo.map((idx) => (typeof idx === 'string' ? idx : idx.index || 'unknown'));
+        const { facts } = refineDocumentDbPlanFacts(explainResult, {
+            usedIndexes: extractedIndexes,
+            isCollectionScan: explainPlan.isCollectionScan,
+            isCovered: explainPlan.isCovered,
+            isIndexScan: extractedIndexes.length > 0 && !explainPlan.isCollectionScan,
+        });
+        const { usedIndexes, isCollectionScan, isCovered } = facts;
         const hasInMemorySort = explainPlan.inMemorySort;
         const namespace = explainPlan.namespace;
 
@@ -209,18 +215,48 @@ export class ExplainPlanAnalyzer {
         // Calculate efficiency ratio
         const efficiencyRatio = this.calculateEfficiencyRatio(nReturned, totalDocsExamined);
 
-        // Extract query characteristics
+        // Extract query characteristics (first pass: engine-neutral, via explain-plan-helper)
         const usedIndexesInfo = explainPlan.usedIndexes || [];
-        const usedIndexes = usedIndexesInfo.map((idx) => (typeof idx === 'string' ? idx : idx.index || 'unknown'));
-        const isCollectionScan = explainPlan.isCollectionScan;
-        const isCovered = explainPlan.isCovered;
-        const hasInMemorySort = explainPlan.inMemorySort;
+        const extracted: PlanAccessFacts = {
+            usedIndexes: usedIndexesInfo.map((idx) => (typeof idx === 'string' ? idx : idx.index || 'unknown')),
+            isCollectionScan: explainPlan.isCollectionScan,
+            isCovered: explainPlan.isCovered,
+            isIndexScan: false,
+        };
         // Note: isIndexScan is derived from whether indexes are used
-        const isIndexScan = usedIndexes.length > 0 && !isCollectionScan;
+        extracted.isIndexScan = extracted.usedIndexes.length > 0 && !extracted.isCollectionScan;
+
+        // Second pass: DocumentDB-specific corrections, applied before the rating is computed
+        const refined = refineDocumentDbPlanFacts(explainResult, extracted);
+        const { usedIndexes, isCollectionScan, isCovered, isIndexScan } = refined.facts;
+        const hasInMemorySort = explainPlan.inMemorySort;
 
         // Check if sorting is being performed (either in-memory or index-based)
         // We detect this by checking if there's a SORT stage in the execution plan
         const hasSorting = this.detectSortingInPlan(explainResult);
+
+        const performanceRating = executionError
+            ? this.createFailedQueryRating(executionError)
+            : this.calculatePerformanceRating(
+                  executionTimeMillis,
+                  efficiencyRatio,
+                  hasInMemorySort,
+                  hasSorting,
+                  isIndexScan,
+                  isCollectionScan,
+                  queryFilter,
+              );
+        if (!executionError && refined.diagnostics.length > 0) {
+            // Place the explanation right after the index usage badge it qualifies.
+            const indexBadge = performanceRating.diagnostics.findIndex(
+                (d) => d.diagnosticId === 'full_collection_scan',
+            );
+            performanceRating.diagnostics.splice(
+                indexBadge >= 0 ? indexBadge + 1 : performanceRating.diagnostics.length,
+                0,
+                ...refined.diagnostics,
+            );
+        }
 
         // Build response structure
         return {
@@ -234,19 +270,10 @@ export class ExplainPlanAnalyzer {
             isCovered,
             hasInMemorySort,
             isIndexScan,
-            performanceRating: executionError
-                ? this.createFailedQueryRating(executionError)
-                : this.calculatePerformanceRating(
-                      executionTimeMillis,
-                      efficiencyRatio,
-                      hasInMemorySort,
-                      hasSorting,
-                      isIndexScan,
-                      isCollectionScan,
-                      queryFilter,
-                  ),
+            performanceRating,
             rawStats: explainResult,
             executionError,
+            planRefinements: refined.refinements,
         };
     }
 
@@ -1001,7 +1028,7 @@ export class ExplainPlanAnalyzer {
                     Array.isArray(indexUsage) &&
                     indexUsage.length === 1 &&
                     Array.isArray((indexUsage[0] as { scanKeys?: unknown } | undefined)?.scanKeys) &&
-                    ((indexUsage[0] as { scanKeys: unknown[] }).scanKeys.length === 1);
+                    (indexUsage[0] as { scanKeys: unknown[] }).scanKeys.length === 1;
 
                 const coverage =
                     !options.skipCoverage && totalCollectionDocs && totalCollectionDocs > 0
@@ -1145,4 +1172,6 @@ export interface ExecutionStatsAnalysis {
     rawStats: Document;
     extendedStageInfo?: ExtendedStageInfo[];
     executionError?: QueryExecutionError;
+    /** DocumentDB-specific corrections applied by the second analysis pass (empty for other engines). */
+    planRefinements?: PlanRefinementId[];
 }
