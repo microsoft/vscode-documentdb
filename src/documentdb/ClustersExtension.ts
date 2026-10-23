@@ -141,6 +141,7 @@ import {
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
 import { registerClusterDashboardContextMenuCommands } from '../webviews/documentdb/clusterDashboard/clusterDashboardController';
+import { EntraDiagnosticsProvider } from './auth/entraErrors/EntraDiagnosticsProvider';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
@@ -185,6 +186,7 @@ export class ClustersExtension implements vscode.Disposable {
         ConnectionDiagnosticsService.registerProvider(new AtlasDiagnosticsProvider());
         // First explanation wins, so source-specific diagnostics take priority over generic SRV failures.
         ConnectionDiagnosticsService.registerProvider(new SrvDnsDiagnosticsProvider());
+        ConnectionDiagnosticsService.registerProvider(new EntraDiagnosticsProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
