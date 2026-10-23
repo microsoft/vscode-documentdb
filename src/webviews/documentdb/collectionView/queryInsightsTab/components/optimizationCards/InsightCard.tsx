@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, Card, CardHeader, Label, Text, tokens } from '@fluentui/react-components';
+import { Badge, Card, CardHeader, Label, Text, tokens } from '@fluentui/react-components';
 import {
     BeakerRegular,
     CodeRegular,
-    CopyRegular,
     DatabaseRegular,
     LightbulbRegular,
     PersonSupportRegular,
@@ -15,13 +14,14 @@ import {
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useId } from 'react';
+import { CopyButton } from '../../../../queryInsightsShared/CopyButton';
 import { type InsightCard as InsightCardConfig, type InsightKind } from '../../../types/queryInsights';
 import './baseOptimizationCard.scss';
 
 export interface InsightCardProps {
     config: InsightCardConfig;
-    /** Called with the card's command when the user copies it. */
-    onCopy?: (command: string) => void;
+    /** Copies the card's command. A resolved `false` or a rejection is reported as a failed copy. */
+    onCopy?: (command: string) => Promise<unknown> | unknown;
     ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -107,13 +107,10 @@ export function InsightCard({ config, onCopy, ref }: InsightCardProps) {
                         )}
 
                         {config.shellCommand && onCopy && (
-                            <Button
-                                size="small"
-                                icon={<CopyRegular />}
-                                onClick={() => onCopy(config.shellCommand ?? '')}
-                            >
-                                {l10n.t('Copy command')}
-                            </Button>
+                            <CopyButton
+                                label={l10n.t('Copy command')}
+                                onCopy={() => onCopy(config.shellCommand ?? '')}
+                            />
                         )}
                     </div>
                 </div>

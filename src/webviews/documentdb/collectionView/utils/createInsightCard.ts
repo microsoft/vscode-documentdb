@@ -46,7 +46,7 @@ function getTitle(kind: InsightKind): string {
         case 'query-change':
             return l10n.t('Change the Query');
         case 'verify':
-            return l10n.t('Verify First');
+            return l10n.t('Verify');
         case 'maintenance':
             return l10n.t('Maintenance');
         case 'data-model':

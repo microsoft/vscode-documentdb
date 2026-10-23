@@ -20,6 +20,7 @@ import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
 import { type ImprovementCard as ImprovementCardConfig } from '../../../types/queryInsights';
+import { CopyButton } from '../../../../queryInsightsShared/CopyButton';
 import './baseOptimizationCard.scss';
 
 export interface ImprovementCardProps {
@@ -30,9 +31,10 @@ export interface ImprovementCardProps {
     actionsEnabled?: boolean;
 
     /**
-     * Optional callback when the copy button is clicked
+     * Copies the card's command. Shown as a secondary action next to the primary one, or alone
+     * when actions are disabled. A resolved `false` or a rejection is reported as a failed copy.
      */
-    onCopy?: () => void;
+    onCopy?: () => Promise<unknown> | unknown;
 
     /**
      * Callback when the primary button is clicked
@@ -273,11 +275,6 @@ export function ImprovementCard({
 
                         {/* Action Buttons */}
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {!actionsEnabled && (
-                                <Button size="small" onClick={onCopy}>
-                                    {l10n.t('Copy command')}
-                                </Button>
-                            )}
                             {actionsEnabled && config.primaryButton && (
                                 <Button
                                     appearance="primary"
@@ -307,6 +304,9 @@ export function ImprovementCard({
                                           ? l10n.t('Retry')
                                           : config.secondaryButton.label}
                                 </Button>
+                            )}
+                            {onCopy && config.shellCommand && (
+                                <CopyButton label={l10n.t('Copy command')} onCopy={onCopy} />
                             )}
                         </div>
                     </div>

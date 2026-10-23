@@ -26,7 +26,7 @@ describe('createInsightCardConfig', () => {
             type: 'insight',
             cardId: 'insight-2',
             kind: 'verify',
-            title: 'Verify First',
+            title: 'Verify',
             description: 'Run a hinted explain.',
         });
     });
