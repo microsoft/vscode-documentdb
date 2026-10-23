@@ -5,8 +5,10 @@
 
 import { type Document } from 'mongodb';
 import { describe, expect, it } from 'vitest';
+import { fixupDocumentDbExplain } from '../utils/fixupDocumentDbExplain';
 import { analyzeExplainForStage2 } from './analyzeExplainForStage2';
 import { ExplainPlanAnalyzer } from './ExplainPlanAnalyzer';
+import { buildStaticAnalysisSummary } from './staticAnalysisSummary';
 
 function explainWith(executionStages: Document): Document {
     return {
@@ -45,5 +47,85 @@ describe('ExplainPlanAnalyzer with non-array child stages', () => {
 
         expect(analyzed.rawStats).toBe(explain);
         expect(executionStages.shards).toEqual({ s0: { stage: 'COLLSCAN' } });
+    });
+});
+
+/** Azure DocumentDB plan where `_id_` only provides order: `indexUsage` is `{}`, not an array. */
+function documentDbIdOrderPlan(): Document {
+    const ixscan = {
+        stage: 'IXSCAN',
+        nReturned: 0,
+        executionTimeMillis: 0.614,
+        executionStartAtTimeMillis: 0.614,
+        totalDocsExamined: 1000,
+        indexName: '_id_',
+        indexUsage: {},
+        totalKeysExamined: 0,
+        totalDocsRemovedByRuntimeFilter: 1000,
+        numBlocksFromCache: 67,
+    };
+    const runtimeFilterSet = [{ 'address.building': { $gt: 30000 } }, { $unknown: {} }];
+    return {
+        explainVersion: 2,
+        command: "db.runCommand({explain: { 'find' : 'restaurants', 'filter' : { 'address.building' : { '$gt' : 30000 } } }})",
+        queryPlanner: {
+            namespace: 'MyDatabase.restaurants',
+            winningPlan: {
+                stage: 'FETCH',
+                cursorScanType: 'streamingPrimaryKey',
+                runtimeFilterSet,
+                estimatedTotalKeysExamined: 167,
+                inputStage: {
+                    stage: 'IXSCAN',
+                    cursorScanType: 'streamingPrimaryKey',
+                    indexName: '_id_',
+                    direction: 'Forward',
+                    indexUsage: {},
+                    runtimeFilterSet,
+                    estimatedTotalKeysExamined: 167,
+                },
+            },
+        },
+        executionStats: {
+            nReturned: 0,
+            executionTimeMillis: 0.614,
+            executionStartAtTimeMillis: 0.614,
+            totalDocsExamined: 1000,
+            totalKeysExamined: 0,
+            executionStages: {
+                stage: 'FETCH',
+                nReturned: 0,
+                executionTimeMillis: 0.614,
+                totalDocsExamined: 1000,
+                totalKeysExamined: 0,
+                totalDocsRemovedByRuntimeFilter: 1000,
+                numBlocksFromCache: 67,
+                inputStage: ixscan,
+            },
+        },
+        ok: 1,
+    };
+}
+
+describe('DocumentDB plan with indexUsage as an empty object', () => {
+    const filter = { 'address.building': { $gt: 30000 } };
+
+    it.each([
+        ['as returned by the server', (): Document => documentDbIdOrderPlan()],
+        [
+            'after the Azure DocumentDB fixup',
+            (): Document => {
+                const plan = documentDbIdOrderPlan();
+                fixupDocumentDbExplain(plan, { domainInfo_isAzure: 'true', domainInfo_api: 'vCore' });
+                return plan;
+            },
+        ],
+    ])('completes Stage 2 analysis %s', (_label, makePlan) => {
+        const stage2 = analyzeExplainForStage2(makePlan(), 1000, filter, 'find');
+
+        expect(stage2.documentsReturned).toBe(0);
+        expect(stage2.totalDocsExamined).toBe(1000);
+        expect(stage2.usedIndexNames).toContain('_id_');
+        expect(() => buildStaticAnalysisSummary(stage2, 1000)).not.toThrow();
     });
 });

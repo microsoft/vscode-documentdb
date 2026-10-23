@@ -883,13 +883,14 @@ export class ExplainPlanAnalyzer {
                 | Document
                 | undefined;
             const ixscanExec = this.findStageInPlan(executionStages, 'IXSCAN');
-            const indexUsage = ixscanExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+            // DocumentDB reports `indexUsage: {}` (not an array) when the index only provides order.
+            const indexUsage: unknown = ixscanExec?.indexUsage;
 
-            if (indexUsage) {
-                for (const usage of indexUsage) {
+            if (Array.isArray(indexUsage)) {
+                for (const usage of indexUsage as Array<{ scanKeys?: unknown }>) {
                     // Skip compound indexes — per-key cardinality check is not meaningful
-                    if (usage.scanKeys && usage.scanKeys.length === 1) {
-                        const scanKey = usage.scanKeys[0];
+                    if (Array.isArray(usage?.scanKeys) && usage.scanKeys.length === 1) {
+                        const scanKey = String(usage.scanKeys[0]);
                         // Parse: "key N: [(isInequality: false, estimatedEntryCount: 22074)]"
                         const match = /estimatedEntryCount:\s*(\d+)/.exec(scanKey);
                         if (match) {
@@ -992,15 +993,15 @@ export class ExplainPlanAnalyzer {
                     ixscanExec && bitmapIndexName && (ixscanExec.indexName as string) === bitmapIndexName
                         ? ixscanExec
                         : undefined;
-                const indexUsage = correlatedExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+                const indexUsage: unknown = correlatedExec?.indexUsage;
                 // We require exactly one indexUsage entry with exactly one scanKey.
                 // If there are multiple entries (e.g., mixed single/compound), we
                 // conservatively treat the index as compound to avoid false demotions.
                 const isSingleField =
-                    indexUsage !== undefined &&
+                    Array.isArray(indexUsage) &&
                     indexUsage.length === 1 &&
-                    indexUsage[0].scanKeys !== undefined &&
-                    indexUsage[0].scanKeys.length === 1;
+                    Array.isArray((indexUsage[0] as { scanKeys?: unknown } | undefined)?.scanKeys) &&
+                    ((indexUsage[0] as { scanKeys: unknown[] }).scanKeys.length === 1);
 
                 const coverage =
                     !options.skipCoverage && totalCollectionDocs && totalCollectionDocs > 0
