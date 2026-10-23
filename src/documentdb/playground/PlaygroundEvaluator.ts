@@ -17,6 +17,7 @@ import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
+import { resolveInteractiveTokenResource, resolveManagedIdentityTokenResource } from '../auth/documentdbTokenResource';
 import { CredentialCache } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
@@ -374,6 +375,15 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         traceContext?: AuthTraceContext,
     ): Promise<void> {
         try {
+            const clusterId = this._workerManager.workerClusterId;
+            const credentials = clusterId ? CredentialCache.getCredentials(clusterId) : undefined;
+            if (!credentials) {
+                throw new Error(l10n.t('No credentials found for the query playground connection.'));
+            }
+            const resolved =
+                msg.source === 'managedIdentity'
+                    ? await resolveManagedIdentityTokenResource(credentials.connectionString)
+                    : await resolveInteractiveTokenResource(credentials.connectionString);
             let accessToken: string;
 
             if (msg.source === 'managedIdentity') {
@@ -382,7 +392,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 accessToken = (
                     await withTokenAcquisitionTiming(timings, () =>
                         getManagedIdentityAccessToken(
-                            msg.scopes as string[],
+                            [resolved.scope],
                             msg.clientId,
                             msg.tenantId,
                             this._sessionId,
@@ -399,9 +409,14 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                     'interactiveEntra.getSession',
                     () =>
                         withTokenAcquisitionTiming(timings, () =>
-                            getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
+                            getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
                         ),
-                    { tenantSpecified: !!msg.tenantId, createIfNone: true },
+                    {
+                        tenantSpecified: !!msg.tenantId,
+                        createIfNone: true,
+                        cloudCategory: resolved.cloudCategory,
+                        tokenResourceReason: resolved.reason,
+                    },
                     msg.requestId,
                     traceContext,
                 );

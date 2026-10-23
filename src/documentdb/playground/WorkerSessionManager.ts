@@ -11,11 +11,12 @@ import {
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
 import { type AuthTraceContext } from '../../utils/authTrace';
+import { type DocumentDBCustomEnvironment } from '../auth/documentdbTokenResource';
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
 import { SettingsHintError } from '../shell/SettingsHintError';
 import { prepareDriverConnectionString } from '../srv/prepareDriverConnectionString';
@@ -345,7 +346,11 @@ export class WorkerSessionManager implements vscode.Disposable {
                 appName: prepared.options.appName,
                 tls: prepared.options.tls,
             },
-            oidcAllowedHosts: getOidcAllowedHosts(initMsg.connectionString),
+            oidcAllowedHosts: getOidcAllowedHosts(
+                initMsg.connectionString,
+                vscode.workspace.getConfiguration().get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)
+                    ?.mongoClusterHostnameSuffix,
+            ),
         };
         this._spawnCount++;
         this._lastSpawnTime = Date.now();

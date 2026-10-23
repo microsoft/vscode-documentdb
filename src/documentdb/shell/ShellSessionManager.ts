@@ -11,6 +11,7 @@ import { traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
+import { resolveInteractiveTokenResource, resolveManagedIdentityTokenResource } from '../auth/documentdbTokenResource';
 import {
     WorkerSessionManager,
     type WorkerSessionCallbacks,
@@ -358,6 +359,14 @@ export class ShellSessionManager implements vscode.Disposable {
         traceContext?: AuthTraceContext,
     ): Promise<void> {
         try {
+            const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
+            if (!credentials) {
+                throw new Error(l10n.t('No credentials found for cluster {0}', this._connectionInfo.clusterId));
+            }
+            const resolved =
+                msg.source === 'managedIdentity'
+                    ? await resolveManagedIdentityTokenResource(credentials.connectionString)
+                    : await resolveInteractiveTokenResource(credentials.connectionString);
             let accessToken: string;
 
             if (msg.source === 'managedIdentity') {
@@ -365,7 +374,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 accessToken = (
                     await withTokenAcquisitionTiming(timings, () =>
                         getManagedIdentityAccessToken(
-                            msg.scopes as string[],
+                            [resolved.scope],
                             msg.clientId,
                             msg.tenantId,
                             this._managedIdentityTokenCorrelationId,
@@ -382,9 +391,14 @@ export class ShellSessionManager implements vscode.Disposable {
                     'interactiveEntra.getSession',
                     () =>
                         withTokenAcquisitionTiming(timings, () =>
-                            getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
+                            getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
                         ),
-                    { tenantSpecified: !!msg.tenantId, createIfNone: true },
+                    {
+                        tenantSpecified: !!msg.tenantId,
+                        createIfNone: true,
+                        cloudCategory: resolved.cloudCategory,
+                        tokenResourceReason: resolved.reason,
+                    },
                     msg.requestId,
                     traceContext,
                 );
