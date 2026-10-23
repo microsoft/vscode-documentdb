@@ -14,10 +14,14 @@ import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
-import { traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
+import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
-import { resolveInteractiveTokenResource, resolveManagedIdentityTokenResource } from '../auth/documentdbTokenResource';
+import {
+    resolveInteractiveTokenResource,
+    resolveManagedIdentityTokenResource,
+    TokenResourceResolutionError,
+} from '../auth/documentdbTokenResource';
 import { recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
@@ -381,10 +385,19 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             if (!clusterId || !credentials) {
                 throw new Error(l10n.t('No credentials found for the query playground connection.'));
             }
-            const resolved =
-                msg.source === 'managedIdentity'
-                    ? await resolveManagedIdentityTokenResource(credentials.connectionString)
-                    : await resolveInteractiveTokenResource(credentials.connectionString);
+            let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
+            try {
+                resolved =
+                    msg.source === 'managedIdentity'
+                        ? await resolveManagedIdentityTokenResource(credentials.connectionString)
+                        : await resolveInteractiveTokenResource(credentials.connectionString);
+                traceAuthFlow('entraCloud.resolved', resolved.details, msg.requestId, traceContext);
+            } catch (error) {
+                if (error instanceof TokenResourceResolutionError) {
+                    traceAuthFlow('entraCloud.unresolved', error.details, msg.requestId, traceContext);
+                }
+                throw error;
+            }
             let accessToken: string;
 
             if (msg.source === 'managedIdentity') {

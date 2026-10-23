@@ -4,7 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 // eslint-disable-next-line import/no-internal-modules
-import { getConfiguredAzureEnv } from '@microsoft/vscode-azext-azureauth/out/src/utils/configuredAzureEnv';
+import {
+    getConfiguredAuthProviderId,
+    getConfiguredAzureEnv,
+} from '@microsoft/vscode-azext-azureauth/out/src/utils/configuredAzureEnv';
 import * as l10n from '@vscode/l10n';
 import * as http from 'http';
 import * as vscode from 'vscode';
@@ -18,7 +21,7 @@ import {
     toEntraScope,
     type DocumentDBEntraCloud,
 } from './entraScopes';
-import { getAzureCloudFromHosts } from './oidcAllowedHosts';
+import { getAzureCloudFromHosts, normalizeCustomHostnameSuffix } from './oidcAllowedHosts';
 
 /** Coarse cloud label. Safe for traces and telemetry; never carries an identifier. */
 export type CloudCategory = 'public' | 'usgov' | 'china' | 'custom';
@@ -37,6 +40,7 @@ export interface ResolvedTokenResource {
     readonly scope: string;
     readonly cloudCategory: CloudCategory;
     readonly reason: TokenResourceReason;
+    readonly details: Readonly<Record<string, string | boolean>>;
 }
 
 /** The parts of `getConfiguredAzureEnv()` this module reads. */
@@ -61,6 +65,7 @@ export interface TokenResourceResolverDeps {
     fetchArmMetadata(url: string): Promise<unknown>;
     /** Returns IMDS `compute.azEnvironment`, or `undefined` on any failure. */
     readImdsAzEnvironment(): Promise<string | undefined>;
+    getSignInEnvironment(): { authProvider: string; brokerImplementation: string | undefined };
     warn(message: string): void;
 }
 
@@ -71,6 +76,7 @@ export class TokenResourceResolutionError extends Error {
     constructor(
         message: string,
         public readonly kind: TokenResourceErrorKind,
+        public readonly details: Readonly<Record<string, string | boolean>>,
     ) {
         super(message);
         this.name = 'TokenResourceResolutionError';
@@ -110,20 +116,17 @@ export async function resolveInteractiveTokenResource(
     connectionString: string,
     deps: TokenResourceResolverDeps = getDefaultDeps(),
 ): Promise<ResolvedTokenResource> {
-    let configured: ConfiguredCloud;
-    try {
-        configured = deps.getConfiguredCloud();
-    } catch {
-        // `custom` without a usable `customEnvironment`: still a custom cloud, never the public one.
-        configured = { name: 'custom', isCustomCloud: true };
-    }
-
-    const resolved = configured.isCustomCloud
-        ? await resolveCustomCloud(configured, deps)
-        : fromBuiltInCloud(toBuiltInCloud(configured.name), 'setting');
+    const customEnvironment = deps.getCustomEnvironment();
+    const details = createResolutionDetails('interactive', customEnvironment, deps);
+    const configured = getConfiguredCloudForDetails(deps, details);
+    const resolved = configured
+        ? configured.isCustomCloud
+            ? await resolveCustomCloud(configured, customEnvironment, deps, details)
+            : fromBuiltInCloud(toBuiltInCloud(configured.name), 'setting')
+        : await resolveCustomCloud({ name: 'custom', isCustomCloud: true }, customEnvironment, deps, details);
 
     if (
-        configured.isCustomCloud &&
+        configured?.isCustomCloud &&
         resolved.reason === 'customOverride' &&
         resolved.resource === DOCUMENTDB_TOKEN_RESOURCE
     ) {
@@ -135,9 +138,10 @@ export async function resolveInteractiveTokenResource(
     }
 
     const hostCloud = getAzureCloudFromHosts(connectionString);
+    details.hostCloud = hostCloud ?? 'none';
     const audienceCloud = getCloudForTokenResource(resolved.resource);
     if (hostCloud && hostCloud !== audienceCloud) {
-        throw new TokenResourceResolutionError(
+        throw resolutionError(
             l10n.t(
                 'This cluster is in {clusterCloud}, but VS Code is signed in to {signedInCloud}. Change the "{setting}" setting to the cloud of the cluster, then connect again.',
                 {
@@ -147,10 +151,11 @@ export async function resolveInteractiveTokenResource(
                 },
             ),
             'cloudMismatch',
+            details,
         );
     }
 
-    return resolved;
+    return withDetails(resolved, details);
 }
 
 /**
@@ -164,27 +169,33 @@ export async function resolveManagedIdentityTokenResource(
     connectionString: string,
     deps: TokenResourceResolverDeps = getDefaultDeps(),
 ): Promise<ResolvedTokenResource> {
-    const override = parseTokenResource(deps.getCustomEnvironment().ossrdbmsEndpoint);
+    const customEnvironment = deps.getCustomEnvironment();
+    const details = createResolutionDetails('managedIdentity', customEnvironment, deps);
+    getConfiguredCloudForDetails(deps, details);
+    const override = parseTokenResource(customEnvironment.ossrdbmsEndpoint);
     if (override) {
-        return fromResource(override, 'customOverride');
+        return withDetails(fromResource(override, 'customOverride'), details);
     }
 
     const hostCloud = getAzureCloudFromHosts(connectionString);
+    details.hostCloud = hostCloud ?? 'none';
     if (hostCloud) {
-        return fromBuiltInCloud(hostCloud, 'host');
+        return withDetails(fromBuiltInCloud(hostCloud, 'host'), details);
     }
 
     const azEnvironment = await deps.readImdsAzEnvironment();
+    details.imdsAzEnvironment = classifyImdsAzEnvironment(azEnvironment);
     if (azEnvironment?.trim().toUpperCase() === 'AZUREPUBLICCLOUD') {
-        return fromBuiltInCloud('AzureCloud', 'imds');
+        return withDetails(fromBuiltInCloud('AzureCloud', 'imds'), details);
     }
 
-    throw new TokenResourceResolutionError(
+    throw resolutionError(
         l10n.t(
             'We could not determine which Azure cloud this virtual machine is in, so we do not know which Microsoft Entra resource to request a token for. Set "{setting}" to the open-source database resource of your cloud, for example "{example}".',
             { setting: OSSRDBMS_ENDPOINT_SETTING, example: getTokenResourceForCloud('AzureUSGovernment') },
         ),
         'managedIdentityCloudUnknown',
+        details,
     );
 }
 
@@ -197,28 +208,30 @@ export async function resolveManagedIdentityTokenResource(
  */
 export function resolveTokenResourceForCopy(
     connectionString: string,
-    deps: Pick<TokenResourceResolverDeps, 'getConfiguredCloud' | 'getCustomEnvironment'> = getDefaultDeps(),
+    deps: Pick<
+        TokenResourceResolverDeps,
+        'getConfiguredCloud' | 'getCustomEnvironment' | 'getSignInEnvironment'
+    > = getDefaultDeps(),
 ): ResolvedTokenResource {
-    const override = parseTokenResource(deps.getCustomEnvironment().ossrdbmsEndpoint);
+    const customEnvironment = deps.getCustomEnvironment();
+    const details = createResolutionDetails('copy', customEnvironment, deps);
+    const override = parseTokenResource(customEnvironment.ossrdbmsEndpoint);
     if (override) {
-        return fromResource(override, 'customOverride');
+        return withDetails(fromResource(override, 'customOverride'), details);
     }
 
     const hostCloud = getAzureCloudFromHosts(connectionString);
+    details.hostCloud = hostCloud ?? 'none';
     if (hostCloud) {
-        return fromBuiltInCloud(hostCloud, 'host');
+        return withDetails(fromBuiltInCloud(hostCloud, 'host'), details);
     }
 
-    try {
-        const configured = deps.getConfiguredCloud();
-        if (!configured.isCustomCloud) {
-            return fromBuiltInCloud(toBuiltInCloud(configured.name), 'setting');
-        }
-    } catch {
-        // Misconfigured custom cloud: fall through to the default below.
+    const configured = getConfiguredCloudForDetails(deps, details);
+    if (configured && !configured.isCustomCloud) {
+        return withDetails(fromBuiltInCloud(toBuiltInCloud(configured.name), 'setting'), details);
     }
 
-    return fromBuiltInCloud('AzureCloud', 'copyDefault');
+    return withDetails(fromBuiltInCloud('AzureCloud', 'copyDefault'), details);
 }
 
 export function getCloudCategory(resource: string): CloudCategory {
@@ -252,9 +265,11 @@ export function resetTokenResourceCacheForTests(): void {
 
 async function resolveCustomCloud(
     configured: ConfiguredCloud,
+    customEnvironment: DocumentDBCustomEnvironment,
     deps: TokenResourceResolverDeps,
-): Promise<ResolvedTokenResource> {
-    const override = parseTokenResource(deps.getCustomEnvironment().ossrdbmsEndpoint);
+    details: Record<string, string | boolean>,
+): Promise<Omit<ResolvedTokenResource, 'details'>> {
+    const override = parseTokenResource(customEnvironment.ossrdbmsEndpoint);
     if (override) {
         return fromResource(override, 'customOverride');
     }
@@ -266,36 +281,43 @@ async function resolveCustomCloud(
     }
 
     const fromMetadata = await lookUpArmMetadata(configured.resourceManagerEndpointUrl, deps);
-    if (fromMetadata) {
-        return fromResource(fromMetadata, 'armMetadata');
+    details.armMetadata = fromMetadata.status;
+    if (fromMetadata.resource) {
+        return fromResource(fromMetadata.resource, 'armMetadata');
     }
 
-    throw new TokenResourceResolutionError(
+    throw resolutionError(
         l10n.t(
             'VS Code is signed in to a custom cloud, and we could not find which Microsoft Entra resource to request a token for. Set "{setting}" to the open-source database resource of your cloud, usually "https://ossrdbms-aad.database.<your-cloud-domain>". Your cloud operator or Azure administrator can tell you the exact value.',
             { setting: OSSRDBMS_ENDPOINT_SETTING },
         ),
         'customCloudUnresolved',
+        details,
     );
 }
 
 async function lookUpArmMetadata(
     resourceManagerEndpointUrl: string | undefined,
     deps: TokenResourceResolverDeps,
-): Promise<string | undefined> {
+): Promise<{ resource: string | undefined; status: 'cached' | 'found' | 'missingKey' | 'unavailable' }> {
     const base = parseTokenResource(resourceManagerEndpointUrl);
     if (!base) {
-        return undefined;
+        return { resource: undefined, status: 'unavailable' };
     }
 
     const cached = armMetadataCache.get(base);
     if (cached) {
-        return cached;
+        return { resource: cached, status: 'cached' };
     }
 
-    const body = await deps.fetchArmMetadata(`${base}/metadata/endpoints?api-version=${ARM_METADATA_API_VERSION}`);
+    let body: unknown;
+    try {
+        body = await deps.fetchArmMetadata(`${base}/metadata/endpoints?api-version=${ARM_METADATA_API_VERSION}`);
+    } catch {
+        return { resource: undefined, status: 'unavailable' };
+    }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-        return undefined;
+        return { resource: undefined, status: 'unavailable' };
     }
 
     const entry = Object.entries(body as Record<string, unknown>).find(
@@ -304,8 +326,9 @@ async function lookUpArmMetadata(
     const resource = parseTokenResource(entry?.[1]);
     if (resource) {
         armMetadataCache.set(base, resource);
+        return { resource, status: 'found' };
     }
-    return resource;
+    return { resource: undefined, status: 'missingKey' };
 }
 
 function toBuiltInCloud(name: string): DocumentDBEntraCloud {
@@ -319,12 +342,110 @@ function toBuiltInCloud(name: string): DocumentDBEntraCloud {
     }
 }
 
-function fromBuiltInCloud(cloud: DocumentDBEntraCloud, reason: TokenResourceReason): ResolvedTokenResource {
+function fromBuiltInCloud(cloud: DocumentDBEntraCloud, reason: TokenResourceReason): Omit<ResolvedTokenResource, 'details'> {
     return fromResource(getTokenResourceForCloud(cloud), reason);
 }
 
-function fromResource(resource: string, reason: TokenResourceReason): ResolvedTokenResource {
+function fromResource(resource: string, reason: TokenResourceReason): Omit<ResolvedTokenResource, 'details'> {
     return { resource, scope: toEntraScope(resource), cloudCategory: getCloudCategory(resource), reason };
+}
+
+function withDetails(
+    resolved: Omit<ResolvedTokenResource, 'details'>,
+    details: Record<string, string | boolean>,
+): ResolvedTokenResource {
+    return {
+        ...resolved,
+        details: {
+            ...details,
+            cloudCategory: resolved.cloudCategory,
+            reason: resolved.reason,
+            tokenResource: resolved.resource,
+        },
+    };
+}
+
+function resolutionError(
+    message: string,
+    kind: TokenResourceErrorKind,
+    details: Record<string, string | boolean>,
+): TokenResourceResolutionError {
+    return new TokenResourceResolutionError(message, kind, { ...details, errorKind: kind });
+}
+
+function createResolutionDetails(
+    flow: 'interactive' | 'managedIdentity' | 'copy',
+    customEnvironment: DocumentDBCustomEnvironment,
+    deps: Pick<TokenResourceResolverDeps, 'getSignInEnvironment'>,
+): Record<string, string | boolean> {
+    let authProvider = 'unknown';
+    let brokerImplementation = 'default';
+    try {
+        const signInEnvironment = deps.getSignInEnvironment();
+        if (
+            signInEnvironment.authProvider === 'microsoft' ||
+            signInEnvironment.authProvider === 'microsoft-sovereign-cloud'
+        ) {
+            authProvider = signInEnvironment.authProvider;
+        }
+        brokerImplementation = normalizeBrokerImplementation(signInEnvironment.brokerImplementation);
+    } catch {
+        // Configuration can be read only as support diagnostics, never as an auth decision.
+    }
+    return {
+        flow,
+        configuredCloud: 'unreadable',
+        authProvider,
+        brokerImplementation,
+        hostCloud: 'none',
+        customOssrdbmsEndpointSet: !!parseTokenResource(customEnvironment.ossrdbmsEndpoint),
+        customHostnameSuffixSet: !!normalizeCustomHostnameSuffix(customEnvironment.mongoClusterHostnameSuffix),
+        armMetadata: 'notNeeded',
+        imdsAzEnvironment: 'notQueried',
+    };
+}
+
+function getConfiguredCloudForDetails(
+    deps: Pick<TokenResourceResolverDeps, 'getConfiguredCloud'>,
+    details: Record<string, string | boolean>,
+): ConfiguredCloud | undefined {
+    try {
+        const configured = deps.getConfiguredCloud();
+        details.configuredCloud = configured.isCustomCloud ? 'custom' : toConfiguredCloudTraceValue(configured.name);
+        return configured;
+    } catch {
+        return undefined;
+    }
+}
+
+function toConfiguredCloudTraceValue(name: string): string {
+    switch (name) {
+        case 'AzureCloud':
+        case 'AzureUSGovernment':
+        case 'AzureChinaCloud':
+            return name;
+        default:
+            return 'custom';
+    }
+}
+
+function normalizeBrokerImplementation(value: string | undefined): string {
+    switch (value) {
+        case undefined:
+            return 'default';
+        case 'msal':
+        case 'msal-no-broker':
+            return value;
+        default:
+            return 'other';
+    }
+}
+
+function classifyImdsAzEnvironment(value: string | undefined): string {
+    if (!value?.trim()) {
+        return 'unavailable';
+    }
+    return value.trim().toUpperCase() === 'AZUREPUBLICCLOUD' ? 'AZUREPUBLICCLOUD' : 'other';
 }
 
 function getHostname(url: string | undefined): string | undefined {
@@ -345,6 +466,12 @@ function getDefaultDeps(): TokenResourceResolverDeps {
             vscode.workspace.getConfiguration().get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment) ?? {},
         fetchArmMetadata: fetchJson,
         readImdsAzEnvironment,
+        getSignInEnvironment: () => ({
+            authProvider: getConfiguredAuthProviderId(),
+            brokerImplementation: vscode.workspace
+                .getConfiguration('microsoft-authentication')
+                .get<string>('implementation'),
+        }),
         warn: (message) => ext.outputChannel?.warn(`[Authentication] ${message}`),
     };
 }

@@ -101,6 +101,10 @@ describe('ShellSessionManager', () => {
             scope: 'https://ossrdbms-aad.database.windows.net/.default',
             cloudCategory: 'public',
             reason: 'setting',
+            details: {
+                flow: 'interactive',
+                tokenResource: 'https://ossrdbms-aad.database.windows.net',
+            },
         } as const;
         vi.mocked(resolveInteractiveTokenResource).mockResolvedValue(publicResolution);
         vi.mocked(resolveManagedIdentityTokenResource).mockResolvedValue({ ...publicResolution, reason: 'host' });
@@ -255,6 +259,10 @@ describe('ShellSessionManager', () => {
             scope: 'https://ossrdbms-aad.database.usgovcloudapi.net/.default',
             cloudCategory: 'usgov',
             reason: source === 'vscode' ? 'setting' : 'host',
+            details: {
+                flow: source === 'vscode' ? 'interactive' : 'managedIdentity',
+                tokenResource: 'https://ossrdbms-aad.database.usgovcloudapi.net',
+            },
         });
         const provider = source === 'vscode' ? mockGetSessionFromVSCode : mockGetManagedIdentityAccessToken;
         provider.mockResolvedValueOnce({ accessToken: 'private-token', account: { label: 'private-account' } });
@@ -290,6 +298,10 @@ describe('ShellSessionManager', () => {
             const error = new TokenResourceResolutionError(
                 'Select the cloud of the cluster.',
                 source === 'vscode' ? 'cloudMismatch' : 'managedIdentityCloudUnknown',
+                {
+                    flow: source === 'vscode' ? 'interactive' : 'managedIdentity',
+                    errorKind: source === 'vscode' ? 'cloudMismatch' : 'managedIdentityCloudUnknown',
+                },
             );
             const resolver = source === 'vscode' ? resolveInteractiveTokenResource : resolveManagedIdentityTokenResource;
             vi.mocked(resolver).mockRejectedValueOnce(error);
@@ -326,6 +338,10 @@ describe('ShellSessionManager', () => {
             scope: 'https://ossrdbms-aad.database.chinacloudapi.cn/.default',
             cloudCategory: 'china',
             reason: source === 'vscode' ? 'setting' : 'host',
+            details: {
+                flow: source === 'vscode' ? 'interactive' : 'managedIdentity',
+                tokenResource: 'https://ossrdbms-aad.database.chinacloudapi.cn',
+            },
         });
         const error = Object.freeze(
             Object.assign(new Error('AADSTS65002: Token failed'), { code: 'original-code' }),

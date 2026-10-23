@@ -11,6 +11,7 @@ import {
 import { classifyEntraError } from './classifyEntraError';
 import { entraErrorRules } from './entraErrorRules';
 import { getRecentEntraTokenFailure } from './entraTokenFailures';
+import { traceAuthFlow } from '../../../utils/authTrace';
 
 export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
     public readonly id = 'entra-sign-in';
@@ -29,6 +30,13 @@ export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
         }
 
         const failure = getRecentEntraTokenFailure(clusterId);
+        traceAuthFlow('entraSignIn.classified', {
+            ruleId: classification.ruleId,
+            aadstsCode: classification.code ?? 'none',
+            cloudCategory: failure?.cloudCategory ?? 'unknown',
+            recentTokenFailure: failure !== undefined,
+            brokered: classification.brokered,
+        });
         const message = rule.explain({
             code: classification.code,
             cloudCategory: failure?.cloudCategory,

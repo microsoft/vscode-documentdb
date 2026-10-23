@@ -9,6 +9,12 @@ import { Links } from '../../../constants';
 import { EntraDiagnosticsProvider } from './EntraDiagnosticsProvider';
 import { recordEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraTokenFailures';
 
+const mockOutputChannel = vi.hoisted(() => ({ info: vi.fn() }));
+
+vi.mock('../../../extensionVariables', () => ({
+    ext: { outputChannel: mockOutputChannel },
+}));
+
 const telemetryContext = vi.hoisted(() => ({
     errorHandling: { suppressDisplay: false, suppressReportIssue: false },
     telemetry: { properties: {} as Record<string, string> },
@@ -77,6 +83,13 @@ describe('EntraDiagnosticsProvider', () => {
             aadstsCode: '53003',
             brokered: 'true',
         });
+        const trace = String(mockOutputChannel.info.mock.calls[0][0]);
+        expect(trace).toContain('entraSignIn.classified');
+        expect(trace).toContain('"ruleId":"conditionalAccess"');
+        expect(trace).toContain('"aadstsCode":"53003"');
+        expect(trace).toContain('"cloudCategory":"unknown"');
+        expect(trace).toContain('"recentTokenFailure":false');
+        expect(trace).toContain('"brokered":true');
     });
 
     it('accepts a string cause relayed by a worker', async (): Promise<void> => {

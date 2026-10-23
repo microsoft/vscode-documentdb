@@ -243,7 +243,10 @@ describe('ManagedIdentityAuthHandler', () => {
     });
 
     it('does not record token resource resolution errors as token-acquisition failures', async (): Promise<void> => {
-        const error = new tokenResources.TokenResourceResolutionError('Set the cloud resource.', 'managedIdentityCloudUnknown');
+        const error = new tokenResources.TokenResourceResolutionError('Set the cloud resource.', 'managedIdentityCloudUnknown', {
+            flow: 'managedIdentity',
+            errorKind: 'managedIdentityCloudUnknown',
+        });
         vi.spyOn(tokenResources, 'resolveManagedIdentityTokenResource').mockRejectedValueOnce(error);
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
 

@@ -53,6 +53,10 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             scope: 'https://ossrdbms-aad.database.windows.net/.default',
             cloudCategory: 'public',
             reason: 'setting',
+            details: {
+                flow: 'interactive',
+                tokenResource: 'https://ossrdbms-aad.database.windows.net',
+            },
         });
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue(undefined),
@@ -84,6 +88,11 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(output).toContain('interactiveEntra.getSession');
         expect(output).not.toContain('access-token');
         expect(output).not.toContain('my-cluster');
+        const cloudResolutionTrace = mockOutputChannel.info.mock.calls
+            .map((call) => String(call[0]))
+            .find((message) => message.includes('entraCloud.resolved'));
+        expect(cloudResolutionTrace).toContain('"tokenResource":"https://ossrdbms-aad.database.windows.net"');
+        expect(cloudResolutionTrace).not.toContain('my-cluster');
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
 
@@ -94,19 +103,23 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             scope,
             cloudCategory: 'usgov',
             reason: 'setting',
+            details: { flow: 'interactive', tokenResource: 'https://ossrdbms-aad.database.usgovcloudapi.net' },
         });
         const connectionString = 'mongodb://cluster.azure.us/';
         await new MicrosoftEntraIDAuthHandler(buildCredentials(connectionString)).configureAuth();
         expect(resolveInteractiveTokenResource).toHaveBeenCalledWith(connectionString);
         expect(getSessionFromVSCode).toHaveBeenCalledWith([scope], 'tenant', { createIfNone: true });
-        const output = String(mockOutputChannel.info.mock.calls[0][0]);
+        const output = mockOutputChannel.info.mock.calls.map((call) => String(call[0])).join('\n');
         expect(output).toContain('"cloudCategory":"usgov"');
         expect(output).toContain('"tokenResourceReason":"setting"');
-        expect(mockOutputChannel.info).toHaveBeenCalledTimes(3);
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(4);
     });
 
     it('propagates a cloud mismatch unchanged before requesting a session', async () => {
-        const error = new TokenResourceResolutionError('Select the cloud of the cluster.', 'cloudMismatch');
+        const error = new TokenResourceResolutionError('Select the cloud of the cluster.', 'cloudMismatch', {
+            flow: 'interactive',
+            errorKind: 'cloudMismatch',
+        });
         vi.mocked(resolveInteractiveTokenResource).mockRejectedValueOnce(error);
         const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.azure.us/'));
         await expect(handler.configureAuth()).rejects.toBe(error);
@@ -122,6 +135,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
                 scope: 'https://database.example.com/.default',
                 cloudCategory,
                 reason: 'setting',
+                details: { flow: 'interactive', tokenResource: 'https://database.example.com' },
             });
             const error = Object.freeze(
                 Object.assign(new Error('AADSTS65002: Preauthorization required'), { code: 'original-code' }),
@@ -174,9 +188,11 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         await handler.configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension' });
 
         const messages = mockOutputChannel.info.mock.calls.map((call) => String(call[0]));
-        expect(messages).toHaveLength(3);
+        expect(messages).toHaveLength(4);
         for (const message of messages) {
-            expect(message).toMatch(/^\[Authentication\] startup=startup-id surface=extension interactiveEntra\./);
+            expect(message).toMatch(
+                /^\[Authentication\] startup=startup-id surface=extension (entraCloud\.resolved|interactiveEntra\.)/,
+            );
         }
     });
 

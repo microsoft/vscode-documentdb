@@ -32,6 +32,7 @@ function createDeps(): TokenResourceResolverDeps {
         getCustomEnvironment: vi.fn(() => ({})),
         fetchArmMetadata: vi.fn().mockResolvedValue(undefined),
         readImdsAzEnvironment: vi.fn().mockResolvedValue(undefined),
+        getSignInEnvironment: vi.fn(() => ({ authProvider: 'microsoft', brokerImplementation: undefined })),
         warn: vi.fn(),
     };
 }
@@ -62,7 +63,7 @@ describe('resolveInteractiveTokenResource', () => {
         const deps = createDeps();
         deps.getConfiguredCloud = getConfiguredAzureEnv;
 
-        expect(await resolveInteractiveTokenResource(privateConnection, deps)).toEqual({
+        expect(await resolveInteractiveTokenResource(privateConnection, deps)).toMatchObject({
             resource,
             scope: `${resource}/.default`,
             cloudCategory: category,
@@ -72,12 +73,51 @@ describe('resolveInteractiveTokenResource', () => {
         expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
     });
 
+    it('records public interactive resolution details without host information', async () => {
+        const resolution = await resolveInteractiveTokenResource(privateConnection, createDeps());
+
+        expect(resolution.details).toMatchObject({
+            flow: 'interactive',
+            configuredCloud: 'AzureCloud',
+            authProvider: 'microsoft',
+            brokerImplementation: 'default',
+            hostCloud: 'none',
+            customOssrdbmsEndpointSet: false,
+            customHostnameSuffixSet: false,
+            armMetadata: 'notNeeded',
+            imdsAzEnvironment: 'notQueried',
+            cloudCategory: 'public',
+            reason: 'setting',
+            tokenResource: publicResource,
+        });
+        expect(JSON.stringify(resolution.details)).not.toContain('cluster.private.example.com');
+    });
+
+    it('records US Government interactive resolution details', async () => {
+        const deps = createDeps();
+        vi.mocked(deps.getConfiguredCloud).mockReturnValue({ name: 'AzureUSGovernment', isCustomCloud: false });
+        vi.mocked(deps.getSignInEnvironment).mockReturnValue({
+            authProvider: 'microsoft-sovereign-cloud',
+            brokerImplementation: 'msal-no-broker',
+        });
+
+        const resolution = await resolveInteractiveTokenResource('mongodb://cluster.azure.us/', deps);
+
+        expect(resolution.details).toMatchObject({
+            configuredCloud: 'AzureUSGovernment',
+            authProvider: 'microsoft-sovereign-cloud',
+            brokerImplementation: 'msal-no-broker',
+            hostCloud: 'AzureUSGovernment',
+            tokenResource: governmentResource,
+        });
+    });
+
     it('uses a validated custom override before the login host or metadata', async () => {
         const deps = createDeps();
         useCustomCloud(deps);
         vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: `${customResource}/` });
 
-        expect(await resolveInteractiveTokenResource(privateConnection, deps)).toEqual({
+        expect(await resolveInteractiveTokenResource(privateConnection, deps)).toMatchObject({
             resource: customResource,
             scope: `${customResource}/.default`,
             cloudCategory: 'custom',
@@ -120,10 +160,12 @@ describe('resolveInteractiveTokenResource', () => {
         useCustomCloud(deps);
         vi.mocked(deps.fetchArmMetadata).mockResolvedValue({ [key]: `${customResource}/` });
 
-        expect(await resolveInteractiveTokenResource(privateConnection, deps)).toMatchObject({
+        const resolution = await resolveInteractiveTokenResource(privateConnection, deps);
+        expect(resolution).toMatchObject({
             resource: customResource,
             reason: 'armMetadata',
         });
+        expect(resolution.details).toMatchObject({ armMetadata: 'found', configuredCloud: 'custom' });
         expect(deps.fetchArmMetadata).toHaveBeenCalledWith(
             'https://management.example.com/metadata/endpoints?api-version=2022-09-01',
         );
@@ -211,6 +253,15 @@ describe('resolveInteractiveTokenResource', () => {
         await expect(resolveInteractiveTokenResource(`mongodb://cluster.${suffix}/`, deps)).rejects.toMatchObject({
             kind: 'cloudMismatch',
             message: expect.stringContaining('microsoft-sovereign-cloud.environment'),
+            details: expect.objectContaining({
+                hostCloud:
+                    suffix === 'azure.us'
+                        ? 'AzureUSGovernment'
+                        : suffix === 'azure.cn'
+                          ? 'AzureChinaCloud'
+                          : 'AzureCloud',
+                errorKind: 'cloudMismatch',
+            }),
         });
         await expect(resolveInteractiveTokenResource(`mongodb://cluster.${suffix}/`, deps)).rejects.toThrow(
             hostDisplay,
@@ -245,7 +296,7 @@ describe('resolveManagedIdentityTokenResource', () => {
             resource: customResource,
             reason: 'customOverride',
         });
-        expect(deps.getConfiguredCloud).not.toHaveBeenCalled();
+        expect(deps.getConfiguredCloud).toHaveBeenCalledTimes(1);
         expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
     });
 
@@ -260,7 +311,7 @@ describe('resolveManagedIdentityTokenResource', () => {
             scope: `${resource}/.default`,
             reason: 'host',
         });
-        expect(deps.getConfiguredCloud).not.toHaveBeenCalled();
+        expect(deps.getConfiguredCloud).toHaveBeenCalledTimes(1);
         expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
     });
 
@@ -273,9 +324,23 @@ describe('resolveManagedIdentityTokenResource', () => {
                 resource: publicResource,
                 reason: 'imds',
             });
-            expect(deps.getConfiguredCloud).not.toHaveBeenCalled();
+            expect(deps.getConfiguredCloud).toHaveBeenCalledTimes(1);
         },
     );
+
+    it('records IMDS classification for managed identity resolution', async () => {
+        const deps = createDeps();
+        vi.mocked(deps.readImdsAzEnvironment).mockResolvedValue('azurepubliccloud');
+        const resolution = await resolveManagedIdentityTokenResource(privateConnection, deps);
+
+        expect(resolution.details).toMatchObject({
+            flow: 'managedIdentity',
+            configuredCloud: 'AzureCloud',
+            hostCloud: 'none',
+            imdsAzEnvironment: 'AZUREPUBLICCLOUD',
+            tokenResource: publicResource,
+        });
+    });
 
     it.each([undefined, 'AZUREUSGOVERNMENT', 'AZURECHINACLOUD', 'unknown', ''])(
         'fails clearly for unknown or unavailable IMDS environment %s',

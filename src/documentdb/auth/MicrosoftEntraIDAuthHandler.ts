@@ -16,7 +16,11 @@ import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../ut
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
-import { resolveInteractiveTokenResource, type DocumentDBCustomEnvironment } from './documentdbTokenResource';
+import {
+    resolveInteractiveTokenResource,
+    TokenResourceResolutionError,
+    type DocumentDBCustomEnvironment,
+} from './documentdbTokenResource';
 import { recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
@@ -31,7 +35,16 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         traceContext?: AuthTraceContext,
     ): Promise<AuthHandlerResponse> {
         const authCorrelationId = randomUUID();
-        const resolved = await resolveInteractiveTokenResource(this.clusterCredentials.connectionString);
+        let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
+        try {
+            resolved = await resolveInteractiveTokenResource(this.clusterCredentials.connectionString);
+            traceAuthFlow('entraCloud.resolved', resolved.details, authCorrelationId, traceContext);
+        } catch (error) {
+            if (error instanceof TokenResourceResolutionError) {
+                traceAuthFlow('entraCloud.unresolved', error.details, authCorrelationId, traceContext);
+            }
+            throw error;
+        }
         const customHostnameSuffix = vscode.workspace
             .getConfiguration()
             .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
@@ -82,11 +95,12 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         dbConnectionString.searchParams.delete('tls');
 
         // Configure MongoDB client options for OIDC
+        const allowedHosts = getOidcAllowedHosts(this.clusterCredentials.connectionString, customHostnameSuffix);
         const options: MongoClientOptions = {
             authMechanism: 'MONGODB-OIDC',
             tls: true,
             authMechanismProperties: {
-                ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString, customHostnameSuffix),
+                ALLOWED_HOSTS: allowedHosts,
                 OIDC_CALLBACK: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
                     Promise.resolve({
                         accessToken: session.accessToken,
@@ -110,7 +124,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
 
         traceAuthFlow(
             'interactiveEntra.oidcConfigured',
-            { sessionAvailable: true, tls: true },
+            { sessionAvailable: true, tls: true, allowedHosts: allowedHosts.join(',') },
             authCorrelationId,
             traceContext,
         );
