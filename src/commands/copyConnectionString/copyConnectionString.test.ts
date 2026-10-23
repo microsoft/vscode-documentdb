@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 
 const mockClipboardWriteText = vi.fn();
 const mockShowQuickPick = vi.fn();
@@ -28,6 +30,9 @@ vi.mock('vscode', () => ({
     },
     l10n: {
         t: vi.fn((message: string) => message),
+    },
+    workspace: {
+        getConfiguration: vi.fn(() => ({ get: vi.fn().mockReturnValue(undefined) })),
     },
 }));
 
@@ -453,6 +458,21 @@ describe('copyConnectionString', () => {
         const azureConnString = 'mongodb+srv://my-cluster.mongocluster.cosmos.azure.com/?retryWrites=true';
         const clientId = '11111111-2222-3333-4444-555555555555';
 
+        it('copies the US Government token resource for an azure.us cluster', async () => {
+            const ctx = makeContext();
+            const node = makeNode('connectionsView;treeitem_documentdbcluster', {
+                connectionString: 'mongodb+srv://my-cluster.mongocluster.cosmos.azure.us/?retryWrites=true',
+                availableAuthMethods: [AuthMethodId.ManagedIdentity],
+                selectedAuthMethod: AuthMethodId.ManagedIdentity,
+                managedIdentityAuthConfig: { clientId },
+            });
+            await copyConnectionString(ctx as unknown as IActionContext, node as unknown as ClusterItemBase);
+            const written = mockClipboardWriteText.mock.calls[0][0] as string;
+            expect(getConnectionStringAuthFacts(new DocumentDBConnectionString(written)).tokenResource).toBe(
+                'https://ossrdbms-aad.database.usgovcloudapi.net',
+            );
+        });
+
         it('T-13 user-assigned identity -> documented driver-native form, no password prompt', async () => {
             const ctx = makeContext();
             const node = makeNode('connectionsView;treeitem_documentdbcluster', {
@@ -511,6 +531,7 @@ describe('copyConnectionString', () => {
             expect(facts).toMatchObject({
                 usesOidc: true,
                 declaresAzureMachineWorkflow: true,
+                tokenResource: 'https://ossrdbms-aad.database.windows.net',
                 username: clientId,
                 usernameIsGuid: true,
             });

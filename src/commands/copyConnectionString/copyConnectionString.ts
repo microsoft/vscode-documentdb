@@ -7,7 +7,8 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES } from '../../documentdb/auth/managedIdentityConnectionString';
+import { resolveTokenResourceForCopy } from '../../documentdb/auth/documentdbTokenResource';
+import { getManagedIdentityAuthMechanismProperties } from '../../documentdb/auth/managedIdentityConnectionString';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
@@ -148,7 +149,10 @@ function buildParsedConnectionString(credentials: EphemeralClusterCredentials): 
         // The documented driver-native form (D1a): it works in mongosh and application drivers on the
         // same Azure VM, and it round-trips back into our own New Connection flow.
         parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');
-        parsedConnectionString.searchParams.set('authMechanismProperties', MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES);
+        parsedConnectionString.searchParams.set(
+            'authMechanismProperties',
+            getManagedIdentityAuthMechanismProperties(resolveTokenResourceForCopy(credentials.connectionString).resource),
+        );
         // The client ID rides in the username position. Empty for the system-assigned identity.
         parsedConnectionString.username = credentials.managedIdentityAuthConfig?.clientId ?? '';
     }
