@@ -35,8 +35,8 @@ These values are published by each cloud in its Azure Resource Manager metadata 
 `/metadata/endpoints?api-version=2022-09-01`.
 
 If a cluster host ends in `azure.com`, `azure.us`, or `azure.cn`, and that suffix identifies a
-different cloud from the one VS Code is signed in to, the extension stops before sign-in. It tells
-you which `microsoft-sovereign-cloud.environment` setting to change.
+different cloud from the one VS Code is signed in to, the extension stops before sign-in and asks
+you to change `microsoft-sovereign-cloud.environment` to the cluster's cloud.
 
 ## Managed identity
 
@@ -62,10 +62,15 @@ By default, the extension sends tokens only to cluster hosts under `azure.com`, 
 `azure.cn`. Set `documentDB.customEnvironment.mongoClusterHostnameSuffix` to allow cluster hosts
 in a custom cloud. Include the leading dot.
 
+Both are properties of the `documentDB.customEnvironment` setting, so they go in one object in
+`settings.json`:
+
 ```json
 {
-    "documentDB.customEnvironment.ossrdbmsEndpoint": "https://ossrdbms-aad.database.example",
-    "documentDB.customEnvironment.mongoClusterHostnameSuffix": ".mongocluster.cosmos.example"
+    "documentDB.customEnvironment": {
+        "ossrdbmsEndpoint": "https://ossrdbms-aad.database.example",
+        "mongoClusterHostnameSuffix": ".mongocluster.cosmos.example"
+    }
 }
 ```
 
@@ -73,7 +78,7 @@ in a custom cloud. Include the leading dot.
 
 In some clouds, Microsoft Entra ID has not authorized VS Code to request tokens for Azure
 DocumentDB. Sign-in can then show **Something went wrong** or fail with AADSTS65002, which says
-the application "must be configured via preauthorization."
+the consent "must be configured via preauthorization."
 
 Microsoft must make this configuration change. You and your tenant administrator cannot change it.
 The Azure Resources view can still list resources because it requests a token for a different
