@@ -6,12 +6,13 @@
 import { micromark } from 'micromark';
 
 /**
- * Renders AI-generated Markdown as email-safe HTML for the "Copy as rich text" report.
+ * Renders the Markdown report as email-safe HTML for "Copy as rich text": the same content, styled
+ * for pasting into email, Teams, Word or Google Docs.
  *
  * `micromark` (already bundled through `react-markdown`) does the parsing; it escapes raw HTML and
  * drops unsafe link protocols. Its output uses plain tags only, so this adds inline styles (email
  * clients and Word ignore classes, `<style>` blocks and CSS variables), keeps http(s) links only,
- * shows images as their alt text and maps `#`/`##` headings to `h3`, below the report's own headings.
+ * shows images as their alt text and wraps everything in a light, fixed palette.
  */
 
 export const shareFontStack = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
@@ -25,9 +26,11 @@ export const sharePalette = {
     link: '#0f6cbd',
 } as const;
 
+const headingSizes: Record<number, number> = { 1: 22, 2: 18, 3: 16, 4: 15, 5: 14, 6: 14 };
+
 const styles = {
     heading: (level: number): string =>
-        `margin:16px 0 8px 0;font-size:${level <= 3 ? 16 : level === 4 ? 15 : 14}px;font-weight:600;color:${sharePalette.text};`,
+        `margin:${level <= 2 ? 24 : 16}px 0 8px 0;font-size:${headingSizes[level] ?? 14}px;font-weight:600;color:${sharePalette.text};`,
     p: `margin:8px 0;line-height:1.5;color:${sharePalette.text};`,
     list: `margin:8px 0;padding-left:24px;color:${sharePalette.text};`,
     li: 'margin:4px 0;line-height:1.5;',
@@ -49,9 +52,8 @@ export function escapeHtml(value: string): string {
 }
 
 export function markdownToEmailHtml(markdown: string): string {
-    return micromark(markdown)
-        .replace(/<(\/?)h[12]>/g, '<$1h3>')
-        .replace(/<(h[3-6])>/g, (_tag, name: string) => `<${name} style="${styles.heading(Number(name[1]))}">`)
+    const body = micromark(markdown)
+        .replace(/<(h[1-6])>/g, (_tag, name: string) => `<${name} style="${styles.heading(Number(name[1]))}">`)
         .replace(/<pre><code[^>]*>/g, `<pre style="${styles.pre}"><code style="font-family:${shareMonospaceStack};">`)
         .replace(/<code>/g, `<code style="${styles.code}">`)
         .replace(/<img [^>]*?alt="([^"]*)"[^>]*>/g, '$1')
@@ -65,4 +67,5 @@ export function markdownToEmailHtml(markdown: string): string {
         )
         .replace(/<hr \/>/g, `<hr style="${styles.hr}">`)
         .trim();
+    return `<div style="font-family:${shareFontStack};font-size:14px;line-height:1.5;color:${sharePalette.text};background-color:#ffffff;">\n${body}\n</div>`;
 }

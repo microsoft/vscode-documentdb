@@ -97,11 +97,11 @@ describe('ShareMenu', () => {
             document.getElementById(item.getAttribute('aria-labelledby') ?? '')?.textContent,
             document.getElementById(item.getAttribute('aria-describedby') ?? '')?.textContent,
         ];
-        expect(describe(items[0])).toEqual([
-            'Copy as Markdown',
-            'Full report with model inputs, for issues and AI agents',
+        expect(describe(items[0])).toEqual(['Copy as Markdown', 'For issues, docs and AI agents']);
+        expect(describe(items[1])).toEqual([
+            'Copy as rich text',
+            'The same report, formatted for email, Teams and Word',
         ]);
-        expect(describe(items[1])).toEqual(['Copy as rich text', 'Formatted with tables, for email, Teams and Word']);
     });
 
     it('copies the full Markdown report through the host and confirms it', async () => {

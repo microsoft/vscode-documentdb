@@ -11,12 +11,13 @@ describe('markdownToEmailHtml', () => {
         expect(escapeHtml(`<a href="x">'&'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
     });
 
-    it('renders the Markdown the AI produces, with inline styles', () => {
+    it('renders the report Markdown with heading levels and inline styles', () => {
         const html = markdownToEmailHtml(
-            '# Title\n### Key Issues\n1. 🔻 **Critical**: scan on `status_1`\n2. 🔼 Good\n\n```javascript\ndb.items.find({ a: "<b>" })\n```\n\n> quoted\n\n---\n\n3. third',
+            '# Title\n## Section\n### Key Issues\n1. 🔻 **Critical**: scan on `status_1`\n2. 🔼 Good\n\n```javascript\ndb.items.find({ a: "<b>" })\n```\n\n> quoted\n\n---\n\n3. third',
         );
-        expect(html).toMatch(/^<h3 style="[^"]+">Title<\/h3>/);
-        expect(html).toMatch(/<h3 style="[^"]+">Key Issues<\/h3>/);
+        expect(html).toMatch(/^<div style="font-family:[^"]+">\n<h1 style="[^"]*font-size:22px[^"]*">Title<\/h1>/);
+        expect(html).toMatch(/<h2 style="[^"]*font-size:18px[^"]*">Section<\/h2>/);
+        expect(html).toMatch(/<h3 style="[^"]*font-size:16px[^"]*">Key Issues<\/h3>/);
         expect(html).toMatch(
             /<ol style="[^"]+">\n<li style="[^"]+">🔻 <strong>Critical<\/strong>: scan on <code style="[^"]+">status_1<\/code><\/li>/,
         );

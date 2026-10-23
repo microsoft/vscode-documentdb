@@ -55,12 +55,12 @@ import {
     startStage1Load,
     startStage3Load,
 } from '../queryInsightsReducer';
-import { buildOptimizationMarkdown, type OptimizationMarkdownInput } from '../utils/buildOptimizationMarkdown';
-import { buildOptimizationShareHtml } from '../utils/buildOptimizationShareHtml';
+import { buildOptimizationMarkdown } from '../utils/buildOptimizationMarkdown';
 import { createImprovementCardConfig } from '../utils/createImprovementCard';
 import { createInsightCardConfig } from '../utils/createInsightCard';
 import { extractErrorCode } from '../utils/errorCodeExtractor';
 import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDisplay';
+import { markdownToEmailHtml } from '../utils/markdownToEmailHtml';
 import { CardStack, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
@@ -601,12 +601,13 @@ export const QueryInsightsMain = (): JSX.Element => {
         [source.executeAction],
     );
 
-    /** The Optimization Opportunities report, or `undefined` before the AI analysis completes. */
-    const getShareReportInput = useCallback((): OptimizationMarkdownInput | undefined => {
-        if (pipeline.kind !== 's3Success') return undefined;
-        return {
+    /** The report as Markdown, the single source for both copy formats. */
+    const buildShareMarkdown = useCallback((): string => {
+        if (pipeline.kind !== 's3Success') throw new Error('The AI analysis has not completed.');
+        return buildOptimizationMarkdown({
             databaseName: configuration.databaseName,
             collectionName: configuration.collectionName,
+            staticAnalysis: stage2Data ?? undefined,
             analysis: pipeline.streaming.summary?.markdown,
             executionErrors: showErrorCard ? stage2Data?.concerns : undefined,
             recommendations: pipeline.streaming.recommendations.filter(
@@ -615,23 +616,14 @@ export const QueryInsightsMain = (): JSX.Element => {
             educational: pipeline.streaming.educational?.markdown,
             model: pipeline.model,
             generatedAt: new Date(),
-        };
+        });
     }, [pipeline, configuration, showErrorCard, stage2Data]);
 
-    const buildShareMarkdown = useCallback((): string => {
-        const input = getShareReportInput();
-        if (!input) throw new Error('The AI analysis has not completed.');
-        return buildOptimizationMarkdown(input);
-    }, [getShareReportInput]);
-
+    /** The same report, rendered with inline styles for email, Teams and Word. */
     const buildShareRichText = useCallback((): ShareReportContent => {
-        const input = getShareReportInput();
-        if (!input) throw new Error('The AI analysis has not completed.');
-        return {
-            html: buildOptimizationShareHtml({ ...input, metrics: stage2Data ?? undefined }),
-            plainText: buildOptimizationMarkdown({ ...input, includeModelInputs: false }),
-        };
-    }, [getShareReportInput, stage2Data]);
+        const markdown = buildShareMarkdown();
+        return { html: markdownToEmailHtml(markdown), plainText: markdown };
+    }, [buildShareMarkdown]);
 
     const copyShareText = useCallback(
         (text: string): Promise<boolean> => trpcClient.common.copyToClipboard.mutate({ text }),

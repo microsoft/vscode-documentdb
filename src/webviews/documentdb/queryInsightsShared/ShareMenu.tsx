@@ -60,9 +60,8 @@ function ShareMenuItem({ icon, label, description, onClick }: ShareMenuItemProps
 }
 
 /**
- * "Share" menu for the Query Insights report: copy it as Markdown (the full report, including the
- * model inputs) or as rich text (HTML with a plain Markdown alternative, without the model
- * inputs). After a copy the button icon becomes a checkmark for two seconds and the result is
+ * "Share" menu for the Query Insights report. Both options copy the same content: as Markdown, or as
+ * rich text (the Markdown rendered as styled HTML, with the Markdown as the plain-text alternative). After a copy the button icon becomes a checkmark for two seconds and the result is
  * announced; the button label never changes.
  */
 export function ShareMenu({
@@ -109,13 +108,13 @@ export function ShareMenu({
                         <ShareMenuItem
                             icon={<MarkdownRegular />}
                             label={l10n.t('Copy as Markdown')}
-                            description={l10n.t('Full report with model inputs, for issues and AI agents')}
+                            description={l10n.t('For issues, docs and AI agents')}
                             onClick={copyMarkdown}
                         />
                         <ShareMenuItem
                             icon={<DocumentTextRegular />}
                             label={l10n.t('Copy as rich text')}
-                            description={l10n.t('Formatted with tables, for email, Teams and Word')}
+                            description={l10n.t('The same report, formatted for email, Teams and Word')}
                             onClick={copyRichText}
                         />
                     </MenuList>

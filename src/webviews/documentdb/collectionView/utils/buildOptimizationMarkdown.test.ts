@@ -120,17 +120,82 @@ describe('buildOptimizationMarkdown', () => {
         expect(markdown).toContain('## Query Execution Failed\n\nQuery timed out.');
     });
 
-    it('leaves out the prompt source and the model inputs for the shareable summary', () => {
-        expect(buildOptimizationMarkdown({ ...base, includeModelInputs: true })).toBe(buildOptimizationMarkdown(base));
-        const markdown = buildOptimizationMarkdown({ ...base, includeModelInputs: false });
-        expect(markdown).toContain('## Recommendations');
-        expect(markdown).toContain('## Query Insights Configuration');
-        expect(markdown).toContain('- **Model**: GPT-5 (`copilot-gpt-5`)');
-        expect(markdown).toContain('- **Tokens**: 19000 in / 900 out');
-        expect(markdown).not.toContain('**Prompt**');
-        expect(markdown).not.toContain('local-resource-file');
-        expect(markdown).not.toContain('Inputs sent to the model');
-        expect(markdown).not.toContain('db.orders.find({ status: "<value>" })');
-        expect(markdown).not.toContain('Collection_Stats');
+    it('starts with the static analysis: rating as shape and word, metrics as a list, visible badges', () => {
+        const markdown = buildOptimizationMarkdown({
+            ...base,
+            staticAnalysis: {
+                analysisProfile: 'find',
+                notApplicable: [],
+                executionTimeMs: 50.221,
+                documentsReturned: 18,
+                totalDocsExamined: 2412,
+                totalKeysExamined: 0,
+                efficiencyAnalysis: {
+                    selectivity: 0.7,
+                    indexUsed: null,
+                    fetchOverhead: 'Collection scan',
+                    hasInMemorySort: false,
+                    performanceRating: {
+                        score: 'poor',
+                        diagnostics: [
+                            {
+                                diagnosticId: 'very_low_efficiency_ratio',
+                                type: 'negative',
+                                message: 'Very low efficiency ratio',
+                                details: 'd',
+                            },
+                            {
+                                diagnosticId: 'no_sorting_required',
+                                type: 'positive',
+                                message: 'No sorting required',
+                                details: 'd',
+                            },
+                            {
+                                diagnosticId: 'primary_key_order_scan',
+                                type: 'neutral',
+                                message: 'Collection read in _id order',
+                                details: 'd',
+                            },
+                        ],
+                    },
+                },
+            },
+        });
+        const section = markdown.slice(
+            markdown.indexOf('## Query Efficiency Analysis'),
+            markdown.indexOf('## Query Performance Analysis'),
+        );
+        expect(section).toContain('**Performance Rating**: 🔻 Poor');
+        expect(section).toContain('- **Documents Examined**: 2,412');
+        expect(section).toContain('- **Index Used**: None (collection scan)');
+        expect(section).toContain('- **Fetch Overhead**: Collection scan');
+        expect(section).toMatch(/- ℹ️ Collection read in _id order\n- 🔻 Very low efficiency ratio/);
+        expect(section).not.toContain('No sorting required');
+        expect(section).not.toContain('|');
+    });
+
+    it('skips metrics that do not apply', () => {
+        const markdown = buildOptimizationMarkdown({
+            ...base,
+            staticAnalysis: {
+                analysisProfile: 'count',
+                notApplicable: ['performanceRating', 'documentsReturned'],
+                executionTimeMs: 1,
+                documentsReturned: 0,
+                totalDocsExamined: 5,
+                totalKeysExamined: 5,
+                efficiencyAnalysis: {
+                    selectivity: null,
+                    indexUsed: 'status_1',
+                    fetchOverhead: 'Direct fetch',
+                    hasInMemorySort: false,
+                    performanceRating: { score: 'good', diagnostics: [] },
+                },
+            },
+        });
+        expect(markdown).not.toContain('Performance Rating');
+        expect(markdown).not.toContain('Selectivity');
+        expect(markdown).not.toContain('Fetch Overhead');
+        expect(markdown).toContain('- **Index Used**: `status_1`');
     });
 });

@@ -5,13 +5,37 @@
 
 import * as l10n from '@vscode/l10n';
 import { type AIIndexRecommendation } from '../../../../services/ai/types';
+import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analysisProfilePresentation';
 import { type QueryInsightsStage3Model } from '../collectionViewContext';
+import { formatCount, formatTime } from '../queryInsightsTab/components/metricsRow/formatUtils';
+import { type PerformanceRating, type QueryInsightsStage2Response } from '../types/queryInsights';
 import { createImprovementCardConfig } from './createImprovementCard';
 import { createInsightCardConfig } from './createInsightCard';
+import { formatSelectivityForDisplay } from './formatSelectivityForDisplay';
+import { getVisibleDiagnostics } from './visibleDiagnostics';
+
+/** The Stage 2 static analysis values the report shows. */
+export type OptimizationStaticAnalysis = Pick<
+    QueryInsightsStage2Response,
+    | 'analysisProfile'
+    | 'notApplicable'
+    | 'executionTimeScope'
+    | 'executionTimeMs'
+    | 'documentsReturned'
+    | 'totalDocsExamined'
+    | 'totalKeysExamined'
+> & {
+    efficiencyAnalysis: Pick<
+        QueryInsightsStage2Response['efficiencyAnalysis'],
+        'selectivity' | 'indexUsed' | 'fetchOverhead' | 'hasInMemorySort' | 'performanceRating'
+    >;
+};
 
 export interface OptimizationMarkdownInput {
     databaseName: string;
     collectionName: string;
+    /** The "Query Efficiency Analysis" panel (static analysis). Omitted when it is not available. */
+    staticAnalysis?: OptimizationStaticAnalysis;
     /** The "Query Performance Analysis" card (AI `analysis`). */
     analysis?: string;
     /** Shown as "Query Execution Failed" when the query itself failed. */
@@ -21,11 +45,90 @@ export interface OptimizationMarkdownInput {
     educational?: string;
     model?: QueryInsightsStage3Model;
     generatedAt: Date;
-    /**
-     * Include the prompt source and the inputs sent to the model (debug data for issues and AI
-     * agents). Defaults to `true`; the shareable summary leaves them out.
-     */
-    includeModelInputs?: boolean;
+}
+
+/** Shapes, not colors, carry the meaning so the report reads the same in any target. */
+const ratingMarkers: Record<PerformanceRating['score'], string> = {
+    excellent: '🔼',
+    good: '🔼',
+    fair: '⚠️',
+    poor: '🔻',
+};
+const diagnosticMarkers: Record<PerformanceRating['diagnostics'][number]['type'], string> = {
+    positive: '🔼',
+    neutral: 'ℹ️',
+    negative: '🔻',
+};
+
+function ratingLabel(score: PerformanceRating['score']): string {
+    switch (score) {
+        case 'excellent':
+            return l10n.t('Excellent');
+        case 'good':
+            return l10n.t('Good');
+        case 'fair':
+            return l10n.t('Fair');
+        default:
+            return l10n.t('Poor');
+    }
+}
+
+function staticAnalysisMarkdown(analysis: OptimizationStaticAnalysis): string {
+    const profile = analysis.analysisProfile ?? 'find';
+    const notApplicable = analysis.notApplicable ?? [];
+    const isCount = profile === 'count';
+    const efficiency = analysis.efficiencyAnalysis;
+    const lines = [`## ${l10n.t('Query Efficiency Analysis')}`, ''];
+    if (!notApplicable.includes('performanceRating')) {
+        const score = efficiency.performanceRating.score;
+        lines.push(`**${l10n.t('Performance Rating')}**: ${ratingMarkers[score]} ${ratingLabel(score)}`, '');
+    }
+    const metric = (label: string, value: string): void => {
+        lines.push(`- **${label}**: ${value}`);
+    };
+    if (!notApplicable.includes('executionTime')) {
+        metric(
+            analysis.executionTimeScope === 'pipeline-estimate'
+                ? l10n.t('Overall execution time (estimate)')
+                : l10n.t('Execution Time'),
+            formatTime(analysis.executionTimeMs),
+        );
+    }
+    if (!notApplicable.includes('documentsReturned')) {
+        metric(getAnalysisProfilePresentation(profile).resultLabel, formatCount(analysis.documentsReturned));
+    }
+    metric(l10n.t('Documents Examined'), formatCount(analysis.totalDocsExamined));
+    metric(l10n.t('Keys Examined'), formatCount(analysis.totalKeysExamined));
+    if (!isCount && !notApplicable.includes('selectivity')) {
+        const lowSelectivityLabel = l10n.t(
+            'below {0}%',
+            (0.1).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+        );
+        metric(
+            profile === 'aggregate' ? l10n.t('Initial-stage selectivity') : l10n.t('Selectivity'),
+            formatSelectivityForDisplay(efficiency.selectivity, lowSelectivityLabel) ?? l10n.t('Not available'),
+        );
+    }
+    metric(
+        l10n.t('Index Used'),
+        efficiency.indexUsed ? `\`${efficiency.indexUsed}\`` : l10n.t('None (collection scan)'),
+    );
+    if (!isCount && !notApplicable.includes('fetchOverhead')) {
+        metric(l10n.t('Fetch Overhead'), efficiency.fetchOverhead);
+    }
+    if (!isCount && !notApplicable.includes('inMemorySort')) {
+        metric(l10n.t('In-Memory Sort'), efficiency.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'));
+    }
+    const diagnostics = notApplicable.includes('performanceRating')
+        ? []
+        : getVisibleDiagnostics(efficiency.performanceRating.diagnostics);
+    if (diagnostics.length > 0) {
+        lines.push('', `**${l10n.t('Diagnostics')}**`, '');
+        for (const diagnostic of diagnostics) {
+            lines.push(`- ${diagnosticMarkers[diagnostic.type]} ${diagnostic.message}`);
+        }
+    }
+    return lines.join('\n');
 }
 
 /** Wraps content in a fence longer than any backtick run inside it. */
@@ -73,7 +176,7 @@ function recommendationMarkdown(recommendation: AIIndexRecommendation, index: nu
     return lines.join('\n');
 }
 
-function configurationMarkdown(model: QueryInsightsStage3Model | undefined, includeModelInputs: boolean): string {
+function configurationMarkdown(model: QueryInsightsStage3Model | undefined): string {
     const lines = [`## ${l10n.t('Query Insights Configuration')}`, ''];
     const name = model?.modelDisplayName ?? model?.modelId;
     const modelLabel = name
@@ -82,7 +185,7 @@ function configurationMarkdown(model: QueryInsightsStage3Model | undefined, incl
             : name
         : l10n.t('Unknown');
     lines.push(`- **${l10n.t('Model')}**: ${modelLabel}`);
-    if (includeModelInputs && model?.modelInputs?.promptSource) {
+    if (model?.modelInputs?.promptSource) {
         lines.push(`- **${l10n.t('Prompt')}**: ${model.modelInputs.promptSource}`);
     }
     if (model?.durationMs !== undefined) {
@@ -100,9 +203,6 @@ function configurationMarkdown(model: QueryInsightsStage3Model | undefined, incl
         lines.push(`- **${l10n.t('Credits')}**: ${usage.credits}`);
     }
 
-    if (!includeModelInputs) {
-        return lines.join('\n');
-    }
     const inputs = model?.modelInputs;
     lines.push('', `### ${l10n.t('Inputs sent to the model')}`, '');
     if (!inputs) {
@@ -124,15 +224,18 @@ function configurationMarkdown(model: QueryInsightsStage3Model | undefined, incl
 }
 
 /**
- * Builds a shareable Markdown document of the Optimization Opportunities section: every card in
- * display order, followed by the model and, unless `includeModelInputs` is `false`, the prompt
- * source and the inputs the model received.
+ * Builds the Query Insights report as Markdown: the static analysis, every Optimization
+ * Opportunities card in display order, and the model with the inputs it received. This is the single
+ * source of the report; "Copy as rich text" renders the same Markdown with inline styles.
  */
 export function buildOptimizationMarkdown(input: OptimizationMarkdownInput): string {
     const sections: string[] = [
         `# ${l10n.t('Query Insights: Optimization Opportunities')}`,
         `**${l10n.t('Collection')}**: \`${input.databaseName}.${input.collectionName}\` · ${input.generatedAt.toISOString()}`,
     ];
+    if (input.staticAnalysis) {
+        sections.push(staticAnalysisMarkdown(input.staticAnalysis));
+    }
     if (input.analysis?.trim()) {
         sections.push(`## ${l10n.t('Query Performance Analysis')}`, input.analysis.trim());
     }
@@ -148,6 +251,6 @@ export function buildOptimizationMarkdown(input: OptimizationMarkdownInput): str
     if (input.educational?.trim()) {
         sections.push(`## ${l10n.t('Understanding Your Query Execution Plan')}`, input.educational.trim());
     }
-    sections.push('---', configurationMarkdown(input.model, input.includeModelInputs ?? true));
+    sections.push('---', configurationMarkdown(input.model));
     return `${sections.join('\n\n')}\n`;
 }
