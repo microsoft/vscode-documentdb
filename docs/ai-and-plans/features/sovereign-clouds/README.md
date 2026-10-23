@@ -19,7 +19,7 @@ explanations when Entra sign-in fails.
 
 ## Status
 
-**Investigation complete, implementation planned.** No PR yet. Nobody on the team has access to a
+**Plan approved, implementation in progress.** No PR yet. Nobody on the team has access to a
 sovereign cloud, so every change here is made without being able to test it end to end. See
 [D2](decisions.md#d2-implement-without-sovereign-cloud-access).
 
@@ -85,4 +85,3 @@ Azure management (subscription listing, ARM clients) already follows the selecte
 - Not confirmed which audience DocumentDB accepts in US Government. ARM metadata publishes the
   `usgovcloudapi.net` URI as the OSSRDBMS resource there, but no DocumentDB document confirms it.
 - Whether China clusters accept the public audience today (check telemetry before shipping, D11).
-- DocumentDB availability and host suffix in US Government are not publicly documented.

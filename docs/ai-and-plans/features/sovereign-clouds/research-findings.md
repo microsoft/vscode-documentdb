@@ -236,7 +236,8 @@ sign-in, so `microsoft-sovereign-cloud.environment` says nothing about them.
    Entra sign-in to China clusters work today with the public audience? If it does, switching to the
    per-cloud audience could break those users. Check telemetry for successful Entra connections to
    `*.azure.cn` hosts before shipping.
-4. DocumentDB availability and host suffix in US Government (not publicly documented).
+4. DocumentDB availability in US Government is not publicly documented. The operator confirmed
+   `azure.us` as the domain of US Government clusters.
 5. `compute.azEnvironment` values outside the public cloud.
 6. Does the Microsoft Sovereign Cloud Authentication log contain the inner broker error?
 

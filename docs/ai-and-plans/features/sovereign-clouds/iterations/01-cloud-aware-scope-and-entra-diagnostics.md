@@ -28,7 +28,7 @@ Case 2 only at hand-over.
 **Constraint (D2):** no sovereign-cloud access. Public-cloud behavior must not change, and tests pin
 the exact public scope string.
 
-## Revision 1 (before implementation started)
+## Revision 1 (before implementation started; approved by the operator)
 
 The first version of this plan assumed the Windows broker passes the AADSTS code to the extension,
 kept the public audience for custom clouds, used the VS Code setting for managed identity, and only
@@ -82,8 +82,10 @@ export function resolveInteractiveTokenResource(connectionString: string, deps?:
   `login.sovcloud-identity.de` (Azure CLI `cloud.py`).
 - Unresolved custom cloud: throws a localized error naming
   `documentDB.customEnvironment.ossrdbmsEndpoint`.
-- Mismatch (D8): `.azure.cn` host with a non-China cloud, or `.azure.com` host with a non-public
-  cloud, throws a localized error naming both clouds and `microsoft-sovereign-cloud.environment`.
+- Mismatch (D8): a host under `azure.com`, `azure.us` or `azure.cn` whose cloud differs from the
+  audience's cloud throws a localized error naming both clouds and
+  `microsoft-sovereign-cloud.environment`. (Revised after approval: `azure.us` was added once the
+  operator confirmed it as the US Government cluster domain.)
 - A warning is logged when the override equals the public audience but the cloud is not public.
 - `deps` injects settings, `fetch` and the environment for tests.
 
@@ -91,8 +93,12 @@ export function resolveInteractiveTokenResource(connectionString: string, deps?:
 
 Same file: `resolveManagedIdentityTokenResource(connectionString, deps?)`.
 
-- Order: override, known `TOKEN_RESOURCE` in the connection string, host suffix, IMDS
-  `compute.azEnvironment` (`AZUREPUBLICCLOUD` only), else a localized error naming the override.
+- Order: override, host suffix, IMDS `compute.azEnvironment` (`AZUREPUBLICCLOUD` only), else a
+  localized error naming the override.
+- **Deviation:** the plan also read a known `TOKEN_RESOURCE` from the connection string. Dropped:
+  `stripManagedIdentityMarkers` removes `authMechanismProperties` before the connection is saved, so
+  the value never reaches connect time. Keeping it would have meant a storage change for a signal the
+  host suffix already covers.
 - IMDS: `GET http://169.254.169.254/metadata/instance/compute/azEnvironment?api-version=2021-02-01&format=text`
   with `Metadata: true` and a short timeout; called only when the earlier steps found nothing.
 
@@ -231,7 +237,6 @@ and `authMethod`. No tenant, subscription, cluster, user, or correlation identif
 
 - The ask-once prompt for custom clouds, as a command (D6).
 - Buttons on diagnostics: Report issue, Switch cloud, Copy details (D10).
-- A US Government host suffix rule once it is publicly documented (D7, D8).
 
 # Outcome
 

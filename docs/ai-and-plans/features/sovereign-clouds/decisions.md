@@ -6,29 +6,28 @@ status: active
 
 # Sovereign Clouds: Decisions
 
-"Adopted" means the operator chose to move forward with the entry while other research is
-pending; the operator may still revisit it. Superseded entries are kept for their rejected
+"Accepted" entries were approved by the operator. Superseded entries are kept for their rejected
 alternatives.
 
 | ID  | Status                      | Summary                                                                                            |
 | --- | --------------------------- | -------------------------------------------------------------------------------------------------- |
-| D1  | **Adopted**                 | The preauthorization gap is fixed outside the extension; no own client ID                          |
+| D1  | **Accepted** (operator)     | The preauthorization gap is fixed outside the extension; no own client ID                          |
 | D2  | **Accepted** (operator)     | Implement without sovereign-cloud access, copying patterns proven elsewhere                        |
 | D3  | **Accepted** (operator)     | Entra sign-in errors are classified in one table, routed through the diagnostics service           |
 | D4  | **Superseded** by D6 and D7 | Which signal decides the cloud                                                                     |
 | D5  | **Superseded** by D6        | Custom clouds keep the public audience                                                             |
-| D6  | **Adopted**                 | Interactive sign-in: cloud from VS Code's setting; custom clouds resolved, never public            |
-| D7  | **Adopted**                 | Managed identity: cloud from an override, the cluster host, then IMDS; otherwise fail clearly      |
-| D8  | **Adopted**                 | Stop before requesting a token when the cluster host and the selected cloud clearly disagree       |
-| D9  | **Adopted**                 | An opaque broker error in a sovereign cloud gets a hedged message that asks for the on-screen code |
-| D10 | **Adopted**                 | Messages are text only in this iteration; no buttons                                               |
-| D11 | **Adopted**                 | No public-audience fallback for China unless telemetry shows it works today                        |
+| D6  | **Accepted** (operator)     | Interactive sign-in: cloud from VS Code's setting; custom clouds resolved, never public            |
+| D7  | **Accepted** (operator)     | Managed identity: cloud from an override, the cluster host, then IMDS; otherwise fail clearly      |
+| D8  | **Accepted** (operator)     | Stop before requesting a token when the cluster host and the selected cloud clearly disagree       |
+| D9  | **Accepted** (operator)     | An opaque broker error in a sovereign cloud gets a hedged message that asks for the on-screen code |
+| D10 | **Accepted** (operator)     | Messages are text only in this iteration; no buttons                                               |
+| D11 | **Accepted** (operator)     | No public-audience fallback for China unless telemetry shows it works today                        |
 
 ---
 
 ## D1. Service-side preauthorization, not a client workaround
 
-**Adopted.**
+**Accepted** by the operator.
 
 The missing preauthorization (see [README](README.md#what-is-being-done)) is raised with Microsoft
 outside the code. Two public precedents were resolved the same way: microsoft/vscode-mssql#22296
@@ -84,7 +83,7 @@ fallback; failing clearly is better.
 
 ## D6. Interactive sign-in
 
-**Adopted.**
+**Accepted** by the operator.
 
 The audience follows the same setting that chooses the sign-in authority,
 `microsoft-sovereign-cloud.environment`, so the two cannot disagree.
@@ -111,33 +110,36 @@ command.
 
 ## D7. Managed identity
 
-**Adopted.**
+**Accepted** by the operator.
 
 Managed identity tokens come from the VM, not from VS Code's sign-in, so the setting is not a signal.
 
 1. `documentDB.customEnvironment.ossrdbmsEndpoint`, if set.
-2. A `TOKEN_RESOURCE` from the connection string, only if it is one of the known audiences.
-3. The cluster host: `.azure.cn` → China, `.azure.com` → public. No `.azure.us` rule until a US
-   Government DocumentDB host suffix is publicly documented.
-4. IMDS `compute.azEnvironment`: `AZUREPUBLICCLOUD` → public. Any other value means "not public,
+2. The cluster host: `.azure.com` → public, `.azure.us` → US Government, `.azure.cn` → China. The
+   operator confirmed `azure.us` as the domain of US Government clusters.
+3. IMDS `compute.azEnvironment`: `AZUREPUBLICCLOUD` → public. Any other value means "not public,
    cloud unknown".
-5. Otherwise fail with a message naming the setting from step 1.
+4. Otherwise fail with a message naming the setting from step 1.
+
+Dropped during implementation: reading `TOKEN_RESOURCE` from the connection string. The wizard
+removes `authMechanismProperties` before the connection is saved, so the value never reaches connect
+time.
 
 The VS Code setting is deliberately not consulted: a user who never signs in interactively has no
 reason to set it, and a stale value would pick the wrong audience silently.
 
 ## D8. Cloud mismatch stops the request
 
-**Adopted.**
+**Accepted** by the operator.
 
-For interactive sign-in, when the cluster host ends in `.azure.cn` but the selected cloud is not
-China, or ends in `.azure.com` but the selected cloud is not public, the request is stopped before a
-token is requested, with a message naming both clouds and the setting. No rule for `.azure.us` (see
-D7). Hosts that match neither suffix, such as private DNS names, are not checked.
+For interactive sign-in, when the cluster host's Azure domain (`azure.com`, `azure.us`, `azure.cn`)
+belongs to a different cloud than the one VS Code is signed in to, the request is stopped before a
+token is requested, with a message naming both clouds and the setting. Hosts outside these domains,
+such as private DNS names, are not checked.
 
 ## D9. Opaque broker errors
 
-**Adopted.**
+**Accepted** by the operator.
 
 On Windows the extension receives only `platform_broker_error`, without the AADSTS code (research §3).
 When the failure is opaque, the selected cloud is not public, and the failing request was the
@@ -147,7 +149,7 @@ message.
 
 ## D10. Text-only messages in this iteration
 
-**Adopted.**
+**Accepted** by the operator.
 
 `ConnectionDiagnosticsService` providers return text only, by design (error-translation skill).
 Buttons such as "Report issue" or "Switch cloud" would change that contract and every call site. Each
@@ -156,7 +158,7 @@ Structured actions are future work.
 
 ## D11. China and the public audience
 
-**Adopted.**
+**Accepted** by the operator.
 
 Microsoft's DocumentDB China documentation uses the China audience, so the extension switches to it.
 Before shipping, check telemetry for successful Entra connections to `*.azure.cn` hosts. If there are
