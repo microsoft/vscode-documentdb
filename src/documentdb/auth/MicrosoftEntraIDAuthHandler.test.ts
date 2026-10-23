@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import type * as documentdbTokenResource from './documentdbTokenResource';
 
 const getSessionFromVSCode = vi.fn();
 const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
@@ -21,7 +22,7 @@ vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => 
 }));
 
 vi.mock('./documentdbTokenResource', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('./documentdbTokenResource')>()),
+    ...(await importOriginal<typeof documentdbTokenResource>()),
     resolveInteractiveTokenResource: vi.fn(),
 }));
 

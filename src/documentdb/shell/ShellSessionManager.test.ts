@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type AuthenticationSession } from 'vscode';
+import type * as documentdbTokenResource from '../auth/documentdbTokenResource';
 import { ext } from '../../extensionVariables';
 import { AuthMethodId } from '../auth/AuthMethod';
 import {
@@ -47,7 +48,7 @@ vi.mock('../auth/managedIdentityTokenProvider', () => ({
 }));
 
 vi.mock('../auth/documentdbTokenResource', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('../auth/documentdbTokenResource')>()),
+    ...(await importOriginal<typeof documentdbTokenResource>()),
     resolveInteractiveTokenResource: vi.fn(),
     resolveManagedIdentityTokenResource: vi.fn(),
 }));

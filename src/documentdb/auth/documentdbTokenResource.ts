@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// eslint-disable-next-line import/no-internal-modules
 import {
     getConfiguredAuthProviderId,
     getConfiguredAzureEnv,
-} from '@microsoft/vscode-azext-azureauth/out/src/utils/configuredAzureEnv';
+} from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import * as http from 'http';
 import * as vscode from 'vscode';
