@@ -6,6 +6,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
+import * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthMethodId } from './AuthMethod';
@@ -64,6 +66,10 @@ describe('expiresInSecondsFromTimestamp', () => {
 
 describe('ManagedIdentityAuthHandler', () => {
     beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue(undefined),
+        } as unknown as vscode.WorkspaceConfiguration);
         getManagedIdentityAccessToken.mockReset();
         getManagedIdentityAccessToken.mockResolvedValue({
             accessToken: 'a-token',
@@ -130,6 +136,40 @@ describe('ManagedIdentityAuthHandler', () => {
         );
     });
 
+    it('requests the US Government audience for an azure.us host and traces the resolution', async () => {
+        const connectionString = 'mongodb://cluster.mongocluster.cosmos.azure.us/';
+        const handler = new ManagedIdentityAuthHandler(
+            buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
+        );
+        const { options } = await handler.configureAuth();
+        await invokeOidcCallback(options);
+        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.azure.us']);
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledWith(
+            ['https://ossrdbms-aad.database.usgovcloudapi.net/.default'],
+            undefined,
+            undefined,
+            expect.any(String),
+            undefined,
+        );
+        expect(ext.outputChannel.info).toHaveBeenCalledWith(expect.stringContaining('"cloudCategory":"usgov"'));
+        expect(ext.outputChannel.info).toHaveBeenCalledWith(expect.stringContaining('"tokenResourceReason":"host"'));
+    });
+
+    it('passes the configured custom suffix to the allowed-hosts list', async () => {
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue({
+                ossrdbmsEndpoint: 'https://database.example.com',
+                mongoClusterHostnameSuffix: '.database.example.com',
+            }),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const connectionString = 'mongodb://cluster.database.example.com/';
+        const handler = new ManagedIdentityAuthHandler(
+            buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
+        );
+        const { options } = await handler.configureAuth();
+        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.database.example.com']);
+    });
+
     it('passes startup context into the deferred token provider', async (): Promise<void> => {
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
         const context = { startupCorrelationId: 'startup-id', surface: 'extension' };
@@ -174,6 +214,9 @@ describe('ManagedIdentityAuthHandler', () => {
     });
 
     it('honors the host-gated TLS exception', async () => {
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://ossrdbms-aad.database.windows.net' }),
+        } as unknown as vscode.WorkspaceConfiguration);
         const cs = 'mongodb://localhost:27017/';
         const handler = new ManagedIdentityAuthHandler(
             buildCredentials({

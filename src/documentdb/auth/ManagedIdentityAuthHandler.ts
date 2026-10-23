@@ -5,13 +5,15 @@
 
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
+import * as vscode from 'vscode';
+import { settingsKeys } from '../../settingsKeys';
 import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
-import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
+import { resolveManagedIdentityTokenResource, type DocumentDBCustomEnvironment } from './documentdbTokenResource';
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
@@ -36,12 +38,18 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
     ): Promise<AuthHandlerResponse> {
         const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
         const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
+        const resolved = await resolveManagedIdentityTokenResource(this.clusterCredentials.connectionString);
+        const customHostnameSuffix = vscode.workspace
+            .getConfiguration()
+            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
         traceAuthFlow(
             'managedIdentity.configureOidc',
             {
                 identityKind: clientId ? 'userAssigned' : 'systemAssigned',
                 clusterTenantKnown: !!tenantId,
                 tokenAcquisition: 'deferredUntilDriverCallback',
+                cloudCategory: resolved.cloudCategory,
+                tokenResourceReason: resolved.reason,
             },
             this.tokenCorrelationId,
             traceContext,
@@ -60,14 +68,14 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
             authMechanism: 'MONGODB-OIDC',
             tls: true,
             authMechanismProperties: {
-                ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
+                ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString, customHostnameSuffix),
                 OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
                     const token = await traceAuthOperation(
                         'managedIdentity.oidcCallback',
                         () =>
                             withTokenAcquisitionTiming(timings, () =>
                                 getManagedIdentityAccessToken(
-                                    [DOCUMENTDB_ENTRA_SCOPE],
+                                    [resolved.scope],
                                     clientId,
                                     tenantId,
                                     this.tokenCorrelationId,
