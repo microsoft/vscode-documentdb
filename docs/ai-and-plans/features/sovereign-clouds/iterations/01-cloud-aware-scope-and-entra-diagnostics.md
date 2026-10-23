@@ -256,6 +256,18 @@ The auth method comes from the recent token-failure registry, not from the error
 
 ---
 
+# Addition: support tracing (operator request)
+
+**Done** in `17a95f66`. Every Entra connection, including the public cloud, writes
+`entraCloud.resolved` (or `entraCloud.unresolved`) to the DocumentDB output: flow, configured cloud,
+sign-in provider, broker mode, cloud implied by the host, whether the custom settings are set, ARM
+and IMDS lookup outcomes, and the chosen token resource and reason. The OIDC traces add the
+`ALLOWED_HOSTS` patterns, auth error summaries add `broker=platform_broker_error|none`, and the
+classifier writes `entraSignIn.classified`. No tenant, client, account, host, or connection-string
+values are logged, consistent with the managed identity tracing rules.
+
+---
+
 # Before shipping
 
 - D11: check telemetry for successful Entra connections to `*.azure.cn` hosts.
