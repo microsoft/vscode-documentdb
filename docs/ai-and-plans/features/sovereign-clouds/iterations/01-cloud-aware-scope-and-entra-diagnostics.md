@@ -200,7 +200,8 @@ src/documentdb/auth/entraErrors/
 
 ## B4. Rules
 
-Each rule has an id, codes, and `explain(context)` with `context = { code, cloud, authMethod }`.
+Each rule has an id, codes, and `explain(context)` with
+`context = { code, cloudCategory, recentTokenFailure }`.
 Every message names who can fix the problem and links to the public troubleshooting page
 (`Links.SovereignClouds`).
 
@@ -228,6 +229,7 @@ as a manual diagnostic step, never as a fix.
 
 The provider sends `entraSignIn.classified` with `ruleId`, `aadstsCode`, `cloudCategory`, `brokered`
 and `authMethod`. No tenant, subscription, cluster, user, or correlation identifiers.
+The auth method comes from the recent token-failure registry, not from the error text.
 
 ## B6. Tests
 
@@ -268,4 +270,14 @@ and `authMethod`. No tenant, subscription, cluster, user, or correlation identif
 
 # Outcome
 
-_To be written at hand-over._
+Part B is implemented: one rule table and pure text classifier, a ten-minute in-memory
+token-failure registry, and the `entra-sign-in` diagnostics provider registered next to SRV DNS
+diagnostics. Interactive and managed identity handlers, the shell, and the playground record only
+token-acquisition failures, leaving audience-resolution failures and original errors unchanged.
+An empty interactive session is also recorded as a token-acquisition failure.
+
+Verification: `npx vitest run src/documentdb/auth src/documentdb/shell src/documentdb/playground src/services`
+passed, 85 files and 2,061 tests. No build, lint, formatter, localization generation, or packaging was
+run for Part B, as requested by the operator. Sovereign-cloud behavior is inferred from fixtures and
+has not been observed end to end (D2). The service-side preauthorization work remains outside this
+repository.

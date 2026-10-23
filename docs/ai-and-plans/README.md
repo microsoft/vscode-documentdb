@@ -49,7 +49,7 @@ treat `status: historical` or `status: superseded` as current.
 | [survey](./features/survey/README.md)                                     | Survey refresh: simpler eligibility, broader activity coverage, cohort telemetry, and invitation surface | draft #992; enabled                 |
 | [docs-site](./features/docs-site/README.md)                               | The GitHub Pages documentation site: Just the Docs theme, OS dark mode, local preview                    | draft #420                          |
 | [pre-release-polish](./features/pre-release-polish/README.md)             | Cross-feature visual and documentation refinements prepared for the 1.0 release                          | active                              |
-| [sovereign-clouds](./features/sovereign-clouds/README.md)                 | Entra sign-in in Azure Government and China: per-cloud token audience, Entra error classifier            | planned                             |
+| [sovereign-clouds](./features/sovereign-clouds/README.md)                 | Entra sign-in in Azure Government and China: per-cloud token audience, Entra error classifier            | implemented; sovereign checks pending |
 
 Everything else is a single file at this root, such as:
 
