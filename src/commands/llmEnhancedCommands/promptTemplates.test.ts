@@ -3,16 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { ext } from '../../extensionVariables';
 import {
     AGGREGATE_QUERY_PROMPT_TEMPLATE,
     COUNT_QUERY_PROMPT_TEMPLATE,
     CRITICAL_JSON_REMINDER,
     FIND_QUERY_PROMPT_TEMPLATE,
+    LOCAL_INDEX_ADVISOR_PROMPT_FILE,
     buildIndexAdvisorPrompt,
     createPriorityDeclaration,
     createSecurityInstructions,
+    getLastPromptSource,
     getQueryTypeConfig,
     loadPromptBody,
 } from './promptTemplates';
@@ -286,6 +292,43 @@ describe('promptTemplates', () => {
         it('should return inline fallback for unknown command type', () => {
             const result = buildIndexAdvisorPrompt('unknown', 'Test Role', ['msg1'], 'task', 'INLINE_FALLBACK');
             expect(result).toBe('INLINE_FALLBACK');
+        });
+    });
+
+    describe('buildIndexAdvisorPrompt with a packaged local prompt', () => {
+        let extensionPath: string;
+        const originalContext = ext.context;
+
+        beforeEach(() => {
+            extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'qi-prompt-'));
+            fs.mkdirSync(path.join(extensionPath, 'resources', 'prompts', 'local'), { recursive: true });
+            fs.writeFileSync(path.join(extensionPath, 'resources', 'prompts', 'index-advisor-count.prompt.md'), 'BUILT_IN_BODY');
+            ext.context = { extensionPath } as unknown as typeof ext.context;
+        });
+
+        afterEach(() => {
+            ext.context = originalContext;
+            fs.rmSync(extensionPath, { recursive: true, force: true });
+        });
+
+        it('should use the built-in resource when no local prompt is packaged', () => {
+            const result = buildIndexAdvisorPrompt('count', 'Test Role', ['msg1'], 'task', 'INLINE_FALLBACK');
+            expect(result).toContain('BUILT_IN_BODY');
+            expect(result).toContain('## PRIORITY DECLARATION');
+            expect(getLastPromptSource()).toBe('resource-file');
+        });
+
+        it('should return the local prompt as-is for every command type', () => {
+            fs.writeFileSync(
+                path.join(extensionPath, 'resources', 'prompts', LOCAL_INDEX_ADVISOR_PROMPT_FILE),
+                'LOCAL_PROMPT',
+            );
+            for (const commandType of ['find', 'aggregate', 'count']) {
+                expect(buildIndexAdvisorPrompt(commandType, 'Test Role', ['msg1'], 'task', 'INLINE_FALLBACK')).toBe(
+                    'LOCAL_PROMPT',
+                );
+                expect(getLastPromptSource()).toBe('local-resource-file');
+            }
         });
     });
 
