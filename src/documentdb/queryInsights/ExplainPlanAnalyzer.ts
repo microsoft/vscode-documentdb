@@ -111,6 +111,47 @@ export class ExplainPlanAnalyzer {
     }
 
     /**
+     * `@mongodb-js/explain-plan-helper` (and `mongodb-explain-compat`) iterate a stage's `shards`
+     * and `inputStages` with `yield*` / `.map()` and fail with "x is not iterable" when a server
+     * returns them as anything but an array. Returns a copy in which, for every stage node (an
+     * object with a `stage` field), such values become arrays: plain objects contribute their
+     * values, anything else is dropped. Non-plain values (BSON types) are kept by reference.
+     */
+    private static toExplainPlanHelperInput(explainResult: Document): Document {
+        const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+            typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype;
+
+        const normalize = (value: unknown): unknown => {
+            if (Array.isArray(value)) {
+                return value.map(normalize);
+            }
+            if (!isPlainObject(value)) {
+                return value;
+            }
+            const copy: Record<string, unknown> = {};
+            for (const [key, child] of Object.entries(value)) {
+                copy[key] = normalize(child);
+            }
+            if (typeof value.stage === 'string') {
+                for (const key of ['shards', 'inputStages']) {
+                    const children = copy[key];
+                    if (children === undefined || Array.isArray(children)) {
+                        continue;
+                    }
+                    if (isPlainObject(children)) {
+                        copy[key] = Object.values(children).filter(isPlainObject);
+                    } else {
+                        delete copy[key];
+                    }
+                }
+            }
+            return copy;
+        };
+
+        return normalize(explainResult) as Document;
+    }
+
+    /**
      * Analyzes explain("queryPlanner") output
      * Provides basic query characteristics without execution metrics
      *
@@ -119,7 +160,7 @@ export class ExplainPlanAnalyzer {
      */
     public static analyzeQueryPlanner(explainResult: Document): QueryPlannerAnalysis {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-        const explainPlan = new ExplainPlan(explainResult as any);
+        const explainPlan = new ExplainPlan(this.toExplainPlanHelperInput(explainResult) as any);
 
         // Extract metrics using helper methods
         const usedIndexesInfo = explainPlan.usedIndexes || [];
@@ -153,7 +194,7 @@ export class ExplainPlanAnalyzer {
      */
     public static analyzeExecutionStats(explainResult: Document, queryFilter?: Document): ExecutionStatsAnalysis {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-        const explainPlan = new ExplainPlan(explainResult as any);
+        const explainPlan = new ExplainPlan(this.toExplainPlanHelperInput(explainResult) as any);
 
         // STEP 1: Check for execution errors FIRST
         const executionStats = explainResult.executionStats as Document | undefined;

@@ -12,6 +12,7 @@ import { ExplainPlanAnalyzer } from '../../../documentdb/queryInsights/ExplainPl
 import { buildStaticAnalysisSummary } from '../../../documentdb/queryInsights/staticAnalysisSummary';
 import { StreamingResponseParser } from '../../../documentdb/queryInsights/streamingResponseParser';
 import { transformStage1Response } from '../../../documentdb/queryInsights/transformations';
+import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
@@ -58,7 +59,20 @@ export const queryInsightsStandaloneRouter = router({
     }),
     getStage2: publicProcedureWithTelemetry.input(standaloneInputSchema).query(({ input }) => {
         const parsed = parseStandaloneInput(input);
-        return analyzeExplainForStage2(parsed.explain, parsed.totalDocs, parsed.filter, parsed.commandType);
+        try {
+            return analyzeExplainForStage2(parsed.explain, parsed.totalDocs, parsed.filter, parsed.commandType);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                vscode.l10n.t('[Query Insights Stage 2] Analysis of the execution plan failed: {error}', {
+                    error: message,
+                }),
+            );
+            if (error instanceof Error && error.stack) {
+                ext.outputChannel.error(error.stack);
+            }
+            throw error;
+        }
     }),
     streamStage3: publicProcedureWithTelemetry
         .input(standaloneInputSchema.extend({ requestKey: z.string() }))

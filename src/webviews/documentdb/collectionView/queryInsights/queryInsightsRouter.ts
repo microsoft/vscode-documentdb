@@ -274,7 +274,7 @@ export const queryInsightsQueriesRouter = router({
         );
 
         let analyzed: ExecutionStatsAnalysis;
-        let explainResult: Document | undefined;
+        let explainResult: Document;
         let totalCollectionDocs: number | undefined;
 
         // Check for debug override file first
@@ -282,8 +282,6 @@ export const queryInsightsQueriesRouter = router({
         let queryFilter: Document | undefined;
         if (debugData) {
             ext.outputChannel.trace(l10n.t('[Query Insights Stage 2] Using debug data file'));
-            // Use debug data - analyze it the same way as real data
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
             explainResult = debugData;
             // totalCollectionDocs not available in debug mode — advisories will simply not fire
         } else {
@@ -315,8 +313,7 @@ export const queryInsightsQueriesRouter = router({
                 }),
             );
 
-            // Analyze with ExplainPlanAnalyzer (pass the user's actual filter for empty-query detection)
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult, queryParams.filterObj);
+            // The user's actual filter is passed for empty-query detection
             explainResult = executionStatsResult;
             queryFilter = queryParams.filterObj as Document | undefined;
 
@@ -329,13 +326,28 @@ export const queryInsightsQueriesRouter = router({
             }
         }
 
-        const transformed = analyzeExplainForStage2(
-            explainResult ?? {},
-            totalCollectionDocs,
-            queryFilter,
-            'find',
-            analyzed,
-        );
+        let transformed: ReturnType<typeof analyzeExplainForStage2>;
+        try {
+            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(explainResult, queryFilter);
+            transformed = analyzeExplainForStage2(explainResult, totalCollectionDocs, queryFilter, 'find', analyzed);
+        } catch (error) {
+            // The explain is already cached in the session, so "View Raw Execution Stats" still works;
+            // the plan is logged as well so the failure can be reproduced.
+            const message = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                l10n.t('[Query Insights Stage 2] Analysis of the execution plan failed: {error}', { error: message }),
+            );
+            if (error instanceof Error && error.stack) {
+                ext.outputChannel.error(error.stack);
+            }
+            ext.outputChannel.error(
+                l10n.t('[Query Insights Stage 2] Execution plan that failed analysis:\n{plan}', {
+                    plan: EJSON.stringify(explainResult, { relaxed: true }, 2),
+                }),
+            );
+            myCtx.actionContext.telemetry.properties.stage2AnalysisFailed = 'true';
+            throw error;
+        }
 
         // Check for execution error and return error response if found
         if (analyzed.executionError) {

@@ -1302,6 +1302,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         stage1Loading={pipeline.kind === 's1Loading'}
                         stage2Loading={pipeline.kind === 's2Loading'}
                         hasError={hasMetricsError}
+                        rawExplainAvailable={pipeline.kind === 's2Error'}
                     />
                 </div>
             </div>

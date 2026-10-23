@@ -36,6 +36,8 @@ interface QueryPlanSummaryProps {
     stage1Loading: boolean;
     stage2Loading: boolean;
     hasError: boolean;
+    /** True when Stage 2 failed after the explain ran, so the raw plan can still be opened. */
+    rawExplainAvailable?: boolean;
     preview?: boolean;
     onViewRawExplain?: () => Promise<void>;
 }
@@ -46,6 +48,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     stage1Loading,
     stage2Loading,
     hasError,
+    rawExplainAvailable = false,
     preview = false,
     onViewRawExplain,
 }) => {
@@ -105,7 +108,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                         </>
                     )}
                 </Text>
-                {stage2Data && (
+                {(stage2Data || rawExplainAvailable) && (
                     <Button
                         appearance="subtle"
                         size="small"
