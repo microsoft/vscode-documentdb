@@ -21,11 +21,17 @@ export interface OptimizationMarkdownInput {
     educational?: string;
     model?: QueryInsightsStage3Model;
     generatedAt: Date;
+    /**
+     * Include the prompt source and the inputs sent to the model (debug data for issues and AI
+     * agents). Defaults to `true`; the shareable summary leaves them out.
+     */
+    includeModelInputs?: boolean;
 }
 
 /** Wraps content in a fence longer than any backtick run inside it. */
 function fence(content: string, language = ''): string {
-    const longestRun = Math.max(0, ...(content.match(/`+/g) ?? []).map((run) => run.length));
+    const runs: readonly string[] = content.match(/`+/g) ?? [];
+    const longestRun = Math.max(0, ...runs.map((run) => run.length));
     const ticks = '`'.repeat(Math.max(3, longestRun + 1));
     return `${ticks}${language}\n${content.replace(/\s+$/, '')}\n${ticks}`;
 }
@@ -67,7 +73,7 @@ function recommendationMarkdown(recommendation: AIIndexRecommendation, index: nu
     return lines.join('\n');
 }
 
-function configurationMarkdown(model: QueryInsightsStage3Model | undefined): string {
+function configurationMarkdown(model: QueryInsightsStage3Model | undefined, includeModelInputs: boolean): string {
     const lines = [`## ${l10n.t('Query Insights Configuration')}`, ''];
     const name = model?.modelDisplayName ?? model?.modelId;
     const modelLabel = name
@@ -76,7 +82,7 @@ function configurationMarkdown(model: QueryInsightsStage3Model | undefined): str
             : name
         : l10n.t('Unknown');
     lines.push(`- **${l10n.t('Model')}**: ${modelLabel}`);
-    if (model?.modelInputs?.promptSource) {
+    if (includeModelInputs && model?.modelInputs?.promptSource) {
         lines.push(`- **${l10n.t('Prompt')}**: ${model.modelInputs.promptSource}`);
     }
     if (model?.durationMs !== undefined) {
@@ -94,6 +100,9 @@ function configurationMarkdown(model: QueryInsightsStage3Model | undefined): str
         lines.push(`- **${l10n.t('Credits')}**: ${usage.credits}`);
     }
 
+    if (!includeModelInputs) {
+        return lines.join('\n');
+    }
     const inputs = model?.modelInputs;
     lines.push('', `### ${l10n.t('Inputs sent to the model')}`, '');
     if (!inputs) {
@@ -116,7 +125,8 @@ function configurationMarkdown(model: QueryInsightsStage3Model | undefined): str
 
 /**
  * Builds a shareable Markdown document of the Optimization Opportunities section: every card in
- * display order, followed by the model, prompt source and the inputs the model received.
+ * display order, followed by the model and, unless `includeModelInputs` is `false`, the prompt
+ * source and the inputs the model received.
  */
 export function buildOptimizationMarkdown(input: OptimizationMarkdownInput): string {
     const sections: string[] = [
@@ -138,6 +148,6 @@ export function buildOptimizationMarkdown(input: OptimizationMarkdownInput): str
     if (input.educational?.trim()) {
         sections.push(`## ${l10n.t('Understanding Your Query Execution Plan')}`, input.educational.trim());
     }
-    sections.push('---', configurationMarkdown(input.model));
+    sections.push('---', configurationMarkdown(input.model, input.includeModelInputs ?? true));
     return `${sections.join('\n\n')}\n`;
 }

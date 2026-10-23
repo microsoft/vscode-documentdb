@@ -37,10 +37,12 @@ import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { type AvailableModelInfo } from '../../../../services/ai/modelSelection';
+import { type AIIndexRecommendation } from '../../../../services/ai/types';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { getAnalysisProfilePresentation } from '../../queryInsightsShared/analysisProfilePresentation';
 import { ModelPicker } from '../../queryInsightsShared/ModelPicker';
 import { QueryInsightsPreviewBadge } from '../../queryInsightsShared/QueryInsightsPreviewBadge';
+import { ShareMenu, type ShareReportContent } from '../../queryInsightsShared/ShareMenu';
 import { usageByline } from '../../queryInsightsShared/usageByline';
 import {
     applyStage3Event,
@@ -53,11 +55,10 @@ import {
     startStage1Load,
     startStage3Load,
 } from '../queryInsightsReducer';
+import { buildOptimizationMarkdown, type OptimizationMarkdownInput } from '../utils/buildOptimizationMarkdown';
+import { buildOptimizationShareHtml } from '../utils/buildOptimizationShareHtml';
 import { createImprovementCardConfig } from '../utils/createImprovementCard';
-import { buildOptimizationMarkdown } from '../utils/buildOptimizationMarkdown';
 import { createInsightCardConfig } from '../utils/createInsightCard';
-import { CopyButton } from '../../queryInsightsShared/CopyButton';
-import { type AIIndexRecommendation } from '../../../../services/ai/types';
 import { extractErrorCode } from '../utils/errorCodeExtractor';
 import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDisplay';
 import { CardStack, type CardStackItem } from './components';
@@ -600,9 +601,10 @@ export const QueryInsightsMain = (): JSX.Element => {
         [source.executeAction],
     );
 
-    const copyOptimizationMarkdown = useCallback(async (): Promise<boolean> => {
-        if (pipeline.kind !== 's3Success') return false;
-        const markdown = buildOptimizationMarkdown({
+    /** The Optimization Opportunities report, or `undefined` before the AI analysis completes. */
+    const getShareReportInput = useCallback((): OptimizationMarkdownInput | undefined => {
+        if (pipeline.kind !== 's3Success') return undefined;
+        return {
             databaseName: configuration.databaseName,
             collectionName: configuration.collectionName,
             analysis: pipeline.streaming.summary?.markdown,
@@ -613,9 +615,28 @@ export const QueryInsightsMain = (): JSX.Element => {
             educational: pipeline.streaming.educational?.markdown,
             model: pipeline.model,
             generatedAt: new Date(),
-        });
-        return trpcClient.common.copyToClipboard.mutate({ text: markdown });
-    }, [pipeline, configuration, showErrorCard, stage2Data, trpcClient]);
+        };
+    }, [pipeline, configuration, showErrorCard, stage2Data]);
+
+    const buildShareMarkdown = useCallback((): string => {
+        const input = getShareReportInput();
+        if (!input) throw new Error('The AI analysis has not completed.');
+        return buildOptimizationMarkdown(input);
+    }, [getShareReportInput]);
+
+    const buildShareRichText = useCallback((): ShareReportContent => {
+        const input = getShareReportInput();
+        if (!input) throw new Error('The AI analysis has not completed.');
+        return {
+            html: buildOptimizationShareHtml({ ...input, metrics: stage2Data ?? undefined }),
+            plainText: buildOptimizationMarkdown({ ...input, includeModelInputs: false }),
+        };
+    }, [getShareReportInput, stage2Data]);
+
+    const copyShareText = useCallback(
+        (text: string): Promise<boolean> => trpcClient.common.copyToClipboard.mutate({ text }),
+        [trpcClient],
+    );
 
     const handleSecondaryAction = useCallback(
         async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
@@ -854,17 +875,16 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                     {/* Optimization Opportunities */}
                     <div className="optimizationSection">
-                        {/* Section title, with the Markdown export once the AI analysis is complete */}
+                        {/* Section title, with the Share menu once the AI analysis is complete */}
                         <div className="cardSpacing optimizationSectionHeader">
                             <Text size={400} weight="semibold" id="optimization-opportunities-title">
                                 {l10n.t('Optimization Opportunities')}
                             </Text>
                             {isStage3Success && (
-                                <CopyButton
-                                    appearance="subtle"
-                                    label={l10n.t('Copy as Markdown')}
-                                    copiedMessage={l10n.t('Copied the optimization opportunities as Markdown')}
-                                    onCopy={copyOptimizationMarkdown}
+                                <ShareMenu
+                                    buildMarkdown={buildShareMarkdown}
+                                    buildRichText={buildShareRichText}
+                                    copyText={copyShareText}
                                 />
                             )}
                         </div>

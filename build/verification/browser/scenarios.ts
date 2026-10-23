@@ -311,7 +311,7 @@ function explorerInsights(): Scenario<'queryInsightsStandalone'> {
                 'Suggested command',
                 verifyCommand,
                 'Changing filters or limits changes the results returned to the application.',
-                'Copy as Markdown',
+                'Share',
             ],
             selectors: ['.leftColumn', '.rightColumn'],
             noProgressbar: true,

@@ -193,6 +193,7 @@
     "bson": "^7.2.0",
     "denque": "~2.1.0",
     "es-toolkit": "~1.45.1",
+    "micromark": "~4.0.2",
     "monaco-editor": "~0.52.2",
     "mongodb": "^7.1.0",
     "mongodb-connection-string-url": "~3.0.2",

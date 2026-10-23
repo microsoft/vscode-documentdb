@@ -5,15 +5,14 @@
 
 import { Button, type ButtonProps } from '@fluentui/react-components';
 import { CheckmarkRegular, CopyRegular } from '@fluentui/react-icons';
-import * as l10n from '@vscode/l10n';
-import { useEffect, useState, type JSX } from 'react';
-import { Announcer } from '../../components/accessibility';
+import { type JSX } from 'react';
+import { useCopyFeedback } from './useCopyFeedback';
 
 export interface CopyButtonProps {
     /** Visible label, e.g. "Copy command". */
     label: string;
     /** Performs the copy. Resolving to `false` or rejecting counts as a failure. */
-    onCopy: () => Promise<unknown> | unknown;
+    onCopy: () => unknown;
     /** Screen reader message after a successful copy. Defaults to "Copied to clipboard". */
     copiedMessage?: string;
     appearance?: ButtonProps['appearance'];
@@ -33,47 +32,19 @@ export function CopyButton({
     appearance = 'secondary',
     size = 'small',
 }: CopyButtonProps): JSX.Element {
-    const [state, setState] = useState<{ status: 'idle' | 'copied' | 'failed'; key: number }>({
-        status: 'idle',
-        key: 0,
-    });
+    const feedback = useCopyFeedback();
 
-    useEffect(() => {
-        if (state.status === 'idle') return undefined;
-        const timer = window.setTimeout(() => setState((previous) => ({ ...previous, status: 'idle' })), 2000);
-        return () => window.clearTimeout(timer);
-    }, [state]);
-
-    const handleClick = async (): Promise<void> => {
-        let ok: boolean;
-        try {
-            ok = (await onCopy()) !== false;
-        } catch {
-            ok = false;
-        }
-        setState((previous) => ({ status: ok ? 'copied' : 'failed', key: previous.key + 1 }));
-    };
-
-    const copied = state.status === 'copied';
     return (
         <>
             <Button
                 appearance={appearance}
                 size={size}
-                icon={copied ? <CheckmarkRegular /> : <CopyRegular />}
-                onClick={() => void handleClick()}
+                icon={feedback.copied ? <CheckmarkRegular /> : <CopyRegular />}
+                onClick={() => void feedback.run(onCopy, copiedMessage)}
             >
                 {label}
             </Button>
-            <Announcer
-                key={`copy-${state.key}`}
-                when={state.status !== 'idle'}
-                message={
-                    state.status === 'failed'
-                        ? l10n.t('Could not copy to the clipboard')
-                        : (copiedMessage ?? l10n.t('Copied to clipboard'))
-                }
-            />
+            {feedback.announcer}
         </>
     );
 }

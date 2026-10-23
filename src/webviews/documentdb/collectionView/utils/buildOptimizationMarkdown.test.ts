@@ -119,4 +119,18 @@ describe('buildOptimizationMarkdown', () => {
         const markdown = buildOptimizationMarkdown({ ...base, executionErrors: ['Query timed out.'] });
         expect(markdown).toContain('## Query Execution Failed\n\nQuery timed out.');
     });
+
+    it('leaves out the prompt source and the model inputs for the shareable summary', () => {
+        expect(buildOptimizationMarkdown({ ...base, includeModelInputs: true })).toBe(buildOptimizationMarkdown(base));
+        const markdown = buildOptimizationMarkdown({ ...base, includeModelInputs: false });
+        expect(markdown).toContain('## Recommendations');
+        expect(markdown).toContain('## Query Insights Configuration');
+        expect(markdown).toContain('- **Model**: GPT-5 (`copilot-gpt-5`)');
+        expect(markdown).toContain('- **Tokens**: 19000 in / 900 out');
+        expect(markdown).not.toContain('**Prompt**');
+        expect(markdown).not.toContain('local-resource-file');
+        expect(markdown).not.toContain('Inputs sent to the model');
+        expect(markdown).not.toContain('db.orders.find({ status: "<value>" })');
+        expect(markdown).not.toContain('Collection_Stats');
+    });
 });
