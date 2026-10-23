@@ -57,6 +57,9 @@ for the public one.
   the normalized value or `undefined`.
 - `getCloudForTokenResource(value)`: the built-in cloud for a known audience, else `undefined`.
 
+**Done** in `99f7c2b0` (with the allowed-hosts changes): table, `toEntraScope`, `parseTokenResource`,
+`getCloudForTokenResource`, tests pinning the exact public scope string.
+
 ## A2. Interactive resolver (D6, D8)
 
 `src/documentdb/auth/resolveDocumentDBTokenResource.ts`:
@@ -89,6 +92,15 @@ export function resolveInteractiveTokenResource(connectionString: string, deps?:
 - A warning is logged when the override equals the public audience but the cloud is not public.
 - `deps` injects settings, `fetch` and the environment for tests.
 
+**Done** in `b1e39d1b` (`documentdbTokenResource.ts`, shared with A3). `azure.us` maps to US
+Government after the operator confirmed it (D8).
+
+**ARM metadata api-version:** kept at `2022-09-01`. A research pass found that vscode-cosmosdb, Azure
+Resources and the Azure tools libraries never call `/metadata/endpoints` (they use the static
+`getConfiguredAzureEnv()`), so there is no peer version to follow. The public endpoint returns the
+same body, including `ossrDbmsResourceId`, for `2022-09-01` and the newer `2026-06-01` stable spec
+version. Review again only if the response content changes.
+
 ## A3. Managed identity resolver (D7)
 
 Same file: `resolveManagedIdentityTokenResource(connectionString, deps?)`.
@@ -101,6 +113,8 @@ Same file: `resolveManagedIdentityTokenResource(connectionString, deps?)`.
   host suffix already covers.
 - IMDS: `GET http://169.254.169.254/metadata/instance/compute/azEnvironment?api-version=2021-02-01&format=text`
   with `Metadata: true` and a short timeout; called only when the earlier steps found nothing.
+
+**Done** in `b1e39d1b`.
 
 ## A4. Wiring
 
@@ -116,6 +130,10 @@ Same file: `resolveManagedIdentityTokenResource(connectionString, deps?)`.
   a small in-memory registry, for Part B. This is the error-translation skill's "record it while
   preparing the connection" pattern; the error object is not touched.
 
+**Done**: interactive handler `00c8752e`, managed identity handler `89a2489e`, shell and playground
+`32e8f5f2` (the playground uses its existing `workerClusterId`), copy connection string `df8652a5`.
+The failure registry moved to Part B, which owns it.
+
 ## A5. Settings
 
 `documentDB.customEnvironment`, an object setting mirroring `mssql.customEnvironment`:
@@ -129,6 +147,8 @@ The description says it is used together with `microsoft-sovereign-cloud.environ
 `mongoClusterHostnameSuffix` extends `ALLOWED_HOSTS` explicitly; automatic trust stays limited to
 `azure.com`, `azure.us` and `azure.cn`, which [oidcAllowedHosts.ts](../../../../../src/documentdb/auth/oidcAllowedHosts.ts)
 already enforces (#934).
+
+**Done** in `5aafc30e`; the custom suffix is passed to `getOidcAllowedHosts` by every caller.
 
 ## A6. Tests
 
@@ -146,6 +166,9 @@ already enforces (#934).
 
 Goal (D3): one table maps Entra sign-in failures to text that says what happened, who can fix it, and
 where to go next.
+
+**Done** with each commit. Case 1 checkpoint after Part A: `npm run build` passed; targeted Vitest
+(auth, shell, playground, copy, new connection, settings) 43 files, 992 tests passed.
 
 ## B1. Where it plugs in
 
@@ -179,7 +202,7 @@ src/documentdb/auth/entraErrors/
 
 Each rule has an id, codes, and `explain(context)` with `context = { code, cloud, authMethod }`.
 Every message names who can fix the problem and links to the public troubleshooting page
-(`Links.SovereignCloudsTroubleshooting`).
+(`Links.SovereignClouds`).
 
 | Rule id                      | Codes                   | Who can fix it                                  |
 | ---------------------------- | ----------------------- | ----------------------------------------------- |
@@ -220,9 +243,14 @@ and `authMethod`. No tenant, subscription, cluster, user, or correlation identif
 - New user-manual page `docs/user-manual/sovereign-clouds.md`: selecting a cloud, the audience per
   cloud, `documentDB.customEnvironment`, the known Entra limitation where VS Code is not yet
   authorized, workarounds (native authentication, managed identity), finding the error code, and how
-  to report it on GitHub. It is the target of `Links.SovereignCloudsTroubleshooting`.
+  to report it on GitHub. It is the target of `Links.SovereignClouds`.
 - `src/documentdb/utils/connection-string-parameters.md`: the per-cloud `TOKEN_RESOURCE` values.
 - `oidcAllowedHosts.ts`: point the "tracked separately" comment at the resolver.
+
+**Done**: user-manual page `79af884e`, links and `Links.SovereignClouds` (named without the
+`Troubleshooting` suffix, since the page covers setup too) `891af716`, settings example fix
+`5e1930e7` (the first draft used dotted keys; `documentDB.customEnvironment` is one object setting),
+`connection-string-parameters.md` `8082fa9c`, `oidcAllowedHosts.ts` comment `99f7c2b0`.
 
 ---
 
