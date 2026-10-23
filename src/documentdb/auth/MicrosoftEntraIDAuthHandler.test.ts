@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
 
 const getSessionFromVSCode = vi.fn();
 const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
@@ -19,9 +20,15 @@ vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => 
     getSessionFromVSCode: (...args: unknown[]) => getSessionFromVSCode(...args),
 }));
 
+vi.mock('./documentdbTokenResource', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('./documentdbTokenResource')>()),
+    resolveInteractiveTokenResource: vi.fn(),
+}));
+
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthMethodId } from './AuthMethod';
+import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
 import { MicrosoftEntraIDAuthHandler } from './MicrosoftEntraIDAuthHandler';
 
 function buildCredentials(connectionString: string): CachedClusterCredentials {
@@ -39,6 +46,15 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         vi.clearAllMocks();
         getSessionFromVSCode.mockReset();
         getSessionFromVSCode.mockResolvedValue({ accessToken: 'access-token' });
+        vi.mocked(resolveInteractiveTokenResource).mockResolvedValue({
+            resource: 'https://ossrdbms-aad.database.windows.net',
+            scope: 'https://ossrdbms-aad.database.windows.net/.default',
+            cloudCategory: 'public',
+            reason: 'setting',
+        });
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue(undefined),
+        } as unknown as vscode.WorkspaceConfiguration);
     });
 
     it('strips credentials and stale OIDC markers from the connection string', async () => {
@@ -53,10 +69,50 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(result.connectionString).not.toContain('authMechanismProperties');
         expect(result.connectionString).toContain('retryWrites=true');
         expect(result.options.authMechanismProperties).toHaveProperty('OIDC_CALLBACK');
+        expect(getSessionFromVSCode).toHaveBeenCalledWith(
+            ['https://ossrdbms-aad.database.windows.net/.default'],
+            'tenant',
+            { createIfNone: true },
+        );
         const output = JSON.stringify(mockOutputChannel.info.mock.calls);
         expect(output).toContain('interactiveEntra.getSession');
         expect(output).not.toContain('access-token');
         expect(output).not.toContain('my-cluster');
+    });
+
+    it('requests the resolved US Government scope and records its category on the existing trace', async () => {
+        const scope = 'https://ossrdbms-aad.database.usgovcloudapi.net/.default';
+        vi.mocked(resolveInteractiveTokenResource).mockResolvedValueOnce({
+            resource: 'https://ossrdbms-aad.database.usgovcloudapi.net',
+            scope,
+            cloudCategory: 'usgov',
+            reason: 'setting',
+        });
+        const connectionString = 'mongodb://cluster.azure.us/';
+        await new MicrosoftEntraIDAuthHandler(buildCredentials(connectionString)).configureAuth();
+        expect(resolveInteractiveTokenResource).toHaveBeenCalledWith(connectionString);
+        expect(getSessionFromVSCode).toHaveBeenCalledWith([scope], 'tenant', { createIfNone: true });
+        const output = String(mockOutputChannel.info.mock.calls[0][0]);
+        expect(output).toContain('"cloudCategory":"usgov"');
+        expect(output).toContain('"tokenResourceReason":"setting"');
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(3);
+    });
+
+    it('propagates a cloud mismatch unchanged before requesting a session', async () => {
+        const error = new TokenResourceResolutionError('Select the cloud of the cluster.', 'cloudMismatch');
+        vi.mocked(resolveInteractiveTokenResource).mockRejectedValueOnce(error);
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.azure.us/'));
+        await expect(handler.configureAuth()).rejects.toBe(error);
+        expect(getSessionFromVSCode).not.toHaveBeenCalled();
+    });
+
+    it('passes the explicitly configured custom hostname suffix to the OIDC allowlist', async () => {
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue({ mongoClusterHostnameSuffix: '.database.example.com' }),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.database.example.com/'));
+        const { options } = await handler.configureAuth();
+        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.database.example.com']);
     });
 
     it('logs interactive authentication failure without the raw message', async () => {
