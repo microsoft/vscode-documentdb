@@ -6,11 +6,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES } from '../../documentdb/auth/managedIdentityConnectionString';
+import { DOCUMENTDB_TOKEN_RESOURCE } from '../../documentdb/auth/entraScopes';
+import { getManagedIdentityAuthMechanismProperties } from '../../documentdb/auth/managedIdentityConnectionString';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptConnectionStringStep } from './PromptConnectionStringStep';
 
 const mockInfo = vi.fn();
+const publicAuthMechanismProperties = getManagedIdentityAuthMechanismProperties(DOCUMENTDB_TOKEN_RESOURCE);
 vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
@@ -51,7 +53,7 @@ describe('PromptConnectionStringStep', () => {
     it('keeps managed identity available when an explicit hint uses a custom host', async () => {
         const clientId = '11111111-2222-3333-4444-555555555555';
         const context = makeContext(
-            `mongodb://${clientId}@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+            `mongodb://${clientId}@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
         );
 
         await new PromptConnectionStringStep().prompt(context);
@@ -82,7 +84,7 @@ describe('PromptConnectionStringStep', () => {
 
     it('does not infer managed identity from ENVIRONMENT:azure without OIDC', async () => {
         const context = makeContext(
-            `mongodb://private.documentdb.internal:10260/?authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+            `mongodb://private.documentdb.internal:10260/?authMechanismProperties=${publicAuthMechanismProperties}`,
         );
 
         await new PromptConnectionStringStep().prompt(context);
@@ -98,7 +100,7 @@ describe('PromptConnectionStringStep', () => {
 
     it('keeps an unusable machine identity visible for correction without storing machine-flow markers', async () => {
         const context = makeContext(
-            `mongodb://display-name@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+            `mongodb://display-name@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${publicAuthMechanismProperties}`,
         );
 
         await new PromptConnectionStringStep().prompt(context);

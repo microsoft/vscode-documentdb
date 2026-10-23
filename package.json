@@ -1986,6 +1986,24 @@
             "maximum": 65535,
             "scope": "machine-overridable",
             "description": "Starting port for automatic local port selection when localPortStrategy is 'autoSelect'. The extension scans upward until a free port is found."
+          },
+          "documentDB.customEnvironment": {
+            "order": 5,
+            "type": "object",
+            "default": {},
+            "scope": "machine-overridable",
+            "markdownDescription": "Additional DocumentDB-specific configuration for a custom sovereign cloud. Use it together with `#microsoft-sovereign-cloud.environment#` set to `custom` and `#microsoft-sovereign-cloud.customEnvironment#`. `ossrdbmsEndpoint` is also used for managed identity when the cloud of the virtual machine cannot be detected.",
+            "properties": {
+              "ossrdbmsEndpoint": {
+                "type": "string",
+                "description": "Sovereign cloud equivalent for https://ossrdbms-aad.database.windows.net/ (the Microsoft Entra resource for open-source databases)."
+              },
+              "mongoClusterHostnameSuffix": {
+                "type": "string",
+                "description": "Sovereign cloud equivalent for .mongocluster.cosmos.azure.com (including the leading dot). Microsoft Entra ID tokens are sent only to hosts ending with this suffix or with a built-in Azure cloud domain."
+              }
+            },
+            "additionalProperties": false
           }
         }
       },
