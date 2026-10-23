@@ -21,7 +21,7 @@ import './baseOptimizationCard.scss';
 export interface InsightCardProps {
     config: InsightCardConfig;
     /** Copies the card's command. A resolved `false` or a rejection is reported as a failed copy. */
-    onCopy?: (command: string) => Promise<unknown> | unknown;
+    onCopy?: (command: string) => unknown;
     ref?: React.Ref<HTMLDivElement>;
 }
 
@@ -100,7 +100,11 @@ export function InsightCard({ config, onCopy, ref }: InsightCardProps) {
                         {config.details && (
                             <Text
                                 size={200}
-                                style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: '12px' }}
+                                style={{
+                                    color: tokens.colorNeutralForeground3,
+                                    display: 'block',
+                                    marginBottom: '12px',
+                                }}
                             >
                                 {config.details}
                             </Text>

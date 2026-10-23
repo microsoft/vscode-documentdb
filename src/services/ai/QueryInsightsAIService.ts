@@ -142,7 +142,7 @@ export class QueryInsightsAIService {
                 parsedResponse.modelFamily = optimizationResult.modelFamily;
                 parsedResponse.modelDisplayName = optimizationResult.modelDisplayName;
                 parsedResponse.usage = optimizationResult.usage;
-                        parsedResponse.modelInputs = optimizationResult.modelInputs;
+                parsedResponse.modelInputs = optimizationResult.modelInputs;
 
                 // Count all actionable recommendations by action type in a single pass
                 let actionableRecommendationCount = 0;

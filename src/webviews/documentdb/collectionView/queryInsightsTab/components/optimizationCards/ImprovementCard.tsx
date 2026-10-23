@@ -19,8 +19,8 @@ import {
 import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
-import { type ImprovementCard as ImprovementCardConfig } from '../../../types/queryInsights';
 import { CopyButton } from '../../../../queryInsightsShared/CopyButton';
+import { type ImprovementCard as ImprovementCardConfig } from '../../../types/queryInsights';
 import './baseOptimizationCard.scss';
 
 export interface ImprovementCardProps {
@@ -34,7 +34,7 @@ export interface ImprovementCardProps {
      * Copies the card's command. Shown as a secondary action next to the primary one, or alone
      * when actions are disabled. A resolved `false` or a rejection is reported as a failed copy.
      */
-    onCopy?: () => Promise<unknown> | unknown;
+    onCopy?: () => unknown;
 
     /**
      * Callback when the primary button is clicked

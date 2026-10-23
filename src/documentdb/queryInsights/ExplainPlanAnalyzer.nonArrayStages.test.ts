@@ -67,7 +67,8 @@ function documentDbIdOrderPlan(): Document {
     const runtimeFilterSet = [{ 'address.building': { $gt: 30000 } }, { $unknown: {} }];
     return {
         explainVersion: 2,
-        command: "db.runCommand({explain: { 'find' : 'restaurants', 'filter' : { 'address.building' : { '$gt' : 30000 } } }})",
+        command:
+            "db.runCommand({explain: { 'find' : 'restaurants', 'filter' : { 'address.building' : { '$gt' : 30000 } } }})",
         queryPlanner: {
             namespace: 'MyDatabase.restaurants',
             winningPlan: {

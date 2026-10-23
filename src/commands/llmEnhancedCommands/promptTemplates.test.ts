@@ -302,7 +302,10 @@ describe('promptTemplates', () => {
         beforeEach(() => {
             extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'qi-prompt-'));
             fs.mkdirSync(path.join(extensionPath, 'resources', 'prompts', 'local'), { recursive: true });
-            fs.writeFileSync(path.join(extensionPath, 'resources', 'prompts', 'index-advisor-count.prompt.md'), 'BUILT_IN_BODY');
+            fs.writeFileSync(
+                path.join(extensionPath, 'resources', 'prompts', 'index-advisor-count.prompt.md'),
+                'BUILT_IN_BODY',
+            );
             ext.context = { extensionPath } as unknown as typeof ext.context;
         });
 
