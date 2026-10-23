@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
 import * as vscode from 'vscode';
@@ -11,6 +11,8 @@ import { ext } from '../../extensionVariables';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthMethodId } from './AuthMethod';
+import * as tokenResources from './documentdbTokenResource';
+import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
@@ -67,6 +69,7 @@ describe('expiresInSecondsFromTimestamp', () => {
 describe('ManagedIdentityAuthHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        resetEntraTokenFailuresForTests();
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
@@ -75,6 +78,11 @@ describe('ManagedIdentityAuthHandler', () => {
             accessToken: 'a-token',
             expiresOnTimestamp: Date.now() + 3600 * 1000,
         });
+    });
+
+    afterEach((): void => {
+        vi.restoreAllMocks();
+        resetEntraTokenFailuresForTests();
     });
 
     it('configures the OIDC mechanism with a curated allowed-hosts list', async () => {
@@ -192,6 +200,7 @@ describe('ManagedIdentityAuthHandler', () => {
 
         expect(response.accessToken).toBe('a-token');
         expect(response.expiresInSeconds).toBeGreaterThan(0);
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
 
     it('reuses one token correlation ID across OIDC callback retries', async () => {
@@ -211,6 +220,36 @@ describe('ManagedIdentityAuthHandler', () => {
         const { options } = await handler.configureAuth();
 
         await expect(invokeOidcCallback(options)).rejects.toThrow(/more than one managed identity/i);
+    });
+
+    it('records failures only inside the deferred token callback and rethrows the same error', async (): Promise<void> => {
+        const connectionString = 'mongodb://cluster.azure.us/';
+        const handler = new ManagedIdentityAuthHandler(
+            buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
+        );
+        const error = Object.freeze(new Error('AADSTS500011: Resource not found'));
+        getManagedIdentityAccessToken.mockRejectedValueOnce(error);
+
+        const { options } = await handler.configureAuth();
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+        expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
+
+        await expect(invokeOidcCallback(options)).rejects.toBe(error);
+        expect(getRecentEntraTokenFailure('cluster-1')).toEqual({
+            cloudCategory: 'usgov',
+            authMethod: 'managedIdentity',
+            timestamp: expect.any(Number),
+        });
+    });
+
+    it('does not record token resource resolution errors as token-acquisition failures', async (): Promise<void> => {
+        const error = new tokenResources.TokenResourceResolutionError('Set the cloud resource.', 'managedIdentityCloudUnknown');
+        vi.spyOn(tokenResources, 'resolveManagedIdentityTokenResource').mockRejectedValueOnce(error);
+        const handler = new ManagedIdentityAuthHandler(buildCredentials());
+
+        await expect(handler.configureAuth()).rejects.toBe(error);
+        expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
 
     it('honors the host-gated TLS exception', async () => {

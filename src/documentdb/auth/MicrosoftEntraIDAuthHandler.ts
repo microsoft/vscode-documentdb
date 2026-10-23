@@ -17,6 +17,7 @@ import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString'
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 import { resolveInteractiveTokenResource, type DocumentDBCustomEnvironment } from './documentdbTokenResource';
+import { recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
 /**
@@ -35,32 +36,41 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             .getConfiguration()
             .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
         // Get Microsoft Entra ID token
-        const session = await traceAuthOperation(
-            'interactiveEntra.getSession',
-            () =>
-                withTokenAcquisitionTiming(timings, () =>
-                    getSessionFromVSCode([resolved.scope], this.clusterCredentials.entraIdConfig?.tenantId, {
-                        createIfNone: true,
-                    }),
-                ),
-            {
-                tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId,
-                createIfNone: true,
-                cloudCategory: resolved.cloudCategory,
-                tokenResourceReason: resolved.reason,
-            },
-            authCorrelationId,
-            traceContext,
-        );
-
-        if (!session) {
-            traceAuthFlow(
-                'interactiveEntra.sessionUnavailable',
-                { reason: 'noSessionReturned' },
+        let session: vscode.AuthenticationSession | undefined;
+        try {
+            session = await traceAuthOperation(
+                'interactiveEntra.getSession',
+                () =>
+                    withTokenAcquisitionTiming(timings, () =>
+                        getSessionFromVSCode([resolved.scope], this.clusterCredentials.entraIdConfig?.tenantId, {
+                            createIfNone: true,
+                        }),
+                    ),
+                {
+                    tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId,
+                    createIfNone: true,
+                    cloudCategory: resolved.cloudCategory,
+                    tokenResourceReason: resolved.reason,
+                },
                 authCorrelationId,
                 traceContext,
             );
-            throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+
+            if (!session) {
+                traceAuthFlow(
+                    'interactiveEntra.sessionUnavailable',
+                    { reason: 'noSessionReturned' },
+                    authCorrelationId,
+                    traceContext,
+                );
+                throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+            }
+        } catch (error) {
+            recordEntraTokenFailure(this.clusterCredentials.clusterId, {
+                cloudCategory: resolved.cloudCategory,
+                authMethod: 'interactive',
+            });
+            throw error;
         }
 
         // Prepare connection string

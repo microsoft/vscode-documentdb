@@ -14,6 +14,7 @@ import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString'
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 import { resolveManagedIdentityTokenResource, type DocumentDBCustomEnvironment } from './documentdbTokenResource';
+import { recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
@@ -70,27 +71,35 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
             authMechanismProperties: {
                 ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString, customHostnameSuffix),
                 OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
-                    const token = await traceAuthOperation(
-                        'managedIdentity.oidcCallback',
-                        () =>
-                            withTokenAcquisitionTiming(timings, () =>
-                                getManagedIdentityAccessToken(
-                                    [resolved.scope],
-                                    clientId,
-                                    tenantId,
-                                    this.tokenCorrelationId,
-                                    traceContext,
+                    try {
+                        const token = await traceAuthOperation(
+                            'managedIdentity.oidcCallback',
+                            () =>
+                                withTokenAcquisitionTiming(timings, () =>
+                                    getManagedIdentityAccessToken(
+                                        [resolved.scope],
+                                        clientId,
+                                        tenantId,
+                                        this.tokenCorrelationId,
+                                        traceContext,
+                                    ),
                                 ),
-                            ),
-                        {},
-                        this.tokenCorrelationId,
-                        traceContext,
-                    );
+                            {},
+                            this.tokenCorrelationId,
+                            traceContext,
+                        );
 
-                    return {
-                        accessToken: token.accessToken,
-                        expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
-                    };
+                        return {
+                            accessToken: token.accessToken,
+                            expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
+                        };
+                    } catch (error) {
+                        recordEntraTokenFailure(this.clusterCredentials.clusterId, {
+                            cloudCategory: resolved.cloudCategory,
+                            authMethod: 'managedIdentity',
+                        });
+                        throw error;
+                    }
                 },
             },
         };

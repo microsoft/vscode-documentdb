@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
 const getSessionFromVSCode = vi.fn();
@@ -29,6 +29,7 @@ import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthMethodId } from './AuthMethod';
 import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
+import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { MicrosoftEntraIDAuthHandler } from './MicrosoftEntraIDAuthHandler';
 
 function buildCredentials(connectionString: string): CachedClusterCredentials {
@@ -44,6 +45,7 @@ function buildCredentials(connectionString: string): CachedClusterCredentials {
 describe('MicrosoftEntraIDAuthHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        resetEntraTokenFailuresForTests();
         getSessionFromVSCode.mockReset();
         getSessionFromVSCode.mockResolvedValue({ accessToken: 'access-token' });
         vi.mocked(resolveInteractiveTokenResource).mockResolvedValue({
@@ -55,6 +57,10 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
+    });
+
+    afterEach((): void => {
+        resetEntraTokenFailuresForTests();
     });
 
     it('strips credentials and stale OIDC markers from the connection string', async () => {
@@ -78,6 +84,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(output).toContain('interactiveEntra.getSession');
         expect(output).not.toContain('access-token');
         expect(output).not.toContain('my-cluster');
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
 
     it('requests the resolved US Government scope and records its category on the existing trace', async () => {
@@ -104,6 +111,43 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.azure.us/'));
         await expect(handler.configureAuth()).rejects.toBe(error);
         expect(getSessionFromVSCode).not.toHaveBeenCalled();
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+    });
+
+    it.each(['public', 'usgov', 'china', 'custom'] as const)(
+        'records a failed token acquisition in %s without changing the error',
+        async (cloudCategory): Promise<void> => {
+            vi.mocked(resolveInteractiveTokenResource).mockResolvedValueOnce({
+                resource: 'https://database.example.com',
+                scope: 'https://database.example.com/.default',
+                cloudCategory,
+                reason: 'setting',
+            });
+            const error = Object.freeze(
+                Object.assign(new Error('AADSTS65002: Preauthorization required'), { code: 'original-code' }),
+            );
+            getSessionFromVSCode.mockRejectedValueOnce(error);
+            const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'));
+
+            await expect(handler.configureAuth()).rejects.toBe(error);
+            expect(error.code).toBe('original-code');
+            expect(getRecentEntraTokenFailure('cluster-1')).toEqual({
+                cloudCategory,
+                authMethod: 'interactive',
+                timestamp: expect.any(Number),
+            });
+            expect(mockOutputChannel.error).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it('records a token-acquisition failure when no session is returned', async (): Promise<void> => {
+        getSessionFromVSCode.mockResolvedValueOnce(undefined);
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'));
+        await expect(handler.configureAuth()).rejects.toThrow('Failed to obtain Entra ID token.');
+        expect(getRecentEntraTokenFailure('cluster-1')).toMatchObject({
+            cloudCategory: 'public',
+            authMethod: 'interactive',
+        });
     });
 
     it('passes the explicitly configured custom hostname suffix to the OIDC allowlist', async () => {

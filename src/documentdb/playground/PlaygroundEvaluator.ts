@@ -18,6 +18,7 @@ import { traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { resolveInteractiveTokenResource, resolveManagedIdentityTokenResource } from '../auth/documentdbTokenResource';
+import { recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
@@ -377,7 +378,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         try {
             const clusterId = this._workerManager.workerClusterId;
             const credentials = clusterId ? CredentialCache.getCredentials(clusterId) : undefined;
-            if (!credentials) {
+            if (!clusterId || !credentials) {
                 throw new Error(l10n.t('No credentials found for the query playground connection.'));
             }
             const resolved =
@@ -389,40 +390,57 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             if (msg.source === 'managedIdentity') {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
                 this._sessionId ??= randomUUID();
-                accessToken = (
-                    await withTokenAcquisitionTiming(timings, () =>
-                        getManagedIdentityAccessToken(
-                            [resolved.scope],
-                            msg.clientId,
-                            msg.tenantId,
-                            this._sessionId,
-                            traceContext,
-                        ),
-                    )
-                ).accessToken;
+                try {
+                    accessToken = (
+                        await withTokenAcquisitionTiming(timings, () =>
+                            getManagedIdentityAccessToken(
+                                [resolved.scope],
+                                msg.clientId,
+                                msg.tenantId,
+                                this._sessionId,
+                                traceContext,
+                            ),
+                        )
+                    ).accessToken;
+                } catch (error) {
+                    recordEntraTokenFailure(clusterId, {
+                        cloudCategory: resolved.cloudCategory,
+                        authMethod: 'managedIdentity',
+                    });
+                    throw error;
+                }
             } else {
                 const { getSessionFromVSCode } = await import(
                     // eslint-disable-next-line import/no-internal-modules
                     '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
                 );
-                const session = await traceAuthOperation(
-                    'interactiveEntra.getSession',
-                    () =>
-                        withTokenAcquisitionTiming(timings, () =>
-                            getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
-                        ),
-                    {
-                        tenantSpecified: !!msg.tenantId,
-                        createIfNone: true,
-                        cloudCategory: resolved.cloudCategory,
-                        tokenResourceReason: resolved.reason,
-                    },
-                    msg.requestId,
-                    traceContext,
-                );
+                let session: vscode.AuthenticationSession | undefined;
+                try {
+                    session = await traceAuthOperation(
+                        'interactiveEntra.getSession',
+                        () =>
+                            withTokenAcquisitionTiming(timings, () =>
+                                getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
+                            ),
+                        {
+                            tenantSpecified: !!msg.tenantId,
+                            createIfNone: true,
+                            cloudCategory: resolved.cloudCategory,
+                            tokenResourceReason: resolved.reason,
+                        },
+                        msg.requestId,
+                        traceContext,
+                    );
 
-                if (!session) {
-                    throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                    if (!session) {
+                        throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                    }
+                } catch (error) {
+                    recordEntraTokenFailure(clusterId, {
+                        cloudCategory: resolved.cloudCategory,
+                        authMethod: 'interactive',
+                    });
+                    throw error;
                 }
 
                 accessToken = session.accessToken;

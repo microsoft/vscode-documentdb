@@ -12,6 +12,7 @@ import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspa
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { resolveInteractiveTokenResource, resolveManagedIdentityTokenResource } from '../auth/documentdbTokenResource';
+import { recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
 import {
     WorkerSessionManager,
     type WorkerSessionCallbacks,
@@ -371,40 +372,57 @@ export class ShellSessionManager implements vscode.Disposable {
 
             if (msg.source === 'managedIdentity') {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
-                accessToken = (
-                    await withTokenAcquisitionTiming(timings, () =>
-                        getManagedIdentityAccessToken(
-                            [resolved.scope],
-                            msg.clientId,
-                            msg.tenantId,
-                            this._managedIdentityTokenCorrelationId,
-                            traceContext,
-                        ),
-                    )
-                ).accessToken;
+                try {
+                    accessToken = (
+                        await withTokenAcquisitionTiming(timings, () =>
+                            getManagedIdentityAccessToken(
+                                [resolved.scope],
+                                msg.clientId,
+                                msg.tenantId,
+                                this._managedIdentityTokenCorrelationId,
+                                traceContext,
+                            ),
+                        )
+                    ).accessToken;
+                } catch (error) {
+                    recordEntraTokenFailure(this._connectionInfo.clusterId, {
+                        cloudCategory: resolved.cloudCategory,
+                        authMethod: 'managedIdentity',
+                    });
+                    throw error;
+                }
             } else {
                 const { getSessionFromVSCode } = await import(
                     // eslint-disable-next-line import/no-internal-modules
                     '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
                 );
-                const session = await traceAuthOperation(
-                    'interactiveEntra.getSession',
-                    () =>
-                        withTokenAcquisitionTiming(timings, () =>
-                            getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
-                        ),
-                    {
-                        tenantSpecified: !!msg.tenantId,
-                        createIfNone: true,
-                        cloudCategory: resolved.cloudCategory,
-                        tokenResourceReason: resolved.reason,
-                    },
-                    msg.requestId,
-                    traceContext,
-                );
+                let session: vscode.AuthenticationSession | undefined;
+                try {
+                    session = await traceAuthOperation(
+                        'interactiveEntra.getSession',
+                        () =>
+                            withTokenAcquisitionTiming(timings, () =>
+                                getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
+                            ),
+                        {
+                            tenantSpecified: !!msg.tenantId,
+                            createIfNone: true,
+                            cloudCategory: resolved.cloudCategory,
+                            tokenResourceReason: resolved.reason,
+                        },
+                        msg.requestId,
+                        traceContext,
+                    );
 
-                if (!session) {
-                    throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                    if (!session) {
+                        throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                    }
+                } catch (error) {
+                    recordEntraTokenFailure(this._connectionInfo.clusterId, {
+                        cloudCategory: resolved.cloudCategory,
+                        authMethod: 'interactive',
+                    });
+                    throw error;
                 }
 
                 accessToken = session.accessToken;
