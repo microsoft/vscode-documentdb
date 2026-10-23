@@ -369,6 +369,7 @@ export function applyStage3Event(
                     modelFamily: event.modelFamily,
                     usage: event.usage,
                     durationMs: event.durationMs,
+                    modelInputs: event.modelInputs,
                 },
             });
 

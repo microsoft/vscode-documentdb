@@ -54,7 +54,10 @@ import {
     startStage3Load,
 } from '../queryInsightsReducer';
 import { createImprovementCardConfig } from '../utils/createImprovementCard';
+import { buildOptimizationMarkdown } from '../utils/buildOptimizationMarkdown';
 import { createInsightCardConfig } from '../utils/createInsightCard';
+import { CopyButton } from '../../queryInsightsShared/CopyButton';
+import { type AIIndexRecommendation } from '../../../../services/ai/types';
 import { extractErrorCode } from '../utils/errorCodeExtractor';
 import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDisplay';
 import { CardStack, type CardStackItem } from './components';
@@ -597,6 +600,23 @@ export const QueryInsightsMain = (): JSX.Element => {
         [source.executeAction],
     );
 
+    const copyOptimizationMarkdown = useCallback(async (): Promise<boolean> => {
+        if (pipeline.kind !== 's3Success') return false;
+        const markdown = buildOptimizationMarkdown({
+            databaseName: configuration.databaseName,
+            collectionName: configuration.collectionName,
+            analysis: pipeline.streaming.summary?.markdown,
+            executionErrors: showErrorCard ? stage2Data?.concerns : undefined,
+            recommendations: pipeline.streaming.recommendations.filter(
+                (rec): rec is AIIndexRecommendation => rec !== null,
+            ),
+            educational: pipeline.streaming.educational?.markdown,
+            model: pipeline.model,
+            generatedAt: new Date(),
+        });
+        return trpcClient.common.copyToClipboard.mutate({ text: markdown });
+    }, [pipeline, configuration, showErrorCard, stage2Data, trpcClient]);
+
     const handleSecondaryAction = useCallback(
         async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
             return await source.executeAction(actionId, payload);
@@ -708,7 +728,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             component: (
                                 <InsightCard
                                     config={createInsightCardConfig(rec, index)}
-                                    onCopy={(text) => void trpcClient.common.copyToClipboard.mutate({ text })}
+                                    onCopy={(text) => trpcClient.common.copyToClipboard.mutate({ text })}
                                 />
                             ),
                         });
@@ -726,7 +746,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             <ImprovementCard
                                 config={config}
                                 actionsEnabled={source.actionsEnabled}
-                                onCopy={() => void trpcClient.common.copyToClipboard.mutate({ text: rec.shellCommand })}
+                                onCopy={() => trpcClient.common.copyToClipboard.mutate({ text: rec.shellCommand })}
                                 onPrimaryAction={handlePrimaryAction}
                                 onSecondaryAction={handleSecondaryAction}
                             />
@@ -834,10 +854,20 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                     {/* Optimization Opportunities */}
                     <div className="optimizationSection">
-                        {/* Section title */}
-                        <Text size={400} weight="semibold" className="cardSpacing" style={{ display: 'block' }}>
-                            {l10n.t('Optimization Opportunities')}
-                        </Text>
+                        {/* Section title, with the Markdown export once the AI analysis is complete */}
+                        <div className="cardSpacing optimizationSectionHeader">
+                            <Text size={400} weight="semibold" id="optimization-opportunities-title">
+                                {l10n.t('Optimization Opportunities')}
+                            </Text>
+                            {isStage3Success && (
+                                <CopyButton
+                                    appearance="subtle"
+                                    label={l10n.t('Copy as Markdown')}
+                                    copiedMessage={l10n.t('Copied the optimization opportunities as Markdown')}
+                                    onCopy={copyOptimizationMarkdown}
+                                />
+                            )}
+                        </div>
 
                         {/* Platform-specific error card for RU clusters */}
                         {stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (

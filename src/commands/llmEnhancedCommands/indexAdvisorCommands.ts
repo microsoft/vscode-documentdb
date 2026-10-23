@@ -103,6 +103,8 @@ export interface OptimizationResult {
     // request. Optional fields (see CopilotTokenUsage) — may be undefined when
     // the model rejects countTokens or the request is cancelled.
     usage?: CopilotTokenUsage;
+    // The data messages sent with the request (query + context), for export.
+    modelInputs?: OptimizationModelInputs;
 }
 
 /**
@@ -132,6 +134,21 @@ interface PreparedOptimizationRequest {
      * on the post-LLM telemetry call.
      */
     promptTotalLength: number;
+    /** The data messages exactly as sent (never the instruction prompt). */
+    modelInputs: OptimizationModelInputs;
+}
+
+/**
+ * What the model received besides the instruction prompt, for the user-facing
+ * "copy as Markdown" export and debugging.
+ */
+export interface OptimizationModelInputs {
+    /** Second message: the user's query. */
+    userQuery: string;
+    /** Third message: cluster info, collection/index stats, execution stats, static analysis. */
+    contextData: string;
+    /** Where the instruction prompt came from (built-in resource, local resource, custom file, …). */
+    promptSource: string;
 }
 
 /**
@@ -793,6 +810,7 @@ function buildOptimizationMessages(
     return {
         messages,
         promptTotalLength: craftedPrompt.length + userQuery.length + contextData.length,
+        modelInputs: { userQuery, contextData, promptSource: getLastPromptSource() },
     };
 }
 
@@ -869,6 +887,7 @@ function finalizeOptimizationResponse(
         modelDisplayName: response.modelDisplayName,
         modelVersion: response.modelVersion,
         usage: response.usage,
+        modelInputs: prepared.modelInputs,
     };
 }
 

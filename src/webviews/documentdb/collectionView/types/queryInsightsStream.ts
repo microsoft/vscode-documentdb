@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AIIndexRecommendation } from '../../../../services/ai/types';
+import { type AIIndexRecommendation, type AIOptimizationResponse } from '../../../../services/ai/types';
 
 /**
  * Best-effort Copilot token-usage measurements, mirrored here in a
@@ -130,4 +130,6 @@ export type QueryInsightsStreamEvent =
            * took. Optional for forward compatibility.
            */
           durationMs?: number;
+          /** Data messages sent with the request, for "copy as Markdown". */
+          modelInputs?: AIOptimizationResponse['modelInputs'];
       };

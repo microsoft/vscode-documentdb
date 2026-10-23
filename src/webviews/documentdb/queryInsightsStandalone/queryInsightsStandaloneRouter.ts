@@ -142,6 +142,7 @@ export const queryInsightsStandaloneRouter = router({
                     modelFamily: response.modelFamily,
                     modelDisplayName: response.modelDisplayName,
                     usage: response.usage,
+                    modelInputs: response.modelInputs,
                 };
             } finally {
                 signal?.removeEventListener('abort', abort);

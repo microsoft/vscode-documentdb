@@ -59,6 +59,15 @@ export interface AIOptimizationResponse {
         credits?: number;
         usageSource?: 'provider' | 'estimated';
     };
+    /**
+     * The data messages sent with the request (user query + context data) and the
+     * prompt source. Never the instruction prompt itself. Used by "copy as Markdown".
+     */
+    modelInputs?: {
+        userQuery: string;
+        contextData: string;
+        promptSource: string;
+    };
 }
 
 /**
