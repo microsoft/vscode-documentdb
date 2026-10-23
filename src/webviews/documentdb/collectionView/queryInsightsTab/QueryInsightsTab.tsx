@@ -54,6 +54,7 @@ import {
     startStage3Load,
 } from '../queryInsightsReducer';
 import { createImprovementCardConfig } from '../utils/createImprovementCard';
+import { createInsightCardConfig } from '../utils/createInsightCard';
 import { extractErrorCode } from '../utils/errorCodeExtractor';
 import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDisplay';
 import { CardStack, type CardStackItem } from './components';
@@ -63,6 +64,7 @@ import {
     GetPerformanceInsightsCard,
     ImprovementCard,
     ImprovementCardShell,
+    InsightCard,
     MarkdownCard,
     MarkdownCardEx,
     Stage3AnalyzingCard,
@@ -697,6 +699,19 @@ export const QueryInsightsMain = (): JSX.Element => {
                     const key = `${keyPrefix}rec-${index}`;
                     if (rec === null) {
                         cards.push({ key, motion: 'fade', component: <ImprovementCardShell /> });
+                        return;
+                    }
+                    if (rec.action === 'none') {
+                        cards.push({
+                            key,
+                            motion: 'fade',
+                            component: (
+                                <InsightCard
+                                    config={createInsightCardConfig(rec, index)}
+                                    onCopy={(text) => void trpcClient.common.copyToClipboard.mutate({ text })}
+                                />
+                            ),
+                        });
                         return;
                     }
                     const config = createImprovementCardConfig(rec, index, {

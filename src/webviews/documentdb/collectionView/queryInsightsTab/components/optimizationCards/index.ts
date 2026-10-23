@@ -6,5 +6,6 @@
 export * from './custom';
 export * from './ImprovementCard';
 export * from './ImprovementCardShell';
+export * from './InsightCard';
 export * from './MarkdownCard';
 export * from './MarkdownCardEx';

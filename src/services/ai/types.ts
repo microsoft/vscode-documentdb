@@ -66,6 +66,11 @@ export interface AIOptimizationResponse {
  */
 export interface AIIndexRecommendation {
     action: 'create' | 'drop' | 'none' | 'modify';
+    /**
+     * For `action: "none"` only: what kind of non-index advice this is. Optional; older prompts
+     * prefix `justification` with the kind instead (see `createInsightCardConfig`).
+     */
+    kind?: string;
     indexSpec: Record<string, number>; // e.g., { user_id: 1, status: 1 }
     indexOptions?: Record<string, unknown>;
     indexName: string; // Name of the index

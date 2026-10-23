@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type AIIndexRecommendation } from '../../../src/services/ai/types';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
 import { previewAvailableModels } from '../../../src/webviews/documentdb/queryInsightsShared/designPreview/mockModels';
 import {
@@ -233,6 +234,86 @@ function explorerProfile(profile: 'aggregate' | 'count'): Scenario<'queryInsight
             selectors: ['.leftColumn', '.rightColumn'],
             noProgressbar: true,
         },
+    };
+}
+
+/** Advice recommendations (`action: "none"`): copy-only cards without an index block. */
+function explorerInsights(): Scenario<'queryInsightsStandalone'> {
+    const verifyCommand = 'db.getCollection("items").find({}).hint({ $natural: 1 }).explain("executionStats")';
+    const advice = (
+        index: number,
+        recommendation: Omit<AIIndexRecommendation, 'indexSpec' | 'indexName' | 'shellCommand'> &
+            Partial<AIIndexRecommendation>,
+    ) =>
+        [
+            { type: 'recommendationStarted', index },
+            {
+                type: 'recommendation',
+                index,
+                recommendation: { indexSpec: {}, indexName: '', shellCommand: '', ...recommendation },
+            },
+        ] as const;
+    return {
+        ...defaultScenario('queryInsightsStandalone'),
+        config: explorerPrefilled,
+        steps: explorerSteps,
+        rpc: {
+            ...explorerBase.rpc,
+            'queryInsightsStandalone.streamStage3': {
+                type: 'subscription',
+                results: [
+                    {
+                        type: 'summary',
+                        markdown:
+                            '### Key Issues\n1. 🔻 Critical: collection scan over 64,694 documents.\n2. 🔼 Good: the filter is simple.',
+                        complete: true,
+                    },
+                    ...advice(0, {
+                        action: 'none',
+                        kind: 'verify',
+                        justification: 'Compare the current plan with a collection-order scan before changing indexes.',
+                        shellCommand: verifyCommand,
+                        priority: 'medium',
+                    }),
+                    ...advice(1, {
+                        action: 'none',
+                        justification:
+                            'Query change: The predicate returns 91.9% of the collection. Add a more selective condition or a limit.',
+                        risks: 'Changing filters or limits changes the results returned to the application.',
+                        priority: 'low',
+                    }),
+                    ...advice(2, {
+                        action: 'none',
+                        kind: 'support',
+                        justification: 'Planner statistics could help choose the selective index.',
+                        priority: 'low',
+                    }),
+                    explorerBase.rpc['queryInsightsStandalone.streamStage3'].results.at(-1)!,
+                ],
+            },
+        },
+        readiness: {
+            content: [
+                'Verify First',
+                'Change the Query',
+                'Contact Support',
+                'Suggested command',
+                verifyCommand,
+                'Changing filters or limits changes the results returned to the application.',
+            ],
+            selectors: ['.leftColumn', '.rightColumn'],
+            noProgressbar: true,
+        },
+        assertions: [
+            {
+                kind: 'calls',
+                name: 'Advice cards copy their command',
+                path: 'common.copyToClipboard',
+                input: { text: verifyCommand },
+                count: 1,
+                steps: [{ action: 'click', role: 'button', name: 'Copy command' }],
+            },
+        ],
     };
 }
 
@@ -528,6 +609,7 @@ export const scenarios = {
         },
         'analyze-aggregate': explorerProfile('aggregate'),
         'analyze-count': explorerProfile('count'),
+        'analyze-insights': explorerInsights(),
     },
     collectionView: { default: defaultScenario('collectionView') },
     documentView: { default: defaultScenario('documentView') },

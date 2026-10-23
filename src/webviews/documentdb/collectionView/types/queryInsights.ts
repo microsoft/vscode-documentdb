@@ -273,6 +273,28 @@ export interface ImprovementCard {
 }
 
 /**
+ * Kinds of non-index advice (`action: "none"`). `other` covers anything unrecognized.
+ */
+export type InsightKind = 'query-change' | 'verify' | 'maintenance' | 'data-model' | 'support' | 'other';
+
+/**
+ * Configuration for a non-index recommendation card (`action: "none"`).
+ * Advisory only: it never executes anything; an optional command can be copied.
+ */
+export interface InsightCard {
+    type: 'insight';
+    cardId: string;
+    kind: InsightKind;
+    title: string;
+    priority: 'high' | 'medium' | 'low';
+    description: string;
+    /** Runnable command the user can copy, when the advice has one. */
+    shellCommand?: string;
+    /** Risks or side effects, only when the model provided them. */
+    details?: string;
+}
+
+/**
  * Action button with payload for execution
  */
 export interface ActionButton {

@@ -23,8 +23,8 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(69);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(69);
+        expect(routes).toHaveLength(72);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(72);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
@@ -50,8 +50,8 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(69);
-        expect(runnerRoutes('/scenarios/run-all/queryInsightsStandalone.js')).toHaveLength(27);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(72);
+        expect(runnerRoutes('/scenarios/run-all/queryInsightsStandalone.js')).toHaveLength(30);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(30);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(10);
         expect(runnerRoutes('/scenarios/run-all/unknown.js')).toBeUndefined();
