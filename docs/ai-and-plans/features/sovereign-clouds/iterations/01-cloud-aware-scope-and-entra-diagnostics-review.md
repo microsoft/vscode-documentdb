@@ -44,7 +44,7 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R6 | Complete | GPT-6.1 Sol | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; `d8f2db967cc3bc2d0f16bc7554f012db2bbb551b` |
 | R7 | Complete | GPT-6.1 Sol | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; `439047d751d4f081fcea9003aca161715163cfc3` |
 | R8 | Complete | GPT-6.1 Sol | 10:12:56-10:14:11 UTC (75 seconds); 70 focused tests passed; `6f1f507e26f9c5767cfe95b949ed163a1310e47d` |
-| R9 | Complete | GPT-6.1 Sol | 10:14:30-10:16:24 UTC (114 seconds); docs-only; cluster build passed; commit recorded in final note |
+| R9 | Complete | GPT-6.1 Sol | 10:14:30-10:16:24 UTC (114 seconds); docs-only; cluster build passed; `853ef409fc5d4f2481768c997efea27760e67561` |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
 | S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
 | S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e` |
@@ -54,10 +54,44 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692` |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
 | S8 | In progress | GPT-6.1 Sol | Isolated worktree and `preview/sovereign-diagnostics` branch; never merge into PR |
-| Enhancement review | Pending | Opus 5.5 | Review enhancements, including isolated preview |
+| Enhancement review | Main complete; preview pending | Opus 5.5 | 10:18:12-10:22:43 UTC (271 seconds); one medium S7 documentation finding; no medium-or-higher product-code findings; correction below; isolated preview review pending |
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
 ### Execution log
+
+- Main enhancement review: Opus 5.5, 10:18:12-10:22:43 UTC (271 seconds).
+  One medium documentation finding: S7's static-metadata/startup join excludes v0.11.0,
+  whose events have only `connectioncorrelationid`, and v0.10.2, which has no
+  `connect.startup` event. It therefore cannot answer D11 for those historical versions.
+  No medium-or-higher product-code findings. The isolated S8 preview review remains pending.
+- S7 review correction: GPT-6.1 Sol, 10:23:48-10:25:29 UTC (101 seconds; investigation,
+  correction, and diff verification). Disposition: addressed in this documentation-only commit. Replaced
+  the join with a direct successful `connect.getmetadata` aggregation after verifying current
+  source, v0.11.0, and v0.10.2; all carry `authmethod` and hashed domain metadata after a
+  successful connection. Recomputed all four hashes. No live ingested version field was verified;
+  approved live schema/version filtering remains required, as does the external Kusto
+  cluster/database configuration. No production query, product-code change, tests, or build.
+- Final R6-R9 note (10:16:47 UTC, originally left uncommitted to avoid an extra commit or amend;
+  preserved in this documentation-correction commit):
+  R9 is `853ef409fc5d4f2481768c997efea27760e67561`; the preceding three hashes are in the live
+  table. All four separate commits include the requested Copilot co-author trailer.
+  No R6-R9 blocker. Changed files:
+  - `src/documentdb/auth/entraErrors/classifyEntraError.ts`
+  - `src/documentdb/auth/entraErrors/classifyEntraError.test.ts`
+  - `src/utils/authTrace.test.ts`
+  - `src/documentdb/auth/entraErrors/entraErrorRules.ts`
+  - `src/documentdb/auth/entraErrors/entraTokenFailures.ts`
+  - `src/documentdb/auth/entraErrors/entraTokenFailures.test.ts`
+  - `src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts`
+  - `src/documentdb/auth/MicrosoftEntraIDAuthHandler.test.ts`
+  - `src/documentdb/auth/ManagedIdentityAuthHandler.ts`
+  - `src/documentdb/auth/ManagedIdentityAuthHandler.test.ts`
+  - `src/documentdb/shell/ShellSessionManager.ts`
+  - `src/documentdb/shell/ShellSessionManager.test.ts`
+  - `src/documentdb/playground/PlaygroundEvaluator.ts`
+  - `docs/user-manual/sovereign-clouds.md`
+  - `docs/ai-and-plans/features/sovereign-clouds/README.md`
+  - This live review/progress document.
 
 - R6-R9: GPT-6.1 Sol completed the expanded scope in the main worktree on
   `dev/tnaum/gov-clouds`, preserving the operator's 10:11 UTC scope update.
@@ -664,42 +698,41 @@ No approved telemetry endpoint or database was available in the repository setti
 availability probe therefore never reached a server. No credential, endpoint, or database was
 invented. D11 remains an open shipping gate, not a passed check and not evidence of zero users.
 
-The following read-only query uses the repository's documented `RawEventsVSCodeExt` schema,
-lowercase ingested property names, and startup correlation IDs. Add the approved cluster/database
-instructions before running it. Its live schema and results are **not verified**:
+The following read-only query uses the repository's documented `RawEventsVSCodeExt` schema and
+lowercase ingested property names. It reads `connect.getmetadata` directly: current source,
+v0.11.0, and v0.10.2 emit this event after a successful connection, with `authmethod` and hashed
+domain metadata. No startup event or correlation join is required. The previous join excluded
+v0.11.0 (only `connectioncorrelationid`) and v0.10.2 (no `connect.startup` event).
+Add the approved cluster/database instructions before running it. Its live schema and results
+are **not verified**:
 
 ```kusto
-let recent = materialize(
-    RawEventsVSCodeExt
-    | where ServerTimestamp > ago(30d)
-    | where EventName contains "vscode-documentdb"
-    | where EventName endswith "connect.staticmetadata" or EventName endswith "connect.startup"
-    | project EventName, Properties
-);
-let sovereignAttempts = recent
-    | where EventName endswith "connect.staticmetadata"
-    | extend l2 = tostring(Properties.domaininfo_domain_l2),
-             l3 = tostring(Properties.domaininfo_domain_l3),
-             startup = coalesce(tostring(Properties.startupcorrelationid),
-                                tostring(Properties.connectioncorrelationid))
-    | extend cloud = case(l2 == "6a619114" or l3 == "49133d63", "china",
-                          l2 == "8bafc480" or l3 == "f3e87358", "usgov", "")
-    | where cloud != "" and startup != ""
-    | distinct startup, cloud;
-recent
-| where EventName endswith "connect.startup"
-| extend startup = tostring(Properties.startupcorrelationid),
-         auth = tostring(Properties.authmethod),
-         outcome = tostring(Properties.startupoutcome)
-| join kind=inner sovereignAttempts on startup
-| summarize attempts = count() by cloud, auth, outcome
-| order by cloud asc, auth asc, outcome asc
+RawEventsVSCodeExt
+| where ServerTimestamp > ago(30d) and ServerTimestamp <= now()
+| where EventName startswith "ms-azuretools.vscode-documentdb/"
+| where EventName endswith "connect.getmetadata"
+| extend auth = tostring(Properties.authmethod),
+         l2 = tostring(Properties.domaininfo_domain_l2),
+         l3 = tostring(Properties.domaininfo_domain_l3)
+| where auth in ("MicrosoftEntraID", "ManagedIdentity")
+| extend cloud = case(l2 == "6a619114" or l3 == "49133d63", "china",
+                      l2 == "8bafc480" or l3 == "f3e87358", "usgov", "")
+| where cloud != ""
+| summarize successfulObservations = count() by cloud, auth
+| order by cloud asc, auth asc
 ```
 
-Restrict the reporting period to versions predating the sovereign audience change when evaluating
-whether China previously accepted the public audience. Historical telemetry does not record the
-requested audience directly. Count only the relevant Entra/managed-identity methods, and investigate
-missing metadata/correlation rather than interpreting absent joined rows as absent connections.
+An approved live schema/version filter is required before using these counts for D11. The telemetry
+SDK documents `common.extversion`, but its ingested location was not verified; this query does not
+invent a version field. Once verified, filter to builds predating the sovereign audience change
+and add the verified extension-version field to the cloud/auth aggregation. The unversioned
+30-day totals alone cannot establish historical compatibility.
+
+These are successful metadata observations, not distinct users, all connection attempts, or a
+success rate. Missing metadata, consent, collection failures, sampling, and ingestion gaps may
+exclude successful connections; absent rows are not proof of no users. Historical telemetry has
+no requested-audience field, so even positive observations do not directly prove public-audience
+acceptance. Investigate build provenance and missing metadata before drawing a D11 conclusion.
 The query returns aggregate counts only, with no machine, tenant, user, or host identifiers.
 
 ### S8. Preview-build connection diagnostics dialogs
