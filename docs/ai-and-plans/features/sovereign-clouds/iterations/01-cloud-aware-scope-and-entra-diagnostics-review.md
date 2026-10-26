@@ -53,12 +53,27 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92` |
 | S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692` |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
-| S8 | Complete (preview only) | GPT-6.1 Sol | 10:09-10:30 UTC implementation/delivery notes; `9931446469d3a0d62a262f8bf04127e3b9a0b250`; 200 focused tests and exact build passed; see inline S8 delivery below; never merge into PR |
+| S8 | Complete (preview only; delivery pending) | GPT-6.1 Sol | 10:09-10:30 UTC implementation/delivery notes, `99314464`; committed base `18060ae0` merged as `7e5fe7d0`; integration recheck 10:38:52-10:39:42 UTC: 12 files / 277 tests and one exact build passed; see inline S8 delivery below; never merge into PR |
 | Enhancement review | Main complete; preview pending | Opus 5.5 | 10:18:12-10:22:43 UTC (271 seconds); one medium S7 documentation finding; no medium-or-higher product-code findings; correction below; isolated preview review pending |
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
 ### Execution log
 
+- S8 committed-base integration: GPT-6.1 Sol, started at 10:35:43 UTC. In the isolated
+  preview worktree only, merged `18060ae09088457b4ae2bdb7420d883f51b6ab46` with `--no-ff`;
+  merge commit: `7e5fe7d0f2d0375c29d74c41b2756498ea43ad27`. The only conflict was the live
+  progress table: retained S8 completion and the newer main enhancement-review result. Source
+  merged automatically, preserving all S8 hooks and R8 success-path `clearEntraTokenFailure`
+  calls, plus R6/R7 classification/guidance, R9 docs, and corrected S7 query.
+  The first focused invocation could not load `vitest/config` because this worktree had no
+  dependencies. Restored the unchanged lockfile with `npm ci` (10:37:16-10:38:43 UTC,
+  87 seconds); no manifest or lockfile edit. Revalidation passed: 12 files / 277 tests,
+  10:38:52-10:38:57 UTC (5 seconds wall clock; Vitest 4.11 seconds), followed by exactly one
+  `npm run build`, 10:38:57-10:39:42 UTC (45 seconds), including workspace prebuilds and root
+  TypeScript. Integration/checks through build completion: 239 seconds. No integration-caused
+  source error or follow-up code fix. Case 1 applies; full checks, including `prettier-fix`,
+  localization, lint, the full suite and packaging remain deferred. No main worktree edits,
+  uncommitted-main imports, push, amend, or preview merge/cherry-pick into the PR.
 - Main enhancement review: Opus 5.5, 10:18:12-10:22:43 UTC (271 seconds).
   One medium documentation finding: S7's static-metadata/startup join excludes v0.11.0,
   whose events have only `connectioncorrelationid`, and v0.10.2, which has no
@@ -739,13 +754,17 @@ The query returns aggregate counts only, with no machine, tenant, user, or host 
 
 Accepted by the operator on 2026-10-26. It replaces the earlier scripted-checklist idea.
 
-**Preview implementation / delivery, updated 2026-10-26 at 10:29:11 UTC.** GPT-6.1 Sol
-implemented S8 only in the isolated `preview/sovereign-diagnostics` worktree:
+**Preview implementation / delivery, updated 2026-10-26 after the 10:39:42 UTC integration checks.**
+GPT-6.1 Sol implemented S8 at **10:09-10:30 UTC** (21 minutes, including delivery notes), only
+in the isolated `preview/sovereign-diagnostics` worktree:
 `/home/tnaum/.copilot/session-state/2ab50763-84c2-482c-9a3d-dcf4de193ad2/files/sovereign-diagnostics-preview`.
-This single preview commit is titled
+The original preview implementation commit, `9931446469d3a0d62a262f8bf04127e3b9a0b250`, is titled
 `chore(preview): sovereign connection diagnostics dialogs (DO NOT MERGE)`.
-No push, branch switch, merge or cherry-pick into the draft PR was performed. R6-R9 are not
-implemented here; the operator assigned those separately on the main working branch.
+No push, branch switch, merge or cherry-pick into the draft PR was performed. The subsequently
+committed R6-R9 fixes and corrected S7 query were integrated from
+`18060ae09088457b4ae2bdb7420d883f51b6ab46` into this never-merge preview branch, not the reverse;
+merge commit: `7e5fe7d0f2d0375c29d74c41b2756498ea43ad27`. The main working tree's uncommitted
+formatting/localization changes were not imported or edited.
 
 - Implementation and tests live in `src/documentdb/auth/previewDiagnostics/`. The only existing
   source edits are imports and single-call wrappers/hooks in the two auth handlers, the two
@@ -782,9 +801,21 @@ implemented here; the operator assigned those separately on the main working bra
   redaction/classification fixes and passed at **10:27:26-10:27:57 UTC**, including workspace
   prebuilds and root TypeScript. No full runtime suite, lint, formatting, localization or
   packaging command ran. Case 2 and preview packaging remain deferred to the final handoff.
+- **Committed-base integration verification (Case 1):** the focused command below passed
+  **12 files / 277 tests** at **10:38:52-10:38:57 UTC**, including preview state/report/wiring,
+  both auth handlers, real-resolver sovereign integration, shell/playground worker token relay,
+  client hooks, and R6-R8 classifier/trace/failure-registry regressions. Exactly one integration
+  `npm run build` passed at **10:38:57-10:39:42 UTC** (45 seconds), including all workspace
+  prebuilds and root compilation. No integration-caused code changes were needed.
 - **Preview delivery / run sheet location:** this S8 section and the reporter run sheet below
   are the delivery instructions to attach to a later preview VSIX. No VSIX was built or sent;
   no live sovereign validation or token-usage measurement is claimed.
+- **Explicitly outstanding requirement, not completed by this integration:** the preferred S8
+  delivery calls for a reporter VSIX. It still has not been packaged or delivered. Preview-only
+  localization generation and final checks remain prerequisites for that separate packaging
+  step; the reporter's live-cloud run and isolated preview review are also still pending.
+  These notes do not identify a separately deferred implementation requirement. Do not
+  interpret offline tests/build success as completed preview delivery or sovereign validation.
 
 **Purpose.** Nobody on the team can sign in to a Government or China cluster. The preview reporter
 is the only real-cloud test. A preview build should therefore show, at each connection stage, what
@@ -990,7 +1021,10 @@ npx vitest run --config src/documentdb/auth/previewDiagnostics/vitest.preview.co
   src/documentdb/auth/sovereignAuth.integration.test.ts \
   src/documentdb/shell/ShellSessionManager.test.ts \
   src/documentdb/playground/WorkerSessionManager.test.ts \
-  src/documentdb/ClustersClient.test.ts
+  src/documentdb/ClustersClient.test.ts \
+  src/documentdb/auth/entraErrors/classifyEntraError.test.ts \
+  src/documentdb/auth/entraErrors/entraTokenFailures.test.ts \
+  src/utils/authTrace.test.ts
 ```
 
 In dialog 1, Copy report must reopen the dialog and Cancel must stop sign-in. Continue proceeds.
