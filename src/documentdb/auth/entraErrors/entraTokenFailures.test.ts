@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+    clearEntraTokenFailure,
     getRecentEntraTokenFailure,
     recordEntraTokenFailure,
     resetEntraTokenFailuresForTests,
@@ -57,6 +58,19 @@ describe('Entra token failure registry', () => {
             cloudCategory: 'custom',
             authMethod: 'managedIdentity',
             timestamp: Date.now(),
+        });
+    });
+
+    it('clears only the successful cluster and safely accepts a missing entry', (): void => {
+        recordEntraTokenFailure('cluster-1', { cloudCategory: 'usgov', authMethod: 'interactive' });
+        recordEntraTokenFailure('cluster-2', { cloudCategory: 'china', authMethod: 'managedIdentity' });
+
+        clearEntraTokenFailure('cluster-1');
+        clearEntraTokenFailure('cluster-1');
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+        expect(getRecentEntraTokenFailure('cluster-2')).toMatchObject({
+            cloudCategory: 'china',
+            authMethod: 'managedIdentity',
         });
     });
 

@@ -22,7 +22,7 @@ import {
     resolveManagedIdentityTokenResource,
     TokenResourceResolutionError,
 } from '../auth/documentdbTokenResource';
-import { recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
+import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
@@ -465,6 +465,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 accessToken = session.accessToken;
             }
 
+            clearEntraTokenFailure(clusterId);
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,

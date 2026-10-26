@@ -18,7 +18,7 @@ import {
     TokenResourceResolutionError,
     type DocumentDBCustomEnvironment,
 } from './documentdbTokenResource';
-import { recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
+import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
@@ -104,6 +104,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                             traceContext,
                         );
 
+                        clearEntraTokenFailure(this.clusterCredentials.clusterId);
                         return {
                             accessToken: token.accessToken,
                             expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),

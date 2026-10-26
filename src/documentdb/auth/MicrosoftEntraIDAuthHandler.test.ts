@@ -30,6 +30,7 @@ import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthMethodId } from './AuthMethod';
 import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
+import { EntraDiagnosticsProvider } from './entraErrors/EntraDiagnosticsProvider';
 import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { MicrosoftEntraIDAuthHandler } from './MicrosoftEntraIDAuthHandler';
 
@@ -224,6 +225,46 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             cloudCategory: 'public',
             authMethod: 'interactive',
         });
+    });
+
+    it('clears a prior failure only after a session succeeds, without stale explanation context', async (): Promise<void> => {
+        vi.mocked(resolveInteractiveTokenResource).mockResolvedValueOnce({
+            resource: 'https://ossrdbms-aad.database.usgovcloudapi.net',
+            scope: 'https://ossrdbms-aad.database.usgovcloudapi.net/.default',
+            cloudCategory: 'usgov',
+            reason: 'setting',
+            details: { flow: 'interactive', cloudCategory: 'usgov', reason: 'setting' },
+        });
+        const error = Object.freeze(new Error('platform_broker_error'));
+        getSessionFromVSCode.mockRejectedValueOnce(error);
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'));
+        const failedProperties: Record<string, string> = {};
+        await expect(handler.configureAuth(undefined, {
+            startupCorrelationId: 'failed-startup', surface: 'extension', startupProperties: failedProperties,
+        })).rejects.toBe(error);
+        const failure = getRecentEntraTokenFailure('cluster-1');
+        expect(failure).toMatchObject({ cloudCategory: 'usgov', authMethod: 'interactive' });
+        const diagnostics = new EntraDiagnosticsProvider();
+        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain('Sign-in failed in Azure US Government');
+
+        getSessionFromVSCode.mockImplementationOnce(async () => {
+            expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
+            return { accessToken: 'access-token' };
+        });
+        const successfulProperties: Record<string, string> = {};
+        await handler.configureAuth(undefined, {
+            startupCorrelationId: 'successful-startup', surface: 'extension', startupProperties: successfulProperties,
+        });
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+        expect(failedProperties.errorKind).toBe('tokenAcquisitionFailed');
+        expect(successfulProperties.errorKind).toBe('none');
+        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toMatch(
+            /^The sign-in window reported an error without details\./,
+        );
+        expect(mockOutputChannel.info).toHaveBeenLastCalledWith(
+            expect.stringContaining('"cloudCategory":"unknown","recentTokenFailure":false'),
+        );
+        expect(error.message).toBe('platform_broker_error');
     });
 
     it('passes the explicitly configured custom hostname suffix to the OIDC allowlist', async () => {

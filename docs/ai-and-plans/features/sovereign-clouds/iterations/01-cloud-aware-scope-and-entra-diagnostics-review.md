@@ -42,8 +42,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R4 | Complete | GPT-6.1 Sol | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65` |
 | R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
 | R6 | Complete | GPT-6.1 Sol | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; `d8f2db967cc3bc2d0f16bc7554f012db2bbb551b` |
-| R7 | Complete | GPT-6.1 Sol | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; commit recorded with R8 |
-| R8 | Pending | GPT-6.1 Sol | Clear token-failure context on success at all four surfaces |
+| R7 | Complete | GPT-6.1 Sol | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; `439047d751d4f081fcea9003aca161715163cfc3` |
+| R8 | Complete | GPT-6.1 Sol | 10:12:56-10:14:11 UTC (75 seconds); 70 focused tests passed; commit recorded with R9 |
 | R9 | Pending | GPT-6.1 Sol | Correct IMDS and private-DNS user guidance |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
 | S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
@@ -565,6 +565,16 @@ only Entra-matching texts are classified. **Recommended:** clear the record when
 succeeds on any of the four call sites. Add one test per surface.
 
 **Author decision:** accepted (2026-10-26), recommended option.
+
+**Implementation (R8):** GPT-6.1 Sol, 10:12:56-10:14:11 UTC (75 seconds).
+A single `clearEntraTokenFailure(clusterId)` deletes only that cluster's recent failure.
+Both handlers and shell/playground token requests clear after token acquisition succeeds;
+managed identity configuration and in-flight acquisition retain the previous record.
+Failure-then-success tests cover all four surfaces (both token sources in each worker surface),
+exercise the real diagnostics provider before and after success, retain original frozen errors,
+and keep failed versus successful startup telemetry isolated. No telemetry or cache redesign.
+`npx vitest run src/documentdb/auth/entraErrors/entraTokenFailures.test.ts src/documentdb/auth/MicrosoftEntraIDAuthHandler.test.ts src/documentdb/auth/ManagedIdentityAuthHandler.test.ts src/documentdb/shell/ShellSessionManager.test.ts`:
+four files / 70 tests passed.
 
 ### R9. P3: Correct the user manual on managed identity and private hosts
 
