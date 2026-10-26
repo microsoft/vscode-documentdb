@@ -45,8 +45,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
 | S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e` |
 | S3 | Complete | GPT-6.1 Sol | 09:59:50-10:00:36 UTC; 99 focused tests passed; `7537d69ac2197700ccf4576c321b1a43af5839d0` |
-| S4 | Complete | GPT-6.1 Sol | 10:00:46-10:01:50 UTC; 72 focused tests passed; commit recorded with S5 |
-| S5 | Pending | GPT-6.1 Sol | Settings patterns; reuse R1 audience validation |
+| S4 | Complete | GPT-6.1 Sol | 10:00:46-10:01:50 UTC; 72 focused tests passed; `f6406d8f82dac2b351aa77f6de87639f41c8efa1` |
+| S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; commit recorded with S6 |
 | S6 | Pending | GPT-6.1 Sol | Real-resolver integration tests |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
 | S8 | Pending | GPT-6.1 Sol | Preview-only dialogs on separate `preview/sovereign-diagnostics` branch |
@@ -55,13 +55,20 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 ### Execution log
 
+- S5: GPT-6.1 Sol, 10:02:01-10:02:40 UTC (39 seconds). Reused R1's audience schema unchanged
+  and added the hostname-suffix pattern/message, matching existing normalization and R5 public
+  suffix rejection. Settings tests compare valid/invalid/blank/whitespace values with the real
+  normalizer, including DNS-label length/case/boundary cases. Settings and allowlist suites:
+  two files / 56 tests passed. User settings documentation updated; no runtime path added.
+  Hash recorded in S6.
 - S4: GPT-6.1 Sol, 10:00:46-10:01:50 UTC (64 seconds). One narrow driver-text rule in the
   existing Entra classifier table returns only trusted-suffix settings guidance through the
   diagnostics service. No host echoed, token-failure prerequisite, UI, recovery, or error mutation.
   Classifier/provider/service suites: three files / 72 tests passed, including false positives,
   wrapped and string errors, and frozen original errors. An initial test assumed registration
   returned a disposable; corrected it to use the existing reset API. Localization generation
-  is deliberately deferred to the final Terra checks. Hash recorded in S5.
+  is deliberately deferred to the final Terra checks.
+  Commit: `f6406d8f82dac2b351aa77f6de87639f41c8efa1`.
 - S3: GPT-6.1 Sol, 09:59:50-10:00:36 UTC (46 seconds). Local IMDS evidence retains only the
   accepted Azure-prefixed letter-only shape, with length and control-character boundaries tested.
   Public-cloud normalization and D7 mapping/precedence remain unchanged; no new mappings.
@@ -557,8 +564,9 @@ each one as a separate commit, so they can be reviewed apart from the R fixes.
 - [x] **S4.** Translate the driver's `ALLOWED_HOSTS` rejection into a message that names
       `documentDB.customEnvironment.mongoClusterHostnameSuffix`. Implemented as a narrowly
       anchored rule in the existing Entra table, routed as text only through the diagnostics service.
-- [ ] **S5.** Add `pattern` and `patternErrorMessage` validation for both
+- [x] **S5.** Add `pattern` and `patternErrorMessage` validation for both
       `documentDB.customEnvironment` properties. This overlaps with the R1 decision; implement it once.
+      R1 audience schema retained unchanged; suffix schema mirrors R5 and preserves empty clearing.
 - [ ] **S6.** Add end-to-end handler tests with the real resolver for the Government and China
       interactive and managed identity flows, and for the shell and playground `tokenRequest` path.
 - [ ] **S7.** Run the D11 China check against existing hashed domain telemetry. Use

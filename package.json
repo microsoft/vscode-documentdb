@@ -2002,6 +2002,8 @@
               },
               "mongoClusterHostnameSuffix": {
                 "type": "string",
+                "pattern": "^\\s*(?:\\.?(?!(?:[cC][oO][mM]|[cC][oO]|[nN][eE][tT]|[oO][rR][gG]|[gG][oO][vV])\\.[a-zA-Z]{2}\\s*$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)?\\s*$",
+                "patternErrorMessage": "Use a trusted service hostname suffix such as .mongocluster.cosmos.example, with valid DNS labels and no wildcard, URL, port, or path. Bare top-level domains and common public suffixes such as com.cn are not allowed. Leave it empty to clear.",
                 "description": "Sovereign cloud equivalent for .mongocluster.cosmos.azure.com (including the leading dot). Microsoft Entra ID tokens are sent only to hosts ending with this suffix or with a built-in Azure cloud domain."
               }
             },

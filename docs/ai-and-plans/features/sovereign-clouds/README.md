@@ -100,6 +100,12 @@ The existing Entra diagnostics rule table also recognizes the driver's precise O
 text-only explanation naming `documentDB.customEnvironment.mongoClusterHostnameSuffix` in user
 settings, without echoing the host, changing the error, or requiring a recent token failure.
 
+Both custom-environment properties have Settings schema patterns and actionable validation
+messages. The audience validation added in R1 is reused; the hostname-suffix pattern mirrors
+the existing normalizer, including case, an optional leading dot, valid DNS labels, and R5's
+bare/common-public-suffix rejection. Empty or whitespace-only values still clear either property.
+There is no new runtime validation path.
+
 ## Documents
 
 - [research-findings.md](research-findings.md): the reported failure, error analysis, where the GUIDs

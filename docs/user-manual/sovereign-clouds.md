@@ -74,6 +74,13 @@ Both are properties of the `documentDB.customEnvironment` setting, so they go in
 }
 ```
 
+Configure this machine-scoped object in **User settings**, not Workspace or Folder settings.
+The Settings editor checks both properties: the audience must be an HTTPS resource without a
+path or `/.default`; the hostname suffix must use valid DNS labels, without a wildcard, URL,
+port, or path. Bare top-level domains and common public suffixes such as `com.cn` are rejected.
+Only configure a service domain you trust. Surrounding whitespace is ignored; an empty or
+whitespace-only property clears the override and restores automatic selection.
+
 ## Sign-in error AADSTS65002
 
 In some clouds, Microsoft Entra ID has not authorized VS Code to request tokens for Azure
