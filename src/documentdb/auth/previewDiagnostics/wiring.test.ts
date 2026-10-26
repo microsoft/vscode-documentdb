@@ -7,6 +7,7 @@ import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { ext } from '../../../extensionVariables';
 import { type AuthTraceContext } from '../../../utils/authTrace';
 import { ClustersClient } from '../../ClustersClient';
 import { CredentialCache, type CachedClusterCredentials } from '../../CredentialCache';
@@ -15,6 +16,7 @@ import { type MainToWorkerMessage, type WorkerToMainMessage } from '../../playgr
 import { ShellSessionManager } from '../../shell/ShellSessionManager';
 import { ConnectionStartupTimings } from '../../utils/ConnectionStartupTimings';
 import { AuthMethodId } from '../AuthMethod';
+import * as tokenResources from '../documentdbTokenResource';
 import { ManagedIdentityAuthHandler } from '../ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from '../MicrosoftEntraIDAuthHandler';
 import { resetPreviewDiagnosticsForTests } from './previewDiagnostics';
@@ -111,9 +113,38 @@ beforeEach((): void => {
 
 afterEach((): void => {
     CredentialCache.deleteCredentials(credentials.clusterId);
+    vi.restoreAllMocks();
 });
 
 describe('real handlers and callback wiring', () => {
+    it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+        'keeps a dismissed resolution failure failed and traces it unchanged for %s',
+        async (authMethod): Promise<void> => {
+            const error = new tokenResources.TokenResourceResolutionError('private-value', 'cloudMismatch', {
+                errorKind: 'cloudMismatch', hostCloud: 'AzureUSGovernment', configuredCloud: 'AzureChinaCloud',
+            });
+            const resolver = authMethod === AuthMethodId.ManagedIdentity
+                ? 'resolveManagedIdentityTokenResource' : 'resolveInteractiveTokenResource';
+            vi.spyOn(tokenResources, resolver).mockRejectedValueOnce(error);
+            vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(undefined);
+            CredentialCache.setAuthCredentials(credentials.clusterId, authMethod, credentials.connectionString,
+                undefined, undefined, credentials.entraIdConfig, credentials.managedIdentityConfig);
+            const instance = Reflect.construct(ClustersClient, [credentials.clusterId]) as {
+                initClient: () => Promise<void>;
+            };
+
+            await expect(instance.initClient()).rejects.toBe(error);
+
+            expect(ext.outputChannel.info).toHaveBeenCalledWith(expect.stringContaining('entraCloud.unresolved'));
+            expect(ext.outputChannel.error).toHaveBeenCalledWith(expect.stringContaining('failed surface=extension'));
+            expect(ext.outputChannel.trace).not.toHaveBeenCalledWith(expect.stringContaining('canceled surface=extension'));
+            expect(network.session).not.toHaveBeenCalled();
+            expect(network.managedToken).not.toHaveBeenCalled();
+            expect(network.connect).not.toHaveBeenCalled();
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledOnce();
+        },
+    );
+
     it.each([false, true])('cancels before requesting any token (managed identity: %s)', async (managedIdentity) => {
         vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
         const handler = managedIdentity ? new ManagedIdentityAuthHandler(credentials) : new MicrosoftEntraIDAuthHandler(credentials);

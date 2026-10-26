@@ -54,11 +54,35 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692` |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
 | S8 | Complete (preview only; delivery pending) | GPT-6.1 Sol | 10:09-10:30 UTC implementation/delivery notes, `99314464`; committed base `18060ae0` merged as `7e5fe7d0`; integration recheck 10:38:52-10:39:42 UTC: 12 files / 277 tests and one exact build passed; see inline S8 delivery below; never merge into PR |
-| Enhancement review | Main complete; preview pending | Opus 5.5 | 10:18:12-10:22:43 UTC (271 seconds); one medium S7 documentation finding; no medium-or-higher product-code findings; correction below; isolated preview review pending |
+| Enhancement review | Main and preview reviews complete; preview fixes in progress | Opus 5.5 | Main: 10:18:12-10:22:43 UTC (271 seconds), one medium S7 documentation finding, corrected below; preview: 10:46:08-10:49:55 UTC (227 seconds), two medium findings P1/P2 at `9568ac02`; dispositions below |
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
 ### Execution log
 
+- S8 isolated preview review: Opus 5.5, **10:46:08-10:49:55 UTC** (227 seconds),
+  reviewed preview head `9568ac028a1b00ea75137064128f704e1d36dbd0`. Two medium findings:
+  - **P1:** dismissing the step-1 resolution-failure dialog replaced the original
+    `TokenResourceResolutionError` with `UserCancelledError`, skipping `entraCloud.unresolved`
+    and reporting startup cancellation. **Addressed in this commit:** the failure dialog is
+    blocking but noncancellable; it rethrows the exact original error. The successful
+    pre-token dialog remains cancellable. GPT-6.1 Sol investigation/implementation/test window:
+    **10:50:51-10:52:21 UTC** (90 seconds). The combined focused run first reproduced all three
+    new failing cases (96 passed / 3 failed), then passed **4 files / 99 tests** at
+    **10:52:16-10:52:21 UTC**. Tests cover Continue and dismissal error identity, both real
+    auth handlers' unresolved traces, actual startup `failed` rather than `canceled`, and
+    existing successful-resolution cancellation. P1's hash will be recorded in the P2 commit.
+  - **P2:** the catch-side connection preview ran before the abort check, displaying a false
+    step-3 failure and consuming the once key after user cancellation. **Pending:** move the
+    existing abort handling before that preview hook, with an aborted-connect/reconnect test.
+  - **Low observations, documented only; intentionally not fixed:** the attempts map retains
+    entries for each startup; canceling VS Code sign-in still shows token-failure step 2 and
+    consumes its shown key; the Atlas explanation projection always uses the TLS-rejection
+    summary regardless of the actual explanation; concurrent first connections can duplicate
+    probes before the dialog shown key is set. No new state registry, abstraction or tuning.
+  - Work is confined to the preview worktree. Main scope/progress entries below are retained.
+    Case 1 applies; one exact build will run after both fixes. Terra owns the deferred full
+    checks, including formatting, localization, lint, full tests and packaging. No live
+    sovereign-cloud validation or token-usage measurement is claimed.
 - S8 committed-base integration: GPT-6.1 Sol, started at 10:35:43 UTC. In the isolated
   preview worktree only, merged `18060ae09088457b4ae2bdb7420d883f51b6ab46` with `--no-ff`;
   merge commit: `7e5fe7d0f2d0375c29d74c41b2756498ea43ad27`. The only conflict was the live
@@ -772,7 +796,8 @@ formatting/localization changes were not imported or edited.
   dependencies or webviews were added.
 - One constant gates the hooks. Dialogs are deduplicated per stable cluster ID, surface and step.
   Resolution/token attempt state enforces ordering and failure suppression. Blocking step-1
-  dismissal throws the repository `UserCancelledError` before sign-in; callback paths never
+  dismissal after successful resolution throws the repository `UserCancelledError` before
+  sign-in; dismissing a resolution failure preserves the original error. Callback paths never
   await human interaction. UI/clipboard failures use a constant safe output-channel message
   and do not replace auth/driver errors. All three bounded admin probes run only after successful
   extension connect, with independently reported failures that cannot fail the connection.
@@ -813,7 +838,8 @@ formatting/localization changes were not imported or edited.
 - **Explicitly outstanding requirement, not completed by this integration:** the preferred S8
   delivery calls for a reporter VSIX. It still has not been packaged or delivered. Preview-only
   localization generation and final checks remain prerequisites for that separate packaging
-  step; the reporter's live-cloud run and isolated preview review are also still pending.
+  step; the reporter's live-cloud run is still pending. The isolated preview review is complete;
+  its two medium findings and their fix progress are recorded in the execution log above.
   These notes do not identify a separately deferred implementation requirement. Do not
   interpret offline tests/build success as completed preview delivery or sovereign validation.
 

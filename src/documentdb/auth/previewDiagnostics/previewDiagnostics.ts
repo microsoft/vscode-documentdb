@@ -118,16 +118,13 @@ export async function previewResolve(
             const dialog = showPreviewDialog(credentials.clusterId, {
                 ...reportContext(surface, context), step: 1, error, managedIdentity,
                 userAssigned: !!credentials.managedIdentityConfig?.clientId,
-            }, surface === 'extension', true);
+            }, surface === 'extension');
             if (surface === 'extension') {
                 await dialog;
             } else {
                 void dialog.catch(logPreviewFailure);
             }
-        } catch (uiError) {
-            if (uiError instanceof UserCancelledError) {
-                throw uiError;
-            }
+        } catch {
             logPreviewFailure();
         }
         throw error;

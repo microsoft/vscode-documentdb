@@ -114,7 +114,8 @@ describe('preview dialog lifecycle', () => {
 });
 
 describe('real preview stage ordering', () => {
-    it('suppresses stage 2 and 3 after resolution failure and preserves the original error', async () => {
+    it.each(['Continue', undefined])('preserves a resolution failure and suppresses later stages after dialog response %s', async (choice): Promise<void> => {
+        vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(choice as never);
         const error = new TokenResourceResolutionError('private-value', 'cloudMismatch', {});
         await expect(previewResolve(credentials, 'extension', context, async () => { throw error; })).rejects.toBe(error);
         await previewAcquireToken(credentials.clusterId, 'extension', context, async () => 'token', (token) => token);
