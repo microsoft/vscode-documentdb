@@ -104,16 +104,12 @@ describe('classifyEntraError', () => {
         );
     });
 
-    it.each([
-        'AADSTS1234567890',
-        'AADSTS6500200000',
-        'xAADSTS65002',
-        '_AADSTS65002',
-        'AADSTS65002x',
-        'AADSTS65002_',
-    ])('rejects an overlong or unbounded code: %s', (text): void => {
-        expect(classifyEntraError(text)).toBeUndefined();
-    });
+    it.each(['AADSTS1234567890', 'AADSTS6500200000', 'xAADSTS65002', '_AADSTS65002', 'AADSTS65002x', 'AADSTS65002_'])(
+        'rejects an overlong or unbounded code: %s',
+        (text): void => {
+            expect(classifyEntraError(text)).toBeUndefined();
+        },
+    );
 
     it.each([
         '',

@@ -13,16 +13,12 @@ describe('describeAuthError', () => {
         expect(describeAuthError(new Error(`Sign-in failed (AADSTS${code}).`))).toContain(`aadsts=AADSTS${code};`);
     });
 
-    it.each([
-        'AADSTS1234567890',
-        'AADSTS6500200000',
-        'xAADSTS65002',
-        '_AADSTS65002',
-        'AADSTS65002x',
-        'AADSTS65002_',
-    ])('does not trace an overlong or unbounded code: %s', (text): void => {
-        expect(describeAuthError(new Error(text))).toContain('aadsts=none;');
-    });
+    it.each(['AADSTS1234567890', 'AADSTS6500200000', 'xAADSTS65002', '_AADSTS65002', 'AADSTS65002x', 'AADSTS65002_'])(
+        'does not trace an overlong or unbounded code: %s',
+        (text): void => {
+            expect(describeAuthError(new Error(text))).toContain('aadsts=none;');
+        },
+    );
 
     it('labels platform broker errors without exposing the raw message', (): void => {
         expect(describeAuthError(new Error('platform_broker_error: private sign-in failure'))).toBe(
@@ -33,18 +29,23 @@ describe('describeAuthError', () => {
     describe('startup cloud telemetry', () => {
         it.each(['entraCloud.resolved', 'entraCloud.unresolved'])('copies only closed enums from %s', (operation) => {
             const properties: Record<string, string> = {};
-            traceAuthFlow(operation, {
-                cloudCategory: 'usgov',
-                reason: 'setting',
-                configuredCloud: 'AzureUSGovernment',
-                hostCloud: 'AzureUSGovernment',
-                errorKind: 'cloudMismatch',
-                tokenResource: 'https://private-resource.example',
-                authority: 'https://private-authority.example',
-                tenantId: 'private-tenant',
-                customHostnameSuffix: 'private.example',
-                imdsAzEnvironment: 'AzurePrivateCloud',
-            }, undefined, { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties: properties });
+            traceAuthFlow(
+                operation,
+                {
+                    cloudCategory: 'usgov',
+                    reason: 'setting',
+                    configuredCloud: 'AzureUSGovernment',
+                    hostCloud: 'AzureUSGovernment',
+                    errorKind: 'cloudMismatch',
+                    tokenResource: 'https://private-resource.example',
+                    authority: 'https://private-authority.example',
+                    tenantId: 'private-tenant',
+                    customHostnameSuffix: 'private.example',
+                    imdsAzEnvironment: 'AzurePrivateCloud',
+                },
+                undefined,
+                { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties: properties },
+            );
             expect(properties).toEqual({
                 cloudCategory: 'usgov',
                 tokenResourceReason: 'setting',
@@ -57,20 +58,33 @@ describe('describeAuthError', () => {
 
         it('rejects dynamic values even under known property names', () => {
             const properties: Record<string, string> = {};
-            traceAuthFlow('entraCloud.resolved', {
-                cloudCategory: 'private-category', reason: 'private-reason', configuredCloud: 'private-cloud',
-                hostCloud: 'private-host', errorKind: 'private-error',
-            }, undefined, { startupCorrelationId: 'startup-id', surface: 'shell', startupProperties: properties });
+            traceAuthFlow(
+                'entraCloud.resolved',
+                {
+                    cloudCategory: 'private-category',
+                    reason: 'private-reason',
+                    configuredCloud: 'private-cloud',
+                    hostCloud: 'private-host',
+                    errorKind: 'private-error',
+                },
+                undefined,
+                { startupCorrelationId: 'startup-id', surface: 'shell', startupProperties: properties },
+            );
             expect(properties).toEqual({
-                cloudCategory: 'unknown', tokenResourceReason: 'unknown', configuredCloud: 'unknown',
-                hostCloud: 'unknown', errorKind: 'none',
+                cloudCategory: 'unknown',
+                tokenResourceReason: 'unknown',
+                configuredCloud: 'unknown',
+                hostCloud: 'unknown',
+                errorKind: 'none',
             });
         });
 
         it('leaves unrelated auth traces unchanged', () => {
             const properties: Record<string, string> = {};
             traceAuthFlow('nativeAuth.configure', { cloudCategory: 'public' }, undefined, {
-                startupCorrelationId: 'startup-id', surface: 'extension', startupProperties: properties,
+                startupCorrelationId: 'startup-id',
+                surface: 'extension',
+                startupProperties: properties,
             });
             expect(properties).toEqual({});
         });

@@ -285,8 +285,11 @@ describe('ShellSessionManager', () => {
             { startupCorrelationId: 'startup-id', surface, startupProperties },
         );
         expect(startupProperties).toEqual({
-            cloudCategory: 'usgov', tokenResourceReason: source === 'vscode' ? 'setting' : 'host',
-            configuredCloud: 'AzureUSGovernment', hostCloud: 'AzureUSGovernment', errorKind: 'none',
+            cloudCategory: 'usgov',
+            tokenResourceReason: source === 'vscode' ? 'setting' : 'host',
+            configuredCloud: 'AzureUSGovernment',
+            hostCloud: 'AzureUSGovernment',
+            errorKind: 'none',
         });
         expect(resolver).toHaveBeenCalledWith(connectionString);
         expect(provider.mock.calls.at(-1)?.[0]).toEqual(['https://ossrdbms-aad.database.usgovcloudapi.net/.default']);
@@ -406,7 +409,8 @@ describe('ShellSessionManager', () => {
     ] as const)(
         'clears stale %s %s failure context only after token success',
         async (surface, source): Promise<void> => {
-            const resolver = source === 'vscode' ? resolveInteractiveTokenResource : resolveManagedIdentityTokenResource;
+            const resolver =
+                source === 'vscode' ? resolveInteractiveTokenResource : resolveManagedIdentityTokenResource;
             vi.mocked(resolver).mockResolvedValueOnce({
                 resource: 'https://ossrdbms-aad.database.chinacloudapi.cn',
                 scope: 'https://ossrdbms-aad.database.chinacloudapi.cn/.default',
@@ -430,11 +434,14 @@ describe('ShellSessionManager', () => {
                 { startupCorrelationId: 'failed-startup', surface, startupProperties: failedProperties },
             );
             expect(postResponse).toHaveBeenLastCalledWith({
-                type: 'tokenError', requestId: 'failed-token-request', error: error.message,
+                type: 'tokenError',
+                requestId: 'failed-token-request',
+                error: error.message,
             });
             const failure = getRecentEntraTokenFailure(clusterId);
             expect(failure).toMatchObject({
-                cloudCategory: 'china', authMethod: source === 'vscode' ? 'interactive' : 'managedIdentity',
+                cloudCategory: 'china',
+                authMethod: source === 'vscode' ? 'interactive' : 'managedIdentity',
             });
             const diagnostics = new EntraDiagnosticsProvider();
             expect(await diagnostics.explain({ clusterId, error })).toContain('Sign-in failed in Azure China');
@@ -451,7 +458,9 @@ describe('ShellSessionManager', () => {
                 { startupCorrelationId: 'successful-startup', surface, startupProperties: successfulProperties },
             );
             expect(postResponse).toHaveBeenLastCalledWith({
-                type: 'tokenResponse', requestId: 'successful-token-request', accessToken: 'private-token',
+                type: 'tokenResponse',
+                requestId: 'successful-token-request',
+                accessToken: 'private-token',
             });
             expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
             expect(failedProperties.errorKind).toBe('tokenAcquisitionFailed');

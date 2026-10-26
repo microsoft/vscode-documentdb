@@ -125,9 +125,13 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         vi.mocked(resolveInteractiveTokenResource).mockRejectedValueOnce(error);
         const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.azure.us/'));
         const startupProperties: Record<string, string> = {};
-        await expect(handler.configureAuth(undefined, {
-            startupCorrelationId: 'startup-id', surface: 'extension', startupProperties,
-        })).rejects.toBe(error);
+        await expect(
+            handler.configureAuth(undefined, {
+                startupCorrelationId: 'startup-id',
+                surface: 'extension',
+                startupProperties,
+            }),
+        ).rejects.toBe(error);
         expect(startupProperties.errorKind).toBe('cloudMismatch');
         expect(getSessionFromVSCode).not.toHaveBeenCalled();
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
@@ -135,9 +139,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
 
     it.each([false, true])('emits complete real-resolver cloud evidence (mismatch: %s)', async (mismatch) => {
         const actual = await vi.importActual<typeof documentdbTokenResource>('./documentdbTokenResource');
-        const resource = mismatch
-            ? 'https://database.example.com'
-            : 'https://ossrdbms-aad.database.usgovcloudapi.net';
+        const resource = mismatch ? 'https://database.example.com' : 'https://ossrdbms-aad.database.usgovcloudapi.net';
         const deps: documentdbTokenResource.TokenResourceResolverDeps = {
             getConfiguredCloud: () => ({ name: 'custom', isCustomCloud: true }),
             getCustomEnvironment: () => ({ ossrdbmsEndpoint: resource }),
@@ -239,13 +241,19 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         getSessionFromVSCode.mockRejectedValueOnce(error);
         const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.example.com/'));
         const failedProperties: Record<string, string> = {};
-        await expect(handler.configureAuth(undefined, {
-            startupCorrelationId: 'failed-startup', surface: 'extension', startupProperties: failedProperties,
-        })).rejects.toBe(error);
+        await expect(
+            handler.configureAuth(undefined, {
+                startupCorrelationId: 'failed-startup',
+                surface: 'extension',
+                startupProperties: failedProperties,
+            }),
+        ).rejects.toBe(error);
         const failure = getRecentEntraTokenFailure('cluster-1');
         expect(failure).toMatchObject({ cloudCategory: 'usgov', authMethod: 'interactive' });
         const diagnostics = new EntraDiagnosticsProvider();
-        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain('Sign-in failed in Azure US Government');
+        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain(
+            'Sign-in failed in Azure US Government',
+        );
 
         getSessionFromVSCode.mockImplementationOnce(async () => {
             expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
@@ -253,7 +261,9 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         });
         const successfulProperties: Record<string, string> = {};
         await handler.configureAuth(undefined, {
-            startupCorrelationId: 'successful-startup', surface: 'extension', startupProperties: successfulProperties,
+            startupCorrelationId: 'successful-startup',
+            surface: 'extension',
+            startupProperties: successfulProperties,
         });
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
         expect(failedProperties.errorKind).toBe('tokenAcquisitionFailed');
@@ -304,7 +314,11 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
         const startupProperties: Record<string, string> = {};
         await expect(
-            handler.configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties }),
+            handler.configureAuth(undefined, {
+                startupCorrelationId: 'startup-id',
+                surface: 'extension',
+                startupProperties,
+            }),
         ).rejects.toThrow('secret-token');
         expect(startupProperties.errorKind).toBe('tokenAcquisitionFailed');
         expect(JSON.stringify(startupProperties)).not.toContain('secret-token');

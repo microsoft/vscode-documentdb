@@ -219,7 +219,11 @@ export function resolveTokenResourceForCopy(
     connectionString: string,
     deps: Pick<
         TokenResourceResolverDeps,
-        'getConfiguredCloud' | 'getCustomEnvironment' | 'getCustomHostnameSuffixSource' | 'getSignInEnvironment' | 'warn'
+        | 'getConfiguredCloud'
+        | 'getCustomEnvironment'
+        | 'getCustomHostnameSuffixSource'
+        | 'getSignInEnvironment'
+        | 'warn'
     > = getDefaultDeps(),
 ): ResolvedTokenResource {
     const hostCloud = getAzureCloudFromHosts(connectionString);

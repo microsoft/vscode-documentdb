@@ -53,11 +53,27 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S5                 | Complete                       | GPT-6.1 Sol  | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92`                                                                             |
 | S6                 | Complete                       | GPT-6.1 Sol  | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692`                                                           |
 | S7                 | Externally blocked             | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below                                                                                        |
-| S8                 | Implemented; review pending     | GPT-6.1 Sol  | Preview commit `99314464`; base merge `7e5fe7d0`, evidence `9568ac02`; 277 focused tests and build passed; preview branch only |
-| Enhancement review | Main complete; preview pending | Opus 5.5     | 10:18:12-10:22:43 UTC (271 seconds); one medium S7 documentation finding; no medium-or-higher product-code findings; correction below; isolated preview review pending |
-| Full verification  | Local checks passed             | Terra + GPT-6.1 Sol | Terra: 10:35-10:45 UTC; Sol import correction: 10:46:04-10:49:30 UTC; lint, build, and 52 focused tests passed; original lint failure historical; generated finalization commit pending |
+| S8                 | Reviewed and corrected; packaging pending | GPT-6.1 Sol | Preview `99314464`; cancellation fixes `488fb042`, `1120be5a`; 100 focused tests and exact build passed; preview branch only |
+| Enhancement review | Complete; medium findings addressed | Opus 5.5 | Main 10:18:12-10:22:43 UTC; preview 10:46:08-10:49:55 UTC; one medium docs issue and two medium preview issues corrected; low observations documented |
+| Full verification  | Main local checks passed | Terra + GPT-6.1 Sol | Full Case 1/2 checks passed after import correction `6c863f4a`; preview final checks/package pending separately |
 
 ### Execution log
+
+- S8 Opus 5.5 review, 10:46:08-10:49:55 UTC (227 seconds): two medium cancellation findings.
+  GPT-6.1 Sol addressed them in separate preview-only commits:
+  `488fb0428f8bfef1a12b5e896ec15e8d0402e4b3` preserves the original resolution error when the failure
+  dialog is dismissed (99 focused tests);
+  `1120be5a54524dd5e10f170b1bc01f61ccbeb078` skips canceled-connect result dialogs, leaving step 3
+  available for a real retry (100 focused tests). Exact preview build passed in 43 seconds.
+  Final preview validation and packaging will follow integration of the main lint/format output.
+- Four low preview observations are documented, not fixed under the medium-or-higher threshold:
+  the per-startup attempts map retains entries for the window; canceling VS Code sign-in can show
+  the token-failure dialog and consume step 2; Atlas explanation projection always uses its
+  TLS-rejection summary; concurrent first connections can duplicate probes before the once-only
+  dialog key is recorded. No private-data leak was found in the preview review.
+- Main lint correction commit: `6c863f4a6d4888cc17d96fdc8a0787d50fa923df`. Finalization preserves
+  the generated localization bundle and formatting output as a separate commit, with no behavior
+  changes. Main code and all nine review items are complete; D11/live-cloud gates remain external.
 
 - S8: GPT-6.1 Sol implemented the isolated preview during 10:09-10:30 UTC
   (`9931446469d3a0d62a262f8bf04127e3b9a0b250`). A later integration pass, 10:35:43-10:40:52 UTC

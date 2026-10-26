@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Links } from '../../../constants';
 import { ConnectionDiagnosticsService } from '../../../services/connectionDiagnosticsService';
 import { EntraDiagnosticsProvider } from './EntraDiagnosticsProvider';
-import { getRecentEntraTokenFailure, recordEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraTokenFailures';
+import {
+    getRecentEntraTokenFailure,
+    recordEntraTokenFailure,
+    resetEntraTokenFailuresForTests,
+} from './entraTokenFailures';
 
 const mockOutputChannel = vi.hoisted(() => ({ info: vi.fn() }));
 
@@ -52,36 +56,43 @@ describe('EntraDiagnosticsProvider', () => {
         expect(provider.id).toBe('entra-sign-in');
     });
 
-    it.each([false, true])('explains the driver host rejection through the service without a token failure (cause=%s)', async (wrapped) => {
-        const rejection = "Host 'private-cluster.example.com:10255' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.com'";
-        const cause = Object.freeze(new Error(rejection));
-        const error = Object.freeze(Object.assign(
-            new Error(wrapped ? 'Connection failed' : rejection, wrapped ? { cause } : undefined),
-            { code: 'original-code' },
-        ));
-        const descriptors = Object.getOwnPropertyDescriptors(error);
-        ConnectionDiagnosticsService.resetForTests();
-        ConnectionDiagnosticsService.registerProvider(provider);
-        try {
-            expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
-            const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error });
-            expect(diagnosis?.providerId).toBe('entra-sign-in');
-            expect(diagnosis?.message).toContain('documentDB.customEnvironment.mongoClusterHostnameSuffix');
-            expect(diagnosis?.message).toContain('user settings');
-            expect(diagnosis?.message).not.toMatch(/private-cluster|example.com|10255|azure.com/);
-            expect(Object.getOwnPropertyDescriptors(error)).toEqual(descriptors);
-            expect(telemetryContext.telemetry.properties.ruleId).toBe('oidcHostNotAllowed');
-            expect(JSON.stringify(telemetryContext.telemetry.properties)).not.toContain('private-cluster');
-        } finally {
+    it.each([false, true])(
+        'explains the driver host rejection through the service without a token failure (cause=%s)',
+        async (wrapped) => {
+            const rejection =
+                "Host 'private-cluster.example.com:10255' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.com'";
+            const cause = Object.freeze(new Error(rejection));
+            const error = Object.freeze(
+                Object.assign(new Error(wrapped ? 'Connection failed' : rejection, wrapped ? { cause } : undefined), {
+                    code: 'original-code',
+                }),
+            );
+            const descriptors = Object.getOwnPropertyDescriptors(error);
             ConnectionDiagnosticsService.resetForTests();
-        }
-    });
+            ConnectionDiagnosticsService.registerProvider(provider);
+            try {
+                expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
+                const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error });
+                expect(diagnosis?.providerId).toBe('entra-sign-in');
+                expect(diagnosis?.message).toContain('documentDB.customEnvironment.mongoClusterHostnameSuffix');
+                expect(diagnosis?.message).toContain('user settings');
+                expect(diagnosis?.message).not.toMatch(/private-cluster|example.com|10255|azure.com/);
+                expect(Object.getOwnPropertyDescriptors(error)).toEqual(descriptors);
+                expect(telemetryContext.telemetry.properties.ruleId).toBe('oidcHostNotAllowed');
+                expect(JSON.stringify(telemetryContext.telemetry.properties)).not.toContain('private-cluster');
+            } finally {
+                ConnectionDiagnosticsService.resetForTests();
+            }
+        },
+    );
 
     it('explains a raw worker host rejection string without a token-failure record', async () => {
-        expect(await provider.explain({
-            clusterId,
-            error: "Host 'private.example.com' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.us,*.azure.cn'",
-        })).toContain('documentDB.customEnvironment.mongoClusterHostnameSuffix');
+        expect(
+            await provider.explain({
+                clusterId,
+                error: "Host 'private.example.com' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.us,*.azure.cn'",
+            }),
+        ).toContain('documentDB.customEnvironment.mongoClusterHostnameSuffix');
         expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
     });
 
