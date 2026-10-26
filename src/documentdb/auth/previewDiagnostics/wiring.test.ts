@@ -8,6 +8,7 @@ import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
+import { ConnectionDiagnosticsService } from '../../../services/connectionDiagnosticsService';
 import { type AuthTraceContext } from '../../../utils/authTrace';
 import { ClustersClient } from '../../ClustersClient';
 import { CredentialCache, type CachedClusterCredentials } from '../../CredentialCache';
@@ -19,10 +20,10 @@ import { AuthMethodId } from '../AuthMethod';
 import * as tokenResources from '../documentdbTokenResource';
 import { ManagedIdentityAuthHandler } from '../ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from '../MicrosoftEntraIDAuthHandler';
-import { resetPreviewDiagnosticsForTests } from './previewDiagnostics';
+import * as previewDiagnostics from './previewDiagnostics';
 
 const network = vi.hoisted(() => ({
-    session: vi.fn(), managedToken: vi.fn(), connect: vi.fn(), command: vi.fn(), posted: [] as MainToWorkerMessage[],
+    session: vi.fn(), managedToken: vi.fn(), connect: vi.fn(), close: vi.fn(), command: vi.fn(), posted: [] as MainToWorkerMessage[],
 }));
 
 vi.mock('../../../extensionVariables', () => ({
@@ -42,7 +43,7 @@ vi.mock('mongodb', async (original) => ({
         public db(): { command: typeof network.command } {
             return { command: network.command };
         }
-        public async close(): Promise<void> {}
+        public close = network.close;
     },
 }));
 vi.mock('@microsoft/vscode-azext-utils', async (original) => ({
@@ -98,12 +99,13 @@ const never = new Promise<string | undefined>(() => undefined);
 
 beforeEach((): void => {
     vi.clearAllMocks();
-    resetPreviewDiagnosticsForTests();
+    previewDiagnostics.resetPreviewDiagnosticsForTests();
     network.posted.length = 0;
     network.session.mockReset().mockResolvedValue({ accessToken: 'private-token', account: { label: 'private-user' } });
     network.managedToken.mockReset().mockResolvedValue({ accessToken: 'private-token', expiresOnTimestamp: Date.now() + 3600_000 });
     network.command.mockReset().mockResolvedValue({ ok: 1 });
     network.connect.mockReset().mockResolvedValue(undefined);
+    network.close.mockReset().mockResolvedValue(undefined);
     vi.mocked(vscode.window.showInformationMessage).mockReset().mockResolvedValue('Continue' as never);
     vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
         get: vi.fn((key: string) => key === 'environment' ? 'USGovernment' : undefined),
@@ -168,7 +170,7 @@ describe('real handlers and callback wiring', () => {
         vi.mocked(vscode.window.showInformationMessage).mockReturnValue(never as never);
         await expect(callback()).resolves.toMatchObject({ accessToken: 'private-token' });
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2);
-        resetPreviewDiagnosticsForTests();
+        previewDiagnostics.resetPreviewDiagnosticsForTests();
         vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce('Continue' as never);
         const retry = await new ManagedIdentityAuthHandler(credentials).configureAuth(undefined, context);
         const error = new Error('AADSTS65002 private-host');
@@ -202,16 +204,49 @@ describe('real handlers and callback wiring', () => {
 });
 
 describe('real ClustersClient connect hook', () => {
-    async function connect(options: MongoClientOptions): Promise<void> {
+    async function connect(
+        options: MongoClientOptions,
+        abortSignal?: AbortSignal,
+        traceContext: AuthTraceContext = context,
+    ): Promise<void> {
         const instance = Reflect.construct(ClustersClient, [credentials.clusterId]) as {
             connect: (...args: unknown[]) => Promise<void>;
         };
         await instance.connect({
-            id: context.startupCorrelationId, startedAt: Date.now(), costTimings: new ConnectionStartupTimings(),
+            id: traceContext.startupCorrelationId, startedAt: Date.now(), costTimings: new ConnectionStartupTimings(),
             telemetry: { properties: {}, measurements: {} }, stageDurationsMs: {},
             stage: 'stage03PreparingClient', stageStartedAt: Date.now(),
-        }, credentials.connectionString, options);
+        }, credentials.connectionString, options, undefined, abortSignal);
     }
+
+    it('skips canceled-connect reporting and preserves step 3 for a later successful startup', async (): Promise<void> => {
+        const { options } = await new MicrosoftEntraIDAuthHandler(credentials).configureAuth(undefined, context);
+        const connectionResult = vi.spyOn(previewDiagnostics, 'previewConnectionResult');
+        const explain = vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue(undefined);
+        const controller = new AbortController();
+        network.connect.mockImplementationOnce(async (): Promise<void> => {
+            controller.abort();
+            throw new Error('private-driver-host connection closed');
+        });
+
+        await expect(connect(options, controller.signal)).rejects.toBeInstanceOf(UserCancelledError);
+
+        expect(network.close).toHaveBeenCalledOnce();
+        expect(connectionResult).not.toHaveBeenCalled();
+        expect(explain).not.toHaveBeenCalled();
+        expect(network.command).not.toHaveBeenCalled();
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2);
+
+        const retryContext = { ...context, startupCorrelationId: 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff' };
+        const retry = await new MicrosoftEntraIDAuthHandler(credentials).configureAuth(undefined, retryContext);
+        await expect(connect(retry.options, undefined, retryContext)).resolves.toBeUndefined();
+
+        expect(connectionResult).toHaveBeenCalledOnce();
+        expect(explain).not.toHaveBeenCalled();
+        expect(network.command).toHaveBeenCalledTimes(3);
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(3);
+        expect(vi.mocked(vscode.window.showInformationMessage).mock.lastCall?.[0]).toContain('3 of 3');
+    });
 
     it('reports all probe failures without failing an actual successful connect', async () => {
         const { options } = await new MicrosoftEntraIDAuthHandler(credentials).configureAuth(undefined, context);

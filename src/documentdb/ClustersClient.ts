@@ -487,12 +487,12 @@ export class ClustersClient {
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
-            await previewConnectionResult(this.clusterId, { startupCorrelationId: startup.id, surface: 'extension' }, this._mongoClient, Date.now() - startup.stageStartedAt, error);
             if (abortSignal?.aborted) {
                 ext.outputChannel.debug(`[ClustersClient] startup=${startup.id} canceled by user surface=extension`);
                 throw new UserCancelledError('abortConnection');
             }
 
+            await previewConnectionResult(this.clusterId, { startupCorrelationId: startup.id, surface: 'extension' }, this._mongoClient, Date.now() - startup.stageStartedAt, error);
             const message = parseError(error).message;
             // Surface the friendly local-connection tips only for a genuinely local-ish connection
             // (emulator, OR a local connection that opted into the TLS exception — host-gated the

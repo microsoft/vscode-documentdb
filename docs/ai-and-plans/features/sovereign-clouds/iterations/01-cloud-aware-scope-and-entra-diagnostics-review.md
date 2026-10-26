@@ -53,8 +53,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92` |
 | S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692` |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
-| S8 | Complete (preview only; delivery pending) | GPT-6.1 Sol | 10:09-10:30 UTC implementation/delivery notes, `99314464`; committed base `18060ae0` merged as `7e5fe7d0`; integration recheck 10:38:52-10:39:42 UTC: 12 files / 277 tests and one exact build passed; see inline S8 delivery below; never merge into PR |
-| Enhancement review | Main and preview reviews complete; preview fixes in progress | Opus 5.5 | Main: 10:18:12-10:22:43 UTC (271 seconds), one medium S7 documentation finding, corrected below; preview: 10:46:08-10:49:55 UTC (227 seconds), two medium findings P1/P2 at `9568ac02`; dispositions below |
+| S8 | Complete (preview only; delivery pending) | GPT-6.1 Sol | 10:09-10:30 UTC implementation/delivery notes, `99314464`; committed base `18060ae0` merged as `7e5fe7d0`; integration recheck 10:38:52-10:39:42 UTC: 12 files / 277 tests and one exact build passed; review fixes verified by 10:54:28 UTC, P1 `488fb042`, P2 in this commit; see inline S8 delivery below; never merge into PR |
+| Enhancement review | Main and preview complete; medium findings addressed | Opus 5.5 | Main: 10:18:12-10:22:43 UTC (271 seconds), one medium S7 documentation finding, corrected below; preview: 10:46:08-10:49:55 UTC (227 seconds), two medium findings P1/P2 at `9568ac02`, both fixed; dispositions below |
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
 ### Execution log
@@ -70,19 +70,33 @@ The read-only attachment is unchanged; this repository copy is the live progress
     new failing cases (96 passed / 3 failed), then passed **4 files / 99 tests** at
     **10:52:16-10:52:21 UTC**. Tests cover Continue and dismissal error identity, both real
     auth handlers' unresolved traces, actual startup `failed` rather than `canceled`, and
-    existing successful-resolution cancellation. P1's hash will be recorded in the P2 commit.
+    existing successful-resolution cancellation. P1 commit:
+    `488fb0428f8bfef1a12b5e896ec15e8d0402e4b3` (committed at 10:52:49 UTC).
   - **P2:** the catch-side connection preview ran before the abort check, displaying a false
-    step-3 failure and consuming the once key after user cancellation. **Pending:** move the
-    existing abort handling before that preview hook, with an aborted-connect/reconnect test.
+    step-3 failure and consuming the once key after user cancellation. **Addressed in this
+    separate commit:** moved the existing abort handling before the catch-side preview hook.
+    An in-flight abort closes the client without invoking `previewConnectionResult`, diagnostics
+    or probes, and without displaying/consuming step 3. A subsequent successful startup for the
+    same cluster, without resetting preview state, still runs all three probes and shows step 3.
+    Existing normal failure/success tests remain unchanged. GPT-6.1 Sol implementation/test/build
+    window: **10:52:49-10:54:28 UTC** (99 seconds). The new regression first failed against the
+    old ordering (99 passed / 1 failed); after the fix the combined focused command passed
+    **4 files / 100 tests**, **10:53:35-10:53:39 UTC**:
+    `npx vitest run --config src/documentdb/auth/previewDiagnostics/vitest.preview.config.ts src/documentdb/auth/previewDiagnostics/ src/documentdb/ClustersClient.test.ts --reporter=dot`.
+    Exactly one cluster-end `npm run build` passed **10:53:45-10:54:28 UTC** (43 seconds),
+    including workspace prebuilds and root TypeScript. P2's final hash is returned in the
+    handoff, rather than requiring an amend or extra commit to record its own hash.
   - **Low observations, documented only; intentionally not fixed:** the attempts map retains
     entries for each startup; canceling VS Code sign-in still shows token-failure step 2 and
     consumes its shown key; the Atlas explanation projection always uses the TLS-rejection
     summary regardless of the actual explanation; concurrent first connections can duplicate
     probes before the dialog shown key is set. No new state registry, abstraction or tuning.
   - Work is confined to the preview worktree. Main scope/progress entries below are retained.
-    Case 1 applies; one exact build will run after both fixes. Terra owns the deferred full
-    checks, including formatting, localization, lint, full tests and packaging. No live
-    sovereign-cloud validation or token-usage measurement is claimed.
+    Case 1 applies; both medium fixes and the one exact cluster-end build are complete.
+    Terra owns the deferred full checks, including `prettier-fix`, localization, lint, full
+    tests, strict package-test types and packaging. No push, amend, merge, dependency change,
+    live sovereign-cloud validation or token-usage measurement. The four low observations
+    remain documentation only.
 - S8 committed-base integration: GPT-6.1 Sol, started at 10:35:43 UTC. In the isolated
   preview worktree only, merged `18060ae09088457b4ae2bdb7420d883f51b6ab46` with `--no-ff`;
   merge commit: `7e5fe7d0f2d0375c29d74c41b2756498ea43ad27`. The only conflict was the live
@@ -778,7 +792,7 @@ The query returns aggregate counts only, with no machine, tenant, user, or host 
 
 Accepted by the operator on 2026-10-26. It replaces the earlier scripted-checklist idea.
 
-**Preview implementation / delivery, updated 2026-10-26 after the 10:39:42 UTC integration checks.**
+**Preview implementation / delivery, updated 2026-10-26 after the 10:54:28 UTC review-fix checks.**
 GPT-6.1 Sol implemented S8 at **10:09-10:30 UTC** (21 minutes, including delivery notes), only
 in the isolated `preview/sovereign-diagnostics` worktree:
 `/home/tnaum/.copilot/session-state/2ab50763-84c2-482c-9a3d-dcf4de193ad2/files/sovereign-diagnostics-preview`.
@@ -801,6 +815,7 @@ formatting/localization changes were not imported or edited.
   await human interaction. UI/clipboard failures use a constant safe output-channel message
   and do not replace auth/driver errors. All three bounded admin probes run only after successful
   extension connect, with independently reported failures that cannot fail the connection.
+  User-aborted extension connects skip step 3 entirely, preserving its once key for a real reconnect.
 - **Required localization deviation from the original sketch:** preview strings use
   `vscode.l10n.t()`, as required by repository rules and the operator's explicit instruction.
   No localization generation or bundle edit was performed. If a preview VSIX is later packaged,
