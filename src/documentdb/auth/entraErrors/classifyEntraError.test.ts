@@ -95,6 +95,26 @@ describe('classifyEntraError', () => {
         expect(classifyEntraError('AADSTS12345 AADSTS1234567')?.code).toBe('12345');
     });
 
+    it.each(['12345678', '123456789'])('preserves the full unknown code %s in its lookup link', (code): void => {
+        const classification = classifyEntraError(`Sign-in failed (AADSTS${code}).`);
+        expect(classification).toEqual({ ruleId: 'unknownAadsts', code, brokered: false });
+        const rule = entraErrorRules.find((candidate): boolean => candidate.id === classification?.ruleId);
+        expect(rule?.explain({ code: classification?.code, recentTokenFailure: false })).toContain(
+            `https://login.microsoftonline.com/error?code=${code}`,
+        );
+    });
+
+    it.each([
+        'AADSTS1234567890',
+        'AADSTS6500200000',
+        'xAADSTS65002',
+        '_AADSTS65002',
+        'AADSTS65002x',
+        'AADSTS65002_',
+    ])('rejects an overlong or unbounded code: %s', (text): void => {
+        expect(classifyEntraError(text)).toBeUndefined();
+    });
+
     it.each([
         '',
         'querySrv EBADRESP _mongodb._tcp.example.com',
@@ -114,6 +134,24 @@ describe('classifyEntraError', () => {
 });
 
 describe('Entra error rule table', () => {
+    it.each<EntraErrorContext>([
+        { recentTokenFailure: false },
+        { cloudCategory: 'public', recentTokenFailure: true },
+        { cloudCategory: 'usgov', recentTokenFailure: false },
+        { cloudCategory: 'china', recentTokenFailure: false },
+        { cloudCategory: 'custom', recentTokenFailure: false },
+    ])('uses platform-neutral opaque-broker wording for %j', (context): void => {
+        const rule = entraErrorRules.find((candidate): boolean => candidate.id === 'brokerOpaque');
+        const message = rule?.explain(context);
+        expect(message).toMatch(/^The sign-in window reported an error without details\./);
+        expect(message).not.toContain('Windows');
+        expect(message).toContain(
+            context.cloudCategory && context.cloudCategory !== 'public'
+                ? 'Microsoft Sovereign Cloud Authentication'
+                : 'Microsoft Authentication',
+        );
+    });
+
     it('has unique ids and no repeated AADSTS or MSAL codes', (): void => {
         const ids = entraErrorRules.map((rule): string => rule.id);
         const codes = entraErrorRules.flatMap((rule): readonly string[] => rule.aadsts ?? []);

@@ -14,6 +14,7 @@ import {
     resolveManagedIdentityTokenResource,
     TokenResourceResolutionError,
 } from '../auth/documentdbTokenResource';
+import { EntraDiagnosticsProvider } from '../auth/entraErrors/EntraDiagnosticsProvider';
 import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from '../auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../CredentialCache';
 import { PlaygroundEvaluator } from '../playground/PlaygroundEvaluator';
@@ -393,6 +394,75 @@ describe('ShellSessionManager', () => {
                 authMethod: source === 'vscode' ? 'interactive' : 'managedIdentity',
                 timestamp: expect.any(Number),
             });
+            manager.dispose();
+        },
+    );
+
+    it.each([
+        ['shell', 'vscode'],
+        ['shell', 'managedIdentity'],
+        ['playground', 'vscode'],
+        ['playground', 'managedIdentity'],
+    ] as const)(
+        'clears stale %s %s failure context only after token success',
+        async (surface, source): Promise<void> => {
+            const resolver = source === 'vscode' ? resolveInteractiveTokenResource : resolveManagedIdentityTokenResource;
+            vi.mocked(resolver).mockResolvedValueOnce({
+                resource: 'https://ossrdbms-aad.database.chinacloudapi.cn',
+                scope: 'https://ossrdbms-aad.database.chinacloudapi.cn/.default',
+                cloudCategory: 'china',
+                reason: source === 'vscode' ? 'setting' : 'host',
+                details: { flow: source === 'vscode' ? 'interactive' : 'managedIdentity', cloudCategory: 'china' },
+            });
+            const error = Object.freeze(new Error('platform_broker_error'));
+            const provider = source === 'vscode' ? mockGetSessionFromVSCode : mockGetManagedIdentityAccessToken;
+            provider.mockRejectedValueOnce(error);
+            const manager =
+                surface === 'shell'
+                    ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
+                    : new PlaygroundEvaluator();
+            const postResponse = vi.fn();
+            const failedProperties: Record<string, string> = {};
+            await workerCallbacks.onTokenRequest?.(
+                { type: 'tokenRequest', requestId: 'failed-token-request', source },
+                postResponse,
+                undefined,
+                { startupCorrelationId: 'failed-startup', surface, startupProperties: failedProperties },
+            );
+            expect(postResponse).toHaveBeenLastCalledWith({
+                type: 'tokenError', requestId: 'failed-token-request', error: error.message,
+            });
+            const failure = getRecentEntraTokenFailure(clusterId);
+            expect(failure).toMatchObject({
+                cloudCategory: 'china', authMethod: source === 'vscode' ? 'interactive' : 'managedIdentity',
+            });
+            const diagnostics = new EntraDiagnosticsProvider();
+            expect(await diagnostics.explain({ clusterId, error })).toContain('Sign-in failed in Azure China');
+
+            provider.mockImplementationOnce(async () => {
+                expect(getRecentEntraTokenFailure(clusterId)).toBe(failure);
+                return { accessToken: 'private-token', account: { label: 'private-account' } };
+            });
+            const successfulProperties: Record<string, string> = {};
+            await workerCallbacks.onTokenRequest?.(
+                { type: 'tokenRequest', requestId: 'successful-token-request', source },
+                postResponse,
+                undefined,
+                { startupCorrelationId: 'successful-startup', surface, startupProperties: successfulProperties },
+            );
+            expect(postResponse).toHaveBeenLastCalledWith({
+                type: 'tokenResponse', requestId: 'successful-token-request', accessToken: 'private-token',
+            });
+            expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
+            expect(failedProperties.errorKind).toBe('tokenAcquisitionFailed');
+            expect(successfulProperties.errorKind).toBe('none');
+            expect(await diagnostics.explain({ clusterId, error })).toMatch(
+                /^The sign-in window reported an error without details\./,
+            );
+            expect(ext.outputChannel.info).toHaveBeenLastCalledWith(
+                expect.stringContaining('"cloudCategory":"unknown","recentTokenFailure":false'),
+            );
+            expect(error.message).toBe('platform_broker_error');
             manager.dispose();
         },
     );

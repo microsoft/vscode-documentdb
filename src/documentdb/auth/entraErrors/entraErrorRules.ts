@@ -119,7 +119,7 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
                     ? 'Microsoft Sovereign Cloud Authentication'
                     : 'Microsoft Authentication';
             return l10n.t(
-                'The Windows sign-in window reported an error without details. Check the error code shown in that window, or open Developer: Show Logs... > {authenticationLog} in VS Code. Your IT help desk can help interpret the code; if the problem persists, report it on GitHub. See {link}',
+                'The sign-in window reported an error without details. Check the error code shown in that window, or open Developer: Show Logs... > {authenticationLog} in VS Code. Your IT help desk can help interpret the code; if the problem persists, report it on GitHub. See {link}',
                 { authenticationLog, link: Links.SovereignClouds },
             );
         },

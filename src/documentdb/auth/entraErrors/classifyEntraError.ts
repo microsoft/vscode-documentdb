@@ -23,7 +23,7 @@ export function classifyEntraError(text: string): EntraErrorClassification | und
         return undefined;
     }
 
-    const codes = Array.from(text.matchAll(/AADSTS(\d{5,7})/g), (match): string => match[1]);
+    const codes = Array.from(text.matchAll(/\bAADSTS(\d{5,9})\b/g), (match): string => match[1]);
     for (const rule of entraErrorRules) {
         const code = rule.aadsts?.find((candidate): boolean => codes.includes(candidate));
         if (code) {

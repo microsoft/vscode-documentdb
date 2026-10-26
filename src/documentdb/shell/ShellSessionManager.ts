@@ -17,7 +17,7 @@ import {
     resolveManagedIdentityTokenResource,
     TokenResourceResolutionError,
 } from '../auth/documentdbTokenResource';
-import { recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
+import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
 import {
     WorkerSessionManager,
     type WorkerSessionCallbacks,
@@ -449,6 +449,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 this._displayName = session.account.label || undefined;
             }
 
+            clearEntraTokenFailure(this._connectionInfo.clusterId);
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,

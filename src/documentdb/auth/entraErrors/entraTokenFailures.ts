@@ -24,6 +24,10 @@ export function recordEntraTokenFailure(clusterId: string, context: EntraTokenFa
     });
 }
 
+export function clearEntraTokenFailure(clusterId: string): void {
+    failures.delete(clusterId);
+}
+
 export function getRecentEntraTokenFailure(clusterId: string, maxAgeMs = 10 * 60_000): EntraTokenFailure | undefined {
     const failure = failures.get(clusterId);
     if (failure && Date.now() - failure.timestamp > maxAgeMs) {

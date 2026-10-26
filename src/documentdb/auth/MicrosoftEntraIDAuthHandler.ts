@@ -21,7 +21,7 @@ import {
     TokenResourceResolutionError,
     type DocumentDBCustomEnvironment,
 } from './documentdbTokenResource';
-import { recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
+import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 import { previewAcquireToken, previewResolve } from './previewDiagnostics/previewDiagnostics';
 
@@ -89,6 +89,8 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             });
             throw error;
         }
+
+        clearEntraTokenFailure(this.clusterCredentials.clusterId);
 
         // Prepare connection string
         const dbConnectionString = new DocumentDBConnectionString(this.clusterCredentials.connectionString);

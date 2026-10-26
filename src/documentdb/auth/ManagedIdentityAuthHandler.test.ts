@@ -12,6 +12,7 @@ import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthMethodId } from './AuthMethod';
 import * as tokenResources from './documentdbTokenResource';
+import { EntraDiagnosticsProvider } from './entraErrors/EntraDiagnosticsProvider';
 import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
@@ -277,6 +278,45 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(startupProperties.errorKind).toBe('managedIdentityCloudUnknown');
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+    });
+
+    it('retains failure context through configureAuth and clears it only after a token succeeds', async (): Promise<void> => {
+        const connectionString = 'mongodb://cluster.azure.us/';
+        const handler = new ManagedIdentityAuthHandler(
+            buildCredentials({ connectionString, connectionStringWithPassword: connectionString }),
+        );
+        const error = Object.freeze(new Error('platform_broker_error'));
+        getManagedIdentityAccessToken.mockRejectedValueOnce(error);
+        const failedProperties: Record<string, string> = {};
+        const failed = await handler.configureAuth(undefined, {
+            startupCorrelationId: 'failed-startup', surface: 'extension', startupProperties: failedProperties,
+        });
+        await expect(invokeOidcCallback(failed.options)).rejects.toBe(error);
+        const failure = getRecentEntraTokenFailure('cluster-1');
+        expect(failure).toMatchObject({ cloudCategory: 'usgov', authMethod: 'managedIdentity' });
+        const diagnostics = new EntraDiagnosticsProvider();
+        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain('Sign-in failed in Azure US Government');
+
+        const successfulProperties: Record<string, string> = {};
+        const successful = await handler.configureAuth(undefined, {
+            startupCorrelationId: 'successful-startup', surface: 'extension', startupProperties: successfulProperties,
+        });
+        expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
+        getManagedIdentityAccessToken.mockImplementationOnce(async () => {
+            expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
+            return { accessToken: 'a-token', expiresOnTimestamp: Date.now() + 3_600_000 };
+        });
+        await expect(invokeOidcCallback(successful.options)).resolves.toMatchObject({ accessToken: 'a-token' });
+        expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+        expect(failedProperties.errorKind).toBe('tokenAcquisitionFailed');
+        expect(successfulProperties.errorKind).toBe('none');
+        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toMatch(
+            /^The sign-in window reported an error without details\./,
+        );
+        expect(ext.outputChannel.info).toHaveBeenLastCalledWith(
+            expect.stringContaining('"cloudCategory":"unknown","recentTokenFailure":false'),
+        );
+        expect(error.message).toBe('platform_broker_error');
     });
 
     it('honors the host-gated TLS exception', async () => {
