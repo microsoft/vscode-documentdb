@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import { ext } from '../extensionVariables';
@@ -61,7 +62,9 @@ export function describeAuthError(error: unknown): string {
             ? statusCode
             : 'unknown';
     const aadstsCode = error instanceof Error ? /\bAADSTS\d{5,9}\b/.exec(error.message)?.[0] : undefined;
-    return `type=${errorName}; code=${code}; httpStatus=${httpStatus}; aadsts=${aadstsCode ?? 'none'}`;
+    const broker =
+        error instanceof Error && error.message.includes('platform_broker_error') ? 'platform_broker_error' : 'none';
+    return `type=${errorName}; code=${code}; httpStatus=${httpStatus}; aadsts=${aadstsCode ?? 'none'}; broker=${broker}`;
 }
 
 type AuthTraceDetails = Readonly<Record<string, string | number | boolean>>;
@@ -70,6 +73,43 @@ type AuthTraceDetails = Readonly<Record<string, string | number | boolean>>;
 export interface AuthTraceContext {
     readonly startupCorrelationId: string;
     readonly surface: string;
+    readonly startupProperties?: ITelemetryContext['properties'];
+}
+
+function recordCloudResolution(details: AuthTraceDetails, properties: ITelemetryContext['properties']): void {
+    properties.cloudCategory =
+        typeof details.cloudCategory === 'string' &&
+        ['public', 'usgov', 'china', 'custom'].includes(details.cloudCategory)
+            ? details.cloudCategory
+            : 'unknown';
+    properties.tokenResourceReason =
+        typeof details.reason === 'string' &&
+        ['setting', 'customOverride', 'customLoginHost', 'armMetadata', 'host', 'imds', 'copyDefault'].includes(
+            details.reason,
+        )
+            ? details.reason
+            : 'unknown';
+    properties.configuredCloud =
+        typeof details.configuredCloud === 'string' &&
+        ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud', 'custom', 'unreadable'].includes(details.configuredCloud)
+            ? details.configuredCloud
+            : 'unknown';
+    properties.hostCloud =
+        typeof details.hostCloud === 'string' &&
+        ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud', 'none'].includes(details.hostCloud)
+            ? details.hostCloud
+            : 'unknown';
+    properties.errorKind =
+        typeof details.errorKind === 'string' &&
+        [
+            'customCloudUnresolved',
+            'customCloudDefinitionInvalid',
+            'invalidCustomOverride',
+            'cloudMismatch',
+            'managedIdentityCloudUnknown',
+        ].includes(details.errorKind)
+            ? details.errorKind
+            : 'none';
 }
 
 /** Connection-bound steps show the connection's startup ID; other steps show their own auth ID. */
@@ -86,6 +126,9 @@ export function traceAuthFlow(
     correlationId?: string,
     context?: AuthTraceContext,
 ): void {
+    if (context?.startupProperties && (operation === 'entraCloud.resolved' || operation === 'entraCloud.unresolved')) {
+        recordCloudResolution(details, context.startupProperties);
+    }
     ext.outputChannel.info(
         l10n.t('[Authentication]{0} {1}: {2}', authLogIds(correlationId, context), operation, JSON.stringify(details)),
     );

@@ -65,6 +65,20 @@ RawEventsVSCodeExt
 
 Scope the query to this extension and a time range. Ingested property names are lowercase.
 
+### Entra cloud resolution
+
+Interactive and managed identity startup events also carry only five closed-enum fields:
+`cloudCategory` (`public`, `usgov`, `china`, `custom`, `unknown`), `tokenResourceReason`
+(`setting`, `customOverride`, `customLoginHost`, `armMetadata`, `host`, `imds`, `copyDefault`,
+`unknown`), `configuredCloud` (the three built-in Azure cloud names, `custom`, `unreadable`,
+`unknown`), `hostCloud` (the three built-in names, `none`, `unknown`), and `errorKind`
+(`none`, the five token-resource resolution error kinds, or `tokenAcquisitionFailed`).
+Unknown resolution fields are reported as `unknown`, not inferred from the selected cloud.
+These properties use the existing attempt's auth trace context, including deferred managed
+identity callbacks and worker token relays. No cluster-keyed verdict cache is used.
+Native and no-auth attempts are unchanged. Resources, scopes, authorities, identifiers, custom
+configuration, and IMDS environment strings remain outside this telemetry projection.
+
 ## Why this needs a convention
 
 Ids are the only way to join events that come from different telemetry contexts: a command, the

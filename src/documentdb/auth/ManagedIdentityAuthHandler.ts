@@ -5,13 +5,20 @@
 
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
+import * as vscode from 'vscode';
+import { settingsKeys } from '../../settingsKeys';
 import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
-import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
+import {
+    resolveManagedIdentityTokenResource,
+    TokenResourceResolutionError,
+    type DocumentDBCustomEnvironment,
+} from './documentdbTokenResource';
+import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
@@ -36,12 +43,29 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
     ): Promise<AuthHandlerResponse> {
         const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
         const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
+        let resolved: Awaited<ReturnType<typeof resolveManagedIdentityTokenResource>>;
+        try {
+            resolved = await resolveManagedIdentityTokenResource(this.clusterCredentials.connectionString);
+            traceAuthFlow('entraCloud.resolved', resolved.details, this.tokenCorrelationId, traceContext);
+        } catch (error) {
+            if (error instanceof TokenResourceResolutionError) {
+                traceAuthFlow('entraCloud.unresolved', error.details, this.tokenCorrelationId, traceContext);
+            }
+            throw error;
+        }
+        const customHostnameSuffix = vscode.workspace
+            .getConfiguration()
+            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
+        const allowedHosts = getOidcAllowedHosts(this.clusterCredentials.connectionString, customHostnameSuffix);
         traceAuthFlow(
             'managedIdentity.configureOidc',
             {
                 identityKind: clientId ? 'userAssigned' : 'systemAssigned',
                 clusterTenantKnown: !!tenantId,
                 tokenAcquisition: 'deferredUntilDriverCallback',
+                cloudCategory: resolved.cloudCategory,
+                tokenResourceReason: resolved.reason,
+                allowedHosts: allowedHosts.join(','),
             },
             this.tokenCorrelationId,
             traceContext,
@@ -60,29 +84,41 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
             authMechanism: 'MONGODB-OIDC',
             tls: true,
             authMechanismProperties: {
-                ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
+                ALLOWED_HOSTS: allowedHosts,
                 OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
-                    const token = await traceAuthOperation(
-                        'managedIdentity.oidcCallback',
-                        () =>
-                            withTokenAcquisitionTiming(timings, () =>
-                                getManagedIdentityAccessToken(
-                                    [DOCUMENTDB_ENTRA_SCOPE],
-                                    clientId,
-                                    tenantId,
-                                    this.tokenCorrelationId,
-                                    traceContext,
+                    try {
+                        const token = await traceAuthOperation(
+                            'managedIdentity.oidcCallback',
+                            () =>
+                                withTokenAcquisitionTiming(timings, () =>
+                                    getManagedIdentityAccessToken(
+                                        [resolved.scope],
+                                        clientId,
+                                        tenantId,
+                                        this.tokenCorrelationId,
+                                        traceContext,
+                                    ),
                                 ),
-                            ),
-                        {},
-                        this.tokenCorrelationId,
-                        traceContext,
-                    );
+                            {},
+                            this.tokenCorrelationId,
+                            traceContext,
+                        );
 
-                    return {
-                        accessToken: token.accessToken,
-                        expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
-                    };
+                        clearEntraTokenFailure(this.clusterCredentials.clusterId);
+                        return {
+                            accessToken: token.accessToken,
+                            expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
+                        };
+                    } catch (error) {
+                        if (traceContext?.startupProperties) {
+                            traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                        }
+                        recordEntraTokenFailure(this.clusterCredentials.clusterId, {
+                            cloudCategory: resolved.cloudCategory,
+                            authMethod: 'managedIdentity',
+                        });
+                        throw error;
+                    }
                 },
             },
         };

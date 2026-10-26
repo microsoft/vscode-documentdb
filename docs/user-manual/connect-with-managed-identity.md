@@ -10,6 +10,8 @@ When VS Code runs on an **Azure VM** that has a managed identity assigned, the e
 
 This is the right choice for a shared jump box, a build agent, or any Azure VM where an interactive sign-in is impractical or where you want the connection to be attributable to the machine rather than to a person.
 
+For Azure US Government, Azure China, or a custom cloud, see [Sovereign Clouds](./sovereign-clouds).
+
 **Table of Contents**
 
 - [Before you start](#before-you-start)

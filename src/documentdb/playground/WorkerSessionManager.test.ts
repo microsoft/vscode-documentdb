@@ -7,10 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockIn
 
 import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import * as workerThreads from 'worker_threads';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
-import { type AuthTraceContext } from '../../utils/authTrace';
+import { traceAuthFlow, type AuthTraceContext } from '../../utils/authTrace';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
@@ -78,6 +79,7 @@ vi.mock('../../extensionVariables', () => ({
         context: { extensionPath: '/extension-root' },
         outputChannel: {
             trace: vi.fn(),
+            info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
         },
@@ -142,6 +144,9 @@ describe('WorkerSessionManager', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue(undefined),
+        } as unknown as vscode.WorkspaceConfiguration);
         mockTelemetryEvents.length = 0;
         vi.mocked(prepareDriverConnectionString).mockImplementation(async (input) => ({
             connectionString: input.connectionString,
@@ -269,6 +274,23 @@ describe('WorkerSessionManager', () => {
         function startupEvent(): RecordedTelemetry {
             return mockTelemetryEvents.find((event) => event.eventName === 'worker.startup')!;
         }
+
+        it('passes the configured custom hostname suffix to the worker allowlist', async (): Promise<void> => {
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                get: vi.fn().mockReturnValue({ mongoClusterHostnameSuffix: '.database.example.com' }),
+            } as unknown as vscode.WorkspaceConfiguration);
+            const manager = new WorkerSessionManager(callbacks);
+            const initializing = manager.ensureWorker(
+                'cluster-id',
+                { ...initMessage(), connectionString: 'mongodb://cluster.database.example.com/' },
+                1000,
+            );
+            await Promise.resolve();
+            const posted = replyInit();
+            await initializing;
+            expect(posted.oidcAllowedHosts).toEqual(['*.database.example.com']);
+            manager.dispose();
+        });
 
         it('posts only serializable prepared options without changing the input', async (): Promise<void> => {
             const input = Object.freeze({
@@ -738,7 +760,7 @@ describe('WorkerSessionManager', () => {
             timing('tokenWait', 'token-request', true);
             timing('tokenWait', 'token-request', true);
             vi.advanceTimersByTime(5);
-            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
+            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request' });
             vi.advanceTimersByTime(5);
             timing('tokenWait', 'token-request', false);
             vi.advanceTimersByTime(10);
@@ -794,7 +816,7 @@ describe('WorkerSessionManager', () => {
                 started: true,
             });
             vi.advanceTimersByTime(50);
-            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
+            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request' });
             vi.advanceTimersByTime(850);
             await expect(initPromise).rejects.toThrow('Operation timed out');
 
@@ -884,16 +906,83 @@ describe('WorkerSessionManager', () => {
                 contexts.push(context);
             });
             const { manager, initPromise, requestId, worker } = await startWorker();
-            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: [] });
+            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request' });
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
-            worker._emit('message', { type: 'tokenRequest', requestId: 'refresh-request', scopes: [] });
+            worker._emit('message', { type: 'tokenRequest', requestId: 'refresh-request' });
             expect(contexts).toEqual([
-                { startupCorrelationId: requestId, surface: 'shell' },
-                { startupCorrelationId: requestId, surface: 'shell' },
+                {
+                    startupCorrelationId: requestId,
+                    surface: 'shell',
+                    startupProperties: startupEvent().telemetry.properties,
+                },
+                {
+                    startupCorrelationId: requestId,
+                    surface: 'shell',
+                    startupProperties: startupEvent().telemetry.properties,
+                },
             ]);
             manager.dispose();
         });
+
+        it.each([true, false])(
+            'keeps cloud properties on their own worker attempt (persistent=%s)',
+            async (persistent) => {
+                let firstContext: AuthTraceContext | undefined;
+                callbacks.onTokenRequest = vi.fn(async (_message, _postResponse, _timings, context): Promise<void> => {
+                    firstContext = context;
+                    traceAuthFlow(
+                        'entraCloud.unresolved',
+                        {
+                            cloudCategory: 'china',
+                            reason: 'setting',
+                            configuredCloud: 'AzureChinaCloud',
+                            hostCloud: 'AzureUSGovernment',
+                            errorKind: 'cloudMismatch',
+                            tokenResource: 'private-resource',
+                        },
+                        undefined,
+                        context,
+                    );
+                });
+                const first = await startWorker(persistent);
+                first.worker._emit('message', { type: 'tokenRequest', requestId: 'token-request' });
+                first.worker._emit('message', {
+                    type: 'initResult',
+                    requestId: first.requestId,
+                    success: false,
+                    error: 'private-error',
+                });
+                await expect(first.initPromise).rejects.toThrow('private-error');
+                const firstProperties = { ...startupEvent().telemetry.properties };
+                const retry = await startWorker(persistent, {}, first.manager);
+                // A late result from the first attempt must never write into the retry.
+                traceAuthFlow(
+                    'entraCloud.resolved',
+                    {
+                        cloudCategory: 'usgov',
+                        reason: 'host',
+                        configuredCloud: 'AzureCloud',
+                        hostCloud: 'AzureUSGovernment',
+                    },
+                    undefined,
+                    firstContext,
+                );
+                retry.worker._emit('message', { type: 'initResult', requestId: retry.requestId, success: true });
+                await retry.initPromise;
+                const events = mockTelemetryEvents.filter((event) => event.eventName === 'worker.startup');
+                expect(firstProperties).toMatchObject({
+                    cloudCategory: 'china',
+                    tokenResourceReason: 'setting',
+                    configuredCloud: 'AzureChinaCloud',
+                    hostCloud: 'AzureUSGovernment',
+                    errorKind: 'cloudMismatch',
+                });
+                expect(events[1].telemetry.properties.cloudCategory).toBeUndefined();
+                expect(JSON.stringify(events)).not.toMatch(/private-/);
+                retry.manager.dispose();
+            },
+        );
 
         it('reports worker construction failures while preserving the original error', async () => {
             const originalError = new Error('private-construction-error');

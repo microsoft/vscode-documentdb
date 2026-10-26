@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import * as packageJson from '../package.json';
+import { normalizeCustomHostnameSuffix } from './documentdb/auth/oidcAllowedHosts';
 import { settingsKeys } from './settingsKeys';
 
 type ConfigurationNode = {
@@ -35,6 +36,80 @@ function constantKeys(): string[] {
 }
 
 describe('settings contributions', () => {
+    it('keeps the entire custom environment machine scoped, not workspace or folder overridable', () => {
+        const properties = Object.fromEntries(nodes.flatMap((node) => Object.entries(node.properties)));
+        expect(properties[settingsKeys.customEnvironment]?.scope).toBe('machine');
+    });
+
+    it('validates audience overrides in Settings while allowing an empty setting', () => {
+        const setting = packageJson.contributes.configuration
+            .flatMap((node) => Object.entries(node.properties))
+            .find(([key]) => key === settingsKeys.customEnvironment)?.[1];
+        expect(setting).toBeDefined();
+        if (!setting || !('properties' in setting)) {
+            throw new Error('Missing custom environment schema');
+        }
+        const schema = setting.properties.ossrdbmsEndpoint;
+        const pattern = new RegExp(schema.pattern);
+        expect(schema.patternErrorMessage).toContain('https://ossrdbms-aad.database.usgovcloudapi.net');
+        for (const value of ['', ' \t ', 'https://database.example.com', ' https://database.example.com/ ']) {
+            expect(pattern.test(value), value).toBe(true);
+        }
+        for (const value of ['http://database.example.com', 'https://database.example.com/.default', 'not a URL']) {
+            expect(pattern.test(value), value).toBe(false);
+        }
+    });
+
+    it('validates hostname suffixes in Settings using the existing normalization rules', () => {
+        const setting = packageJson.contributes.configuration
+            .flatMap((node) => Object.entries(node.properties))
+            .find(([key]) => key === settingsKeys.customEnvironment)?.[1];
+        if (!setting || !('properties' in setting)) {
+            throw new Error('Missing custom environment schema');
+        }
+        const schema = setting.properties.mongoClusterHostnameSuffix;
+        const pattern = new RegExp(schema.pattern);
+        expect(schema.patternErrorMessage).toContain('.mongocluster.cosmos.example');
+        expect(schema.patternErrorMessage).toContain('com.cn');
+        for (const value of [
+            '',
+            ' \t\n ',
+            '.mongocluster.cosmos.example',
+            'mongocluster.cosmos.example',
+            ' .DATABASE.EXAMPLE.COM ',
+            '.service.example.com.cn',
+            '.a.b',
+            `.${'a'.repeat(63)}.example`,
+            '.a-b.example',
+            '.com',
+            'com',
+            '.cn',
+            '.com.cn',
+            ' COM.CN ',
+            '.Co.Uk',
+            '.NET.CN',
+            '.org.cn',
+            '.gov.us',
+            '*.example.com',
+            'https://example.com',
+            '.example.com:10255',
+            '.example.com/path',
+            '.example.com/',
+            '.example..com',
+            '..example.com',
+            '.example.com.',
+            '.-example.com',
+            '.example-.com',
+            '.example_com',
+            '.éxample.com',
+            `.${'a'.repeat(64)}.example`,
+            '.example. com',
+        ]) {
+            const accepted = value.trim() === '' || normalizeCustomHostnameSuffix(value) !== undefined;
+            expect(pattern.test(value), value).toBe(accepted);
+        }
+    });
+
     describe('table of contents grouping', () => {
         // A node titled the same as the extension has its settings hoisted onto the parent
         // entry instead of becoming an expandable child, collapsing the whole grouping.

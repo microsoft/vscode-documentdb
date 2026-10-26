@@ -5,15 +5,18 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { AuthMethodId, authMethodFromString, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import { type DocumentDBCustomEnvironment } from '../../documentdb/auth/documentdbTokenResource';
+import { hasDocumentDBHost } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
+import { settingsKeys } from '../../settingsKeys';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { refreshView } from '../refreshView/refreshView';
@@ -65,7 +68,10 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     const parsedCS = new DocumentDBConnectionString(connectionCredentials?.secrets.connectionString ?? '');
     const supportedAuthMethods = [...(connectionCredentials?.properties.availableAuthMethods ?? [])];
 
-    if (hasDomainSuffix(AzureDomains.vCore, ...parsedCS.hosts)) {
+    const customHostnameSuffix = vscode.workspace
+        .getConfiguration()
+        .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
+    if (hasDocumentDBHost(parsedCS.hosts, customHostnameSuffix)) {
         if (!supportedAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
         }
