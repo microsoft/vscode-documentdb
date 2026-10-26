@@ -398,6 +398,9 @@ export class ShellSessionManager implements vscode.Disposable {
                         )
                     ).accessToken;
                 } catch (error) {
+                    if (traceContext?.startupProperties) {
+                        traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                    }
                     recordEntraTokenFailure(this._connectionInfo.clusterId, {
                         cloudCategory: resolved.cloudCategory,
                         authMethod: 'managedIdentity',
@@ -431,6 +434,9 @@ export class ShellSessionManager implements vscode.Disposable {
                         throw new Error(l10n.t('Failed to obtain Entra ID token.'));
                     }
                 } catch (error) {
+                    if (traceContext?.startupProperties) {
+                        traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                    }
                     recordEntraTokenFailure(this._connectionInfo.clusterId, {
                         cloudCategory: resolved.cloudCategory,
                         authMethod: 'interactive',

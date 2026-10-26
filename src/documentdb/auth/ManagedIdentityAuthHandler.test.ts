@@ -89,7 +89,14 @@ describe('ManagedIdentityAuthHandler', () => {
     it('configures the OIDC mechanism with a curated allowed-hosts list', async () => {
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
 
-        const { options } = await handler.configureAuth();
+        const startupProperties: Record<string, string> = {};
+        const { options } = await handler.configureAuth(undefined, {
+            startupCorrelationId: 'startup-id', surface: 'extension', startupProperties,
+        });
+        expect(startupProperties).toEqual({
+            cloudCategory: 'public', tokenResourceReason: 'host', configuredCloud: 'AzureCloud',
+            hostCloud: 'AzureCloud', errorKind: 'none',
+        });
 
         expect(options.authMechanism).toBe('MONGODB-OIDC');
         expect(options.tls).toBe(true);
@@ -234,11 +241,16 @@ describe('ManagedIdentityAuthHandler', () => {
         const error = Object.freeze(new Error('AADSTS500011: Resource not found'));
         getManagedIdentityAccessToken.mockRejectedValueOnce(error);
 
-        const { options } = await handler.configureAuth();
+        const startupProperties: Record<string, string> = {};
+        const { options } = await handler.configureAuth(undefined, {
+            startupCorrelationId: 'startup-id', surface: 'extension', startupProperties,
+        });
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
 
         await expect(invokeOidcCallback(options)).rejects.toBe(error);
+        expect(startupProperties.errorKind).toBe('tokenAcquisitionFailed');
+        expect(JSON.stringify(startupProperties)).not.toMatch(/cluster-1|AADSTS|https/);
         expect(getRecentEntraTokenFailure('cluster-1')).toEqual({
             cloudCategory: 'usgov',
             authMethod: 'managedIdentity',
@@ -258,7 +270,11 @@ describe('ManagedIdentityAuthHandler', () => {
         vi.spyOn(tokenResources, 'resolveManagedIdentityTokenResource').mockRejectedValueOnce(error);
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
 
-        await expect(handler.configureAuth()).rejects.toBe(error);
+        const startupProperties: Record<string, string> = {};
+        await expect(handler.configureAuth(undefined, {
+            startupCorrelationId: 'startup-id', surface: 'extension', startupProperties,
+        })).rejects.toBe(error);
+        expect(startupProperties.errorKind).toBe('managedIdentityCloudUnknown');
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });

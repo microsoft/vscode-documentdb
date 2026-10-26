@@ -109,6 +109,9 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                             expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
                         };
                     } catch (error) {
+                        if (traceContext?.startupProperties) {
+                            traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                        }
                         recordEntraTokenFailure(this.clusterCredentials.clusterId, {
                             cloudCategory: resolved.cloudCategory,
                             authMethod: 'managedIdentity',

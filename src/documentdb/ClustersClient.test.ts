@@ -9,7 +9,7 @@ import { type IActionContext, type ITelemetryContext, UserCancelledError } from 
 import type * as Mongodb from 'mongodb';
 import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
-import { type AuthTraceContext } from '../utils/authTrace';
+import { traceAuthFlow, type AuthTraceContext } from '../utils/authTrace';
 import { AuthMethodId } from './auth/AuthMethod';
 import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
@@ -79,7 +79,7 @@ vi.mock('mongodb', async () => {
 });
 
 vi.mock('../extensionVariables', () => ({
-    ext: { outputChannel: { trace: vi.fn(), error: vi.fn(), debug: vi.fn() } },
+    ext: { outputChannel: { trace: vi.fn(), error: vi.fn(), debug: vi.fn(), info: vi.fn() } },
 }));
 
 vi.mock('./utils/getClusterMetadata', () => ({
@@ -227,8 +227,38 @@ describe('regular connection startup diagnostics', () => {
             },
         );
         const client = await ClustersClient.getClient(clusterId);
-        expect(traceContext).toEqual({ startupCorrelationId: client.connectionCorrelationId, surface: 'extension' });
+        expect(traceContext).toEqual({
+            startupCorrelationId: client.connectionCorrelationId,
+            surface: 'extension',
+            startupProperties: startupEvent().telemetry.properties,
+        });
     });
+
+    it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+        'isolates %s cloud telemetry from the next attempt on the same cluster',
+        async (authMethod) => {
+            CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://private-host:27017');
+            const handler = authMethod === AuthMethodId.ManagedIdentity ? ManagedIdentityAuthHandler : MicrosoftEntraIDAuthHandler;
+            vi.mocked(handler.prototype.configureAuth).mockImplementationOnce(async (_timings, context) => {
+                traceAuthFlow('entraCloud.unresolved', {
+                    cloudCategory: 'usgov', reason: 'host', configuredCloud: 'custom',
+                    hostCloud: 'AzureUSGovernment', errorKind: 'cloudMismatch', tokenResource: 'private-resource',
+                }, undefined, context);
+                throw new Error('private-resolution-failure');
+            });
+            await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('private-resolution-failure');
+            const failedProperties = { ...startupEvent().telemetry.properties };
+            await ClustersClient.getClient(clusterId);
+            const events = mockTelemetryEvents.filter((event) => event.eventName === 'connect.startup');
+            expect(events[0].telemetry.properties).toEqual(failedProperties);
+            expect(failedProperties).toMatchObject({
+                cloudCategory: 'usgov', tokenResourceReason: 'host', configuredCloud: 'custom',
+                hostCloud: 'AzureUSGovernment', errorKind: 'cloudMismatch',
+            });
+            expect(events[1].telemetry.properties.cloudCategory).toBeUndefined();
+            expect(JSON.stringify(events)).not.toContain('private-');
+        },
+    );
 
     it('preserves auth failures and records their partial stage without private error data', async () => {
         const originalError = new Error('private-token private-account');

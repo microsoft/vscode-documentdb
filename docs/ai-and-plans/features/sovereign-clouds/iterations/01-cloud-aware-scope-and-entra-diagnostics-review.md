@@ -42,22 +42,29 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
 | R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
-| S1 | In progress | GPT-6.1 Sol | Closed-enum startup telemetry |
+| S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; commit recorded with S2 |
 | S2 | Pending | GPT-6.1 Sol | Sovereign connection appName |
 | S3 | Pending | GPT-6.1 Sol | Safe IMDS environment evidence |
 | S4 | Pending | GPT-6.1 Sol | Actionable OIDC allowed-host explanation |
 | S5 | Pending | GPT-6.1 Sol | Settings patterns; reuse R1 audience validation |
 | S6 | Pending | GPT-6.1 Sol | Real-resolver integration tests |
-| S7 | Externally blocked | Orchestrator | 09:54-09:57 UTC; Kusto has no configured cluster/database; query recorded below |
+| S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
 | S8 | Pending | GPT-6.1 Sol | Preview-only dialogs on separate `preview/sovereign-diagnostics` branch |
 | Enhancement review | Pending | Opus 5.5 | Review enhancements, including isolated preview |
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
 ### Execution log
 
+- S1: GPT-6.1 Sol, 09:56:21-09:58:33 UTC (132 seconds). Existing per-attempt auth trace contexts
+  project only the five allowlisted enums onto startup telemetry; token catches mark a closed
+  failure category without replacing errors. Covered both handlers and worker surfaces, resolution
+  and token failures, retry/late-result isolation, and exclusion of raw resources/custom/IMDS data.
+  Six focused files / 124 tests passed. Initial new assertion expected an unreadable cloud, but
+  the existing auth mock supplies public Azure; corrected that assertion. No TDD contract failed.
+  Build deferred to the end of S1-S6. Local commit hash will be recorded in S2.
 - 09:36-09:39 UTC: orchestrator read the supplied review, checked the clean worktree and draft PR,
   and mapped implementation, review, preview isolation, and verification work. No code changed.
-- S7: orchestrator, 09:54-09:57 UTC. The read-only Kusto attempt returned "No connection configured"
+- S7: orchestrator, 09:54-09:55 UTC. The read-only Kusto attempt returned "No connection configured"
   and requires explicit cluster/database instructions. The repository has no Kusto query files or
   connection settings. All four supplied domain hashes were independently recomputed with SHA-256
   and match. No telemetry rows were retrieved; no China audience compatibility claim is possible.
@@ -521,9 +528,10 @@ These items are not defects. They are ordered by how much they reduce the risk o
 Accepted by the operator on 2026-10-26 as follow-up work. These are not blocking findings. Track
 each one as a separate commit, so they can be reviewed apart from the R fixes.
 
-- [ ] **S1.** Add `cloudCategory`, `tokenResourceReason`, `configuredCloud`, `hostCloud`, and
+- [x] **S1.** Add `cloudCategory`, `tokenResourceReason`, `configuredCloud`, `hostCloud`, and
       `errorKind` to the connection-startup telemetry for Entra ID and managed identity attempts.
-      Use closed enums only.
+      Use closed enums only. Implemented through existing attempt-bound trace contexts, never a
+      cluster-keyed registry or raw trace spread.
 - [ ] **S2.** Set the extension `appName` for `azure.us` and `azure.cn` hosts, not only
       `azure.com` (`ClustersClient`, `hasAzureDomain`).
 - [ ] **S3.** Trace the raw IMDS `azEnvironment` value when it matches `^Azure[A-Za-z]{1,40}$`.

@@ -366,7 +366,11 @@ export class WorkerSessionManager implements vscode.Disposable {
         this._worker = worker;
         this._workerClusterId = clusterId;
         // Everything this worker reports stays tied to the startup that created it.
-        const connection: AuthTraceContext = { startupCorrelationId: startup.requestId, surface: startup.surface };
+        const connection: AuthTraceContext = {
+            startupCorrelationId: startup.requestId,
+            surface: startup.surface,
+            startupProperties: startup.telemetry.properties,
+        };
 
         // Listen for messages from the worker
         worker.on('message', (msg: WorkerToMainMessage) => {

@@ -358,6 +358,7 @@ export class ClustersClient {
         const { connectionString, options } = await authHandler.configureAuth(startup.costTimings, {
             startupCorrelationId: startup.id,
             surface: 'extension',
+            startupProperties: startup.telemetry.properties,
         });
 
         this.advanceClientStartup(startup, 'stage03PreparingClient');

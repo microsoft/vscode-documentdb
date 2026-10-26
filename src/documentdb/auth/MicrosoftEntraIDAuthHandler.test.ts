@@ -123,7 +123,11 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         });
         vi.mocked(resolveInteractiveTokenResource).mockRejectedValueOnce(error);
         const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.azure.us/'));
-        await expect(handler.configureAuth()).rejects.toBe(error);
+        const startupProperties: Record<string, string> = {};
+        await expect(handler.configureAuth(undefined, {
+            startupCorrelationId: 'startup-id', surface: 'extension', startupProperties,
+        })).rejects.toBe(error);
+        expect(startupProperties.errorKind).toBe('cloudMismatch');
         expect(getSessionFromVSCode).not.toHaveBeenCalled();
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
@@ -257,9 +261,12 @@ describe('MicrosoftEntraIDAuthHandler', () => {
     it('labels authentication failure with its startup ID without exposing secrets', async (): Promise<void> => {
         getSessionFromVSCode.mockRejectedValueOnce(new Error('secret-token'));
         const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
+        const startupProperties: Record<string, string> = {};
         await expect(
-            handler.configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension' }),
+            handler.configureAuth(undefined, { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties }),
         ).rejects.toThrow('secret-token');
+        expect(startupProperties.errorKind).toBe('tokenAcquisitionFailed');
+        expect(JSON.stringify(startupProperties)).not.toContain('secret-token');
         expect(mockOutputChannel.error).toHaveBeenCalledWith(
             expect.stringContaining('[Authentication] startup=startup-id surface=extension'),
         );

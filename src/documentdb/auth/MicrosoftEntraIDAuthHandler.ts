@@ -79,6 +79,9 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 throw new Error(l10n.t('Failed to obtain Entra ID token.'));
             }
         } catch (error) {
+            if (traceContext?.startupProperties) {
+                traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+            }
             recordEntraTokenFailure(this.clusterCredentials.clusterId, {
                 cloudCategory: resolved.cloudCategory,
                 authMethod: 'interactive',

@@ -262,6 +262,10 @@ describe('ShellSessionManager', () => {
             reason: source === 'vscode' ? 'setting' : 'host',
             details: {
                 flow: source === 'vscode' ? 'interactive' : 'managedIdentity',
+                cloudCategory: 'usgov',
+                reason: source === 'vscode' ? 'setting' : 'host',
+                configuredCloud: 'AzureUSGovernment',
+                hostCloud: 'AzureUSGovernment',
                 tokenResource: 'https://ossrdbms-aad.database.usgovcloudapi.net',
             },
         });
@@ -272,10 +276,17 @@ describe('ShellSessionManager', () => {
                 ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                 : new PlaygroundEvaluator();
         const postResponse = vi.fn();
+        const startupProperties: Record<string, string> = {};
         await workerCallbacks.onTokenRequest?.(
             { type: 'tokenRequest', requestId: 'token-request', source },
             postResponse,
+            undefined,
+            { startupCorrelationId: 'startup-id', surface, startupProperties },
         );
+        expect(startupProperties).toEqual({
+            cloudCategory: 'usgov', tokenResourceReason: source === 'vscode' ? 'setting' : 'host',
+            configuredCloud: 'AzureUSGovernment', hostCloud: 'AzureUSGovernment', errorKind: 'none',
+        });
         expect(resolver).toHaveBeenCalledWith(connectionString);
         expect(provider.mock.calls.at(-1)?.[0]).toEqual(['https://ossrdbms-aad.database.usgovcloudapi.net/.default']);
         expect(postResponse).toHaveBeenCalledWith({
@@ -310,10 +321,14 @@ describe('ShellSessionManager', () => {
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
             const postResponse = vi.fn();
+            const startupProperties: Record<string, string> = {};
             await workerCallbacks.onTokenRequest?.(
                 { type: 'tokenRequest', requestId: 'token-request', source },
                 postResponse,
+                undefined,
+                { startupCorrelationId: 'startup-id', surface, startupProperties },
             );
+            expect(startupProperties.errorKind).toBe(error.kind);
             expect(mockGetSessionFromVSCode).not.toHaveBeenCalled();
             expect(mockGetManagedIdentityAccessToken).not.toHaveBeenCalled();
             expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
@@ -356,11 +371,16 @@ describe('ShellSessionManager', () => {
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
             const postResponse = vi.fn();
+            const startupProperties: Record<string, string> = {};
 
             await workerCallbacks.onTokenRequest?.(
                 { type: 'tokenRequest', requestId: 'token-request', source },
                 postResponse,
+                undefined,
+                { startupCorrelationId: 'startup-id', surface, startupProperties },
             );
+            expect(startupProperties.errorKind).toBe('tokenAcquisitionFailed');
+            expect(JSON.stringify(startupProperties)).not.toMatch(/https|private|AADSTS|original/);
 
             expect(postResponse).toHaveBeenCalledExactlyOnceWith({
                 type: 'tokenError',

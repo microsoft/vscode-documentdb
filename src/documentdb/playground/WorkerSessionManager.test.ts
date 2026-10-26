@@ -11,7 +11,7 @@ import * as vscode from 'vscode';
 import * as workerThreads from 'worker_threads';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
-import { type AuthTraceContext } from '../../utils/authTrace';
+import { traceAuthFlow, type AuthTraceContext } from '../../utils/authTrace';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { ShellSessionManager } from '../shell/ShellSessionManager';
@@ -79,6 +79,7 @@ vi.mock('../../extensionVariables', () => ({
         context: { extensionPath: '/extension-root' },
         outputChannel: {
             trace: vi.fn(),
+            info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
         },
@@ -910,10 +911,43 @@ describe('WorkerSessionManager', () => {
             await initPromise;
             worker._emit('message', { type: 'tokenRequest', requestId: 'refresh-request' });
             expect(contexts).toEqual([
-                { startupCorrelationId: requestId, surface: 'shell' },
-                { startupCorrelationId: requestId, surface: 'shell' },
+                { startupCorrelationId: requestId, surface: 'shell', startupProperties: startupEvent().telemetry.properties },
+                { startupCorrelationId: requestId, surface: 'shell', startupProperties: startupEvent().telemetry.properties },
             ]);
             manager.dispose();
+        });
+
+        it.each([true, false])('keeps cloud properties on their own worker attempt (persistent=%s)', async (persistent) => {
+            let firstContext: AuthTraceContext | undefined;
+            callbacks.onTokenRequest = vi.fn(async (_message, _postResponse, _timings, context): Promise<void> => {
+                firstContext = context;
+                traceAuthFlow('entraCloud.unresolved', {
+                    cloudCategory: 'china', reason: 'setting', configuredCloud: 'AzureChinaCloud',
+                    hostCloud: 'AzureUSGovernment', errorKind: 'cloudMismatch', tokenResource: 'private-resource',
+                }, undefined, context);
+            });
+            const first = await startWorker(persistent);
+            first.worker._emit('message', { type: 'tokenRequest', requestId: 'token-request' });
+            first.worker._emit('message', {
+                type: 'initResult', requestId: first.requestId, success: false, error: 'private-error',
+            });
+            await expect(first.initPromise).rejects.toThrow('private-error');
+            const firstProperties = { ...startupEvent().telemetry.properties };
+            const retry = await startWorker(persistent, {}, first.manager);
+            // A late result from the first attempt must never write into the retry.
+            traceAuthFlow('entraCloud.resolved', {
+                cloudCategory: 'usgov', reason: 'host', configuredCloud: 'AzureCloud', hostCloud: 'AzureUSGovernment',
+            }, undefined, firstContext);
+            retry.worker._emit('message', { type: 'initResult', requestId: retry.requestId, success: true });
+            await retry.initPromise;
+            const events = mockTelemetryEvents.filter((event) => event.eventName === 'worker.startup');
+            expect(firstProperties).toMatchObject({
+                cloudCategory: 'china', tokenResourceReason: 'setting', configuredCloud: 'AzureChinaCloud',
+                hostCloud: 'AzureUSGovernment', errorKind: 'cloudMismatch',
+            });
+            expect(events[1].telemetry.properties.cloudCategory).toBeUndefined();
+            expect(JSON.stringify(events)).not.toMatch(/private-/);
+            retry.manager.dispose();
         });
 
         it('reports worker construction failures while preserving the original error', async () => {
