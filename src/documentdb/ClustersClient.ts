@@ -45,6 +45,7 @@ import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { NoAuthHandler } from './auth/NoAuthHandler';
+import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
@@ -62,7 +63,7 @@ import { SchemaStore } from './SchemaStore';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
 import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
-import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
+import { getHostsFromConnectionString } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { parseDocumentId } from './utils/parseDocumentId';
@@ -363,7 +364,7 @@ export class ClustersClient {
 
         this.advanceClientStartup(startup, 'stage03PreparingClient');
         const hosts = getHostsFromConnectionString(connectionString);
-        const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
+        const userAgentString = hosts.some((host) => getAzureHostSuffix(host)) ? appendExtensionUserAgent() : undefined;
         if (userAgentString) {
             options.appName = userAgentString;
         }

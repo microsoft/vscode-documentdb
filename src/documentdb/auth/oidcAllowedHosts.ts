@@ -157,7 +157,7 @@ function getHostname(host: string): string | undefined {
  * top-level label) so that lookalikes such as `azure.com.evil.com` are rejected,
  * and the top-level label must be one of {@link KNOWN_AZURE_TOP_LEVEL_DOMAINS}.
  */
-function getAzureHostSuffix(host: string): string | undefined {
+export function getAzureHostSuffix(host: string): string | undefined {
     const hostname = getHostname(host);
 
     if (!hostname) {

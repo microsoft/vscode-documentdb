@@ -154,6 +154,35 @@ describe('regular connection startup diagnostics', () => {
     }
 
     it.each([
+        ['cluster.mongocluster.cosmos.azure.com', 'test-extension'],
+        ['cluster.mongocluster.cosmos.azure.us:10255', 'test-extension'],
+        ['CLUSTER.mongocluster.cosmos.azure.cn:10255', 'test-extension'],
+        ['cluster.other.azure.us', 'test-extension'],
+        ['cluster.azure.cn.evil.com', undefined],
+        ['cluster.notazure.us', undefined],
+        ['cluster.notazure.com', undefined],
+        ['cluster.azure.tk', undefined],
+        ['cluster.example.com', undefined],
+        ['localhost:27017', undefined],
+    ])('sets the same Azure appName only for a known cloud domain: %s', async (host, appName) => {
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
+            connectionString: `mongodb://${host}/`, options: {},
+        });
+        await ClustersClient.getClient(clusterId);
+        expect(vi.mocked(MongoClient).mock.calls[0]?.[1]?.appName).toBe(appName);
+    });
+
+    it.each([
+        ['us', '8bafc480', 'f3e87358'],
+        ['cn', '6a619114', '49133d63'],
+    ])('preserves historical domain telemetry hashes for azure.%s', async (tld, level2, level3) => {
+        const actual = await vi.importActual<typeof import('./utils/getClusterMetadata')>('./utils/getClusterMetadata');
+        expect(actual.getDomainMetadata([`cluster.mongocluster.cosmos.azure.${tld}`])).toMatchObject({
+            domainInfo_isAzure: 'false', domainInfo_domain_l2: level2, domainInfo_domain_l3: level3,
+        });
+    });
+
+    it.each([
         AuthMethodId.MicrosoftEntraID,
         AuthMethodId.ManagedIdentity,
         AuthMethodId.NativeAuth,

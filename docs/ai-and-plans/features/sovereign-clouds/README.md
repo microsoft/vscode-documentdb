@@ -86,6 +86,10 @@ Entra and managed identity attempts attach only `cloudCategory`, `tokenResourceR
 details (including resources and local IMDS evidence) are never spread into telemetry.
 See [telemetry correlation IDs](../../telemetry-correlation-ids.md#entra-cloud-resolution).
 
+`ClustersClient` sends the same extension `appName` to known `azure.com`, `azure.us`, and
+`azure.cn` endpoints using the existing closed Azure suffix matcher. Lookalikes are excluded.
+Domain telemetry keeps its historical classification and hashes, so the D11 query remains valid.
+
 ## Documents
 
 - [research-findings.md](research-findings.md): the reported failure, error analysis, where the GUIDs

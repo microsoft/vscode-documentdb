@@ -42,8 +42,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
 | R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
-| S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; commit recorded with S2 |
-| S2 | Pending | GPT-6.1 Sol | Sovereign connection appName |
+| S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
+| S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; commit recorded with S3 |
 | S3 | Pending | GPT-6.1 Sol | Safe IMDS environment evidence |
 | S4 | Pending | GPT-6.1 Sol | Actionable OIDC allowed-host explanation |
 | S5 | Pending | GPT-6.1 Sol | Settings patterns; reuse R1 audience validation |
@@ -55,13 +55,17 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 ### Execution log
 
+- S2: GPT-6.1 Sol, 09:58:59-09:59:39 UTC (40 seconds). `ClustersClient` reuses the existing
+  closed Azure suffix helper for the same public-cloud appName on Government and China hosts.
+  Dot-boundary/lookalike tests and historical sovereign-domain hash assertions passed:
+  two focused files / 76 tests. No metadata hashing semantics changed. Hash recorded in S3.
 - S1: GPT-6.1 Sol, 09:56:21-09:58:33 UTC (132 seconds). Existing per-attempt auth trace contexts
   project only the five allowlisted enums onto startup telemetry; token catches mark a closed
   failure category without replacing errors. Covered both handlers and worker surfaces, resolution
   and token failures, retry/late-result isolation, and exclusion of raw resources/custom/IMDS data.
   Six focused files / 124 tests passed. Initial new assertion expected an unreadable cloud, but
   the existing auth mock supplies public Azure; corrected that assertion. No TDD contract failed.
-  Build deferred to the end of S1-S6. Local commit hash will be recorded in S2.
+  Build deferred to the end of S1-S6. Commit: `20e07a36bf6e3d294cf14bcbe1c330b5821708e6`.
 - 09:36-09:39 UTC: orchestrator read the supplied review, checked the clean worktree and draft PR,
   and mapped implementation, review, preview isolation, and verification work. No code changed.
 - S7: orchestrator, 09:54-09:55 UTC. The read-only Kusto attempt returned "No connection configured"
@@ -532,8 +536,9 @@ each one as a separate commit, so they can be reviewed apart from the R fixes.
       `errorKind` to the connection-startup telemetry for Entra ID and managed identity attempts.
       Use closed enums only. Implemented through existing attempt-bound trace contexts, never a
       cluster-keyed registry or raw trace spread.
-- [ ] **S2.** Set the extension `appName` for `azure.us` and `azure.cn` hosts, not only
-      `azure.com` (`ClustersClient`, `hasAzureDomain`).
+- [x] **S2.** Set the extension `appName` for `azure.us` and `azure.cn` hosts, not only
+      `azure.com` (`ClustersClient`, `hasAzureDomain`). Implemented by reusing the closed suffix
+      matcher locally in `ClustersClient`; historical `hasAzureDomain` telemetry behavior is unchanged.
 - [ ] **S3.** Trace the raw IMDS `azEnvironment` value when it matches `^Azure[A-Za-z]{1,40}$`.
       Otherwise keep `other`.
 - [ ] **S4.** Translate the driver's `ALLOWED_HOSTS` rejection into a message that names
