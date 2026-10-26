@@ -53,9 +53,9 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92` |
 | S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692` |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
-| S8 | Complete (preview only; delivery pending) | GPT-6.1 Sol | 10:09-10:30 UTC implementation/delivery notes, `99314464`; committed base `18060ae0` merged as `7e5fe7d0`; integration recheck 10:38:52-10:39:42 UTC: 12 files / 277 tests and one exact build passed; review fixes verified by 10:54:28 UTC, P1 `488fb042`, P2 in this commit; see inline S8 delivery below; never merge into PR |
+| S8 | Reviewed and corrected (preview only; packaging/delivery pending) | GPT-6.1 Sol | 10:09-10:30 UTC implementation/delivery notes, `99314464`; committed base `18060ae0` merged as `7e5fe7d0`; integration recheck 10:38:52-10:39:42 UTC: 12 files / 277 tests and one exact build passed; review fixes verified by 10:54:28 UTC, P1 `488fb042`, P2 `1120be5a`; see inline S8 delivery below; never merge into PR |
 | Enhancement review | Main and preview complete; medium findings addressed | Opus 5.5 | Main: 10:18:12-10:22:43 UTC (271 seconds), one medium S7 documentation finding, corrected below; preview: 10:46:08-10:49:55 UTC (227 seconds), two medium findings P1/P2 at `9568ac02`, both fixed; dispositions below |
-| Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
+| Full verification | Main local checks passed | Terra + GPT-6.1 Sol | Full Case 1/2 checks passed after import correction `6c863f4a`; preview final checks/package pending separately |
 
 ### Execution log
 
@@ -85,7 +85,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
     `npx vitest run --config src/documentdb/auth/previewDiagnostics/vitest.preview.config.ts src/documentdb/auth/previewDiagnostics/ src/documentdb/ClustersClient.test.ts --reporter=dot`.
     Exactly one cluster-end `npm run build` passed **10:53:45-10:54:28 UTC** (43 seconds),
     including workspace prebuilds and root TypeScript. P2's final hash is returned in the
-    handoff, rather than requiring an amend or extra commit to record its own hash.
+    handoff, rather than requiring an amend or extra commit to record its own hash:
+    `1120be5a54524dd5e10f170b1bc01f61ccbeb078`.
   - **Low observations, documented only; intentionally not fixed:** the attempts map retains
     entries for each startup; canceling VS Code sign-in still shows token-failure step 2 and
     consumes its shown key; the Atlas explanation projection always uses the TLS-rejection
@@ -112,6 +113,96 @@ The read-only attachment is unchanged; this repository copy is the live progress
   source error or follow-up code fix. Case 1 applies; full checks, including `prettier-fix`,
   localization, lint, the full suite and packaging remain deferred. No main worktree edits,
   uncommitted-main imports, push, amend, or preview merge/cherry-pick into the PR.
+- Main finalization and verification record (preserved from committed main `508a1d61`):
+
+- S8 Opus 5.5 review, 10:46:08-10:49:55 UTC (227 seconds): two medium cancellation findings.
+  GPT-6.1 Sol addressed them in separate preview-only commits:
+  `488fb0428f8bfef1a12b5e896ec15e8d0402e4b3` preserves the original resolution error when the failure
+  dialog is dismissed (99 focused tests);
+  `1120be5a54524dd5e10f170b1bc01f61ccbeb078` skips canceled-connect result dialogs, leaving step 3
+  available for a real retry (100 focused tests). Exact preview build passed in 43 seconds.
+  Final preview validation and packaging will follow integration of the main lint/format output.
+- Four low preview observations are documented, not fixed under the medium-or-higher threshold:
+  the per-startup attempts map retains entries for the window; canceling VS Code sign-in can show
+  the token-failure dialog and consume step 2; Atlas explanation projection always uses its
+  TLS-rejection summary; concurrent first connections can duplicate probes before the once-only
+  dialog key is recorded. No private-data leak was found in the preview review.
+- Main lint correction commit: `6c863f4a6d4888cc17d96fdc8a0787d50fa923df`. Finalization preserves
+  the generated localization bundle and formatting output as a separate commit, with no behavior
+  changes. Main code and all nine review items are complete; D11/live-cloud gates remain external.
+
+- S8: GPT-6.1 Sol implemented the isolated preview during 10:09-10:30 UTC
+  (`9931446469d3a0d62a262f8bf04127e3b9a0b250`). A later integration pass, 10:35:43-10:40:52 UTC
+  (309 seconds), merged committed PR base `18060ae0` while preserving R6-R9 and the preview hooks:
+  merge `7e5fe7d0f2d0375c29d74c41b2756498ea43ad27`, evidence
+  `9568ac028a1b00ea75137064128f704e1d36dbd0`. Twelve focused files / 277 tests and an exact
+  `npm run build` passed. Preview code is absent from the PR branch. Opus review, preview-only
+  localization generation, and reporter VSIX packaging are next.
+- Terra final verification, 10:35-10:45 UTC: full command results below. The earlier interrupted
+  agent's unreported checks were not counted. This completed run found three lint errors in test
+  imports; GPT-6.1 Sol resolved those narrow corrections in the follow-up below.
+  Formatter/localization output outside the three corrected tests remains uncommitted for a
+  separate generated finalization commit. PR remains a draft.
+
+### Final verification (Terra, first completed run)
+
+| Check | UTC interval / elapsed | Result |
+| --- | --- | --- |
+| `npm run l10n` | 10:35:57-10:37:00 / 63 seconds | Passed |
+| `npm run prettier-fix` | Started 10:37:02; completion time unavailable | Passed, exit 0 |
+| `npm run l10n:check` | 10:38:37-10:39:37 / 60 seconds | Passed |
+| `npm run lint` | 10:39:39-10:41:35 / 116 seconds | Historical failure: three test-import errors below; corrected rerun passed |
+| `npm run build` | 10:41:37-10:42:16 / 39 seconds | Passed |
+| `npm run typecheck:tests` | 10:42:18-10:42:32 / 14 seconds | Passed (exact strict package-test script) |
+| Focused Case 1 Vitest | 10:42:34-10:42:38 / 4 seconds | Passed: four files / 140 tests |
+| `npx vitest run` | 10:42:40-10:44:10 / 90 seconds | Passed: 323 files / 5,571 passed, one skipped |
+| `npm run package` | Started 10:44:12; completion time unavailable | Passed, exit 0; `vscode-documentdb-1.0.2-alpha.0.vsix` |
+
+Original lint blockers (historical; all resolved):
+
+1. `src/commands/updateCredentials/updateCredentials.test.ts:6`: wildcard import triggers
+   `no-restricted-imports` for the Azure utility package's non-null helpers.
+2. `src/documentdb/ClustersClient.test.ts:180`: inline `import()` type annotation violates
+   `@typescript-eslint/consistent-type-imports`.
+3. `src/documentdb/auth/sovereignAuth.integration.test.ts:37`: same inline type-import rule.
+
+Terra supplied command results but did not persist the requested logs or document update; this
+table records its returned evidence without inventing missing timing data. Runtime success does
+not replace `typecheck:tests`, which ran separately and passed. Real sovereign authentication,
+D11 production data, and additional model/vendor attestation remain separate external gates.
+
+### Lint import correction
+
+- GPT-6.1 Sol, 10:46:04-10:49:30 UTC (206 seconds through validation). Fixed only the three
+  test import errors: named type imports for the Azure utility partial mocks and the existing
+  named metadata import for `vi.importActual`, following nearby typed partial-mock prior art.
+  Actual module exports are still spread unchanged. No production behavior, test expectations,
+  or TDD contracts changed; Terra's formatting in these three files is retained.
+- Verification command count: **3**, one invocation each of the exact lint script, exact build
+  script, and combined focused Vitest command below. No failures or retries. No agents, installs,
+  localization generation, formatter, strict package-test rerun, full runtime rerun, package rerun,
+  push, amend, or preview edits. Terra's prior full-suite and packaging evidence above is retained;
+  these import-only changes did not require repeating those checks.
+
+| Check | UTC interval / elapsed | Result |
+| --- | --- | --- |
+| `npm run lint` | 10:46:56-10:48:50 / 114 seconds | Passed; all three original lint errors resolved |
+| `npm run build` | 10:48:50-10:49:27 / 37 seconds | Passed, including workspace prebuilds and root test type checking |
+| Combined focused Vitest | 10:49:27-10:49:30 / 3 seconds | Passed: three files / 52 tests |
+
+Exact focused command:
+
+```bash
+npx vitest run src/commands/updateCredentials/updateCredentials.test.ts src/documentdb/ClustersClient.test.ts src/documentdb/auth/sovereignAuth.integration.test.ts
+```
+
+The separate correction commit contains only those three tests and this live review progress note.
+The other pending formatter/localization changes are preserved for a separate finalization commit.
+PR #1050 remains a draft; the earlier Case 2 results above plus this correction are recorded without
+claiming a new full-suite or packaging run.
+
+### Earlier implementation history
+
 - Main enhancement review: Opus 5.5, 10:18:12-10:22:43 UTC (271 seconds).
   One medium documentation finding: S7's static-metadata/startup join excludes v0.11.0,
   whose events have only `connectioncorrelationid`, and v0.10.2, which has no
@@ -312,17 +403,17 @@ cloud audience table and the main token-delivery paths are supported by the insp
 tests, installed SDK and driver behavior, and public metadata. Successful sovereign authentication
 is still unverified.
 
-| ID | Priority | Finding | Confidence | Validation |
-| --- | --- | --- | --- | --- |
-| R1 | P2 / medium | Invalid explicit audience overrides silently fall through | High (99%) | Code trace, local reproduction, separate reviewer confirmed, re-reproduced in second pass |
-| R2 | P2 / medium | Support traces omit or misstate available cloud evidence | High (99%) | Three local reproductions, separate reviewer confirmed, re-reproduced in second pass |
-| R3 | P1 / high | Government and China hosts are not recognized as DocumentDB, so managed identity is never offered in New Connection or Update Credentials | High (99%) | Code trace, local reproduction (second pass) |
-| R4 | P2 / medium | A missing or incomplete custom cloud definition gets remediation that names the wrong setting | High (95%) | Code trace, installed SDK inspection, local reproduction (second pass) |
-| R5 | P2 / medium | `mongoClusterHostnameSuffix` widens the token allowlist from workspace settings and accepts public suffixes | High (90%) | Code trace, installed driver inspection, local reproduction (second pass) |
-| R6 | P3 / low | AADSTS code regex is unbounded and disagrees with the trace regex | High (99%) | Local reproduction (second pass) |
-| R7 | P3 / low | Opaque-broker message assumes Windows | Medium (70%) | Code trace (second pass) |
-| R8 | P3 / low | Token-failure registry is never cleared on success | Medium (75%) | Code trace (second pass) |
-| R9 | P3 / low | User manual overstates managed identity cloud detection and scopes the host suffix to custom clouds only | High (95%) | Doc/code comparison (second pass) |
+| ID  | Priority    | Finding                                                                                                                                   | Confidence   | Validation                                                                                |
+| --- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| R1  | P2 / medium | Invalid explicit audience overrides silently fall through                                                                                 | High (99%)   | Code trace, local reproduction, separate reviewer confirmed, re-reproduced in second pass |
+| R2  | P2 / medium | Support traces omit or misstate available cloud evidence                                                                                  | High (99%)   | Three local reproductions, separate reviewer confirmed, re-reproduced in second pass      |
+| R3  | P1 / high   | Government and China hosts are not recognized as DocumentDB, so managed identity is never offered in New Connection or Update Credentials | High (99%)   | Code trace, local reproduction (second pass)                                              |
+| R4  | P2 / medium | A missing or incomplete custom cloud definition gets remediation that names the wrong setting                                             | High (95%)   | Code trace, installed SDK inspection, local reproduction (second pass)                    |
+| R5  | P2 / medium | `mongoClusterHostnameSuffix` widens the token allowlist from workspace settings and accepts public suffixes                               | High (90%)   | Code trace, installed driver inspection, local reproduction (second pass)                 |
+| R6  | P3 / low    | AADSTS code regex is unbounded and disagrees with the trace regex                                                                         | High (99%)   | Local reproduction (second pass)                                                          |
+| R7  | P3 / low    | Opaque-broker message assumes Windows                                                                                                     | Medium (70%) | Code trace (second pass)                                                                  |
+| R8  | P3 / low    | Token-failure registry is never cleared on success                                                                                        | Medium (75%) | Code trace (second pass)                                                                  |
+| R9  | P3 / low    | User manual overstates managed identity cloud detection and scopes the host suffix to custom clouds only                                  | High (95%)   | Doc/code comparison (second pass)                                                         |
 
 Enhancements that reduce the risk of shipping without sovereign access are listed separately in
 [Shipping without sovereign access](#shipping-without-sovereign-access-enhancements). They are
@@ -380,10 +471,10 @@ public-resource override. Reasons were `customLoginHost` and `host`; warnings we
 with a localized, setting-specific error before fallback on paths where the override applies.
 Keep the intentional behavior that built-in interactive clouds ignore the custom override.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Reject an invalid applicable override (recommended) | Makes precedence explicit; avoids requesting an unintended audience; gives a direct corrective action | A currently ignored typo becomes a visible configuration failure |
-| Warn and continue with a trace value of `invalid` | Preserves permissive behavior | Still requests an audience different from the explicit configuration; warning can be missed |
+| Option                                              | Pros                                                                                                  | Cons                                                                                        |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Reject an invalid applicable override (recommended) | Makes precedence explicit; avoids requesting an unintended audience; gives a direct corrective action | A currently ignored typo becomes a visible configuration failure                            |
+| Warn and continue with a trace value of `invalid`   | Preserves permissive behavior                                                                         | Still requests an audience different from the explicit configuration; warning can be missed |
 
 **Regression tests:** nonempty malformed override with a recognized custom login host, a recognized
 managed-identity cluster host, valid ARM metadata, and a usable IMDS result; assert no
@@ -447,10 +538,10 @@ candidate's safe resolution fields before the mismatch check. Distinguish an une
 an examined but unrecognized host. Preserve the current audience precedence; this does not propose
 adding a managed-identity mismatch check. Do not log cluster hosts, credentials, or raw errors.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Populate known evidence before branching (recommended) | Accurate traces across all consumers; small central change | Requires updating trace expectations |
-| Mark skipped fields `notEvaluated` and add evidence at each error site | Avoids asserting a false negative | More branch-specific handling and incomplete evidence |
+| Option                                                                 | Pros                                                       | Cons                                                  |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------- |
+| Populate known evidence before branching (recommended)                 | Accurate traces across all consumers; small central change | Requires updating trace expectations                  |
+| Mark skipped fields `notEvaluated` and add evidence at each error site | Avoids asserting a false negative                          | More branch-specific handling and incomplete evidence |
 
 **Regression tests:** override plus recognized host, unresolved custom cloud plus recognized host,
 and custom-resource mismatch. Assert the full resolved/unresolved trace shape, not just the error
@@ -686,7 +777,7 @@ four files / 70 tests passed.
   (`*.azure.com` default) and needs this setting. A private-host managed identity user in
   Government needs **both** properties. Add a "Private endpoints and custom DNS names" subsection.
 - The driver's rejection (`Host '...' is not valid for OIDC authentication with ALLOWED_HOSTS of
-  '*.azure.com'`) is not translated by any provider. See enhancement S4.
+'*.azure.com'`) is not translated by any provider. See enhancement S4.
 
 **Author decision:** accepted (2026-10-26), all three corrections.
 
@@ -704,16 +795,16 @@ run needed. The one `npm run build` for R6-R9 passed (10:15:42-10:16:15 UTC, 33 
 
 These items are not defects. They are ordered by how much they reduce the risk of a blind release.
 
-| ID | Enhancement | Why it matters without a sovereign cluster |
-| --- | --- | --- |
-| S1 | Attach the coarse resolution fields (`cloudCategory`, `tokenResourceReason`, `configuredCloud`, `hostCloud`, `errorKind`) to the existing connection-startup telemetry for Entra and managed identity attempts. | The only scalable signal for whether Government/China connections succeed after release. All values are closed enums with no identifiers. The first pass called this a separate scope decision; this pass recommends making it before shipping. |
-| S2 | Set the extension `appName` for `azure.us` and `azure.cn` hosts too ([`ClustersClient`](../../../../../src/documentdb/ClustersClient.ts#L365) uses `hasAzureDomain`, which matches `azure.com` only). | The service team can then attribute VS Code connections in sovereign clusters and confirm success or failure server-side, independent of client telemetry. Same data as already sent for public clusters. |
-| S3 | Trace the raw IMDS `azEnvironment` when it matches a safe shape such as `^Azure[A-Za-z]{1,40}$`; keep `other` for anything else. | Answers research open question 5 from the first Government managed identity report, which is the evidence needed to revisit D7 safely. |
-| S4 | Translate the driver's `ALLOWED_HOSTS` rejection into a message naming `documentDB.customEnvironment.mongoClusterHostnameSuffix` (a rule matched on the driver text, routed through `ConnectionDiagnosticsService`). | Private endpoints with custom DNS are common in Government tenants; today the user sees a raw driver message that mentions `*.azure.com`. |
-| S5 | Add `pattern` validation for both `documentDB.customEnvironment` properties in `package.json` (see R1). | Catches configuration mistakes in the Settings editor, before any remote troubleshooting round trip. |
-| S6 | Add end-to-end handler tests using the real resolver, not a mocked resolution, for: Government interactive (scope passed to `getSessionFromVSCode`, `ALLOWED_HOSTS`), Government managed identity by host, China both flows, and the shell and playground `tokenRequest` path with a Government connection string. | The current handler tests mock `resolveInteractiveTokenResource`, so a wiring regression between resolver and token request would pass. |
-| S7 | Use the existing hashed domain telemetry to run the D11 check. `*.azure.cn` and `*.azure.us` hosts are classified `domainInfo_isAzure = false` and hashed. Match `domainInfo_domain_l2 = 6a619114` (`azure.cn`) or `domainInfo_domain_l3 = 49133d63` (`cosmos.azure.cn`); for Government, `8bafc480` (`azure.us`) and `f3e87358` (`cosmos.azure.us`). Values are the first 8 hex characters of SHA-256, as computed by `getClusterMetadata.ts`. | Makes the D11 shipping gate answerable with data that already exists. |
-| S8 | Preview-build connection diagnostics dialogs. Replaces the earlier scripted-checklist idea. See [S8 design](#s8-preview-build-connection-diagnostics-dialogs). | The reporter sees what the extension detected and decided at each stage, and can paste a redacted report with one click. |
+| ID  | Enhancement                                                                                                                                                                                                                                                                                                                                                                                                                                     | Why it matters without a sovereign cluster                                                                                                                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | Attach the coarse resolution fields (`cloudCategory`, `tokenResourceReason`, `configuredCloud`, `hostCloud`, `errorKind`) to the existing connection-startup telemetry for Entra and managed identity attempts.                                                                                                                                                                                                                                 | The only scalable signal for whether Government/China connections succeed after release. All values are closed enums with no identifiers. The first pass called this a separate scope decision; this pass recommends making it before shipping. |
+| S2  | Set the extension `appName` for `azure.us` and `azure.cn` hosts too ([`ClustersClient`](../../../../../src/documentdb/ClustersClient.ts#L365) uses `hasAzureDomain`, which matches `azure.com` only).                                                                                                                                                                                                                                           | The service team can then attribute VS Code connections in sovereign clusters and confirm success or failure server-side, independent of client telemetry. Same data as already sent for public clusters.                                       |
+| S3  | Trace the raw IMDS `azEnvironment` when it matches a safe shape such as `^Azure[A-Za-z]{1,40}$`; keep `other` for anything else.                                                                                                                                                                                                                                                                                                                | Answers research open question 5 from the first Government managed identity report, which is the evidence needed to revisit D7 safely.                                                                                                          |
+| S4  | Translate the driver's `ALLOWED_HOSTS` rejection into a message naming `documentDB.customEnvironment.mongoClusterHostnameSuffix` (a rule matched on the driver text, routed through `ConnectionDiagnosticsService`).                                                                                                                                                                                                                            | Private endpoints with custom DNS are common in Government tenants; today the user sees a raw driver message that mentions `*.azure.com`.                                                                                                       |
+| S5  | Add `pattern` validation for both `documentDB.customEnvironment` properties in `package.json` (see R1).                                                                                                                                                                                                                                                                                                                                         | Catches configuration mistakes in the Settings editor, before any remote troubleshooting round trip.                                                                                                                                            |
+| S6  | Add end-to-end handler tests using the real resolver, not a mocked resolution, for: Government interactive (scope passed to `getSessionFromVSCode`, `ALLOWED_HOSTS`), Government managed identity by host, China both flows, and the shell and playground `tokenRequest` path with a Government connection string.                                                                                                                              | The current handler tests mock `resolveInteractiveTokenResource`, so a wiring regression between resolver and token request would pass.                                                                                                         |
+| S7  | Use the existing hashed domain telemetry to run the D11 check. `*.azure.cn` and `*.azure.us` hosts are classified `domainInfo_isAzure = false` and hashed. Match `domainInfo_domain_l2 = 6a619114` (`azure.cn`) or `domainInfo_domain_l3 = 49133d63` (`cosmos.azure.cn`); for Government, `8bafc480` (`azure.us`) and `f3e87358` (`cosmos.azure.us`). Values are the first 8 hex characters of SHA-256, as computed by `getClusterMetadata.ts`. | Makes the D11 shipping gate answerable with data that already exists.                                                                                                                                                                           |
+| S8  | Preview-build connection diagnostics dialogs. Replaces the earlier scripted-checklist idea. See [S8 design](#s8-preview-build-connection-diagnostics-dialogs).                                                                                                                                                                                                                                                                                  | The reporter sees what the extension detected and decided at each stage, and can paste a redacted report with one click.                                                                                                                        |
 
 ### Follow-up todos (S1 to S7)
 
@@ -886,11 +977,11 @@ callback. A dialog there must not be awaited, or a reporter who reads it slowly 
 timeout that looks like a sign-in failure. Interactive sign-in on the extension connection gets its
 token in `configureAuth`, before the driver runs, so it can safely block.
 
-| Dialog | Shown | Blocking? | Hook |
-| --- | --- | --- | --- |
-| 1 of 3: about to request a token | After cloud resolution succeeds or fails, before any token request | Yes in `configureAuth` (both handlers). No in shell and playground (`handleTokenRequest` runs inside the worker's callback) | `MicrosoftEntraIDAuthHandler`, `ManagedIdentityAuthHandler` (`configureAuth`), `ShellSessionManager` and `PlaygroundEvaluator` (`handleTokenRequest`) |
-| 2 of 3: token result | After the token request succeeds or fails | Yes for interactive in `configureAuth`; no elsewhere | After `getSessionFromVSCode` or `getManagedIdentityAccessToken`, at the same four sites |
-| 3 of 3: connection result | After `MongoClient.connect()` succeeds or throws; three guarded probes run only on success | Yes (the connection is already open or has failed) | `ClustersClient.connect`, after stage 04, and in its `catch` |
+| Dialog                           | Shown                                                                          | Blocking?                                                                                                                   | Hook                                                                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 of 3: about to request a token | After cloud resolution succeeds or fails, before any token request             | Yes in `configureAuth` (both handlers). No in shell and playground (`handleTokenRequest` runs inside the worker's callback) | `MicrosoftEntraIDAuthHandler`, `ManagedIdentityAuthHandler` (`configureAuth`), `ShellSessionManager` and `PlaygroundEvaluator` (`handleTokenRequest`) |
+| 2 of 3: token result             | After the token request succeeds or fails                                      | Yes for interactive in `configureAuth`; no elsewhere                                                                        | After `getSessionFromVSCode` or `getManagedIdentityAccessToken`, at the same four sites                                                               |
+| 3 of 3: connection result        | After `MongoClient.connect()` succeeds or throws; three guarded probes run only on success | Yes (the connection is already open or has failed)                                                                          | `ClustersClient.connect`, after stage 04, and in its `catch`                                                                                          |
 
 Show each dialog at most once per `(clusterId, surface, step)` per window. Token refreshes in the
 shell and playground then do not repeat it. If resolution fails, dialog 1 reports the failure and
@@ -1125,13 +1216,13 @@ sovereign access, field telemetry is the main way to learn whether the feature w
 Verification is **Case 1: still working**, because this is a review of a draft PR, not a request to
 mark it ready for review.
 
-| Check | Result |
-| --- | --- |
-| `npm run build` | Passed, including workspace prebuilds |
-| Focused Vitest run: auth resolver/scopes/allowed hosts/handlers/Entra errors, shell/playground worker integration, copy connection string, connection-string input, diagnostics service, auth traces | 15 files, 297 tests passed |
-| Settings contribution suite | 11 tests passed |
-| Temporary characterization probes of R1/R2 | 5 tests passed; removed after execution |
-| Second pass: temporary probes for R1 to R6 and the edge cases below | 19 tests passed (`npx vitest run`, two files); removed after execution |
+| Check                                                                                                                                                                                                | Result                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `npm run build`                                                                                                                                                                                      | Passed, including workspace prebuilds                                  |
+| Focused Vitest run: auth resolver/scopes/allowed hosts/handlers/Entra errors, shell/playground worker integration, copy connection string, connection-string input, diagnostics service, auth traces | 15 files, 297 tests passed                                             |
+| Settings contribution suite                                                                                                                                                                          | 11 tests passed                                                        |
+| Temporary characterization probes of R1/R2                                                                                                                                                           | 5 tests passed; removed after execution                                |
+| Second pass: temporary probes for R1 to R6 and the edge cases below                                                                                                                                  | 19 tests passed (`npx vitest run`, two files); removed after execution |
 
 The IDE test runner did not discover these files, so the suites were run with the repository's
 `npx vitest run` command. One initial temporary-probe assertion incorrectly equated absent object
@@ -1170,20 +1261,20 @@ Second pass:
 
 ### Second-pass edge cases examined
 
-| Case | Observed | Assessment |
-| --- | --- | --- |
-| Interactive, public setting, private DNS host | Public audience, no mismatch check | Correct per D8 |
-| Replica set mixing `azure.com` and `azure.us` hosts | No host cloud; `ALLOWED_HOSTS` is `*.azure.com,*.azure.us` | Acceptable; unrealistic topology |
-| `mongodb+srv://` alias under a private domain whose SRV targets `azure.us` | No host cloud from the alias; `ALLOWED_HOSTS` defaults to `*.azure.com`, so the driver rejects the `azure.us` targets | **Sovereign-specific.** The same alias works in the public cloud only because the default happens to be `*.azure.com`. Consider deriving `ALLOWED_HOSTS` from the configured interactive cloud when the host is unclassified, or document it under R9; S4 makes it diagnosable |
-| Copy, managed identity, private host, `USGovernment` setting | Government audience (`reason: setting`) | Documented copy policy; it can disagree with connect-time D7, which ignores the setting. Acceptable because the copy is editable |
-| Text with `platform_broker_error` and AADSTS65002 | `firstPartyPreauthorization`, `brokered: true` | Correct precedence |
-| Text with AADSTS50001 and AADSTS500011 | `resourceNotInTenant` (rule order, not text order) | Acceptable; document that rule order is the precedence |
-| HTML-escaped preauthorization phrase only | `firstPartyPreauthorization` | Correct |
-| IMDS request through a VS Code proxy or a stalled body | Resolves `undefined` on error or socket timeout | Acceptable. The managed identity token request uses the same patched `http` stack, so a proxy that breaks IMDS breaks the token anyway |
-| Shell/playground token refresh | The audience is re-resolved on every worker request; managed identity with a private host repeats IMDS (2 s timeout) | Acceptable at hourly refresh; consider caching the IMDS outcome for the window |
-| Diagnostics provider order and deadline | The Entra provider is registered last and is synchronous; the service deadline is shared across providers | Low risk; it depends on earlier providers declining Azure clusters quickly, which this pass did not trace in detail |
-| Managed identity token errors | The provider rethrows a described message; the uncategorized branch keeps the original text, so AADSTS codes generally survive for classification | Acceptable; categorized branches drop the code, but those reasons are not Entra-classifier rules |
-| Driver `ALLOWED_HOSTS` enforcement (7.2.0) | Enforced after SRV resolution for callback OIDC unless `ENVIRONMENT` is set; the extension never sets it | Confirms that `ALLOWED_HOSTS` is a real control, which is the basis of R5 |
+| Case                                                                       | Observed                                                                                                                                          | Assessment                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Interactive, public setting, private DNS host                              | Public audience, no mismatch check                                                                                                                | Correct per D8                                                                                                                                                                                                                                                                 |
+| Replica set mixing `azure.com` and `azure.us` hosts                        | No host cloud; `ALLOWED_HOSTS` is `*.azure.com,*.azure.us`                                                                                        | Acceptable; unrealistic topology                                                                                                                                                                                                                                               |
+| `mongodb+srv://` alias under a private domain whose SRV targets `azure.us` | No host cloud from the alias; `ALLOWED_HOSTS` defaults to `*.azure.com`, so the driver rejects the `azure.us` targets                             | **Sovereign-specific.** The same alias works in the public cloud only because the default happens to be `*.azure.com`. Consider deriving `ALLOWED_HOSTS` from the configured interactive cloud when the host is unclassified, or document it under R9; S4 makes it diagnosable |
+| Copy, managed identity, private host, `USGovernment` setting               | Government audience (`reason: setting`)                                                                                                           | Documented copy policy; it can disagree with connect-time D7, which ignores the setting. Acceptable because the copy is editable                                                                                                                                               |
+| Text with `platform_broker_error` and AADSTS65002                          | `firstPartyPreauthorization`, `brokered: true`                                                                                                    | Correct precedence                                                                                                                                                                                                                                                             |
+| Text with AADSTS50001 and AADSTS500011                                     | `resourceNotInTenant` (rule order, not text order)                                                                                                | Acceptable; document that rule order is the precedence                                                                                                                                                                                                                         |
+| HTML-escaped preauthorization phrase only                                  | `firstPartyPreauthorization`                                                                                                                      | Correct                                                                                                                                                                                                                                                                        |
+| IMDS request through a VS Code proxy or a stalled body                     | Resolves `undefined` on error or socket timeout                                                                                                   | Acceptable. The managed identity token request uses the same patched `http` stack, so a proxy that breaks IMDS breaks the token anyway                                                                                                                                         |
+| Shell/playground token refresh                                             | The audience is re-resolved on every worker request; managed identity with a private host repeats IMDS (2 s timeout)                              | Acceptable at hourly refresh; consider caching the IMDS outcome for the window                                                                                                                                                                                                 |
+| Diagnostics provider order and deadline                                    | The Entra provider is registered last and is synchronous; the service deadline is shared across providers                                         | Low risk; it depends on earlier providers declining Azure clusters quickly, which this pass did not trace in detail                                                                                                                                                            |
+| Managed identity token errors                                              | The provider rethrows a described message; the uncategorized branch keeps the original text, so AADSTS codes generally survive for classification | Acceptable; categorized branches drop the code, but those reasons are not Entra-classifier rules                                                                                                                                                                               |
+| Driver `ALLOWED_HOSTS` enforcement (7.2.0)                                 | Enforced after SRV resolution for callback OIDC unless `ENVIRONMENT` is set; the extension never sets it                                          | Confirms that `ALLOWED_HOSTS` is a real control, which is the basis of R5                                                                                                                                                                                                      |
 
 ## Decisions respected and remaining rollout gates
 

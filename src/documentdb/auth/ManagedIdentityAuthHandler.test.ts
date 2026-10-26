@@ -92,11 +92,16 @@ describe('ManagedIdentityAuthHandler', () => {
 
         const startupProperties: Record<string, string> = {};
         const { options } = await handler.configureAuth(undefined, {
-            startupCorrelationId: 'startup-id', surface: 'extension', startupProperties,
+            startupCorrelationId: 'startup-id',
+            surface: 'extension',
+            startupProperties,
         });
         expect(startupProperties).toEqual({
-            cloudCategory: 'public', tokenResourceReason: 'host', configuredCloud: 'AzureCloud',
-            hostCloud: 'AzureCloud', errorKind: 'none',
+            cloudCategory: 'public',
+            tokenResourceReason: 'host',
+            configuredCloud: 'AzureCloud',
+            hostCloud: 'AzureCloud',
+            errorKind: 'none',
         });
 
         expect(options.authMechanism).toBe('MONGODB-OIDC');
@@ -244,7 +249,9 @@ describe('ManagedIdentityAuthHandler', () => {
 
         const startupProperties: Record<string, string> = {};
         const { options } = await handler.configureAuth(undefined, {
-            startupCorrelationId: 'startup-id', surface: 'extension', startupProperties,
+            startupCorrelationId: 'startup-id',
+            surface: 'extension',
+            startupProperties,
         });
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
@@ -272,9 +279,13 @@ describe('ManagedIdentityAuthHandler', () => {
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
 
         const startupProperties: Record<string, string> = {};
-        await expect(handler.configureAuth(undefined, {
-            startupCorrelationId: 'startup-id', surface: 'extension', startupProperties,
-        })).rejects.toBe(error);
+        await expect(
+            handler.configureAuth(undefined, {
+                startupCorrelationId: 'startup-id',
+                surface: 'extension',
+                startupProperties,
+            }),
+        ).rejects.toBe(error);
         expect(startupProperties.errorKind).toBe('managedIdentityCloudUnknown');
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
@@ -289,17 +300,23 @@ describe('ManagedIdentityAuthHandler', () => {
         getManagedIdentityAccessToken.mockRejectedValueOnce(error);
         const failedProperties: Record<string, string> = {};
         const failed = await handler.configureAuth(undefined, {
-            startupCorrelationId: 'failed-startup', surface: 'extension', startupProperties: failedProperties,
+            startupCorrelationId: 'failed-startup',
+            surface: 'extension',
+            startupProperties: failedProperties,
         });
         await expect(invokeOidcCallback(failed.options)).rejects.toBe(error);
         const failure = getRecentEntraTokenFailure('cluster-1');
         expect(failure).toMatchObject({ cloudCategory: 'usgov', authMethod: 'managedIdentity' });
         const diagnostics = new EntraDiagnosticsProvider();
-        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain('Sign-in failed in Azure US Government');
+        expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain(
+            'Sign-in failed in Azure US Government',
+        );
 
         const successfulProperties: Record<string, string> = {};
         const successful = await handler.configureAuth(undefined, {
-            startupCorrelationId: 'successful-startup', surface: 'extension', startupProperties: successfulProperties,
+            startupCorrelationId: 'successful-startup',
+            surface: 'extension',
+            startupProperties: successfulProperties,
         });
         expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
         getManagedIdentityAccessToken.mockImplementationOnce(async () => {

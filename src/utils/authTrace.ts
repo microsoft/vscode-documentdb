@@ -78,12 +78,15 @@ export interface AuthTraceContext {
 
 function recordCloudResolution(details: AuthTraceDetails, properties: ITelemetryContext['properties']): void {
     properties.cloudCategory =
-        typeof details.cloudCategory === 'string' && ['public', 'usgov', 'china', 'custom'].includes(details.cloudCategory)
+        typeof details.cloudCategory === 'string' &&
+        ['public', 'usgov', 'china', 'custom'].includes(details.cloudCategory)
             ? details.cloudCategory
             : 'unknown';
     properties.tokenResourceReason =
         typeof details.reason === 'string' &&
-        ['setting', 'customOverride', 'customLoginHost', 'armMetadata', 'host', 'imds', 'copyDefault'].includes(details.reason)
+        ['setting', 'customOverride', 'customLoginHost', 'armMetadata', 'host', 'imds', 'copyDefault'].includes(
+            details.reason,
+        )
             ? details.reason
             : 'unknown';
     properties.configuredCloud =
@@ -123,10 +126,7 @@ export function traceAuthFlow(
     correlationId?: string,
     context?: AuthTraceContext,
 ): void {
-    if (
-        context?.startupProperties &&
-        (operation === 'entraCloud.resolved' || operation === 'entraCloud.unresolved')
-    ) {
+    if (context?.startupProperties && (operation === 'entraCloud.resolved' || operation === 'entraCloud.unresolved')) {
         recordCloudResolution(details, context.startupProperties);
     }
     ext.outputChannel.info(

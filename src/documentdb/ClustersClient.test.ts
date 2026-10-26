@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
 import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
@@ -166,7 +166,8 @@ describe('regular connection startup diagnostics', () => {
         ['localhost:27017', undefined],
     ])('sets the same Azure appName only for a known cloud domain: %s', async (host, appName) => {
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockResolvedValueOnce({
-            connectionString: `mongodb://${host}/`, options: {},
+            connectionString: `mongodb://${host}/`,
+            options: {},
         });
         await ClustersClient.getClient(clusterId);
         expect(vi.mocked(MongoClient).mock.calls[0]?.[1]?.appName).toBe(appName);
@@ -176,9 +177,13 @@ describe('regular connection startup diagnostics', () => {
         ['us', '8bafc480', 'f3e87358'],
         ['cn', '6a619114', '49133d63'],
     ])('preserves historical domain telemetry hashes for azure.%s', async (tld, level2, level3) => {
-        const actual = await vi.importActual<typeof import('./utils/getClusterMetadata')>('./utils/getClusterMetadata');
+        const actual = await vi.importActual<{ getDomainMetadata: typeof getDomainMetadata }>(
+            './utils/getClusterMetadata',
+        );
         expect(actual.getDomainMetadata([`cluster.mongocluster.cosmos.azure.${tld}`])).toMatchObject({
-            domainInfo_isAzure: 'false', domainInfo_domain_l2: level2, domainInfo_domain_l3: level3,
+            domainInfo_isAzure: 'false',
+            domainInfo_domain_l2: level2,
+            domainInfo_domain_l3: level3,
         });
     });
 
@@ -267,12 +272,22 @@ describe('regular connection startup diagnostics', () => {
         'isolates %s cloud telemetry from the next attempt on the same cluster',
         async (authMethod) => {
             CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://private-host:27017');
-            const handler = authMethod === AuthMethodId.ManagedIdentity ? ManagedIdentityAuthHandler : MicrosoftEntraIDAuthHandler;
+            const handler =
+                authMethod === AuthMethodId.ManagedIdentity ? ManagedIdentityAuthHandler : MicrosoftEntraIDAuthHandler;
             vi.mocked(handler.prototype.configureAuth).mockImplementationOnce(async (_timings, context) => {
-                traceAuthFlow('entraCloud.unresolved', {
-                    cloudCategory: 'usgov', reason: 'host', configuredCloud: 'custom',
-                    hostCloud: 'AzureUSGovernment', errorKind: 'cloudMismatch', tokenResource: 'private-resource',
-                }, undefined, context);
+                traceAuthFlow(
+                    'entraCloud.unresolved',
+                    {
+                        cloudCategory: 'usgov',
+                        reason: 'host',
+                        configuredCloud: 'custom',
+                        hostCloud: 'AzureUSGovernment',
+                        errorKind: 'cloudMismatch',
+                        tokenResource: 'private-resource',
+                    },
+                    undefined,
+                    context,
+                );
                 throw new Error('private-resolution-failure');
             });
             await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('private-resolution-failure');
@@ -281,8 +296,11 @@ describe('regular connection startup diagnostics', () => {
             const events = mockTelemetryEvents.filter((event) => event.eventName === 'connect.startup');
             expect(events[0].telemetry.properties).toEqual(failedProperties);
             expect(failedProperties).toMatchObject({
-                cloudCategory: 'usgov', tokenResourceReason: 'host', configuredCloud: 'custom',
-                hostCloud: 'AzureUSGovernment', errorKind: 'cloudMismatch',
+                cloudCategory: 'usgov',
+                tokenResourceReason: 'host',
+                configuredCloud: 'custom',
+                hostCloud: 'AzureUSGovernment',
+                errorKind: 'cloudMismatch',
             });
             expect(events[1].telemetry.properties.cloudCategory).toBeUndefined();
             expect(JSON.stringify(events)).not.toContain('private-');
