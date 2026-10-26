@@ -47,9 +47,9 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S3 | Complete | GPT-6.1 Sol | 09:59:50-10:00:36 UTC; 99 focused tests passed; `7537d69ac2197700ccf4576c321b1a43af5839d0` |
 | S4 | Complete | GPT-6.1 Sol | 10:00:46-10:01:50 UTC; 72 focused tests passed; `f6406d8f82dac2b351aa77f6de87639f41c8efa1` |
 | S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92` |
-| S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; hash recorded after commit |
+| S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692` |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
-| S8 | Pending | GPT-6.1 Sol | Preview-only dialogs on separate `preview/sovereign-diagnostics` branch |
+| S8 | In progress | GPT-6.1 Sol | Isolated worktree and `preview/sovereign-diagnostics` branch; never merge into PR |
 | Enhancement review | Pending | Opus 5.5 | Review enhancements, including isolated preview |
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
@@ -64,7 +64,7 @@ The read-only attachment is unchanged; this repository copy is the live progress
   with the wrong signature; corrected it to the existing `setAuthCredentials` API.
   Four focused files / 66 tests passed (10:05:51-10:05:53 UTC).
   One exact `npm run build` passed, including workspace prebuilds and root compilation
-  (10:05:53-10:06:22 UTC, 29 seconds). Final hash recorded after commit, without amending.
+  (10:05:53-10:06:22 UTC, 29 seconds). Commit: `bb08f47af47892c560c728222692ef2f81ef7692`.
 - S5: GPT-6.1 Sol, 10:02:01-10:02:40 UTC (39 seconds). Reused R1's audience schema unchanged
   and added the hostname-suffix pattern/message, matching existing normalization and R5 public
   suffix rejection. Settings tests compare valid/invalid/blank/whitespace values with the real
