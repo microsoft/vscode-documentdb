@@ -12,8 +12,12 @@ import { type AuthTraceContext } from '../../../utils/authTrace';
 import { type CachedClusterCredentials } from '../../CredentialCache';
 import { type ResolvedTokenResource } from '../documentdbTokenResource';
 import {
-    formatPreviewReport, previewBody, previewTitle,
-    type PreviewProbe, type PreviewReport, type PreviewSurface,
+    formatPreviewReport,
+    previewBody,
+    previewTitle,
+    type PreviewProbe,
+    type PreviewReport,
+    type PreviewSurface,
 } from './report';
 
 export const PREVIEW_DIAGNOSTICS_ENABLED = true;
@@ -32,7 +36,9 @@ function attemptKey(clusterId: string, surface: PreviewSurface, context?: AuthTr
 
 function logPreviewFailure(): void {
     try {
-        ext.outputChannel.error(vscode.l10n.t('[Preview diagnostics] Diagnostic UI or probe failed; connection behavior is unchanged.'));
+        ext.outputChannel.error(
+            vscode.l10n.t('[Preview diagnostics] Diagnostic UI or probe failed; connection behavior is unchanged.'),
+        );
     } catch {
         // Logging itself must not affect authentication.
     }
@@ -40,11 +46,15 @@ function logPreviewFailure(): void {
 
 function reportContext(surface: PreviewSurface, context?: AuthTraceContext): Omit<PreviewReport, 'step'> {
     const packageJSON: unknown = ext.context?.extension?.packageJSON;
-    const extensionVersion = packageJSON && typeof packageJSON === 'object' && 'version' in packageJSON
-        ? packageJSON.version : undefined;
+    const extensionVersion =
+        packageJSON && typeof packageJSON === 'object' && 'version' in packageJSON ? packageJSON.version : undefined;
     return {
-        surface, extensionVersion, vscodeVersion: vscode.version,
-        platform: process.platform, arch: process.arch, timestamp: new Date().toISOString(),
+        surface,
+        extensionVersion,
+        vscodeVersion: vscode.version,
+        platform: process.platform,
+        arch: process.arch,
+        timestamp: new Date().toISOString(),
         startupCorrelationId: context?.startupCorrelationId,
     };
 }
@@ -70,15 +80,18 @@ export async function showPreviewDialog(
             for (;;) {
                 const choice = await vscode.window.showInformationMessage(
                     vscode.l10n.t('Preview build: connection check {0} of 3: {1}', report.step, previewTitle(report)),
-                    { modal: true, detail: previewBody(report) }, proceed, copy,
+                    { modal: true, detail: previewBody(report) },
+                    proceed,
+                    copy,
                 );
                 if (choice !== copy) {
                     return blocking && cancellable && choice !== proceed;
                 }
                 try {
                     await vscode.env.clipboard.writeText(formatPreviewReport(report));
-                    void Promise.resolve(vscode.window.showInformationMessage(vscode.l10n.t('Report copied.')))
-                        .catch(logPreviewFailure);
+                    void Promise.resolve(vscode.window.showInformationMessage(vscode.l10n.t('Report copied.'))).catch(
+                        logPreviewFailure,
+                    );
                 } catch {
                     logPreviewFailure();
                 }
@@ -115,10 +128,17 @@ export async function previewResolve(
         resolved = await resolve();
     } catch (error) {
         try {
-            const dialog = showPreviewDialog(credentials.clusterId, {
-                ...reportContext(surface, context), step: 1, error, managedIdentity,
-                userAssigned: !!credentials.managedIdentityConfig?.clientId,
-            }, surface === 'extension');
+            const dialog = showPreviewDialog(
+                credentials.clusterId,
+                {
+                    ...reportContext(surface, context),
+                    step: 1,
+                    error,
+                    managedIdentity,
+                    userAssigned: !!credentials.managedIdentityConfig?.clientId,
+                },
+                surface === 'extension',
+            );
             if (surface === 'extension') {
                 await dialog;
             } else {
@@ -131,10 +151,18 @@ export async function previewResolve(
     }
     attempts.set(key, { resolved, tokenSucceeded: false });
     try {
-        const dialog = showPreviewDialog(credentials.clusterId, {
-            ...reportContext(surface, context), step: 1, resolved, managedIdentity,
-            userAssigned: !!credentials.managedIdentityConfig?.clientId,
-        }, surface === 'extension', true);
+        const dialog = showPreviewDialog(
+            credentials.clusterId,
+            {
+                ...reportContext(surface, context),
+                step: 1,
+                resolved,
+                managedIdentity,
+                userAssigned: !!credentials.managedIdentityConfig?.clientId,
+            },
+            surface === 'extension',
+            true,
+        );
         if (surface === 'extension') {
             await dialog;
         } else {
@@ -171,10 +199,17 @@ export async function previewAcquireToken<T>(
         if (attempt) {
             attempt.tokenSucceeded = false;
             try {
-                const dialog = showPreviewDialog(clusterId, {
-                    ...reportContext(surface, context), step: 2, resolved: attempt.resolved,
-                    error, elapsedMs: Date.now() - started,
-                }, surface === 'extension' && !managedIdentity);
+                const dialog = showPreviewDialog(
+                    clusterId,
+                    {
+                        ...reportContext(surface, context),
+                        step: 2,
+                        resolved: attempt.resolved,
+                        error,
+                        elapsedMs: Date.now() - started,
+                    },
+                    surface === 'extension' && !managedIdentity,
+                );
                 if (surface === 'extension' && !managedIdentity) {
                     await dialog;
                 } else {
@@ -190,11 +225,20 @@ export async function previewAcquireToken<T>(
         try {
             const token = tokenFromResult(result);
             attempt.tokenSucceeded = !!token;
-            const dialog = showPreviewDialog(clusterId, {
-                ...reportContext(surface, context), step: 2, resolved: attempt.resolved,
-                token, tenantId, managedIdentity, elapsedMs: Date.now() - started,
-                error: token ? undefined : new Error(),
-            }, surface === 'extension' && !managedIdentity);
+            const dialog = showPreviewDialog(
+                clusterId,
+                {
+                    ...reportContext(surface, context),
+                    step: 2,
+                    resolved: attempt.resolved,
+                    token,
+                    tenantId,
+                    managedIdentity,
+                    elapsedMs: Date.now() - started,
+                    error: token ? undefined : new Error(),
+                },
+                surface === 'extension' && !managedIdentity,
+            );
             if (surface === 'extension' && !managedIdentity) {
                 await dialog;
             } else {
@@ -223,8 +267,12 @@ export async function runPostConnectProbes(client: Pick<MongoClient, 'db'>): Pro
             }
             if (index === 2) {
                 const authInfo: unknown = result.authInfo;
-                if (authInfo && typeof authInfo === 'object' && 'authenticatedUserRoles' in authInfo &&
-                    Array.isArray(authInfo.authenticatedUserRoles)) {
+                if (
+                    authInfo &&
+                    typeof authInfo === 'object' &&
+                    'authenticatedUserRoles' in authInfo &&
+                    Array.isArray(authInfo.authenticatedUserRoles)
+                ) {
                     count = authInfo.authenticatedUserRoles.length;
                 }
             }
@@ -254,10 +302,19 @@ export async function previewConnectionResult(
         }
         const probes = error ? undefined : await runPostConnectProbes(client);
         const diagnosis = error ? await ConnectionDiagnosticsService.explain({ clusterId, error }) : undefined;
-        await showPreviewDialog(clusterId, {
-            ...reportContext('extension', context), step: 3, resolved: attempt.resolved,
-            elapsedMs, error, probes, diagnosis,
-        }, true);
+        await showPreviewDialog(
+            clusterId,
+            {
+                ...reportContext('extension', context),
+                step: 3,
+                resolved: attempt.resolved,
+                elapsedMs,
+                error,
+                probes,
+                diagnosis,
+            },
+            true,
+        );
     } catch {
         logPreviewFailure();
     }

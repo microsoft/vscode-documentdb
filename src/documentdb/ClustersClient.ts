@@ -482,7 +482,12 @@ export class ClustersClient {
             // guard in case abort fires between the assignment and this removal.
             abortSignal?.removeEventListener('abort', onAbort);
 
-            await previewConnectionResult(this.clusterId, { startupCorrelationId: startup.id, surface: 'extension' }, this._mongoClient, Date.now() - startup.stageStartedAt);
+            await previewConnectionResult(
+                this.clusterId,
+                { startupCorrelationId: startup.id, surface: 'extension' },
+                this._mongoClient,
+                Date.now() - startup.stageStartedAt,
+            );
             this.advanceClientStartup(startup, 'stage05InitializingApis');
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
@@ -492,7 +497,13 @@ export class ClustersClient {
                 throw new UserCancelledError('abortConnection');
             }
 
-            await previewConnectionResult(this.clusterId, { startupCorrelationId: startup.id, surface: 'extension' }, this._mongoClient, Date.now() - startup.stageStartedAt, error);
+            await previewConnectionResult(
+                this.clusterId,
+                { startupCorrelationId: startup.id, surface: 'extension' },
+                this._mongoClient,
+                Date.now() - startup.stageStartedAt,
+                error,
+            );
             const message = parseError(error).message;
             // Surface the friendly local-connection tips only for a genuinely local-ish connection
             // (emulator, OR a local connection that opted into the TLS exception — host-gated the

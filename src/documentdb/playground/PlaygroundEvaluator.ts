@@ -17,13 +17,13 @@ import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../utils/authTrace';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
-import { previewAcquireToken, previewResolve } from '../auth/previewDiagnostics/previewDiagnostics';
 import {
     resolveInteractiveTokenResource,
     resolveManagedIdentityTokenResource,
     TokenResourceResolutionError,
 } from '../auth/documentdbTokenResource';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
+import { previewAcquireToken, previewResolve } from '../auth/previewDiagnostics/previewDiagnostics';
 import { CredentialCache } from '../CredentialCache';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
@@ -388,10 +388,16 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             }
             let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
             try {
-                resolved = await previewResolve(credentials, 'playground', traceContext, async () =>
-                    msg.source === 'managedIdentity'
-                        ? await resolveManagedIdentityTokenResource(credentials.connectionString)
-                        : await resolveInteractiveTokenResource(credentials.connectionString), msg.source === 'managedIdentity');
+                resolved = await previewResolve(
+                    credentials,
+                    'playground',
+                    traceContext,
+                    async () =>
+                        msg.source === 'managedIdentity'
+                            ? await resolveManagedIdentityTokenResource(credentials.connectionString)
+                            : await resolveInteractiveTokenResource(credentials.connectionString),
+                    msg.source === 'managedIdentity',
+                );
                 traceAuthFlow('entraCloud.resolved', resolved.details, msg.requestId, traceContext);
             } catch (error) {
                 if (error instanceof TokenResourceResolutionError) {
@@ -406,15 +412,24 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 this._sessionId ??= randomUUID();
                 try {
                     accessToken = (
-                        await previewAcquireToken(clusterId, 'playground', traceContext, () => withTokenAcquisitionTiming(timings, () =>
-                            getManagedIdentityAccessToken(
-                                [resolved.scope],
-                                msg.clientId,
-                                msg.tenantId,
-                                this._sessionId,
-                                traceContext,
-                            ),
-                        ), (result) => result.accessToken, msg.tenantId, true)
+                        await previewAcquireToken(
+                            clusterId,
+                            'playground',
+                            traceContext,
+                            () =>
+                                withTokenAcquisitionTiming(timings, () =>
+                                    getManagedIdentityAccessToken(
+                                        [resolved.scope],
+                                        msg.clientId,
+                                        msg.tenantId,
+                                        this._sessionId,
+                                        traceContext,
+                                    ),
+                                ),
+                            (result) => result.accessToken,
+                            msg.tenantId,
+                            true,
+                        )
                     ).accessToken;
                 } catch (error) {
                     if (traceContext?.startupProperties) {
@@ -433,21 +448,29 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 );
                 let session: vscode.AuthenticationSession | undefined;
                 try {
-                    session = await previewAcquireToken(clusterId, 'playground', traceContext, () => traceAuthOperation(
-                        'interactiveEntra.getSession',
-                        () =>
-                            withTokenAcquisitionTiming(timings, () =>
-                                getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
-                            ),
-                        {
-                            tenantSpecified: !!msg.tenantId,
-                            createIfNone: true,
-                            cloudCategory: resolved.cloudCategory,
-                            tokenResourceReason: resolved.reason,
-                        },
-                        msg.requestId,
+                    session = await previewAcquireToken(
+                        clusterId,
+                        'playground',
                         traceContext,
-                    ), (result) => result?.accessToken, msg.tenantId);
+                        () =>
+                            traceAuthOperation(
+                                'interactiveEntra.getSession',
+                                () =>
+                                    withTokenAcquisitionTiming(timings, () =>
+                                        getSessionFromVSCode([resolved.scope], msg.tenantId, { createIfNone: true }),
+                                    ),
+                                {
+                                    tenantSpecified: !!msg.tenantId,
+                                    createIfNone: true,
+                                    cloudCategory: resolved.cloudCategory,
+                                    tokenResourceReason: resolved.reason,
+                                },
+                                msg.requestId,
+                                traceContext,
+                            ),
+                        (result) => result?.accessToken,
+                        msg.tenantId,
+                    );
 
                     if (!session) {
                         throw new Error(l10n.t('Failed to obtain Entra ID token.'));

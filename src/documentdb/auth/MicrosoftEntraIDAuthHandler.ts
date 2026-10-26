@@ -38,7 +38,9 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         const authCorrelationId = randomUUID();
         let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
         try {
-            resolved = await previewResolve(this.clusterCredentials, 'extension', traceContext, () => resolveInteractiveTokenResource(this.clusterCredentials.connectionString));
+            resolved = await previewResolve(this.clusterCredentials, 'extension', traceContext, () =>
+                resolveInteractiveTokenResource(this.clusterCredentials.connectionString),
+            );
             traceAuthFlow('entraCloud.resolved', resolved.details, authCorrelationId, traceContext);
         } catch (error) {
             if (error instanceof TokenResourceResolutionError) {
@@ -52,23 +54,35 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         // Get Microsoft Entra ID token
         let session: vscode.AuthenticationSession | undefined;
         try {
-            session = await previewAcquireToken(this.clusterCredentials.clusterId, 'extension', traceContext, () => traceAuthOperation(
-                'interactiveEntra.getSession',
-                () =>
-                    withTokenAcquisitionTiming(timings, () =>
-                        getSessionFromVSCode([resolved.scope], this.clusterCredentials.entraIdConfig?.tenantId, {
-                            createIfNone: true,
-                        }),
-                    ),
-                {
-                    tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId,
-                    createIfNone: true,
-                    cloudCategory: resolved.cloudCategory,
-                    tokenResourceReason: resolved.reason,
-                },
-                authCorrelationId,
+            session = await previewAcquireToken(
+                this.clusterCredentials.clusterId,
+                'extension',
                 traceContext,
-            ), (result) => result?.accessToken, this.clusterCredentials.entraIdConfig?.tenantId);
+                () =>
+                    traceAuthOperation(
+                        'interactiveEntra.getSession',
+                        () =>
+                            withTokenAcquisitionTiming(timings, () =>
+                                getSessionFromVSCode(
+                                    [resolved.scope],
+                                    this.clusterCredentials.entraIdConfig?.tenantId,
+                                    {
+                                        createIfNone: true,
+                                    },
+                                ),
+                            ),
+                        {
+                            tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId,
+                            createIfNone: true,
+                            cloudCategory: resolved.cloudCategory,
+                            tokenResourceReason: resolved.reason,
+                        },
+                        authCorrelationId,
+                        traceContext,
+                    ),
+                (result) => result?.accessToken,
+                this.clusterCredentials.entraIdConfig?.tenantId,
+            );
 
             if (!session) {
                 traceAuthFlow(
