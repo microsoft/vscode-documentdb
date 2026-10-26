@@ -82,7 +82,8 @@ describe('resolveInteractiveTokenResource', () => {
             authProvider: 'microsoft',
             brokerImplementation: 'default',
             hostCloud: 'none',
-            customOssrdbmsEndpointSet: false,
+            customOssrdbmsEndpointState: 'absent',
+            customOssrdbmsEndpointApplicable: false,
             customHostnameSuffixSet: false,
             armMetadata: 'notNeeded',
             imdsAzEnvironment: 'notQueried',
@@ -122,18 +123,26 @@ describe('resolveInteractiveTokenResource', () => {
             scope: `${customResource}/.default`,
             cloudCategory: 'custom',
             reason: 'customOverride',
+            details: { customOssrdbmsEndpointState: 'valid', customOssrdbmsEndpointApplicable: true },
         });
         expect(deps.fetchArmMetadata).not.toHaveBeenCalled();
     });
 
-    it('does not apply the custom override to a built-in interactive cloud', async () => {
-        const deps = createDeps();
-        vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: customResource });
-        expect(await resolveInteractiveTokenResource(privateConnection, deps)).toMatchObject({
-            resource: publicResource,
-            reason: 'setting',
-        });
-    });
+    it.each([customResource, 'https://database.example.com/.default'])(
+        'does not apply the custom override to a built-in interactive cloud: %s',
+        async (ossrdbmsEndpoint) => {
+            const deps = createDeps();
+            vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint });
+            expect(await resolveInteractiveTokenResource(privateConnection, deps)).toMatchObject({
+                resource: publicResource,
+                reason: 'setting',
+                details: {
+                    customOssrdbmsEndpointState: ossrdbmsEndpoint === customResource ? 'valid' : 'invalid',
+                    customOssrdbmsEndpointApplicable: false,
+                },
+            });
+        },
+    );
 
     it.each([
         ['login.microsoftonline.com', publicResource],
@@ -188,16 +197,50 @@ describe('resolveInteractiveTokenResource', () => {
     });
 
     it.each(['http://database.example.com', 'https://database.example.com/path', 'not a URL'])(
-        'does not use an invalid custom override: %s',
+        'rejects an invalid custom override before ARM metadata: %s',
         async (override) => {
             const deps = createDeps();
             useCustomCloud(deps);
             vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: override });
+            vi.mocked(deps.fetchArmMetadata).mockResolvedValue({ ossrDbmsResourceId: customResource });
             await expect(resolveInteractiveTokenResource(privateConnection, deps)).rejects.toMatchObject({
-                kind: 'customCloudUnresolved',
+                kind: 'invalidCustomOverride',
+                message: expect.stringContaining('documentDB.customEnvironment.ossrdbmsEndpoint'),
+                details: {
+                    customOssrdbmsEndpointState: 'invalid',
+                    customOssrdbmsEndpointApplicable: true,
+                },
             });
+            expect(deps.fetchArmMetadata).not.toHaveBeenCalled();
         },
     );
+
+    it('rejects an invalid override before a recognized custom login host', async () => {
+        const deps = createDeps();
+        vi.mocked(deps.getConfiguredCloud).mockReturnValue({
+            name: 'custom',
+            isCustomCloud: true,
+            activeDirectoryEndpointUrl: 'https://login.microsoftonline.us/',
+        });
+        vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: `${publicResource}/.default` });
+        await expect(resolveInteractiveTokenResource('mongodb://cluster.azure.us/', deps)).rejects.toMatchObject({
+            kind: 'invalidCustomOverride',
+            message: expect.stringContaining('https://ossrdbms-aad.database.usgovcloudapi.net'),
+        });
+        expect(deps.fetchArmMetadata).not.toHaveBeenCalled();
+    });
+
+    it.each([undefined, '', ' \t '])('treats an empty override as absent: %s', async (ossrdbmsEndpoint) => {
+        const deps = createDeps();
+        useCustomCloud(deps);
+        vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint });
+        vi.mocked(deps.fetchArmMetadata).mockResolvedValue({ ossrDbmsResourceId: customResource });
+        expect(await resolveInteractiveTokenResource(privateConnection, deps)).toMatchObject({
+            resource: customResource,
+            reason: 'armMetadata',
+            details: { customOssrdbmsEndpointState: 'absent', customOssrdbmsEndpointApplicable: true },
+        });
+    });
 
     it('fails clearly when custom is selected without a custom cloud definition', async () => {
         const deps = createDeps();
@@ -291,6 +334,30 @@ describe('resolveInteractiveTokenResource', () => {
 });
 
 describe('resolveManagedIdentityTokenResource', () => {
+    it.each(['mongodb://cluster.azure.us/', privateConnection])(
+        'rejects an invalid override before host or IMDS fallback: %s',
+        async (connectionString) => {
+            const deps = createDeps();
+            vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: `${publicResource}/.default` });
+            vi.mocked(deps.readImdsAzEnvironment).mockResolvedValue('AZUREPUBLICCLOUD');
+            await expect(resolveManagedIdentityTokenResource(connectionString, deps)).rejects.toMatchObject({
+                kind: 'invalidCustomOverride',
+                details: { customOssrdbmsEndpointState: 'invalid', customOssrdbmsEndpointApplicable: true },
+            });
+            expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([undefined, '', ' \t '])('treats an empty override as absent: %s', async (ossrdbmsEndpoint) => {
+        const deps = createDeps();
+        vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint });
+        expect(await resolveManagedIdentityTokenResource('mongodb://cluster.azure.com/', deps)).toMatchObject({
+            resource: publicResource,
+            reason: 'host',
+            details: { customOssrdbmsEndpointState: 'absent', customOssrdbmsEndpointApplicable: true },
+        });
+    });
+
     it('uses the override before the host and never reads the VS Code cloud setting', async () => {
         const deps = createDeps();
         vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: `${customResource}/` });
@@ -358,6 +425,19 @@ describe('resolveManagedIdentityTokenResource', () => {
 });
 
 describe('resolveTokenResourceForCopy', () => {
+    it('warns and preserves the permissive fallback for an invalid override', () => {
+        const deps = createDeps();
+        vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: `${publicResource}/.default` });
+        expect(resolveTokenResourceForCopy('mongodb://cluster.azure.us/', deps)).toMatchObject({
+            resource: governmentResource,
+            reason: 'host',
+            details: { customOssrdbmsEndpointState: 'invalid', customOssrdbmsEndpointApplicable: true },
+        });
+        expect(deps.warn).toHaveBeenCalledWith(
+            expect.stringContaining('documentDB.customEnvironment.ossrdbmsEndpoint'),
+        );
+    });
+
     it('prefers the override to the host', () => {
         const deps = createDeps();
         vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: customResource });

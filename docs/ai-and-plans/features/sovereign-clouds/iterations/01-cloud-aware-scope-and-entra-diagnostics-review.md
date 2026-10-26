@@ -19,7 +19,47 @@ status: active
 This is a review, not an implementation pass. Product code is unchanged. On 2026-10-26 the
 operator accepted the recommended option for every finding, R1 to R9, with neutral wording only
 for R7. S1 to S7 are accepted as follow-up todos. S8 is accepted as preview-build-only work. The
-fixes are not implemented yet.
+implementation began on 2026-10-26. See the live progress below; the original review and its
+evidence are preserved.
+
+## Implementation progress (2026-10-26)
+
+The operator requested GPT-6.1 Sol for narrowly scoped coding, an Opus 5.5 review after the fixes
+and again after enhancements, separate commits per item, and a Terra final verification run.
+Only medium-or-higher findings are in the fix scope; R6 to R9 remain documented low-severity
+follow-ups. S1 to S8 remain accepted enhancement work. PR #1050 remains a draft.
+
+Started at 09:36 UTC. Durations below are wall-clock observations, not model compute time.
+Token usage is unavailable unless explicitly reported. Commits are local unless stated otherwise.
+The read-only attachment is unchanged; this repository copy is the live progress record.
+
+| Item | State | Model | Result / commit |
+| --- | --- | --- | --- |
+| R1 | Complete | GPT-6.1 Sol | 09:38:47-09:40 UTC; 114 focused tests passed; commit recorded below |
+| R2 | Pending | GPT-6.1 Sol | Populate safe cloud evidence before branching |
+| R3 | Pending | GPT-6.1 Sol | Sovereign and configured host recognition in both credential wizards |
+| R4 | Pending | GPT-6.1 Sol | Setting-specific invalid custom-cloud error |
+| R5 | Pending | GPT-6.1 Sol | Machine-scoped settings and public-suffix rejection |
+| R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
+| Fix review | Pending | Opus 5.5 | Review completed R1-R5; fix medium-or-higher findings |
+| S1 | Pending | GPT-6.1 Sol | Closed-enum startup telemetry |
+| S2 | Pending | GPT-6.1 Sol | Sovereign connection appName |
+| S3 | Pending | GPT-6.1 Sol | Safe IMDS environment evidence |
+| S4 | Pending | GPT-6.1 Sol | Actionable OIDC allowed-host explanation |
+| S5 | Pending | GPT-6.1 Sol | Settings patterns; reuse R1 audience validation |
+| S6 | Pending | GPT-6.1 Sol | Real-resolver integration tests |
+| S7 | Pending | Orchestrator | Attempt D11 telemetry check; preserve any access blocker explicitly |
+| S8 | Pending | GPT-6.1 Sol | Preview-only dialogs on separate `preview/sovereign-diagnostics` branch |
+| Enhancement review | Pending | Opus 5.5 | Review enhancements, including isolated preview |
+| Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
+
+### Execution log
+
+- 09:36-09:39 UTC: orchestrator read the supplied review, checked the clean worktree and draft PR,
+  and mapped implementation, review, preview isolation, and verification work. No code changed.
+- R1: GPT-6.1 Sol, 09:38:47-09:40 UTC. IDE runner found no tests; `npx vitest run`
+  covered resolver, settings contributions, scopes, and copied managed-identity strings:
+  4 files / 114 tests passed. Build deferred to the five-fix cluster. Commit hash follows in R2.
 
 ## Verdict
 
@@ -134,6 +174,12 @@ fallback crosses clouds, not just sources. The recommended option is correct. Re
   the override is not silent.
 
 **Author decision:** accepted (2026-10-26), recommended option. Reject a nonempty invalid override on the paths where it applies, including the second-pass refinements: empty or whitespace-only values count as absent, a tri-state trace value, the expected form in the error, a `package.json` `pattern`, and a warning on copy.
+
+**Implementation (R1):** applicable invalid overrides now fail before login-host, ARM, host, or
+IMDS fallback with a localized setting-specific expected-form error. Empty/whitespace values remain
+absent; built-in interactive clouds ignore overrides. Traces record `absent|valid|invalid` and
+applicability without the configured value. Settings validate resource form; copy warns and keeps
+its permissive fallback. Focused resolver, settings, scope, and copy suites: 114 tests passed.
 
 ### R2. P2: Populate cloud evidence before early returns and mismatch errors
 

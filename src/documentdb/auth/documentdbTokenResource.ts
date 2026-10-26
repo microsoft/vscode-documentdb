@@ -65,7 +65,11 @@ export interface TokenResourceResolverDeps {
     warn(message: string): void;
 }
 
-export type TokenResourceErrorKind = 'customCloudUnresolved' | 'cloudMismatch' | 'managedIdentityCloudUnknown';
+export type TokenResourceErrorKind =
+    | 'customCloudUnresolved'
+    | 'invalidCustomOverride'
+    | 'cloudMismatch'
+    | 'managedIdentityCloudUnknown';
 
 /** A failure to choose a token audience. The message is user-facing and already actionable. */
 export class TokenResourceResolutionError extends Error {
@@ -168,7 +172,7 @@ export async function resolveManagedIdentityTokenResource(
     const customEnvironment = deps.getCustomEnvironment();
     const details = createResolutionDetails('managedIdentity', customEnvironment, deps);
     getConfiguredCloudForDetails(deps, details);
-    const override = parseTokenResource(customEnvironment.ossrdbmsEndpoint);
+    const override = getApplicableOverride(customEnvironment, details);
     if (override) {
         return withDetails(fromResource(override, 'customOverride'), details);
     }
@@ -206,14 +210,22 @@ export function resolveTokenResourceForCopy(
     connectionString: string,
     deps: Pick<
         TokenResourceResolverDeps,
-        'getConfiguredCloud' | 'getCustomEnvironment' | 'getSignInEnvironment'
+        'getConfiguredCloud' | 'getCustomEnvironment' | 'getSignInEnvironment' | 'warn'
     > = getDefaultDeps(),
 ): ResolvedTokenResource {
     const customEnvironment = deps.getCustomEnvironment();
     const details = createResolutionDetails('copy', customEnvironment, deps);
+    details.customOssrdbmsEndpointApplicable = true;
     const override = parseTokenResource(customEnvironment.ossrdbmsEndpoint);
     if (override) {
         return withDetails(fromResource(override, 'customOverride'), details);
+    }
+    if (details.customOssrdbmsEndpointState === 'invalid') {
+        deps.warn(
+            l10n.t('Ignoring invalid "{setting}" while copying the connection string; using the fallback resource.', {
+                setting: OSSRDBMS_ENDPOINT_SETTING,
+            }),
+        );
     }
 
     const hostCloud = getAzureCloudFromHosts(connectionString);
@@ -265,7 +277,7 @@ async function resolveCustomCloud(
     deps: TokenResourceResolverDeps,
     details: Record<string, string | boolean>,
 ): Promise<Omit<ResolvedTokenResource, 'details'>> {
-    const override = parseTokenResource(customEnvironment.ossrdbmsEndpoint);
+    const override = getApplicableOverride(customEnvironment, details);
     if (override) {
         return fromResource(override, 'customOverride');
     }
@@ -290,6 +302,24 @@ async function resolveCustomCloud(
         'customCloudUnresolved',
         details,
     );
+}
+
+function getApplicableOverride(
+    customEnvironment: DocumentDBCustomEnvironment,
+    details: Record<string, string | boolean>,
+): string | undefined {
+    details.customOssrdbmsEndpointApplicable = true;
+    if (details.customOssrdbmsEndpointState === 'invalid') {
+        throw resolutionError(
+            l10n.t(
+                '"{setting}" must be an HTTPS resource such as "https://ossrdbms-aad.database.usgovcloudapi.net", with no path or "/.default". Clear the setting to use automatic resource selection.',
+                { setting: OSSRDBMS_ENDPOINT_SETTING },
+            ),
+            'invalidCustomOverride',
+            details,
+        );
+    }
+    return parseTokenResource(customEnvironment.ossrdbmsEndpoint);
 }
 
 async function lookUpArmMetadata(
@@ -397,7 +427,12 @@ function createResolutionDetails(
         authProvider,
         brokerImplementation,
         hostCloud: 'none',
-        customOssrdbmsEndpointSet: !!parseTokenResource(customEnvironment.ossrdbmsEndpoint),
+        customOssrdbmsEndpointState: !customEnvironment.ossrdbmsEndpoint?.trim()
+            ? 'absent'
+            : parseTokenResource(customEnvironment.ossrdbmsEndpoint)
+              ? 'valid'
+              : 'invalid',
+        customOssrdbmsEndpointApplicable: false,
         customHostnameSuffixSet: !!normalizeCustomHostnameSuffix(customEnvironment.mongoClusterHostnameSuffix),
         armMetadata: 'notNeeded',
         imdsAzEnvironment: 'notQueried',

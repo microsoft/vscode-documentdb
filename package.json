@@ -1996,6 +1996,8 @@
             "properties": {
               "ossrdbmsEndpoint": {
                 "type": "string",
+                "pattern": "^\\s*(?:https://[^/?#:@\\\\\\s]+/?)?\\s*$",
+                "patternErrorMessage": "Use an HTTPS resource such as https://ossrdbms-aad.database.usgovcloudapi.net, with no path or /.default, or leave it empty.",
                 "description": "Sovereign cloud equivalent for https://ossrdbms-aad.database.windows.net/ (the Microsoft Entra resource for open-source databases)."
               },
               "mongoClusterHostnameSuffix": {

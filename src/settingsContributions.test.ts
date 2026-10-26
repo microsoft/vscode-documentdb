@@ -35,6 +35,25 @@ function constantKeys(): string[] {
 }
 
 describe('settings contributions', () => {
+    it('validates audience overrides in Settings while allowing an empty setting', () => {
+        const setting = packageJson.contributes.configuration
+            .flatMap((node) => Object.entries(node.properties))
+            .find(([key]) => key === settingsKeys.customEnvironment)?.[1];
+        expect(setting).toBeDefined();
+        if (!setting || !('properties' in setting)) {
+            throw new Error('Missing custom environment schema');
+        }
+        const schema = setting.properties.ossrdbmsEndpoint;
+        const pattern = new RegExp(schema.pattern);
+        expect(schema.patternErrorMessage).toContain('https://ossrdbms-aad.database.usgovcloudapi.net');
+        for (const value of ['', ' \t ', 'https://database.example.com', ' https://database.example.com/ ']) {
+            expect(pattern.test(value), value).toBe(true);
+        }
+        for (const value of ['http://database.example.com', 'https://database.example.com/.default', 'not a URL']) {
+            expect(pattern.test(value), value).toBe(false);
+        }
+    });
+
     describe('table of contents grouping', () => {
         // A node titled the same as the extension has its settings hoisted onto the parent
         // entry instead of becoming an expandable child, collapsing the whole grouping.
