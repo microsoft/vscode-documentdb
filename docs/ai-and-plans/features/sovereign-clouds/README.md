@@ -61,7 +61,10 @@ readable without a support round trip.
   interactive sign-in through `getSessionFromVSCode`, which already picks the sovereign VS Code
   auth provider and requests the resolved cloud's scope.
 - [ManagedIdentityAuthHandler.ts](../../../../src/documentdb/auth/ManagedIdentityAuthHandler.ts):
-  managed identity, using the VM and cluster's resolved cloud scope.
+  managed identity, using an explicit audience override, the cluster host's cloud, or public-only
+  IMDS recognition (`AZUREPUBLICCLOUD`). An unclassified private hostname on a Government or
+  China VM requires `documentDB.customEnvironment.ossrdbmsEndpoint`; the VS Code sign-in cloud
+  is not a managed identity signal.
 - [playgroundWorker.ts](../../../../src/documentdb/playground/playgroundWorker.ts): the shell and
   playground worker asks the main thread for a token; the main thread resolves its scope.
 - [managedIdentityConnectionString.ts](../../../../src/documentdb/auth/managedIdentityConnectionString.ts):

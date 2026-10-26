@@ -43,8 +43,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
 | R6 | Complete | GPT-6.1 Sol | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; `d8f2db967cc3bc2d0f16bc7554f012db2bbb551b` |
 | R7 | Complete | GPT-6.1 Sol | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; `439047d751d4f081fcea9003aca161715163cfc3` |
-| R8 | Complete | GPT-6.1 Sol | 10:12:56-10:14:11 UTC (75 seconds); 70 focused tests passed; commit recorded with R9 |
-| R9 | Pending | GPT-6.1 Sol | Correct IMDS and private-DNS user guidance |
+| R8 | Complete | GPT-6.1 Sol | 10:12:56-10:14:11 UTC (75 seconds); 70 focused tests passed; `6f1f507e26f9c5767cfe95b949ed163a1310e47d` |
+| R9 | Complete | GPT-6.1 Sol | 10:14:30-10:16:24 UTC (114 seconds); docs-only; cluster build passed; commit recorded in final note |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
 | S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
 | S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e` |
@@ -58,6 +58,16 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
 ### Execution log
+
+- R6-R9: GPT-6.1 Sol completed the expanded scope in the main worktree on
+  `dev/tnaum/gov-clouds`, preserving the operator's 10:11 UTC scope update.
+  Per-item timings, exact focused Vitest commands, and results are recorded inline below.
+  The single cluster `npm run build` passed at 10:15:42-10:16:15 UTC (33 seconds),
+  including workspace prebuilds and root compilation. No source or manifest changes to shared
+  packages, no access to the S8 worktree, no new agents, no dependency installs, no push/amend.
+  Case 1 applies: PR #1050 is still a draft. Full checks, including `prettier-fix` and localization,
+  remain deferred to final Terra verification. No live sovereign authentication was attempted;
+  model token usage was not measured.
 
 - 10:11 UTC: operator explicitly expanded fix scope to R6-R9. Their earlier deferral below is
   historical, not the current instruction. A separate GPT-6.1 Sol agent handles these four fixes on
@@ -592,6 +602,16 @@ four files / 70 tests passed.
   '*.azure.com'`) is not translated by any provider. See enhancement S4.
 
 **Author decision:** accepted (2026-10-26), all three corrections.
+
+**Implementation (R9):** GPT-6.1 Sol, 10:14:30-10:16:24 UTC (114 seconds, including
+the cluster build). The manual now states the public-only IMDS mapping and explicit audience
+requirement for unknown Government/China/private-host managed identity connections. A dedicated
+private-DNS section explains both settings for a Government private host, their separate
+audience/trust roles, built-in-cloud applicability, non-SRV CNAME versus SRV-target checks, and
+the implemented S4 actionable diagnostics. Machine scope and R5/S5 suffix validation are preserved;
+the guidance never recommends arbitrary or public suffixes. The active feature README's ambiguous
+VM-cloud wording is corrected; unrelated history is untouched. Documentation-only: no R9 Vitest
+run needed. The one `npm run build` for R6-R9 passed (10:15:42-10:16:15 UTC, 33 seconds).
 
 ## Shipping without sovereign access: enhancements
 

@@ -40,10 +40,17 @@ you to change `microsoft-sovereign-cloud.environment` to the cluster's cloud.
 
 ## Managed identity
 
-For a managed identity, the extension determines the cloud from the cluster host:
-`azure.com`, `azure.us`, or `azure.cn`. Otherwise, it uses the Azure VM's instance metadata.
+For a managed identity, the extension selects the token resource in this order:
 
-If neither source identifies the cloud, set `documentDB.customEnvironment.ossrdbmsEndpoint`.
+1. `documentDB.customEnvironment.ossrdbmsEndpoint`, if configured.
+2. The cluster host: `azure.com` for public, `azure.us` for Government, or `azure.cn` for China.
+3. The Azure VM's instance metadata (IMDS), but **only `AZUREPUBLICCLOUD` is recognized**.
+
+Government, China, and other IMDS environment values are not mapped to a cloud. If the host is
+private or otherwise unrecognized and IMDS does not identify the public cloud, set
+`documentDB.customEnvironment.ossrdbmsEndpoint` to your cloud's resource (the built-in resources
+are listed above).
+The VS Code sign-in cloud setting does not select the managed identity audience.
 
 ## Custom clouds
 
@@ -58,12 +65,53 @@ resource in this order:
 If none is available, connecting fails with a message that names
 `documentDB.customEnvironment.ossrdbmsEndpoint`. It never falls back to the public cloud.
 
-By default, the extension sends tokens only to cluster hosts under `azure.com`, `azure.us`, and
-`azure.cn`. Set `documentDB.customEnvironment.mongoClusterHostnameSuffix` to allow cluster hosts
-in a custom cloud. Include the leading dot.
+The token audience and trusted hostnames are separate settings. For a custom cloud's service
+domain, configure `documentDB.customEnvironment.mongoClusterHostnameSuffix` as described below.
+
+## Private endpoints and custom DNS names
+
+The extension recognizes connection-string hostnames under `azure.com`, `azure.us`, and `azure.cn`
+and selects the corresponding OIDC hostname allowlist. For other names it defaults to
+`*.azure.com`; it does not discover the cloud or trusted suffix by following DNS aliases.
+A private endpoint that keeps its recognized Azure hostname needs no suffix override.
+
+For a trusted private service name outside those domains, set
+`documentDB.customEnvironment.mongoClusterHostnameSuffix` to the service's DNS suffix, for example
+`.documentdb.private.example`. This applies to **built-in Government and China clouds too**, not
+only custom clouds. The connection-string hostname must be a subdomain of the configured suffix.
+For a non-SRV (`mongodb://`) CNAME, the name in the connection string is checked, not its canonical
+DNS target or resolved IP address.
+
+A managed identity connection to a private hostname in Government needs **both** properties:
+the Government token resource and the trusted private service suffix. For example, for a host
+such as `cluster.documentdb.private.example`:
+
+```json
+{
+    "documentDB.customEnvironment": {
+        "ossrdbmsEndpoint": "https://ossrdbms-aad.database.usgovcloudapi.net",
+        "mongoClusterHostnameSuffix": ".documentdb.private.example"
+    }
+}
+```
+
+For `mongodb+srv://`, the extension still derives its allowlist from the hostname in the
+connection string, but the driver checks the **SRV target hostnames** after SRV resolution,
+including when the SRV lookup follows a CNAME. Trusting an alias's private suffix does not allow
+SRV targets under a different suffix. In particular, a private alias whose SRV targets end in
+`azure.us` or `azure.cn` does not automatically get that cloud's allowlist. Use the service-provided
+connection string with the recognized service hostname, or DNS whose connection hostname and SRV
+targets share the configured trusted service suffix. The setting does not bypass the driver's
+SRV-domain or TLS checks. Do not broaden it to an arbitrary domain or public suffix to accommodate
+unrelated targets.
+
+If the driver rejects a host for OIDC authentication, the extension explains that the host does not
+appear to be allowed and names `documentDB.customEnvironment.mongoClusterHostnameSuffix` in User
+settings. Verify the trusted service domain with your cloud administrator, configure it, and
+connect again. The audience override alone does not authorize a hostname.
 
 Both are properties of the `documentDB.customEnvironment` setting, so they go in one object in
-`settings.json`:
+`settings.json`. For a custom cloud, for example:
 
 ```json
 {
@@ -76,8 +124,9 @@ Both are properties of the `documentDB.customEnvironment` setting, so they go in
 
 Configure this machine-scoped object in **User settings**, not Workspace or Folder settings.
 The Settings editor checks both properties: the audience must be an HTTPS resource without a
-path or `/.default`; the hostname suffix must use valid DNS labels, without a wildcard, URL,
-port, or path. Bare top-level domains and common public suffixes such as `com.cn` are rejected.
+non-root path, query, fragment, credentials, or `/.default`; the hostname suffix must use valid DNS
+labels, without a wildcard, URL, port, or path (a leading dot is optional). Bare top-level domains
+and common public suffixes such as `com.cn` are rejected.
 Only configure a service domain you trust. Surrounding whitespace is ignored; an empty or
 whitespace-only property clears the override and restores automatic selection.
 
