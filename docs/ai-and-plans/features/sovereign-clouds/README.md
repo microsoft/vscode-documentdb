@@ -21,7 +21,8 @@ explanations when Entra sign-in fails.
 
 ## Status
 
-**Parts A and B implemented; sovereign-cloud verification pending.** No PR yet. Nobody on the team
+**Parts A and B implemented; sovereign-cloud verification pending.** Draft
+[PR #1050](https://github.com/microsoft/vscode-documentdb/pull/1050). Nobody on the team
 has access to a sovereign cloud, so every change here is made without being able to test it end to end. See
 [D2](decisions.md#d2-implement-without-sovereign-cloud-access).
 
@@ -83,6 +84,8 @@ Azure management (subscription listing, ARM clients) already follows the selecte
 - [decisions.md](decisions.md): operator decisions and proposals awaiting confirmation.
 - [iterations/01-cloud-aware-scope-and-entra-diagnostics.md](iterations/01-cloud-aware-scope-and-entra-diagnostics.md):
   the plan for tracks 2 and 3.
+- [iterations/01-cloud-aware-scope-and-entra-diagnostics-review.md](iterations/01-cloud-aware-scope-and-entra-diagnostics-review.md):
+  the correctness review, local reproductions, and remaining verification gates for PR #1050.
 
 ## Open gaps
 
