@@ -95,6 +95,11 @@ Local resolution traces retain an IMDS `azEnvironment` only when it matches
 `AZUREPUBLICCLOUD` recognition is unchanged. No new IMDS-to-cloud mapping is inferred (D7),
 and this local evidence is excluded from startup telemetry.
 
+The existing Entra diagnostics rule table also recognizes the driver's precise OIDC
+`ALLOWED_HOSTS` host-rejection message. Through `ConnectionDiagnosticsService`, it returns a
+text-only explanation naming `documentDB.customEnvironment.mongoClusterHostnameSuffix` in user
+settings, without echoing the host, changing the error, or requiring a recent token failure.
+
 ## Documents
 
 - [research-findings.md](research-findings.md): the reported failure, error analysis, where the GUIDs

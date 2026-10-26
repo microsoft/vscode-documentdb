@@ -44,8 +44,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
 | S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
 | S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e` |
-| S3 | Complete | GPT-6.1 Sol | 09:59:50-10:00:36 UTC; 99 focused tests passed; commit recorded with S4 |
-| S4 | Pending | GPT-6.1 Sol | Actionable OIDC allowed-host explanation |
+| S3 | Complete | GPT-6.1 Sol | 09:59:50-10:00:36 UTC; 99 focused tests passed; `7537d69ac2197700ccf4576c321b1a43af5839d0` |
+| S4 | Complete | GPT-6.1 Sol | 10:00:46-10:01:50 UTC; 72 focused tests passed; commit recorded with S5 |
 | S5 | Pending | GPT-6.1 Sol | Settings patterns; reuse R1 audience validation |
 | S6 | Pending | GPT-6.1 Sol | Real-resolver integration tests |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
@@ -55,10 +55,18 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 ### Execution log
 
+- S4: GPT-6.1 Sol, 10:00:46-10:01:50 UTC (64 seconds). One narrow driver-text rule in the
+  existing Entra classifier table returns only trusted-suffix settings guidance through the
+  diagnostics service. No host echoed, token-failure prerequisite, UI, recovery, or error mutation.
+  Classifier/provider/service suites: three files / 72 tests passed, including false positives,
+  wrapped and string errors, and frozen original errors. An initial test assumed registration
+  returned a disposable; corrected it to use the existing reset API. Localization generation
+  is deliberately deferred to the final Terra checks. Hash recorded in S5.
 - S3: GPT-6.1 Sol, 09:59:50-10:00:36 UTC (46 seconds). Local IMDS evidence retains only the
   accepted Azure-prefixed letter-only shape, with length and control-character boundaries tested.
   Public-cloud normalization and D7 mapping/precedence remain unchanged; no new mappings.
-  Resolver and telemetry projection suites: two files / 99 tests passed. Hash recorded in S4.
+  Resolver and telemetry projection suites: two files / 99 tests passed.
+  Commit: `7537d69ac2197700ccf4576c321b1a43af5839d0`.
 - S2: GPT-6.1 Sol, 09:58:59-09:59:39 UTC (40 seconds). `ClustersClient` reuses the existing
   closed Azure suffix helper for the same public-cloud appName on Government and China hosts.
   Dot-boundary/lookalike tests and historical sovereign-domain hash assertions passed:
@@ -546,8 +554,9 @@ each one as a separate commit, so they can be reviewed apart from the R fixes.
       matcher locally in `ClustersClient`; historical `hasAzureDomain` telemetry behavior is unchanged.
 - [x] **S3.** Trace the raw IMDS `azEnvironment` value when it matches `^Azure[A-Za-z]{1,40}$`.
       Otherwise keep `other`. Implemented locally only; the S1 telemetry allowlist excludes it.
-- [ ] **S4.** Translate the driver's `ALLOWED_HOSTS` rejection into a message that names
-      `documentDB.customEnvironment.mongoClusterHostnameSuffix`.
+- [x] **S4.** Translate the driver's `ALLOWED_HOSTS` rejection into a message that names
+      `documentDB.customEnvironment.mongoClusterHostnameSuffix`. Implemented as a narrowly
+      anchored rule in the existing Entra table, routed as text only through the diagnostics service.
 - [ ] **S5.** Add `pattern` and `patternErrorMessage` validation for both
       `documentDB.customEnvironment` properties. This overlaps with the R1 decision; implement it once.
 - [ ] **S6.** Add end-to-end handler tests with the real resolver for the Government and China

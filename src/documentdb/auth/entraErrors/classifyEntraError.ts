@@ -15,6 +15,10 @@ const PREAUTHORIZATION_PHRASE = 'must be configured via preauthorization';
 
 export function classifyEntraError(text: string): EntraErrorClassification | undefined {
     const brokered = text.includes('platform_broker_error');
+    const driverRule = entraErrorRules.find((rule): boolean => rule.pattern?.test(text) === true);
+    if (driverRule) {
+        return { ruleId: driverRule.id, brokered };
+    }
     if (!text.includes('AADSTS') && !brokered && !text.includes(PREAUTHORIZATION_PHRASE)) {
         return undefined;
     }

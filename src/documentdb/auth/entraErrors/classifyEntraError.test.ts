@@ -30,6 +30,11 @@ const fixtures = [
     { text: 'AADSTS50076: Verification required', ruleId: 'additionalVerification', code: '50076' },
     { text: 'AADSTS50079: Verification required', ruleId: 'additionalVerification', code: '50079' },
     { text: broker, ruleId: 'brokerOpaque', code: undefined },
+    {
+        text: "Host 'private.example.com:10255' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.com'",
+        ruleId: 'oidcHostNotAllowed',
+        code: undefined,
+    },
     { text: 'AADSTS1234567: Unrecognized failure', ruleId: 'unknownAadsts', code: '1234567' },
 ];
 
@@ -96,6 +101,13 @@ describe('classifyEntraError', () => {
         'MongoServerSelectionError: connect ECONNREFUSED 127.0.0.1:27017',
         'Authentication failed.',
         'AADSTS has no numeric code',
+        'ALLOWED_HOSTS',
+        "Host 'private.example.com' is not valid for authentication with ALLOWED_HOSTS of '*.azure.com'",
+        "Host 'private.example.com' is not valid for OIDC authentication",
+        "Host 'private.example.com' is not valid for OIDC authentication with ALLOWED_HOSTS",
+        "Host 'private.example.com' is valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.com'",
+        "Host 'private.example.com' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.com' trailing",
+        "Unrelated Host 'private.example.com' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.com'",
     ])('does not classify an ordinary or incomplete error: %s', (text): void => {
         expect(classifyEntraError(text)).toBeUndefined();
     });
