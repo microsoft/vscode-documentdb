@@ -489,7 +489,10 @@ function classifyImdsAzEnvironment(value: string | undefined): string {
     if (!value?.trim()) {
         return 'unavailable';
     }
-    return value.trim().toUpperCase() === 'AZUREPUBLICCLOUD' ? 'AZUREPUBLICCLOUD' : 'other';
+    if (value.trim().toUpperCase() === 'AZUREPUBLICCLOUD') {
+        return 'AZUREPUBLICCLOUD';
+    }
+    return value === value.trim() && /^Azure[A-Za-z]{1,40}$/.test(value) ? value : 'other';
 }
 
 function getHostname(url: string | undefined): string | undefined {

@@ -90,6 +90,11 @@ See [telemetry correlation IDs](../../telemetry-correlation-ids.md#entra-cloud-r
 `azure.cn` endpoints using the existing closed Azure suffix matcher. Lookalikes are excluded.
 Domain telemetry keeps its historical classification and hashes, so the D11 query remains valid.
 
+Local resolution traces retain an IMDS `azEnvironment` only when it matches
+`^Azure[A-Za-z]{1,40}$`; other nonempty values are `other`. Existing case-insensitive
+`AZUREPUBLICCLOUD` recognition is unchanged. No new IMDS-to-cloud mapping is inferred (D7),
+and this local evidence is excluded from startup telemetry.
+
 ## Documents
 
 - [research-findings.md](research-findings.md): the reported failure, error analysis, where the GUIDs

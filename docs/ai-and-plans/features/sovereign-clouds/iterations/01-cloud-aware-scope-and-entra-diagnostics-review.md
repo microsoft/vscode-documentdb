@@ -43,8 +43,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
 | S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
-| S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; commit recorded with S3 |
-| S3 | Pending | GPT-6.1 Sol | Safe IMDS environment evidence |
+| S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e` |
+| S3 | Complete | GPT-6.1 Sol | 09:59:50-10:00:36 UTC; 99 focused tests passed; commit recorded with S4 |
 | S4 | Pending | GPT-6.1 Sol | Actionable OIDC allowed-host explanation |
 | S5 | Pending | GPT-6.1 Sol | Settings patterns; reuse R1 audience validation |
 | S6 | Pending | GPT-6.1 Sol | Real-resolver integration tests |
@@ -55,10 +55,15 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 ### Execution log
 
+- S3: GPT-6.1 Sol, 09:59:50-10:00:36 UTC (46 seconds). Local IMDS evidence retains only the
+  accepted Azure-prefixed letter-only shape, with length and control-character boundaries tested.
+  Public-cloud normalization and D7 mapping/precedence remain unchanged; no new mappings.
+  Resolver and telemetry projection suites: two files / 99 tests passed. Hash recorded in S4.
 - S2: GPT-6.1 Sol, 09:58:59-09:59:39 UTC (40 seconds). `ClustersClient` reuses the existing
   closed Azure suffix helper for the same public-cloud appName on Government and China hosts.
   Dot-boundary/lookalike tests and historical sovereign-domain hash assertions passed:
-  two focused files / 76 tests. No metadata hashing semantics changed. Hash recorded in S3.
+  two focused files / 76 tests. No metadata hashing semantics changed.
+  Commit: `c20cc619363aafed9c6f717873fc5e718ad54b0e`.
 - S1: GPT-6.1 Sol, 09:56:21-09:58:33 UTC (132 seconds). Existing per-attempt auth trace contexts
   project only the five allowlisted enums onto startup telemetry; token catches mark a closed
   failure category without replacing errors. Covered both handlers and worker surfaces, resolution
@@ -539,8 +544,8 @@ each one as a separate commit, so they can be reviewed apart from the R fixes.
 - [x] **S2.** Set the extension `appName` for `azure.us` and `azure.cn` hosts, not only
       `azure.com` (`ClustersClient`, `hasAzureDomain`). Implemented by reusing the closed suffix
       matcher locally in `ClustersClient`; historical `hasAzureDomain` telemetry behavior is unchanged.
-- [ ] **S3.** Trace the raw IMDS `azEnvironment` value when it matches `^Azure[A-Za-z]{1,40}$`.
-      Otherwise keep `other`.
+- [x] **S3.** Trace the raw IMDS `azEnvironment` value when it matches `^Azure[A-Za-z]{1,40}$`.
+      Otherwise keep `other`. Implemented locally only; the S1 telemetry allowlist excludes it.
 - [ ] **S4.** Translate the driver's `ALLOWED_HOSTS` rejection into a message that names
       `documentDB.customEnvironment.mongoClusterHostnameSuffix`.
 - [ ] **S5.** Add `pattern` and `patternErrorMessage` validation for both

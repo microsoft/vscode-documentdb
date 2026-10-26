@@ -516,6 +516,33 @@ describe('resolveManagedIdentityTokenResource', () => {
         });
     });
 
+    it.each([
+        ['AzureUSGovernment', 'AzureUSGovernment'],
+        ['AzureChinaCloud', 'AzureChinaCloud'],
+        ['AzurePrivateCloud', 'AzurePrivateCloud'],
+        [`Azure${'A'.repeat(40)}`, `Azure${'A'.repeat(40)}`],
+        [`Azure${'A'.repeat(41)}`, 'other'],
+        ['Azure', 'other'],
+        ['AZUREUSGOVERNMENT', 'other'],
+        ['azureusgovernment', 'other'],
+        [' AzureUSGovernment ', 'other'],
+        ['AzureTenant123', 'other'],
+        ['AzureCloud\n', 'other'],
+        ['AzureCloud\r', 'other'],
+        ['AzureCloud\nprivate-data', 'other'],
+        ['AzureCloud"private-data', 'other'],
+        ['https://private.example', 'other'],
+        [undefined, 'unavailable'],
+        ['', 'unavailable'],
+    ])('retains only safe local IMDS evidence without adding a cloud mapping: %s', async (environment, evidence) => {
+        const deps = createDeps();
+        vi.mocked(deps.readImdsAzEnvironment).mockResolvedValue(environment);
+        await expect(resolveManagedIdentityTokenResource(privateConnection, deps)).rejects.toMatchObject({
+            kind: 'managedIdentityCloudUnknown',
+            details: { imdsAzEnvironment: evidence },
+        });
+    });
+
     it.each([undefined, 'AZUREUSGOVERNMENT', 'AZURECHINACLOUD', 'unknown', ''])(
         'fails clearly for unknown or unavailable IMDS environment %s',
         async (environment) => {
