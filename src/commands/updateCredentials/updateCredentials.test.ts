@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import type * as wizardUtils from '@microsoft/vscode-azext-utils';
+import { type AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
@@ -22,7 +21,7 @@ const mockDeleteClient = vi.fn();
 const mockDeleteCredentials = vi.fn();
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
-    ...(await importOriginal<typeof wizardUtils>()),
+    ...(await importOriginal<{ AzureWizard: typeof AzureWizard }>()),
     AzureWizard: class {
         constructor(context: UpdateCredentialsWizardContext) {
             capturedContexts.push(context);

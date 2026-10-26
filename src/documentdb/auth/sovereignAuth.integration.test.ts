@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { type callWithTelemetryAndErrorHandling, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { CredentialCache, type CachedClusterCredentials } from '../CredentialCache';
@@ -34,10 +34,13 @@ vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => 
 vi.mock('./managedIdentityTokenProvider', () => ({ getManagedIdentityAccessToken: getManagedToken }));
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-utils')>()),
+    ...(await importOriginal<{ callWithTelemetryAndErrorHandling: typeof callWithTelemetryAndErrorHandling }>()),
     callWithTelemetryAndErrorHandling: async (
         eventName: string,
-        callback: (context: { telemetry: ITelemetryContext; errorHandling: Record<string, boolean> }) => Promise<unknown>,
+        callback: (context: {
+            telemetry: ITelemetryContext;
+            errorHandling: Record<string, boolean>;
+        }) => Promise<unknown>,
     ): Promise<unknown> => {
         const telemetry: ITelemetryContext = { properties: {}, measurements: {} };
         const result = await callback({ telemetry, errorHandling: {} });
@@ -77,7 +80,8 @@ vi.mock('worker_threads', async () => {
                     });
                 } else if (message.type === 'eval') {
                     this.reply({
-                        type: 'evalResult', requestId: message.requestId,
+                        type: 'evalResult',
+                        requestId: message.requestId,
                         result: { type: 'number', printable: '1', durationMs: 0 },
                     });
                 }
@@ -97,11 +101,17 @@ vi.mock('worker_threads', async () => {
 const clusterId = 'private-cluster';
 const clouds = [
     {
-        setting: 'USGovernment', suffix: 'us', category: 'usgov', cloud: 'AzureUSGovernment',
+        setting: 'USGovernment',
+        suffix: 'us',
+        category: 'usgov',
+        cloud: 'AzureUSGovernment',
         scope: 'https://ossrdbms-aad.database.usgovcloudapi.net/.default',
     },
     {
-        setting: 'ChinaCloud', suffix: 'cn', category: 'china', cloud: 'AzureChinaCloud',
+        setting: 'ChinaCloud',
+        suffix: 'cn',
+        category: 'china',
+        cloud: 'AzureChinaCloud',
         scope: 'https://ossrdbms-aad.database.chinacloudapi.cn/.default',
     },
 ] as const;
@@ -128,7 +138,9 @@ describe('sovereign authentication with real audience resolvers', () => {
         getSession.mockResolvedValue({ accessToken: 'private-token', account: { label: 'private-account' } });
         getManagedToken.mockResolvedValue({ accessToken: 'private-token', expiresOnTimestamp: Date.now() + 3_600_000 });
         const configuration = { get: vi.fn(), inspect: vi.fn(), has: vi.fn(), update: vi.fn() };
-        configuration.get.mockImplementation((key: string): unknown => key === 'environment' ? selectedCloud : undefined);
+        configuration.get.mockImplementation((key: string): unknown =>
+            key === 'environment' ? selectedCloud : undefined,
+        );
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration);
     });
 
@@ -146,31 +158,41 @@ describe('sovereign authentication with real audience resolvers', () => {
         expect(getSession).toHaveBeenCalledExactlyOnceWith([cloud.scope], 'private-tenant', { createIfNone: true });
         expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.azure.${cloud.suffix}`]);
         expect(startupProperties).toEqual({
-            cloudCategory: cloud.category, tokenResourceReason: 'setting', configuredCloud: cloud.cloud,
-            hostCloud: cloud.cloud, errorKind: 'none',
+            cloudCategory: cloud.category,
+            tokenResourceReason: 'setting',
+            configuredCloud: cloud.cloud,
+            hostCloud: cloud.cloud,
+            errorKind: 'none',
         });
         expect(JSON.stringify(startupProperties)).not.toMatch(/private|https|authority/);
     });
 
-    it.each(clouds)('requests the real azure.$suffix managed identity scope independently of VS Code', async (cloud) => {
-        selectedCloud = cloud.setting === 'USGovernment' ? 'ChinaCloud' : 'USGovernment';
-        const { options } = await new ManagedIdentityAuthHandler(
-            credentials(AuthMethodId.ManagedIdentity, cloud.suffix),
-        ).configureAuth();
-        expect(getManagedToken).not.toHaveBeenCalled();
-        expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.azure.${cloud.suffix}`]);
-        const callback = options.authMechanismProperties?.OIDC_CALLBACK;
-        if (!callback) {
-            throw new Error('Expected the OIDC token callback');
-        }
-        expect(await callback({ version: 1, timeoutContext: new AbortController().signal })).toMatchObject({
-            accessToken: 'private-token',
-        });
-        expect(getManagedToken).toHaveBeenCalledExactlyOnceWith(
-            [cloud.scope], 'private-client', 'private-tenant', expect.any(String), undefined,
-        );
-        expect(getSession).not.toHaveBeenCalled();
-    });
+    it.each(clouds)(
+        'requests the real azure.$suffix managed identity scope independently of VS Code',
+        async (cloud) => {
+            selectedCloud = cloud.setting === 'USGovernment' ? 'ChinaCloud' : 'USGovernment';
+            const { options } = await new ManagedIdentityAuthHandler(
+                credentials(AuthMethodId.ManagedIdentity, cloud.suffix),
+            ).configureAuth();
+            expect(getManagedToken).not.toHaveBeenCalled();
+            expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.azure.${cloud.suffix}`]);
+            const callback = options.authMechanismProperties?.OIDC_CALLBACK;
+            if (!callback) {
+                throw new Error('Expected the OIDC token callback');
+            }
+            expect(await callback({ version: 1, timeoutContext: new AbortController().signal })).toMatchObject({
+                accessToken: 'private-token',
+            });
+            expect(getManagedToken).toHaveBeenCalledExactlyOnceWith(
+                [cloud.scope],
+                'private-client',
+                'private-tenant',
+                expect.any(String),
+                undefined,
+            );
+            expect(getSession).not.toHaveBeenCalled();
+        },
+    );
 
     it.each([
         ['shell', AuthMethodId.MicrosoftEntraID],
@@ -180,32 +202,48 @@ describe('sovereign authentication with real audience resolvers', () => {
     ] as const)('resolves Government from the %s %s worker tokenRequest path', async (surface, authMethod) => {
         const stored = credentials(authMethod, 'us');
         CredentialCache.setAuthCredentials(
-            clusterId, authMethod, stored.connectionString, undefined, undefined,
-            stored.entraIdConfig, stored.managedIdentityConfig,
+            clusterId,
+            authMethod,
+            stored.connectionString,
+            undefined,
+            undefined,
+            stored.entraIdConfig,
+            stored.managedIdentityConfig,
         );
         selectedCloud = authMethod === AuthMethodId.ManagedIdentity ? 'ChinaCloud' : 'USGovernment';
-        const manager = surface === 'shell'
-            ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' })
-            : new PlaygroundEvaluator();
+        const manager =
+            surface === 'shell'
+                ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' })
+                : new PlaygroundEvaluator();
         try {
             if (manager instanceof ShellSessionManager) {
                 await manager.initialize();
             } else {
                 await manager.evaluate({ clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' }, '1');
             }
-            expect(postedMessages).toContainEqual(expect.objectContaining({
-                type: 'init', connectionString: stored.connectionString, oidcAllowedHosts: ['*.azure.us'],
-            }));
+            expect(postedMessages).toContainEqual(
+                expect.objectContaining({
+                    type: 'init',
+                    connectionString: stored.connectionString,
+                    oidcAllowedHosts: ['*.azure.us'],
+                }),
+            );
             expect(postedMessages).toContainEqual({
-                type: 'tokenResponse', requestId: 'token-request', accessToken: 'private-token',
+                type: 'tokenResponse',
+                requestId: 'token-request',
+                accessToken: 'private-token',
             });
             const provider = authMethod === AuthMethodId.ManagedIdentity ? getManagedToken : getSession;
             expect(provider.mock.calls[0]?.[0]).toEqual([clouds[0].scope]);
             const startup = events.find((event) => event.eventName === 'worker.startup');
             expect(startup?.telemetry.properties).toMatchObject({
-                surface, authMethod, startupOutcome: 'succeeded', cloudCategory: 'usgov',
+                surface,
+                authMethod,
+                startupOutcome: 'succeeded',
+                cloudCategory: 'usgov',
                 tokenResourceReason: authMethod === AuthMethodId.ManagedIdentity ? 'host' : 'setting',
-                hostCloud: 'AzureUSGovernment', errorKind: 'none',
+                hostCloud: 'AzureUSGovernment',
+                errorKind: 'none',
             });
             expect(JSON.stringify(startup)).not.toMatch(/private|https|authority/);
         } finally {
