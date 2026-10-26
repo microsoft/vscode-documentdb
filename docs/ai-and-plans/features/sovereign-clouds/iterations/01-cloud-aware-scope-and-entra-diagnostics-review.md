@@ -40,17 +40,17 @@ No token usage was exposed, so no token totals or costs are claimed.
 
 Final verification results:
 
-| Check | PR branch | Isolated reporter preview |
-| --- | --- | --- |
-| `npm run l10n` | Passed | Passed; generated strings remain preview-only |
-| `npm run prettier-fix` | Passed | Passed |
-| `npm run l10n:check` | Passed | Passed |
-| `npm run lint` | Passed after three test-import corrections | Passed after test-file headers/import corrections |
-| `npm run build` | Passed | Passed |
-| `npm run typecheck:tests` | Passed separately from runtime tests | Passed separately from runtime tests |
-| Focused Case 1 tests | Passed (140-test checkpoint; 52-test import-correction subset) | Passed (66 preview tests; 110-test root-config correction subset) |
-| Full `npx vitest run` | 323 files, 5,571 passed, one skipped | 326 files, 5,637 passed, one skipped |
-| `npm run package` | Passed | Passed; final reporter VSIX below |
+| Check                     | PR branch                                                      | Isolated reporter preview                                         |
+| ------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `npm run l10n`            | Passed                                                         | Passed; generated strings remain preview-only                     |
+| `npm run prettier-fix`    | Passed                                                         | Passed                                                            |
+| `npm run l10n:check`      | Passed                                                         | Passed                                                            |
+| `npm run lint`            | Passed after three test-import corrections                     | Passed after test-file headers/import corrections                 |
+| `npm run build`           | Passed                                                         | Passed                                                            |
+| `npm run typecheck:tests` | Passed separately from runtime tests                           | Passed separately from runtime tests                              |
+| Focused Case 1 tests      | Passed (140-test checkpoint; 52-test import-correction subset) | Passed (66 preview tests; 110-test root-config correction subset) |
+| Full `npx vitest run`     | 323 files, 5,571 passed, one skipped                           | 326 files, 5,637 passed, one skipped                              |
+| `npm run package`         | Passed                                                         | Passed; final reporter VSIX below                                 |
 
 Both Case 1 and the full Case 2 command lists ran at the operator's explicit request despite the
 draft PR. The historical failures and earlier deferral notes below are preserved as execution
@@ -86,28 +86,28 @@ Started at 09:36 UTC. Durations below are wall-clock observations, not model com
 Token usage is unavailable unless explicitly reported. Commits are local unless stated otherwise.
 The read-only attachment is unchanged; this repository copy is the live progress record.
 
-| Item               | State                          | Model        | Result / commit                                                                                                                                                        |
-| ------------------ | ------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1                 | Complete                       | GPT-6.1 Sol  | 09:38:47-09:40:20 UTC; 114 focused tests passed; `047465a2bd3b561e92d0069570dd74ba0bd48f99`                                                                            |
-| R2                 | Complete                       | GPT-6.1 Sol  | 09:40:20-09:41:21 UTC; 95 focused tests passed; `2e27b5583d2e622d1b06bd7ac319eb56f52dff09`                                                                             |
-| R3                 | Complete                       | GPT-6.1 Sol  | 09:44:40-09:48:03 UTC; 189 focused tests passed; `0de180b1e93495b3a2c9504431b7fd34079614fa`                                                                            |
-| R4                 | Complete                       | GPT-6.1 Sol  | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65`                                                                            |
-| R5                 | Complete                       | GPT-6.1 Sol  | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228`                                                                            |
-| R6                 | Complete                       | GPT-6.1 Sol  | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; `d8f2db967cc3bc2d0f16bc7554f012db2bbb551b`                                                                |
-| R7                 | Complete                       | GPT-6.1 Sol  | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; `439047d751d4f081fcea9003aca161715163cfc3`                                                                |
-| R8                 | Complete                       | GPT-6.1 Sol  | 10:12:56-10:14:11 UTC (75 seconds); 70 focused tests passed; `6f1f507e26f9c5767cfe95b949ed163a1310e47d`                                                                |
-| R9                 | Complete                       | GPT-6.1 Sol  | 10:14:30-10:16:24 UTC (114 seconds); docs-only; cluster build passed; `853ef409fc5d4f2481768c997efea27760e67561`                                                       |
-| Fix review         | Complete                       | Opus 5.5     | 09:49:45-09:53:46 UTC; no medium-or-higher findings                                                                                                                    |
-| S1                 | Complete                       | GPT-6.1 Sol  | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6`                                                                            |
-| S2                 | Complete                       | GPT-6.1 Sol  | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e`                                                                             |
-| S3                 | Complete                       | GPT-6.1 Sol  | 09:59:50-10:00:36 UTC; 99 focused tests passed; `7537d69ac2197700ccf4576c321b1a43af5839d0`                                                                             |
-| S4                 | Complete                       | GPT-6.1 Sol  | 10:00:46-10:01:50 UTC; 72 focused tests passed; `f6406d8f82dac2b351aa77f6de87639f41c8efa1`                                                                             |
-| S5                 | Complete                       | GPT-6.1 Sol  | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92`                                                                             |
-| S6                 | Complete                       | GPT-6.1 Sol  | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692`                                                           |
-| S7                 | Externally blocked             | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below                                                                                        |
-| S8                 | Complete (preview only) | GPT-6.1 Sol | Final `6c6478ac`; reviewed/corrected, full checks and reporter package passed; never merge |
-| Enhancement review | Complete; medium findings addressed | Opus 5.5 | Main 10:18:12-10:22:43 UTC; preview 10:46:08-10:49:55 UTC; one medium docs issue and two medium preview issues corrected; low observations documented |
-| Full verification  | Complete, both branches | Terra + GPT-6.1 Sol | Main 5,571 tests; preview 5,637 tests; one skipped each; all Case 1/2 commands passed after corrections |
+| Item               | State                               | Model               | Result / commit                                                                                                                                       |
+| ------------------ | ----------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1                 | Complete                            | GPT-6.1 Sol         | 09:38:47-09:40:20 UTC; 114 focused tests passed; `047465a2bd3b561e92d0069570dd74ba0bd48f99`                                                           |
+| R2                 | Complete                            | GPT-6.1 Sol         | 09:40:20-09:41:21 UTC; 95 focused tests passed; `2e27b5583d2e622d1b06bd7ac319eb56f52dff09`                                                            |
+| R3                 | Complete                            | GPT-6.1 Sol         | 09:44:40-09:48:03 UTC; 189 focused tests passed; `0de180b1e93495b3a2c9504431b7fd34079614fa`                                                           |
+| R4                 | Complete                            | GPT-6.1 Sol         | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65`                                                           |
+| R5                 | Complete                            | GPT-6.1 Sol         | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228`                                                           |
+| R6                 | Complete                            | GPT-6.1 Sol         | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; `d8f2db967cc3bc2d0f16bc7554f012db2bbb551b`                                               |
+| R7                 | Complete                            | GPT-6.1 Sol         | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; `439047d751d4f081fcea9003aca161715163cfc3`                                               |
+| R8                 | Complete                            | GPT-6.1 Sol         | 10:12:56-10:14:11 UTC (75 seconds); 70 focused tests passed; `6f1f507e26f9c5767cfe95b949ed163a1310e47d`                                               |
+| R9                 | Complete                            | GPT-6.1 Sol         | 10:14:30-10:16:24 UTC (114 seconds); docs-only; cluster build passed; `853ef409fc5d4f2481768c997efea27760e67561`                                      |
+| Fix review         | Complete                            | Opus 5.5            | 09:49:45-09:53:46 UTC; no medium-or-higher findings                                                                                                   |
+| S1                 | Complete                            | GPT-6.1 Sol         | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6`                                                           |
+| S2                 | Complete                            | GPT-6.1 Sol         | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e`                                                            |
+| S3                 | Complete                            | GPT-6.1 Sol         | 09:59:50-10:00:36 UTC; 99 focused tests passed; `7537d69ac2197700ccf4576c321b1a43af5839d0`                                                            |
+| S4                 | Complete                            | GPT-6.1 Sol         | 10:00:46-10:01:50 UTC; 72 focused tests passed; `f6406d8f82dac2b351aa77f6de87639f41c8efa1`                                                            |
+| S5                 | Complete                            | GPT-6.1 Sol         | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92`                                                            |
+| S6                 | Complete                            | GPT-6.1 Sol         | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692`                                          |
+| S7                 | Externally blocked                  | Orchestrator        | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below                                                                       |
+| S8                 | Complete (preview only)             | GPT-6.1 Sol         | Final `6c6478ac`; reviewed/corrected, full checks and reporter package passed; never merge                                                            |
+| Enhancement review | Complete; medium findings addressed | Opus 5.5            | Main 10:18:12-10:22:43 UTC; preview 10:46:08-10:49:55 UTC; one medium docs issue and two medium preview issues corrected; low observations documented |
+| Full verification  | Complete, both branches             | Terra + GPT-6.1 Sol | Main 5,571 tests; preview 5,637 tests; one skipped each; all Case 1/2 commands passed after corrections                                               |
 
 ### Execution log
 
@@ -154,17 +154,17 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 ### Final verification (Terra, first completed run)
 
-| Check | UTC interval / elapsed | Result |
-| --- | --- | --- |
-| `npm run l10n` | 10:35:57-10:37:00 / 63 seconds | Passed |
-| `npm run prettier-fix` | Started 10:37:02; completion time unavailable | Passed, exit 0 |
-| `npm run l10n:check` | 10:38:37-10:39:37 / 60 seconds | Passed |
-| `npm run lint` | 10:39:39-10:41:35 / 116 seconds | Historical failure: three test-import errors below; corrected rerun passed |
-| `npm run build` | 10:41:37-10:42:16 / 39 seconds | Passed |
-| `npm run typecheck:tests` | 10:42:18-10:42:32 / 14 seconds | Passed (exact strict package-test script) |
-| Focused Case 1 Vitest | 10:42:34-10:42:38 / 4 seconds | Passed: four files / 140 tests |
-| `npx vitest run` | 10:42:40-10:44:10 / 90 seconds | Passed: 323 files / 5,571 passed, one skipped |
-| `npm run package` | Started 10:44:12; completion time unavailable | Passed, exit 0; `vscode-documentdb-1.0.2-alpha.0.vsix` |
+| Check                     | UTC interval / elapsed                        | Result                                                                     |
+| ------------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
+| `npm run l10n`            | 10:35:57-10:37:00 / 63 seconds                | Passed                                                                     |
+| `npm run prettier-fix`    | Started 10:37:02; completion time unavailable | Passed, exit 0                                                             |
+| `npm run l10n:check`      | 10:38:37-10:39:37 / 60 seconds                | Passed                                                                     |
+| `npm run lint`            | 10:39:39-10:41:35 / 116 seconds               | Historical failure: three test-import errors below; corrected rerun passed |
+| `npm run build`           | 10:41:37-10:42:16 / 39 seconds                | Passed                                                                     |
+| `npm run typecheck:tests` | 10:42:18-10:42:32 / 14 seconds                | Passed (exact strict package-test script)                                  |
+| Focused Case 1 Vitest     | 10:42:34-10:42:38 / 4 seconds                 | Passed: four files / 140 tests                                             |
+| `npx vitest run`          | 10:42:40-10:44:10 / 90 seconds                | Passed: 323 files / 5,571 passed, one skipped                              |
+| `npm run package`         | Started 10:44:12; completion time unavailable | Passed, exit 0; `vscode-documentdb-1.0.2-alpha.0.vsix`                     |
 
 Original lint blockers (historical; all resolved):
 
@@ -192,11 +192,11 @@ D11 production data, and additional model/vendor attestation remain separate ext
   push, amend, or preview edits. Terra's prior full-suite and packaging evidence above is retained;
   these import-only changes did not require repeating those checks.
 
-| Check | UTC interval / elapsed | Result |
-| --- | --- | --- |
-| `npm run lint` | 10:46:56-10:48:50 / 114 seconds | Passed; all three original lint errors resolved |
-| `npm run build` | 10:48:50-10:49:27 / 37 seconds | Passed, including workspace prebuilds and root test type checking |
-| Combined focused Vitest | 10:49:27-10:49:30 / 3 seconds | Passed: three files / 52 tests |
+| Check                   | UTC interval / elapsed          | Result                                                            |
+| ----------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| `npm run lint`          | 10:46:56-10:48:50 / 114 seconds | Passed; all three original lint errors resolved                   |
+| `npm run build`         | 10:48:50-10:49:27 / 37 seconds  | Passed, including workspace prebuilds and root test type checking |
+| Combined focused Vitest | 10:49:27-10:49:30 / 3 seconds   | Passed: three files / 52 tests                                    |
 
 Exact focused command:
 
