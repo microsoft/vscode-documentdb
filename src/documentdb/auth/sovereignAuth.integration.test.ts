@@ -135,6 +135,7 @@ describe('sovereign authentication with real audience resolvers', () => {
         events.length = 0;
         selectedCloud = 'USGovernment';
         resetEntraTokenFailuresForTests();
+        vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Continue' as never);
         getSession.mockResolvedValue({ accessToken: 'private-token', account: { label: 'private-account' } });
         getManagedToken.mockResolvedValue({ accessToken: 'private-token', expiresOnTimestamp: Date.now() + 3_600_000 });
         const configuration = { get: vi.fn(), inspect: vi.fn(), has: vi.fn(), update: vi.fn() };

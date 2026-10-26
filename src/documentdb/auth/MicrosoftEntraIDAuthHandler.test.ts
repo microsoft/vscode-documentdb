@@ -48,6 +48,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         resetEntraTokenFailuresForTests();
+        vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Continue' as never);
         getSessionFromVSCode.mockReset();
         getSessionFromVSCode.mockResolvedValue({ accessToken: 'access-token' });
         vi.mocked(resolveInteractiveTokenResource).mockResolvedValue({

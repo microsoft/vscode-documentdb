@@ -71,6 +71,7 @@ describe('ManagedIdentityAuthHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         resetEntraTokenFailuresForTests();
+        vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Continue' as never);
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue(undefined),
             inspect: vi.fn().mockReturnValue(undefined),

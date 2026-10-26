@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 import rootConfig from '../../../../vitest.config';
@@ -11,15 +16,17 @@ if (!project || typeof project !== 'object' || !('test' in project) || !project.
 export default defineConfig({
     test: {
         ...rootConfig.test,
-        projects: [{
-            ...project,
-            test: {
-                ...project.test,
-                setupFiles: [
-                    ...(Array.isArray(project.test.setupFiles) ? project.test.setupFiles : []),
-                    fileURLToPath(new URL('./uiTestSetup.ts', import.meta.url)),
-                ],
+        projects: [
+            {
+                ...project,
+                test: {
+                    ...project.test,
+                    setupFiles: [
+                        ...(Array.isArray(project.test.setupFiles) ? project.test.setupFiles : []),
+                        fileURLToPath(new URL('./uiTestSetup.ts', import.meta.url)),
+                    ],
+                },
             },
-        }],
+        ],
     },
 });

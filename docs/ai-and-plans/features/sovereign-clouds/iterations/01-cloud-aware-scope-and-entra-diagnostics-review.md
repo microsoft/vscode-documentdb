@@ -34,28 +34,28 @@ Started at 09:36 UTC. Durations below are wall-clock observations, not model com
 Token usage is unavailable unless explicitly reported. Commits are local unless stated otherwise.
 The read-only attachment is unchanged; this repository copy is the live progress record.
 
-| Item | State | Model | Result / commit |
-| --- | --- | --- | --- |
-| R1 | Complete | GPT-6.1 Sol | 09:38:47-09:40:20 UTC; 114 focused tests passed; `047465a2bd3b561e92d0069570dd74ba0bd48f99` |
-| R2 | Complete | GPT-6.1 Sol | 09:40:20-09:41:21 UTC; 95 focused tests passed; `2e27b5583d2e622d1b06bd7ac319eb56f52dff09` |
-| R3 | Complete | GPT-6.1 Sol | 09:44:40-09:48:03 UTC; 189 focused tests passed; `0de180b1e93495b3a2c9504431b7fd34079614fa` |
-| R4 | Complete | GPT-6.1 Sol | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65` |
-| R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
-| R6 | Complete | GPT-6.1 Sol | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; `d8f2db967cc3bc2d0f16bc7554f012db2bbb551b` |
-| R7 | Complete | GPT-6.1 Sol | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; `439047d751d4f081fcea9003aca161715163cfc3` |
-| R8 | Complete | GPT-6.1 Sol | 10:12:56-10:14:11 UTC (75 seconds); 70 focused tests passed; `6f1f507e26f9c5767cfe95b949ed163a1310e47d` |
-| R9 | Complete | GPT-6.1 Sol | 10:14:30-10:16:24 UTC (114 seconds); docs-only; cluster build passed; `853ef409fc5d4f2481768c997efea27760e67561` |
-| Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
-| S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
-| S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e` |
-| S3 | Complete | GPT-6.1 Sol | 09:59:50-10:00:36 UTC; 99 focused tests passed; `7537d69ac2197700ccf4576c321b1a43af5839d0` |
-| S4 | Complete | GPT-6.1 Sol | 10:00:46-10:01:50 UTC; 72 focused tests passed; `f6406d8f82dac2b351aa77f6de87639f41c8efa1` |
-| S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92` |
-| S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692` |
-| S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
-| S8 | Reviewed and corrected (preview only; packaging/delivery pending) | GPT-6.1 Sol | 10:09-10:30 UTC implementation/delivery notes, `99314464`; committed base `18060ae0` merged as `7e5fe7d0`; integration recheck 10:38:52-10:39:42 UTC: 12 files / 277 tests and one exact build passed; review fixes verified by 10:54:28 UTC, P1 `488fb042`, P2 `1120be5a`; see inline S8 delivery below; never merge into PR |
-| Enhancement review | Main and preview complete; medium findings addressed | Opus 5.5 | Main: 10:18:12-10:22:43 UTC (271 seconds), one medium S7 documentation finding, corrected below; preview: 10:46:08-10:49:55 UTC (227 seconds), two medium findings P1/P2 at `9568ac02`, both fixed; dispositions below |
-| Full verification | Main local checks passed | Terra + GPT-6.1 Sol | Full Case 1/2 checks passed after import correction `6c863f4a`; preview final checks/package pending separately |
+| Item               | State                                                             | Model               | Result / commit                                                                                                                                                                                                                                                                                                               |
+| ------------------ | ----------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1                 | Complete                                                          | GPT-6.1 Sol         | 09:38:47-09:40:20 UTC; 114 focused tests passed; `047465a2bd3b561e92d0069570dd74ba0bd48f99`                                                                                                                                                                                                                                   |
+| R2                 | Complete                                                          | GPT-6.1 Sol         | 09:40:20-09:41:21 UTC; 95 focused tests passed; `2e27b5583d2e622d1b06bd7ac319eb56f52dff09`                                                                                                                                                                                                                                    |
+| R3                 | Complete                                                          | GPT-6.1 Sol         | 09:44:40-09:48:03 UTC; 189 focused tests passed; `0de180b1e93495b3a2c9504431b7fd34079614fa`                                                                                                                                                                                                                                   |
+| R4                 | Complete                                                          | GPT-6.1 Sol         | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65`                                                                                                                                                                                                                                   |
+| R5                 | Complete                                                          | GPT-6.1 Sol         | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228`                                                                                                                                                                                                                                   |
+| R6                 | Complete                                                          | GPT-6.1 Sol         | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; `d8f2db967cc3bc2d0f16bc7554f012db2bbb551b`                                                                                                                                                                                                                       |
+| R7                 | Complete                                                          | GPT-6.1 Sol         | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; `439047d751d4f081fcea9003aca161715163cfc3`                                                                                                                                                                                                                       |
+| R8                 | Complete                                                          | GPT-6.1 Sol         | 10:12:56-10:14:11 UTC (75 seconds); 70 focused tests passed; `6f1f507e26f9c5767cfe95b949ed163a1310e47d`                                                                                                                                                                                                                       |
+| R9                 | Complete                                                          | GPT-6.1 Sol         | 10:14:30-10:16:24 UTC (114 seconds); docs-only; cluster build passed; `853ef409fc5d4f2481768c997efea27760e67561`                                                                                                                                                                                                              |
+| Fix review         | Complete                                                          | Opus 5.5            | 09:49:45-09:53:46 UTC; no medium-or-higher findings                                                                                                                                                                                                                                                                           |
+| S1                 | Complete                                                          | GPT-6.1 Sol         | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6`                                                                                                                                                                                                                                   |
+| S2                 | Complete                                                          | GPT-6.1 Sol         | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e`                                                                                                                                                                                                                                    |
+| S3                 | Complete                                                          | GPT-6.1 Sol         | 09:59:50-10:00:36 UTC; 99 focused tests passed; `7537d69ac2197700ccf4576c321b1a43af5839d0`                                                                                                                                                                                                                                    |
+| S4                 | Complete                                                          | GPT-6.1 Sol         | 10:00:46-10:01:50 UTC; 72 focused tests passed; `f6406d8f82dac2b351aa77f6de87639f41c8efa1`                                                                                                                                                                                                                                    |
+| S5                 | Complete                                                          | GPT-6.1 Sol         | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92`                                                                                                                                                                                                                                    |
+| S6                 | Complete                                                          | GPT-6.1 Sol         | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692`                                                                                                                                                                                                                  |
+| S7                 | Externally blocked                                                | Orchestrator        | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below                                                                                                                                                                                                                                               |
+| S8                 | Reviewed and corrected (preview only; packaging/delivery pending) | GPT-6.1 Sol         | 10:09-10:30 UTC implementation/delivery notes, `99314464`; committed base `18060ae0` merged as `7e5fe7d0`; integration recheck 10:38:52-10:39:42 UTC: 12 files / 277 tests and one exact build passed; review fixes verified by 10:54:28 UTC, P1 `488fb042`, P2 `1120be5a`; see inline S8 delivery below; never merge into PR |
+| Enhancement review | Main and preview complete; medium findings addressed              | Opus 5.5            | Main: 10:18:12-10:22:43 UTC (271 seconds), one medium S7 documentation finding, corrected below; preview: 10:46:08-10:49:55 UTC (227 seconds), two medium findings P1/P2 at `9568ac02`, both fixed; dispositions below                                                                                                        |
+| Full verification | Main checks passed; preview initial blockers corrected, cluster-end rerun pending | Terra + GPT-6.1 Sol | Main checks passed after `6c863f4a`; preview initial lint/runtime failures are historical after the bounded correction below: 6 files / 110 root-config tests, exact lint and build passed by 11:13:36 UTC; no full-suite rerun claimed |
 
 ### Execution log
 
@@ -146,17 +146,17 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 ### Final verification (Terra, first completed run)
 
-| Check | UTC interval / elapsed | Result |
-| --- | --- | --- |
-| `npm run l10n` | 10:35:57-10:37:00 / 63 seconds | Passed |
-| `npm run prettier-fix` | Started 10:37:02; completion time unavailable | Passed, exit 0 |
-| `npm run l10n:check` | 10:38:37-10:39:37 / 60 seconds | Passed |
-| `npm run lint` | 10:39:39-10:41:35 / 116 seconds | Historical failure: three test-import errors below; corrected rerun passed |
-| `npm run build` | 10:41:37-10:42:16 / 39 seconds | Passed |
-| `npm run typecheck:tests` | 10:42:18-10:42:32 / 14 seconds | Passed (exact strict package-test script) |
-| Focused Case 1 Vitest | 10:42:34-10:42:38 / 4 seconds | Passed: four files / 140 tests |
-| `npx vitest run` | 10:42:40-10:44:10 / 90 seconds | Passed: 323 files / 5,571 passed, one skipped |
-| `npm run package` | Started 10:44:12; completion time unavailable | Passed, exit 0; `vscode-documentdb-1.0.2-alpha.0.vsix` |
+| Check                     | UTC interval / elapsed                        | Result                                                                     |
+| ------------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
+| `npm run l10n`            | 10:35:57-10:37:00 / 63 seconds                | Passed                                                                     |
+| `npm run prettier-fix`    | Started 10:37:02; completion time unavailable | Passed, exit 0                                                             |
+| `npm run l10n:check`      | 10:38:37-10:39:37 / 60 seconds                | Passed                                                                     |
+| `npm run lint`            | 10:39:39-10:41:35 / 116 seconds               | Historical failure: three test-import errors below; corrected rerun passed |
+| `npm run build`           | 10:41:37-10:42:16 / 39 seconds                | Passed                                                                     |
+| `npm run typecheck:tests` | 10:42:18-10:42:32 / 14 seconds                | Passed (exact strict package-test script)                                  |
+| Focused Case 1 Vitest     | 10:42:34-10:42:38 / 4 seconds                 | Passed: four files / 140 tests                                             |
+| `npx vitest run`          | 10:42:40-10:44:10 / 90 seconds                | Passed: 323 files / 5,571 passed, one skipped                              |
+| `npm run package`         | Started 10:44:12; completion time unavailable | Passed, exit 0; `vscode-documentdb-1.0.2-alpha.0.vsix`                     |
 
 Original lint blockers (historical; all resolved):
 
@@ -184,11 +184,11 @@ D11 production data, and additional model/vendor attestation remain separate ext
   push, amend, or preview edits. Terra's prior full-suite and packaging evidence above is retained;
   these import-only changes did not require repeating those checks.
 
-| Check | UTC interval / elapsed | Result |
-| --- | --- | --- |
-| `npm run lint` | 10:46:56-10:48:50 / 114 seconds | Passed; all three original lint errors resolved |
-| `npm run build` | 10:48:50-10:49:27 / 37 seconds | Passed, including workspace prebuilds and root test type checking |
-| Combined focused Vitest | 10:49:27-10:49:30 / 3 seconds | Passed: three files / 52 tests |
+| Check                   | UTC interval / elapsed          | Result                                                            |
+| ----------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| `npm run lint`          | 10:46:56-10:48:50 / 114 seconds | Passed; all three original lint errors resolved                   |
+| `npm run build`         | 10:48:50-10:49:27 / 37 seconds  | Passed, including workspace prebuilds and root test type checking |
+| Combined focused Vitest | 10:49:27-10:49:30 / 3 seconds   | Passed: three files / 52 tests                                    |
 
 Exact focused command:
 
@@ -977,10 +977,10 @@ callback. A dialog there must not be awaited, or a reporter who reads it slowly 
 timeout that looks like a sign-in failure. Interactive sign-in on the extension connection gets its
 token in `configureAuth`, before the driver runs, so it can safely block.
 
-| Dialog                           | Shown                                                                          | Blocking?                                                                                                                   | Hook                                                                                                                                                  |
-| -------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 of 3: about to request a token | After cloud resolution succeeds or fails, before any token request             | Yes in `configureAuth` (both handlers). No in shell and playground (`handleTokenRequest` runs inside the worker's callback) | `MicrosoftEntraIDAuthHandler`, `ManagedIdentityAuthHandler` (`configureAuth`), `ShellSessionManager` and `PlaygroundEvaluator` (`handleTokenRequest`) |
-| 2 of 3: token result             | After the token request succeeds or fails                                      | Yes for interactive in `configureAuth`; no elsewhere                                                                        | After `getSessionFromVSCode` or `getManagedIdentityAccessToken`, at the same four sites                                                               |
+| Dialog                           | Shown                                                                                      | Blocking?                                                                                                                   | Hook                                                                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 of 3: about to request a token | After cloud resolution succeeds or fails, before any token request                         | Yes in `configureAuth` (both handlers). No in shell and playground (`handleTokenRequest` runs inside the worker's callback) | `MicrosoftEntraIDAuthHandler`, `ManagedIdentityAuthHandler` (`configureAuth`), `ShellSessionManager` and `PlaygroundEvaluator` (`handleTokenRequest`) |
+| 2 of 3: token result             | After the token request succeeds or fails                                                  | Yes for interactive in `configureAuth`; no elsewhere                                                                        | After `getSessionFromVSCode` or `getManagedIdentityAccessToken`, at the same four sites                                                               |
 | 3 of 3: connection result        | After `MongoClient.connect()` succeeds or throws; three guarded probes run only on success | Yes (the connection is already open or has failed)                                                                          | `ClustersClient.connect`, after stage 04, and in its `catch`                                                                                          |
 
 Show each dialog at most once per `(clusterId, surface, step)` per window. Token refreshes in the
@@ -1291,3 +1291,74 @@ Second pass:
   S7 lists the hashed domain values that make the query possible with existing data.
 - When the Microsoft-side change is available, obtain a reporter-run preview check that covers
   token acquisition and an actual database command, not merely successful resource listing.
+
+## Preview final verification (2026-10-26)
+
+Run in preview worktree `preview/sovereign-diagnostics` at
+`51d246d7`, by Terra. Generated localization and unrelated formatting changes remain
+uncommitted in this isolated worktree; formatting in files touched by the bounded correction below
+is retained in that correction. The formatter and package command transcripts exceeded the
+runner's output limit, so their successful exit was recorded but their end timestamp/count details
+were not recoverable from the returned output.
+
+| Command | Status / counts | UTC timing |
+| --- | --- | --- |
+| `npm run l10n` | Passed (exit 0): 964 files, 2,764 extracted strings, 2,875 localization keys. | 11:00:06–11:01:00 (54 s) |
+| `npm run prettier-fix` | Passed (exit 0); formatter output was truncated by the runner. | Started 11:01:00; returned end time unavailable |
+| `npm run l10n:check` | Passed (exit 0): 964 files, 2,764 extracted strings, 2,875 keys; bundle up to date. | 11:02:25–11:03:22 (57 s) |
+| `npm run lint` | Historical failure (exit 1): 4 errors, 0 warnings (two missing license headers; two forbidden `import()` type annotations). Corrected exact rerun passed below. | 11:03:24–11:05:14 (110 s) |
+| `npm run build` | Passed (exit 0): all seven workspace builds plus root TypeScript build completed. | 11:05:18–11:05:56 (38 s) |
+| `npm run typecheck:tests` | Passed (exit 0): seven workspace test TypeScript projects completed. | 11:05:58–11:06:13 (15 s) |
+| `npx vitest run src/documentdb/auth/previewDiagnostics` | Passed (exit 0): 3 files, 66 tests. | 11:06:16–11:06:20 (4 s; Vitest 2.57 s) |
+| `npx vitest run` | Historical failure (exit 1): 323/326 files passed; 5,634 passed, 3 failed, 1 skipped (5,638 total). All three `UserCancelledError` failures were reproduced and corrected in the root-config focused run below; the full-suite rerun remains pending. | 11:06:22–11:07:58 (96 s; Vitest 94.36 s) |
+| `npm run package` | Passed (exit 0); package transcript was truncated by the runner. VSIX produced at the path below. | Started after 11:07:58; returned end time unavailable |
+
+Reporter VSIX: `/home/tnaum/.copilot/session-state/2ab50763-84c2-482c-9a3d-dcf4de193ad2/files/sovereign-diagnostics-preview/vscode-documentdb-1.0.2-alpha.0.vsix`.
+
+This remains local/fixture verification only. No live sovereign-cloud account, VM, cluster, token
+acquisition, or database command was exercised; it does not remove the rollout gate described
+above. The complete verification interval cannot be calculated from the returned command output
+because the package end timestamp was truncated.
+
+### Preview validation blocker correction (GPT-6.1 Sol)
+
+Bounded correction started at **11:10 UTC**; all three requested validations completed by
+**11:13:36 UTC**. Work stayed in the preview worktree. No product behavior or TDD contract changed.
+
+- **Root cause:** root `vitest.config.ts` installs only `test/vitest/setup.ts`, whose shared
+  VS Code UI mock returns `undefined` by default. The preview-specific config additionally
+  installs `uiTestSetup.ts`, which answers Continue. With preview diagnostics enabled, the root
+  default is correctly interpreted as dismissal of the blocking successful-resolution dialog,
+  throwing `UserCancelledError` before token acquisition. Per-cluster/surface/step deduplication
+  explains why only the first applicable case in each auth suite failed.
+- **Reproduction:** the combined root-config command below reproduced the same three failures
+  at **11:11:10 UTC** (Vitest **3.00 s**): **3 failed / 107 passed**, including all 66 passing
+  preview tests. The failures were the managed identity allowlist, interactive stale-marker
+  stripping, and Government interactive scope/allowlist cases.
+- **Minimal fix:** explicitly answer Continue in the three non-preview auth suites' existing
+  `beforeEach` hooks, following the preview test setup's existing mock pattern. Add the standard
+  license headers to `uiTestSetup.ts` and `vitest.preview.config.ts`; replace the two forbidden
+  `import()` type annotations with named imports and typed original-module mock factories.
+  There is no global UI-mock change, preview disable, error swallowing, skipped test, or product
+  cancellation change. Real dismissal, original-error identity, and aborted-connect regression
+  tests remain unchanged and passed.
+
+Exact focused command (root config, not the preview-specific config):
+
+```bash
+npx vitest run --config vitest.config.ts src/documentdb/auth/ManagedIdentityAuthHandler.test.ts src/documentdb/auth/MicrosoftEntraIDAuthHandler.test.ts src/documentdb/auth/sovereignAuth.integration.test.ts src/documentdb/auth/previewDiagnostics
+```
+
+| Command | Result | UTC timing |
+| --- | --- | --- |
+| Root-config focused command above | Passed: 6 files / 110 tests; all 44 auth tests and all 66 preview tests, no skips. | 11:11:41–11:11:45 (4 s wall clock; Vitest 3.51 s) |
+| `npm run lint` | Passed (exit 0), all four original lint errors resolved. | 11:11:41–11:13:36 (115 s) |
+| `npm run build` | Passed (exit 0), all seven workspace prebuilds and root TypeScript. | 11:11:41–11:12:29 (48 s) |
+
+These checks ran concurrently. No TDD test failed or was modified. The initial lint/runtime
+failures above are historical, not an assertion that the complete preview suite now passes.
+Per the operator's bounded scope, no full-suite, package, localization, formatting, or strict
+package-test rerun was performed here; Terra owns the needed cluster-end checks and finalization
+of unrelated generated changes. The previously packaged VSIX predates this correction and must
+not be described as a freshly validated package of it. Preview delivery/live sovereign validation
+remain pending; no token-usage measurement is claimed.

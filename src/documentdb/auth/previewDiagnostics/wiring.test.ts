@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
-import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
+import { type MongoClient, type MongoClientOptions, type OIDCResponse } from 'mongodb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
@@ -23,7 +23,12 @@ import { MicrosoftEntraIDAuthHandler } from '../MicrosoftEntraIDAuthHandler';
 import * as previewDiagnostics from './previewDiagnostics';
 
 const network = vi.hoisted(() => ({
-    session: vi.fn(), managedToken: vi.fn(), connect: vi.fn(), close: vi.fn(), command: vi.fn(), posted: [] as MainToWorkerMessage[],
+    session: vi.fn(),
+    managedToken: vi.fn(),
+    connect: vi.fn(),
+    close: vi.fn(),
+    command: vi.fn(),
+    posted: [] as MainToWorkerMessage[],
 }));
 
 vi.mock('../../../extensionVariables', () => ({
@@ -37,7 +42,7 @@ vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => 
 }));
 vi.mock('../managedIdentityTokenProvider', () => ({ getManagedIdentityAccessToken: network.managedToken }));
 vi.mock('mongodb', async (original) => ({
-    ...(await original<typeof import('mongodb')>()),
+    ...(await original<{ MongoClient: typeof MongoClient }>()),
     MongoClient: class {
         public connect = network.connect;
         public db(): { command: typeof network.command } {
@@ -47,11 +52,16 @@ vi.mock('mongodb', async (original) => ({
     },
 }));
 vi.mock('@microsoft/vscode-azext-utils', async (original) => ({
-    ...(await original<typeof import('@microsoft/vscode-azext-utils')>()),
-    parseError: (error: unknown): { message: string } => ({ message: error instanceof Error ? error.message : String(error) }),
+    ...(await original<{ UserCancelledError: typeof UserCancelledError }>()),
+    parseError: (error: unknown): { message: string } => ({
+        message: error instanceof Error ? error.message : String(error),
+    }),
     callWithTelemetryAndErrorHandling: async (
         _event: string,
-        callback: (context: { telemetry: { properties: Record<string, string>; measurements: Record<string, number> }; errorHandling: Record<string, boolean> }) => Promise<unknown>,
+        callback: (context: {
+            telemetry: { properties: Record<string, string>; measurements: Record<string, number> };
+            errorHandling: Record<string, boolean>;
+        }) => Promise<unknown>,
     ): Promise<unknown> => callback({ telemetry: { properties: {}, measurements: {} }, errorHandling: {} }),
 }));
 vi.mock('worker_threads', async () => {
@@ -64,17 +74,25 @@ vi.mock('worker_threads', async () => {
                 if (message.type === 'init') {
                     this.initId = message.requestId;
                     this.reply({
-                        type: 'tokenRequest', requestId: 'token-request',
+                        type: 'tokenRequest',
+                        requestId: 'token-request',
                         source: message.authMechanism === 'ManagedIdentity' ? 'managedIdentity' : 'vscode',
-                        tenantId: message.tenantId, clientId: message.managedIdentityClientId,
+                        tenantId: message.tenantId,
+                        clientId: message.managedIdentityClientId,
                     });
                 } else if (message.type === 'tokenResponse' || message.type === 'tokenError') {
                     this.reply({
-                        type: 'initResult', requestId: this.initId, success: message.type === 'tokenResponse',
+                        type: 'initResult',
+                        requestId: this.initId,
+                        success: message.type === 'tokenResponse',
                         error: message.type === 'tokenError' ? message.error : undefined,
                     });
                 } else if (message.type === 'eval') {
-                    this.reply({ type: 'evalResult', requestId: message.requestId, result: { type: 'number', printable: '1', durationMs: 0 } });
+                    this.reply({
+                        type: 'evalResult',
+                        requestId: message.requestId,
+                        result: { type: 'number', printable: '1', durationMs: 0 },
+                    });
                 }
             }
             private reply(message: WorkerToMainMessage): void {
@@ -88,12 +106,15 @@ vi.mock('worker_threads', async () => {
 });
 
 const credentials: CachedClusterCredentials = {
-    clusterId: 'private-cluster', connectionString: 'mongodb://private-cluster.mongocluster.cosmos.azure.us:10255/',
-    authMechanism: AuthMethodId.MicrosoftEntraID, entraIdConfig: { tenantId: 'private-tenant' },
+    clusterId: 'private-cluster',
+    connectionString: 'mongodb://private-cluster.mongocluster.cosmos.azure.us:10255/',
+    authMechanism: AuthMethodId.MicrosoftEntraID,
+    entraIdConfig: { tenantId: 'private-tenant' },
     managedIdentityConfig: { clientId: 'private-client', tenantId: 'private-tenant' },
 };
 const context: AuthTraceContext = {
-    startupCorrelationId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', surface: 'extension',
+    startupCorrelationId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+    surface: 'extension',
 };
 const never = new Promise<string | undefined>(() => undefined);
 
@@ -102,14 +123,20 @@ beforeEach((): void => {
     previewDiagnostics.resetPreviewDiagnosticsForTests();
     network.posted.length = 0;
     network.session.mockReset().mockResolvedValue({ accessToken: 'private-token', account: { label: 'private-user' } });
-    network.managedToken.mockReset().mockResolvedValue({ accessToken: 'private-token', expiresOnTimestamp: Date.now() + 3600_000 });
+    network.managedToken
+        .mockReset()
+        .mockResolvedValue({ accessToken: 'private-token', expiresOnTimestamp: Date.now() + 3600_000 });
     network.command.mockReset().mockResolvedValue({ ok: 1 });
     network.connect.mockReset().mockResolvedValue(undefined);
     network.close.mockReset().mockResolvedValue(undefined);
-    vi.mocked(vscode.window.showInformationMessage).mockReset().mockResolvedValue('Continue' as never);
+    vi.mocked(vscode.window.showInformationMessage)
+        .mockReset()
+        .mockResolvedValue('Continue' as never);
     vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-        get: vi.fn((key: string) => key === 'environment' ? 'USGovernment' : undefined),
-        inspect: vi.fn(), has: vi.fn(), update: vi.fn(),
+        get: vi.fn((key: string) => (key === 'environment' ? 'USGovernment' : undefined)),
+        inspect: vi.fn(),
+        has: vi.fn(),
+        update: vi.fn(),
     } as unknown as vscode.WorkspaceConfiguration);
 });
 
@@ -123,14 +150,25 @@ describe('real handlers and callback wiring', () => {
         'keeps a dismissed resolution failure failed and traces it unchanged for %s',
         async (authMethod): Promise<void> => {
             const error = new tokenResources.TokenResourceResolutionError('private-value', 'cloudMismatch', {
-                errorKind: 'cloudMismatch', hostCloud: 'AzureUSGovernment', configuredCloud: 'AzureChinaCloud',
+                errorKind: 'cloudMismatch',
+                hostCloud: 'AzureUSGovernment',
+                configuredCloud: 'AzureChinaCloud',
             });
-            const resolver = authMethod === AuthMethodId.ManagedIdentity
-                ? 'resolveManagedIdentityTokenResource' : 'resolveInteractiveTokenResource';
+            const resolver =
+                authMethod === AuthMethodId.ManagedIdentity
+                    ? 'resolveManagedIdentityTokenResource'
+                    : 'resolveInteractiveTokenResource';
             vi.spyOn(tokenResources, resolver).mockRejectedValueOnce(error);
             vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(undefined);
-            CredentialCache.setAuthCredentials(credentials.clusterId, authMethod, credentials.connectionString,
-                undefined, undefined, credentials.entraIdConfig, credentials.managedIdentityConfig);
+            CredentialCache.setAuthCredentials(
+                credentials.clusterId,
+                authMethod,
+                credentials.connectionString,
+                undefined,
+                undefined,
+                credentials.entraIdConfig,
+                credentials.managedIdentityConfig,
+            );
             const instance = Reflect.construct(ClustersClient, [credentials.clusterId]) as {
                 initClient: () => Promise<void>;
             };
@@ -139,7 +177,9 @@ describe('real handlers and callback wiring', () => {
 
             expect(ext.outputChannel.info).toHaveBeenCalledWith(expect.stringContaining('entraCloud.unresolved'));
             expect(ext.outputChannel.error).toHaveBeenCalledWith(expect.stringContaining('failed surface=extension'));
-            expect(ext.outputChannel.trace).not.toHaveBeenCalledWith(expect.stringContaining('canceled surface=extension'));
+            expect(ext.outputChannel.trace).not.toHaveBeenCalledWith(
+                expect.stringContaining('canceled surface=extension'),
+            );
             expect(network.session).not.toHaveBeenCalled();
             expect(network.managedToken).not.toHaveBeenCalled();
             expect(network.connect).not.toHaveBeenCalled();
@@ -149,7 +189,9 @@ describe('real handlers and callback wiring', () => {
 
     it.each([false, true])('cancels before requesting any token (managed identity: %s)', async (managedIdentity) => {
         vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
-        const handler = managedIdentity ? new ManagedIdentityAuthHandler(credentials) : new MicrosoftEntraIDAuthHandler(credentials);
+        const handler = managedIdentity
+            ? new ManagedIdentityAuthHandler(credentials)
+            : new MicrosoftEntraIDAuthHandler(credentials);
         await expect(handler.configureAuth(undefined, context)).rejects.toBeInstanceOf(UserCancelledError);
         expect(network.session).not.toHaveBeenCalled();
         expect(network.managedToken).not.toHaveBeenCalled();
@@ -157,9 +199,12 @@ describe('real handlers and callback wiring', () => {
 
     it('blocks interactive token result outside the automated callback', async () => {
         vi.mocked(vscode.window.showInformationMessage)
-            .mockResolvedValueOnce('Continue' as never).mockReturnValueOnce(never as never);
+            .mockResolvedValueOnce('Continue' as never)
+            .mockReturnValueOnce(never as never);
         let completed = false;
-        void new MicrosoftEntraIDAuthHandler(credentials).configureAuth(undefined, context).then(() => { completed = true; });
+        void new MicrosoftEntraIDAuthHandler(credentials).configureAuth(undefined, context).then(() => {
+            completed = true;
+        });
         await vi.waitFor(() => expect(network.session).toHaveBeenCalledOnce());
         expect(completed).toBe(false);
     });
@@ -175,32 +220,48 @@ describe('real handlers and callback wiring', () => {
         const retry = await new ManagedIdentityAuthHandler(credentials).configureAuth(undefined, context);
         const error = new Error('AADSTS65002 private-host');
         network.managedToken.mockRejectedValueOnce(error);
-        await expect((retry.options.authMechanismProperties?.OIDC_CALLBACK as () => Promise<OIDCResponse>)()).rejects.toBe(error);
+        await expect(
+            (retry.options.authMechanismProperties?.OIDC_CALLBACK as () => Promise<OIDCResponse>)(),
+        ).rejects.toBe(error);
     });
 
     it.each([
-        ['shell', AuthMethodId.MicrosoftEntraID], ['shell', AuthMethodId.ManagedIdentity],
-        ['playground', AuthMethodId.MicrosoftEntraID], ['playground', AuthMethodId.ManagedIdentity],
-    ] as const)('%s %s returns worker tokens while both modal dialogs remain unresolved', async (surface, authMethod) => {
-        CredentialCache.setAuthCredentials(credentials.clusterId, authMethod, credentials.connectionString,
-            undefined, undefined, credentials.entraIdConfig, credentials.managedIdentityConfig);
-        vi.mocked(vscode.window.showInformationMessage).mockReturnValue(never as never);
-        const info = { clusterId: credentials.clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' };
-        const manager = surface === 'shell' ? new ShellSessionManager(info) : new PlaygroundEvaluator();
-        try {
-            if (manager instanceof ShellSessionManager) {
-                await manager.initialize();
-            } else {
-                await manager.evaluate(info, '1');
+        ['shell', AuthMethodId.MicrosoftEntraID],
+        ['shell', AuthMethodId.ManagedIdentity],
+        ['playground', AuthMethodId.MicrosoftEntraID],
+        ['playground', AuthMethodId.ManagedIdentity],
+    ] as const)(
+        '%s %s returns worker tokens while both modal dialogs remain unresolved',
+        async (surface, authMethod) => {
+            CredentialCache.setAuthCredentials(
+                credentials.clusterId,
+                authMethod,
+                credentials.connectionString,
+                undefined,
+                undefined,
+                credentials.entraIdConfig,
+                credentials.managedIdentityConfig,
+            );
+            vi.mocked(vscode.window.showInformationMessage).mockReturnValue(never as never);
+            const info = { clusterId: credentials.clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' };
+            const manager = surface === 'shell' ? new ShellSessionManager(info) : new PlaygroundEvaluator();
+            try {
+                if (manager instanceof ShellSessionManager) {
+                    await manager.initialize();
+                } else {
+                    await manager.evaluate(info, '1');
+                }
+                expect(network.posted).toContainEqual({
+                    type: 'tokenResponse',
+                    requestId: 'token-request',
+                    accessToken: 'private-token',
+                });
+                expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2);
+            } finally {
+                manager.dispose();
             }
-            expect(network.posted).toContainEqual({
-                type: 'tokenResponse', requestId: 'token-request', accessToken: 'private-token',
-            });
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2);
-        } finally {
-            manager.dispose();
-        }
-    });
+        },
+    );
 });
 
 describe('real ClustersClient connect hook', () => {
@@ -212,11 +273,21 @@ describe('real ClustersClient connect hook', () => {
         const instance = Reflect.construct(ClustersClient, [credentials.clusterId]) as {
             connect: (...args: unknown[]) => Promise<void>;
         };
-        await instance.connect({
-            id: traceContext.startupCorrelationId, startedAt: Date.now(), costTimings: new ConnectionStartupTimings(),
-            telemetry: { properties: {}, measurements: {} }, stageDurationsMs: {},
-            stage: 'stage03PreparingClient', stageStartedAt: Date.now(),
-        }, credentials.connectionString, options, undefined, abortSignal);
+        await instance.connect(
+            {
+                id: traceContext.startupCorrelationId,
+                startedAt: Date.now(),
+                costTimings: new ConnectionStartupTimings(),
+                telemetry: { properties: {}, measurements: {} },
+                stageDurationsMs: {},
+                stage: 'stage03PreparingClient',
+                stageStartedAt: Date.now(),
+            },
+            credentials.connectionString,
+            options,
+            undefined,
+            abortSignal,
+        );
     }
 
     it('skips canceled-connect reporting and preserves step 3 for a later successful startup', async (): Promise<void> => {
@@ -254,7 +325,9 @@ describe('real ClustersClient connect hook', () => {
         await expect(connect(options)).resolves.toBeUndefined();
         expect(network.command).toHaveBeenCalledTimes(3);
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(3);
-        expect(JSON.stringify(vi.mocked(vscode.window.showInformationMessage).mock.calls)).not.toContain('private-probe-host');
+        expect(JSON.stringify(vi.mocked(vscode.window.showInformationMessage).mock.calls)).not.toContain(
+            'private-probe-host',
+        );
     });
 
     it('reports the original connect failure and runs no probes', async () => {
@@ -264,6 +337,8 @@ describe('real ClustersClient connect hook', () => {
         await expect(connect(options)).rejects.toBe(error);
         expect(network.command).not.toHaveBeenCalled();
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(3);
-        expect(JSON.stringify(vi.mocked(vscode.window.showInformationMessage).mock.calls)).not.toContain('private-driver-host');
+        expect(JSON.stringify(vi.mocked(vscode.window.showInformationMessage).mock.calls)).not.toContain(
+            'private-driver-host',
+        );
     });
 });
