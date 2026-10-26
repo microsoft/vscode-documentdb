@@ -42,13 +42,13 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
 | R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
-| S1 | Pending | GPT-6.1 Sol | Closed-enum startup telemetry |
+| S1 | In progress | GPT-6.1 Sol | Closed-enum startup telemetry |
 | S2 | Pending | GPT-6.1 Sol | Sovereign connection appName |
 | S3 | Pending | GPT-6.1 Sol | Safe IMDS environment evidence |
 | S4 | Pending | GPT-6.1 Sol | Actionable OIDC allowed-host explanation |
 | S5 | Pending | GPT-6.1 Sol | Settings patterns; reuse R1 audience validation |
 | S6 | Pending | GPT-6.1 Sol | Real-resolver integration tests |
-| S7 | Pending | Orchestrator | Attempt D11 telemetry check; preserve any access blocker explicitly |
+| S7 | Externally blocked | Orchestrator | 09:54-09:57 UTC; Kusto has no configured cluster/database; query recorded below |
 | S8 | Pending | GPT-6.1 Sol | Preview-only dialogs on separate `preview/sovereign-diagnostics` branch |
 | Enhancement review | Pending | Opus 5.5 | Review enhancements, including isolated preview |
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
@@ -57,6 +57,10 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 - 09:36-09:39 UTC: orchestrator read the supplied review, checked the clean worktree and draft PR,
   and mapped implementation, review, preview isolation, and verification work. No code changed.
+- S7: orchestrator, 09:54-09:57 UTC. The read-only Kusto attempt returned "No connection configured"
+  and requires explicit cluster/database instructions. The repository has no Kusto query files or
+  connection settings. All four supplied domain hashes were independently recomputed with SHA-256
+  and match. No telemetry rows were retrieved; no China audience compatibility claim is possible.
 - R1: GPT-6.1 Sol, 09:38:47-09:40 UTC. IDE runner found no tests; `npx vitest run`
   covered resolver, settings contributions, scopes, and copied managed-identity strings:
   4 files / 114 tests passed. Build deferred to the five-fix cluster.
@@ -533,6 +537,52 @@ each one as a separate commit, so they can be reviewed apart from the R fixes.
 - [ ] **S7.** Run the D11 China check against existing hashed domain telemetry. Use
       `6a619114` (`azure.cn`) and `49133d63` (`cosmos.azure.cn`); for Government, use `8bafc480`
       (`azure.us`) and `f3e87358` (`cosmos.azure.us`).
+
+### S7 execution: telemetry access blocker and query
+
+**Blocked externally (2026-10-26).** The available Kusto tool returned
+`No connection configured. The query must include :setDefaultCluster and :setDefaultDb instructions.`
+No approved telemetry endpoint or database was available in the repository settings. The initial
+availability probe therefore never reached a server. No credential, endpoint, or database was
+invented. D11 remains an open shipping gate, not a passed check and not evidence of zero users.
+
+The following read-only query uses the repository's documented `RawEventsVSCodeExt` schema,
+lowercase ingested property names, and startup correlation IDs. Add the approved cluster/database
+instructions before running it. Its live schema and results are **not verified**:
+
+```kusto
+let recent = materialize(
+    RawEventsVSCodeExt
+    | where ServerTimestamp > ago(30d)
+    | where EventName contains "vscode-documentdb"
+    | where EventName endswith "connect.staticmetadata" or EventName endswith "connect.startup"
+    | project EventName, Properties
+);
+let sovereignAttempts = recent
+    | where EventName endswith "connect.staticmetadata"
+    | extend l2 = tostring(Properties.domaininfo_domain_l2),
+             l3 = tostring(Properties.domaininfo_domain_l3),
+             startup = coalesce(tostring(Properties.startupcorrelationid),
+                                tostring(Properties.connectioncorrelationid))
+    | extend cloud = case(l2 == "6a619114" or l3 == "49133d63", "china",
+                          l2 == "8bafc480" or l3 == "f3e87358", "usgov", "")
+    | where cloud != "" and startup != ""
+    | distinct startup, cloud;
+recent
+| where EventName endswith "connect.startup"
+| extend startup = tostring(Properties.startupcorrelationid),
+         auth = tostring(Properties.authmethod),
+         outcome = tostring(Properties.startupoutcome)
+| join kind=inner sovereignAttempts on startup
+| summarize attempts = count() by cloud, auth, outcome
+| order by cloud asc, auth asc, outcome asc
+```
+
+Restrict the reporting period to versions predating the sovereign audience change when evaluating
+whether China previously accepted the public audience. Historical telemetry does not record the
+requested audience directly. Count only the relevant Entra/managed-identity methods, and investigate
+missing metadata/correlation rather than interpreting absent joined rows as absent connections.
+The query returns aggregate counts only, with no machine, tenant, user, or host identifiers.
 
 ### S8. Preview-build connection diagnostics dialogs
 
