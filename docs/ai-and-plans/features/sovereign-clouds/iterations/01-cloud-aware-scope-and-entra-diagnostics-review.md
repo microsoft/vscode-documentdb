@@ -36,9 +36,9 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | Item | State | Model | Result / commit |
 | --- | --- | --- | --- |
 | R1 | Complete | GPT-6.1 Sol | 09:38:47-09:40:20 UTC; 114 focused tests passed; `047465a2bd3b561e92d0069570dd74ba0bd48f99` |
-| R2 | Complete | GPT-6.1 Sol | 09:40:20-09:41:21 UTC; 95 focused tests passed; commit recorded in R4 |
+| R2 | Complete | GPT-6.1 Sol | 09:40:20-09:41:21 UTC; 95 focused tests passed; `2e27b5583d2e622d1b06bd7ac319eb56f52dff09` |
 | R3 | Pending | GPT-6.1 Sol | Sovereign and configured host recognition in both credential wizards |
-| R4 | Pending | GPT-6.1 Sol | Setting-specific invalid custom-cloud error |
+| R4 | Complete | GPT-6.1 Sol | 09:41:33-09:42:03 UTC; 118 focused tests passed; commit recorded in R5 |
 | R5 | Pending | GPT-6.1 Sol | Machine-scoped settings and public-suffix rejection |
 | R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
 | Fix review | Pending | Opus 5.5 | Review completed R1-R5; fix medium-or-higher findings |
@@ -63,7 +63,9 @@ The read-only attachment is unchanged; this repository copy is the live progress
   Commit: `047465a2bd3b561e92d0069570dd74ba0bd48f99`.
 - R2: GPT-6.1 Sol, 09:40:20-09:41:21 UTC. Resolver, interactive handler, and copied
   managed-identity string suites: 3 files / 95 tests passed, including real-resolver emitted
-  resolved/unresolved records. Commit hash follows in R4.
+  resolved/unresolved records. Commit: `2e27b5583d2e622d1b06bd7ac319eb56f52dff09`.
+- R4: GPT-6.1 Sol, 09:41:33-09:42:03 UTC. Resolver, interactive/managed-identity handlers,
+  and copied managed-identity string suites: 4 files / 118 tests passed. Commit hash follows in R5.
 
 ## Verdict
 
@@ -319,6 +321,13 @@ error text in traces. Regression tests: missing `customEnvironment`, one missing
 override-plus-`azure.com` case.
 
 **Author decision:** accepted (2026-10-26), recommended option. Add a new error kind for an unreadable custom cloud definition that names `microsoft-sovereign-cloud.customEnvironment` and its required fields, raised before audience selection.
+
+**Implementation (R4):** interactive resolution now raises `customCloudDefinitionInvalid` before
+audience selection when the VS Code cloud definition is unreadable. Its localized message names
+`microsoft-sovereign-cloud.customEnvironment` and all six SDK-required fields. Tests exercise the
+real SDK with an absent definition and missing `portalUrl`, including an override with a public
+host, and preserve managed identity's override/host/IMDS independence from unreadable VS Code
+settings. No SDK error text enters traces. Focused suites: 118 tests passed.
 
 ### R5. P2: Do not let a workspace widen the OIDC token allowlist
 

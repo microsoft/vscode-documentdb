@@ -251,9 +251,49 @@ describe('resolveInteractiveTokenResource', () => {
             TokenResourceResolutionError,
         );
         await expect(resolveInteractiveTokenResource(privateConnection, deps)).rejects.toMatchObject({
-            kind: 'customCloudUnresolved',
+            kind: 'customCloudDefinitionInvalid',
         });
     });
+
+    it.each([undefined, 'portalUrl'])(
+        'names the custom-cloud setting when the SDK rejects its definition (missing: %s)',
+        async (missingField) => {
+            const definition = {
+                name: 'private-custom-name',
+                portalUrl: 'https://portal.example.com',
+                managementEndpointUrl: 'https://management.example.com',
+                resourceManagerEndpointUrl: 'https://management.example.com',
+                activeDirectoryEndpointUrl: 'https://login.microsoftonline.us',
+                activeDirectoryResourceId: 'https://management.example.com',
+            };
+            const customEnvironment = missingField
+                ? Object.fromEntries(Object.entries(definition).filter(([key]) => key !== missingField))
+                : undefined;
+            vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: (key: string): unknown => (key === 'environment' ? 'custom' : customEnvironment),
+            } as vscode.WorkspaceConfiguration);
+            const deps = createDeps();
+            deps.getConfiguredCloud = getConfiguredAzureEnv;
+            vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: governmentResource });
+
+            const result = resolveInteractiveTokenResource('mongodb://cluster.azure.com/', deps);
+            await expect(result).rejects.toMatchObject({
+                kind: 'customCloudDefinitionInvalid',
+                message: expect.stringContaining('microsoft-sovereign-cloud.customEnvironment'),
+                details: {
+                    configuredCloud: 'unreadable',
+                    hostCloud: 'AzureCloud',
+                    errorKind: 'customCloudDefinitionInvalid',
+                },
+            });
+            for (const field of Object.keys(definition)) {
+                await expect(result).rejects.toThrow(field);
+            }
+            await expect(result).rejects.not.toThrow('VS Code is signed in');
+            expect(deps.fetchArmMetadata).not.toHaveBeenCalled();
+            expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
+        },
+    );
 
     it('caches successful metadata per Resource Manager endpoint', async () => {
         const deps = createDeps();
@@ -355,6 +395,33 @@ describe('resolveInteractiveTokenResource', () => {
 });
 
 describe('resolveManagedIdentityTokenResource', () => {
+    it.each(['override', 'host', 'imds'] as const)(
+        'does not require readable VS Code cloud configuration for %s selection',
+        async (source) => {
+            const deps = createDeps();
+            vi.mocked(deps.getConfiguredCloud).mockImplementation(() => {
+                throw new Error('private SDK configuration error');
+            });
+            vi.mocked(deps.getSignInEnvironment).mockImplementation(() => {
+                throw new Error('private SDK configuration error');
+            });
+            vi.mocked(deps.getCustomEnvironment).mockReturnValue(
+                source === 'override' ? { ossrdbmsEndpoint: governmentResource } : {},
+            );
+            vi.mocked(deps.readImdsAzEnvironment).mockResolvedValue('AZUREPUBLICCLOUD');
+            const resolution = await resolveManagedIdentityTokenResource(
+                source === 'host' ? 'mongodb://cluster.azure.us/' : privateConnection,
+                deps,
+            );
+            expect(resolution).toMatchObject({
+                resource: source === 'imds' ? publicResource : governmentResource,
+                reason: source === 'override' ? 'customOverride' : source,
+                details: { configuredCloud: 'unreadable', authProvider: 'unknown' },
+            });
+            expect(JSON.stringify(resolution.details)).not.toContain('private SDK configuration error');
+        },
+    );
+
     it.each(['mongodb://cluster.azure.us/', privateConnection])(
         'rejects an invalid override before host or IMDS fallback: %s',
         async (connectionString) => {

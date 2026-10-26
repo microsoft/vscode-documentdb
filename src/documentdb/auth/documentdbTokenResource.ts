@@ -67,6 +67,7 @@ export interface TokenResourceResolverDeps {
 
 export type TokenResourceErrorKind =
     | 'customCloudUnresolved'
+    | 'customCloudDefinitionInvalid'
     | 'invalidCustomOverride'
     | 'cloudMismatch'
     | 'managedIdentityCloudUnknown';
@@ -121,11 +122,18 @@ export async function resolveInteractiveTokenResource(
     const details = createResolutionDetails('interactive', customEnvironment, deps);
     details.hostCloud = hostCloud ?? 'none';
     const configured = getConfiguredCloudForDetails(deps, details);
-    const resolved = configured
-        ? configured.isCustomCloud
-            ? await resolveCustomCloud(configured, customEnvironment, deps, details)
-            : fromBuiltInCloud(toBuiltInCloud(configured.name), 'setting')
-        : await resolveCustomCloud({ name: 'custom', isCustomCloud: true }, customEnvironment, deps, details);
+    if (!configured) {
+        throw resolutionError(
+            l10n.t(
+                'The VS Code custom cloud definition could not be read. Configure "microsoft-sovereign-cloud.customEnvironment" with all six required fields: name, portalUrl, managementEndpointUrl, resourceManagerEndpointUrl, activeDirectoryEndpointUrl, activeDirectoryResourceId. Then connect again.',
+            ),
+            'customCloudDefinitionInvalid',
+            details,
+        );
+    }
+    const resolved = configured.isCustomCloud
+        ? await resolveCustomCloud(configured, customEnvironment, deps, details)
+        : fromBuiltInCloud(toBuiltInCloud(configured.name), 'setting');
 
     if (
         configured?.isCustomCloud &&
