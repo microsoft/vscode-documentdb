@@ -106,6 +106,11 @@ the existing normalizer, including case, an optional leading dot, valid DNS labe
 bare/common-public-suffix rejection. Empty or whitespace-only values still clear either property.
 There is no new runtime validation path.
 
+`sovereignAuth.integration.test.ts` exercises the real default audience resolvers and cloud
+configuration reader through Government/China handlers, plus Government shell/playground worker
+token requests. Only token APIs and worker transport are simulated; worker/session managers and
+credential lookup remain real. These are offline wiring checks, not live sovereign-cloud validation.
+
 ## Documents
 
 - [research-findings.md](research-findings.md): the reported failure, error analysis, where the GUIDs

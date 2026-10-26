@@ -46,8 +46,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e` |
 | S3 | Complete | GPT-6.1 Sol | 09:59:50-10:00:36 UTC; 99 focused tests passed; `7537d69ac2197700ccf4576c321b1a43af5839d0` |
 | S4 | Complete | GPT-6.1 Sol | 10:00:46-10:01:50 UTC; 72 focused tests passed; `f6406d8f82dac2b351aa77f6de87639f41c8efa1` |
-| S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; commit recorded with S6 |
-| S6 | Pending | GPT-6.1 Sol | Real-resolver integration tests |
+| S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92` |
+| S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; hash recorded after commit |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
 | S8 | Pending | GPT-6.1 Sol | Preview-only dialogs on separate `preview/sovereign-diagnostics` branch |
 | Enhancement review | Pending | Opus 5.5 | Review enhancements, including isolated preview |
@@ -55,12 +55,22 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 ### Execution log
 
+- S6: GPT-6.1 Sol, 10:02:55-10:06:22 UTC (207 seconds, including cluster build). Eight new
+  real-resolver integration cases cover Government/China interactive scopes and allowlists,
+  Government/China managed identity scopes selected by host despite the opposite VS Code setting,
+  and Government tokenRequest round trips through both real worker/session managers and both token
+  sources. Token APIs and worker transport alone are simulated; the default resolvers and
+  configuration reader are not mocked. An initial test used the deprecated credential-cache API
+  with the wrong signature; corrected it to the existing `setAuthCredentials` API.
+  Four focused files / 66 tests passed (10:05:51-10:05:53 UTC).
+  One exact `npm run build` passed, including workspace prebuilds and root compilation
+  (10:05:53-10:06:22 UTC, 29 seconds). Final hash recorded after commit, without amending.
 - S5: GPT-6.1 Sol, 10:02:01-10:02:40 UTC (39 seconds). Reused R1's audience schema unchanged
   and added the hostname-suffix pattern/message, matching existing normalization and R5 public
   suffix rejection. Settings tests compare valid/invalid/blank/whitespace values with the real
   normalizer, including DNS-label length/case/boundary cases. Settings and allowlist suites:
   two files / 56 tests passed. User settings documentation updated; no runtime path added.
-  Hash recorded in S6.
+  Commit: `dd29c55eadf8415f0364a7b72ddbbd23d0896e92`.
 - S4: GPT-6.1 Sol, 10:00:46-10:01:50 UTC (64 seconds). One narrow driver-text rule in the
   existing Entra classifier table returns only trusted-suffix settings guidance through the
   diagnostics service. No host echoed, token-failure prerequisite, UI, recovery, or error mutation.
@@ -152,6 +162,24 @@ Changed files across the five scoped commits:
 - `src/commands/updateCredentials/updateCredentials.test.ts`
 - `docs/ai-and-plans/features/sovereign-clouds/README.md`
 - This live review/progress file.
+
+### S1-S6 enhancement cluster handoff
+
+- **Case 1: still working**, draft PR. All six accepted enhancements are implemented in order,
+  with one local commit each. Focused passing test totals: S1 124, S2 76, S3 99, S4 72, S5 56,
+  S6 66. These overlapping runs are not a count of unique tests.
+- Exactly one `npm run build` ran for this enhancement cluster and passed, including all workspace
+  prebuilds and root compilation. No full runtime suite was run. No `TDD:` contract was modified or
+  failed. No dependencies were added.
+- Full checks, including `prettier-fix`, lint, localization generation/check, strict package-test
+  typechecking, packaging, and the full runtime suite remain deferred to the final Terra run.
+  The new S4 localized message still needs localization generation there.
+- R1-R5 remain as reviewed; R6-R9 remain deliberately deferred and untouched. S7 remains externally
+  blocked on Kusto cluster/database configuration; only its log window was corrected to
+  09:54-09:55 UTC. S8 has not been implemented or branched here. No push, PR comment, amendment,
+  branch change, or subagent was used.
+- No live sovereign access was exercised or implied, and no token usage counts are available.
+  Only the final S6 hash record may remain uncommitted to avoid a circular commit hash.
 
 ### Opus 5.5 fix review
 
@@ -567,8 +595,10 @@ each one as a separate commit, so they can be reviewed apart from the R fixes.
 - [x] **S5.** Add `pattern` and `patternErrorMessage` validation for both
       `documentDB.customEnvironment` properties. This overlaps with the R1 decision; implement it once.
       R1 audience schema retained unchanged; suffix schema mirrors R5 and preserves empty clearing.
-- [ ] **S6.** Add end-to-end handler tests with the real resolver for the Government and China
+- [x] **S6.** Add end-to-end handler tests with the real resolver for the Government and China
       interactive and managed identity flows, and for the shell and playground `tokenRequest` path.
+      New offline integration suite uses actual default resolvers, cloud configuration reader,
+      worker/session managers, and credential lookup; only tokens and worker transport are simulated.
 - [ ] **S7.** Run the D11 China check against existing hashed domain telemetry. Use
       `6a619114` (`azure.cn`) and `49133d63` (`cosmos.azure.cn`); for Government, use `8bafc480`
       (`azure.us`) and `f3e87358` (`cosmos.azure.us`).
