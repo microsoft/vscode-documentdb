@@ -21,6 +21,7 @@ import {
 import { recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
+import { previewAcquireToken, previewResolve } from './previewDiagnostics/previewDiagnostics';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
 /**
@@ -45,7 +46,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
         const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
         let resolved: Awaited<ReturnType<typeof resolveManagedIdentityTokenResource>>;
         try {
-            resolved = await resolveManagedIdentityTokenResource(this.clusterCredentials.connectionString);
+            resolved = await previewResolve(this.clusterCredentials, 'extension', traceContext, () => resolveManagedIdentityTokenResource(this.clusterCredentials.connectionString), true);
             traceAuthFlow('entraCloud.resolved', resolved.details, this.tokenCorrelationId, traceContext);
         } catch (error) {
             if (error instanceof TokenResourceResolutionError) {
@@ -87,7 +88,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                 ALLOWED_HOSTS: allowedHosts,
                 OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
                     try {
-                        const token = await traceAuthOperation(
+                        const token = await previewAcquireToken(this.clusterCredentials.clusterId, 'extension', traceContext, () => traceAuthOperation(
                             'managedIdentity.oidcCallback',
                             () =>
                                 withTokenAcquisitionTiming(timings, () =>
@@ -102,7 +103,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                             {},
                             this.tokenCorrelationId,
                             traceContext,
-                        );
+                        ), (result) => result.accessToken, tenantId, true);
 
                         return {
                             accessToken: token.accessToken,

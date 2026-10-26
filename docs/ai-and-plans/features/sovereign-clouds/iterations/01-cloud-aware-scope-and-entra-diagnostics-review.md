@@ -49,7 +49,7 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S5 | Complete | GPT-6.1 Sol | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92` |
 | S6 | Complete | GPT-6.1 Sol | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692` |
 | S7 | Externally blocked | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below |
-| S8 | In progress | GPT-6.1 Sol | Isolated worktree and `preview/sovereign-diagnostics` branch; never merge into PR |
+| S8 | Complete (preview only) | GPT-6.1 Sol | 10:09:16-10:27:57 UTC implementation/checks; 200 focused tests and exact build passed; see inline S8 delivery below; never merge into PR |
 | Enhancement review | Pending | Opus 5.5 | Review enhancements, including isolated preview |
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
@@ -653,6 +653,53 @@ The query returns aggregate counts only, with no machine, tenant, user, or host 
 
 Accepted by the operator on 2026-10-26. It replaces the earlier scripted-checklist idea.
 
+**Preview implementation / delivery, updated 2026-10-26 at 10:29:11 UTC.** GPT-6.1 Sol
+implemented S8 only in the isolated `preview/sovereign-diagnostics` worktree:
+`/home/tnaum/.copilot/session-state/2ab50763-84c2-482c-9a3d-dcf4de193ad2/files/sovereign-diagnostics-preview`.
+This single preview commit is titled
+`chore(preview): sovereign connection diagnostics dialogs (DO NOT MERGE)`.
+No push, branch switch, merge or cherry-pick into the draft PR was performed. R6-R9 are not
+implemented here; the operator assigned those separately on the main working branch.
+
+- Implementation and tests live in `src/documentdb/auth/previewDiagnostics/`. The only existing
+  source edits are imports and single-call wrappers/hooks in the two auth handlers, the two
+  worker token handlers, and `ClustersClient.connect`. No commands, manifest entries, settings,
+  dependencies or webviews were added.
+- One constant gates the hooks. Dialogs are deduplicated per stable cluster ID, surface and step.
+  Resolution/token attempt state enforces ordering and failure suppression. Blocking step-1
+  dismissal throws the repository `UserCancelledError` before sign-in; callback paths never
+  await human interaction. UI/clipboard failures use a constant safe output-channel message
+  and do not replace auth/driver errors. All three bounded admin probes run only after successful
+  extension connect, with independently reported failures that cannot fail the connection.
+- **Required localization deviation from the original sketch:** preview strings use
+  `vscode.l10n.t()`, as required by repository rules and the operator's explicit instruction.
+  No localization generation or bundle edit was performed. If a preview VSIX is later packaged,
+  generate its preview-only strings on this never-merge branch; do not transplant them or a
+  generated preview bundle onto the PR/main branch.
+- **Required redaction refinement:** the details object is an explicit closed projection, not a
+  verbatim copy: custom resources and suffixes can contain private values. Only known resource,
+  issuer, provider, cloud and error classes are emitted. Token payload inspection uses only the
+  approved claims; tenant/client/object IDs, account claims, endpoint names, raw tokens and error
+  messages are not emitted. Infrastructure diagnoses are projected to identifier-free provider
+  guidance (canonical Entra/Atlas text, coarse local/port-forward guidance); an unknown provider's
+  arbitrary text is withheld rather than copied. Resolution-failure text is reconstructed from
+  the existing messages and closed cloud fields, never from an untrusted error message.
+- **Verification (Case 1):** the final focused run passed **9 files / 200 tests**
+  (10:27:23-10:27:26 UTC). New tests cover adversarial reports/JWTs, fenced copy output, modal
+  copy/reopen and safe failures, cancellation, independent once keys, real stage ordering,
+  unresolved nonblocking dialogs, real handler and worker token delivery, actual
+  `ClustersClient.connect` hooks and all probe outcomes. Only external UI, token, transport,
+  driver-network and host-runtime adapters are simulated; the preview state machine is real.
+  The existing handler, sovereign integration, shell, worker-manager and client suites also ran.
+  Initial fixture/parser failures were corrected; no `TDD:` contract was changed.
+- Exact `npm run build` passed at 10:24:35-10:25:11 UTC, then was rerun after final
+  redaction/classification fixes and passed at **10:27:26-10:27:57 UTC**, including workspace
+  prebuilds and root TypeScript. No full runtime suite, lint, formatting, localization or
+  packaging command ran. Case 2 and preview packaging remain deferred to the final handoff.
+- **Preview delivery / run sheet location:** this S8 section and the reporter run sheet below
+  are the delivery instructions to attach to a later preview VSIX. No VSIX was built or sent;
+  no live sovereign validation or token-usage measurement is claimed.
+
 **Purpose.** Nobody on the team can sign in to a Government or China cluster. The preview reporter
 is the only real-cloud test. A preview build should therefore show, at each connection stage, what
 the extension detected, what it decided, and what happens next. Each stage needs one button that
@@ -669,8 +716,8 @@ copies a redacted report the reporter can paste into the issue.
 - Either way:
   - All code is in one new folder, `src/documentdb/auth/previewDiagnostics/`.
   - The hooks are one-line calls, so the commit stays small and its revert stays clean.
-  - Strings are plain English and not wrapped in `vscode.l10n.t()`, so `l10n:check` is not affected
-    and the bundle does not pick up throwaway strings.
+  - Strings use `vscode.l10n.t()` per the operator's localization update above. Preview-only
+    generation is deferred until packaging and must stay on this never-merge branch.
   - One constant, `PREVIEW_DIAGNOSTICS_ENABLED = true`, gates every hook, so the code can be
     disabled without removing it.
 
@@ -685,7 +732,7 @@ token in `configureAuth`, before the driver runs, so it can safely block.
 | --- | --- | --- | --- |
 | 1 of 3: about to request a token | After cloud resolution succeeds or fails, before any token request | Yes in `configureAuth` (both handlers). No in shell and playground (`handleTokenRequest` runs inside the worker's callback) | `MicrosoftEntraIDAuthHandler`, `ManagedIdentityAuthHandler` (`configureAuth`), `ShellSessionManager` and `PlaygroundEvaluator` (`handleTokenRequest`) |
 | 2 of 3: token result | After the token request succeeds or fails | Yes for interactive in `configureAuth`; no elsewhere | After `getSessionFromVSCode` or `getManagedIdentityAccessToken`, at the same four sites |
-| 3 of 3: connection result | After `MongoClient.connect()` succeeds or throws, and after two probe commands | Yes (the connection is already open or has failed) | `ClustersClient.connect`, after stage 04, and in its `catch` |
+| 3 of 3: connection result | After `MongoClient.connect()` succeeds or throws; three guarded probes run only on success | Yes (the connection is already open or has failed) | `ClustersClient.connect`, after stage 04, and in its `catch` |
 
 Show each dialog at most once per `(clusterId, surface, step)` per window. Token refreshes in the
 shell and playground then do not repeat it. If resolution fails, dialog 1 reports the failure and
@@ -786,8 +833,9 @@ reported, not thrown.
 **Copied report.** Every dialog's **Copy report** produces one fenced Markdown block. It starts with
 the step header, the extension version, the VS Code version, `process.platform`/`arch`, the UTC
 time, and the startup correlation ID, so the report can be matched to the output channel. It then
-repeats the fields shown in the dialog, plus the `entraCloud.resolved` or `entraCloud.unresolved`
-details object verbatim. That object is already identifier-free by design.
+repeats the fields shown in the dialog, plus an explicit safe projection of the
+`entraCloud.resolved` or `entraCloud.unresolved` details object. Custom values are categorized,
+not copied verbatim.
 
 Redaction rules, enforced by a unit test of the formatter:
 
@@ -811,12 +859,12 @@ export interface PreviewDialog {
     readonly title: string; // "About to request a Microsoft Entra ID token"
     readonly sections: ReadonlyArray<{ heading: string; rows: ReadonlyArray<[string, string]> }>;
     readonly next?: string;
-    readonly details?: Readonly<Record<string, string | boolean>>; // resolution details, copied verbatim
+    readonly details?: Readonly<Record<string, string | boolean>>; // explicit safe resolution projection
 }
 
 const shown = new Set<string>();
 
-/** Never throws. When `blocking` is false, returns immediately; use it inside OIDC callbacks. */
+/** Only intentional blocking step-1 cancellation throws. Nonblocking calls return immediately. */
 export async function showPreviewDialog(
     clusterId: string,
     surface: PreviewSurface,
@@ -842,7 +890,26 @@ Hook call sites, one line each: two handlers × steps 1 and 2; `ShellSessionMana
 (success and `catch`). Tests: formatter redaction, the once-per-key behavior, and
 `blocking: false` returning before the dialog resolves.
 
-**Reporter run sheet** (attach to the preview VSIX):
+#### Preview delivery and reporter run sheet
+
+Attach this run sheet to the preview VSIX after the separate final checks/package step. Never
+merge this branch. Before packaging, repeat the focused checks with the preview-only UI adapter
+(it answers Continue for existing regression suites, without mocking the preview state machine):
+
+```bash
+npx vitest run --config src/documentdb/auth/previewDiagnostics/vitest.preview.config.ts \
+  src/documentdb/auth/previewDiagnostics \
+  src/documentdb/auth/MicrosoftEntraIDAuthHandler.test.ts \
+  src/documentdb/auth/ManagedIdentityAuthHandler.test.ts \
+  src/documentdb/auth/sovereignAuth.integration.test.ts \
+  src/documentdb/shell/ShellSessionManager.test.ts \
+  src/documentdb/playground/WorkerSessionManager.test.ts \
+  src/documentdb/ClustersClient.test.ts
+```
+
+In dialog 1, Copy report must reopen the dialog and Cancel must stop sign-in. Continue proceeds.
+Dialog 2 must not hold up managed identity callbacks or shell/playground workers while it is open.
+Reports are redacted evidence, not a live-cloud success claim until the reporter performs the run.
 
 1. Government, interactive, portal connection string (`*.mongocluster.cosmos.azure.us`): expect
    `usgov` in dialog 1, a matching `aud` in dialog 2, and dialog 3 succeeded. Then open a

@@ -23,6 +23,7 @@ import {
 } from './documentdbTokenResource';
 import { recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
+import { previewAcquireToken, previewResolve } from './previewDiagnostics/previewDiagnostics';
 
 /**
  * Handler for Microsoft Entra ID authentication via OIDC
@@ -37,7 +38,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         const authCorrelationId = randomUUID();
         let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
         try {
-            resolved = await resolveInteractiveTokenResource(this.clusterCredentials.connectionString);
+            resolved = await previewResolve(this.clusterCredentials, 'extension', traceContext, () => resolveInteractiveTokenResource(this.clusterCredentials.connectionString));
             traceAuthFlow('entraCloud.resolved', resolved.details, authCorrelationId, traceContext);
         } catch (error) {
             if (error instanceof TokenResourceResolutionError) {
@@ -51,7 +52,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         // Get Microsoft Entra ID token
         let session: vscode.AuthenticationSession | undefined;
         try {
-            session = await traceAuthOperation(
+            session = await previewAcquireToken(this.clusterCredentials.clusterId, 'extension', traceContext, () => traceAuthOperation(
                 'interactiveEntra.getSession',
                 () =>
                     withTokenAcquisitionTiming(timings, () =>
@@ -67,7 +68,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 },
                 authCorrelationId,
                 traceContext,
-            );
+            ), (result) => result?.accessToken, this.clusterCredentials.entraIdConfig?.tenantId);
 
             if (!session) {
                 traceAuthFlow(

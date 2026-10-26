@@ -46,6 +46,7 @@ import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler'
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { NoAuthHandler } from './auth/NoAuthHandler';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
+import { previewConnectionResult } from './auth/previewDiagnostics/previewDiagnostics';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
@@ -481,10 +482,12 @@ export class ClustersClient {
             // guard in case abort fires between the assignment and this removal.
             abortSignal?.removeEventListener('abort', onAbort);
 
+            await previewConnectionResult(this.clusterId, { startupCorrelationId: startup.id, surface: 'extension' }, this._mongoClient, Date.now() - startup.stageStartedAt);
             this.advanceClientStartup(startup, 'stage05InitializingApis');
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
+            await previewConnectionResult(this.clusterId, { startupCorrelationId: startup.id, surface: 'extension' }, this._mongoClient, Date.now() - startup.stageStartedAt, error);
             if (abortSignal?.aborted) {
                 ext.outputChannel.debug(`[ClustersClient] startup=${startup.id} canceled by user surface=extension`);
                 throw new UserCancelledError('abortConnection');

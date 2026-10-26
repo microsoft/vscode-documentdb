@@ -11,6 +11,7 @@ import { traceAuthFlow, traceAuthOperation, type AuthTraceContext } from '../../
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
+import { previewAcquireToken, previewResolve } from '../auth/previewDiagnostics/previewDiagnostics';
 import {
     resolveInteractiveTokenResource,
     resolveManagedIdentityTokenResource,
@@ -370,10 +371,10 @@ export class ShellSessionManager implements vscode.Disposable {
             }
             let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
             try {
-                resolved =
+                resolved = await previewResolve(credentials, 'shell', traceContext, async () =>
                     msg.source === 'managedIdentity'
                         ? await resolveManagedIdentityTokenResource(credentials.connectionString)
-                        : await resolveInteractiveTokenResource(credentials.connectionString);
+                        : await resolveInteractiveTokenResource(credentials.connectionString), msg.source === 'managedIdentity');
                 traceAuthFlow('entraCloud.resolved', resolved.details, msg.requestId, traceContext);
             } catch (error) {
                 if (error instanceof TokenResourceResolutionError) {
@@ -387,7 +388,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
                 try {
                     accessToken = (
-                        await withTokenAcquisitionTiming(timings, () =>
+                        await previewAcquireToken(this._connectionInfo.clusterId, 'shell', traceContext, () => withTokenAcquisitionTiming(timings, () =>
                             getManagedIdentityAccessToken(
                                 [resolved.scope],
                                 msg.clientId,
@@ -395,7 +396,7 @@ export class ShellSessionManager implements vscode.Disposable {
                                 this._managedIdentityTokenCorrelationId,
                                 traceContext,
                             ),
-                        )
+                        ), (result) => result.accessToken, msg.tenantId, true)
                     ).accessToken;
                 } catch (error) {
                     if (traceContext?.startupProperties) {
@@ -414,7 +415,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 );
                 let session: vscode.AuthenticationSession | undefined;
                 try {
-                    session = await traceAuthOperation(
+                    session = await previewAcquireToken(this._connectionInfo.clusterId, 'shell', traceContext, () => traceAuthOperation(
                         'interactiveEntra.getSession',
                         () =>
                             withTokenAcquisitionTiming(timings, () =>
@@ -428,7 +429,7 @@ export class ShellSessionManager implements vscode.Disposable {
                         },
                         msg.requestId,
                         traceContext,
-                    );
+                    ), (result) => result?.accessToken, msg.tenantId);
 
                     if (!session) {
                         throw new Error(l10n.t('Failed to obtain Entra ID token.'));
