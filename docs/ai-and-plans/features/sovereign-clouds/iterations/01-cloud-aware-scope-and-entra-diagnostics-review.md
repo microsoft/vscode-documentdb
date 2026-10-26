@@ -24,6 +24,58 @@ evidence are preserved.
 
 ## Implementation progress (2026-10-26)
 
+### Current outcome (11:24 UTC)
+
+**R1-R9 and S1-S6 are complete, separately committed, and locally verified.** S8 is complete,
+reviewed, and packaged on the isolated `preview/sovereign-diagnostics` branch only. S7 was attempted
+but remains **externally blocked** by the missing approved Kusto cluster/database; D11 is not passed.
+All commits are local: no push or PR-state change was made. PR #1050 remains a draft.
+
+The requested model assignments were used: GPT-6.1 Sol for bounded coding and corrections,
+Opus 5.5 for the fix review and enhancement reviews, and Terra for the full check runs.
+Opus review windows total 12 minutes 19 seconds; coding/check timings are recorded per item below
+and in the preview copy. Overall wall-clock elapsed time is approximately 1 hour 48 minutes,
+including parallel work, reviews, interrupted verification, corrections, and packaging.
+No token usage was exposed, so no token totals or costs are claimed.
+
+Final verification results:
+
+| Check | PR branch | Isolated reporter preview |
+| --- | --- | --- |
+| `npm run l10n` | Passed | Passed; generated strings remain preview-only |
+| `npm run prettier-fix` | Passed | Passed |
+| `npm run l10n:check` | Passed | Passed |
+| `npm run lint` | Passed after three test-import corrections | Passed after test-file headers/import corrections |
+| `npm run build` | Passed | Passed |
+| `npm run typecheck:tests` | Passed separately from runtime tests | Passed separately from runtime tests |
+| Focused Case 1 tests | Passed (140-test checkpoint; 52-test import-correction subset) | Passed (66 preview tests; 110-test root-config correction subset) |
+| Full `npx vitest run` | 323 files, 5,571 passed, one skipped | 326 files, 5,637 passed, one skipped |
+| `npm run package` | Passed | Passed; final reporter VSIX below |
+
+Both Case 1 and the full Case 2 command lists ran at the operator's explicit request despite the
+draft PR. The historical failures and earlier deferral notes below are preserved as execution
+history, not current blockers. Four low preview observations remain documented; all medium review
+findings and all validation failures discovered during this work were corrected.
+
+Persistent delivery:
+
+- PR branch final generated output: `508a1d61`; narrow lint correction: `6c863f4a`.
+- Preview branch final verified commit: `6c6478ac399b8ecc3acc4d913bfcd847be532759`.
+  It includes original S8 `99314464`, both cancellation corrections `488fb042` / `1120be5a`,
+  validation correction `e0ac05ac`, and final main-base integration `51d246d7`.
+- Preview worktree:
+  `/home/tnaum/.copilot/session-state/2ab50763-84c2-482c-9a3d-dcf4de193ad2/files/sovereign-diagnostics-preview`.
+- Reporter VSIX is `vscode-documentdb-1.0.2-alpha.0.vsix` in that preview worktree.
+  **Preview-only: never release or merge the preview branch.**
+  SHA-256: `992d7e082507c323eb03c4c6a0cd597c22548776615fdf6b33ed9984201c2c1b`.
+- The PR worktree's same-named package does **not** contain preview dialogs and has a different hash.
+  Preview code is not tracked on the PR branch; both worktrees were checked independently.
+
+Remaining external gates: production D11 telemetry, a reporter-run sovereign token acquisition and
+actual database command, and the previously recorded additional vendor-attestation requirement.
+Local fixtures and successful packaging do not establish real Government/China authentication or
+service-side client preauthorization.
+
 The operator requested GPT-6.1 Sol for narrowly scoped coding, an Opus 5.5 review after the fixes
 and again after enhancements, separate commits per item, and a Terra final verification run.
 The original medium-or-higher fix threshold was expanded by the operator at 10:11 UTC:
@@ -53,11 +105,23 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | S5                 | Complete                       | GPT-6.1 Sol  | 10:02:01-10:02:40 UTC; 56 focused tests passed; `dd29c55eadf8415f0364a7b72ddbbd23d0896e92`                                                                             |
 | S6                 | Complete                       | GPT-6.1 Sol  | 10:02:55-10:06:22 UTC; 66 focused tests and cluster build passed; `bb08f47af47892c560c728222692ef2f81ef7692`                                                           |
 | S7                 | Externally blocked             | Orchestrator | 09:54-09:55 UTC; Kusto has no configured cluster/database; query recorded below                                                                                        |
-| S8                 | Reviewed and corrected; packaging pending | GPT-6.1 Sol | Preview `99314464`; cancellation fixes `488fb042`, `1120be5a`; 100 focused tests and exact build passed; preview branch only |
+| S8                 | Complete (preview only) | GPT-6.1 Sol | Final `6c6478ac`; reviewed/corrected, full checks and reporter package passed; never merge |
 | Enhancement review | Complete; medium findings addressed | Opus 5.5 | Main 10:18:12-10:22:43 UTC; preview 10:46:08-10:49:55 UTC; one medium docs issue and two medium preview issues corrected; low observations documented |
-| Full verification  | Main local checks passed | Terra + GPT-6.1 Sol | Full Case 1/2 checks passed after import correction `6c863f4a`; preview final checks/package pending separately |
+| Full verification  | Complete, both branches | Terra + GPT-6.1 Sol | Main 5,571 tests; preview 5,637 tests; one skipped each; all Case 1/2 commands passed after corrections |
 
 ### Execution log
+
+- Preview validation correction: GPT-6.1 Sol, 11:10-11:14:40 UTC,
+  `e0ac05ac093aa465d7f460cbc43ff579069fa227`. The default inherited UI mocks returned `undefined`,
+  correctly triggering real preview cancellation. Three non-preview auth suites now explicitly
+  simulate Continue; real cancellation tests remain unchanged. Added two missing standard license
+  headers and proper type imports. Root-config six-file / 110-test run, exact lint, and build passed.
+- Terra corrected preview final run, 11:15:23-11:22:45 UTC (7 minutes 22 seconds):
+  `prettier-fix`, `l10n:check`, `lint`, `build`, exact `typecheck:tests`, full runtime, and `package`
+  all exited 0. Full suite: 326 files / 5,637 passed, one skipped. Full-runtime interval
+  11:20:29-11:22:09 UTC (100 seconds wall); packaging 11:22:14-11:22:45 UTC (31 seconds).
+  Localization generation had already passed on this branch; no strings changed in the correction.
+  Final output persisted at `6c6478ac`; VSIX hash independently recomputed by the orchestrator.
 
 - S8 Opus 5.5 review, 10:46:08-10:49:55 UTC (227 seconds): two medium cancellation findings.
   GPT-6.1 Sol addressed them in separate preview-only commits:
