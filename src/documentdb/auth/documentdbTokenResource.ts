@@ -57,6 +57,7 @@ export interface TokenResourceResolverDeps {
     /** Throws when `custom` is selected without a usable `customEnvironment`. */
     getConfiguredCloud(): ConfiguredCloud;
     getCustomEnvironment(): DocumentDBCustomEnvironment;
+    getCustomHostnameSuffixSource(): 'user' | 'workspace' | 'none';
     /** Returns the parsed JSON body, or `undefined` on any failure. */
     fetchArmMetadata(url: string): Promise<unknown>;
     /** Returns IMDS `compute.azEnvironment`, or `undefined` on any failure. */
@@ -218,7 +219,7 @@ export function resolveTokenResourceForCopy(
     connectionString: string,
     deps: Pick<
         TokenResourceResolverDeps,
-        'getConfiguredCloud' | 'getCustomEnvironment' | 'getSignInEnvironment' | 'warn'
+        'getConfiguredCloud' | 'getCustomEnvironment' | 'getCustomHostnameSuffixSource' | 'getSignInEnvironment' | 'warn'
     > = getDefaultDeps(),
 ): ResolvedTokenResource {
     const hostCloud = getAzureCloudFromHosts(connectionString);
@@ -413,7 +414,7 @@ function resolutionError(
 function createResolutionDetails(
     flow: 'interactive' | 'managedIdentity' | 'copy',
     customEnvironment: DocumentDBCustomEnvironment,
-    deps: Pick<TokenResourceResolverDeps, 'getSignInEnvironment'>,
+    deps: Pick<TokenResourceResolverDeps, 'getSignInEnvironment' | 'getCustomHostnameSuffixSource'>,
 ): Record<string, string | boolean> {
     let authProvider = 'unknown';
     let brokerImplementation = 'default';
@@ -442,6 +443,7 @@ function createResolutionDetails(
               : 'invalid',
         customOssrdbmsEndpointApplicable: false,
         customHostnameSuffixSet: !!normalizeCustomHostnameSuffix(customEnvironment.mongoClusterHostnameSuffix),
+        customHostnameSuffixSource: deps.getCustomHostnameSuffixSource(),
         armMetadata: 'notNeeded',
         imdsAzEnvironment: 'notQueried',
     };
@@ -506,6 +508,21 @@ function getDefaultDeps(): TokenResourceResolverDeps {
         getConfiguredCloud: () => getConfiguredAzureEnv(),
         getCustomEnvironment: () =>
             vscode.workspace.getConfiguration().get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment) ?? {},
+        getCustomHostnameSuffixSource: () => {
+            const inspected = vscode.workspace
+                .getConfiguration()
+                .inspect<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment);
+            if (inspected?.globalValue?.mongoClusterHostnameSuffix?.trim()) {
+                return 'user';
+            }
+            if (
+                inspected?.workspaceValue?.mongoClusterHostnameSuffix?.trim() ||
+                inspected?.workspaceFolderValue?.mongoClusterHostnameSuffix?.trim()
+            ) {
+                return 'workspace';
+            }
+            return 'none';
+        },
         fetchArmMetadata: fetchJson,
         readImdsAzEnvironment,
         getSignInEnvironment: () => ({

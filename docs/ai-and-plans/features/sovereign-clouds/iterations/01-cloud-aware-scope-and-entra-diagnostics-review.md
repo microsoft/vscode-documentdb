@@ -38,8 +38,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R1 | Complete | GPT-6.1 Sol | 09:38:47-09:40:20 UTC; 114 focused tests passed; `047465a2bd3b561e92d0069570dd74ba0bd48f99` |
 | R2 | Complete | GPT-6.1 Sol | 09:40:20-09:41:21 UTC; 95 focused tests passed; `2e27b5583d2e622d1b06bd7ac319eb56f52dff09` |
 | R3 | Pending | GPT-6.1 Sol | Sovereign and configured host recognition in both credential wizards |
-| R4 | Complete | GPT-6.1 Sol | 09:41:33-09:42:03 UTC; 118 focused tests passed; commit recorded in R5 |
-| R5 | Pending | GPT-6.1 Sol | Machine-scoped settings and public-suffix rejection |
+| R4 | Complete | GPT-6.1 Sol | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65` |
+| R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; commit recorded in R3 |
 | R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
 | Fix review | Pending | Opus 5.5 | Review completed R1-R5; fix medium-or-higher findings |
 | S1 | Pending | GPT-6.1 Sol | Closed-enum startup telemetry |
@@ -65,7 +65,12 @@ The read-only attachment is unchanged; this repository copy is the live progress
   managed-identity string suites: 3 files / 95 tests passed, including real-resolver emitted
   resolved/unresolved records. Commit: `2e27b5583d2e622d1b06bd7ac319eb56f52dff09`.
 - R4: GPT-6.1 Sol, 09:41:33-09:42:03 UTC. Resolver, interactive/managed-identity handlers,
-  and copied managed-identity string suites: 4 files / 118 tests passed. Commit hash follows in R5.
+  and copied managed-identity string suites: 4 files / 118 tests passed.
+  Commit: `f1bc8bffeb0d6106d5f4182767f5d7219884bd65`.
+- R5: GPT-6.1 Sol, 09:42:14-09:44:14 UTC. Allowlist, resolver, both auth handlers, settings,
+  and copy-command suites: 6 files / 174 tests passed. Initial copy and managed-identity handler
+  failures identified configuration mocks missing the newly used `inspect` API; updated only those
+  mock APIs and reran successfully. No `TDD:` contract failed. Commit hash follows in R3.
 
 ## Verdict
 
@@ -361,6 +366,13 @@ consistent. VS Code's own `microsoft-sovereign-cloud.*` settings use the default
 hardening, not parity.
 
 **Author decision:** accepted (2026-10-26), recommended option. Use `machine` scope for `documentDB.customEnvironment`, covering both properties. Reject two-label public-suffix patterns and trace `customHostnameSuffixSource`.
+
+**Implementation (R5):** the entire `documentDB.customEnvironment` object is machine scoped;
+the settings contract test pins this rather than adding another settings reader. Suffix normalization
+rejects `com|co|net|org|gov.<two-letter-cc>` after case/dot normalization while retaining narrower
+service suffixes. Traces report only `user|workspace|none` from configuration inspection, never raw
+suffixes. Focused allowlist, source-trace, manifest scope, handler, and copy tests: 174 passed.
+This is targeted pattern hardening, not a complete public-suffix database.
 
 ### R6. P3: Bound the AADSTS code match
 

@@ -72,6 +72,7 @@ describe('ManagedIdentityAuthHandler', () => {
         resetEntraTokenFailuresForTests();
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue(undefined),
+            inspect: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
         getManagedIdentityAccessToken.mockReset();
         getManagedIdentityAccessToken.mockResolvedValue({
@@ -169,6 +170,9 @@ describe('ManagedIdentityAuthHandler', () => {
                 ossrdbmsEndpoint: 'https://database.example.com',
                 mongoClusterHostnameSuffix: '.database.example.com',
             }),
+            inspect: vi.fn().mockReturnValue({
+                globalValue: { mongoClusterHostnameSuffix: '.database.example.com' },
+            }),
         } as unknown as vscode.WorkspaceConfiguration);
         const connectionString = 'mongodb://cluster.database.example.com/';
         const handler = new ManagedIdentityAuthHandler(
@@ -262,6 +266,7 @@ describe('ManagedIdentityAuthHandler', () => {
     it('honors the host-gated TLS exception', async () => {
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://ossrdbms-aad.database.windows.net' }),
+            inspect: vi.fn().mockReturnValue(undefined),
         } as unknown as vscode.WorkspaceConfiguration);
         const cs = 'mongodb://localhost:27017/';
         const handler = new ManagedIdentityAuthHandler(

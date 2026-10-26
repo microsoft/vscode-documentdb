@@ -32,7 +32,10 @@ vi.mock('vscode', () => ({
         t: vi.fn((message: string) => message),
     },
     workspace: {
-        getConfiguration: vi.fn(() => ({ get: vi.fn().mockReturnValue(undefined) })),
+        getConfiguration: vi.fn(() => ({
+            get: vi.fn().mockReturnValue(undefined),
+            inspect: vi.fn().mockReturnValue(undefined),
+        })),
     },
 }));
 

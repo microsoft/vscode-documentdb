@@ -136,6 +136,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         const deps: documentdbTokenResource.TokenResourceResolverDeps = {
             getConfiguredCloud: () => ({ name: 'custom', isCustomCloud: true }),
             getCustomEnvironment: () => ({ ossrdbmsEndpoint: resource }),
+            getCustomHostnameSuffixSource: () => 'none',
             getSignInEnvironment: () => ({
                 authProvider: 'microsoft-sovereign-cloud',
                 brokerImplementation: undefined,
@@ -172,6 +173,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             customOssrdbmsEndpointState: 'valid',
             customOssrdbmsEndpointApplicable: true,
             customHostnameSuffixSet: false,
+            customHostnameSuffixSource: 'none',
             armMetadata: 'notNeeded',
             imdsAzEnvironment: 'notQueried',
             cloudCategory: mismatch ? 'custom' : 'usgov',

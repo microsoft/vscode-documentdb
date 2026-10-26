@@ -30,6 +30,7 @@ function createDeps(): TokenResourceResolverDeps {
     return {
         getConfiguredCloud: vi.fn(() => ({ name: 'AzureCloud', isCustomCloud: false })),
         getCustomEnvironment: vi.fn(() => ({})),
+        getCustomHostnameSuffixSource: vi.fn(() => 'none'),
         fetchArmMetadata: vi.fn().mockResolvedValue(undefined),
         readImdsAzEnvironment: vi.fn().mockResolvedValue(undefined),
         getSignInEnvironment: vi.fn(() => ({ authProvider: 'microsoft', brokerImplementation: undefined })),
@@ -85,6 +86,7 @@ describe('resolveInteractiveTokenResource', () => {
             customOssrdbmsEndpointState: 'absent',
             customOssrdbmsEndpointApplicable: false,
             customHostnameSuffixSet: false,
+            customHostnameSuffixSource: 'none',
             armMetadata: 'notNeeded',
             imdsAzEnvironment: 'notQueried',
             cloudCategory: 'public',
@@ -528,6 +530,29 @@ describe('resolveManagedIdentityTokenResource', () => {
 });
 
 describe('resolveTokenResourceForCopy', () => {
+    it.each([
+        [{ globalValue: { mongoClusterHostnameSuffix: '.private.example.com' } }, 'user'],
+        [{ workspaceValue: { mongoClusterHostnameSuffix: '.private.example.com' } }, 'workspace'],
+        [{ workspaceFolderValue: { mongoClusterHostnameSuffix: '.private.example.com' } }, 'workspace'],
+        [
+            {
+                globalValue: { mongoClusterHostnameSuffix: '.user.example.com' },
+                workspaceValue: { mongoClusterHostnameSuffix: '.private.example.com' },
+            },
+            'user',
+        ],
+        [{}, 'none'],
+    ] as const)('records only the closed suffix source from inspected configuration: %j', (inspected, source) => {
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+            get: (key: string): unknown =>
+                key === 'documentDB.customEnvironment' ? { ossrdbmsEndpoint: governmentResource } : undefined,
+            inspect: () => inspected,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const resolution = resolveTokenResourceForCopy(privateConnection);
+        expect(resolution.details.customHostnameSuffixSource).toBe(source);
+        expect(JSON.stringify(resolution.details)).not.toContain('private.example.com');
+    });
+
     it('warns and preserves the permissive fallback for an invalid override', () => {
         const deps = createDeps();
         vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: `${publicResource}/.default` });

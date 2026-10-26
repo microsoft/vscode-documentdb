@@ -85,6 +85,20 @@ describe('getOidcAllowedHosts', () => {
             expect(normalizeCustomHostnameSuffix(value)).toBeUndefined();
         }
     });
+
+    it.each(['.com.cn', '.co.uk', 'net.au', '.org.uk', '.gov.us', ' CO.ZA '])(
+        'rejects the public suffix %s without widening the token allowlist',
+        (suffix) => {
+            expect(normalizeCustomHostnameSuffix(suffix)).toBeUndefined();
+            const normalized = suffix.trim().toLowerCase().replace(/^\./, '');
+            expect(getOidcAllowedHosts(`mongodb://attacker.${normalized}/`, suffix)).toEqual(['*.azure.com']);
+        },
+    );
+
+    it.each(['example.com', 'database.co.uk', 'service.com.cn'])('accepts the narrower custom suffix %s', (suffix) => {
+        expect(normalizeCustomHostnameSuffix(` .${suffix.toUpperCase()} `)).toBe(suffix);
+        expect(getOidcAllowedHosts(`mongodb://cluster.${suffix}/`, suffix)).toEqual([`*.${suffix}`]);
+    });
 });
 
 describe('getAzureCloudFromHosts', () => {

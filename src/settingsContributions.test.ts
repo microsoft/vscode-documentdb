@@ -35,6 +35,11 @@ function constantKeys(): string[] {
 }
 
 describe('settings contributions', () => {
+    it('keeps the entire custom environment machine scoped, not workspace or folder overridable', () => {
+        const properties = Object.fromEntries(nodes.flatMap((node) => Object.entries(node.properties)));
+        expect(properties[settingsKeys.customEnvironment]?.scope).toBe('machine');
+    });
+
     it('validates audience overrides in Settings while allowing an empty setting', () => {
         const setting = packageJson.contributes.configuration
             .flatMap((node) => Object.entries(node.properties))

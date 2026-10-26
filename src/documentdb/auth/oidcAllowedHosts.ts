@@ -104,7 +104,7 @@ export function getAzureCloudFromHosts(connectionString: string): DocumentDBEntr
 
 /**
  * Validates `documentDB.customEnvironment.mongoClusterHostnameSuffix` and returns it without the
- * leading dot. At least two labels are required so a bare TLD can never be trusted.
+ * leading dot. Bare TLDs and common two-label public suffixes can never be trusted.
  */
 export function normalizeCustomHostnameSuffix(value: unknown): string | undefined {
     if (typeof value !== 'string') {
@@ -114,6 +114,9 @@ export function normalizeCustomHostnameSuffix(value: unknown): string | undefine
     const suffix = value.trim().toLowerCase().replace(/^\./, '');
     const labels = suffix.split('.');
     if (labels.length < 2 || labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
+        return undefined;
+    }
+    if (/^(?:com|co|net|org|gov)\.[a-z]{2}$/.test(suffix)) {
         return undefined;
     }
 
