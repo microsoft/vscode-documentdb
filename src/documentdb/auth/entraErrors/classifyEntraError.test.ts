@@ -134,6 +134,24 @@ describe('classifyEntraError', () => {
 });
 
 describe('Entra error rule table', () => {
+    it.each<EntraErrorContext>([
+        { recentTokenFailure: false },
+        { cloudCategory: 'public', recentTokenFailure: true },
+        { cloudCategory: 'usgov', recentTokenFailure: false },
+        { cloudCategory: 'china', recentTokenFailure: false },
+        { cloudCategory: 'custom', recentTokenFailure: false },
+    ])('uses platform-neutral opaque-broker wording for %j', (context): void => {
+        const rule = entraErrorRules.find((candidate): boolean => candidate.id === 'brokerOpaque');
+        const message = rule?.explain(context);
+        expect(message).toMatch(/^The sign-in window reported an error without details\./);
+        expect(message).not.toContain('Windows');
+        expect(message).toContain(
+            context.cloudCategory && context.cloudCategory !== 'public'
+                ? 'Microsoft Sovereign Cloud Authentication'
+                : 'Microsoft Authentication',
+        );
+    });
+
     it('has unique ids and no repeated AADSTS or MSAL codes', (): void => {
         const ids = entraErrorRules.map((rule): string => rule.id);
         const codes = entraErrorRules.flatMap((rule): readonly string[] => rule.aadsts ?? []);

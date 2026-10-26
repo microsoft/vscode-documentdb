@@ -41,8 +41,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R3 | Complete | GPT-6.1 Sol | 09:44:40-09:48:03 UTC; 189 focused tests passed; `0de180b1e93495b3a2c9504431b7fd34079614fa` |
 | R4 | Complete | GPT-6.1 Sol | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65` |
 | R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
-| R6 | Complete | GPT-6.1 Sol | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; commit recorded with R7 |
-| R7 | Pending | GPT-6.1 Sol | Neutral opaque-broker wording |
+| R6 | Complete | GPT-6.1 Sol | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; `d8f2db967cc3bc2d0f16bc7554f012db2bbb551b` |
+| R7 | Complete | GPT-6.1 Sol | 10:12:30-10:12:45 UTC (15 seconds); 76 focused tests passed; commit recorded with R8 |
 | R8 | Pending | GPT-6.1 Sol | Clear token-failure context on success at all four surfaces |
 | R9 | Pending | GPT-6.1 Sol | Correct IMDS and private-DNS user guidance |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
@@ -545,6 +545,13 @@ wording ("The sign-in window reported an error without details"), or gate the Wi
 
 **Author decision:** accepted (2026-10-26), neutral wording only. No platform gate: the message
 must not mention Windows on any platform.
+
+**Implementation (R7):** GPT-6.1 Sol, 10:12:30-10:12:45 UTC (15 seconds).
+The generic opaque-broker explanation starts "The sign-in window reported an error without details".
+No platform branch; cloud-specific authentication-log selection and the sovereign hedged message
+are unchanged. Five focused generic-context cases pin the neutral wording.
+`npx vitest run src/documentdb/auth/entraErrors/classifyEntraError.test.ts src/documentdb/auth/entraErrors/EntraDiagnosticsProvider.test.ts`:
+two files / 76 tests passed. Localization generation remains deferred to final Terra verification.
 
 ### R8. P3: Clear the token-failure record on success
 
