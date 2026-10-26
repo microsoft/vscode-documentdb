@@ -5,7 +5,37 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { getAzureCloudFromHosts, getOidcAllowedHosts, normalizeCustomHostnameSuffix } from './oidcAllowedHosts';
+import {
+    getAzureCloudFromHosts,
+    getOidcAllowedHosts,
+    hasDocumentDBHost,
+    normalizeCustomHostnameSuffix,
+} from './oidcAllowedHosts';
+
+describe('hasDocumentDBHost', () => {
+    it.each(['com', 'us', 'cn'])('recognizes DocumentDB service hosts under azure.%s', (tld) => {
+        expect(hasDocumentDBHost([`CLUSTER.GLOBAL.mongocluster.cosmos.azure.${tld}:10255`])).toBe(true);
+    });
+
+    it.each([
+        'cluster.mongocluster.cosmos.azure.us.evil.com',
+        'xmongocluster.cosmos.azure.com',
+        'cluster.mongocluster.cosmos.azure.tk',
+        'cluster.other.azure.us',
+        'cluster.mongo.cosmos.azure.com',
+        '[::1]:27017',
+    ])('does not recognize lookalikes, other services, or RU hosts: %s', (host) => {
+        expect(hasDocumentDBHost([host])).toBe(false);
+    });
+
+    it('uses the hardened configured suffix with a dot boundary', () => {
+        expect(hasDocumentDBHost(['CLUSTER.database.example.com:10255'], ' .DATABASE.EXAMPLE.COM ')).toBe(true);
+        expect(hasDocumentDBHost(['notdatabase.example.com'], '.database.example.com')).toBe(false);
+        expect(hasDocumentDBHost(['cluster.database.example.com.evil.com'], '.database.example.com')).toBe(false);
+        expect(hasDocumentDBHost(['attacker.com.cn'], '.com.cn')).toBe(false);
+        expect(hasDocumentDBHost([])).toBe(false);
+    });
+});
 
 describe('getOidcAllowedHosts', () => {
     it('allows only the Azure suffix for a public-cloud host, not the full host', () => {

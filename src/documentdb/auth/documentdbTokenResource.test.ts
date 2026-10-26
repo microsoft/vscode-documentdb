@@ -30,7 +30,7 @@ function createDeps(): TokenResourceResolverDeps {
     return {
         getConfiguredCloud: vi.fn(() => ({ name: 'AzureCloud', isCustomCloud: false })),
         getCustomEnvironment: vi.fn(() => ({})),
-        getCustomHostnameSuffixSource: vi.fn(() => 'none'),
+        getCustomHostnameSuffixSource: vi.fn((): 'none' => 'none'),
         fetchArmMetadata: vi.fn().mockResolvedValue(undefined),
         readImdsAzEnvironment: vi.fn().mockResolvedValue(undefined),
         getSignInEnvironment: vi.fn(() => ({ authProvider: 'microsoft', brokerImplementation: undefined })),

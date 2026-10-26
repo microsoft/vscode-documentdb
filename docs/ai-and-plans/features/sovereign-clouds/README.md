@@ -69,7 +69,9 @@ readable without a support round trip.
 - [oidcAllowedHosts.ts](../../../../src/documentdb/auth/oidcAllowedHosts.ts): already accepts
   `*.azure.us` and `*.azure.cn` hosts (#639, #934). Custom suffixes come from the machine-scoped
   `documentDB.customEnvironment` object, not workspace overrides; bare TLDs and common two-label
-  public suffixes are rejected.
+  public suffixes are rejected. The same closed Azure TLD list and validated suffix recognize
+  DocumentDB hosts in New Connection and Update Credentials, making managed identity available
+  for public, Government, China, and configured service domains without matching lookalikes.
 - [entraErrors/](../../../../src/documentdb/auth/entraErrors/): the single classifier table,
   pure text classifier, recent token-failure registry, and Entra diagnostics provider.
 - [connectionDiagnosticsService.ts](../../../../src/services/connectionDiagnosticsService.ts): the

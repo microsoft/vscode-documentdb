@@ -5,14 +5,17 @@
 
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { type DocumentDBCustomEnvironment } from '../../documentdb/auth/documentdbTokenResource';
 import {
     getConnectionStringAuthFacts,
     stripManagedIdentityMarkers,
 } from '../../documentdb/auth/managedIdentityConnectionString';
-import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
+import { hasDocumentDBHost } from '../../documentdb/auth/oidcAllowedHosts';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { canonicalizeTlsException } from '../../documentdb/utils/tlsException';
+import { settingsKeys } from '../../settingsKeys';
 import { traceAuthFlow } from '../../utils/authTrace';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
@@ -104,7 +107,11 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         // 3. Detect and/or guess available authentication methods
         const supportedAuthMethods: AuthMethodId[] = [AuthMethodId.NativeAuth];
 
-        if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
+        const customHostnameSuffix = vscode.workspace
+            .getConfiguration()
+            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
+        const entraHostRecognized = hasDocumentDBHost(parsedConnectionString.hosts, customHostnameSuffix);
+        if (entraHostRecognized) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
             // Managed identity is Entra ID on the wire; wherever one is offered, so is the other.
             supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
@@ -128,7 +135,7 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             usableManagedIdentity: hasUsableManagedIdentity,
             selectedMethod: context.selectedAuthenticationMethod ?? 'none',
             supportedMethods: supportedAuthMethods.join(','),
-            entraHostRecognized: hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts),
+            entraHostRecognized,
         });
     }
 

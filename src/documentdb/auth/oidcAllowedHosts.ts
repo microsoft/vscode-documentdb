@@ -16,6 +16,20 @@ const DEFAULT_ALLOWED_HOSTS = ['*.azure.com'];
 // top-level domain (for example a ccTLD with open registration) is not ours.
 const KNOWN_AZURE_TOP_LEVEL_DOMAINS: ReadonlySet<string> = new Set(['com', 'us', 'cn']);
 
+/** Recognizes DocumentDB service hosts without trusting lookalikes or arbitrary Azure services. */
+export function hasDocumentDBHost(hosts: readonly string[], customHostnameSuffix?: string): boolean {
+    const customSuffix = normalizeCustomHostnameSuffix(customHostnameSuffix);
+    return hosts.some((host) => {
+        const hostname = getHostname(host);
+        const azureSuffix = getAzureHostSuffix(host);
+        return (
+            !!hostname &&
+            ((!!azureSuffix && hostname.endsWith(`.mongocluster.cosmos.${azureSuffix}`)) ||
+                (!!customSuffix && hostname.endsWith(`.${customSuffix}`)))
+        );
+    });
+}
+
 /**
  * Resolve the OIDC ALLOWED_HOSTS list from a connection string.
  *

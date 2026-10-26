@@ -16,7 +16,7 @@ status: active
 - Constraint: no sovereign-cloud account, VM, or cluster was used. Passing local tests and reading
   public ARM metadata are not evidence of successful sovereign-cloud authentication.
 
-This is a review, not an implementation pass. Product code is unchanged. On 2026-10-26 the
+The original review below is preserved alongside the live implementation progress. On 2026-10-26 the
 operator accepted the recommended option for every finding, R1 to R9, with neutral wording only
 for R7. S1 to S7 are accepted as follow-up todos. S8 is accepted as preview-build-only work. The
 implementation began on 2026-10-26. See the live progress below; the original review and its
@@ -37,9 +37,9 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | --- | --- | --- | --- |
 | R1 | Complete | GPT-6.1 Sol | 09:38:47-09:40:20 UTC; 114 focused tests passed; `047465a2bd3b561e92d0069570dd74ba0bd48f99` |
 | R2 | Complete | GPT-6.1 Sol | 09:40:20-09:41:21 UTC; 95 focused tests passed; `2e27b5583d2e622d1b06bd7ac319eb56f52dff09` |
-| R3 | Pending | GPT-6.1 Sol | Sovereign and configured host recognition in both credential wizards |
+| R3 | Complete | GPT-6.1 Sol | 09:44:40-09:48:03 UTC; 189 focused tests passed; final commit hash recorded after commit |
 | R4 | Complete | GPT-6.1 Sol | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65` |
-| R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; commit recorded in R3 |
+| R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
 | R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
 | Fix review | Pending | Opus 5.5 | Review completed R1-R5; fix medium-or-higher findings |
 | S1 | Pending | GPT-6.1 Sol | Closed-enum startup telemetry |
@@ -70,7 +70,46 @@ The read-only attachment is unchanged; this repository copy is the live progress
 - R5: GPT-6.1 Sol, 09:42:14-09:44:14 UTC. Allowlist, resolver, both auth handlers, settings,
   and copy-command suites: 6 files / 174 tests passed. Initial copy and managed-identity handler
   failures identified configuration mocks missing the newly used `inspect` API; updated only those
-  mock APIs and reran successfully. No `TDD:` contract failed. Commit hash follows in R3.
+  mock APIs and reran successfully. No `TDD:` contract failed.
+  Commit: `ecd0995babb996863cd2bfb71b9181941a347228`.
+- R3: GPT-6.1 Sol, 09:44:40-09:48:03 UTC. Host helper, New Connection, Update Credentials,
+  token-source eligibility, and resolver suites: 5 files / 189 tests passed. Initial new assertions
+  inspected JSON-escaped log text rather than the message; corrected those assertions. The one
+  cluster build found a widened mock return type introduced in R5; pinned its literal return type
+  in this commit and rechecked root compilation successfully. Final commit hash recorded after commit.
+
+### Five-fix cluster verification and handoff
+
+- **Case 1: still working**, draft PR. Exactly one `npm run build` was run after R1/R2/R4/R5/R3
+  implementation. Workspace prebuilds passed; root compilation failed on the suffix-source mock's
+  widened `string` return type. After its explicit `'none'` return type fix, `npx tsc --noEmit`
+  passed. The build command itself was not rerun and is not reported as passed.
+- Focused tests passed for every item, including the final 189-test run. No `TDD:`-prefixed
+  contract failed. IDE discovery was unavailable, so Vitest CLI was used.
+- Public resource/scope definitions in `src/documentdb/auth/entraScopes.ts`, and all constants
+  (including RU) in `src/documentdb/utils/connectionStringHelpers.ts`, are unchanged byte-for-byte.
+- Full checks, including `prettier-fix`, remain deferred until ready for review. No lint,
+  localization generation/check, packaging, full runtime suite, or strict package-test suite ran.
+  No dependencies were changed, and no live sovereign-cloud validation or token-usage measurement
+  was performed. R6-R9 and S1-S8 were not implemented.
+
+Changed files across the five scoped commits:
+
+- `package.json`
+- `src/documentdb/auth/documentdbTokenResource.ts`
+- `src/documentdb/auth/documentdbTokenResource.test.ts`
+- `src/documentdb/auth/oidcAllowedHosts.ts`
+- `src/documentdb/auth/oidcAllowedHosts.test.ts`
+- `src/documentdb/auth/MicrosoftEntraIDAuthHandler.test.ts`
+- `src/documentdb/auth/ManagedIdentityAuthHandler.test.ts`
+- `src/settingsContributions.test.ts`
+- `src/commands/copyConnectionString/copyConnectionString.test.ts`
+- `src/commands/newConnection/PromptConnectionStringStep.ts`
+- `src/commands/newConnection/PromptConnectionStringStep.test.ts`
+- `src/commands/updateCredentials/updateCredentials.ts`
+- `src/commands/updateCredentials/updateCredentials.test.ts`
+- `docs/ai-and-plans/features/sovereign-clouds/README.md`
+- This live review/progress file.
 
 ## Verdict
 
@@ -113,7 +152,7 @@ Following [CONTRIBUTING section 6](../../../../../CONTRIBUTING.md#6-ai-assisted-
    Azure-auth SDK and driver/worker boundaries. No additional high-confidence defect was established.
    The provisional telemetry concern was assessed as a documented limitation, not a third finding.
 5. Author decisions: recorded on 2026-10-26 for R1 to R9 (all recommended options; R7 neutral
-   wording only). Fixes: not started.
+   wording only). R1-R5 are now implemented locally; R6-R9 remain deferred.
 6. Second pass (same head): re-verified R1 and R2 against the code and reassessed their
    recommendations (see "Second-pass verification" under each). Then an independent sweep
    covered the New Connection and Update Credentials wizards, the installed Azure-auth SDK
@@ -296,6 +335,13 @@ with a bare `endsWith`, so `xmongocluster.cosmos.azure.com` also matches today; 
 in the new helper.
 
 **Author decision:** accepted (2026-10-26), recommended option. Recognize `mongocluster.cosmos.azure.{com,us,cn}` with a dot boundary, reuse the closed TLD list, also accept a configured `mongoClusterHostnameSuffix`, and apply the result in both New Connection and Update Credentials.
+
+**Implementation (R3):** both credential wizards use `hasDocumentDBHost`, which reuses the existing
+closed Azure TLD set through the host-suffix helper and the R5-hardened custom suffix validator.
+Matching requires a dot boundary, including configured suffixes. No RU or public-cloud constants
+changed. Tests cover all three service domains, configured service hosts, lookalikes, rejected public
+suffixes, unchanged RU availability, and the real managed-identity token-source eligibility gate in
+both wizard flows. The final focused run (including resolver regression coverage): 189 tests passed.
 
 ### R4. P2: Name `microsoft-sovereign-cloud.customEnvironment` when it is missing or incomplete
 
