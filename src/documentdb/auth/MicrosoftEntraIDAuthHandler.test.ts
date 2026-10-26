@@ -128,6 +128,61 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
 
+    it.each([false, true])('emits complete real-resolver cloud evidence (mismatch: %s)', async (mismatch) => {
+        const actual = await vi.importActual<typeof documentdbTokenResource>('./documentdbTokenResource');
+        const resource = mismatch
+            ? 'https://database.example.com'
+            : 'https://ossrdbms-aad.database.usgovcloudapi.net';
+        const deps: documentdbTokenResource.TokenResourceResolverDeps = {
+            getConfiguredCloud: () => ({ name: 'custom', isCustomCloud: true }),
+            getCustomEnvironment: () => ({ ossrdbmsEndpoint: resource }),
+            getSignInEnvironment: () => ({
+                authProvider: 'microsoft-sovereign-cloud',
+                brokerImplementation: undefined,
+            }),
+            fetchArmMetadata: vi.fn(),
+            readImdsAzEnvironment: vi.fn(),
+            warn: vi.fn(),
+        };
+        vi.mocked(resolveInteractiveTokenResource).mockImplementationOnce((connectionString) =>
+            actual.resolveInteractiveTokenResource(connectionString, deps),
+        );
+        const result = new MicrosoftEntraIDAuthHandler(
+            buildCredentials('mongodb://private-identifier.azure.us/'),
+        ).configureAuth();
+        if (mismatch) {
+            await expect(result).rejects.toMatchObject({ kind: 'cloudMismatch' });
+            expect(getSessionFromVSCode).not.toHaveBeenCalled();
+        } else {
+            await result;
+        }
+        const trace = mockOutputChannel.info.mock.calls
+            .map((call) => String(call[0]))
+            .find((message) => message.includes(mismatch ? 'entraCloud.unresolved' : 'entraCloud.resolved'));
+        if (!trace) {
+            throw new Error('Missing cloud resolution trace');
+        }
+        const details: unknown = JSON.parse(trace.slice(trace.indexOf(': ') + 2));
+        expect(details).toEqual({
+            flow: 'interactive',
+            configuredCloud: 'custom',
+            authProvider: 'microsoft-sovereign-cloud',
+            brokerImplementation: 'default',
+            hostCloud: 'AzureUSGovernment',
+            customOssrdbmsEndpointState: 'valid',
+            customOssrdbmsEndpointApplicable: true,
+            customHostnameSuffixSet: false,
+            armMetadata: 'notNeeded',
+            imdsAzEnvironment: 'notQueried',
+            cloudCategory: mismatch ? 'custom' : 'usgov',
+            reason: 'customOverride',
+            tokenResource: resource,
+            ...(mismatch ? { errorKind: 'cloudMismatch' } : {}),
+        });
+        expect(trace).not.toContain('private-identifier');
+        expect(trace).not.toContain('access-token');
+    });
+
     it.each(['public', 'usgov', 'china', 'custom'] as const)(
         'records a failed token acquisition in %s without changing the error',
         async (cloudCategory): Promise<void> => {

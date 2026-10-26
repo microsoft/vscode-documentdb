@@ -35,8 +35,8 @@ The read-only attachment is unchanged; this repository copy is the live progress
 
 | Item | State | Model | Result / commit |
 | --- | --- | --- | --- |
-| R1 | Complete | GPT-6.1 Sol | 09:38:47-09:40 UTC; 114 focused tests passed; commit recorded below |
-| R2 | Pending | GPT-6.1 Sol | Populate safe cloud evidence before branching |
+| R1 | Complete | GPT-6.1 Sol | 09:38:47-09:40:20 UTC; 114 focused tests passed; `047465a2bd3b561e92d0069570dd74ba0bd48f99` |
+| R2 | Complete | GPT-6.1 Sol | 09:40:20-09:41:21 UTC; 95 focused tests passed; commit recorded in R4 |
 | R3 | Pending | GPT-6.1 Sol | Sovereign and configured host recognition in both credential wizards |
 | R4 | Pending | GPT-6.1 Sol | Setting-specific invalid custom-cloud error |
 | R5 | Pending | GPT-6.1 Sol | Machine-scoped settings and public-suffix rejection |
@@ -59,7 +59,11 @@ The read-only attachment is unchanged; this repository copy is the live progress
   and mapped implementation, review, preview isolation, and verification work. No code changed.
 - R1: GPT-6.1 Sol, 09:38:47-09:40 UTC. IDE runner found no tests; `npx vitest run`
   covered resolver, settings contributions, scopes, and copied managed-identity strings:
-  4 files / 114 tests passed. Build deferred to the five-fix cluster. Commit hash follows in R2.
+  4 files / 114 tests passed. Build deferred to the five-fix cluster.
+  Commit: `047465a2bd3b561e92d0069570dd74ba0bd48f99`.
+- R2: GPT-6.1 Sol, 09:40:20-09:41:21 UTC. Resolver, interactive handler, and copied
+  managed-identity string suites: 3 files / 95 tests passed, including real-resolver emitted
+  resolved/unresolved records. Commit hash follows in R4.
 
 ## Verdict
 
@@ -239,6 +243,12 @@ message says "VS Code is signed in to {cloud of the override}". VS Code is not s
 in that state. See R4.
 
 **Author decision:** accepted (2026-10-26), recommended option. Classify the host first in every flow, including copy, and build the mismatch error from the merged resolution details.
+
+**Implementation (R2):** interactive, managed identity, and copy classify hosts before branching.
+Mismatch errors now carry the candidate's resource, reason, and cloud category. Focused tests
+cover override early returns, unresolved custom clouds, and complete emitted resolved/unresolved
+trace objects through the interactive handler using the real resolver: 95 tests passed. No host,
+token, or raw error is added to traces; audience precedence and D8 are unchanged.
 
 ## Second-pass findings
 

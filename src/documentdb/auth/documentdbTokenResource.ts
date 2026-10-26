@@ -116,8 +116,10 @@ export async function resolveInteractiveTokenResource(
     connectionString: string,
     deps: TokenResourceResolverDeps = getDefaultDeps(),
 ): Promise<ResolvedTokenResource> {
+    const hostCloud = getAzureCloudFromHosts(connectionString);
     const customEnvironment = deps.getCustomEnvironment();
     const details = createResolutionDetails('interactive', customEnvironment, deps);
+    details.hostCloud = hostCloud ?? 'none';
     const configured = getConfiguredCloudForDetails(deps, details);
     const resolved = configured
         ? configured.isCustomCloud
@@ -137,8 +139,6 @@ export async function resolveInteractiveTokenResource(
         );
     }
 
-    const hostCloud = getAzureCloudFromHosts(connectionString);
-    details.hostCloud = hostCloud ?? 'none';
     const audienceCloud = getCloudForTokenResource(resolved.resource);
     if (hostCloud && hostCloud !== audienceCloud) {
         throw resolutionError(
@@ -151,7 +151,7 @@ export async function resolveInteractiveTokenResource(
                 },
             ),
             'cloudMismatch',
-            details,
+            withDetails(resolved, details).details,
         );
     }
 
@@ -169,16 +169,16 @@ export async function resolveManagedIdentityTokenResource(
     connectionString: string,
     deps: TokenResourceResolverDeps = getDefaultDeps(),
 ): Promise<ResolvedTokenResource> {
+    const hostCloud = getAzureCloudFromHosts(connectionString);
     const customEnvironment = deps.getCustomEnvironment();
     const details = createResolutionDetails('managedIdentity', customEnvironment, deps);
+    details.hostCloud = hostCloud ?? 'none';
     getConfiguredCloudForDetails(deps, details);
     const override = getApplicableOverride(customEnvironment, details);
     if (override) {
         return withDetails(fromResource(override, 'customOverride'), details);
     }
 
-    const hostCloud = getAzureCloudFromHosts(connectionString);
-    details.hostCloud = hostCloud ?? 'none';
     if (hostCloud) {
         return withDetails(fromBuiltInCloud(hostCloud, 'host'), details);
     }
@@ -213,8 +213,10 @@ export function resolveTokenResourceForCopy(
         'getConfiguredCloud' | 'getCustomEnvironment' | 'getSignInEnvironment' | 'warn'
     > = getDefaultDeps(),
 ): ResolvedTokenResource {
+    const hostCloud = getAzureCloudFromHosts(connectionString);
     const customEnvironment = deps.getCustomEnvironment();
     const details = createResolutionDetails('copy', customEnvironment, deps);
+    details.hostCloud = hostCloud ?? 'none';
     details.customOssrdbmsEndpointApplicable = true;
     const override = parseTokenResource(customEnvironment.ossrdbmsEndpoint);
     if (override) {
@@ -228,8 +230,6 @@ export function resolveTokenResourceForCopy(
         );
     }
 
-    const hostCloud = getAzureCloudFromHosts(connectionString);
-    details.hostCloud = hostCloud ?? 'none';
     if (hostCloud) {
         return withDetails(fromBuiltInCloud(hostCloud, 'host'), details);
     }

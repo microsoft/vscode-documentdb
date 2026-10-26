@@ -322,6 +322,27 @@ describe('resolveInteractiveTokenResource', () => {
         });
     });
 
+    it('retains examined host evidence when custom resolution fails', async () => {
+        const deps = createDeps();
+        useCustomCloud(deps);
+        await expect(resolveInteractiveTokenResource('mongodb://cluster.azure.us/', deps)).rejects.toMatchObject({
+            kind: 'customCloudUnresolved',
+            details: {
+                flow: 'interactive',
+                configuredCloud: 'custom',
+                authProvider: 'microsoft',
+                brokerImplementation: 'default',
+                hostCloud: 'AzureUSGovernment',
+                customOssrdbmsEndpointState: 'absent',
+                customOssrdbmsEndpointApplicable: true,
+                customHostnameSuffixSet: false,
+                armMetadata: 'unavailable',
+                imdsAzEnvironment: 'notQueried',
+                errorKind: 'customCloudUnresolved',
+            },
+        });
+    });
+
     it('warns when a custom cloud explicitly overrides the resource to public', async () => {
         const deps = createDeps();
         useCustomCloud(deps);
@@ -364,6 +385,21 @@ describe('resolveManagedIdentityTokenResource', () => {
         expect(await resolveManagedIdentityTokenResource('mongodb://cluster.azure.us/', deps)).toMatchObject({
             resource: customResource,
             reason: 'customOverride',
+            details: {
+                flow: 'managedIdentity',
+                configuredCloud: 'AzureCloud',
+                authProvider: 'microsoft',
+                brokerImplementation: 'default',
+                hostCloud: 'AzureUSGovernment',
+                customOssrdbmsEndpointState: 'valid',
+                customOssrdbmsEndpointApplicable: true,
+                customHostnameSuffixSet: false,
+                armMetadata: 'notNeeded',
+                imdsAzEnvironment: 'notQueried',
+                cloudCategory: 'custom',
+                reason: 'customOverride',
+                tokenResource: customResource,
+            },
         });
         expect(deps.getConfiguredCloud).toHaveBeenCalledTimes(1);
         expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
@@ -444,6 +480,7 @@ describe('resolveTokenResourceForCopy', () => {
         expect(resolveTokenResourceForCopy('mongodb://cluster.azure.us/', deps)).toMatchObject({
             resource: customResource,
             reason: 'customOverride',
+            details: { hostCloud: 'AzureUSGovernment' },
         });
     });
 
