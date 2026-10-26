@@ -9,6 +9,21 @@ import { describeAuthError, traceAuthFlow } from './authTrace';
 vi.mock('../extensionVariables', () => ({ ext: { outputChannel: { info: vi.fn() } } }));
 
 describe('describeAuthError', () => {
+    it.each(['12345678', '123456789'])('keeps the full bounded AADSTS code %s', (code): void => {
+        expect(describeAuthError(new Error(`Sign-in failed (AADSTS${code}).`))).toContain(`aadsts=AADSTS${code};`);
+    });
+
+    it.each([
+        'AADSTS1234567890',
+        'AADSTS6500200000',
+        'xAADSTS65002',
+        '_AADSTS65002',
+        'AADSTS65002x',
+        'AADSTS65002_',
+    ])('does not trace an overlong or unbounded code: %s', (text): void => {
+        expect(describeAuthError(new Error(text))).toContain('aadsts=none;');
+    });
+
     it('labels platform broker errors without exposing the raw message', (): void => {
         expect(describeAuthError(new Error('platform_broker_error: private sign-in failure'))).toBe(
             'type=Error; code=unknown; httpStatus=unknown; aadsts=none; broker=platform_broker_error',

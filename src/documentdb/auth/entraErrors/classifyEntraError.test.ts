@@ -95,6 +95,26 @@ describe('classifyEntraError', () => {
         expect(classifyEntraError('AADSTS12345 AADSTS1234567')?.code).toBe('12345');
     });
 
+    it.each(['12345678', '123456789'])('preserves the full unknown code %s in its lookup link', (code): void => {
+        const classification = classifyEntraError(`Sign-in failed (AADSTS${code}).`);
+        expect(classification).toEqual({ ruleId: 'unknownAadsts', code, brokered: false });
+        const rule = entraErrorRules.find((candidate): boolean => candidate.id === classification?.ruleId);
+        expect(rule?.explain({ code: classification?.code, recentTokenFailure: false })).toContain(
+            `https://login.microsoftonline.com/error?code=${code}`,
+        );
+    });
+
+    it.each([
+        'AADSTS1234567890',
+        'AADSTS6500200000',
+        'xAADSTS65002',
+        '_AADSTS65002',
+        'AADSTS65002x',
+        'AADSTS65002_',
+    ])('rejects an overlong or unbounded code: %s', (text): void => {
+        expect(classifyEntraError(text)).toBeUndefined();
+    });
+
     it.each([
         '',
         'querySrv EBADRESP _mongodb._tcp.example.com',

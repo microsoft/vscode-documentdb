@@ -26,8 +26,9 @@ evidence are preserved.
 
 The operator requested GPT-6.1 Sol for narrowly scoped coding, an Opus 5.5 review after the fixes
 and again after enhancements, separate commits per item, and a Terra final verification run.
-Only medium-or-higher findings are in the fix scope; R6 to R9 remain documented low-severity
-follow-ups. S1 to S8 remain accepted enhancement work. PR #1050 remains a draft.
+The original medium-or-higher fix threshold was expanded by the operator at 10:11 UTC:
+**R6 to R9 must also be implemented**, each in its own commit. New review findings remain subject
+to the medium-or-higher threshold. S1 to S8 remain accepted enhancement work. PR #1050 remains a draft.
 
 Started at 09:36 UTC. Durations below are wall-clock observations, not model compute time.
 Token usage is unavailable unless explicitly reported. Commits are local unless stated otherwise.
@@ -40,7 +41,10 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | R3 | Complete | GPT-6.1 Sol | 09:44:40-09:48:03 UTC; 189 focused tests passed; `0de180b1e93495b3a2c9504431b7fd34079614fa` |
 | R4 | Complete | GPT-6.1 Sol | 09:41:33-09:42:03 UTC; 118 focused tests passed; `f1bc8bffeb0d6106d5f4182767f5d7219884bd65` |
 | R5 | Complete | GPT-6.1 Sol | 09:42:14-09:44:14 UTC; 174 focused tests passed; `ecd0995babb996863cd2bfb71b9181941a347228` |
-| R6-R9 | Deferred (low) | — | Kept documented per the operator's medium-or-higher threshold |
+| R6 | Complete | GPT-6.1 Sol | 10:11:43-10:12:18 UTC (35 seconds); 60 focused tests passed; commit recorded with R7 |
+| R7 | Pending | GPT-6.1 Sol | Neutral opaque-broker wording |
+| R8 | Pending | GPT-6.1 Sol | Clear token-failure context on success at all four surfaces |
+| R9 | Pending | GPT-6.1 Sol | Correct IMDS and private-DNS user guidance |
 | Fix review | Complete | Opus 5.5 | 09:49:45-09:53:46 UTC; no medium-or-higher findings |
 | S1 | Complete | GPT-6.1 Sol | 09:56:21-09:58:33 UTC; 124 focused tests passed; `20e07a36bf6e3d294cf14bcbe1c330b5821708e6` |
 | S2 | Complete | GPT-6.1 Sol | 09:58:59-09:59:39 UTC; 76 focused tests passed; `c20cc619363aafed9c6f717873fc5e718ad54b0e` |
@@ -54,6 +58,11 @@ The read-only attachment is unchanged; this repository copy is the live progress
 | Full verification | Pending | Terra | Case 1 plus all Case 2 commands, including strict package-test types |
 
 ### Execution log
+
+- 10:11 UTC: operator explicitly expanded fix scope to R6-R9. Their earlier deferral below is
+  historical, not the current instruction. A separate GPT-6.1 Sol agent handles these four fixes on
+  the PR branch while S8 continues in its isolated worktree; preview will receive these base fixes
+  before final verification.
 
 - S6: GPT-6.1 Sol, 10:02:55-10:06:22 UTC (207 seconds, including cluster build). Eight new
   real-resolver integration cases cover Government/China interactive scopes and allowlists,
@@ -516,6 +525,13 @@ would build a wrong lookup link, and the trace and classifier would disagree. **
 `/\bAADSTS(\d{5,9})\b/g` in both places, with a test.
 
 **Author decision:** accepted (2026-10-26), recommended option.
+
+**Implementation (R6):** GPT-6.1 Sol, 10:11:43-10:12:18 UTC (35 seconds).
+The classifier now uses `/\bAADSTS(\d{5,9})\b/g`, matching the existing trace boundaries.
+Eight- and nine-digit unknown codes retain their full lookup links; overlong codes and missing
+word boundaries are rejected in both classifier and trace tests.
+`npx vitest run src/documentdb/auth/entraErrors/classifyEntraError.test.ts src/utils/authTrace.test.ts`:
+two files / 60 tests passed. No parser abstraction or trace behavior change.
 
 ### R7. P3: Do not assume Windows in the opaque-broker message
 
