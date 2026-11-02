@@ -11,6 +11,7 @@ import {
 import { type CellValue } from '../../../src/utils/slickgrid/CellValue';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
+import { type AwsCredentialsWebviewConfig } from '../../../src/webviews/documentdb/awsCredentials/awsCredentialsController';
 import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
@@ -82,6 +83,7 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
+const awsConfig: AwsCredentialsWebviewConfig = { mode: 'add' };
 interface FixtureTableRow {
     readonly id: string;
     readonly 'x-objectid': string;
@@ -255,6 +257,16 @@ export const fixtures = {
             'atlasCredentials.submitApiKey': reply<Outputs['atlasCredentials']['submitApiKey']>('mutation', {
                 success: true,
             }),
+        },
+    },
+    awsCredentials: {
+        config: awsConfig,
+        monaco: false,
+        content: ['Add an AWS DocumentDB connection', 'Choose an authentication method'],
+        styles: [{ selector: 'main', property: 'display', expected: 'flex' }],
+        rpc: {
+            ...common,
+            'awsCredentials.listProfiles': reply<Outputs['awsCredentials']['listProfiles']>('query', []),
         },
     },
 } satisfies Record<WebviewName, ViewFixture>;

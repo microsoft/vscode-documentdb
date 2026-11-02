@@ -48,6 +48,7 @@ describe('Stage 0 L2 production browser harness', (): void => {
                 expect(existsSync(join(output, 'unpacked/extension.vsixmanifest'))).toBe(false);
                 expect(existsSync(join(output, 'unpacked/[Content_Types].xml'))).toBe(false);
                 expect(existsSync(join(output, 'site/pages/atlasCredentials.html'))).toBe(true);
+                expect(existsSync(join(output, 'site/pages/awsCredentials.html'))).toBe(true);
                 expect(existsSync(join(output, 'site/pages/clusterDashboard.html'))).toBe(true);
                 expect(existsSync(join(output, 'site/pages/collectionView.html'))).toBe(true);
                 expect(existsSync(join(output, 'site/pages/documentView.html'))).toBe(true);
@@ -165,9 +166,10 @@ describe('Stage 0 L2 production browser harness', (): void => {
         }
     });
 
-    it('covers all five registry keys with populated fixture contracts', (): void => {
+    it('covers all six registry keys with populated fixture contracts', (): void => {
         expect(Object.keys(fixtures).sort()).toEqual([
             'atlasCredentials',
+            'awsCredentials',
             'clusterDashboard',
             'collectionView',
             'documentView',

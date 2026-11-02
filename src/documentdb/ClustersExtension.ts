@@ -97,6 +97,10 @@ import {
     openAtlasCluster,
 } from '../plugins/service-atlas-mongodb/commands/openAtlasCluster';
 import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongodb/credentialsManagement/addAtlasCredential';
+import { AwsDiagnosticsProvider } from '../plugins/service-aws-documentdb/AwsDiagnosticsProvider';
+import { AwsDiscoveryProvider } from '../plugins/service-aws-documentdb/AwsDiscoveryProvider';
+import { AWS_ADD_CREDENTIAL_COMMAND, AWS_LIST_MODE_COMMAND, AWS_SELECT_CA_COMMAND, AWS_TREE_MODE_COMMAND } from '../plugins/service-aws-documentdb/config';
+import { AwsClusterItem } from '../plugins/service-aws-documentdb/discovery-tree/AwsClusterItem';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
@@ -157,8 +161,10 @@ import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
     private readonly atlasDiscoveryProvider = new AtlasDiscoveryProvider();
+    private readonly awsDiscoveryProvider = new AwsDiscoveryProvider();
 
     async dispose(): Promise<void> {
+        this.awsDiscoveryProvider.dispose();
         // Clean up any active port-forward tunnels
         const { PortForwardTunnelManager } = await import('../plugins/service-kubernetes/portForwardTunnel');
         PortForwardTunnelManager.getInstance().dispose();
@@ -169,6 +175,7 @@ export class ClustersExtension implements vscode.Disposable {
         DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
         DiscoveryService.registerProvider(this.atlasDiscoveryProvider);
+        DiscoveryService.registerProvider(this.awsDiscoveryProvider);
         DiscoveryService.registerProvider(new KubernetesDiscoveryProvider());
 
         // Connection-reachability providers: source-specific steps that make a saved connection
@@ -183,6 +190,7 @@ export class ClustersExtension implements vscode.Disposable {
         ConnectionDiagnosticsService.registerProvider(new QuickStartDiagnosticsProvider());
         ConnectionDiagnosticsService.registerProvider(new KubernetesDiagnosticsProvider());
         ConnectionDiagnosticsService.registerProvider(new AtlasDiagnosticsProvider());
+        ConnectionDiagnosticsService.registerProvider(new AwsDiagnosticsProvider());
         // First explanation wins, so source-specific diagnostics take priority over generic SRV failures.
         ConnectionDiagnosticsService.registerProvider(new SrvDnsDiagnosticsProvider());
     }
@@ -734,6 +742,32 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     OPEN_ATLAS_CLUSTER_COMMAND_ID,
                     withTreeNodeCommandCorrelation(openAtlasCluster),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    AWS_ADD_CREDENTIAL_COMMAND,
+                    withTreeNodeCommandCorrelation((context, node: TreeElement) =>
+                        this.awsDiscoveryProvider.addCredential(context, node)),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    AWS_TREE_MODE_COMMAND,
+                    withTreeNodeCommandCorrelation((_context, node: TreeElement) =>
+                        this.awsDiscoveryProvider.switchViewMode('tree', node)),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    AWS_LIST_MODE_COMMAND,
+                    withTreeNodeCommandCorrelation((_context, node: TreeElement) =>
+                        this.awsDiscoveryProvider.switchViewMode('list', node)),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    AWS_SELECT_CA_COMMAND,
+                    withTreeNodeCommandCorrelation(async (_context, node: TreeElement) => {
+                        if (!(node instanceof AwsClusterItem)) {
+                            throw new Error(vscode.l10n.t('Select an AWS DocumentDB cluster to change its CA bundle.'));
+                        }
+                        await node.selectCertificate();
+                        ext.discoveryBranchDataProvider.refresh(node);
+                    }),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
