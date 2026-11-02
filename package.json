@@ -158,6 +158,12 @@
     "webpack-dev-server": "~5.2.6"
   },
   "dependencies": {
+    "@aws-sdk/client-docdb": "3.1146.0",
+    "@aws-sdk/client-sso": "3.1146.0",
+    "@aws-sdk/client-sso-oidc": "3.1146.0",
+    "@aws-sdk/client-sts": "3.1146.0",
+    "@aws-sdk/credential-providers": "3.1146.0",
+    "@aws-sdk/types": "3.974.6",
     "@azure/arm-compute": "^22.4.0",
     "@azure/arm-cosmosdb": "~16.4.0",
     "@azure/arm-mongocluster": "~1.1.0",
@@ -623,6 +629,24 @@
         "command": "vscode-documentdb.command.discoveryView.atlas.switchToFlatListView",
         "title": "View as List",
         "icon": "$(list-tree)"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.aws.switchToTreeView",
+        "title": "View as Tree",
+        "icon": "$(list-selection)"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.aws.switchToFlatListView",
+        "title": "View as List",
+        "icon": "$(list-tree)"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.aws.selectCertificate",
+        "title": "Select AWS CA Bundle...",
+        "icon": "$(file)"
       },
       {
         "//": "Create Database",
@@ -1274,6 +1298,31 @@
           "group": "yheAlmostLastGroup@1"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.aws.switchToFlatListView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryAwsViewModeTree\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.aws.switchToFlatListView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryAwsViewModeTree\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.aws.switchToTreeView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryAwsViewModeList\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.aws.switchToTreeView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryAwsViewModeList\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.aws.selectCertificate",
+          "when": "view == discoveryView && viewItem =~ /\\bawsDocumentDBCluster\\b/i",
+          "group": "2@5"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
           "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
           "group": "inline@3"
@@ -1701,6 +1750,18 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.atlas.switchToTreeView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.aws.switchToTreeView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.aws.switchToFlatListView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.aws.selectCertificate",
           "when": "never"
         },
         {

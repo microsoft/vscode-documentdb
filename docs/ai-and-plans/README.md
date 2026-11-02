@@ -31,6 +31,7 @@ treat `status: historical` or `status: superseded` as current.
 | [completions-and-schema](./features/completions-and-schema/README.md)     | Operator registry, schema analyzer, and the shared completion layer                            | shipped           |
 | [index-management](./features/index-management/README.md)                 | The Indexes tab, the create drawer, and the Collection View chrome redesign                    | shipped           |
 | [atlas-discovery](./features/atlas-discovery/README.md)                   | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                           | shipped           |
+| [aws-discovery](./features/aws-discovery/README.md)                       | Atlas-style login cards, multi-credential AWS discovery, tree/list and database connections | implemented locally |
 | [kubernetes-discovery](./features/kubernetes-discovery/README.md)         | Kubernetes service discovery and connect-time reachability providers                           | shipped           |
 | [webview-ext-package](./features/webview-ext-package/README.md)           | `@microsoft/vscode-ext-webview`: the extracted webview transport package                       | published preview |
 | [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews  | 1.1.0 prepared    |
@@ -51,6 +52,10 @@ Everything else is a single file at this root, such as:
 - **[telemetry-correlation-ids.md](./telemetry-correlation-ids.md)** - future work: an inventory of
   the telemetry ids used to join events (lineage, surface session, operation) and a draft rule for
   which one to use. Written after #979 showed how easily they are confused.
+- **[service-discovery-onboarding-roadmap.md](./service-discovery-onboarding-roadmap.md)** - Atlas
+  screenshot-to-code walkthrough, reusable provider-onboarding process, and the agreed AWS discovery
+  roadmap. The [AWS integration analysis](./features/aws-discovery/README.md) records the subsequent
+  demo review and confirmed login-card requirements.
 
 There is no bucket folder for these. See the placement rule below.
 

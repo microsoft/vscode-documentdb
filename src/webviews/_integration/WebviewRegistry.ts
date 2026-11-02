@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AtlasCredentialsView } from '../documentdb/atlasCredentials/AtlasCredentialsView';
+import { AwsCredentialsView } from '../documentdb/awsCredentials/AwsCredentialsView';
 import { ClusterDashboard } from '../documentdb/clusterDashboard/ClusterDashboard';
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
@@ -43,6 +44,7 @@ export const WebviewRegistry = {
     documentView: DocumentView,
     localQuickStart: LocalQuickStart,
     atlasCredentials: AtlasCredentialsView,
+    awsCredentials: AwsCredentialsView,
 } as const;
 
 /**
