@@ -13,6 +13,8 @@ import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegi
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
 import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
+import { type ConnectivityTroubleshooterConfiguration } from '../../../src/webviews/documentdb/connectivityTroubleshooter/connectivityTroubleshooterTypes';
+import { panelRowIds } from '../../../src/webviews/documentdb/connectivityTroubleshooter/panelTypes';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
 import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';
@@ -20,6 +22,11 @@ import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtu
 type Inputs = FixtureInputs;
 type Outputs = FixtureOutputs;
 type CollectionOutputs = Outputs['mongoClusters']['collectionView'];
+// The router's serialized stream item: what the fake host can send, with tRPC's mutable arrays.
+export type TroubleshooterRunUpdate =
+    Outputs['connectivityTroubleshooter']['run'] extends AsyncIterable<infer Update> ? Update : never;
+export type TroubleshooterRow = Extract<TroubleshooterRunUpdate, { type: 'started' }>['rows'][number];
+export type TroubleshooterCard = Extract<TroubleshooterRunUpdate, { type: 'finished' }>['result'];
 
 export interface ViewFixture {
     readonly config: unknown;
@@ -82,6 +89,333 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
+const troubleshooterConfig: ConnectivityTroubleshooterConfiguration = {
+    connectionName: 'Stage 0 fixture connection',
+    troubleshooterSessionId: 'stage0-troubleshooter-session',
+    feedbackPermitted: true,
+    // Static states render at once, so layout assertions see the final state; `paced-run` paces (0043).
+    stepPacing: { stepMs: 0, jitterMs: 0 },
+};
+export const troubleshooterStartedAt = 1790884800000;
+export const troubleshooterPendingRows: TroubleshooterRow[] = panelRowIds.map(
+    (id): TroubleshooterRow => ({ id, status: 'pending', segments: [] }),
+);
+export const troubleshooterHost = 'c-stage0.mongocluster.cosmos.azure.com';
+
+// WI-18 prototype: expandable row details. Fixture data only; the live host builds the same shape.
+// The panel always shows full identifiers; Hide identifiers applies to the report only (WI-19).
+export type TroubleshooterDetails = NonNullable<TroubleshooterRow['details']>;
+export type TroubleshooterFinding = TroubleshooterDetails['findings'][number];
+export type TroubleshooterEvidence = TroubleshooterDetails['evidence'][number];
+
+/** A row's details, as the host sends them. */
+export function troubleshooterDetails(
+    findings: TroubleshooterFinding[],
+    evidence: TroubleshooterEvidence[] = [],
+): TroubleshooterDetails {
+    return { findings, evidence };
+}
+
+/** A finding the host would send, with no identifiers in it. */
+export function troubleshooterFinding(
+    severity: TroubleshooterFinding['severity'],
+    title: string,
+    explanation: string,
+    nextStep?: string,
+    targets?: string[],
+): TroubleshooterFinding {
+    return { severity, title, explanation, ...(nextStep ? { nextStep } : {}), ...(targets ? { targets } : {}) };
+}
+
+/** `fc-0123456789ab-00N.<cluster>`: the SRV target names Azure DocumentDB returns, fixture-safe. */
+export const troubleshooterSrvTargets = [0, 1, 2].map(
+    (index): string => `fc-0123456789ab-00${index}.${troubleshooterHost}`,
+);
+export const troubleshooterPrivateLinkAlias = 'fc-0123456789ab-000.privatelink.mongocluster.cosmos.azure.com';
+export const troubleshooterPublicAliasTitle = 'Public address for this Azure host name';
+export const troubleshooterPublicAliasExplanation =
+    "The name goes through Azure's private-link alias and resolves to a public address. That is normal outside the cluster's private network.";
+export const troubleshooterPrivateAccessHint =
+    'This name resolved to a public address. If the cluster allows only private access, connect from its virtual network or a network that resolves the private endpoint (VPN, peering or a private DNS zone).';
+const troubleshooterDnsServer = '172.20.192.1';
+
+interface HealthyRunShape {
+    readonly hosts: readonly string[];
+    readonly addresses: readonly string[];
+    readonly cnameChains?: readonly (readonly string[])[];
+    readonly dnsFindings?: TroubleshooterFinding[];
+    readonly pingMs: number;
+    readonly databaseCount: number;
+}
+
+/**
+ * The details a healthy DocumentDB run sends for rows 2 to 8.
+ */
+export function troubleshooterHealthyDetails(
+    shape: HealthyRunShape,
+): Record<
+    | 'connectionSettings'
+    | 'serverAddress'
+    | 'networkConnection'
+    | 'secureConnection'
+    | 'serverResponse'
+    | 'authentication'
+    | 'databaseAccess',
+    TroubleshooterDetails
+> {
+    const query = `_mongodb._tcp.${troubleshooterHost}`;
+    const certificate = `*.${troubleshooterHost}`;
+    const address = (index: number): TroubleshooterEvidence & { kind: 'dnsHost' } => {
+        const answer = [{ address: shape.addresses[index], family: 4 as const, addressClass: 'public' as const }];
+        return {
+            kind: 'dnsHost',
+            host: shape.hosts[index],
+            cnameChain: [...(shape.cnameChains?.[index] ?? [])],
+            system: answer,
+            direct: answer,
+            systemFailed: false,
+            directFailed: false,
+            agree: true,
+        };
+    };
+    return {
+        connectionSettings: troubleshooterDetails(
+            [],
+            [
+                {
+                    kind: 'connectionSettings',
+                    scheme: 'mongodb+srv',
+                    hosts: [troubleshooterHost],
+                    user: 'stage0user',
+                    passwordPresent: false,
+                    authMethod: 'native',
+                    authSource: { value: 'admin', origin: 'dns' },
+                    options: [
+                        { name: 'tls', value: 'true', hidden: false, source: 'uri' },
+                        { name: 'appName', value: 'stage0-fixture', hidden: false, source: 'uri' },
+                        { name: 'authSource', value: 'admin', hidden: false, source: 'dns' },
+                    ],
+                },
+            ],
+        ),
+        serverAddress: troubleshooterDetails(shape.dnsFindings ?? [], [
+            {
+                kind: 'srv',
+                query,
+                targets: shape.hosts.map((name): string => `${name}:10260`),
+                omittedTargets: 0,
+                resolver: 'system',
+                dnsServers: [troubleshooterDnsServer],
+                txtOptions: [{ name: 'authSource', value: 'admin' }],
+                failed: false,
+            },
+            ...shape.hosts.map((_name, index) => address(index)),
+        ]),
+        networkConnection: troubleshooterDetails(
+            [],
+            shape.hosts.map(
+                (name, index): TroubleshooterEvidence => ({
+                    kind: 'tcpHost',
+                    host: name,
+                    port: 10260,
+                    connectedAddress: shape.addresses[index],
+                    failedAddresses: [],
+                }),
+            ),
+        ),
+        secureConnection: troubleshooterDetails(
+            [],
+            shape.hosts.map(
+                (name): TroubleshooterEvidence => ({
+                    kind: 'tlsHost',
+                    host: name,
+                    protocol: 'TLSv1.3',
+                    subject: certificate,
+                    issuer: 'Microsoft Azure RSA TLS Issuing CA 03',
+                    validTo: '2027-03-01T00:00:00.000Z',
+                    trusted: true,
+                    hostNameMatched: true,
+                }),
+            ),
+        ),
+        serverResponse: troubleshooterDetails(
+            [],
+            shape.hosts.map(
+                (name): TroubleshooterEvidence => ({
+                    kind: 'serverHost',
+                    host: name,
+                    topology: 'documentdbGateway',
+                    documentdbVersion: '0.107.0',
+                    command: 'hello',
+                    maxWireVersion: 21,
+                    passwordMechanisms: ['SCRAM-SHA-256'],
+                }),
+            ),
+        ),
+        authentication: troubleshooterDetails(
+            [],
+            [
+                {
+                    kind: 'auth',
+                    method: 'native',
+                    mechanism: 'SCRAM-SHA-256',
+                    mechanismNegotiated: true,
+                    user: 'stage0user',
+                    authSource: { value: 'admin', origin: 'default' },
+                    stages: [{ stage: 'sendPassword', outcome: 'done' }],
+                },
+            ],
+        ),
+        databaseAccess: troubleshooterDetails(
+            [],
+            [
+                {
+                    kind: 'access',
+                    commands: [
+                        { command: 'ping', outcome: 'ok' },
+                        { command: 'connectionStatus', outcome: 'ok' },
+                        { command: 'listDatabases', outcome: 'ok' },
+                        { command: 'buildInfo', outcome: 'ok' },
+                        { command: 'hello', outcome: 'ok' },
+                    ],
+                    pingMs: shape.pingMs,
+                    databaseCount: shape.databaseCount,
+                    serverVersion: '7.0.0',
+                },
+            ],
+        ),
+    };
+}
+
+const troubleshooterConnectedDetails = troubleshooterHealthyDetails({
+    hosts: troubleshooterSrvTargets,
+    addresses: ['203.0.113.10', '203.0.113.11', '203.0.113.12'],
+    pingMs: 12,
+    databaseCount: 5,
+});
+
+/** A healthy DocumentDB connection, with evidence on every row the host fills today. */
+export const troubleshooterConnectedRows: TroubleshooterRow[] = [
+    {
+        id: 'setup',
+        status: 'done',
+        segments: [
+            { kind: 'location', remoteKind: 'local' },
+            { kind: 'platform', platform: 'linux' },
+            { kind: 'arch', arch: 'x64' },
+        ],
+    },
+    {
+        id: 'connectionSettings',
+        status: 'done',
+        segments: [
+            { kind: 'scheme', scheme: 'mongodb+srv' },
+            { kind: 'user', userName: 'stage0user' },
+            { kind: 'optionCount', count: 2 },
+        ],
+        details: troubleshooterConnectedDetails.connectionSettings,
+    },
+    {
+        id: 'serverAddress',
+        status: 'done',
+        segments: [
+            { kind: 'srvHosts', count: 3 },
+            { kind: 'resolved', resolved: 3, total: 3 },
+        ],
+        details: troubleshooterConnectedDetails.serverAddress,
+    },
+    {
+        id: 'networkConnection',
+        status: 'done',
+        segments: [
+            { kind: 'reachable', reachable: 3, total: 3 },
+            { kind: 'port', port: 10260 },
+        ],
+        details: troubleshooterConnectedDetails.networkConnection,
+    },
+    {
+        id: 'secureConnection',
+        status: 'done',
+        segments: [
+            { kind: 'tlsProtocol', protocol: 'TLSv1.3' },
+            { kind: 'certificateTrusted' },
+            { kind: 'validUntil', date: '2027-03-01T00:00:00.000Z' },
+        ],
+        details: troubleshooterConnectedDetails.secureConnection,
+    },
+    {
+        id: 'serverResponse',
+        status: 'done',
+        segments: [{ kind: 'topology', topology: 'documentdbGateway' }, { kind: 'answeredBeforeSignIn' }],
+        details: troubleshooterConnectedDetails.serverResponse,
+    },
+    {
+        id: 'authentication',
+        status: 'done',
+        segments: [
+            { kind: 'authMethod', method: 'native' },
+            { kind: 'account', label: 'stage0user' },
+        ],
+        details: troubleshooterConnectedDetails.authentication,
+    },
+    {
+        id: 'databaseAccess',
+        status: 'done',
+        segments: [
+            { kind: 'ping', ms: 12 },
+            { kind: 'databasesVisible', count: 5 },
+        ],
+        details: troubleshooterConnectedDetails.databaseAccess,
+    },
+];
+/** The result card data for a run; every flag is off unless the scenario sets it. */
+export function troubleshooterCard(
+    outcome: TroubleshooterCard['outcome'],
+    extra: Partial<Omit<TroubleshooterCard, 'outcome'>> = {},
+): TroubleshooterCard {
+    return {
+        outcome,
+        firewallHint: false,
+        earlierSignInFailure: false,
+        runTimeoutBeforeAttempt: false,
+        authenticated: outcome === 'connected',
+        ...extra,
+    };
+}
+export const troubleshooterConnectedCard = troubleshooterCard('connected', {
+    serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: troubleshooterHost, pingMs: 12 },
+});
+/** The card's sentence for a clean, signed-in connection; server facts live in the rows' Details (decision 0041). */
+export const troubleshooterConnectedSummary = 'All checks passed. Sign-in succeeded and the database answered.';
+export const troubleshooterFullCoverage = { limited: false, retryWouldHelp: false, connectionTimeoutLimited: false };
+const troubleshooterConnectedRun: TroubleshooterRunUpdate[] = [
+    {
+        type: 'started',
+        runId: 'stage0-run-connected',
+        startedAt: troubleshooterStartedAt,
+        rows: troubleshooterPendingRows,
+    },
+    {
+        type: 'finished',
+        runId: 'stage0-run-connected',
+        finishedAt: troubleshooterStartedAt + 4000,
+        rows: troubleshooterConnectedRows,
+        outcome: 'connected',
+        result: troubleshooterConnectedCard,
+        coverage: troubleshooterFullCoverage,
+    },
+];
+/** The fixed row labels, in order; spelled out so the scenarios check the view's own strings. */
+export const troubleshooterRowLabels = [
+    'Diagnosis setup',
+    'Connection settings',
+    'Server address (DNS)',
+    'Network connection (TCP)',
+    'Secure connection (TLS)',
+    'Server greeting (hello)',
+    'Authentication',
+    'Database access',
+] as const;
 interface FixtureTableRow {
     readonly id: string;
     readonly 'x-objectid': string;
@@ -243,6 +577,30 @@ export const fixtures = {
             'localQuickStart.checkPassword': reply<Outputs['localQuickStart']['checkPassword']>('query', 'ok'),
             'localQuickStart.reportStepChange': reply<void>('mutation', undefined),
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
+        },
+    },
+    connectivityTroubleshooter: {
+        config: troubleshooterConfig,
+        monaco: false,
+        content: [
+            ...troubleshooterRowLabels,
+            'Connection successful',
+            'Running on this computer',
+            troubleshooterConnectedSummary,
+        ],
+        styles: [{ selector: '#connectivity-checks', property: 'display', expected: 'flex' }],
+        rpc: {
+            ...common,
+            'connectivityTroubleshooter.run': { type: 'subscription', results: troubleshooterConnectedRun },
+            'connectivityTroubleshooter.panelEvents': { type: 'subscription', results: [], keepOpen: true },
+            'connectivityTroubleshooter.cancel': reply<void>('mutation', undefined),
+            'connectivityTroubleshooter.showDiagnostics': reply<boolean>('mutation', true),
+            'connectivityTroubleshooter.setReportIdentifiers': reply<boolean>('mutation', false),
+            'connectivityTroubleshooter.copyReport': reply<void>('mutation', undefined),
+            'connectivityTroubleshooter.saveReport': reply<void>('mutation', undefined),
+            'common.openFeedback': reply<void>('mutation', undefined),
+            // The share warning before Copy or Save with identifiers; the fixture always continues.
+            'common.confirm': reply<{ confirmed: boolean }>('mutation', { confirmed: true }),
         },
     },
     atlasCredentials: {

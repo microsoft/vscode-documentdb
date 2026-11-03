@@ -316,7 +316,7 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 return await new AsyncFunction('page', source)(page);
 ```
 
-The helper executes outside the page and does not weaken its CSP. It checks all five settled views,
+The helper executes outside the page and does not weaken its CSP. It checks all six settled views,
 computed styles, diagnostics, network responses, fetched chunks, and actual editor-originated worker
 round-trips in both Monaco views. The helper edits the rendered editor and correlates a response with
 that editor's synchronized model: Unicode highlighting for Collection View, and JSON validation with
@@ -343,12 +343,62 @@ The serve-only [Vite plugin](../vite/webview-scenarios.mjs) lists every
 No scenario or helper URL uses query strings, which remote port forwarding mangles.
 Nothing is added to production bundles or the packaged-VSIX L2 gate.
 
-[Scenarios](./browser/scenarios.ts) import all five L2 fixtures as `default`, plus nine Local Quick
+[Scenarios](./browser/scenarios.ts) import all six L2 fixtures as `default`, plus nine Local Quick
 Start states: `introduction`, `configure`, `provisioning`, `success`, `failed-port-in-use`,
-`failed-timeout`, and `docker-missing-windows`, `docker-missing-mac`, `docker-missing-linux`.
+`failed-timeout`, and `docker-missing-windows`, `docker-missing-mac`, `docker-missing-linux`; and
+nineteen connection diagnosis states beside its connected `default`: `running` (rows 1–3
+settled, row 4 checking, rows 5–8 pending, the run still open and no card), `dns-failure`,
+`tls-warning`, `remote-host`, `ip-address-tls-off`, `timeout-limited`, `cancelled`,
+`report-identifiers-hidden`, the Microsoft Entra ID outcomes `entra-connected`, `entra-us-gov-connected`,
+`entra-no-silent-session`, `entra-cloud-mismatch`, `entra-token-failed` and
+`entra-server-rejected`, and `managed-identity-connected`, `listing-denied`,
+`compressor-unavailable`, `network-refused` and `auth-rejected-native`.
 Every state has dark, light and high-contrast routes. The shared core's `TypedRpcFixtures` checks
 procedure paths **and outputs**, including subscription items; escaping actions are only recorded.
 Docker install assertions check exactly one `common.openUrl` call and its platform-specific URL.
+Every connection diagnosis scenario asserts the eight row labels in order (`order`: the elements matching
+a selector contain the given texts one to one); that the eight rows share one height within 1 px, so
+pending, active, settled and skipped rows all reserve one detail line and no evidence line wraps
+(`rowHeights`: exactly `count` elements match the selector and their heights differ by at most
+`tolerance` px at the page's current viewport width; it also reports that width and the list's top
+offset); that the list starts at `troubleshooterListTop` px from the top of the document in every
+state, so the card appearing below never moves it (`top`: the first element matching the selector
+starts at that offset, rounded); and that no rendered text matches a finding code, an AADSTS code,
+`http` or a Microsoft Entra ID rule ID (`text`: the first element matching a selector contains every
+`includes` string and matches none of the `excludes` patterns, case-insensitive). Every state except
+`running` also asserts that the result card renders below the list (`below`: the second selector
+follows the first in the document and starts under its bottom edge) and the card's text. The layout
+assertions measure at whatever viewport the runner's page has. Run them at a width of at least 900 px,
+the reference panel width for connection diagnosis layout checks; they pass at 900 px and 1280 px
+(Playwright's default). `network-refused`'s evidence line is too long to share one line with its
+Details toggle at any width, so it wraps around the toggle, and that scenario's `rowHeights` leaves
+out the Network connection row. Below about 700 px, other evidence lines wrap and `rowHeights`
+fails. That is expected: narrow panels may wrap evidence lines rather than cut them off (design §5.2). The fake host replays the same subscription results for
+every call, so a re-run that streams a different second run is covered by the view's jsdom test
+(`ConnectivityTroubleshooter.test.tsx`), not by a scenario. `network-refused` and `private-endpoint-blocked`
+expect the possible-firewall sentence; `auth-rejected-native` and the other non-network failures
+assert its absence. Report-action assertions check the run ID and the Hide identifiers choice, and
+that Copy or Save with identifiers first calls `common.confirm` (the share warning, decision 0040;
+the fixture always continues) while Save with identifiers hidden does not. Every state also asserts
+that each Details toggle sits inside its own row on the evidence line, under the row title (`inside`
+with `under`: each inner control's centre lies within its container and its top at or below the
+bottom of the container's first `under` match). `private-endpoint-public` and
+`private-endpoint-report-identifiers-hidden` assert that the Hide identifiers link changes nothing in
+the panel (`stableText`: the selector's text is the same after the steps as before), and that the
+panel shows full identifiers and no report placeholders while the report hides them. Their Azure
+private-link alias finding is informational: DNS is done and the card says "Connection successful"
+without warnings or private-access advice. `private-endpoint-blocked` keeps the same DNS information
+but fails at Network connection (TCP) with a timeout and the conditional private-access hint.
+`tls-warning` retains the real "Connection successful, with 1 warning" path.
+
+Every connection diagnosis fixture sets `stepPacing` to zero, so these static states render at once
+and the layout assertions see their final state. `paced-run` is the exception: it leaves `stepPacing`
+out, so the panel's default pacing applies (decision 0043, amended WI-24 to 400 ms ± 100 ms per step),
+and replays a run whose eight rows start and settle in one burst. Its `sequence` assertion checks that the list,
+each row reaching `data-status="done"`, and the result card first appear in that order, at least
+150 ms apart and at least 1,800 ms from the list to the card. The scenario runtime records when each
+milestone selector first matches, from page load (`window.__scenarioTimeline`), so the timing is
+observed while the page settles, not after it is ready. The route takes about 4 s to become ready.
 
 With a Playwright `page` already on the dev-server origin, execute this snippet **outside the page**:
 
