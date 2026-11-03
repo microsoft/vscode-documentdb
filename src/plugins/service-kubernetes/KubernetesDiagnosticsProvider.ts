@@ -17,6 +17,8 @@ import * as l10n from '@vscode/l10n';
 import {
     type ConnectionDiagnosticsProvider,
     type ConnectionDiagnosticsRequest,
+    type ConnectionExplanation,
+    type DiagnosisIdentifier,
 } from '../../services/connectionDiagnosticsService';
 import { type KubernetesPortForwardMetadata } from './portForwardMetadata';
 
@@ -54,11 +56,19 @@ export function resetKubernetesClustersForTests(): void {
 export class KubernetesDiagnosticsProvider implements ConnectionDiagnosticsProvider {
     public readonly id = 'kubernetes-port-forward';
 
-    public async explain({ clusterId, error }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
+    public async explain({
+        clusterId,
+        error,
+    }: ConnectionDiagnosticsRequest): Promise<ConnectionExplanation | undefined> {
         const metadata = knownClusters.get(clusterId);
         if (!metadata) {
             return undefined;
         }
+        // The text names the service and namespace; listing them lets a shared report hide them.
+        const identifiers: DiagnosisIdentifier[] = [
+            { kind: 'service', value: metadata.serviceName },
+            { kind: 'namespace', value: metadata.namespace },
+        ];
 
         const target = l10n.t('"{service}" in namespace "{namespace}"', {
             service: metadata.serviceName,
@@ -76,19 +86,25 @@ export class KubernetesDiagnosticsProvider implements ConnectionDiagnosticsProvi
         );
 
         if (!isTunnelUp) {
-            return l10n.t(
-                'We cannot find an active port-forward tunnel to {target}, so localhost:{port} very likely does not reach the cluster right now. Collapse and expand the connection again to re-establish the tunnel.',
-                { target, port: String(metadata.localPort) },
-            );
+            return {
+                message: l10n.t(
+                    'We cannot find an active port-forward tunnel to {target}, so localhost:{port} very likely does not reach the cluster right now. Collapse and expand the connection again to re-establish the tunnel.',
+                    { target, port: String(metadata.localPort) },
+                ),
+                identifiers,
+            };
         }
 
         // The tunnel looks up, so a transport failure points past it, at the service or the pod.
         const message = error instanceof Error ? error.message : String(error);
         if (NO_ANSWER_SIGNATURES.some((signature) => signature.test(message))) {
-            return l10n.t(
-                'The port-forward tunnel to {target} looks active, but the service did not answer. The pod behind it may have restarted or been rescheduled.',
-                { target },
-            );
+            return {
+                message: l10n.t(
+                    'The port-forward tunnel to {target} looks active, but the service did not answer. The pod behind it may have restarted or been rescheduled.',
+                    { target },
+                ),
+                identifiers,
+            };
         }
 
         return undefined;

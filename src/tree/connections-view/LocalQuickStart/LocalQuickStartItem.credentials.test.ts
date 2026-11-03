@@ -271,7 +271,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
             if (source === 'tree') {
                 const children = await item.getChildren();
-                expect(children).toHaveLength(cached ? 0 : 1);
+                expect(children).toHaveLength(cached ? 0 : 3);
             } else {
                 await expect(item.connect()).resolves.toBeNull();
             }

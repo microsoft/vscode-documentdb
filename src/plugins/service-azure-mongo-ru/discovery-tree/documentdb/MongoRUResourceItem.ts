@@ -17,6 +17,8 @@ import { Views } from '../../../../documentdb/Views';
 import { ext } from '../../../../extensionVariables';
 import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import { type DiagnosticCredentialRead } from '../../../../tree/documentdb/diagnosticCredentialRead';
+import { readCredentialsForDiagnostics } from '../../../../tree/documentdb/readCredentialsForDiagnostics';
 import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { DISCOVERY_PROVIDER_ID, RESOURCE_TYPE } from '../../config';
 import { extractCredentialsFromRUAccount } from '../../utils/ruClusterHelpers';
@@ -47,23 +49,36 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
-            context.telemetry.properties.resourceType = RESOURCE_TYPE;
-            if (this.journeyCorrelationId) {
-                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
-            }
+        return callWithTelemetryAndErrorHandling('getCredentials', (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            const credentials = await extractCredentialsFromRUAccount(
-                context,
-                this.subscription,
-                this.cluster.resourceGroup!,
-                this.cluster.name,
-            );
+    /** Same Azure Resource Manager read, without error UI; failures reach the troubleshooter typed. */
+    public override getCredentialsForDiagnostics(
+        read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return readCredentialsForDiagnostics('getCredentials', 'azure', read, (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            return credentials;
-        });
+    private async readCredentials(context: IActionContext): Promise<EphemeralClusterCredentials> {
+        context.telemetry.properties.view = Views.DiscoveryView;
+        context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+        context.telemetry.properties.resourceType = RESOURCE_TYPE;
+        if (this.journeyCorrelationId) {
+            context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+        }
+
+        const credentials = await extractCredentialsFromRUAccount(
+            context,
+            this.subscription,
+            this.cluster.resourceGroup!,
+            this.cluster.name,
+        );
+
+        return credentials;
     }
 
     /**

@@ -24,6 +24,15 @@ import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate
 import { ext } from '../../../../extensionVariables';
 import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import {
+    ConnectionEndpointUnavailableError,
+    ConnectionInputCancelledError,
+    type DiagnosticCredentialRead,
+} from '../../../../tree/documentdb/diagnosticCredentialRead';
+import {
+    cancellationTokenFromSignal,
+    readCredentialsForDiagnostics,
+} from '../../../../tree/documentdb/readCredentialsForDiagnostics';
 import { type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
 import { DISCOVERY_PROVIDER_ID } from '../../config';
@@ -36,6 +45,48 @@ export interface VirtualMachineModel extends AzureClusterModel {
 }
 
 const DEFAULT_PORT = 27017;
+
+function portPromptOptions(): vscode.InputBoxOptions {
+    return {
+        prompt: l10n.t('Enter the port number your DocumentDB uses. The default port: {defaultPort}.', {
+            defaultPort: DEFAULT_PORT,
+        }),
+        value: `${DEFAULT_PORT}`,
+        placeHolder: l10n.t('The default port: {defaultPort}', { defaultPort: DEFAULT_PORT }),
+        validateInput: (port: string) => {
+            port = port ? port.trim() : '';
+
+            if (!port) {
+                return l10n.t('Port number is required');
+            }
+
+            const portNumber = parseInt(port, 10);
+            if (isNaN(portNumber)) {
+                return l10n.t('Port number must be a number');
+            }
+
+            if (portNumber <= 0 || portNumber > 65535) {
+                return l10n.t('Port number must be between 1 and 65535');
+            }
+
+            return undefined;
+        },
+    };
+}
+
+/** The port in a connection string this VM was connected with earlier in the session, if any. */
+function sessionPort(connectionString: string | undefined): number | undefined {
+    if (!connectionString) {
+        return undefined;
+    }
+    try {
+        const match = /:(\d+)$/.exec(new DocumentDBConnectionString(connectionString).hosts?.[0] ?? '');
+        const port = match ? parseInt(match[1], 10) : NaN;
+        return port > 0 && port <= 65535 ? port : undefined;
+    } catch {
+        return undefined;
+    }
+}
 
 export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
     iconPath = new vscode.ThemeIcon('server-environment');
@@ -74,95 +125,117 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
-            context.telemetry.properties.view = Views.DiscoveryView;
-            if (this.journeyCorrelationId) {
-                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
-            }
+            this.populateTelemetry(context);
 
             if (!this.cluster.connectionString) {
                 return undefined;
             }
 
-            const newPort = await context.ui.showInputBox({
-                prompt: l10n.t('Enter the port number your DocumentDB uses. The default port: {defaultPort}.', {
-                    defaultPort: DEFAULT_PORT,
-                }),
-                value: `${DEFAULT_PORT}`,
-                placeHolder: l10n.t('The default port: {defaultPort}', { defaultPort: DEFAULT_PORT }),
-                validateInput: (port: string) => {
-                    port = port ? port.trim() : '';
-
-                    if (!port) {
-                        return l10n.t('Port number is required');
-                    }
-
-                    const portNumber = parseInt(port, 10);
-                    if (isNaN(portNumber)) {
-                        return l10n.t('Port number must be a number');
-                    }
-
-                    if (portNumber <= 0 || portNumber > 65535) {
-                        return l10n.t('Port number must be between 1 and 65535');
-                    }
-
-                    return undefined;
-                },
-            });
+            const newPort = await context.ui.showInputBox(portPromptOptions());
 
             const portNumber = newPort ? parseInt(newPort, 10) : DEFAULT_PORT;
 
-            const parsedCS = new DocumentDBConnectionString(this.cluster.connectionString ?? '');
-
-            const newHosts: string[] = [];
-            if (parsedCS.hosts && parsedCS.hosts.length > 0) {
-                for (const hostString of parsedCS.hosts) {
-                    let baseAddress = hostString;
-                    const lastColonIndex = hostString.lastIndexOf(':');
-
-                    // Check if a colon exists and it's not the first character of the string.
-                    // This is an attempt to identify a port separator.
-                    if (lastColonIndex > 0) {
-                        const potentialPortStr = hostString.substring(lastColonIndex + 1);
-
-                        // Verify if the part after the colon is purely numeric.
-                        if (/^\d+$/.test(potentialPortStr)) {
-                            const portVal = parseInt(potentialPortStr, 10);
-                            // Verify if the numeric part is within the valid port range.
-                            if (portVal > 0 && portVal <= 65535) {
-                                // If all checks pass, consider this a "host:port" structure.
-                                // The baseAddress is the part before the last colon.
-                                // This handles "hostname:port" and "[ipv6address]:port".
-                                baseAddress = hostString.substring(0, lastColonIndex);
-                            }
-                            // If portVal is not in valid range, potentialPortStr is not a valid port.
-                            // So, the colon was likely part of the hostname itself (e.g. unbracketed IPv6).
-                            // In this case, baseAddress remains the original hostString.
-                        }
-                        // If potentialPortStr is not numeric, it's not a port.
-                        // The colon was likely part of the hostname.
-                        // baseAddress remains the original hostString.
-                    }
-                    // If lastColonIndex <= 0 (no colon, or colon is the first char like ":27017"),
-                    // or if the part after colon wasn't a valid port,
-                    // baseAddress is the original hostString.
-
-                    // Construct the new host entry with the specified port.
-                    // The format "baseAddress:numericPortToUse" is verified by construction.
-                    newHosts.push(`${baseAddress}:${portNumber}`);
-                }
-            }
-            // else if parsedCS.hosts is null, undefined or empty, newHosts remains empty.
-
-            parsedCS.hosts = newHosts;
-
-            return {
-                connectionString: parsedCS.toString(),
-                connectionUser: parsedCS.username,
-                connectionPassword: parsedCS.password,
-                availableAuthMethods: [AuthMethodId.NativeAuth],
-            };
+            return this.credentialsWithPort(portNumber);
         });
+    }
+
+    /**
+     * The troubleshooter's read (decision 0035, refined in WI-16): the VM's discovery data has no port, so
+     * a port the user already entered in this session is reused silently. Otherwise the existing port
+     * prompt is shown, dismissed by the run's signal; closing it reports cancelled input.
+     */
+    public override getCredentialsForDiagnostics(
+        read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return readCredentialsForDiagnostics('getCredentials', 'azure', read, async (context: IActionContext) => {
+            this.populateTelemetry(context);
+
+            if (!this.cluster.connectionString) {
+                throw new ConnectionEndpointUnavailableError('azure', 'notProvided');
+            }
+
+            let port = sessionPort(CredentialCache.getCredentials(this.cluster.clusterId)?.connectionString);
+            context.telemetry.properties.portSource = port === undefined ? 'prompt' : 'sessionCache';
+            if (port === undefined) {
+                const cancellation = cancellationTokenFromSignal(read.signal);
+                let value: string | undefined;
+                try {
+                    value = await vscode.window.showInputBox(portPromptOptions(), cancellation.token);
+                } finally {
+                    cancellation.dispose();
+                }
+                read.signal.throwIfAborted();
+                if (value === undefined) {
+                    throw new ConnectionInputCancelledError('port');
+                }
+                port = parseInt(value.trim(), 10);
+            }
+
+            return this.credentialsWithPort(port);
+        });
+    }
+
+    private populateTelemetry(context: IActionContext): void {
+        context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+        context.telemetry.properties.view = Views.DiscoveryView;
+        if (this.journeyCorrelationId) {
+            context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+        }
+    }
+
+    private credentialsWithPort(
+        portNumber: number,
+    ): EphemeralClusterCredentials & { readonly connectionUser: string; readonly connectionPassword: string } {
+        const parsedCS = new DocumentDBConnectionString(this.cluster.connectionString ?? '');
+
+        const newHosts: string[] = [];
+        if (parsedCS.hosts && parsedCS.hosts.length > 0) {
+            for (const hostString of parsedCS.hosts) {
+                let baseAddress = hostString;
+                const lastColonIndex = hostString.lastIndexOf(':');
+
+                // Check if a colon exists and it's not the first character of the string.
+                // This is an attempt to identify a port separator.
+                if (lastColonIndex > 0) {
+                    const potentialPortStr = hostString.substring(lastColonIndex + 1);
+
+                    // Verify if the part after the colon is purely numeric.
+                    if (/^\d+$/.test(potentialPortStr)) {
+                        const portVal = parseInt(potentialPortStr, 10);
+                        // Verify if the numeric part is within the valid port range.
+                        if (portVal > 0 && portVal <= 65535) {
+                            // If all checks pass, consider this a "host:port" structure.
+                            // The baseAddress is the part before the last colon.
+                            // This handles "hostname:port" and "[ipv6address]:port".
+                            baseAddress = hostString.substring(0, lastColonIndex);
+                        }
+                        // If portVal is not in valid range, potentialPortStr is not a valid port.
+                        // So, the colon was likely part of the hostname itself (e.g. unbracketed IPv6).
+                        // In this case, baseAddress remains the original hostString.
+                    }
+                    // If potentialPortStr is not numeric, it's not a port.
+                    // The colon was likely part of the hostname.
+                    // baseAddress remains the original hostString.
+                }
+                // If lastColonIndex <= 0 (no colon, or colon is the first char like ":27017"),
+                // or if the part after colon wasn't a valid port,
+                // baseAddress is the original hostString.
+
+                // Construct the new host entry with the specified port.
+                // The format "baseAddress:numericPortToUse" is verified by construction.
+                newHosts.push(`${baseAddress}:${portNumber}`);
+            }
+        }
+        // else if parsedCS.hosts is null, undefined or empty, newHosts remains empty.
+
+        parsedCS.hosts = newHosts;
+
+        return {
+            connectionString: parsedCS.toString(),
+            connectionUser: parsedCS.username,
+            connectionPassword: parsedCS.password,
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+        };
     }
 
     public getTreeItem(): vscode.TreeItem {

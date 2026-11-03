@@ -6,10 +6,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
-import { ConnectionDiagnosticsService, type ConnectionDiagnosticsProvider } from './connectionDiagnosticsService';
+import {
+    ConnectionDiagnosticsService,
+    type ConnectionDiagnosticsProvider,
+    type ConnectionDiagnosticsRequest,
+} from './connectionDiagnosticsService';
+
+const telemetryContext = vi.hoisted(() => ({
+    telemetry: { properties: {} as Record<string, string> },
+}));
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: vi.fn(),
+    callWithTelemetryAndErrorHandling: vi.fn(
+        async (_event: string, callback: (context: typeof telemetryContext) => void): Promise<void> => {
+            callback(telemetryContext);
+        },
+    ),
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
@@ -19,6 +31,8 @@ function provider(id: string, explain: ConnectionDiagnosticsProvider['explain'])
 
 describe('ConnectionDiagnosticsService', () => {
     beforeEach(() => {
+        vi.clearAllMocks();
+        telemetryContext.telemetry.properties = {};
         ConnectionDiagnosticsService.resetForTests();
     });
 
@@ -44,6 +58,42 @@ describe('ConnectionDiagnosticsService', () => {
         ).resolves.toEqual({ providerId: 'b', message: 'from b' });
         expect(second).not.toHaveBeenCalled();
     });
+
+    it('passes through the identifiers a structured explanation names (R4)', async () => {
+        const identifiers = [{ kind: 'service', value: 'payments-db-svc' }] as const;
+        ConnectionDiagnosticsService.registerProvider(
+            provider('k', () => Promise.resolve({ message: 'from k', identifiers })),
+        );
+
+        await expect(
+            ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') }),
+        ).resolves.toEqual({ providerId: 'k', message: 'from k', identifiers });
+    });
+
+    it.each([undefined, 'troubleshooter'] as const)(
+        'records the diagnosis source and passes it unchanged to providers (source=%s)',
+        async (source): Promise<void> => {
+            const explain = vi.fn().mockResolvedValue('explained');
+            ConnectionDiagnosticsService.registerProvider(provider('a', explain));
+            const request: ConnectionDiagnosticsRequest = { clusterId: 'c1', error: new Error('boom'), source };
+
+            await expect(ConnectionDiagnosticsService.explain(request)).resolves.toEqual({
+                providerId: 'a',
+                message: 'explained',
+            });
+
+            expect(explain).toHaveBeenCalledExactlyOnceWith(request);
+            expect(explain.mock.calls[0][0]).toBe(request);
+            expect(callWithTelemetryAndErrorHandling).toHaveBeenCalledExactlyOnceWith(
+                'connectionDiagnostics.explained',
+                expect.any(Function),
+            );
+            expect(telemetryContext.telemetry.properties).toEqual({
+                diagnosisProviderId: 'a',
+                diagnosisSource: source ?? 'connect',
+            });
+        },
+    );
 
     it('skips a throwing provider instead of failing the caller', async () => {
         ConnectionDiagnosticsService.registerProvider(provider('a', () => Promise.reject(new Error('provider bug'))));

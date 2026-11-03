@@ -4,12 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { type ConnectionReachabilityIntent } from '../../services/connectionReachabilityService';
 import { createCoreApi, loadConfiguredKubeConfig } from './kubernetesClient';
 import { type KubernetesPortForwardMetadata } from './portForwardMetadata';
 import { PortForwardTunnelManager, type TunnelStartResult } from './portForwardTunnel';
 import { getSource } from './sources/sourceStore';
 
-export async function ensureKubernetesPortForward(metadata: KubernetesPortForwardMetadata): Promise<TunnelStartResult> {
+export async function ensureKubernetesPortForward(
+    metadata: KubernetesPortForwardMetadata,
+    intent?: ConnectionReachabilityIntent,
+): Promise<TunnelStartResult> {
     // Surface a friendlier message before falling through to loadConfiguredKubeConfig,
     // which would otherwise show the raw sourceId (UUID for file/inline sources).
     // We use the sourceLabel saved with the connection when available.
@@ -26,16 +30,21 @@ export async function ensureKubernetesPortForward(metadata: KubernetesPortForwar
 
     const kubeConfig = await loadConfiguredKubeConfig(metadata.sourceId);
     const coreApi = await createCoreApi(kubeConfig, metadata.contextName);
+    // A caller that gave up while the kubeconfig loaded must not get a tunnel it no longer waits for.
+    intent?.signal?.throwIfAborted();
 
-    return await PortForwardTunnelManager.getInstance().startTunnel({
-        sourceId: metadata.sourceId,
-        kubeConfig,
-        coreApi,
-        contextName: metadata.contextName,
-        namespace: metadata.namespace,
-        serviceName: metadata.serviceName,
-        servicePort: metadata.servicePort,
-        servicePortName: metadata.servicePortName,
-        localPort: metadata.localPort,
-    });
+    return await PortForwardTunnelManager.getInstance().startTunnel(
+        {
+            sourceId: metadata.sourceId,
+            kubeConfig,
+            coreApi,
+            contextName: metadata.contextName,
+            namespace: metadata.namespace,
+            serviceName: metadata.serviceName,
+            servicePort: metadata.servicePort,
+            servicePortName: metadata.servicePortName,
+            localPort: metadata.localPort,
+        },
+        { interactive: intent?.interactive !== false },
+    );
 }

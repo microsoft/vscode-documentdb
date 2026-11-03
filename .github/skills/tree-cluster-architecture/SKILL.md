@@ -182,6 +182,20 @@ At minimum, verify the context contract and `getCredentials()` path needed by:
 
 If a command is intentionally unavailable, gate it explicitly with context values and document why; do not omit base behavior accidentally.
 
+## Failure Presentation: Actions Only
+
+The tree shows **actions, never error or information rows**. When expanding a cluster fails, the
+reason goes in a **modal** (`showErrorMessage(..., { modal: true, detail })`, translated through
+`ConnectionDiagnosticsService` where available). The children are only recovery actions: Retry,
+"Diagnose this connection…", "Click here to open the shell" (on every failure, so experts can debug
+in the shell even when connecting or sign-in failed), and provider-owned
+actions such as "Update credentials…" via `errorRecoveryActions`
+(`ClusterItemBase.createErrorRecoveryChildren`).
+
+Do not add a child whose purpose is to show a message (an error label, a "sign-in required" row,
+a tooltip-only info node), even with an icon. Better wording belongs in the modal and in the
+Diagnose connection panel, not in the tree.
+
 ## Review Checklist
 
 Before approving a cluster tree change, answer yes to all:
@@ -196,3 +210,4 @@ Before approving a cluster tree change, answer yes to all:
 - [ ] IDs are collision-safe beyond display names.
 - [ ] A real render-to-lookup round-trip test covers every layout.
 - [ ] Standard cluster commands work or are explicitly gated off.
+- [ ] Failures show a modal; tree children are recovery actions only, never error or info rows.

@@ -52,6 +52,11 @@ export class MyDiagnosticsProvider implements ConnectionDiagnosticsProvider {
 
 `undefined` is always the safe answer: it means "show the original error".
 
+If the text names an infrastructure identifier that is not in the connection string (for example a
+Kubernetes service or namespace), return `{ message, identifiers }` instead of a plain string and list
+each one with its kind. The troubleshooter's "Hide identifiers" can only replace names it was told
+about.
+
 A provider may answer without inspecting the error at all. Cancellations are therefore filtered
 centrally: `explain()` returns `undefined` for a `UserCancelledError` before any provider is asked,
 so a wizard the user escaped is never reported as an infrastructure failure.

@@ -48,7 +48,23 @@ describe('KubernetesReachabilityProvider', () => {
         await provider.ensureReachable({ [KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]: validMetadata });
 
         expect(mockEnsureKubernetesPortForward).toHaveBeenCalledTimes(1);
-        expect(mockEnsureKubernetesPortForward).toHaveBeenCalledWith(expect.objectContaining({ localPort: 10260 }));
+        expect(mockEnsureKubernetesPortForward).toHaveBeenCalledWith(
+            expect.objectContaining({ localPort: 10260 }),
+            undefined,
+        );
+    });
+
+    it('forwards the troubleshooter intent and reports the shared tunnel outcome', async () => {
+        mockEnsureKubernetesPortForward.mockResolvedValue({ outcome: 'reused' });
+        const intent = { interactive: false, signal: new AbortController().signal };
+
+        await expect(
+            provider.ensureReachable({ [KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]: validMetadata }, 'cluster', intent),
+        ).resolves.toEqual({ sharedTunnel: 'reused' });
+        expect(mockEnsureKubernetesPortForward).toHaveBeenCalledWith(
+            expect.objectContaining({ localPort: 10260 }),
+            intent,
+        );
     });
 
     it('ensureReachable is a no-op when no metadata is present', async () => {

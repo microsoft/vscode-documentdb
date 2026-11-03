@@ -8,6 +8,7 @@ import * as net from 'net';
 import { PassThrough } from 'stream';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { LocalPortInUseError } from '../../services/connectionReachabilityService';
 
 interface TunnelParams {
     /**
@@ -201,10 +202,12 @@ export class PortForwardTunnelManager implements vscode.Disposable {
      * - `externalAssumed`: The port was occupied by an external process
      *   (e.g., `kubectl port-forward`) and the user chose to use it as-is.
      *
+     * @param options `interactive: false` (the connectivity troubleshooter) never asks to use an
+     *        occupied port; it fails with {@link LocalPortInUseError} instead.
      * @throws Error if the port is occupied and the user declines to use it,
      *         or if binding fails for a reason other than EADDRINUSE.
      */
-    async startTunnel(params: TunnelParams): Promise<TunnelStartResult> {
+    async startTunnel(params: TunnelParams, options?: { readonly interactive?: boolean }): Promise<TunnelStartResult> {
         const key = this._buildKey(
             params.sourceId,
             params.contextName,
@@ -233,10 +236,15 @@ export class PortForwardTunnelManager implements vscode.Disposable {
             throw createManagedPortConflictError(pendingPortConflict, params);
         }
 
-        const startPromise = this._doStartTunnel(key, params, {
-            stopAllGeneration: this._stopAllGeneration,
-            keyStopGeneration: this._getKeyStopGeneration(key),
-        });
+        const startPromise = this._doStartTunnel(
+            key,
+            params,
+            {
+                stopAllGeneration: this._stopAllGeneration,
+                keyStopGeneration: this._getKeyStopGeneration(key),
+            },
+            options?.interactive !== false,
+        );
         this._pendingStarts.set(key, startPromise);
         this._pendingStartParams.set(key, params);
         try {
@@ -320,6 +328,7 @@ export class PortForwardTunnelManager implements vscode.Disposable {
         key: string,
         params: TunnelParams,
         startGeneration: { readonly stopAllGeneration: number; readonly keyStopGeneration: number },
+        interactive: boolean,
     ): Promise<TunnelStartResult> {
         const k8s = await import('@kubernetes/client-node');
         const forward = new k8s.PortForward(params.kubeConfig, true);
@@ -428,6 +437,17 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                 throw new Error(
                     vscode.l10n.t(
                         'Cannot bind 127.0.0.1:{0}: permission denied. Choose a different local port (typically 1024 or higher).',
+                        String(params.localPort),
+                    ),
+                );
+            }
+
+            if (bindError?.code === 'EADDRINUSE' && !interactive) {
+                throw new LocalPortInUseError(
+                    params.localPort,
+                    'otherProgram',
+                    vscode.l10n.t(
+                        'Port {0} is already in use. Choose a different local port.',
                         String(params.localPort),
                     ),
                 );
@@ -712,7 +732,9 @@ export class PortForwardTunnelManager implements vscode.Disposable {
 }
 
 function createManagedPortConflictError(existingParams: TunnelParams, requestedParams: TunnelParams): Error {
-    return new Error(
+    return new LocalPortInUseError(
+        requestedParams.localPort,
+        'otherTunnel',
         vscode.l10n.t(
             'Local port {0} is already used by Kubernetes tunnel "{1}/{2}". Choose a different local port for "{3}/{4}".',
             String(requestedParams.localPort),

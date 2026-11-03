@@ -55,9 +55,14 @@ describe('KubernetesDiagnosticsProvider', () => {
             error: new Error('connect ECONNREFUSED 127.0.0.1:51234'),
         });
 
-        expect(result).toContain('port-forward tunnel');
-        expect(result).toContain('documentdb');
-        expect(result).toContain('51234');
+        expect(result?.message).toContain('port-forward tunnel');
+        expect(result?.message).toContain('documentdb');
+        expect(result?.message).toContain('51234');
+        // R4: the service and namespace the text names are returned as identifiers to hide.
+        expect(result?.identifiers).toEqual([
+            { kind: 'service', value: 'documentdb' },
+            { kind: 'namespace', value: 'databases' },
+        ]);
         expect(hasTunnel).toHaveBeenCalledWith('source-1', 'my-context', 'databases', 'documentdb', 51234);
     });
 
@@ -70,7 +75,11 @@ describe('KubernetesDiagnosticsProvider', () => {
             error: new Error('connect ECONNREFUSED 127.0.0.1:51234'),
         });
 
-        expect(result).toContain('looks active');
+        expect(result?.message).toContain('looks active');
+        expect(result?.identifiers).toEqual([
+            { kind: 'service', value: 'documentdb' },
+            { kind: 'namespace', value: 'databases' },
+        ]);
     });
 
     it('stays silent for a live tunnel and a non-transport failure', async () => {

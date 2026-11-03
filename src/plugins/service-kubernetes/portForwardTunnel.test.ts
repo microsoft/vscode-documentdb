@@ -34,6 +34,7 @@ vi.mock('@kubernetes/client-node', () => ({
 
 // Import after mocks are set up
 import { ext } from '../../extensionVariables';
+import { LocalPortInUseError } from '../../services/connectionReachabilityService';
 import { PortForwardTunnelManager, resolveServiceBackend } from './portForwardTunnel';
 
 // ---------------------------------------------------------------------------
@@ -635,6 +636,25 @@ describe('PortForwardTunnelManager', () => {
         }
     });
 
+    it('fails with a typed error and no dialog for a non-interactive start on an occupied port', async () => {
+        const blockingServer = net.createServer();
+        const port = await new Promise<number>((resolve) => {
+            blockingServer.listen(0, '127.0.0.1', () => {
+                resolve((blockingServer.address() as net.AddressInfo).port);
+            });
+        });
+
+        try {
+            const start = manager.startTunnel(createMockParams({ localPort: port }), { interactive: false });
+            await expect(start).rejects.toBeInstanceOf(LocalPortInUseError);
+            await expect(start).rejects.toMatchObject({ localPort: port, holder: 'otherProgram' });
+            expect(mockShowWarningMessage).not.toHaveBeenCalled();
+            expect(hasTunnel({ localPort: port })).toBe(false);
+        } finally {
+            blockingServer.close();
+        }
+    });
+
     it('should not register tunnel when user accepts external port-forward', async () => {
         mockShowWarningMessage.mockResolvedValue('Use existing');
 
@@ -808,6 +828,9 @@ describe('PortForwardTunnelManager', () => {
         await expect(manager.startTunnel(createMockParams({ serviceName: 'svc-b', localPort: port }))).rejects.toThrow(
             /already used by Kubernetes tunnel/,
         );
+        await expect(
+            manager.startTunnel(createMockParams({ serviceName: 'svc-b', localPort: port }), { interactive: false }),
+        ).rejects.toMatchObject({ name: 'LocalPortInUseError', localPort: port, holder: 'otherTunnel' });
 
         expect(mockShowWarningMessage).not.toHaveBeenCalled();
         expect(hasTunnel({ serviceName: 'svc-a', localPort: port })).toBe(true);

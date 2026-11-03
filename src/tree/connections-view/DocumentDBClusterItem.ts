@@ -29,11 +29,16 @@ import { ext } from '../../extensionVariables';
 import { ConnectionReachabilityService } from '../../services/connectionReachabilityService';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
+import { type DiagnosticCredentialRead } from '../documentdb/diagnosticCredentialRead';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 import { buildClusterTreeItem } from './clusterItemPresentation';
 import { resolveStorageZone, type ConnectionClusterModel } from './models/ConnectionClusterModel';
 import { buildSavedConnectionSecrets } from './savedConnectionSecrets';
+
+interface GetCredentialsOptions {
+    readonly ensureReachable?: boolean;
+}
 
 export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
     public override readonly cluster: TreeCluster<ConnectionClusterModel>;
@@ -47,7 +52,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         return this.cluster.storageId;
     }
 
-    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
+    public async getCredentials(options?: GetCredentialsOptions): Promise<EphemeralClusterCredentials | undefined> {
         const connectionType = resolveStorageZone(this.cluster);
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
@@ -55,7 +60,9 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             return undefined;
         }
 
-        await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
+        if (options?.ensureReachable !== false) {
+            await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
+        }
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
@@ -72,6 +79,13 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 : undefined,
             managedIdentityAuthConfig: connectionCredentials.secrets.managedIdentityAuthConfig,
         };
+    }
+
+    /** Stored data only: the troubleshooter's `prepare` check owns endpoint preparation (design §4.3). */
+    public override getCredentialsForDiagnostics(
+        _read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return this.getCredentials({ ensureReachable: false });
     }
 
     /**

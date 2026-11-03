@@ -43,8 +43,53 @@ export interface ConnectionReachabilityProvider {
      * same cluster can be attributed back to this source by a
      * {@link import('./connectionDiagnosticsService').ConnectionDiagnosticsProvider}. The stored
      * connection properties are not available on those later paths.
+     * @param intent How the caller wants preparation to behave; absent for an ordinary connect.
+     * @returns What the provider observed, when it can tell; nothing otherwise.
      */
-    ensureReachable(connectionProperties: Record<string, unknown>, clusterId?: string): Promise<void>;
+    ensureReachable(
+        connectionProperties: Record<string, unknown>,
+        clusterId?: string,
+        intent?: ConnectionReachabilityIntent,
+    ): Promise<void | ConnectionReachabilityResult>;
+}
+
+/** How a caller wants preparation to behave. Absent means an ordinary, interactive connect. */
+export interface ConnectionReachabilityIntent {
+    /**
+     * `false` for the connectivity troubleshooter: a provider must not show a dialog or notification,
+     * and fails with a typed error (such as {@link LocalPortInUseError}) where it would otherwise ask.
+     */
+    readonly interactive?: boolean;
+    /** Checked by providers before a side effect, such as starting a tunnel. */
+    readonly signal?: AbortSignal;
+}
+
+/** What a provider observed while preparing. */
+export interface ConnectionReachabilityResult {
+    /**
+     * A shared tunnel the provider started or found running. It is not owned by the caller and stays
+     * open after it, like the tunnel an ordinary connect sets up.
+     */
+    readonly sharedTunnel?: 'started' | 'reused' | 'externalAssumed';
+}
+
+/** A provider needed a local port that another program or another tunnel already holds. */
+export class LocalPortInUseError extends Error {
+    constructor(
+        public readonly localPort: number,
+        public readonly holder: 'otherProgram' | 'otherTunnel',
+        message: string,
+    ) {
+        super(message);
+        this.name = 'LocalPortInUseError';
+    }
+}
+
+/** Observes provider preparation without affecting the connect flow. */
+export interface ConnectionReachabilityObserver {
+    onProviderStarted?(providerId: string): void;
+    onProviderCompleted?(providerId: string, elapsedMs: number, result?: ConnectionReachabilityResult): void;
+    onProviderFailed?(providerId: string, elapsedMs: number, error: unknown): void;
 }
 
 /**
@@ -84,6 +129,8 @@ class ConnectionReachabilityServiceImpl {
     public async ensureReachable(
         connectionProperties: Record<string, unknown> | undefined,
         clusterId?: string,
+        observer?: ConnectionReachabilityObserver,
+        intent?: ConnectionReachabilityIntent,
     ): Promise<void> {
         if (!connectionProperties) {
             return;
@@ -91,8 +138,29 @@ class ConnectionReachabilityServiceImpl {
 
         for (const provider of this.providers) {
             if (provider.appliesTo(connectionProperties)) {
-                await provider.ensureReachable(connectionProperties, clusterId);
+                this.notifyObserver((): void => observer?.onProviderStarted?.(provider.id));
+                const startedAt = Date.now();
+                let result: void | ConnectionReachabilityResult;
+                try {
+                    result = await provider.ensureReachable(connectionProperties, clusterId, intent);
+                } catch (error) {
+                    this.notifyObserver((): void =>
+                        observer?.onProviderFailed?.(provider.id, Date.now() - startedAt, error),
+                    );
+                    throw error;
+                }
+                this.notifyObserver((): void =>
+                    observer?.onProviderCompleted?.(provider.id, Date.now() - startedAt, result ?? undefined),
+                );
             }
+        }
+    }
+
+    private notifyObserver(callback: () => void): void {
+        try {
+            callback();
+        } catch {
+            // Observers must never change provider outcomes or interrupt the connect flow.
         }
     }
 

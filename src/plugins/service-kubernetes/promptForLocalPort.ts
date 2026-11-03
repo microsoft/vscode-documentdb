@@ -62,6 +62,18 @@ export async function promptForLocalPort(
     return chosenPort;
 }
 
+/**
+ * The local port {@link promptForLocalPort} would suggest, without asking. Used by the connectivity
+ * troubleshooter, which never prompts; the bind-time conflict is still handled by the tunnel manager.
+ */
+export async function suggestLocalPort(remotePort: number, context?: IActionContext): Promise<number> {
+    const strategy = getLocalPortStrategy();
+    if (context) {
+        context.telemetry.properties.portForwardStrategy = strategy;
+    }
+    return resolveSuggestedLocalPort(remotePort, strategy);
+}
+
 async function resolveSuggestedLocalPort(remotePort: number, strategy: LocalPortStrategy): Promise<number> {
     if (strategy === 'matchRemote') {
         return remotePort;

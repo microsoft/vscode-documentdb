@@ -79,6 +79,24 @@ export interface ConnectionDiagnosticsRequest {
      * cannot be served from a webview.
      */
     readonly error: unknown;
+
+    /** Set by callers that are not real connect failures, so telemetry can tell them apart. */
+    readonly source?: 'troubleshooter';
+}
+
+/** Kinds of infrastructure identifiers a provider can name in its explanation. */
+export type DiagnosisIdentifierKind = 'service' | 'namespace';
+
+/** An identifier the explanation text contains, so a shared report can hide it. */
+export interface DiagnosisIdentifier {
+    readonly kind: DiagnosisIdentifierKind;
+    readonly value: string;
+}
+
+/** An explanation that names infrastructure identifiers, returned instead of a plain string. */
+export interface ConnectionExplanation {
+    readonly message: string;
+    readonly identifiers: readonly DiagnosisIdentifier[];
 }
 
 /**
@@ -98,13 +116,18 @@ export interface ConnectionDiagnosticsProvider {
      *
      * Implementations should answer the cheap question first (do I own this cluster? does the
      * error even look like mine?) so the common case costs close to nothing.
+     *
+     * A provider whose text names infrastructure identifiers (not hosts from the connection string)
+     * returns a {@link ConnectionExplanation} that lists them, so "Hide identifiers" can replace them.
      */
-    explain(request: ConnectionDiagnosticsRequest): Promise<string | undefined>;
+    explain(request: ConnectionDiagnosticsRequest): Promise<string | ConnectionExplanation | undefined>;
 }
 
 export interface ConnectionDiagnosis {
     readonly providerId: string;
     readonly message: string;
+    /** Identifiers the message names; absent when the provider returned plain text. */
+    readonly identifiers?: readonly DiagnosisIdentifier[];
 }
 
 /**
@@ -181,10 +204,10 @@ class ConnectionDiagnosticsServiceImpl {
                 return undefined;
             }
 
-            let message: string | undefined;
+            let answer: string | ConnectionExplanation | undefined;
 
             try {
-                message = await provider.explain(request);
+                answer = await provider.explain(request);
             } catch (error) {
                 const detail = error instanceof Error ? error.message : String(error);
                 ext.outputChannel?.debug(`[ConnectionDiagnostics] Provider "${provider.id}" failed: ${detail}`);
@@ -197,11 +220,15 @@ class ConnectionDiagnosticsServiceImpl {
                 return undefined;
             }
 
+            const message = typeof answer === 'string' ? answer : answer?.message;
             if (message) {
                 void callWithTelemetryAndErrorHandling('connectionDiagnostics.explained', (context) => {
                     context.telemetry.properties.diagnosisProviderId = provider.id;
+                    context.telemetry.properties.diagnosisSource = request.source ?? 'connect';
                 });
-                return { providerId: provider.id, message };
+                return typeof answer === 'string' || answer === undefined
+                    ? { providerId: provider.id, message }
+                    : { providerId: provider.id, message, identifiers: answer.identifiers };
             }
         }
 
