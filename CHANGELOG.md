@@ -9,6 +9,10 @@
 - **No-Authentication Connections**: Applies the same host check as the other authentication methods before relaxing TLS certificate validation, and applies a TLS exception you accepted for a local IP address such as `127.0.0.1` or `::1`.
 - **Build and Release Pipelines**: Hardens the npm package build, release and publishing pipelines, and adds a CI check that rejects committed npm registry credentials. The installed extension is not affected.
 
+### Improvements
+
+- **Feedback Survey Telemetry**: Records when a shown survey invitation is hidden without a choice, for example when the Secondary Sidebar is closed or another view is shown in it. This is not counted as a choice and does not change when you are asked again.
+
 ## 1.0.1
 
 ### Improvements
