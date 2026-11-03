@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1
+
+- Export the fallback-eligible SRV error codes for consumers using the same recovery policy.
+
 ## 1.0.0
 
 Initial release.

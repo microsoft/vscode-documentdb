@@ -141,6 +141,17 @@ export default defineConfig({
                 },
             },
             {
+                test: {
+                    name: 'documentdb-js-connectivity-troubleshooter',
+                    root: packageRoot('documentdb-js-connectivity-troubleshooter'),
+                    testTimeout,
+                    pool,
+                    isolate,
+                    environment: 'node',
+                    include: ['src/**/*.test.{ts,tsx}'],
+                },
+            },
+            {
                 // The host facade imports `vscode` at runtime; the package keeps its own minimal stub.
                 resolve: {
                     alias: [
