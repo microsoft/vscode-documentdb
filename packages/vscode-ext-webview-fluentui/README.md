@@ -67,11 +67,15 @@ npm install @microsoft/vscode-ext-webview-fluentui
 
 Peer dependencies, which you already have if you are using Fluent:
 
-| Peer                         | Range   |
-| ---------------------------- | ------- |
-| `react`                      | `>=19`  |
-| `@fluentui/react-components` | `~9.74` |
-| `@fluentui/react-icons`      | `~2.0`  |
+| Peer                                        | Range     |
+| ------------------------------------------- | --------- |
+| `react`                                     | `>=19`    |
+| `@fluentui/react-components`                | `~9.74`   |
+| `@fluentui/react-icons`                     | `~2.0`    |
+| `@fluentui/react-motion-components-preview` | `^0.15.6` |
+
+`StatusListItem` disclosures use Fluent's default `Collapse` motion from the motion peer,
+including its built-in `prefers-reduced-motion` support.
 
 `monaco-editor` is deliberately **not** a peer, even though `./monaco` exists. The theme data is
 structurally typed, so there is no version to agree on and consumers who never open an editor carry
@@ -165,7 +169,8 @@ import { FocusableBadge, Wizard, WizardStep } from '@microsoft/vscode-ext-webvie
 Six components ship today, each usable on its own. `Container` is the shell of a full-window surface: scrolling header and
 content, over a footer pinned to the bottom. `StepList` is a step indicator that collapses into an
 overflow menu and never hides the current step. `StatusList` is a bordered list of stages, each
-with a status glyph and a line of evidence. `Wizard` is all three of those assembled into a
+with a status glyph and a line of evidence, and optional expandable details whose content follows a
+documented type scale. `Wizard` is all three of those assembled into a
 complete wizard surface, for the common case where you do not want to wire them yourself.
 `MetricGrid` and `MetricCard` are a dashboard strip: one measurement per card, told apart from
 "loading" and "unavailable" without the layout moving, in a grid that goes from one column to four.
@@ -273,11 +278,11 @@ Two consequences worth knowing:
 
 ## Public surface
 
-| Entry          | Exports                                                                                                                                    |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme`, `generateAdaptive{Light,Dark}Theme` |
-| `./components` | `Container` and its family, `FocusableBadge`, `MetricGrid`, `MetricCard`, `StepList`, `StatusList`, `Wizard`, and their prop types         |
-| `./monaco`     | `createVSCodeMonacoTheme`, `useVSCodeMonacoTheme`, `DEFAULT_MONACO_THEME_NAME`, and their option and theme types                           |
+| Entry          | Exports                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme`, `generateAdaptive{Light,Dark}Theme`                         |
+| `./components` | `Container` and its family, `FocusableBadge`, `MetricGrid`, `MetricCard`, `StepList`, `StatusList` and its details building blocks, `Wizard`, and their prop types |
+| `./monaco`     | `createVSCodeMonacoTheme`, `useVSCodeMonacoTheme`, `DEFAULT_MONACO_THEME_NAME`, and their option and theme types                                                   |
 
 The palette math and color-ID list are internal. The Monaco entry produces structurally typed
 theme data without a peer or runtime dependency on `monaco-editor`; consumers provide their own

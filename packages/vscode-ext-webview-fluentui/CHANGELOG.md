@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+
+- Added `StatusListDetailsSection`, `StatusListDetailsFacts` and `StatusListDetailsMessage`: small presentational building blocks for a `StatusListItem` disclosure's content (a titled group, term and value pairs as a semantic `<dl>`, and a finding with a severity glyph, title, explanation and next step). They carry no strings except the overridable, visually hidden English severity word. The StatusList README gains a **Details content** section: who owns the frame and who owns the content, a base200 type scale with Fluent tokens and `Text` props, spacing tokens, long values, colours, accessibility, and do's and don'ts.
+- The disclosure region now sets its content's base type (`fontSizeBase200`, `lineHeightBase200`, `colorNeutralForeground1`), renders `code` as `fontFamilyMonospace` without the chip VS Code's webview default stylesheet gives it, and adds `spacingVerticalXXS` above and below the content inside the left rule. Plain content that relied on inheriting base300 from the provider now renders at base200; pass `<Text size={300}>` to keep it, though the README advises against it.
+- Animated `StatusListItem` disclosure contents with Fluent's default `Collapse`, respecting reduced motion. The region remains mounted for `aria-controls`; collapsing makes it `inert` immediately and unmounts its contents after exit. Collapsed row heights and focus stay unchanged. Added `@fluentui/react-motion-components-preview` (`^0.15.6`) as a peer, alongside the other Fluent peers.
+
+- Added an optional `disclosure` to `StatusListItem`: a **Details**-style toggle right after the label, on the label's line, and a labelled region below the detail line, for rows that have more to say than one line. The toggle is a real button with `aria-expanded` and `aria-controls`, and the region is named by it. Collapsed rows keep their height; expanding never moves focus. It can be controlled (`expanded`, `onExpandedChange`) or left to the row (`defaultExpanded`). Rows without it render exactly as before.
+- Added `placement` to `StatusListItem`'s `disclosure`. `label` (the default) keeps the toggle after the label; `detail` puts it inline at the end of the detail line, in that line's type size and line height, so the label line stays a plain heading. A long detail line wraps around the toggle like a word, and a row with an empty detail line still shows it there.
+- Added a `skipped` status to `StatusListItem`, for a stage that does not apply or did not run because an earlier stage failed. It shows a neutral `SubtractCircleRegular` glyph and a dimmed label, and screen readers hear "skipped" after the label, overridable through `statusLabels`. Put the reason in `detail`. Code with an exhaustive `switch` over `StatusListItemStatus` needs a case for the new value.
+
 ## 1.2.0
 
 - Added `contentMaxWidth` to `ContainerBody` and `Wizard`, accepting CSS maximum-width values or pixel numbers. Omit the prop or use `"none"` for no width cap.

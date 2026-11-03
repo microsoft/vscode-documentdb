@@ -49,7 +49,7 @@ actually house style, with no second consumer. It lives in the extension
 | [`FocusableBadge`](./FocusableBadge/README.md) | a badge that exposes tooltip-only details to keyboard users                            |
 | [`MetricGrid`](./MetricGrid/README.md)         | one measurement per card, in a grid that goes from one column to four                  |
 | [`StepList`](./StepList/README.md)             | a step indicator that collapses into an overflow menu and never hides the current step |
-| [`StatusList`](./StatusList/README.md)         | a bordered list of stages, each with a status glyph and a line of evidence             |
+| [`StatusList`](./StatusList/README.md)         | a bordered list of stages, each with a status glyph, a line of evidence and details    |
 | [`Wizard`](./Wizard/README.md)                 | a complete wizard surface in one component                                             |
 
 ## How they compose
@@ -67,7 +67,7 @@ Wizard ──> Container ─┬─ ContainerBody ─┬─ ContainerHeader
                       │                 └─ ContainerMain ─> ContainerSection
                       └─ ContainerFooter
 
-StatusList ──> StatusListItem
+StatusList ──> StatusListItem ──> StatusListDetailsSection, StatusListDetailsFacts, StatusListDetailsMessage
 
 MetricGrid ──> MetricCard
 
