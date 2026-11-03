@@ -47,7 +47,6 @@ const optionalExternals = new Set([
     // DocumentDB API driver (mongodb) optional dependencies
     'kerberos', // Guarded native loader: getKerberos and devtools-connect.
     '@mongodb-js/zstd', // Guarded optional compression loader: getZstdLibrary.
-    '@aws-sdk/credential-providers', // Guarded auth loader: getAwsCredentialProvider; preserve webpack behavior.
     'gcp-metadata', // Guarded auth loader: getGcpMetadata; preserve webpack behavior.
     'snappy', // Guarded optional compression loader: getSnappy.
     'mongodb-client-encryption', // Guarded native loader: getMongoDBClientEncryption and devtools-connect.
