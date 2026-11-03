@@ -8,6 +8,7 @@ import { getConfiguredAzureEnv } from '@microsoft/vscode-azext-azureauth/out/src
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
+    describeEntraSignInEnvironment,
     getCloudCategory,
     resetTokenResourceCacheForTests,
     resolveInteractiveTokenResource,
@@ -50,6 +51,194 @@ function useCustomCloud(deps: TokenResourceResolverDeps): void {
 beforeEach(() => {
     vi.restoreAllMocks();
     resetTokenResourceCacheForTests();
+});
+
+describe('describeEntraSignInEnvironment', () => {
+    it('returns only offline resolution details without resolving a resource', () => {
+        const deps = createDeps();
+        useCustomCloud(deps);
+
+        expect(describeEntraSignInEnvironment(deps, {})).toEqual({
+            flow: 'diagnostics',
+            configuredCloud: 'custom',
+            authProvider: 'microsoft',
+            brokerImplementation: 'default',
+            hostCloud: 'none',
+            customOssrdbmsEndpointState: 'absent',
+            customOssrdbmsEndpointApplicable: false,
+            customHostnameSuffixSet: false,
+            customHostnameSuffixSource: 'none',
+            armMetadata: 'notNeeded',
+            imdsAzEnvironment: 'notQueried',
+        });
+        expect(deps.fetchArmMetadata).not.toHaveBeenCalled();
+        expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
+        expect(deps.getCustomEnvironment).not.toHaveBeenCalled();
+        expect(deps.warn).not.toHaveBeenCalled();
+    });
+
+    it.each(['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud'])(
+        'describes the configured built-in cloud %s',
+        (name) => {
+            const deps = createDeps();
+            vi.mocked(deps.getConfiguredCloud).mockReturnValue({ name, isCustomCloud: false });
+
+            expect(describeEntraSignInEnvironment(deps, {}).configuredCloud).toBe(name);
+        },
+    );
+
+    it('allowlists a custom cloud rather than exposing its name or endpoints', () => {
+        const deps = createDeps();
+        vi.mocked(deps.getConfiguredCloud).mockReturnValue({
+            name: 'private-cloud-name',
+            isCustomCloud: true,
+            activeDirectoryEndpointUrl: 'https://login.private.example.com',
+            resourceManagerEndpointUrl: 'https://management.private.example.com',
+        });
+
+        const details = describeEntraSignInEnvironment(deps, {});
+
+        expect(details.configuredCloud).toBe('custom');
+        expect(JSON.stringify(details)).not.toContain('private');
+    });
+
+    it('describes an unreadable configured cloud without throwing', () => {
+        const deps = createDeps();
+        vi.mocked(deps.getConfiguredCloud).mockImplementation(() => {
+            throw new Error('Custom cloud not configured');
+        });
+
+        expect(describeEntraSignInEnvironment(deps, {}).configuredCloud).toBe('unreadable');
+    });
+
+    it.each([
+        [undefined, 'absent'],
+        ['', 'absent'],
+        [' \t ', 'absent'],
+        [customResource, 'valid'],
+        [`${customResource}/`, 'valid'],
+        [`${customResource}/.default`, 'invalid'],
+        ['not a URL', 'invalid'],
+        ['https://user:password@database.example.com', 'invalid'],
+    ])('classifies the custom resource %p as %s without returning it', (ossrdbmsEndpoint, state) => {
+        const details = describeEntraSignInEnvironment(createDeps(), { ossrdbmsEndpoint });
+
+        expect(details.customOssrdbmsEndpointState).toBe(state);
+        expect(details.customOssrdbmsEndpointApplicable).toBe(false);
+        expect(JSON.stringify(details)).not.toContain('database.example.com');
+        expect(JSON.stringify(details)).not.toContain('password');
+    });
+
+    it.each([
+        [undefined, 'none', false],
+        ['', 'none', false],
+        [' \t ', 'none', false],
+        ['.private.example.com', 'user', true],
+        ['.private.example.com', 'workspace', true],
+        ['invalid suffix', 'workspace', false],
+    ] as const)('describes custom hostname suffix %p from %s', (mongoClusterHostnameSuffix, source, isSet) => {
+        const deps = createDeps();
+        vi.mocked(deps.getCustomHostnameSuffixSource).mockReturnValue(source);
+
+        const details = describeEntraSignInEnvironment(deps, { mongoClusterHostnameSuffix });
+
+        expect(details.customHostnameSuffixSet).toBe(isSet);
+        expect(details.customHostnameSuffixSource).toBe(source);
+        expect(JSON.stringify(details)).not.toContain('private.example.com');
+    });
+
+    it.each([
+        [undefined, 'default'],
+        ['msal', 'msal'],
+        ['msal-no-broker', 'msal-no-broker'],
+        ['unrecognized implementation', 'other'],
+        ['', 'other'],
+    ])('normalizes broker implementation %p as %s', (brokerImplementation, expected) => {
+        const deps = createDeps();
+        vi.mocked(deps.getSignInEnvironment).mockReturnValue({ authProvider: 'microsoft', brokerImplementation });
+
+        expect(describeEntraSignInEnvironment(deps, {}).brokerImplementation).toBe(expected);
+    });
+
+    it.each([
+        ['microsoft', 'microsoft'],
+        ['microsoft-sovereign-cloud', 'microsoft-sovereign-cloud'],
+        ['private-provider', 'unknown'],
+    ])('allowlists sign-in provider %s as %s', (authProvider, expected) => {
+        const deps = createDeps();
+        vi.mocked(deps.getSignInEnvironment).mockReturnValue({ authProvider, brokerImplementation: undefined });
+
+        expect(describeEntraSignInEnvironment(deps, {}).authProvider).toBe(expected);
+    });
+
+    it('uses safe defaults when the sign-in environment cannot be read', () => {
+        const deps = createDeps();
+        vi.mocked(deps.getSignInEnvironment).mockImplementation(() => {
+            throw new Error('Sign-in configuration unavailable');
+        });
+
+        expect(describeEntraSignInEnvironment(deps, {})).toMatchObject({
+            authProvider: 'unknown',
+            brokerImplementation: 'default',
+        });
+    });
+
+    it('requires no network or token acquisition dependencies', () => {
+        const deps = createDeps();
+
+        const details = describeEntraSignInEnvironment(
+            {
+                getConfiguredCloud: deps.getConfiguredCloud,
+                getCustomHostnameSuffixSource: deps.getCustomHostnameSuffixSource,
+                getSignInEnvironment: deps.getSignInEnvironment,
+            },
+            {},
+        );
+
+        expect(details.configuredCloud).toBe('AzureCloud');
+        expect(deps.fetchArmMetadata).not.toHaveBeenCalled();
+        expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('uses the existing default dependencies and custom-environment settings reader', () => {
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+            get: (key: string): unknown => {
+                switch (key) {
+                    case 'environment':
+                        return 'USGovernment';
+                    case 'implementation':
+                        return 'msal-no-broker';
+                    case 'documentDB.customEnvironment':
+                        return {
+                            ossrdbmsEndpoint: governmentResource,
+                            mongoClusterHostnameSuffix: '.private.example.com',
+                        };
+                    default:
+                        return undefined;
+                }
+            },
+            inspect: () => ({ globalValue: { mongoClusterHostnameSuffix: '.private.example.com' } }),
+        } as unknown as vscode.WorkspaceConfiguration);
+
+        expect(describeEntraSignInEnvironment()).toMatchObject({
+            configuredCloud: 'AzureUSGovernment',
+            authProvider: 'microsoft-sovereign-cloud',
+            brokerImplementation: 'msal-no-broker',
+            customOssrdbmsEndpointState: 'valid',
+            customHostnameSuffixSet: true,
+            customHostnameSuffixSource: 'user',
+        });
+        expect(describeEntraSignInEnvironment(createDeps())).toMatchObject({
+            configuredCloud: 'AzureCloud',
+            customOssrdbmsEndpointState: 'valid',
+            customHostnameSuffixSet: true,
+        });
+        expect(describeEntraSignInEnvironment(undefined, {})).toMatchObject({
+            configuredCloud: 'AzureUSGovernment',
+            customOssrdbmsEndpointState: 'absent',
+            customHostnameSuffixSet: false,
+        });
+    });
 });
 
 describe('resolveInteractiveTokenResource', () => {

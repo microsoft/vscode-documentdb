@@ -39,12 +39,8 @@ import { Links } from '../constants';
 import { ext } from '../extensionVariables';
 import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
-import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
-import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
-import { NativeAuthHandler } from './auth/NativeAuthHandler';
-import { NoAuthHandler } from './auth/NoAuthHandler';
+import { createAuthHandler } from './auth/createAuthHandler';
 import { getAzureHostSuffix } from './auth/oidcAllowedHosts';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
@@ -335,24 +331,8 @@ export class ClustersClient {
         const authMethod = credentials?.authMechanism ?? AuthMethodId.NativeAuth;
         startup.telemetry.properties.authMethod = authMethod;
 
-        // TODO: add a proper factory pattern here when more methods are added
-        let authHandler: AuthHandler;
-        switch (authMethod) {
-            case AuthMethodId.NativeAuth:
-                authHandler = new NativeAuthHandler(credentials);
-                break;
-            case AuthMethodId.MicrosoftEntraID:
-                authHandler = new MicrosoftEntraIDAuthHandler(credentials);
-                break;
-            case AuthMethodId.ManagedIdentity:
-                authHandler = new ManagedIdentityAuthHandler(credentials);
-                break;
-            case AuthMethodId.NoAuth:
-                authHandler = new NoAuthHandler(credentials);
-                break;
-            default:
-                throw new Error(l10n.t('Unsupported authentication method: {0}', authMethod));
-        }
+        // Ordinary connects may prompt (for example, Microsoft Entra ID sign-in).
+        const authHandler = createAuthHandler(authMethod, credentials, { interactive: true });
 
         // Configure auth and get connection options
         this.advanceClientStartup(startup, 'stage02ConfiguringAuth');

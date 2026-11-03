@@ -10,6 +10,8 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
+import { type AuthPhaseObserver } from './authCallerPolicy';
+import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import * as tokenResources from './documentdbTokenResource';
 import { EntraDiagnosticsProvider } from './entraErrors/EntraDiagnosticsProvider';
@@ -262,6 +264,7 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(getRecentEntraTokenFailure('cluster-1')).toEqual({
             cloudCategory: 'usgov',
             authMethod: 'managedIdentity',
+            ruleId: 'resourceNotInTenant',
             timestamp: expect.any(Number),
         });
     });
@@ -371,5 +374,157 @@ describe('ManagedIdentityAuthHandler', () => {
         stopDatabase();
 
         expect(timings.finish()).toEqual({ databaseConnectDurationMs: 25, tokenAcquireDurationMs: 25 });
+    });
+
+    it.each([
+        {
+            connectionString:
+                'mongodb+srv://11111111-2222-3333-4444-555555555555@my-cluster.mongocluster.cosmos.azure.com/' +
+                '?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure&tls=false&retryWrites=true',
+            emulatorConfiguration: undefined,
+        },
+        {
+            connectionString: 'mongodb://localhost:27017/?tls=false',
+            emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
+        },
+    ])(
+        'returns the connection string and network options of buildAuthConnectionTarget ($connectionString)',
+        async ({ connectionString, emulatorConfiguration }) => {
+            vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://ossrdbms-aad.database.windows.net' }),
+                inspect: vi.fn().mockReturnValue(undefined),
+            } as unknown as vscode.WorkspaceConfiguration);
+            const credentials = buildCredentials({
+                connectionString,
+                connectionStringWithPassword: connectionString,
+                emulatorConfiguration,
+            });
+            const target = buildAuthConnectionTarget(AuthMethodId.ManagedIdentity, credentials);
+
+            const { connectionString: actual, options } = await new ManagedIdentityAuthHandler(
+                credentials,
+            ).configureAuth();
+
+            expect(actual).toBe(target.connectionString);
+            expect(options).toMatchObject(target.networkOptions);
+        },
+    );
+
+    describe('caller policy', () => {
+        function recordingObserver(events: string[], tokens: string[] = []): AuthPhaseObserver {
+            return {
+                onSignInConfigurationResolved: (info) =>
+                    events.push(
+                        `resolved:${info.cloudCategory}:${info.tokenResourceReason}:${info.allowedHosts.join(',')}`,
+                    ),
+                onSignInConfigurationFailed: (info) => events.push(`configurationFailed:${info.kind}`),
+                onTokenStarted: () => events.push('tokenStarted'),
+                onTokenAcquired: (info) => {
+                    tokens.push(info.accessToken);
+                    events.push(`tokenAcquired:${info.tenantId ?? 'none'}`);
+                },
+                onTokenFailed: () => events.push('tokenFailed'),
+            };
+        }
+
+        it.each([true, false])(
+            'does not change the flow for a %s interactive policy',
+            async (interactive): Promise<void> => {
+                const credentials = buildCredentials({ managedIdentityConfig: { clientId: 'client-id' } });
+                const expected = await new ManagedIdentityAuthHandler(credentials).configureAuth();
+                const { connectionString, options } = await new ManagedIdentityAuthHandler(credentials, {
+                    interactive,
+                }).configureAuth();
+
+                expect(connectionString).toBe(expected.connectionString);
+                expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(
+                    expected.options.authMechanismProperties?.ALLOWED_HOSTS,
+                );
+                await expect(invokeOidcCallback(options)).resolves.toMatchObject({ accessToken: 'a-token' });
+            },
+        );
+
+        it('fires token events inside the OIDC callback, not during configureAuth', async (): Promise<void> => {
+            const events: string[] = [];
+            const tokens: string[] = [];
+            const handler = new ManagedIdentityAuthHandler(
+                buildCredentials({ managedIdentityConfig: { tenantId: 'tenant' } }),
+                {
+                    interactive: false,
+                    observer: recordingObserver(events, tokens),
+                },
+            );
+
+            const { options } = await handler.configureAuth();
+            expect(events).toEqual(['resolved:public:host:*.azure.com']);
+            expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
+
+            await invokeOidcCallback(options);
+            expect(events).toEqual(['resolved:public:host:*.azure.com', 'tokenStarted', 'tokenAcquired:tenant']);
+            expect(tokens).toEqual(['a-token']);
+            const output = JSON.stringify([
+                vi.mocked(ext.outputChannel.info).mock.calls,
+                vi.mocked(ext.outputChannel.error).mock.calls,
+            ]);
+            expect(output).not.toContain('a-token');
+        });
+
+        it('reports a token failure inside the OIDC callback and records it as today', async (): Promise<void> => {
+            const error = new Error('AADSTS700016: identity not found');
+            getManagedIdentityAccessToken.mockRejectedValueOnce(error);
+            const events: string[] = [];
+            const handler = new ManagedIdentityAuthHandler(buildCredentials(), {
+                interactive: false,
+                observer: recordingObserver(events),
+            });
+
+            const { options } = await handler.configureAuth();
+            expect(events).toEqual(['resolved:public:host:*.azure.com']);
+            await expect(invokeOidcCallback(options)).rejects.toBe(error);
+            expect(events).toEqual(['resolved:public:host:*.azure.com', 'tokenStarted', 'tokenFailed']);
+            expect(getRecentEntraTokenFailure('cluster-1')).toMatchObject({
+                authMethod: 'managedIdentity',
+                ruleId: 'applicationNotInDirectory',
+            });
+        });
+
+        it('reports a resolver failure with its kind and never starts a token', async (): Promise<void> => {
+            const error = new tokenResources.TokenResourceResolutionError(
+                'Set the cloud resource.',
+                'managedIdentityCloudUnknown',
+                { flow: 'managedIdentity', errorKind: 'managedIdentityCloudUnknown' },
+            );
+            vi.spyOn(tokenResources, 'resolveManagedIdentityTokenResource').mockRejectedValueOnce(error);
+            const events: string[] = [];
+            const handler = new ManagedIdentityAuthHandler(buildCredentials(), {
+                interactive: false,
+                observer: recordingObserver(events),
+            });
+
+            await expect(handler.configureAuth()).rejects.toBe(error);
+            expect(events).toEqual(['configurationFailed:managedIdentityCloudUnknown']);
+            expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
+        });
+
+        it('ignores a throwing observer', async (): Promise<void> => {
+            const throwing = (): never => {
+                throw new Error('observer failure');
+            };
+            const handler = new ManagedIdentityAuthHandler(buildCredentials(), {
+                interactive: false,
+                observer: {
+                    onSignInConfigurationResolved: throwing,
+                    onTokenStarted: throwing,
+                    onTokenAcquired: throwing,
+                    onTokenFailed: throwing,
+                },
+            });
+
+            const { options } = await handler.configureAuth();
+            await expect(invokeOidcCallback(options)).resolves.toMatchObject({ accessToken: 'a-token' });
+            const error = new Error('token failure');
+            getManagedIdentityAccessToken.mockRejectedValueOnce(error);
+            await expect(invokeOidcCallback(options)).rejects.toBe(error);
+        });
     });
 });

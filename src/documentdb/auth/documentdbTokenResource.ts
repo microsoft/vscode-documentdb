@@ -261,6 +261,19 @@ export function resolveTokenResourceForCopy(
     return withDetails(fromBuiltInCloud('AzureCloud', 'copyDefault'), details);
 }
 
+/** Describes sign-in configuration without resolving a resource or contacting an identity service. */
+export function describeEntraSignInEnvironment(
+    deps: Pick<
+        TokenResourceResolverDeps,
+        'getSignInEnvironment' | 'getCustomHostnameSuffixSource' | 'getConfiguredCloud'
+    > = getDefaultDeps(),
+    customEnvironment: DocumentDBCustomEnvironment = getDefaultDeps().getCustomEnvironment(),
+): Readonly<Record<string, string | boolean>> {
+    const details = createResolutionDetails('diagnostics', customEnvironment, deps);
+    getConfiguredCloudForDetails(deps, details);
+    return details;
+}
+
 export function getCloudCategory(resource: string): CloudCategory {
     switch (getCloudForTokenResource(resource)) {
         case 'AzureCloud':
@@ -443,7 +456,7 @@ function hostCloudConflictError(details: Record<string, string | boolean>): Toke
 }
 
 function createResolutionDetails(
-    flow: 'interactive' | 'managedIdentity' | 'copy',
+    flow: 'interactive' | 'managedIdentity' | 'copy' | 'diagnostics',
     customEnvironment: DocumentDBCustomEnvironment,
     deps: Pick<TokenResourceResolverDeps, 'getSignInEnvironment' | 'getCustomHostnameSuffixSource'>,
 ): Record<string, string | boolean> {

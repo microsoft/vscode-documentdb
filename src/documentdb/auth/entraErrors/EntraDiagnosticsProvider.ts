@@ -18,7 +18,7 @@ import { getRecentEntraTokenFailure } from './entraTokenFailures';
 export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
     public readonly id = 'entra-sign-in';
 
-    public async explain({ clusterId, error }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
+    public async explain({ clusterId, error, source }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
         if (error instanceof UserCancelledError) {
             return undefined;
         }
@@ -47,6 +47,7 @@ export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
             cloudCategory: failure?.cloudCategory ?? 'unknown',
             recentTokenFailure: failure !== undefined,
             brokered: classification.brokered,
+            ...(source ? { source } : {}),
         });
         const message = rule.explain({
             code: classification.code,
@@ -57,6 +58,7 @@ export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
         void callWithTelemetryAndErrorHandling('entraSignIn.classified', async (context): Promise<void> => {
             context.errorHandling.suppressDisplay = true;
             context.errorHandling.suppressReportIssue = true;
+            context.telemetry.properties.diagnosisSource = source ?? 'connect';
             context.telemetry.properties.ruleId = classification.ruleId;
             context.telemetry.properties.aadstsCode = classification.code ?? '';
             context.telemetry.properties.cloudCategory = failure?.cloudCategory ?? 'unknown';

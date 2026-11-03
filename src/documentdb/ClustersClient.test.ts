@@ -11,6 +11,7 @@ import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { ext } from '../extensionVariables';
 import { traceAuthFlow, type AuthTraceContext } from '../utils/authTrace';
 import { AuthMethodId } from './auth/AuthMethod';
+import * as authHandlerFactory from './auth/createAuthHandler';
 import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
@@ -90,6 +91,10 @@ vi.mock('./utils/getClusterMetadata', () => ({
 vi.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: vi.fn() }));
 vi.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: vi.fn() }));
 vi.mock('./srv/prepareDriverConnectionString', () => ({ prepareDriverConnectionString: vi.fn() }));
+vi.mock('./auth/createAuthHandler', async () => {
+    const actual = await vi.importActual<typeof authHandlerFactory>('./auth/createAuthHandler');
+    return { ...actual, createAuthHandler: vi.fn(actual.createAuthHandler) };
+});
 vi.mock('./utils/tlsException', async () => {
     const actual = await vi.importActual<typeof tlsException>('./utils/tlsException');
     return { ...actual, resolveAllowInvalidCertificates: vi.fn(actual.resolveAllowInvalidCertificates) };
@@ -251,6 +256,29 @@ describe('regular connection startup diagnostics', () => {
         expect(ext.outputChannel.trace).toHaveBeenCalledTimes(1);
         expect(vi.mocked(MongoClient)).toHaveBeenCalledTimes(1);
     });
+
+    it.each([
+        [AuthMethodId.MicrosoftEntraID, MicrosoftEntraIDAuthHandler],
+        [AuthMethodId.ManagedIdentity, ManagedIdentityAuthHandler],
+        [AuthMethodId.NativeAuth, NativeAuthHandler],
+        [AuthMethodId.NoAuth, NoAuthHandler],
+    ] as const)(
+        'constructs the %s handler through the factory with the interactive policy',
+        async (authMethod, handlerClass): Promise<void> => {
+            CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://private-host:27017');
+            await ClustersClient.getClient(clusterId);
+
+            const factory = vi.mocked(authHandlerFactory.createAuthHandler);
+            expect(factory).toHaveBeenCalledTimes(1);
+            expect(factory).toHaveBeenCalledWith(authMethod, expect.objectContaining({ clusterId }), {
+                interactive: true,
+            });
+            const handler = factory.mock.results[0]?.value as unknown;
+            expect(handler).toBeInstanceOf(handlerClass);
+            expect(handler).toHaveProperty('policy', { interactive: true });
+            expect(handlerClass.prototype.configureAuth).toHaveBeenCalledTimes(1);
+        },
+    );
 
     it('passes its startup ID to auth configuration', async (): Promise<void> => {
         let traceContext: AuthTraceContext | undefined;

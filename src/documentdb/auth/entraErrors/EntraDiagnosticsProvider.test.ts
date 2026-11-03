@@ -283,6 +283,7 @@ describe('EntraDiagnosticsProvider', () => {
             cloudCategory: 'usgov',
             brokered: 'false',
             authMethod: 'managedIdentity',
+            diagnosisSource: 'connect',
         });
         expect(telemetryContext.errorHandling).toEqual({ suppressDisplay: true, suppressReportIssue: true });
         expect(JSON.stringify(telemetryContext.telemetry.properties)).not.toMatch(
@@ -292,6 +293,33 @@ describe('EntraDiagnosticsProvider', () => {
         expect(message).not.toContain('secret-token');
     });
 
+    it.each([undefined, 'troubleshooter'] as const)(
+        'tags classification telemetry and output only when a source is set (source=%s)',
+        async (source): Promise<void> => {
+            await provider.explain({ clusterId, error: 'AADSTS65002: Preauthorization required', source });
+
+            expect(callWithTelemetryAndErrorHandling).toHaveBeenCalledExactlyOnceWith(
+                'entraSignIn.classified',
+                expect.any(Function),
+            );
+            expect(telemetryContext.telemetry.properties.diagnosisSource).toBe(source ?? 'connect');
+            expect(mockOutputChannel.info).toHaveBeenCalledOnce();
+            const trace = String(mockOutputChannel.info.mock.calls[0][0]);
+            const details = JSON.stringify({
+                ruleId: 'firstPartyPreauthorization',
+                aadstsCode: '65002',
+                cloudCategory: 'unknown',
+                recentTokenFailure: false,
+                brokered: false,
+                ...(source ? { source } : {}),
+            });
+            expect(trace).toBe(`[Authentication] entraSignIn.classified: ${details}`);
+            if (!source) {
+                expect(trace).not.toContain('"source"');
+            }
+        },
+    );
+
     it('uses unknown telemetry categories and an empty code for an uncorrelated broker error', async (): Promise<void> => {
         await provider.explain({ clusterId, error: broker });
         expect(telemetryContext.telemetry.properties).toEqual({
@@ -300,6 +328,7 @@ describe('EntraDiagnosticsProvider', () => {
             cloudCategory: 'unknown',
             brokered: 'true',
             authMethod: 'unknown',
+            diagnosisSource: 'connect',
         });
     });
 
