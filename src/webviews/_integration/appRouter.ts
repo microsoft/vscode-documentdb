@@ -37,8 +37,10 @@ import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCred
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
+import { connectivityTroubleshooterRouter } from '../documentdb/connectivityTroubleshooter/connectivityTroubleshooterRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
+import { confirmInput, showModalConfirmation, type ConfirmResult } from './commonDialogs';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
@@ -99,7 +101,8 @@ const commonRouter = router({
                 (viewName !== 'collectionView' &&
                     viewName !== 'clusterDashboard' &&
                     viewName !== 'atlasCredentials' &&
-                    viewName !== 'localQuickStart') ||
+                    viewName !== 'localQuickStart' &&
+                    viewName !== 'connectivityTroubleshooter') ||
                 (viewName === 'collectionView') !== (input.collectionTab !== undefined)
             ) {
                 throw new Error('Invalid feedback source');
@@ -222,6 +225,15 @@ const commonRouter = router({
             return { action };
         }),
     /**
+     * A modal "continue or cancel" dialog: `message`, an optional `detail`, one `confirmLabel` button
+     * and VS Code's own Cancel. Returns `{ confirmed }`; Cancel, Escape and closing the dialog all
+     * return `false`. The caller localizes every string. Not for destructive actions, which follow
+     * the confirmation-style setting through `getConfirmationAsInSettings`.
+     */
+    confirm: publicProcedure
+        .input(confirmInput)
+        .mutation(({ input }): Promise<ConfirmResult> => showModalConfirmation(input)),
+    /**
      * Unconditional information toast. Use for messages the user must always
      * see; completion notices belong in `displayOperationSummary` instead.
      */
@@ -284,6 +296,7 @@ export const appRouter = router({
         indexView: indexViewRouter,
     },
     localQuickStart: localQuickStartRouter,
+    connectivityTroubleshooter: connectivityTroubleshooterRouter,
 });
 
 // Export type router type signature, this is used by the client.
