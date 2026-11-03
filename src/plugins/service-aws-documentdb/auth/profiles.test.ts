@@ -75,8 +75,12 @@ aws_secret_access_key = secret-value
 `);
         const profiles = await listAwsProfiles();
         expect(profiles).toContainEqual({
-            name: 'work', kind: 'SSO', startUrl: 'https://example.awsapps.com/start',
-            ssoRegion: 'us-east-1', accountId: '123456789012', roleName: 'ReadOnly',
+            name: 'work',
+            kind: 'SSO',
+            startUrl: 'https://example.awsapps.com/start',
+            ssoRegion: 'us-east-1',
+            accountId: '123456789012',
+            roleName: 'ReadOnly',
         });
         expect(profiles.map((profile) => profile.name)).toEqual(['keys', 'role', 'work']);
         expect(JSON.stringify(profiles)).not.toContain('secret-');

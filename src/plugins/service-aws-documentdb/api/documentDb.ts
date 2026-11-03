@@ -52,7 +52,11 @@ export async function discoverRegion(
         for await (const page of pages) {
             throwIfAborted(signal);
             for (const cluster of page.DBClusters ?? []) {
-                if (!cluster.DBClusterArn || !cluster.DBClusterIdentifier || (cluster.Engine && cluster.Engine !== 'docdb')) {
+                if (
+                    !cluster.DBClusterArn ||
+                    !cluster.DBClusterIdentifier ||
+                    (cluster.Engine && cluster.Engine !== 'docdb')
+                ) {
                     continue;
                 }
                 discovered.push({
@@ -71,9 +75,10 @@ export async function discoverRegion(
                         ownerCredentialId: record.id,
                         vpcInfo: {
                             subnetGroupName: cluster.DBSubnetGroup,
-                            securityGroups: (cluster.VpcSecurityGroups ?? [])
-                                .flatMap(({ VpcSecurityGroupId, Status }) =>
-                                    VpcSecurityGroupId ? [{ id: VpcSecurityGroupId, status: Status }] : []),
+                            securityGroups: (cluster.VpcSecurityGroups ?? []).flatMap(
+                                ({ VpcSecurityGroupId, Status }) =>
+                                    VpcSecurityGroupId ? [{ id: VpcSecurityGroupId, status: Status }] : [],
+                            ),
                             availabilityZones: cluster.AvailabilityZones ?? [],
                             subnets: [],
                             networkType: cluster.NetworkType,
@@ -84,7 +89,9 @@ export async function discoverRegion(
             }
         }
 
-        const groupNames = [...new Set(discovered.flatMap(({ subnetGroupName }) => subnetGroupName ? [subnetGroupName] : []))];
+        const groupNames = [
+            ...new Set(discovered.flatMap(({ subnetGroupName }) => (subnetGroupName ? [subnetGroupName] : []))),
+        ];
         if (groupNames.length === 0) {
             return discovered.map(({ resource }) => ({
                 ...resource,
@@ -106,7 +113,9 @@ export async function discoverRegion(
                         { abortSignal: signal },
                     );
                     throwIfAborted(signal);
-                    const group = response.DBSubnetGroups?.find((candidate) => candidate.DBSubnetGroupName === groupName);
+                    const group = response.DBSubnetGroups?.find(
+                        (candidate) => candidate.DBSubnetGroupName === groupName,
+                    );
                     if (!group) {
                         subnetGroups.set(groupName, {
                             subnets: [],
@@ -117,12 +126,15 @@ export async function discoverRegion(
                             vpcId: group.VpcId,
                             subnets: (group.Subnets ?? []).flatMap((subnet) =>
                                 subnet.SubnetIdentifier
-                                    ? [{
-                                          id: subnet.SubnetIdentifier,
-                                          availabilityZone: subnet.SubnetAvailabilityZone?.Name,
-                                          status: subnet.SubnetStatus,
-                                      }]
-                                    : []),
+                                    ? [
+                                          {
+                                              id: subnet.SubnetIdentifier,
+                                              availabilityZone: subnet.SubnetAvailabilityZone?.Name,
+                                              status: subnet.SubnetStatus,
+                                          },
+                                      ]
+                                    : [],
+                            ),
                         });
                     }
                 } catch (error) {
@@ -138,7 +150,8 @@ export async function discoverRegion(
             if (!subnetGroup || subnetGroup.error) {
                 return {
                     ...resource,
-                    vpcInfoError: subnetGroup?.error ?? vscode.l10n.t('AWS did not return the cluster subnet group details.'),
+                    vpcInfoError:
+                        subnetGroup?.error ?? vscode.l10n.t('AWS did not return the cluster subnet group details.'),
                 };
             }
             return {

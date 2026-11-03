@@ -8,12 +8,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('vscode', () => ({
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     ProgressLocation: { Notification: 15 },
-    ThemeIcon: class ThemeIcon { constructor(public readonly id: string) {} },
+    ThemeIcon: class ThemeIcon {
+        constructor(public readonly id: string) {}
+    },
     MarkdownString: class MarkdownString {
         public value = '';
-        public appendText(value: string): this { this.value += value; return this; }
+        public appendText(value: string): this {
+            this.value += value;
+            return this;
+        }
     },
-    Disposable: class Disposable { public dispose(): void {} },
+    Disposable: class Disposable {
+        public dispose(): void {}
+    },
     EventEmitter: class EventEmitter {
         public event = vi.fn();
         public fire(): void {}
@@ -29,9 +36,13 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (values: string[]): string => values.join(';'),
     UserCancelledError: class UserCancelledError extends Error {},
     AzureWizardPromptStep: class AzureWizardPromptStep {},
-    callWithTelemetryAndErrorHandling: async (_name: string, callback: (context: unknown) => Promise<unknown>): Promise<unknown> => {
+    callWithTelemetryAndErrorHandling: async (
+        _name: string,
+        callback: (context: unknown) => Promise<unknown>,
+    ): Promise<unknown> => {
         const context = {
-            telemetry: { properties: {}, measurements: {} }, valuesToMask: [],
+            telemetry: { properties: {}, measurements: {} },
+            valuesToMask: [],
             errorHandling: {} as { rethrow?: boolean },
         };
         try {
@@ -45,14 +56,20 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
     },
 }));
 const state = new Map<string, unknown>();
-vi.mock('../../../extensionVariables', () => ({ ext: {
-    context: { globalState: {
-        get: (key: string, fallback: unknown): unknown => state.get(key) ?? fallback,
-        update: async (key: string, value: unknown): Promise<void> => { state.set(key, value); },
-    } },
-    state: { wrapItemInStateHandling: (item: unknown): unknown => item },
-    outputChannel: { trace: vi.fn(), warn: vi.fn(), debug: vi.fn(), appendLine: vi.fn() },
-} }));
+vi.mock('../../../extensionVariables', () => ({
+    ext: {
+        context: {
+            globalState: {
+                get: (key: string, fallback: unknown): unknown => state.get(key) ?? fallback,
+                update: async (key: string, value: unknown): Promise<void> => {
+                    state.set(key, value);
+                },
+            },
+        },
+        state: { wrapItemInStateHandling: (item: unknown): unknown => item },
+        outputChannel: { trace: vi.fn(), warn: vi.fn(), debug: vi.fn(), appendLine: vi.fn() },
+    },
+}));
 vi.mock('../../../services/discoveryServices', () => ({
     DiscoveryService: { listProviders: vi.fn(), getProvider: vi.fn() },
 }));
@@ -61,8 +78,11 @@ vi.mock('../../../documentdb/ClustersClient', () => ({
 }));
 vi.mock('../../../documentdb/CredentialCache', () => ({
     CredentialCache: {
-        hasCredentials: vi.fn().mockReturnValue(true), getNativeAuthConfig: vi.fn(),
-        getCredentials: vi.fn(), setAuthCredentials: vi.fn(), deleteCredentials: vi.fn(),
+        hasCredentials: vi.fn().mockReturnValue(true),
+        getNativeAuthConfig: vi.fn(),
+        getCredentials: vi.fn(),
+        setAuthCredentials: vi.fn(),
+        deleteCredentials: vi.fn(),
     },
 }));
 vi.mock('../../../services/SettingsService', () => ({ SettingsService: { getSetting: vi.fn() } }));
@@ -90,7 +110,9 @@ vi.mock('../../../tree/documentdb/DatabaseItem', () => ({
             }
             this.collections = [collection];
         }
-        public getTreeItem(): { label: string } { return { label: 'database' }; }
+        public getTreeItem(): { label: string } {
+            return { label: 'database' };
+        }
         public loadCollectionCount(): void {}
         public getChildren(): Array<{ id: string; getTreeItem: () => { label: string } }> {
             return this.collections;
@@ -105,23 +127,33 @@ import { DiscoveryService } from '../../../services/discoveryServices';
 import { DiscoveryBranchDataProvider } from '../../../tree/discovery-view/DiscoveryBranchDataProvider';
 import { ClusterItemBase } from '../../../tree/documentdb/ClusterItemBase';
 import { AWS_DISCOVERY_PROVIDER_ID, AWS_VIEW_MODE_KEY } from '../config';
-import { type AwsDiscoverySnapshot } from '../types';
 import { createAwsClusterModel } from '../models/AwsClusterModel';
+import { type AwsDiscoverySnapshot } from '../types';
 import { AwsClusterItem } from './AwsClusterItem';
 import { AwsServiceRootItem } from './AwsServiceRootItem';
 
 const snapshot: AwsDiscoverySnapshot = {
-    clusters: [{
-        id: 'resource', arn: 'arn:aws:rds:us-east-1:123456789012:cluster:example',
-        name: 'example', accountId: '123456789012', region: 'us-east-1', port: 27017,
-        endpoint: 'cluster.invalid', status: 'available', ownerCredentialId: 'credential',
-        vpcInfo: {
-            vpcId: 'vpc-123', subnetGroupName: 'docdb-subnets',
-            subnets: [{ id: 'subnet-abc', availabilityZone: 'us-east-1a', status: 'Active' }],
-            securityGroups: [{ id: 'sg-123', status: 'active' }],
-            availabilityZones: ['us-east-1a'], networkType: 'IPV4',
+    clusters: [
+        {
+            id: 'resource',
+            arn: 'arn:aws:rds:us-east-1:123456789012:cluster:example',
+            name: 'example',
+            accountId: '123456789012',
+            region: 'us-east-1',
+            port: 27017,
+            endpoint: 'cluster.invalid',
+            status: 'available',
+            ownerCredentialId: 'credential',
+            vpcInfo: {
+                vpcId: 'vpc-123',
+                subnetGroupName: 'docdb-subnets',
+                subnets: [{ id: 'subnet-abc', availabilityZone: 'us-east-1a', status: 'Active' }],
+                securityGroups: [{ id: 'sg-123', status: 'active' }],
+                availabilityZones: ['us-east-1a'],
+                networkType: 'IPV4',
+            },
         },
-    }],
+    ],
     errors: [],
 };
 const service = {
@@ -138,14 +170,22 @@ describe('AWS native discovery tree', () => {
         resetDiscoveryProviderVisibilityCacheForTests();
         service.listCredentials.mockResolvedValue([{ id: 'credential' }]);
         service.listAll.mockResolvedValue(snapshot);
-        vi.mocked(ClustersClient.getClient).mockImplementation(vi.fn().mockResolvedValue({
-            listDatabases: vi.fn().mockResolvedValue([{ name: 'database' }]),
-        }));
-        vi.mocked(DiscoveryService.listProviders).mockReturnValue([{
-            id: AWS_DISCOVERY_PROVIDER_ID, label: 'AWS DocumentDB', description: '',
-        }]);
+        vi.mocked(ClustersClient.getClient).mockImplementation(
+            vi.fn().mockResolvedValue({
+                listDatabases: vi.fn().mockResolvedValue([{ name: 'database' }]),
+            }),
+        );
+        vi.mocked(DiscoveryService.listProviders).mockReturnValue([
+            {
+                id: AWS_DISCOVERY_PROVIDER_ID,
+                label: 'AWS DocumentDB',
+                description: '',
+            },
+        ]);
         vi.mocked(DiscoveryService.getProvider).mockReturnValue({
-            id: AWS_DISCOVERY_PROVIDER_ID, label: 'AWS DocumentDB', description: '',
+            id: AWS_DISCOVERY_PROVIDER_ID,
+            label: 'AWS DocumentDB',
+            description: '',
             getDiscoveryTreeRootItem: (parentId: string) => new AwsServiceRootItem(service, parentId),
             getDiscoveryWizard: () => ({ promptSteps: [] }),
         });
@@ -179,7 +219,9 @@ describe('AWS native discovery tree', () => {
         expect(await provider.findClusterNodeByClusterId(cluster.cluster.clusterId)).toBe(cluster);
         const databases = await provider.getChildren(cluster);
         const collections = await provider.getChildren(databases![0]);
-        expect(await provider.findCollectionByClusterId(cluster.cluster.clusterId, 'database', 'items')).toBe(collections![0]);
+        expect(await provider.findCollectionByClusterId(cluster.cluster.clusterId, 'database', 'items')).toBe(
+            collections![0],
+        );
         expect(ClustersClient.getClient).toHaveBeenCalledWith(cluster.cluster.clusterId, expect.any(AbortSignal));
         expect(CredentialCache.hasCredentials).toHaveBeenCalledWith(cluster.cluster.clusterId);
         expect(await cluster.getCredentials()).toMatchObject({
@@ -192,9 +234,12 @@ describe('AWS native discovery tree', () => {
         const root = new AwsServiceRootItem(service, 'discoveryView');
         service.listCredentials.mockResolvedValueOnce([]);
         const signIn = await root.getChildren();
-        expect(await signIn[0].getTreeItem()).toMatchObject({ command: { command: expect.stringContaining('aws.addCredential') } });
+        expect(await signIn[0].getTreeItem()).toMatchObject({
+            command: { command: expect.stringContaining('aws.addCredential') },
+        });
         service.listAll.mockResolvedValueOnce({
-            clusters: [], errors: [{ credentialId: 'credential', region: 'us-east-1', message: 'Access denied', kind: 'permission' }],
+            clusters: [],
+            errors: [{ credentialId: 'credential', region: 'us-east-1', message: 'Access denied', kind: 'permission' }],
         });
         const failures = await root.getChildren();
         expect(root.hasRetryNode(failures)).toBe(true);
@@ -207,10 +252,15 @@ describe('AWS native discovery tree', () => {
     });
 
     it('retains shared retry and shell recovery after database listing fails', async () => {
-        vi.mocked(ClustersClient.getClient).mockImplementation(vi.fn().mockResolvedValue({
-            listDatabases: vi.fn().mockRejectedValue(new Error('not authorized')),
-        }));
-        const cluster = new AwsClusterItem(createAwsClusterModel(snapshot.clusters[0], 'discoveryView/aws-documentdb-discovery'), 'journey');
+        vi.mocked(ClustersClient.getClient).mockImplementation(
+            vi.fn().mockResolvedValue({
+                listDatabases: vi.fn().mockRejectedValue(new Error('not authorized')),
+            }),
+        );
+        const cluster = new AwsClusterItem(
+            createAwsClusterModel(snapshot.clusters[0], 'discoveryView/aws-documentdb-discovery'),
+            'journey',
+        );
         const children = await cluster.getChildren();
         expect(cluster.hasRetryNode(children)).toBe(true);
         expect(children.map((child) => child.id)).toContain(`${cluster.id}/retry`);

@@ -6,8 +6,8 @@
 import { AzureWizardPromptStep, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
-import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
+import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { nonNullValue } from '../../../utils/nonNull';
 import { prepareAwsConnection } from '../connect/awsConnection';
 import { configureAwsCredentials } from '../credentialsManagement/configureAwsCredentials';
@@ -30,7 +30,9 @@ export class SelectAwsRegionStep extends AzureWizardPromptStep<AwsWizardContext>
             }
             const items: IAzureQuickPickItem<{ accountId: string; region: string } | 'manage' | 'refresh'>[] = [
                 ...[...locations.values()].map((location) => ({
-                    label: location.region, description: location.accountId, data: location,
+                    label: location.region,
+                    description: location.accountId,
+                    data: location,
                 })),
                 {
                     label: snapshot.errors.length
@@ -70,17 +72,21 @@ export class SelectAwsClusterStep extends AzureWizardPromptStep<AwsWizardContext
     public async prompt(context: AwsWizardContext): Promise<void> {
         const location = nonNullValue(context.awsLocation, 'awsLocation', 'SelectAwsClusterStep');
         const snapshot = await awsDiscoveryService.listAll();
-        const resources = snapshot.clusters.filter((resource) =>
-            resource.accountId === location.accountId && resource.region === location.region);
+        const resources = snapshot.clusters.filter(
+            (resource) => resource.accountId === location.accountId && resource.region === location.region,
+        );
         while (true) {
-            const selected = await context.ui.showQuickPick(resources.map((resource) => ({
-                label: resource.name,
-                description: resource.status,
-                detail: isAwsClusterConnectable(resource)
-                    ? resource.endpoint
-                    : vscode.l10n.t('This cluster is not available or has no endpoint yet.'),
-                data: resource,
-            })), { placeHolder: vscode.l10n.t('Select an AWS DocumentDB cluster'), suppressPersistence: true });
+            const selected = await context.ui.showQuickPick(
+                resources.map((resource) => ({
+                    label: resource.name,
+                    description: resource.status,
+                    detail: isAwsClusterConnectable(resource)
+                        ? resource.endpoint
+                        : vscode.l10n.t('This cluster is not available or has no endpoint yet.'),
+                    data: resource,
+                })),
+                { placeHolder: vscode.l10n.t('Select an AWS DocumentDB cluster'), suppressPersistence: true },
+            );
             if (isAwsClusterConnectable(selected.data)) {
                 context.awsCluster = selected.data;
                 return;

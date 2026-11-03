@@ -13,9 +13,15 @@ vi.mock('vscode', () => ({
 }));
 vi.mock('@aws-sdk/client-docdb', () => ({
     DocDBClient: class {
-        constructor(options: unknown) { clientOptions(options); }
-        public send(...args: unknown[]): unknown { return describeSubnetGroup(...args); }
-        public destroy(): void { destroyed(); }
+        constructor(options: unknown) {
+            clientOptions(options);
+        }
+        public send(...args: unknown[]): unknown {
+            return describeSubnetGroup(...args);
+        }
+        public destroy(): void {
+            destroyed();
+        }
     },
     paginateDescribeDBClusters: (...args: unknown[]): unknown => pages(...args),
     DescribeDBSubnetGroupsCommand: class {
@@ -50,37 +56,64 @@ describe('DocumentDB regional enumeration', () => {
 
     it('paginates clusters and subnet groups to map VPC, subnet and security-group information', async () => {
         pages.mockImplementation(async function* (): AsyncGenerator<unknown> {
-            yield { DBClusters: [{
-                DBClusterArn: 'arn:first', DBClusterIdentifier: 'first', Engine: 'docdb', Endpoint: 'first.example',
-                DBSubnetGroup: 'subnet-group', VpcSecurityGroups: [{ VpcSecurityGroupId: 'sg-123', Status: 'active' }],
-                AvailabilityZones: ['us-east-1a', 'us-east-1b'], NetworkType: 'IPV4',
-            }] };
-            yield { DBClusters: [
-                { DBClusterArn: 'arn:second', DBClusterIdentifier: 'second', Engine: 'docdb', Status: 'creating' },
-                { DBClusterArn: 'arn:not-docdb', DBClusterIdentifier: 'other', Engine: 'aurora' },
-            ] };
-        });
-        describeSubnetGroup.mockResolvedValue({ DBSubnetGroups: [{
-                DBSubnetGroupName: 'subnet-group',
-                VpcId: 'vpc-123',
-                Subnets: [
-                    { SubnetIdentifier: 'subnet-a', SubnetAvailabilityZone: { Name: 'us-east-1a' }, SubnetStatus: 'Active' },
-                    { SubnetIdentifier: 'subnet-b', SubnetAvailabilityZone: { Name: 'us-east-1b' }, SubnetStatus: 'Active' },
+            yield {
+                DBClusters: [
+                    {
+                        DBClusterArn: 'arn:first',
+                        DBClusterIdentifier: 'first',
+                        Engine: 'docdb',
+                        Endpoint: 'first.example',
+                        DBSubnetGroup: 'subnet-group',
+                        VpcSecurityGroups: [{ VpcSecurityGroupId: 'sg-123', Status: 'active' }],
+                        AvailabilityZones: ['us-east-1a', 'us-east-1b'],
+                        NetworkType: 'IPV4',
+                    },
                 ],
-            }] });
+            };
+            yield {
+                DBClusters: [
+                    { DBClusterArn: 'arn:second', DBClusterIdentifier: 'second', Engine: 'docdb', Status: 'creating' },
+                    { DBClusterArn: 'arn:not-docdb', DBClusterIdentifier: 'other', Engine: 'aurora' },
+                ],
+            };
+        });
+        describeSubnetGroup.mockResolvedValue({
+            DBSubnetGroups: [
+                {
+                    DBSubnetGroupName: 'subnet-group',
+                    VpcId: 'vpc-123',
+                    Subnets: [
+                        {
+                            SubnetIdentifier: 'subnet-a',
+                            SubnetAvailabilityZone: { Name: 'us-east-1a' },
+                            SubnetStatus: 'Active',
+                        },
+                        {
+                            SubnetIdentifier: 'subnet-b',
+                            SubnetAvailabilityZone: { Name: 'us-east-1b' },
+                            SubnetStatus: 'Active',
+                        },
+                    ],
+                },
+            ],
+        });
         const controller = new AbortController();
         const clusters = await discoverRegion(record, credentials, 'us-east-1', controller.signal);
         expect(clusters.map((cluster) => cluster.name)).toEqual(['first', 'second']);
         expect(clusters[0]).toMatchObject({
-            ownerCredentialId: record.id, port: 27017, endpoint: 'first.example',
+            ownerCredentialId: record.id,
+            port: 27017,
+            endpoint: 'first.example',
             vpcInfo: {
-                vpcId: 'vpc-123', subnetGroupName: 'subnet-group',
+                vpcId: 'vpc-123',
+                subnetGroupName: 'subnet-group',
                 subnets: [
                     { id: 'subnet-a', availabilityZone: 'us-east-1a', status: 'Active' },
                     { id: 'subnet-b', availabilityZone: 'us-east-1b', status: 'Active' },
                 ],
                 securityGroups: [{ id: 'sg-123', status: 'active' }],
-                availabilityZones: ['us-east-1a', 'us-east-1b'], networkType: 'IPV4',
+                availabilityZones: ['us-east-1a', 'us-east-1b'],
+                networkType: 'IPV4',
             },
         });
         expect(clusters[1].endpoint).toBeUndefined();
@@ -101,19 +134,28 @@ describe('DocumentDB regional enumeration', () => {
             yield { DBClusters: [] };
         });
 
-        await expect(discoverRegion(record, credentials, 'us-east-1', controller.signal))
-            .rejects.toMatchObject({ name: 'AbortError' });
+        await expect(discoverRegion(record, credentials, 'us-east-1', controller.signal)).rejects.toMatchObject({
+            name: 'AbortError',
+        });
         expect(destroyed).toHaveBeenCalledTimes(1);
     });
 
     it('keeps cluster discovery available and exposes a sanitized message when subnet-group permission is missing', async () => {
         pages.mockImplementation(async function* (): AsyncGenerator<unknown> {
-            yield { DBClusters: [{
-                DBClusterArn: 'arn:first', DBClusterIdentifier: 'first', Engine: 'docdb',
-                DBSubnetGroup: 'private-group',
-            }] };
+            yield {
+                DBClusters: [
+                    {
+                        DBClusterArn: 'arn:first',
+                        DBClusterIdentifier: 'first',
+                        Engine: 'docdb',
+                        DBSubnetGroup: 'private-group',
+                    },
+                ],
+            };
         });
-        describeSubnetGroup.mockRejectedValue(Object.assign(new Error('secret request metadata'), { name: 'AccessDeniedException' }));
+        describeSubnetGroup.mockRejectedValue(
+            Object.assign(new Error('secret request metadata'), { name: 'AccessDeniedException' }),
+        );
         const clusters = await discoverRegion(record, credentials, 'us-east-1');
         expect(clusters).toHaveLength(1);
         expect(clusters[0].vpcInfoError).toContain('AWS denied this operation');
@@ -123,8 +165,9 @@ describe('DocumentDB regional enumeration', () => {
     it('does not make AWS calls for an already cancelled request', async () => {
         const controller = new AbortController();
         controller.abort();
-        await expect(discoverRegion(record, credentials, 'us-east-1', controller.signal))
-            .rejects.toMatchObject({ name: 'AbortError' });
+        await expect(discoverRegion(record, credentials, 'us-east-1', controller.signal)).rejects.toMatchObject({
+            name: 'AbortError',
+        });
         expect(clientOptions).not.toHaveBeenCalled();
     });
 });

@@ -8,7 +8,11 @@ import { type AwsDiscoveryFailure } from '../types';
 
 export class AwsInteractionRequiredError extends Error {
     constructor() {
-        super(vscode.l10n.t('AWS sign-in requires interaction. Verify this credential again, or renew its AWS profile session.'));
+        super(
+            vscode.l10n.t(
+                'AWS sign-in requires interaction. Verify this credential again, or renew its AWS profile session.',
+            ),
+        );
         this.name = 'AwsInteractionRequiredError';
     }
 }
@@ -47,11 +51,18 @@ export function failureKind(error: unknown): AwsDiscoveryFailure['kind'] {
     if (/AccessDenied|UnauthorizedOperation|Forbidden/.test(name)) {
         return 'permission';
     }
-    if (/InteractionRequired|ExpiredToken|InvalidClientToken|UnrecognizedClient|CredentialsProvider|TokenProvider|Unauthorized|InvalidGrant|InvalidIdentity|SignatureDoesNotMatch/.test(name)) {
+    if (
+        /InteractionRequired|ExpiredToken|InvalidClientToken|UnrecognizedClient|CredentialsProvider|TokenProvider|Unauthorized|InvalidGrant|InvalidIdentity|SignatureDoesNotMatch/.test(
+            name,
+        )
+    ) {
         return 'auth';
     }
     const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
-    if (/Timeout|Networking|RequestTimeout/.test(name) || (typeof code === 'string' && /^(ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)/.test(code))) {
+    if (
+        /Timeout|Networking|RequestTimeout/.test(name) ||
+        (typeof code === 'string' && /^(ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)/.test(code))
+    ) {
         return 'network';
     }
     return 'other';
@@ -69,11 +80,21 @@ export function safeAwsError(error: unknown): Error {
         case 'auth':
             return new AwsInteractionRequiredError();
         case 'permission':
-            return new Error(vscode.l10n.t('AWS denied this operation. Check the credential and its DocumentDB discovery permissions in this region.'));
+            return new Error(
+                vscode.l10n.t(
+                    'AWS denied this operation. Check the credential and its DocumentDB discovery permissions in this region.',
+                ),
+            );
         case 'network':
-            return new Error(vscode.l10n.t('Unable to reach AWS. Check your network, proxy settings, and selected region, then retry.'));
+            return new Error(
+                vscode.l10n.t(
+                    'Unable to reach AWS. Check your network, proxy settings, and selected region, then retry.',
+                ),
+            );
         default:
-            return new Error(vscode.l10n.t('The AWS operation failed. Check your sign-in and selected region, then retry.'));
+            return new Error(
+                vscode.l10n.t('The AWS operation failed. Check your sign-in and selected region, then retry.'),
+            );
     }
 }
 

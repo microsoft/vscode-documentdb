@@ -55,13 +55,15 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
         while (true) {
             const credentials = await awsDiscoveryService.listCredentials();
             const choices: CredentialChoice[] = [
-                ...credentials.map((credential): CredentialChoice => ({
-                    label: credential.label,
-                    description: credential.accountId,
-                    detail: `${credential.authMethod} · ${credential.regions.join(', ')}`,
-                    iconPath: new vscode.ThemeIcon('key'),
-                    credential,
-                })),
+                ...credentials.map(
+                    (credential): CredentialChoice => ({
+                        label: credential.label,
+                        description: credential.accountId,
+                        detail: `${credential.authMethod} · ${credential.regions.join(', ')}`,
+                        iconPath: new vscode.ThemeIcon('key'),
+                        credential,
+                    }),
+                ),
                 { label: vscode.l10n.t('Add a credential…'), iconPath: new vscode.ThemeIcon('add'), action: 'add' },
                 { label: vscode.l10n.t('Exit'), iconPath: new vscode.ThemeIcon('close'), action: 'exit' },
             ];
@@ -87,25 +89,33 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
             const actions: ActionChoice[] = [
                 {
                     label: vscode.l10n.t('Retry'),
-                    detail: vscode.l10n.t('Refresh discovery for this entry after changing AWS permissions or renewing a profile session.'),
+                    detail: vscode.l10n.t(
+                        'Refresh discovery for this entry after changing AWS permissions or renewing a profile session.',
+                    ),
                     iconPath: new vscode.ThemeIcon('refresh'),
                     action: 'retry',
                 },
                 {
                     label: vscode.l10n.t('Update credentials…'),
-                    detail: vscode.l10n.t('Update the credential and its regions. The previous credential is kept unless verification succeeds.'),
+                    detail: vscode.l10n.t(
+                        'Update the credential and its regions. The previous credential is kept unless verification succeeds.',
+                    ),
                     iconPath: new vscode.ThemeIcon('key'),
                     action: 'update',
                 },
                 {
                     label: vscode.l10n.t('Sign in again…'),
-                    detail: vscode.l10n.t('Reauthenticate this entry, including browser sign-in or profile MFA when needed.'),
+                    detail: vscode.l10n.t(
+                        'Reauthenticate this entry, including browser sign-in or profile MFA when needed.',
+                    ),
                     iconPath: new vscode.ThemeIcon('sign-in'),
                     action: 'reauthenticate',
                 },
                 {
                     label: vscode.l10n.t('Remove credential'),
-                    detail: vscode.l10n.t('Remove this entry locally. Saved database connections and AWS-side credentials are not deleted.'),
+                    detail: vscode.l10n.t(
+                        'Remove this entry locally. Saved database connections and AWS-side credentials are not deleted.',
+                    ),
                     iconPath: new vscode.ThemeIcon('trash'),
                     action: 'remove',
                 },
@@ -125,7 +135,13 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
                     continue;
                 case 'update':
                 case 'reauthenticate':
-                    if (await openAwsCredentialsWebview({ credentialId: credential.id, credential, journeyCorrelationId })) {
+                    if (
+                        await openAwsCredentialsWebview({
+                            credentialId: credential.id,
+                            credential,
+                            journeyCorrelationId,
+                        })
+                    ) {
                         changed = true;
                         awsDiscoveryService.invalidate(credential.id);
                         refreshDiscoveryTree(node);
@@ -133,16 +149,23 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
                     break;
                 case 'retry': {
                     awsDiscoveryService.invalidate(credential.id);
-                    const snapshot = await vscode.window.withProgress({
-                        location: vscode.ProgressLocation.Notification,
-                        title: vscode.l10n.t('Retrying {0}…', credential.label),
-                    }, async () => awsDiscoveryService.listAll(false));
+                    const snapshot = await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: vscode.l10n.t('Retrying {0}…', credential.label),
+                        },
+                        async () => awsDiscoveryService.listAll(false),
+                    );
                     changed = true;
                     const failures = snapshot.errors.filter((error) => error.credentialId === credential.id);
                     if (failures.length > 0) {
-                        await vscode.window.showWarningMessage(vscode.l10n.t('AWS discovery still needs attention: {0}', failures[0].message));
+                        await vscode.window.showWarningMessage(
+                            vscode.l10n.t('AWS discovery still needs attention: {0}', failures[0].message),
+                        );
                     } else {
-                        await vscode.window.showInformationMessage(vscode.l10n.t('AWS discovery refreshed for {0}.', credential.label));
+                        await vscode.window.showInformationMessage(
+                            vscode.l10n.t('AWS discovery refreshed for {0}.', credential.label),
+                        );
                     }
                     refreshDiscoveryTree(node);
                     break;
@@ -153,7 +176,10 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
                         vscode.l10n.t('Are you sure?'),
                         {
                             modal: true,
-                            detail: vscode.l10n.t('Remove {0} from VS Code? This does not revoke AWS access or remove saved database connections.', credential.label),
+                            detail: vscode.l10n.t(
+                                'Remove {0} from VS Code? This does not revoke AWS access or remove saved database connections.',
+                                credential.label,
+                            ),
                         },
                         remove,
                     );

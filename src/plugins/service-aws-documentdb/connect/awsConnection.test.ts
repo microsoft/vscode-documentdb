@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type * as Crypto from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('vscode', () => ({
@@ -12,13 +13,15 @@ vi.mock('vscode', () => ({
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
-vi.mock('../../../extensionVariables', () => ({ ext: {
-    context: { globalState: { get: vi.fn().mockReturnValue({}), update: vi.fn() } },
-    outputChannel: { warn: vi.fn() },
-} }));
+vi.mock('../../../extensionVariables', () => ({
+    ext: {
+        context: { globalState: { get: vi.fn().mockReturnValue({}), update: vi.fn() } },
+        outputChannel: { warn: vi.fn() },
+    },
+}));
 vi.mock('fs/promises', () => ({ readFile: vi.fn() }));
 vi.mock('crypto', async () => ({
-    ...await vi.importActual<typeof import('crypto')>('crypto'),
+    ...(await vi.importActual<typeof Crypto>('crypto')),
     X509Certificate: vi.fn(),
 }));
 
@@ -26,18 +29,23 @@ import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import * as vscode from 'vscode';
-import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { NativeAuthHandler } from '../../../documentdb/auth/NativeAuthHandler';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { type AwsCluster } from '../types';
 import { buildAwsConnectionString, selectAwsCertificate, validateAwsCertificate } from './awsConnection';
 
 const resource: AwsCluster = {
-    id: 'id', arn: 'arn:aws:rds:us-east-1:123456789012:cluster:example',
-    accountId: '123456789012', region: 'us-east-1', name: 'example',
-    port: 27017, endpoint: 'example.cluster-abc.us-east-1.docdb.amazonaws.com',
-    status: 'available', ownerCredentialId: 'credential-1',
+    id: 'id',
+    arn: 'arn:aws:rds:us-east-1:123456789012:cluster:example',
+    accountId: '123456789012',
+    region: 'us-east-1',
+    name: 'example',
+    port: 27017,
+    endpoint: 'example.cluster-abc.us-east-1.docdb.amazonaws.com',
+    status: 'available',
+    ownerCredentialId: 'credential-1',
 };
 
 describe('AWS database transport configuration', () => {
@@ -66,7 +74,8 @@ describe('AWS database transport configuration', () => {
         const path = resolve('certificates', 'AWS CA.pem');
         const connectionString = buildAwsConnectionString(resource, path);
         CredentialCache.setAuthCredentials('aws-test', AuthMethodId.NativeAuth, connectionString, {
-            connectionUser: 'database-user', connectionPassword: 'test-password',
+            connectionUser: 'database-user',
+            connectionPassword: 'test-password',
         });
         try {
             const cached = CredentialCache.getCredentials('aws-test');

@@ -39,8 +39,12 @@ function backing(): { storage: AwsCredentialStorage; secrets: Map<string, string
             read: (): ReturnType<AwsCredentialStorage['read']> => records,
             write: writes,
             getSecret: async (key): Promise<string | undefined> => secrets.get(key),
-            storeSecret: async (key, value): Promise<void> => { secrets.set(key, value); },
-            deleteSecret: async (key): Promise<void> => { secrets.delete(key); },
+            storeSecret: async (key, value): Promise<void> => {
+                secrets.set(key, value);
+            },
+            deleteSecret: async (key): Promise<void> => {
+                secrets.delete(key);
+            },
         },
     };
 }
@@ -55,7 +59,16 @@ const identity: AwsIdentity = { accountId: '123456789012', arn: 'arn:aws:iam::12
 
 function cluster(ownerCredentialId: string, region = 'us-east-1'): AwsCluster {
     const arn = `arn:aws:rds:${region}:123456789012:cluster:test`;
-    return { id: arn, arn, accountId: identity.accountId, name: 'test', region, port: 27017, status: 'available', ownerCredentialId };
+    return {
+        id: arn,
+        arn,
+        accountId: identity.accountId,
+        name: 'test',
+        region,
+        port: 27017,
+        status: 'available',
+        ownerCredentialId,
+    };
 }
 
 describe('AWS credential acceptance and discovery', () => {
@@ -72,7 +85,12 @@ describe('AWS credential acceptance and discovery', () => {
         const store = new AwsCredentialStore(state.storage);
         const verify = vi.fn(async (): Promise<AwsIdentity> => identity);
         const discover = vi.fn(async (): Promise<AwsCluster[]> => []);
-        const service = new AwsDiscoveryService({ store, verifyIdentity: verify, discoverRegion: discover, ...overrides });
+        const service = new AwsDiscoveryService({
+            store,
+            verifyIdentity: verify,
+            discoverRegion: discover,
+            ...overrides,
+        });
         services.push(service);
         return { service, store, state, verify, discover };
     }
@@ -100,8 +118,9 @@ describe('AWS credential acceptance and discovery', () => {
         const { service, store, verify } = setup();
         const previous = await service.verifyAndSave(input);
         verify.mockRejectedValueOnce(new Error(`request leaked ${input.secretAccessKey}`));
-        await expect(service.verifyAndSave({ ...input, secretAccessKey: 'replacement' }, undefined, previous.id))
-            .rejects.not.toThrow(input.secretAccessKey);
+        await expect(
+            service.verifyAndSave({ ...input, secretAccessKey: 'replacement' }, undefined, previous.id),
+        ).rejects.not.toThrow(input.secretAccessKey);
         expect(await service.listCredentials()).toEqual([previous]);
         expect(await store.secrets(previous.id)).toMatchObject({ secretAccessKey: input.secretAccessKey });
     });
@@ -110,7 +129,9 @@ describe('AWS credential acceptance and discovery', () => {
         const { service, store, state } = setup();
         const record = await service.verifyAndSave(input);
         state.writes.mockRejectedValueOnce(new Error('storage failure'));
-        await expect(service.verifyAndSave({ ...input, secretAccessKey: 'replacement' }, undefined, record.id)).rejects.toThrow();
+        await expect(
+            service.verifyAndSave({ ...input, secretAccessKey: 'replacement' }, undefined, record.id),
+        ).rejects.toThrow();
         expect(await service.listCredentials()).toEqual([record]);
         expect(await store.secrets(record.id)).toMatchObject({ secretAccessKey: input.secretAccessKey });
         expect(state.secrets.size).toBe(1);
@@ -119,7 +140,12 @@ describe('AWS credential acceptance and discovery', () => {
     it('keeps multiple entries for the same account independent', async () => {
         const { service, store } = setup();
         const first = await service.verifyAndSave(input);
-        const second = await service.verifyAndSave({ ...input, label: 'Second role', secretAccessKey: 'second-secret', regions: ['us-west-2'] });
+        const second = await service.verifyAndSave({
+            ...input,
+            label: 'Second role',
+            secretAccessKey: 'second-secret',
+            regions: ['us-west-2'],
+        });
         expect(first.id).not.toBe(second.id);
         await service.removeCredential(first.id);
         expect(await service.listCredentials()).toEqual([second]);
@@ -153,7 +179,9 @@ describe('AWS credential acceptance and discovery', () => {
         const snapshot = await service.listAll();
         expect(snapshot.clusters).toEqual([]);
         expect(snapshot.errors).toHaveLength(2);
-        expect(snapshot.errors.every((error) => error.kind === 'permission' && error.credentialId === record.id)).toBe(true);
+        expect(snapshot.errors.every((error) => error.kind === 'permission' && error.credentialId === record.id)).toBe(
+            true,
+        );
         expect(JSON.stringify(snapshot)).not.toContain(input.secretAccessKey);
         expect(await service.listCredentials()).toHaveLength(1);
     });
@@ -239,14 +267,15 @@ describe('AWS credential acceptance and discovery', () => {
     it('does not repopulate the identity cache from a late profile refresh after removal', async () => {
         const started = deferred<void>();
         const gate = deferred<AwsCredentialIdentity>();
-        const provider = vi.fn((_profile: string, _region: string, interactive: boolean) =>
-            async (): Promise<AwsCredentialIdentity> => {
+        const provider = vi.fn(
+            (_profile: string, _region: string, interactive: boolean) => async (): Promise<AwsCredentialIdentity> => {
                 if (interactive) {
                     return { accessKeyId: 'old-key', secretAccessKey: 'old-secret' };
                 }
                 started.resolve();
                 return gate.promise;
-            });
+            },
+        );
         const { service } = setup({ profileProvider: provider });
         const record = await service.verifyAndSave({ authMethod: 'profile', profile: 'role', regions: ['us-east-1'] });
         service.invalidate(record.id);
@@ -260,15 +289,20 @@ describe('AWS credential acceptance and discovery', () => {
     });
 
     it('uses foreground profile resolution only for explicit verification', async () => {
-        const provider = vi.fn((_profile: string, _region: string, interactive: boolean) =>
-            async (): Promise<AwsCredentialIdentity> => {
+        const provider = vi.fn(
+            (_profile: string, _region: string, interactive: boolean) => async (): Promise<AwsCredentialIdentity> => {
                 if (!interactive) {
                     throw new AwsInteractionRequiredError();
                 }
                 return { accessKeyId: 'profile-key', secretAccessKey: 'profile-secret' };
-            });
+            },
+        );
         const { service } = setup({ profileProvider: provider });
-        const record = await service.verifyAndSave({ authMethod: 'profile', profile: 'role-with-mfa', regions: ['us-east-1'] });
+        const record = await service.verifyAndSave({
+            authMethod: 'profile',
+            profile: 'role-with-mfa',
+            regions: ['us-east-1'],
+        });
         service.invalidate(record.id);
         const snapshot = await service.listAll();
         expect(provider.mock.calls.map((call) => call[2])).toEqual([true, false]);
@@ -304,7 +338,10 @@ describe('AWS credential acceptance and discovery', () => {
 
     it('limits concurrent regional requests to four', async () => {
         const { service, discover } = setup();
-        await service.verifyAndSave({ ...input, regions: Array.from({ length: 8 }, (_, index) => `us-east-${index + 1}`) });
+        await service.verifyAndSave({
+            ...input,
+            regions: Array.from({ length: 8 }, (_, index) => `us-east-${index + 1}`),
+        });
         let active = 0;
         let maximum = 0;
         const started = deferred<void>();
@@ -350,7 +387,10 @@ describe('AWS credential acceptance and discovery', () => {
         const verifying = deferred<void>();
         const { service, state } = setup({
             sso,
-            resolveSsoCredentials: async (): Promise<{ credentials: AwsCredentialIdentity; secrets: typeof stagedSecrets }> => ({
+            resolveSsoCredentials: async (): Promise<{
+                credentials: AwsCredentialIdentity;
+                secrets: typeof stagedSecrets;
+            }> => ({
                 credentials: { accessKeyId: 'role-key', secretAccessKey: 'role-secret', sessionToken: 'role-token' },
                 secrets: stagedSecrets,
             }),
@@ -360,7 +400,11 @@ describe('AWS credential acceptance and discovery', () => {
             },
         });
         const saving = service.verifyAndSave({
-            authMethod: 'sso', ssoFlowId: 'opaque-flow', accountId: identity.accountId, roleName: 'ReadOnly', regions: ['us-east-1'],
+            authMethod: 'sso',
+            ssoFlowId: 'opaque-flow',
+            accountId: identity.accountId,
+            roleName: 'ReadOnly',
+            regions: ['us-east-1'],
         });
         await verifying.promise;
         expect(stage).toHaveBeenCalledWith('opaque-flow', identity.accountId);
@@ -399,13 +443,19 @@ describe('AWS credential acceptance and discovery', () => {
             sessionToken: 'role-token',
             expiration: new Date(expiresAt),
         };
-        const resolveSso = vi.fn(async (): Promise<{ credentials: AwsCredentialIdentity; secrets: typeof secrets }> => ({
-            credentials,
-            secrets,
-        }));
+        const resolveSso = vi.fn(
+            async (): Promise<{ credentials: AwsCredentialIdentity; secrets: typeof secrets }> => ({
+                credentials,
+                secrets,
+            }),
+        );
         const { service, store } = setup({ sso, resolveSsoCredentials: resolveSso });
         const record = await service.verifyAndSave({
-            authMethod: 'sso', ssoFlowId: 'opaque-flow', accountId: identity.accountId, roleName: 'ReadOnly', regions: ['us-east-1'],
+            authMethod: 'sso',
+            ssoFlowId: 'opaque-flow',
+            accountId: identity.accountId,
+            roleName: 'ReadOnly',
+            regions: ['us-east-1'],
         });
         const renewedSecrets = {
             ...secrets,

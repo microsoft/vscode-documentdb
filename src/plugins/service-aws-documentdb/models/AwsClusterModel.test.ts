@@ -5,14 +5,19 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { awsClusterSuffix, createAwsClusterModel, isAwsClusterConnectable } from './AwsClusterModel';
 import { type AwsCluster } from '../types';
+import { awsClusterSuffix, createAwsClusterModel, isAwsClusterConnectable } from './AwsClusterModel';
 
 const resource: AwsCluster = {
-    id: 'resource-id', arn: 'arn:aws:rds:us-east-1:123456789012:cluster:example',
-    accountId: '123456789012', region: 'us-east-1', name: 'example',
-    port: 27017, endpoint: 'example.cluster-abc.us-east-1.docdb.amazonaws.com',
-    status: 'available', ownerCredentialId: 'credential-1',
+    id: 'resource-id',
+    arn: 'arn:aws:rds:us-east-1:123456789012:cluster:example',
+    accountId: '123456789012',
+    region: 'us-east-1',
+    name: 'example',
+    port: 27017,
+    endpoint: 'example.cluster-abc.us-east-1.docdb.amazonaws.com',
+    status: 'available',
+    ownerCredentialId: 'credential-1',
 };
 
 describe('AWS cluster identity', () => {
@@ -28,7 +33,9 @@ describe('AWS cluster identity', () => {
     });
 
     it('ignores credential/session and display-name changes but distinguishes ARN resource identities', () => {
-        expect(awsClusterSuffix({ ...resource, ownerCredentialId: 'other', name: 'renamed' })).toBe(awsClusterSuffix(resource));
+        expect(awsClusterSuffix({ ...resource, ownerCredentialId: 'other', name: 'renamed' })).toBe(
+            awsClusterSuffix(resource),
+        );
         for (const arn of [
             'arn:aws:rds:us-west-2:123456789012:cluster:example',
             'arn:aws:rds:us-east-1:999999999999:cluster:example',

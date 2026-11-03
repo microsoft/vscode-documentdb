@@ -32,7 +32,9 @@ vi.mock('../../../plugins/service-aws-documentdb/discovery/AwsDiscoveryService',
     },
 }));
 vi.mock('../../_integration/trpc', async () => {
-    const { initWebviewTrpc } = await vi.importActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>('@microsoft/vscode-ext-webview');
+    const { initWebviewTrpc } = await vi.importActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
+        '@microsoft/vscode-ext-webview',
+    );
     const trpc = initWebviewTrpc();
     return {
         createCallerFactory: trpc.createCallerFactory,
@@ -45,7 +47,13 @@ import { API } from '../../../DocumentDBExperiences';
 import { AwsInteractionRequiredError, AwsValidationError } from '../../../plugins/service-aws-documentdb/auth/errors';
 import { type AwsCredentialRecord } from '../../../plugins/service-aws-documentdb/types';
 import { createCallerFactory } from '../../_integration/trpc';
-import { awsCredentialsRouter, credentialInputSchema, disposeAwsCredentialState, isAwsVerificationUrl, type RouterContext } from './awsCredentialsRouter';
+import {
+    awsCredentialsRouter,
+    credentialInputSchema,
+    disposeAwsCredentialState,
+    isAwsVerificationUrl,
+    type RouterContext,
+} from './awsCredentialsRouter';
 
 function createContext(): RouterContext & {
     actionContext: { telemetry: { properties: Record<string, string>; measurements: Record<string, number> } };
@@ -53,7 +61,13 @@ function createContext(): RouterContext & {
     return {
         dbExperience: API.DocumentDB,
         webviewName: 'awsCredentials',
-        credentialState: { credentialsStored: false, submitting: false, ssoGeneration: 0, lifetime: new AbortController(), ssoFlows: new Set() },
+        credentialState: {
+            credentialsStored: false,
+            submitting: false,
+            ssoGeneration: 0,
+            lifetime: new AbortController(),
+            ssoFlows: new Set(),
+        },
         onCredentialPersisted: vi.fn(),
         onCancelled: vi.fn(),
         onCredentialsStored: vi.fn(),
@@ -62,11 +76,25 @@ function createContext(): RouterContext & {
 }
 
 const record: AwsCredentialRecord = {
-    id: 'entry-one', label: 'Work', authMethod: 'accessKey', regions: ['us-east-1'],
-    accountId: '123456789012', arn: 'arn:aws:iam::123456789012:user/test',
+    id: 'entry-one',
+    label: 'Work',
+    authMethod: 'accessKey',
+    regions: ['us-east-1'],
+    accountId: '123456789012',
+    arn: 'arn:aws:iam::123456789012:user/test',
 };
-const input = { authMethod: 'accessKey' as const, regions: ['us-east-1'], accessKeyId: 'key-id', secretAccessKey: 'secret-value' };
-const flow = { flowId: 'flow-one', verificationUri: 'https://device.sso.us-east-1.amazonaws.com/', userCode: 'ABCD-EFGH', intervalSeconds: 5 };
+const input = {
+    authMethod: 'accessKey' as const,
+    regions: ['us-east-1'],
+    accessKeyId: 'key-id',
+    secretAccessKey: 'secret-value',
+};
+const flow = {
+    flowId: 'flow-one',
+    verificationUri: 'https://device.sso.us-east-1.amazonaws.com/',
+    userCode: 'ABCD-EFGH',
+    intervalSeconds: 5,
+};
 const createCaller = createCallerFactory(awsCredentialsRouter);
 
 beforeEach(() => {
@@ -80,13 +108,34 @@ beforeEach(() => {
 describe('AWS credential validation', () => {
     it('requires at least one region and the fields for each selected method', () => {
         expect(credentialInputSchema.safeParse({ ...input, regions: [] }).success).toBe(false);
-        expect(credentialInputSchema.safeParse({ authMethod: 'temporary', regions: ['us-east-1'], accessKeyId: 'id', secretAccessKey: 'secret' }).success).toBe(false);
-        expect(credentialInputSchema.safeParse({ authMethod: 'profile', regions: ['us-east-1'], profile: '' }).success).toBe(false);
-        expect(credentialInputSchema.safeParse({ authMethod: 'sso', regions: ['us-east-1'], ssoFlowId: 'flow', accountId: '123456789012' }).success).toBe(false);
+        expect(
+            credentialInputSchema.safeParse({
+                authMethod: 'temporary',
+                regions: ['us-east-1'],
+                accessKeyId: 'id',
+                secretAccessKey: 'secret',
+            }).success,
+        ).toBe(false);
+        expect(
+            credentialInputSchema.safeParse({ authMethod: 'profile', regions: ['us-east-1'], profile: '' }).success,
+        ).toBe(false);
+        expect(
+            credentialInputSchema.safeParse({
+                authMethod: 'sso',
+                regions: ['us-east-1'],
+                ssoFlowId: 'flow',
+                accountId: '123456789012',
+            }).success,
+        ).toBe(false);
     });
 
     it('deduplicates regions and strips fields outside the chosen method', () => {
-        const parsed = credentialInputSchema.parse({ authMethod: 'profile', regions: ['us-east-1', 'us-east-1'], profile: 'work', secretAccessKey: 'never-forward' });
+        const parsed = credentialInputSchema.parse({
+            authMethod: 'profile',
+            regions: ['us-east-1', 'us-east-1'],
+            profile: 'work',
+            secretAccessKey: 'never-forward',
+        });
         expect(parsed).toEqual({ authMethod: 'profile', regions: ['us-east-1'], profile: 'work' });
     });
 });
@@ -131,7 +180,9 @@ describe('awsCredentialsRouter', () => {
 
     it('opens only checked AWS device URLs and owns the returned flow', async () => {
         const context = createContext();
-        await expect(createCaller(context).startSso({ startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1' })).resolves.toEqual(flow);
+        await expect(
+            createCaller(context).startSso({ startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1' }),
+        ).resolves.toEqual(flow);
         expect(context.credentialState.ssoFlows.has(flow.flowId)).toBe(true);
         expect(mockOpenExternal).toHaveBeenCalledWith(flow.verificationUri);
     });
@@ -143,10 +194,12 @@ describe('awsCredentialsRouter', () => {
         };
         mockBeginSso.mockResolvedValue(portalFlow);
         const context = createContext();
-        await expect(createCaller(context).startSso({
-            startUrl: 'https://directory-alias-example.awsapps.com/start',
-            ssoRegion: 'us-east-1',
-        })).resolves.toEqual(portalFlow);
+        await expect(
+            createCaller(context).startSso({
+                startUrl: 'https://directory-alias-example.awsapps.com/start',
+                ssoRegion: 'us-east-1',
+            }),
+        ).resolves.toEqual(portalFlow);
         expect(mockOpenExternal).toHaveBeenCalledWith(portalFlow.verificationUri);
         expect(context.credentialState.ssoFlows.has(portalFlow.flowId)).toBe(true);
         expect(mockCancelSso).not.toHaveBeenCalled();
@@ -155,29 +208,48 @@ describe('awsCredentialsRouter', () => {
     it('preserves a safe startup diagnostic without exposing raw AWS request details', async () => {
         const message = 'AWS could not start device authorization. Check the SSO start URL and Identity Center region.';
         mockBeginSso.mockRejectedValue(new AwsValidationError(message));
-        await expect(createCaller(createContext()).startSso({
-            startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1',
-        })).rejects.toThrow(message);
+        await expect(
+            createCaller(createContext()).startSso({
+                startUrl: 'https://example.awsapps.com/start',
+                ssoRegion: 'us-east-1',
+            }),
+        ).rejects.toThrow(message);
         mockBeginSso.mockRejectedValue(new Error('private-client-secret'));
-        await expect(createCaller(createContext()).startSso({
-            startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1',
-        })).rejects.not.toThrow('private-client-secret');
+        await expect(
+            createCaller(createContext()).startSso({
+                startUrl: 'https://example.awsapps.com/start',
+                ssoRegion: 'us-east-1',
+            }),
+        ).rejects.not.toThrow('private-client-secret');
     });
 
     it('reports an actionable error and cleans up when no browser can be opened', async () => {
         mockOpenExternal.mockResolvedValue(false);
-        await expect(createCaller(createContext()).startSso({
-            startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1',
-        })).rejects.toThrow('browser');
+        await expect(
+            createCaller(createContext()).startSso({
+                startUrl: 'https://example.awsapps.com/start',
+                ssoRegion: 'us-east-1',
+            }),
+        ).rejects.toThrow('browser');
         expect(mockCancelSso).toHaveBeenCalledWith(flow.flowId);
     });
 
     it('rejects a foreign flow for polling, role listing, cancellation, and submission', async () => {
         const caller = createCaller(createContext());
         await expect(caller.pollSso({ flowId: 'foreign' })).rejects.toThrow('in this panel');
-        await expect(caller.listSsoRoles({ flowId: 'foreign', accountId: '123456789012' })).rejects.toThrow('in this panel');
+        await expect(caller.listSsoRoles({ flowId: 'foreign', accountId: '123456789012' })).rejects.toThrow(
+            'in this panel',
+        );
         await expect(caller.cancelSso({ flowId: 'foreign' })).rejects.toThrow('in this panel');
-        await expect(caller.submit({ authMethod: 'sso', regions: ['us-east-1'], ssoFlowId: 'foreign', accountId: '123456789012', roleName: 'ReadOnly' })).rejects.toThrow('in this panel');
+        await expect(
+            caller.submit({
+                authMethod: 'sso',
+                regions: ['us-east-1'],
+                ssoFlowId: 'foreign',
+                accountId: '123456789012',
+                roleName: 'ReadOnly',
+            }),
+        ).rejects.toThrow('in this panel');
         expect(mockPollSso).not.toHaveBeenCalled();
         expect(mockListSsoRoles).not.toHaveBeenCalled();
         expect(mockCancelSso).not.toHaveBeenCalled();
@@ -187,7 +259,9 @@ describe('awsCredentialsRouter', () => {
     it('cleans up a staged flow when browser opening fails', async () => {
         const context = createContext();
         mockOpenExternal.mockRejectedValue(new Error('Browser failure'));
-        await expect(createCaller(context).startSso({ startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1' })).rejects.toThrow();
+        await expect(
+            createCaller(context).startSso({ startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1' }),
+        ).rejects.toThrow();
         expect(mockCancelSso).toHaveBeenCalledWith(flow.flowId);
         expect(context.credentialState.ssoFlows.size).toBe(0);
     });
@@ -198,7 +272,9 @@ describe('awsCredentialsRouter', () => {
             context.credentialState.lifetime.abort();
             return Promise.resolve(true);
         });
-        await expect(createCaller(context).startSso({ startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1' })).rejects.toThrow('cancelled');
+        await expect(
+            createCaller(context).startSso({ startUrl: 'https://example.awsapps.com/start', ssoRegion: 'us-east-1' }),
+        ).rejects.toThrow('cancelled');
         expect(mockCancelSso).toHaveBeenCalledWith(flow.flowId);
         expect(context.credentialState.ssoFlows.size).toBe(0);
     });
@@ -210,10 +286,12 @@ describe('awsCredentialsRouter', () => {
             await caller.cancelSso({});
             return flow;
         });
-        await expect(caller.startSso({
-            startUrl: 'https://example.awsapps.com/start',
-            ssoRegion: 'us-east-1',
-        })).rejects.toThrow();
+        await expect(
+            caller.startSso({
+                startUrl: 'https://example.awsapps.com/start',
+                ssoRegion: 'us-east-1',
+            }),
+        ).rejects.toThrow();
         expect(mockCancelSso).toHaveBeenCalledWith(flow.flowId);
         expect(context.credentialState.ssoFlows.size).toBe(0);
         expect(mockOpenExternal).not.toHaveBeenCalled();
@@ -227,10 +305,12 @@ describe('awsCredentialsRouter', () => {
             await caller.cancelSso({});
             return true;
         });
-        await expect(caller.startSso({
-            startUrl: 'https://example.awsapps.com/start',
-            ssoRegion: 'us-east-1',
-        })).rejects.toThrow();
+        await expect(
+            caller.startSso({
+                startUrl: 'https://example.awsapps.com/start',
+                ssoRegion: 'us-east-1',
+            }),
+        ).rejects.toThrow();
         expect(mockCancelSso).toHaveBeenCalledWith(flow.flowId);
         expect(context.credentialState.ssoFlows.size).toBe(0);
     });
@@ -249,11 +329,12 @@ describe('awsCredentialsRouter', () => {
 
     it('aborts in-flight verification when the panel is disposed', async () => {
         const context = createContext();
-        mockVerifyAndSave.mockImplementation((_input: unknown, signal: AbortSignal) =>
-            new Promise((_resolve, reject) => {
-                signal.addEventListener('abort', () => reject(new Error('Cancelled')), { once: true });
-                disposeAwsCredentialState(context.credentialState);
-            }),
+        mockVerifyAndSave.mockImplementation(
+            (_input: unknown, signal: AbortSignal) =>
+                new Promise((_resolve, reject) => {
+                    signal.addEventListener('abort', () => reject(new Error('Cancelled')), { once: true });
+                    disposeAwsCredentialState(context.credentialState);
+                }),
         );
         await expect(createCaller(context).submit(input)).rejects.toThrow('cancelled');
         expect(context.onCredentialPersisted).not.toHaveBeenCalled();

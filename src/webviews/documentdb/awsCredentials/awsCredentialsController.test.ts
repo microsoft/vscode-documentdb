@@ -5,8 +5,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type RouterContext } from './awsCredentialsRouter';
 import { type AwsCredentialsWebviewConfig } from './awsCredentialsController';
+import { type RouterContext } from './awsCredentialsRouter';
 
 interface CapturedOptions {
     context: RouterContext;
@@ -37,7 +37,9 @@ vi.mock('../../_integration/openAppWebview', () => ({
         mockOptions = options;
         return {
             dispose: mockDispose,
-            onDisposed: (callback: () => void): void => { mockOnDisposed = callback; },
+            onDisposed: (callback: () => void): void => {
+                mockOnDisposed = callback;
+            },
         };
     },
 }));
@@ -89,9 +91,15 @@ describe('openAwsCredentialsWebview', () => {
 
     it('whitelists public configuration rather than serializing credential objects', async () => {
         const credential = {
-            id: 'entry', label: 'Work', authMethod: 'profile' as const, regions: ['us-west-2'],
-            accountId: '123456789012', arn: 'arn:aws:iam::123456789012:role/test', profile: 'work',
-            secretAccessKey: 'must-not-serialize', sessionToken: 'must-not-serialize-token',
+            id: 'entry',
+            label: 'Work',
+            authMethod: 'profile' as const,
+            regions: ['us-west-2'],
+            accountId: '123456789012',
+            arn: 'arn:aws:iam::123456789012:role/test',
+            profile: 'work',
+            secretAccessKey: 'must-not-serialize',
+            sessionToken: 'must-not-serialize-token',
         };
         const result = openAwsCredentialsWebview({ credential });
         expect(mockOptions.config).toMatchObject({ mode: 'edit', profile: 'work', regions: ['us-west-2'] });

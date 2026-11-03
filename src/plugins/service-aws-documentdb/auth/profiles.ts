@@ -37,7 +37,7 @@ function parseIni(text: string): Map<string, Record<string, string>> {
 async function readOptional(path: string): Promise<string> {
     try {
         return await readFile(path, 'utf8');
-    } catch (error) {
+    } catch (error: unknown) {
         if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
             return '';
         }
@@ -107,14 +107,17 @@ export function profileProvider(
             const onAbort = (): void => cancellation.cancel();
             signal?.addEventListener('abort', onAbort, { once: true });
             try {
-                const code = await vscode.window.showInputBox({
-                    title: vscode.l10n.t('AWS profile verification'),
-                    prompt: vscode.l10n.t('Enter the MFA code for this AWS profile.'),
-                    password: true,
-                    ignoreFocusOut: true,
-                    validateInput: (value: string): string | undefined =>
-                        /^\d{6}$/.test(value.trim()) ? undefined : vscode.l10n.t('Enter a six-digit MFA code.'),
-                }, cancellation.token);
+                const code = await vscode.window.showInputBox(
+                    {
+                        title: vscode.l10n.t('AWS profile verification'),
+                        prompt: vscode.l10n.t('Enter the MFA code for this AWS profile.'),
+                        password: true,
+                        ignoreFocusOut: true,
+                        validateInput: (value: string): string | undefined =>
+                            /^\d{6}$/.test(value.trim()) ? undefined : vscode.l10n.t('Enter a six-digit MFA code.'),
+                    },
+                    cancellation.token,
+                );
                 throwIfAborted(signal);
                 if (!code) {
                     throw abortError();

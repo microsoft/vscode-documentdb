@@ -8,7 +8,7 @@ import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { awsDiscoveryService } from '../../../plugins/service-aws-documentdb/discovery/AwsDiscoveryService';
 import { type AwsAuthMethod, type AwsCredentialRecord } from '../../../plugins/service-aws-documentdb/types';
-import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
+import { openAppWebview } from '../../_integration/openAppWebview';
 import { disposeAwsCredentialState, type AwsCredentialPanelState, type RouterContext } from './awsCredentialsRouter';
 
 export interface AwsCredentialsWebviewConfig {
@@ -28,15 +28,18 @@ export interface OpenAwsCredentialsOptions {
 }
 
 export async function openAwsCredentialsWebview(options: OpenAwsCredentialsOptions = {}): Promise<boolean> {
-    const credential = options.credential ?? (options.credentialId
-        ? (await awsDiscoveryService.listCredentials()).find((record) => record.id === options.credentialId)
-        : undefined);
+    const credential =
+        options.credential ??
+        (options.credentialId
+            ? (await awsDiscoveryService.listCredentials()).find((record) => record.id === options.credentialId)
+            : undefined);
     if (options.credentialId && (!credential || credential.id !== options.credentialId)) {
-        throw new Error(vscode.l10n.t('This AWS credential no longer exists. Refresh the credential list and try again.'));
+        throw new Error(
+            vscode.l10n.t('This AWS credential no longer exists. Refresh the credential list and try again.'),
+        );
     }
     return new Promise<boolean>((resolve) => {
         let settled = false;
-        let controller: AppWebviewController<AwsCredentialsWebviewConfig> | undefined;
         const state: AwsCredentialPanelState = {
             credentialsStored: false,
             submitting: false,
@@ -53,7 +56,7 @@ export async function openAwsCredentialsWebview(options: OpenAwsCredentialsOptio
         const close = (): void => {
             finish(state.credentialsStored);
             disposeAwsCredentialState(state);
-            setTimeout(() => controller?.dispose(), 0);
+            setTimeout(() => controller.dispose(), 0);
         };
         const credentialId = options.credentialId ?? credential?.id;
         const context: RouterContext = {
@@ -66,7 +69,7 @@ export async function openAwsCredentialsWebview(options: OpenAwsCredentialsOptio
             onCredentialsStored: close,
             onCancelled: close,
         };
-        controller = openAppWebview<AwsCredentialsWebviewConfig>({
+        const controller = openAppWebview<AwsCredentialsWebviewConfig>({
             title: credentialId ? vscode.l10n.t('Update AWS Credentials') : vscode.l10n.t('Add an AWS Credential'),
             webviewName: 'awsCredentials',
             panelViewType: 'vscode-documentdb-aws-credentials',
@@ -81,8 +84,18 @@ export async function openAwsCredentialsWebview(options: OpenAwsCredentialsOptio
             },
             context,
             icon: {
-                light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'vscode-documentdb-icon-light-themes.svg'),
-                dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'vscode-documentdb-icon-dark-themes.svg'),
+                light: vscode.Uri.joinPath(
+                    ext.context.extensionUri,
+                    'resources',
+                    'icons',
+                    'vscode-documentdb-icon-light-themes.svg',
+                ),
+                dark: vscode.Uri.joinPath(
+                    ext.context.extensionUri,
+                    'resources',
+                    'icons',
+                    'vscode-documentdb-icon-dark-themes.svg',
+                ),
             },
         });
         controller.onDisposed(() => {

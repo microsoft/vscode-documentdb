@@ -62,18 +62,31 @@ function parseSecrets(text: string): AwsCredentialSecrets {
     if (typeof value !== 'object' || value === null || !('kind' in value)) {
         throw new AwsInteractionRequiredError();
     }
-    if (value.kind === 'keys' && 'accessKeyId' in value && typeof value.accessKeyId === 'string' &&
-        'secretAccessKey' in value && typeof value.secretAccessKey === 'string' &&
+    if (
+        value.kind === 'keys' &&
+        'accessKeyId' in value &&
+        typeof value.accessKeyId === 'string' &&
+        'secretAccessKey' in value &&
+        typeof value.secretAccessKey === 'string' &&
         (!('sessionToken' in value) || typeof value.sessionToken === 'string') &&
-        (!('expiresAt' in value) || typeof value.expiresAt === 'number')) {
+        (!('expiresAt' in value) || typeof value.expiresAt === 'number')
+    ) {
         return value as AwsKeySecrets;
     }
-    if (value.kind === 'sso' && 'clientId' in value && typeof value.clientId === 'string' &&
-        'clientSecret' in value && typeof value.clientSecret === 'string' &&
-        'accessToken' in value && typeof value.accessToken === 'string' &&
-        'clientSecretExpiresAt' in value && typeof value.clientSecretExpiresAt === 'number' &&
-        'accessTokenExpiresAt' in value && typeof value.accessTokenExpiresAt === 'number' &&
-        (!('refreshToken' in value) || typeof value.refreshToken === 'string')) {
+    if (
+        value.kind === 'sso' &&
+        'clientId' in value &&
+        typeof value.clientId === 'string' &&
+        'clientSecret' in value &&
+        typeof value.clientSecret === 'string' &&
+        'accessToken' in value &&
+        typeof value.accessToken === 'string' &&
+        'clientSecretExpiresAt' in value &&
+        typeof value.clientSecretExpiresAt === 'number' &&
+        'accessTokenExpiresAt' in value &&
+        typeof value.accessTokenExpiresAt === 'number' &&
+        (!('refreshToken' in value) || typeof value.refreshToken === 'string')
+    ) {
         return value as AwsSsoSecrets;
     }
     throw new AwsInteractionRequiredError();

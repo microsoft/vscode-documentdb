@@ -99,7 +99,12 @@ import {
 import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongodb/credentialsManagement/addAtlasCredential';
 import { AwsDiagnosticsProvider } from '../plugins/service-aws-documentdb/AwsDiagnosticsProvider';
 import { AwsDiscoveryProvider } from '../plugins/service-aws-documentdb/AwsDiscoveryProvider';
-import { AWS_ADD_CREDENTIAL_COMMAND, AWS_LIST_MODE_COMMAND, AWS_SELECT_CA_COMMAND, AWS_TREE_MODE_COMMAND } from '../plugins/service-aws-documentdb/config';
+import {
+    AWS_ADD_CREDENTIAL_COMMAND,
+    AWS_LIST_MODE_COMMAND,
+    AWS_SELECT_CA_COMMAND,
+    AWS_TREE_MODE_COMMAND,
+} from '../plugins/service-aws-documentdb/config';
 import { AwsClusterItem } from '../plugins/service-aws-documentdb/discovery-tree/AwsClusterItem';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
@@ -747,17 +752,20 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     AWS_ADD_CREDENTIAL_COMMAND,
                     withTreeNodeCommandCorrelation((context, node: TreeElement) =>
-                        this.awsDiscoveryProvider.addCredential(context, node)),
+                        this.awsDiscoveryProvider.addCredential(context, node),
+                    ),
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     AWS_TREE_MODE_COMMAND,
                     withTreeNodeCommandCorrelation((_context, node: TreeElement) =>
-                        this.awsDiscoveryProvider.switchViewMode('tree', node)),
+                        this.awsDiscoveryProvider.switchViewMode('tree', node),
+                    ),
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     AWS_LIST_MODE_COMMAND,
                     withTreeNodeCommandCorrelation((_context, node: TreeElement) =>
-                        this.awsDiscoveryProvider.switchViewMode('list', node)),
+                        this.awsDiscoveryProvider.switchViewMode('list', node),
+                    ),
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     AWS_SELECT_CA_COMMAND,

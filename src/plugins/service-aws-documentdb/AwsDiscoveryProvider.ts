@@ -13,20 +13,28 @@ import { type TreeElement } from '../../tree/TreeElement';
 import { AWS_DISCOVERY_PROVIDER_ID, AWS_VIEW_MODE_KEY } from './config';
 import { addAwsCredential, configureAwsCredentials } from './credentialsManagement/configureAwsCredentials';
 import { AwsServiceRootItem } from './discovery-tree/AwsServiceRootItem';
-import { PrepareAwsConnectionStep, SelectAwsClusterStep, SelectAwsRegionStep } from './discovery-wizard/SelectAwsClusterSteps';
+import {
+    PrepareAwsConnectionStep,
+    SelectAwsClusterStep,
+    SelectAwsRegionStep,
+} from './discovery-wizard/SelectAwsClusterSteps';
 import { awsDiscoveryService } from './discovery/AwsDiscoveryService';
 
 export class AwsDiscoveryProvider implements DiscoveryProvider, vscode.Disposable {
     public readonly id = AWS_DISCOVERY_PROVIDER_ID;
     public readonly label = vscode.l10n.t('AWS DocumentDB');
-    public readonly description = vscode.l10n.t('Discover Amazon DocumentDB clusters in your AWS accounts and regions.');
+    public readonly description = vscode.l10n.t(
+        'Discover Amazon DocumentDB clusters in your AWS accounts and regions.',
+    );
     public readonly iconPath = new vscode.ThemeIcon('cloud');
 
     public getDiscoveryTreeRootItem(parentId: string): TreeElement {
         return new AwsServiceRootItem(awsDiscoveryService, parentId);
     }
 
-    public async getDiscoveryWizard(context: NewConnectionWizardContext): Promise<IWizardOptions<NewConnectionWizardContext>> {
+    public async getDiscoveryWizard(
+        context: NewConnectionWizardContext,
+    ): Promise<IWizardOptions<NewConnectionWizardContext>> {
         if (!(await awsDiscoveryService.listCredentials()).length && !(await addAwsCredential(context))) {
             throw new UserCancelledError();
         }
@@ -74,7 +82,9 @@ export class AwsDiscoveryProvider implements DiscoveryProvider, vscode.Disposabl
             }
             await ext.discoveryTreeView.reveal(root, { select: false, focus: false, expand: true });
         } catch (error) {
-            ext.outputChannel.warn(`[AwsDiscovery] Could not reveal discovery root: ${error instanceof Error ? error.message : String(error)}`);
+            ext.outputChannel.warn(
+                `[AwsDiscovery] Could not reveal discovery root: ${error instanceof Error ? error.message : String(error)}`,
+            );
         }
     }
 }

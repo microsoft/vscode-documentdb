@@ -45,24 +45,24 @@ screenshot sequence and shared file map.
 
 The operator confirmed the following on 2026-10-28:
 
-| Area | Requirement |
-| ---- | ----------- |
-| Resource scope | Amazon DocumentDB provisioned clusters. |
-| Login presentation | Selectable login cards like Atlas, not the demo's method Quick Pick. |
-| Login cards | AWS profile, Access key, SSO, Temporary credentials. |
-| Recommended card | AWS profile. |
-| Excluded cards | Standalone Assume Role and Default credential chain. |
-| Profile compatibility | Preserve SDK-supported role-backed and MFA profiles under AWS profile. |
-| Credential model | Multiple independent credential entries/accounts, like Atlas. |
-| Region scope | Select and remember regions per credential entry. |
-| Entry points | Service Discovery sidebar and New Connection -> Service Discovery. |
-| Cluster expansion | Databases, then collections; AWS metadata belongs in separate details/tooltips. |
-| Network scope | Existing network route, CA configuration, and connection diagnostics. |
-| Tunnel scope | No managed SSM/SSH tunneling in the first implementation. |
-| Saved connections | Use the standard Connections view and shared cluster/database commands. |
-| Layouts | Both account/region tree and flat cluster list, with Atlas-style root toggle. |
-| Verification policy | A verified AWS identity may be saved even if every selected region denies discovery. Failures remain visible. |
-| CA handling | Select an existing local PEM CA bundle on the extension host, during database connection setup rather than AWS sign-in. |
+| Area                  | Requirement                                                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Resource scope        | Amazon DocumentDB provisioned clusters.                                                                                 |
+| Login presentation    | Selectable login cards like Atlas, not the demo's method Quick Pick.                                                    |
+| Login cards           | AWS profile, Access key, SSO, Temporary credentials.                                                                    |
+| Recommended card      | AWS profile.                                                                                                            |
+| Excluded cards        | Standalone Assume Role and Default credential chain.                                                                    |
+| Profile compatibility | Preserve SDK-supported role-backed and MFA profiles under AWS profile.                                                  |
+| Credential model      | Multiple independent credential entries/accounts, like Atlas.                                                           |
+| Region scope          | Select and remember regions per credential entry.                                                                       |
+| Entry points          | Service Discovery sidebar and New Connection -> Service Discovery.                                                      |
+| Cluster expansion     | Databases, then collections; AWS metadata belongs in separate details/tooltips.                                         |
+| Network scope         | Existing network route, CA configuration, and connection diagnostics.                                                   |
+| Tunnel scope          | No managed SSM/SSH tunneling in the first implementation.                                                               |
+| Saved connections     | Use the standard Connections view and shared cluster/database commands.                                                 |
+| Layouts               | Both account/region tree and flat cluster list, with Atlas-style root toggle.                                           |
+| Verification policy   | A verified AWS identity may be saved even if every selected region denies discovery. Failures remain visible.           |
+| CA handling           | Select an existing local PEM CA bundle on the extension host, during database connection setup rather than AWS sign-in. |
 
 These decisions supersede the earlier roadmap's assumption that the demo and login methods were
 still pending. Multiple credential entries do not imply automatically enumerating every account
@@ -149,20 +149,20 @@ and [TLS documentation](https://docs.aws.amazon.com/documentdb/latest/developerg
 
 ## 2. Second-pass findings
 
-| Finding | Source evidence | Integration consequence |
-| ------- | --------------- | ----------------------- |
-| Atlas already has the desired card interaction. | [AtlasCredentialsView.tsx](../../../../src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx#L319) uses Fluent `Card`, `CardHeader`, `Radio`, selected styling, icons, and qualifier text. Its `cardGrid` uses two columns and one below 640px. | Use the same interaction and responsive layout for four AWS cards. No new design system is needed. |
-| Atlas has four outer phases, with a different final button label. | [AtlasCredentialsView.tsx](../../../../src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx#L573) renders Continue, Verify & Save, and Close; the final step is labelled Done. | Preserve the distinction between Done as a stage and Close as an action. Add method-specific substates rather than assuming every login is one submission. |
-| The demo is single-session. | [authManager.ts](../../../../../aws-docdb-discovery/src/auth/authManager.ts#L41) has one `_session` and one persisted session key. [accessKey.ts](../../../../../aws-docdb-discovery/src/auth/accessKey.ts#L5) and [sso.ts](../../../../../aws-docdb-discovery/src/auth/sso.ts#L24) use fixed secret keys. | Replace global slots with entry-scoped storage, sessions, refresh locks, and invalidation. Do not instantiate multiple managers sharing these keys. |
-| Access-key input is stored before validation. | [accessKey.ts](../../../../../aws-docdb-discovery/src/auth/accessKey.ts#L38) writes during collection; [authManager.ts](../../../../../aws-docdb-discovery/src/auth/authManager.ts#L95) collects before activation/STS validation. Its cleanup skips entries with the same method. | A failed same-method replacement can overwrite the prior secret. Stage candidate input in memory and commit only after verification, preserving the previous entry on failure. |
-| SSO also persists intermediate state early. | [sso.ts](../../../../../aws-docdb-discovery/src/auth/sso.ts#L113) saves the token cache before account/role selection. Cancellation can return before the manager receives a completed configuration. | Keep onboarding registration/tokens in an operation-scoped host context until the entry is accepted; dispose staged state on cancellation. |
-| Profile support already includes MFA. | [profile.ts](../../../../../aws-docdb-discovery/src/auth/profile.ts#L147) passes `mfaCodeProvider` to `fromIni`. [authManager.ts](../../../../../aws-docdb-discovery/src/auth/authManager.ts#L152) skips explicit MFA role configurations on restore, but still activates profiles with the interactive callback. | The comment "never prompts" is not sufficient to guarantee silent restoration. Background resolution must return an interaction-required state instead of launching MFA UI. |
-| Expiry-aware single-flight refresh is useful existing logic. | [credentialRefresher.ts](../../../../../aws-docdb-discovery/src/auth/credentialRefresher.ts#L38) joins in-flight resolution and forwards forced refresh. | Adapt it per credential entry; add invalidation/generation protection so an old completion cannot restore removed or replaced credentials. |
-| Temporary credentials are intentionally nonpersistent. | [methods.ts](../../../../../aws-docdb-discovery/src/auth/methods.ts#L97) excludes temporary credentials from persistence; [temporary.ts](../../../../../aws-docdb-discovery/src/auth/temporary.ts#L58) checks known expiry. | Recommended carry-forward: keep their secret material in memory and clearly explain expiry/re-entry. Do not serialize the demo's secret-bearing `BaseConfig` union as panel config or metadata. |
-| Optional metadata is partly coupled to core discovery. | [docdbDiscovery.ts](../../../../../aws-docdb-discovery/src/discovery/docdbDiscovery.ts#L145) requires cluster, instance, and subnet-group calls in one `Promise.all`; EC2 enrichment later uses `allSettled`. | Split cluster enumeration from optional instance/network enrichment so metadata permission failures do not erase usable clusters. |
-| Some failures can disappear as unavailable regions. | [errors.ts](../../../../../aws-docdb-discovery/src/util/errors.ts#L60) classifies rejected-token and DNS errors as unavailable; [clusterTree.ts](../../../../../aws-docdb-discovery/src/ui/clusterTree.ts#L34) hides skipped regions by default. | Keep auth, permission, and network failures distinct from positively identified unsupported/disabled regions. Display recovery rather than hiding uncertain failures. |
-| The demo tree is not a database tree. | [clusterTree.ts](../../../../../aws-docdb-discovery/src/ui/clusterTree.ts#L46) expands clusters into endpoints, metadata, and instances. | Replace the cluster node with a `ClusterItemBase` subclass. Keep metadata out of the database-child path. |
-| Copying a URI is not connection support. | [extension.ts](../../../../../aws-docdb-discovery/src/extension.ts#L146) asks for database credentials and copies a URI; [connectionString.ts](../../../../../aws-docdb-discovery/src/util/connectionString.ts#L8) assumes a relative CA file. | Implement the normal database-auth/save handoff and explicit CA handling. Test real clients rather than accepting a correctly formatted URI as success. |
+| Finding                                                           | Source evidence                                                                                                                                                                                                                                                                                                   | Integration consequence                                                                                                                                                                         |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Atlas already has the desired card interaction.                   | [AtlasCredentialsView.tsx](../../../../src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx#L319) uses Fluent `Card`, `CardHeader`, `Radio`, selected styling, icons, and qualifier text. Its `cardGrid` uses two columns and one below 640px.                                                       | Use the same interaction and responsive layout for four AWS cards. No new design system is needed.                                                                                              |
+| Atlas has four outer phases, with a different final button label. | [AtlasCredentialsView.tsx](../../../../src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx#L573) renders Continue, Verify & Save, and Close; the final step is labelled Done.                                                                                                                       | Preserve the distinction between Done as a stage and Close as an action. Add method-specific substates rather than assuming every login is one submission.                                      |
+| The demo is single-session.                                       | [authManager.ts](../../../../../aws-docdb-discovery/src/auth/authManager.ts#L41) has one `_session` and one persisted session key. [accessKey.ts](../../../../../aws-docdb-discovery/src/auth/accessKey.ts#L5) and [sso.ts](../../../../../aws-docdb-discovery/src/auth/sso.ts#L24) use fixed secret keys.        | Replace global slots with entry-scoped storage, sessions, refresh locks, and invalidation. Do not instantiate multiple managers sharing these keys.                                             |
+| Access-key input is stored before validation.                     | [accessKey.ts](../../../../../aws-docdb-discovery/src/auth/accessKey.ts#L38) writes during collection; [authManager.ts](../../../../../aws-docdb-discovery/src/auth/authManager.ts#L95) collects before activation/STS validation. Its cleanup skips entries with the same method.                                | A failed same-method replacement can overwrite the prior secret. Stage candidate input in memory and commit only after verification, preserving the previous entry on failure.                  |
+| SSO also persists intermediate state early.                       | [sso.ts](../../../../../aws-docdb-discovery/src/auth/sso.ts#L113) saves the token cache before account/role selection. Cancellation can return before the manager receives a completed configuration.                                                                                                             | Keep onboarding registration/tokens in an operation-scoped host context until the entry is accepted; dispose staged state on cancellation.                                                      |
+| Profile support already includes MFA.                             | [profile.ts](../../../../../aws-docdb-discovery/src/auth/profile.ts#L147) passes `mfaCodeProvider` to `fromIni`. [authManager.ts](../../../../../aws-docdb-discovery/src/auth/authManager.ts#L152) skips explicit MFA role configurations on restore, but still activates profiles with the interactive callback. | The comment "never prompts" is not sufficient to guarantee silent restoration. Background resolution must return an interaction-required state instead of launching MFA UI.                     |
+| Expiry-aware single-flight refresh is useful existing logic.      | [credentialRefresher.ts](../../../../../aws-docdb-discovery/src/auth/credentialRefresher.ts#L38) joins in-flight resolution and forwards forced refresh.                                                                                                                                                          | Adapt it per credential entry; add invalidation/generation protection so an old completion cannot restore removed or replaced credentials.                                                      |
+| Temporary credentials are intentionally nonpersistent.            | [methods.ts](../../../../../aws-docdb-discovery/src/auth/methods.ts#L97) excludes temporary credentials from persistence; [temporary.ts](../../../../../aws-docdb-discovery/src/auth/temporary.ts#L58) checks known expiry.                                                                                       | Recommended carry-forward: keep their secret material in memory and clearly explain expiry/re-entry. Do not serialize the demo's secret-bearing `BaseConfig` union as panel config or metadata. |
+| Optional metadata is partly coupled to core discovery.            | [docdbDiscovery.ts](../../../../../aws-docdb-discovery/src/discovery/docdbDiscovery.ts#L145) requires cluster, instance, and subnet-group calls in one `Promise.all`; EC2 enrichment later uses `allSettled`.                                                                                                     | Split cluster enumeration from optional instance/network enrichment so metadata permission failures do not erase usable clusters.                                                               |
+| Some failures can disappear as unavailable regions.               | [errors.ts](../../../../../aws-docdb-discovery/src/util/errors.ts#L60) classifies rejected-token and DNS errors as unavailable; [clusterTree.ts](../../../../../aws-docdb-discovery/src/ui/clusterTree.ts#L34) hides skipped regions by default.                                                                  | Keep auth, permission, and network failures distinct from positively identified unsupported/disabled regions. Display recovery rather than hiding uncertain failures.                           |
+| The demo tree is not a database tree.                             | [clusterTree.ts](../../../../../aws-docdb-discovery/src/ui/clusterTree.ts#L46) expands clusters into endpoints, metadata, and instances.                                                                                                                                                                          | Replace the cluster node with a `ClusterItemBase` subclass. Keep metadata out of the database-child path.                                                                                       |
+| Copying a URI is not connection support.                          | [extension.ts](../../../../../aws-docdb-discovery/src/extension.ts#L146) asks for database credentials and copies a URI; [connectionString.ts](../../../../../aws-docdb-discovery/src/util/connectionString.ts#L8) assumes a relative CA file.                                                                    | Implement the normal database-auth/save handoff and explicit CA handling. Test real clients rather than accepting a correctly formatted URI as success.                                         |
 
 ### What this clarifies in the initial analysis
 
@@ -207,12 +207,12 @@ Avoid describing long-lived credentials as guaranteed to remain valid forever.
 
 ### Method-specific details
 
-| Card | Inputs/interactions | Host-side work |
-| ---- | ------------------- | -------------- |
-| AWS profile | Profile picker inside the webview, safe profile-type summary, region selection; MFA when required. | Enumerate profile metadata, resolve using SDK, verify effective identity. Do not send profile file contents to the webview. |
-| Access key | Access Key ID, masked Secret Access Key, regions. | Validate candidate identity before durable storage; discover regional resources separately. |
-| SSO | SSO profile/settings, start URL and SSO region, browser approval, account/role selection, discovery regions. | Register client/device authorization, poll with cancellation, list accounts/roles, obtain role credentials, verify access. Tokens remain host-side. |
-| Temporary credentials | Access Key ID, masked secret/token, optional expiry, regions. | Validate without durable secret storage; show expiry and re-entry requirements. |
+| Card                  | Inputs/interactions                                                                                          | Host-side work                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AWS profile           | Profile picker inside the webview, safe profile-type summary, region selection; MFA when required.           | Enumerate profile metadata, resolve using SDK, verify effective identity. Do not send profile file contents to the webview.                         |
+| Access key            | Access Key ID, masked Secret Access Key, regions.                                                            | Validate candidate identity before durable storage; discover regional resources separately.                                                         |
+| SSO                   | SSO profile/settings, start URL and SSO region, browser approval, account/role selection, discovery regions. | Register client/device authorization, poll with cancellation, list accounts/roles, obtain role credentials, verify access. Tokens remain host-side. |
+| Temporary credentials | Access Key ID, masked secret/token, optional expiry, regions.                                                | Validate without durable secret storage; show expiry and re-entry requirements.                                                                     |
 
 ### Outer stages and inner interaction
 
@@ -262,36 +262,36 @@ Keep the first implementation provider-specific. Do not introduce a universal cl
 or refactor Atlas merely to share its two-card rendering helper. Reuse existing shared components;
 extract additional shared code only when both consumers genuinely need it.
 
-| Existing file/surface | Planned integration |
-| --------------------- | ------------------- |
-| [discoveryServices.ts](../../../../src/services/discoveryServices.ts) | Implement `DiscoveryProvider`; preserve its tree and wizard contracts. |
-| [ClustersExtension.ts](../../../../src/documentdb/ClustersExtension.ts) | Register provider, commands, diagnostics, and lifetime cleanup. |
-| [package.json](../../../../package.json) | Provider-specific command/menu contributions and required AWS SDK dependencies. |
-| [WebviewRegistry.ts](../../../../src/webviews/_integration/WebviewRegistry.ts) | Register the AWS React component. |
-| [appRouter.ts](../../../../src/webviews/_integration/appRouter.ts) | Register typed AWS procedures and validation. |
-| [openAppWebview.ts](../../../../src/webviews/_integration/openAppWebview.ts) | Reuse panel creation, messaging, and disposal. |
-| [Wizard.tsx](../../../../packages/vscode-ext-webview-fluentui/src/components/Wizard/Wizard.tsx) | Reuse shared layout/navigation rather than copying the screenshot as bespoke HTML. |
-| [ClusterItemBase.ts](../../../../src/tree/documentdb/ClusterItemBase.ts) | Extend for browsable AWS clusters; preserve common context tags and commands. |
-| [addConnectionFromRegistry.ts](../../../../src/commands/addConnectionFromRegistry/addConnectionFromRegistry.ts) | Reuse Save to Connections. |
-| [newConnection/ExecuteStep.ts](../../../../src/commands/newConnection/ExecuteStep.ts) | Reuse wizard persistence, duplicate handling, and reveal. |
+| Existing file/surface                                                                                           | Planned integration                                                                |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [discoveryServices.ts](../../../../src/services/discoveryServices.ts)                                           | Implement `DiscoveryProvider`; preserve its tree and wizard contracts.             |
+| [ClustersExtension.ts](../../../../src/documentdb/ClustersExtension.ts)                                         | Register provider, commands, diagnostics, and lifetime cleanup.                    |
+| [package.json](../../../../package.json)                                                                        | Provider-specific command/menu contributions and required AWS SDK dependencies.    |
+| [WebviewRegistry.ts](../../../../src/webviews/_integration/WebviewRegistry.ts)                                  | Register the AWS React component.                                                  |
+| [appRouter.ts](../../../../src/webviews/_integration/appRouter.ts)                                              | Register typed AWS procedures and validation.                                      |
+| [openAppWebview.ts](../../../../src/webviews/_integration/openAppWebview.ts)                                    | Reuse panel creation, messaging, and disposal.                                     |
+| [Wizard.tsx](../../../../packages/vscode-ext-webview-fluentui/src/components/Wizard/Wizard.tsx)                 | Reuse shared layout/navigation rather than copying the screenshot as bespoke HTML. |
+| [ClusterItemBase.ts](../../../../src/tree/documentdb/ClusterItemBase.ts)                                        | Extend for browsable AWS clusters; preserve common context tags and commands.      |
+| [addConnectionFromRegistry.ts](../../../../src/commands/addConnectionFromRegistry/addConnectionFromRegistry.ts) | Reuse Save to Connections.                                                         |
+| [newConnection/ExecuteStep.ts](../../../../src/commands/newConnection/ExecuteStep.ts)                           | Reuse wizard persistence, duplicate handling, and reveal.                          |
 
 Concrete AWS entry points:
 
-| File | Responsibility |
-| ---- | -------------- |
-| [AwsDiscoveryProvider.ts](../../../../src/plugins/service-aws-documentdb/AwsDiscoveryProvider.ts) | Native provider, New Connection steps, credentials and layout commands. |
-| [AwsServiceRootItem.ts](../../../../src/plugins/service-aws-documentdb/discovery-tree/AwsServiceRootItem.ts) | Sign-in/recovery/empty rows, account/region hierarchy and flat list. |
-| [AwsClusterItem.ts](../../../../src/plugins/service-aws-documentdb/discovery-tree/AwsClusterItem.ts) | Shared cluster base, database credentials, Save/Copy material and CA replacement. |
-| [AwsClusterModel.ts](../../../../src/plugins/service-aws-documentdb/models/AwsClusterModel.ts) | ARN-derived stable suffix shared by both layouts and reverse lookup. |
-| [SelectAwsClusterSteps.ts](../../../../src/plugins/service-aws-documentdb/discovery-wizard/SelectAwsClusterSteps.ts) | Account/region and cluster selection, recovery and CA handoff. |
-| [awsConnection.ts](../../../../src/plugins/service-aws-documentdb/connect/awsConnection.ts) | PEM validation and credential-free URI with strict TLS, `rs0`, secondaryPreferred, and no retry writes. |
-| [AwsDiscoveryService.ts](../../../../src/plugins/service-aws-documentdb/discovery/AwsDiscoveryService.ts) | Verification, entry lifecycle, refresh and merged discovery snapshots. |
-| [awsCredentialStore.ts](../../../../src/plugins/service-aws-documentdb/credentials/awsCredentialStore.ts) | Isolated metadata/secret slots and memory-only temporary entries. |
-| [AwsCredentialsView.tsx](../../../../src/webviews/documentdb/awsCredentials/AwsCredentialsView.tsx) | Atlas-style four-card wizard and method-specific details. |
-| [awsCredentialsRouter.ts](../../../../src/webviews/documentdb/awsCredentials/awsCredentialsRouter.ts) | Host validation, panel-owned SSO flows and acceptance/cancellation boundary. |
-| [awsCredentialsController.ts](../../../../src/webviews/documentdb/awsCredentials/awsCredentialsController.ts) | Panel creation, completion and disposal. |
-| [configureAwsCredentials.ts](../../../../src/plugins/service-aws-documentdb/credentialsManagement/configureAwsCredentials.ts) | Multi-entry management shared by sidebar and wizard. |
-| [AwsDiagnosticsProvider.ts](../../../../src/plugins/service-aws-documentdb/AwsDiagnosticsProvider.ts) | Text-only TLS and network explanations for discovery and saved AWS endpoints. |
+| File                                                                                                                          | Responsibility                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [AwsDiscoveryProvider.ts](../../../../src/plugins/service-aws-documentdb/AwsDiscoveryProvider.ts)                             | Native provider, New Connection steps, credentials and layout commands.                                 |
+| [AwsServiceRootItem.ts](../../../../src/plugins/service-aws-documentdb/discovery-tree/AwsServiceRootItem.ts)                  | Sign-in/recovery/empty rows, account/region hierarchy and flat list.                                    |
+| [AwsClusterItem.ts](../../../../src/plugins/service-aws-documentdb/discovery-tree/AwsClusterItem.ts)                          | Shared cluster base, database credentials, Save/Copy material and CA replacement.                       |
+| [AwsClusterModel.ts](../../../../src/plugins/service-aws-documentdb/models/AwsClusterModel.ts)                                | ARN-derived stable suffix shared by both layouts and reverse lookup.                                    |
+| [SelectAwsClusterSteps.ts](../../../../src/plugins/service-aws-documentdb/discovery-wizard/SelectAwsClusterSteps.ts)          | Account/region and cluster selection, recovery and CA handoff.                                          |
+| [awsConnection.ts](../../../../src/plugins/service-aws-documentdb/connect/awsConnection.ts)                                   | PEM validation and credential-free URI with strict TLS, `rs0`, secondaryPreferred, and no retry writes. |
+| [AwsDiscoveryService.ts](../../../../src/plugins/service-aws-documentdb/discovery/AwsDiscoveryService.ts)                     | Verification, entry lifecycle, refresh and merged discovery snapshots.                                  |
+| [awsCredentialStore.ts](../../../../src/plugins/service-aws-documentdb/credentials/awsCredentialStore.ts)                     | Isolated metadata/secret slots and memory-only temporary entries.                                       |
+| [AwsCredentialsView.tsx](../../../../src/webviews/documentdb/awsCredentials/AwsCredentialsView.tsx)                           | Atlas-style four-card wizard and method-specific details.                                               |
+| [awsCredentialsRouter.ts](../../../../src/webviews/documentdb/awsCredentials/awsCredentialsRouter.ts)                         | Host validation, panel-owned SSO flows and acceptance/cancellation boundary.                            |
+| [awsCredentialsController.ts](../../../../src/webviews/documentdb/awsCredentials/awsCredentialsController.ts)                 | Panel creation, completion and disposal.                                                                |
+| [configureAwsCredentials.ts](../../../../src/plugins/service-aws-documentdb/credentialsManagement/configureAwsCredentials.ts) | Multi-entry management shared by sidebar and wizard.                                                    |
+| [AwsDiagnosticsProvider.ts](../../../../src/plugins/service-aws-documentdb/AwsDiagnosticsProvider.ts)                         | Text-only TLS and network explanations for discovery and saved AWS endpoints.                           |
 
 AWS SDK clients belong exclusively in host-side modules. Select versions against this repository's
 runtime/bundler requirements; do not copy the demo's dependency versions or installation artifacts
@@ -379,15 +379,15 @@ connect-time infrastructure preparation.
 
 ## 7. Implementation sequence and acceptance gates
 
-| Phase | Deliverable | Required evidence |
-| ----- | ----------- | ----------------- |
-| 1 | Credential records and four auth adapters | Independent entries; failed replacement preserves prior state; cancellation and stale completions tested. |
-| 2 | Atlas-style login panel | Exactly four cards; AWS profile marked Recommended; responsive selection, keyboard/focus behavior, help, and error states. |
-| 3 | Interactive SSO/profile handling | Browser approval/account/role flow; cancellation stops polling; MFA only on explicit foreground paths; no token leakage into panel config. |
-| 4 | Discovery service and tree | Per-entry regions; pagination; duplicate-resource merge; partial failures; valid empty results; readiness consistency. |
-| 5 | Both connection entry paths | Sidebar and New Connection; stable-ID round trips; Save to Connections; no duplicate implementation of shared menus. |
-| 6 | TLS and database integration | Existing-route connection with CA handling; database/collection browsing; reload/folder movement; shell/playground propagation. |
-| 7 | Handoff verification | Focused mocks/contracts plus live smoke tests and screenshots; report untested methods and blocked environments explicitly. |
+| Phase | Deliverable                               | Required evidence                                                                                                                          |
+| ----- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | Credential records and four auth adapters | Independent entries; failed replacement preserves prior state; cancellation and stale completions tested.                                  |
+| 2     | Atlas-style login panel                   | Exactly four cards; AWS profile marked Recommended; responsive selection, keyboard/focus behavior, help, and error states.                 |
+| 3     | Interactive SSO/profile handling          | Browser approval/account/role flow; cancellation stops polling; MFA only on explicit foreground paths; no token leakage into panel config. |
+| 4     | Discovery service and tree                | Per-entry regions; pagination; duplicate-resource merge; partial failures; valid empty results; readiness consistency.                     |
+| 5     | Both connection entry paths               | Sidebar and New Connection; stable-ID round trips; Save to Connections; no duplicate implementation of shared menus.                       |
+| 6     | TLS and database integration              | Existing-route connection with CA handling; database/collection browsing; reload/folder movement; shell/playground propagation.            |
+| 7     | Handoff verification                      | Focused mocks/contracts plus live smoke tests and screenshots; report untested methods and blocked environments explicitly.                |
 
 The phase order describes dependencies, not permission to ship a successful-looking UI without
 the underlying connection functionality. Use repository-standard build/test tooling during

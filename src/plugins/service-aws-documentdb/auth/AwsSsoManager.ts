@@ -100,7 +100,9 @@ export class AwsSsoManager {
             throw new AwsValidationError(vscode.l10n.t('Enter a valid HTTPS AWS SSO start URL and AWS region.'));
         }
         if (this.flows.size >= 20) {
-            throw new AwsValidationError(vscode.l10n.t('Too many AWS sign-ins are pending. Cancel an existing sign-in and retry.'));
+            throw new AwsValidationError(
+                vscode.l10n.t('Too many AWS sign-ins are pending. Cancel an existing sign-in and retry.'),
+            );
         }
         const id = randomUUID();
         const controller = new AbortController();
@@ -121,12 +123,15 @@ export class AwsSsoManager {
         flow.timer.unref();
         const client = new SSOOIDCClient({ region, maxAttempts: 2 });
         try {
-            const registration = await client.send(new RegisterClientCommand({
-                clientName: 'vscode-documentdb',
-                clientType: 'public',
-                scopes: ['sso:account:access'],
-                grantTypes: [DEVICE_GRANT, 'refresh_token'],
-            }), { abortSignal: controller.signal });
+            const registration = await client.send(
+                new RegisterClientCommand({
+                    clientName: 'vscode-documentdb',
+                    clientType: 'public',
+                    scopes: ['sso:account:access'],
+                    grantTypes: [DEVICE_GRANT, 'refresh_token'],
+                }),
+                { abortSignal: controller.signal },
+            );
             this.assertCurrent(id, flow);
             if (!registration.clientId || !registration.clientSecret || !registration.clientSecretExpiresAt) {
                 throw new AwsInteractionRequiredError();
@@ -134,11 +139,14 @@ export class AwsSsoManager {
             flow.clientId = registration.clientId;
             flow.clientSecret = registration.clientSecret;
             flow.clientSecretExpiresAt = registration.clientSecretExpiresAt * 1000;
-            const authorization = await client.send(new StartDeviceAuthorizationCommand({
-                clientId: registration.clientId,
-                clientSecret: registration.clientSecret,
-                startUrl: flow.startUrl,
-            }), { abortSignal: controller.signal });
+            const authorization = await client.send(
+                new StartDeviceAuthorizationCommand({
+                    clientId: registration.clientId,
+                    clientSecret: registration.clientSecret,
+                    startUrl: flow.startUrl,
+                }),
+                { abortSignal: controller.signal },
+            );
             this.assertCurrent(id, flow);
             const verificationUri = authorization.verificationUriComplete ?? authorization.verificationUri;
             if (!authorization.deviceCode || !authorization.userCode || !verificationUri) {
@@ -151,7 +159,12 @@ export class AwsSsoManager {
             clearTimeout(flow.timer);
             flow.timer = setTimeout(() => this.cancel(id), Math.max(0, flow.deadline - Date.now()));
             flow.timer.unref();
-            return { flowId: id, verificationUri, userCode: authorization.userCode, intervalSeconds: flow.intervalSeconds };
+            return {
+                flowId: id,
+                verificationUri,
+                userCode: authorization.userCode,
+                intervalSeconds: flow.intervalSeconds,
+            };
         } catch (error) {
             this.cancel(id);
             throw error;
@@ -175,12 +188,15 @@ export class AwsSsoManager {
                 if (!flow.secrets) {
                     const client = new SSOOIDCClient({ region: flow.region, maxAttempts: 1 });
                     try {
-                        const token = await client.send(new CreateTokenCommand({
-                            clientId: flow.clientId,
-                            clientSecret: flow.clientSecret,
-                            deviceCode: flow.deviceCode,
-                            grantType: DEVICE_GRANT,
-                        }), { abortSignal });
+                        const token = await client.send(
+                            new CreateTokenCommand({
+                                clientId: flow.clientId,
+                                clientSecret: flow.clientSecret,
+                                deviceCode: flow.deviceCode,
+                                grantType: DEVICE_GRANT,
+                            }),
+                            { abortSignal },
+                        );
                         this.assertCurrent(id, flow);
                         throwIfAborted(abortSignal);
                         if (!token.accessToken || !flow.clientId || !flow.clientSecret || !flow.clientSecretExpiresAt) {
@@ -203,7 +219,10 @@ export class AwsSsoManager {
                     } catch (error) {
                         this.assertCurrent(id, flow);
                         throwIfAborted(abortSignal);
-                        if (errorName(error) === 'AuthorizationPendingException' || errorName(error) === 'SlowDownException') {
+                        if (
+                            errorName(error) === 'AuthorizationPendingException' ||
+                            errorName(error) === 'SlowDownException'
+                        ) {
                             if (errorName(error) === 'SlowDownException') {
                                 flow.intervalSeconds += 5;
                             }
@@ -227,7 +246,10 @@ export class AwsSsoManager {
                         throwIfAborted(abortSignal);
                         for (const account of page.accountList ?? []) {
                             if (account.accountId) {
-                                accounts.push({ accountId: account.accountId, accountName: account.accountName ?? account.accountId });
+                                accounts.push({
+                                    accountId: account.accountId,
+                                    accountName: account.accountName ?? account.accountId,
+                                });
                             }
                         }
                     }
@@ -320,12 +342,15 @@ export async function resolveSsoCredentials(
         }
         const oidc = new SSOOIDCClient({ region, maxAttempts: 2 });
         try {
-            const response = await oidc.send(new CreateTokenCommand({
-                clientId: secrets.clientId,
-                clientSecret: secrets.clientSecret,
-                refreshToken: secrets.refreshToken,
-                grantType: 'refresh_token',
-            }), { abortSignal: signal });
+            const response = await oidc.send(
+                new CreateTokenCommand({
+                    clientId: secrets.clientId,
+                    clientSecret: secrets.clientSecret,
+                    refreshToken: secrets.refreshToken,
+                    grantType: 'refresh_token',
+                }),
+                { abortSignal: signal },
+            );
             throwIfAborted(signal);
             if (!response.accessToken) {
                 throw new AwsInteractionRequiredError();
@@ -342,14 +367,23 @@ export async function resolveSsoCredentials(
     }
     const client = new SSOClient({ region, maxAttempts: 2 });
     try {
-        const response = await client.send(new GetRoleCredentialsCommand({
-            accessToken: secrets.accessToken,
-            accountId,
-            roleName,
-        }), { abortSignal: signal });
+        const response = await client.send(
+            new GetRoleCredentialsCommand({
+                accessToken: secrets.accessToken,
+                accountId,
+                roleName,
+            }),
+            { abortSignal: signal },
+        );
         throwIfAborted(signal);
         const role = response.roleCredentials;
-        if (!role?.accessKeyId || !role.secretAccessKey || !role.sessionToken || !role.expiration || role.expiration <= Date.now()) {
+        if (
+            !role?.accessKeyId ||
+            !role.secretAccessKey ||
+            !role.sessionToken ||
+            !role.expiration ||
+            role.expiration <= Date.now()
+        ) {
             throw new AwsInteractionRequiredError();
         }
         return {

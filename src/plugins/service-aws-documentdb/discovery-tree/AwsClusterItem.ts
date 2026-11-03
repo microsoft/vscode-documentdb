@@ -3,16 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizard, callWithTelemetryAndErrorHandling, createContextValue, UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    AzureWizard,
+    callWithTelemetryAndErrorHandling,
+    createContextValue,
+    UserCancelledError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { Views } from '../../../documentdb/Views';
-import { ConnectionDiagnosticsService } from '../../../services/connectionDiagnosticsService';
 import { type AuthenticateWizardContext } from '../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
+import { ConnectionDiagnosticsService } from '../../../services/connectionDiagnosticsService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { nonNullValue } from '../../../utils/nonNull';
@@ -21,10 +27,18 @@ import { buildAwsConnectionString, prepareAwsConnection, selectAwsCertificate } 
 import { isAwsClusterConnectable, type AwsClusterModel } from '../models/AwsClusterModel';
 
 export class AwsClusterItem extends ClusterItemBase<AwsClusterModel> {
-    constructor(cluster: TreeCluster<AwsClusterModel>, journeyId: string, private readonly flat = false) {
+    constructor(
+        cluster: TreeCluster<AwsClusterModel>,
+        journeyId: string,
+        private readonly flat = false,
+    ) {
         super(cluster);
         this.journeyCorrelationId = journeyId;
-        this.contextValue = createContextValue([this.contextValue, 'awsDocumentDBCluster', 'enableAddToConnectionsCommand']);
+        this.contextValue = createContextValue([
+            this.contextValue,
+            'awsDocumentDBCluster',
+            'enableAddToConnectionsCommand',
+        ]);
     }
 
     public getTreeItem(): vscode.TreeItem {
@@ -42,16 +56,22 @@ export class AwsClusterItem extends ClusterItemBase<AwsClusterModel> {
             vscode.l10n.t('DB subnet group: {0}', vpcInfo?.subnetGroupName ?? vscode.l10n.t('Not available')),
             vscode.l10n.t(
                 'Subnets: {0}',
-                vpcInfo?.subnets.map((subnet) =>
-                    subnet.availabilityZone ? `${subnet.id} (${subnet.availabilityZone})` : subnet.id,
-                ).join(', ') || vscode.l10n.t('Not available'),
+                vpcInfo?.subnets
+                    .map((subnet) =>
+                        subnet.availabilityZone ? `${subnet.id} (${subnet.availabilityZone})` : subnet.id,
+                    )
+                    .join(', ') || vscode.l10n.t('Not available'),
             ),
             vscode.l10n.t(
                 'VPC security groups: {0}',
-                vpcInfo?.securityGroups.map((group) => group.status ? `${group.id} (${group.status})` : group.id).join(', ') ||
-                    vscode.l10n.t('Not available'),
+                vpcInfo?.securityGroups
+                    .map((group) => (group.status ? `${group.id} (${group.status})` : group.id))
+                    .join(', ') || vscode.l10n.t('Not available'),
             ),
-            vscode.l10n.t('Availability zones: {0}', vpcInfo?.availabilityZones.join(', ') || vscode.l10n.t('Not available')),
+            vscode.l10n.t(
+                'Availability zones: {0}',
+                vpcInfo?.availabilityZones.join(', ') || vscode.l10n.t('Not available'),
+            ),
             ...(vpcInfo?.networkType ? [vscode.l10n.t('Network type: {0}', vpcInfo.networkType)] : []),
         ];
         if (resource.vpcInfoError) {
@@ -94,56 +114,71 @@ export class AwsClusterItem extends ClusterItemBase<AwsClusterModel> {
         const cached = CredentialCache.getNativeAuthConfig(this.cluster.clusterId);
         this.cluster.connectionString = connectionString;
         if (cached) {
-            CredentialCache.setAuthCredentials(this.cluster.clusterId, AuthMethodId.NativeAuth, connectionString, cached);
+            CredentialCache.setAuthCredentials(
+                this.cluster.clusterId,
+                AuthMethodId.NativeAuth,
+                connectionString,
+                cached,
+            );
         }
     }
 
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
-        const result = await callWithTelemetryAndErrorHandling('awsDiscovery.connect', async (context: IActionContext) => {
-            context.telemetry.properties.discoveryProviderId = AWS_DISCOVERY_PROVIDER_ID;
-            context.telemetry.properties.view = Views.DiscoveryView;
-            context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId ?? '';
-            if (this.cluster.resource.endpoint) {
-                context.valuesToMask.push(this.cluster.resource.endpoint);
-            }
-            const credentials = await this.getCredentials();
-            const wizardContext: AuthenticateWizardContext = {
-                ...context,
-                adminUserName: this.cluster.resource.masterUsername,
-                resourceName: this.cluster.name,
-                availableAuthMethods: [AuthMethodId.NativeAuth],
-                selectedAuthMethod: AuthMethodId.NativeAuth,
-            };
-            const wizard = new AzureWizard(wizardContext, {
-                title: vscode.l10n.t('Authenticate to Connect with Your AWS Cluster'),
-                promptSteps: [new ProvideUserNameStep(), new ProvidePasswordStep()],
-            });
-            await wizard.prompt();
-            CredentialCache.setAuthCredentials(
-                this.cluster.clusterId,
-                AuthMethodId.NativeAuth,
-                credentials.connectionString,
-                {
-                    connectionUser: nonNullValue(wizardContext.selectedUserName, 'selectedUserName', 'AwsClusterItem'),
-                    connectionPassword: nonNullValue(wizardContext.password, 'password', 'AwsClusterItem'),
-                },
-            );
-            try {
-                return await this.getClientWithProgress(this.cluster.clusterId);
-            } catch (error) {
-                if (!(error instanceof UserCancelledError)) {
-                    const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId: this.cluster.clusterId, error });
-                    void vscode.window.showErrorMessage(
-                        diagnosis?.message ?? vscode.l10n.t('Failed to connect to the AWS DocumentDB cluster.'),
-                        { modal: true, detail: error instanceof Error ? error.message : String(error) },
-                    );
-                    context.errorHandling.suppressDisplay = true;
+        const result = await callWithTelemetryAndErrorHandling(
+            'awsDiscovery.connect',
+            async (context: IActionContext) => {
+                context.telemetry.properties.discoveryProviderId = AWS_DISCOVERY_PROVIDER_ID;
+                context.telemetry.properties.view = Views.DiscoveryView;
+                context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId ?? '';
+                if (this.cluster.resource.endpoint) {
+                    context.valuesToMask.push(this.cluster.resource.endpoint);
                 }
-                await ClustersClient.deleteClient(this.cluster.clusterId);
-                CredentialCache.deleteCredentials(this.cluster.clusterId);
-                throw error;
-            }
-        });
+                const credentials = await this.getCredentials();
+                const wizardContext: AuthenticateWizardContext = {
+                    ...context,
+                    adminUserName: this.cluster.resource.masterUsername,
+                    resourceName: this.cluster.name,
+                    availableAuthMethods: [AuthMethodId.NativeAuth],
+                    selectedAuthMethod: AuthMethodId.NativeAuth,
+                };
+                const wizard = new AzureWizard(wizardContext, {
+                    title: vscode.l10n.t('Authenticate to Connect with Your AWS Cluster'),
+                    promptSteps: [new ProvideUserNameStep(), new ProvidePasswordStep()],
+                });
+                await wizard.prompt();
+                CredentialCache.setAuthCredentials(
+                    this.cluster.clusterId,
+                    AuthMethodId.NativeAuth,
+                    credentials.connectionString,
+                    {
+                        connectionUser: nonNullValue(
+                            wizardContext.selectedUserName,
+                            'selectedUserName',
+                            'AwsClusterItem',
+                        ),
+                        connectionPassword: nonNullValue(wizardContext.password, 'password', 'AwsClusterItem'),
+                    },
+                );
+                try {
+                    return await this.getClientWithProgress(this.cluster.clusterId);
+                } catch (error) {
+                    if (!(error instanceof UserCancelledError)) {
+                        const diagnosis = await ConnectionDiagnosticsService.explain({
+                            clusterId: this.cluster.clusterId,
+                            error,
+                        });
+                        void vscode.window.showErrorMessage(
+                            diagnosis?.message ?? vscode.l10n.t('Failed to connect to the AWS DocumentDB cluster.'),
+                            { modal: true, detail: error instanceof Error ? error.message : String(error) },
+                        );
+                        context.errorHandling.suppressDisplay = true;
+                    }
+                    await ClustersClient.deleteClient(this.cluster.clusterId);
+                    CredentialCache.deleteCredentials(this.cluster.clusterId);
+                    throw error;
+                }
+            },
+        );
         return result ?? null;
     }
 }

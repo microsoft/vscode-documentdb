@@ -33,7 +33,11 @@ export type RouterContext = BaseRouterContext & {
 const regionSchema = z.string().regex(/^[a-z]{2}(?:-[a-z]+)+-\d+$/);
 const commonInput = {
     label: z.string().trim().max(128).optional(),
-    regions: z.array(regionSchema).min(1).max(50).transform((regions) => [...new Set(regions)]),
+    regions: z
+        .array(regionSchema)
+        .min(1)
+        .max(50)
+        .transform((regions) => [...new Set(regions)]),
 };
 const nonempty = z.string().trim().min(1);
 export const credentialInputSchema = z.discriminatedUnion('authMethod', [
@@ -107,9 +111,12 @@ async function safeOperation<T>(context: RouterContext, operation: (signal: Abor
         assertActive(context);
         throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: error instanceof AwsInteractionRequiredError || error instanceof AwsValidationError
-                ? error.message
-                : l10n.t('AWS sign-in could not finish. Check your credentials, profile, network, and AWS permissions, then retry.'),
+            message:
+                error instanceof AwsInteractionRequiredError || error instanceof AwsValidationError
+                    ? error.message
+                    : l10n.t(
+                          'AWS sign-in could not finish. Check your credentials, profile, network, and AWS permissions, then retry.',
+                      ),
         });
     }
 }
@@ -137,14 +144,10 @@ export function isAwsVerificationUrl(value: string): boolean {
         !url.username &&
         !url.password &&
         !url.port &&
-        (
-            /^(?:device\.sso|oidc)\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?$/.test(url.hostname) ||
-            (
-                /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.awsapps\.(?:com|cn)$/.test(url.hostname) &&
+        (/^(?:device\.sso|oidc)\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?$/.test(url.hostname) ||
+            (/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.awsapps\.(?:com|cn)$/.test(url.hostname) &&
                 url.pathname === '/start/' &&
-                /^#\/device(?:\?|$)/.test(url.hash)
-            )
-        )
+                /^#\/device(?:\?|$)/.test(url.hash)))
     );
 }
 
@@ -163,7 +166,10 @@ export const awsCredentialsRouter = router({
                 const assertCurrent = (): void => {
                     assertActive(context);
                     if (generation !== context.credentialState.ssoGeneration) {
-                        throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: l10n.t('AWS browser sign-in was cancelled.') });
+                        throw new TRPCError({
+                            code: 'CLIENT_CLOSED_REQUEST',
+                            message: l10n.t('AWS browser sign-in was cancelled.'),
+                        });
                     }
                 };
                 const flow = await awsDiscoveryService.beginSso(input.startUrl, input.ssoRegion, signal);
@@ -171,16 +177,28 @@ export const awsCredentialsRouter = router({
                     assertCurrent();
                     context.credentialState.ssoFlows.add(flow.flowId);
                     if (!isAwsVerificationUrl(flow.verificationUri)) {
-                        throw new AwsValidationError(l10n.t('AWS returned an unsupported verification URL. Browser sign-in was stopped to protect your credentials.'));
+                        throw new AwsValidationError(
+                            l10n.t(
+                                'AWS returned an unsupported verification URL. Browser sign-in was stopped to protect your credentials.',
+                            ),
+                        );
                     }
                     let opened: boolean;
                     try {
                         opened = await vscode.env.openExternal(vscode.Uri.parse(flow.verificationUri));
                     } catch {
-                        throw new AwsValidationError(l10n.t('VS Code could not open your browser. Check the default browser configuration and retry.'));
+                        throw new AwsValidationError(
+                            l10n.t(
+                                'VS Code could not open your browser. Check the default browser configuration and retry.',
+                            ),
+                        );
                     }
                     if (!opened) {
-                        throw new AwsValidationError(l10n.t('VS Code could not open your browser. Check the default browser configuration and retry.'));
+                        throw new AwsValidationError(
+                            l10n.t(
+                                'VS Code could not open your browser. Check the default browser configuration and retry.',
+                            ),
+                        );
                     }
                     assertCurrent();
                     return flow;
@@ -202,59 +220,71 @@ export const awsCredentialsRouter = router({
         .query(async ({ ctx, input }) => {
             const context = ctx as RouterContext;
             assertOwnedFlow(context, input.flowId);
-            return safeOperation(context, (signal) => awsDiscoveryService.listSsoRoles(input.flowId, input.accountId, signal));
-        }),
-    cancelSso: publicProcedureWithTelemetry.input(z.object({ flowId: nonempty.optional() })).mutation(({ ctx, input }) => {
-        const context = ctx as RouterContext;
-        assertActive(context);
-        if (input.flowId) {
-            assertOwnedFlow(context, input.flowId);
-            context.credentialState.ssoGeneration++;
-            awsDiscoveryService.cancelSso(input.flowId);
-            context.credentialState.ssoFlows.delete(input.flowId);
-        } else {
-            // Back may arrive before startSso returns its flow ID to the webview.
-            clearAwsSsoFlows(context.credentialState);
-        }
-    }),
-    submit: publicProcedureWithTelemetry.input(credentialInputSchema).mutation(async ({ ctx, input }): Promise<SubmitResult> => {
-        const context = ctx as WithTelemetry<RouterContext>;
-        assertActive(context);
-        if (context.credentialState.submitting || context.credentialState.credentialsStored) {
-            throw new TRPCError({ code: 'CONFLICT', message: l10n.t('This credential is already being saved or has been saved.') });
-        }
-        if (input.authMethod === 'sso') {
-            assertOwnedFlow(context, input.ssoFlowId);
-        }
-        context.actionContext.telemetry.properties.authMethod = input.authMethod;
-        context.actionContext.telemetry.properties.operationMode = context.credentialId ? 'edit' : 'add';
-        if (context.journeyCorrelationId) {
-            context.actionContext.telemetry.properties.journeyCorrelationId = context.journeyCorrelationId;
-        }
-        context.credentialState.submitting = true;
-        try {
-            const credential = await withPanelSignal(context, (signal) =>
-                awsDiscoveryService.verifyAndSave(input, signal, context.credentialId),
+            return safeOperation(context, (signal) =>
+                awsDiscoveryService.listSsoRoles(input.flowId, input.accountId, signal),
             );
-            context.credentialState.credentialsStored = true;
-            context.onCredentialPersisted();
-            return { success: true, credential };
-        } catch (error) {
+        }),
+    cancelSso: publicProcedureWithTelemetry
+        .input(z.object({ flowId: nonempty.optional() }))
+        .mutation(({ ctx, input }) => {
+            const context = ctx as RouterContext;
             assertActive(context);
-            context.actionContext.telemetry.properties.result = 'Failed';
-            return {
-                success: false,
-                error: {
-                    title: l10n.t("We couldn't verify this AWS credential"),
-                    message: error instanceof AwsInteractionRequiredError || error instanceof AwsValidationError
-                        ? error.message
-                        : l10n.t('Check the credential values, profile sign-in or MFA, expiration, and network access, then retry. Your previous credential has not been replaced.'),
-                },
-            };
-        } finally {
-            context.credentialState.submitting = false;
-        }
-    }),
+            if (input.flowId) {
+                assertOwnedFlow(context, input.flowId);
+                context.credentialState.ssoGeneration++;
+                awsDiscoveryService.cancelSso(input.flowId);
+                context.credentialState.ssoFlows.delete(input.flowId);
+            } else {
+                // Back may arrive before startSso returns its flow ID to the webview.
+                clearAwsSsoFlows(context.credentialState);
+            }
+        }),
+    submit: publicProcedureWithTelemetry
+        .input(credentialInputSchema)
+        .mutation(async ({ ctx, input }): Promise<SubmitResult> => {
+            const context = ctx as WithTelemetry<RouterContext>;
+            assertActive(context);
+            if (context.credentialState.submitting || context.credentialState.credentialsStored) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: l10n.t('This credential is already being saved or has been saved.'),
+                });
+            }
+            if (input.authMethod === 'sso') {
+                assertOwnedFlow(context, input.ssoFlowId);
+            }
+            context.actionContext.telemetry.properties.authMethod = input.authMethod;
+            context.actionContext.telemetry.properties.operationMode = context.credentialId ? 'edit' : 'add';
+            if (context.journeyCorrelationId) {
+                context.actionContext.telemetry.properties.journeyCorrelationId = context.journeyCorrelationId;
+            }
+            context.credentialState.submitting = true;
+            try {
+                const credential = await withPanelSignal(context, (signal) =>
+                    awsDiscoveryService.verifyAndSave(input, signal, context.credentialId),
+                );
+                context.credentialState.credentialsStored = true;
+                context.onCredentialPersisted();
+                return { success: true, credential };
+            } catch (error) {
+                assertActive(context);
+                context.actionContext.telemetry.properties.result = 'Failed';
+                return {
+                    success: false,
+                    error: {
+                        title: l10n.t("We couldn't verify this AWS credential"),
+                        message:
+                            error instanceof AwsInteractionRequiredError || error instanceof AwsValidationError
+                                ? error.message
+                                : l10n.t(
+                                      'Check the credential values, profile sign-in or MFA, expiration, and network access, then retry. Your previous credential has not been replaced.',
+                                  ),
+                    },
+                };
+            } finally {
+                context.credentialState.submitting = false;
+            }
+        }),
     complete: publicProcedureWithTelemetry.mutation(({ ctx }) => {
         const context = ctx as RouterContext;
         if (!context.credentialState.credentialsStored) {

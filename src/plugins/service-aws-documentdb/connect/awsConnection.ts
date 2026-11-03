@@ -62,7 +62,9 @@ export async function selectAwsCertificate(resource: AwsCluster, replace = false
 
 export function buildAwsConnectionString(resource: AwsCluster, caPath: string): string {
     if (!isAwsClusterConnectable(resource)) {
-        throw new Error(vscode.l10n.t('This AWS cluster is not available or has no endpoint. Refresh after it is ready.'));
+        throw new Error(
+            vscode.l10n.t('This AWS cluster is not available or has no endpoint. Refresh after it is ready.'),
+        );
     }
     if (!resource.endpoint || !/^[a-zA-Z0-9.-]+$/.test(resource.endpoint)) {
         throw new Error(vscode.l10n.t('AWS returned an invalid cluster endpoint.'));

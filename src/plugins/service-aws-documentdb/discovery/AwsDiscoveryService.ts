@@ -87,9 +87,13 @@ function keyIdentity(secrets: AwsKeySecrets): AwsCredentialIdentity {
 }
 
 function validateInput(input: AwsCredentialInput): void {
-    if (!['profile', 'accessKey', 'sso', 'temporary'].includes(input.authMethod) ||
-        !Array.isArray(input.regions) || input.regions.length === 0 || input.regions.length > 50 ||
-        input.regions.some((region) => !/^[a-z]{2}(?:-[a-z]+)+-\d+$/.test(region))) {
+    if (
+        !['profile', 'accessKey', 'sso', 'temporary'].includes(input.authMethod) ||
+        !Array.isArray(input.regions) ||
+        input.regions.length === 0 ||
+        input.regions.length > 50 ||
+        input.regions.some((region) => !/^[a-z]{2}(?:-[a-z]+)+-\d+$/.test(region))
+    ) {
         throw new AwsValidationError(vscode.l10n.t('Choose an AWS sign-in method and at least one valid region.'));
     }
     if (input.label && input.label.length > 200) {
@@ -98,8 +102,10 @@ function validateInput(input: AwsCredentialInput): void {
     if (input.authMethod === 'profile' && !input.profile?.trim()) {
         throw new AwsValidationError(vscode.l10n.t('Select an AWS profile.'));
     }
-    if ((input.authMethod === 'accessKey' || input.authMethod === 'temporary') &&
-        (!input.accessKeyId?.trim() || !input.secretAccessKey?.trim())) {
+    if (
+        (input.authMethod === 'accessKey' || input.authMethod === 'temporary') &&
+        (!input.accessKeyId?.trim() || !input.secretAccessKey?.trim())
+    ) {
         throw new AwsValidationError(vscode.l10n.t('Enter the AWS access key ID and secret access key.'));
     }
     if (input.authMethod === 'temporary' && !input.sessionToken?.trim()) {
@@ -108,10 +114,16 @@ function validateInput(input: AwsCredentialInput): void {
     if (input.authMethod === 'accessKey' && input.sessionToken) {
         throw new AwsValidationError(vscode.l10n.t('Use Temporary credentials when providing an AWS session token.'));
     }
-    if (input.expiration && (!Number.isFinite(Date.parse(input.expiration)) || Date.parse(input.expiration) <= Date.now())) {
+    if (
+        input.expiration &&
+        (!Number.isFinite(Date.parse(input.expiration)) || Date.parse(input.expiration) <= Date.now())
+    ) {
         throw new AwsValidationError(vscode.l10n.t('Enter a valid future expiration time for the AWS credentials.'));
     }
-    if (input.authMethod === 'sso' && (!input.ssoFlowId || !/^\d{12}$/.test(input.accountId ?? '') || !input.roleName?.trim())) {
+    if (
+        input.authMethod === 'sso' &&
+        (!input.ssoFlowId || !/^\d{12}$/.test(input.accountId ?? '') || !input.roleName?.trim())
+    ) {
         throw new AwsValidationError(vscode.l10n.t('Complete AWS SSO sign-in and select an account and role.'));
     }
 }
@@ -191,7 +203,9 @@ export class AwsDiscoveryService {
 
     public invalidate(id?: string): void {
         this.invalidateSnapshot();
-        const ids = id ? [id] : new Set([...this.generations.keys(), ...this.identities.keys(), ...this.refreshes.keys()]);
+        const ids = id
+            ? [id]
+            : new Set([...this.generations.keys(), ...this.identities.keys(), ...this.refreshes.keys()]);
         for (const entry of ids) {
             this.generations.set(entry, this.generation(entry) + 1);
             this.identities.delete(entry);
@@ -219,7 +233,9 @@ export class AwsDiscoveryService {
             const generation = this.generation(id);
             this.generations.set(id, generation);
             if (credentialId && !(await this.store.list()).some((record) => record.id === id)) {
-                throw new AwsValidationError(vscode.l10n.t('This AWS credential was removed. Add a new credential instead.'));
+                throw new AwsValidationError(
+                    vscode.l10n.t('This AWS credential was removed. Add a new credential instead.'),
+                );
             }
             const assertCurrent = (): void => this.assertCurrent(id, generation, controller.signal);
             assertCurrent();
@@ -228,23 +244,42 @@ export class AwsDiscoveryService {
             let staged: StagedSso | undefined;
             switch (input.authMethod) {
                 case 'profile':
-                    identity = await abortable(this.provider(
-                        nonNullValue(input.profile, 'input.profile', 'AwsDiscoveryService.ts').trim(),
-                        input.regions[0],
-                        true,
+                    identity = await abortable(
+                        this.provider(
+                            nonNullValue(input.profile, 'input.profile', 'AwsDiscoveryService.ts').trim(),
+                            input.regions[0],
+                            true,
+                            controller.signal,
+                        )(),
                         controller.signal,
-                    )(), controller.signal);
+                    );
                     break;
                 case 'accessKey':
                 case 'temporary':
                     secrets = {
                         kind: 'keys',
-                        accessKeyId: nonNullValue(input.accessKeyId, 'input.accessKeyId', 'AwsDiscoveryService.ts').trim(),
-                        secretAccessKey: nonNullValue(input.secretAccessKey, 'input.secretAccessKey', 'AwsDiscoveryService.ts').trim(),
-                        sessionToken: input.authMethod === 'temporary'
-                            ? nonNullValue(input.sessionToken, 'input.sessionToken', 'AwsDiscoveryService.ts').trim()
-                            : undefined,
-                        expiresAt: input.authMethod === 'temporary' && input.expiration ? Date.parse(input.expiration) : undefined,
+                        accessKeyId: nonNullValue(
+                            input.accessKeyId,
+                            'input.accessKeyId',
+                            'AwsDiscoveryService.ts',
+                        ).trim(),
+                        secretAccessKey: nonNullValue(
+                            input.secretAccessKey,
+                            'input.secretAccessKey',
+                            'AwsDiscoveryService.ts',
+                        ).trim(),
+                        sessionToken:
+                            input.authMethod === 'temporary'
+                                ? nonNullValue(
+                                      input.sessionToken,
+                                      'input.sessionToken',
+                                      'AwsDiscoveryService.ts',
+                                  ).trim()
+                                : undefined,
+                        expiresAt:
+                            input.authMethod === 'temporary' && input.expiration
+                                ? Date.parse(input.expiration)
+                                : undefined,
                     };
                     identity = keyIdentity(secrets);
                     break;
@@ -253,7 +288,13 @@ export class AwsDiscoveryService {
                     const accountId = nonNullValue(input.accountId, 'input.accountId', 'AwsDiscoveryService.ts');
                     const roleName = nonNullValue(input.roleName, 'input.roleName', 'AwsDiscoveryService.ts');
                     staged = this.sso.staged(flowId, accountId);
-                    const resolved = await this.resolveSso(staged.secrets, staged.region, accountId, roleName, controller.signal);
+                    const resolved = await this.resolveSso(
+                        staged.secrets,
+                        staged.region,
+                        accountId,
+                        roleName,
+                        controller.signal,
+                    );
                     identity = resolved.credentials;
                     secrets = resolved.secrets;
                     staged.assertCurrent();
@@ -264,11 +305,14 @@ export class AwsDiscoveryService {
             const verified = await this.verify(identity, input.regions[0], controller.signal);
             assertCurrent();
             if (input.authMethod === 'sso' && verified.accountId !== input.accountId) {
-                throw new AwsValidationError(vscode.l10n.t('The verified AWS identity does not match the selected SSO account.'));
+                throw new AwsValidationError(
+                    vscode.l10n.t('The verified AWS identity does not match the selected SSO account.'),
+                );
             }
             const record: AwsCredentialRecord = {
                 id,
-                label: input.label?.trim() ||
+                label:
+                    input.label?.trim() ||
                     (input.authMethod === 'profile' ? input.profile?.trim() : undefined) ||
                     vscode.l10n.t('AWS account {0}', verified.accountId),
                 authMethod: input.authMethod,
@@ -299,9 +343,12 @@ export class AwsDiscoveryService {
 
     private async credentials(record: AwsCredentialRecord, signal: AbortSignal): Promise<AwsCredentialIdentity> {
         const cached = this.identities.get(record.id);
-        if (cached && (cached.identity.expiration
-            ? cached.identity.expiration.getTime() - Date.now() > 60_000
-            : Date.now() - cached.cachedAt < 5 * 60_000)) {
+        if (
+            cached &&
+            (cached.identity.expiration
+                ? cached.identity.expiration.getTime() - Date.now() > 60_000
+                : Date.now() - cached.cachedAt < 5 * 60_000)
+        ) {
             return cached.identity;
         }
         let refresh = this.refreshes.get(record.id);
@@ -314,21 +361,36 @@ export class AwsDiscoveryService {
                 assertCurrent();
                 let identity: AwsCredentialIdentity;
                 if (record.authMethod === 'profile' && record.profile) {
-                    identity = await abortable(this.provider(record.profile, record.regions[0], false, controller.signal)(), controller.signal);
+                    identity = await abortable(
+                        this.provider(record.profile, record.regions[0], false, controller.signal)(),
+                        controller.signal,
+                    );
                 } else {
                     const secrets = await this.store.secrets(record.id);
                     assertCurrent();
                     if (secrets?.kind === 'keys') {
                         identity = keyIdentity(secrets);
                     } else if (secrets?.kind === 'sso' && record.ssoRegion && record.roleName) {
-                        const resolved = await this.resolveSso(secrets, record.ssoRegion, record.accountId, record.roleName, controller.signal);
+                        const resolved = await this.resolveSso(
+                            secrets,
+                            record.ssoRegion,
+                            record.accountId,
+                            record.roleName,
+                            controller.signal,
+                        );
                         assertCurrent();
                         identity = resolved.credentials;
-                        if (resolved.secrets.accessToken !== secrets.accessToken ||
+                        if (
+                            resolved.secrets.accessToken !== secrets.accessToken ||
                             resolved.secrets.accessTokenExpiresAt !== secrets.accessTokenExpiresAt ||
                             resolved.secrets.refreshToken !== secrets.refreshToken ||
-                            identity.expiration?.getTime() !== record.expiresAt) {
-                            await this.store.save({ ...record, expiresAt: identity.expiration?.getTime() }, resolved.secrets, assertCurrent);
+                            identity.expiration?.getTime() !== record.expiresAt
+                        ) {
+                            await this.store.save(
+                                { ...record, expiresAt: identity.expiration?.getTime() },
+                                resolved.secrets,
+                                assertCurrent,
+                            );
                         }
                     } else {
                         throw new AwsInteractionRequiredError();
@@ -370,24 +432,33 @@ export class AwsDiscoveryService {
                 const records = await this.store.list();
                 assertCurrent();
                 const errors: AwsDiscoveryFailure[] = [];
-                const sessions = await bounded(records, async (record): Promise<{ record: AwsCredentialRecord; identity: AwsCredentialIdentity } | undefined> => {
-                    assertCurrent();
-                    try {
-                        const identity = await this.credentials(record, controller.signal);
+                const sessions = await bounded(
+                    records,
+                    async (
+                        record,
+                    ): Promise<{ record: AwsCredentialRecord; identity: AwsCredentialIdentity } | undefined> => {
                         assertCurrent();
-                        return { record, identity };
-                    } catch (error) {
-                        assertCurrent();
-                        if (errorName(error) === 'AbortError') {
-                            throw error;
+                        try {
+                            const identity = await this.credentials(record, controller.signal);
+                            assertCurrent();
+                            return { record, identity };
+                        } catch (error) {
+                            assertCurrent();
+                            if (errorName(error) === 'AbortError') {
+                                throw error;
+                            }
+                            errors.push({
+                                credentialId: record.id,
+                                kind: failureKind(error),
+                                message: safeAwsError(error).message,
+                            });
+                            return undefined;
                         }
-                        errors.push({ credentialId: record.id, kind: failureKind(error), message: safeAwsError(error).message });
-                        return undefined;
-                    }
-                });
-                const jobs = sessions.flatMap((session) => session
-                    ? session.record.regions.map((region) => ({ ...session, region }))
-                    : []);
+                    },
+                );
+                const jobs = sessions.flatMap((session) =>
+                    session ? session.record.regions.map((region) => ({ ...session, region })) : [],
+                );
                 const regional = await bounded(jobs, async ({ record, identity, region }): Promise<AwsCluster[]> => {
                     assertCurrent();
                     try {
@@ -399,7 +470,12 @@ export class AwsDiscoveryService {
                         if (errorName(error) === 'AbortError') {
                             throw error;
                         }
-                        errors.push({ credentialId: record.id, region, kind: failureKind(error), message: safeAwsError(error).message });
+                        errors.push({
+                            credentialId: record.id,
+                            region,
+                            kind: failureKind(error),
+                            message: safeAwsError(error).message,
+                        });
                         return [];
                     }
                 });
@@ -425,15 +501,24 @@ export class AwsDiscoveryService {
     }
 
     public async beginSso(startUrl: string, ssoRegion: string, signal?: AbortSignal): Promise<AwsSsoStart> {
-        return this.operation(signal, async (controller): Promise<AwsSsoStart> => this.sso.begin(startUrl, ssoRegion, controller.signal));
+        return this.operation(
+            signal,
+            async (controller): Promise<AwsSsoStart> => this.sso.begin(startUrl, ssoRegion, controller.signal),
+        );
     }
 
     public async pollSso(flowId: string, signal?: AbortSignal): Promise<AwsSsoPoll> {
-        return this.operation(signal, async (controller): Promise<AwsSsoPoll> => this.sso.poll(flowId, controller.signal));
+        return this.operation(
+            signal,
+            async (controller): Promise<AwsSsoPoll> => this.sso.poll(flowId, controller.signal),
+        );
     }
 
     public async listSsoRoles(flowId: string, accountId: string, signal?: AbortSignal): Promise<string[]> {
-        return this.operation(signal, async (controller): Promise<string[]> => this.sso.roles(flowId, accountId, controller.signal));
+        return this.operation(
+            signal,
+            async (controller): Promise<string[]> => this.sso.roles(flowId, accountId, controller.signal),
+        );
     }
 
     public cancelSso(flowId: string): void {

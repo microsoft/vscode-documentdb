@@ -7,6 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ReactModule from 'react';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { type AwsCredentialsWebviewConfig } from './awsCredentialsController';
@@ -47,7 +48,7 @@ vi.mock('../../_integration/useTrpcClient', () => ({
 // The shared ESM shell has its own DOM/layout tests. Isolate that package boundary here while
 // rendering real Fluent cards, fields, dropdowns, and messages and exercising the AWS state machine.
 vi.mock('@microsoft/vscode-ext-webview-fluentui/components', async () => {
-    const React = await vi.importActual<typeof import('react')>('react');
+    const React = await vi.importActual<typeof ReactModule>('react');
     interface StepProps {
         value: string;
         label: string;
@@ -56,13 +57,24 @@ vi.mock('@microsoft/vscode-ext-webview-fluentui/components', async () => {
     }
     return {
         Wizard: (props: { activeStep: string; header: ReactNode; footer: ReactNode; children: ReactNode }): ReactNode =>
-            React.createElement('main', null, props.header,
-                React.createElement('nav', null, React.Children.map(props.children, (child) =>
-                    React.isValidElement<StepProps>(child) ? React.createElement('span', null, child.props.label) : null,
-                )),
+            React.createElement(
+                'main',
+                null,
+                props.header,
+                React.createElement(
+                    'nav',
+                    null,
+                    React.Children.map(props.children, (child) =>
+                        React.isValidElement<StepProps>(child)
+                            ? React.createElement('span', null, child.props.label)
+                            : null,
+                    ),
+                ),
                 React.Children.map(props.children, (child) =>
                     React.isValidElement<StepProps>(child) && child.props.value === props.activeStep ? child : null,
-                ), props.footer),
+                ),
+                props.footer,
+            ),
         WizardStep: (props: StepProps): ReactNode =>
             React.createElement('section', null, React.createElement('h2', null, props.title), props.children),
         ContainerHeader: (props: { title: string; subtitle: string }): ReactNode =>
@@ -112,7 +124,9 @@ async function choose(host: HTMLElement, method: string): Promise<void> {
 }
 
 async function fill(host: HTMLElement, label: string, value: string): Promise<void> {
-    const fieldLabel = Array.from(host.querySelectorAll('label')).find((candidate) => candidate.textContent?.startsWith(label));
+    const fieldLabel = Array.from(host.querySelectorAll('label')).find((candidate) =>
+        candidate.textContent?.startsWith(label),
+    );
     const input = fieldLabel ? document.getElementById(fieldLabel.htmlFor) : null;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
     if (!(input instanceof HTMLInputElement) || !setter) {
@@ -147,16 +161,25 @@ describe('AWS credentials onboarding', () => {
         const host = await renderView();
         const radios = Array.from(host.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
         expect(radios.map((radio) => radio.getAttribute('aria-label'))).toEqual([
-            'AWS profile', 'Access key', 'SSO', 'Temporary credentials',
+            'AWS profile',
+            'Access key',
+            'SSO',
+            'Temporary credentials',
         ]);
         expect(radios.map((radio) => radio.checked)).toEqual([true, false, false, false]);
         expect(host.textContent).toContain('Recommended');
         expect(host.querySelector('nav')?.textContent).toBe('Choose methodEnter detailsVerifyDone');
         expect(Array.from(host.querySelectorAll('footer button')).map((element) => element.textContent)).toEqual([
-            'Continue', 'Cancel', 'Learn more',
+            'Continue',
+            'Cancel',
+            'Learn more',
         ]);
         const css = Array.from(document.querySelectorAll('style'))
-            .map((style) => Array.from(style.sheet?.cssRules ?? []).map((rule) => rule.cssText).join('\n'))
+            .map((style) =>
+                Array.from(style.sheet?.cssRules ?? [])
+                    .map((rule) => rule.cssText)
+                    .join('\n'),
+            )
             .join('\n');
         expect(css).toMatch(/max-width:\s*640px/);
         expect(css).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
@@ -165,17 +188,24 @@ describe('AWS credentials onboarding', () => {
     it('keeps details inside the wizard and submits the selected profile and remembered regions', async () => {
         mockConfiguration = { mode: 'edit', authMethod: 'profile', profile: 'work', regions: ['eu-west-1'] };
         mockListProfiles.mockResolvedValue([{ name: 'work', kind: 'role' }]);
-        mockSubmit.mockResolvedValue({ success: true, credential: {
-            id: 'work', label: 'Work', authMethod: 'profile', regions: ['eu-west-1'],
-            accountId: '123456789012', arn: 'arn:aws:iam::123456789012:role/work',
-        } });
+        mockSubmit.mockResolvedValue({
+            success: true,
+            credential: {
+                id: 'work',
+                label: 'Work',
+                authMethod: 'profile',
+                regions: ['eu-west-1'],
+                accountId: '123456789012',
+                arn: 'arn:aws:iam::123456789012:role/work',
+            },
+        });
         const host = await renderView();
         expect(host.querySelector('h2')?.textContent).toBe('AWS profile');
         expect(host.textContent).toContain('eu-west-1');
         await click(button(host, 'Verify & Save'));
         expect(mockSubmit).toHaveBeenCalledWith(
             { authMethod: 'profile', profile: 'work', regions: ['eu-west-1'], label: undefined },
-            expect.objectContaining({ signal: expect.any(AbortSignal) }),
+            expect.objectContaining({ signal: expect.any(AbortSignal) as AbortSignal }),
         );
         expect(host.querySelector('h2')?.textContent).toBe('Credential updated');
         expect(host.textContent).toContain('Discovery permissions are checked separately');
@@ -184,10 +214,17 @@ describe('AWS credentials onboarding', () => {
     });
 
     it('masks temporary credentials and truthfully describes session-only completion', async () => {
-        mockSubmit.mockResolvedValue({ success: true, credential: {
-            id: 'session', label: 'Session', authMethod: 'temporary', regions: ['us-east-1'],
-            accountId: '123456789012', arn: 'arn:aws:sts::123456789012:assumed-role/test/session',
-        } });
+        mockSubmit.mockResolvedValue({
+            success: true,
+            credential: {
+                id: 'session',
+                label: 'Session',
+                authMethod: 'temporary',
+                regions: ['us-east-1'],
+                accountId: '123456789012',
+                arn: 'arn:aws:sts::123456789012:assumed-role/test/session',
+            },
+        });
         const host = await renderView();
         await choose(host, 'Temporary credentials');
         expect(host.querySelectorAll('input[type="password"]')).toHaveLength(2);
@@ -195,16 +232,25 @@ describe('AWS credentials onboarding', () => {
         await fill(host, 'Secret Access Key', 'temporary-secret');
         await fill(host, 'Session token', 'temporary-token');
         await click(button(host, 'Verify & Save'));
-        expect(mockSubmit).toHaveBeenCalledWith(expect.objectContaining({
-            authMethod: 'temporary', accessKeyId: 'temporary-id', secretAccessKey: 'temporary-secret', sessionToken: 'temporary-token',
-        }), expect.objectContaining({ signal: expect.any(AbortSignal) }));
+        expect(mockSubmit).toHaveBeenCalledWith(
+            expect.objectContaining({
+                authMethod: 'temporary',
+                accessKeyId: 'temporary-id',
+                secretAccessKey: 'temporary-secret',
+                sessionToken: 'temporary-token',
+            }),
+            expect.objectContaining({ signal: expect.any(AbortSignal) as AbortSignal }),
+        );
         expect(host.textContent).toContain('not saved permanently');
         expect(host.textContent).not.toContain('successfully checked and saved');
         expect(host.querySelector('input[type="password"]')).toBeNull();
     });
 
     it('keeps a failed verification on Verify and lets the user return to the same details', async () => {
-        mockSubmit.mockResolvedValue({ success: false, error: { title: 'Sign-in required', message: 'Renew the AWS profile session.' } });
+        mockSubmit.mockResolvedValue({
+            success: false,
+            error: { title: 'Sign-in required', message: 'Renew the AWS profile session.' },
+        });
         const host = await renderView();
         await click(button(host, 'Continue'));
         await click(button(host, 'Verify & Save'));
@@ -218,8 +264,15 @@ describe('AWS credentials onboarding', () => {
     });
 
     it('aborts an in-flight browser sign-in on Back and ignores its late result', async () => {
-        let resolveStart: ((value: { flowId: string; verificationUri: string; userCode: string; intervalSeconds: number }) => void) | undefined;
-        mockStartSso.mockImplementation(() => new Promise((resolve) => { resolveStart = resolve; }));
+        let resolveStart:
+            | ((value: { flowId: string; verificationUri: string; userCode: string; intervalSeconds: number }) => void)
+            | undefined;
+        mockStartSso.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    resolveStart = resolve;
+                }),
+        );
         const host = await renderView();
         await choose(host, 'SSO');
         await fill(host, 'SSO start URL', 'https://work.awsapps.com/start');
@@ -229,10 +282,14 @@ describe('AWS credentials onboarding', () => {
         await click(button(host, 'Back'));
         expect(requestOptions.signal.aborted).toBe(true);
         expect(mockCancelSso).toHaveBeenLastCalledWith({});
-        await act(async () => resolveStart?.({
-            flowId: 'late-flow', verificationUri: 'https://device.sso.us-east-1.amazonaws.com/',
-            userCode: 'OLD-CODE', intervalSeconds: 1,
-        }));
+        await act(async () =>
+            resolveStart?.({
+                flowId: 'late-flow',
+                verificationUri: 'https://device.sso.us-east-1.amazonaws.com/',
+                userCode: 'OLD-CODE',
+                intervalSeconds: 1,
+            }),
+        );
         expect(host.querySelector('h2')?.textContent).toBe('Choose an authentication method');
         expect(host.textContent).not.toContain('OLD-CODE');
         expect(mockPollSso).not.toHaveBeenCalled();
