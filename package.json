@@ -585,6 +585,11 @@
         "title": "Copy Connection String…"
       },
       {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.diagnoseConnection",
+        "title": "Diagnose Connection…"
+      },
+      {
         "//": "[DiscoveryView] Rename Kubernetes kubeconfig source",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
@@ -1330,6 +1335,11 @@
           "command": "vscode-documentdb.command.copyConnectionString",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "2@1"
+        },
+        {
+          "command": "vscode-documentdb.command.diagnoseConnection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
+          "group": "2@2"
         },
         {
           "//": "[Account] Open Interactive Shell",

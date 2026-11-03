@@ -86,6 +86,7 @@ import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
 import { showWorkerStats } from '../commands/showWorkerStats/showWorkerStats';
+import { troubleshootConnection } from '../commands/troubleshootConnection/troubleshootConnection';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
@@ -636,6 +637,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.copyConnectionString',
                     withTreeNodeCommandCorrelation(copyAzureConnectionString),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.diagnoseConnection',
+                    withTreeNodeCommandCorrelation(troubleshootConnection),
                 );
 
                 //// Connections View Commands:
