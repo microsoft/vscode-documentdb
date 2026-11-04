@@ -196,7 +196,9 @@ export class ShellSessionManager implements vscode.Disposable {
      */
     async initialize(): Promise<ShellConnectionMetadata> {
         const initMsg = this.buildInitMessage();
-        this._sessionConnectionString = CredentialCache.getCredentials(this._connectionInfo.clusterId)?.connectionString;
+        this._sessionConnectionString = CredentialCache.getCredentials(
+            this._connectionInfo.clusterId,
+        )?.connectionString;
         this._resolvedTokenResource = undefined;
 
         const timeoutMs = getConnectionTimeoutMs();

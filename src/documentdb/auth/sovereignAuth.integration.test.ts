@@ -233,57 +233,63 @@ describe('sovereign authentication with real audience resolvers', () => {
         },
     );
 
-    it.each(workerSessions)('resolves Government from the %s %s worker tokenRequest path', async (surface, authMethod) => {
-        const stored = credentials(authMethod, 'us');
-        CredentialCache.setAuthCredentials(
-            clusterId,
-            authMethod,
-            stored.connectionString,
-            undefined,
-            undefined,
-            stored.entraIdConfig,
-            stored.managedIdentityConfig,
-        );
-        selectedCloud = authMethod === AuthMethodId.ManagedIdentity ? 'ChinaCloud' : 'USGovernment';
-        const manager =
-            surface === 'shell'
-                ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' })
-                : new PlaygroundEvaluator();
-        try {
-            if (manager instanceof ShellSessionManager) {
-                await manager.initialize();
-            } else {
-                await manager.evaluate({ clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' }, '1');
-            }
-            expect(postedMessages).toContainEqual(
-                expect.objectContaining({
-                    type: 'init',
-                    connectionString: stored.connectionString,
-                    oidcAllowedHosts: ['*.azure.us'],
-                }),
-            );
-            expect(postedMessages).toContainEqual({
-                type: 'tokenResponse',
-                requestId: 'token-request',
-                accessToken: 'private-token',
-            });
-            const provider = authMethod === AuthMethodId.ManagedIdentity ? getManagedToken : getSession;
-            expect(provider.mock.calls[0]?.[0]).toEqual([clouds[0].scope]);
-            const startup = events.find((event) => event.eventName === 'worker.startup');
-            expect(startup?.telemetry.properties).toMatchObject({
-                surface,
+    it.each(workerSessions)(
+        'resolves Government from the %s %s worker tokenRequest path',
+        async (surface, authMethod) => {
+            const stored = credentials(authMethod, 'us');
+            CredentialCache.setAuthCredentials(
+                clusterId,
                 authMethod,
-                startupOutcome: 'succeeded',
-                cloudCategory: 'usgov',
-                tokenResourceReason: authMethod === AuthMethodId.ManagedIdentity ? 'host' : 'setting',
-                hostCloud: 'AzureUSGovernment',
-                errorKind: 'none',
-            });
-            expect(JSON.stringify(startup)).not.toMatch(/private|https|authority/);
-        } finally {
-            manager.dispose();
-        }
-    });
+                stored.connectionString,
+                undefined,
+                undefined,
+                stored.entraIdConfig,
+                stored.managedIdentityConfig,
+            );
+            selectedCloud = authMethod === AuthMethodId.ManagedIdentity ? 'ChinaCloud' : 'USGovernment';
+            const manager =
+                surface === 'shell'
+                    ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' })
+                    : new PlaygroundEvaluator();
+            try {
+                if (manager instanceof ShellSessionManager) {
+                    await manager.initialize();
+                } else {
+                    await manager.evaluate(
+                        { clusterId, clusterDisplayName: 'Test cluster', databaseName: 'test' },
+                        '1',
+                    );
+                }
+                expect(postedMessages).toContainEqual(
+                    expect.objectContaining({
+                        type: 'init',
+                        connectionString: stored.connectionString,
+                        oidcAllowedHosts: ['*.azure.us'],
+                    }),
+                );
+                expect(postedMessages).toContainEqual({
+                    type: 'tokenResponse',
+                    requestId: 'token-request',
+                    accessToken: 'private-token',
+                });
+                const provider = authMethod === AuthMethodId.ManagedIdentity ? getManagedToken : getSession;
+                expect(provider.mock.calls[0]?.[0]).toEqual([clouds[0].scope]);
+                const startup = events.find((event) => event.eventName === 'worker.startup');
+                expect(startup?.telemetry.properties).toMatchObject({
+                    surface,
+                    authMethod,
+                    startupOutcome: 'succeeded',
+                    cloudCategory: 'usgov',
+                    tokenResourceReason: authMethod === AuthMethodId.ManagedIdentity ? 'host' : 'setting',
+                    hostCloud: 'AzureUSGovernment',
+                    errorKind: 'none',
+                });
+                expect(JSON.stringify(startup)).not.toMatch(/private|https|authority/);
+            } finally {
+                manager.dispose();
+            }
+        },
+    );
 
     describe.each(workerSessions)('%s %s worker lifetime', (surface, authMethod) => {
         let manager: ShellSessionManager | PlaygroundEvaluator;
@@ -449,7 +455,8 @@ describe('sovereign authentication with real audience resolvers', () => {
             provider.mockImplementationOnce(
                 (): Promise<{ accessToken: string; account: { label: string } }> =>
                     new Promise((resolve) => {
-                        finishToken = (): void => resolve({ accessToken: 'old-token', account: { label: 'old-account' } });
+                        finishToken = (): void =>
+                            resolve({ accessToken: 'old-token', account: { label: 'old-account' } });
                     }),
             );
             workers[0].requestToken('late-success');

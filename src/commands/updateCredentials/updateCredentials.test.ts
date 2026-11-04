@@ -283,7 +283,10 @@ describe('updateCredentials post-wizard updates', () => {
     it.each([
         { name: 'no shells are open', shells: [] },
         { name: 'only another cluster has a shell', shells: [{ info: { clusterId: 'another-cluster-id' } }] },
-        { name: 'a shell cluster ID matches only the tree path', shells: [{ info: { clusterId: node.cluster.treeId } }] },
+        {
+            name: 'a shell cluster ID matches only the tree path',
+            shells: [{ info: { clusterId: node.cluster.treeId } }],
+        },
     ])('does not show a modal when $name', async ({ shells }) => {
         mockGetRegisteredShellTerminals.mockReturnValue(shells);
 
