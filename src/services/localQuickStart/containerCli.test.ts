@@ -48,6 +48,14 @@ describe('resolveContainerCli', () => {
         );
     });
 
+    it('reads a quoted Windows PATH entry', () => {
+        const env = { Path: '"C:\\Program Files\\RedHat\\Podman";C:\\Windows', PATHEXT: '.EXE' };
+        expect(resolveContainerCli(lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', env))).toEqual({
+            cli: 'podman',
+            executable: 'C:\\Program Files\\RedHat\\Podman\\podman.EXE',
+        });
+    });
+
     it('ignores empty PATH entries instead of probing the working directory', () => {
         expect(findOnPath('podman', lookup(['podman'], 'linux', { PATH: ':/usr/bin:' }))).toBeUndefined();
     });

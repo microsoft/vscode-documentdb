@@ -40,7 +40,9 @@ export function findOnPath(command: string, lookup: ContainerCliLookup = {}): st
     const pathApi = platform === 'win32' ? path.win32 : path.posix;
     const extensions =
         platform === 'win32' ? (env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean) : [''];
-    for (const dir of pathValue.split(delimiter).filter(Boolean)) {
+    for (const entry of pathValue.split(delimiter).filter(Boolean)) {
+        // Windows allows `"C:\Program Files\X";…`; `which` strips the quotes too.
+        const dir = entry.replace(/^"(.*)"$/, '$1');
         for (const extension of extensions) {
             const candidate = pathApi.join(dir, command + extension);
             if (isExecutable(candidate)) {
