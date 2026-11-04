@@ -146,7 +146,9 @@ On Windows the extension receives only `platform_broker_error`, without the AADS
 When the failure is opaque, the selected cloud is not public, and the failing request was the
 DocumentDB token, the message says what AADSTS65002 would mean and asks the user to check the code in
 the sign-in window. It never asserts 65002. In the public cloud, an opaque broker error gets a generic
-message.
+message. The opaque-broker message applies only when the broker error carries no AADSTS code. If a
+broker error includes an AADSTS code without a specific rule, it is classified as an unknown AADSTS
+code and remains marked as brokered, preserving the code and its lookup link.
 
 ## D10. Text-only messages in this iteration
 

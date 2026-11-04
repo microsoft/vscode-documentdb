@@ -79,14 +79,15 @@ describe('classifyEntraError', () => {
         expect(classifyEntraError('AADSTS1234567 AADSTS50079')?.ruleId).toBe('additionalVerification');
     });
 
-    it('prefers the phrase over the broker, and the broker over an unknown code', (): void => {
+    it('prefers the phrase over the broker, and an unknown code over the broker', (): void => {
         expect(classifyEntraError(`${broker} ${preauthorization}`)).toEqual({
             ruleId: 'firstPartyPreauthorization',
             code: '65002',
             brokered: true,
         });
         expect(classifyEntraError(`${broker} AADSTS1234567`)).toEqual({
-            ruleId: 'brokerOpaque',
+            ruleId: 'unknownAadsts',
+            code: '1234567',
             brokered: true,
         });
     });

@@ -36,13 +36,13 @@ export function classifyEntraError(text: string): EntraErrorClassification | und
         return { ruleId: 'firstPartyPreauthorization', code: '65002', brokered };
     }
 
+    if (codes.length > 0) {
+        return { ruleId: 'unknownAadsts', code: codes[0], brokered };
+    }
+
     const msalRule = entraErrorRules.find((rule): boolean => !!rule.msal?.some((code): boolean => text.includes(code)));
     if (msalRule) {
         return { ruleId: msalRule.id, brokered };
-    }
-
-    if (codes.length > 0) {
-        return { ruleId: 'unknownAadsts', code: codes[0], brokered };
     }
     return undefined;
 }

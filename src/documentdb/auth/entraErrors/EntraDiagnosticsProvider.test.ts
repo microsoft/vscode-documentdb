@@ -191,6 +191,19 @@ describe('EntraDiagnosticsProvider', () => {
         expect(trace).toContain('"brokered":true');
     });
 
+    it('preserves an unknown AADSTS code in the cause of a broker error', async (): Promise<void> => {
+        const error = new Error('platform_broker_error', { cause: new Error('AADSTS1234567: something') });
+        expect(await provider.explain({ clusterId, error })).toContain(
+            'https://login.microsoftonline.com/error?code=1234567',
+        );
+        expect(callWithTelemetryAndErrorHandling).toHaveBeenCalledWith('entraSignIn.classified', expect.any(Function));
+        expect(telemetryContext.telemetry.properties).toMatchObject({
+            ruleId: 'unknownAadsts',
+            aadstsCode: '1234567',
+            brokered: 'true',
+        });
+    });
+
     it('accepts a string cause relayed by a worker', async (): Promise<void> => {
         const error = new Error('Connection failed', { cause: 'AADSTS90002: Tenant was not found' });
         expect(await provider.explain({ clusterId, error })).toContain('right tenant');
