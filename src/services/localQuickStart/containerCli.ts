@@ -24,7 +24,14 @@ function isExecutableFile(filePath: string): boolean {
     }
 }
 
-export function isOnPath(command: string, lookup: ContainerCliLookup = {}): boolean {
+export interface ResolvedContainerCli {
+    readonly cli: ContainerCli;
+    /** What the client runs: the bare name, or on Windows the absolute path. */
+    readonly executable: string;
+}
+
+/** The first match on PATH, honouring PATHEXT on Windows. */
+export function findOnPath(command: string, lookup: ContainerCliLookup = {}): string | undefined {
     const platform = lookup.platform ?? process.platform;
     const env = lookup.environmentVariables ?? process.env;
     const isExecutable = lookup.isExecutable ?? isExecutableFile;
@@ -33,23 +40,30 @@ export function isOnPath(command: string, lookup: ContainerCliLookup = {}): bool
     const pathApi = platform === 'win32' ? path.win32 : path.posix;
     const extensions =
         platform === 'win32' ? (env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean) : [''];
-    return pathValue
-        .split(delimiter)
-        .filter(Boolean)
-        .some((dir) => extensions.some((extension) => isExecutable(pathApi.join(dir, command + extension))));
+    for (const dir of pathValue.split(delimiter).filter(Boolean)) {
+        for (const extension of extensions) {
+            const candidate = pathApi.join(dir, command + extension);
+            if (isExecutable(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    return undefined;
 }
 
 /**
  * Docker when its CLI is on PATH, else Podman when that is, else Docker so readiness reports the
  * missing CLI the way it always has.
  */
-export function resolveContainerCli(lookup: ContainerCliLookup = {}): ContainerCli {
-    if (isOnPath('docker', lookup)) {
-        return 'docker';
-    }
-    return isOnPath('podman', lookup) ? 'podman' : 'docker';
+export function resolveContainerCli(lookup: ContainerCliLookup = {}): ResolvedContainerCli {
+    const cli: ContainerCli = findOnPath('docker', lookup) || !findOnPath('podman', lookup) ? 'docker' : 'podman';
+    const found = findOnPath(cli, lookup);
+    // On Windows the container client caches each bare name's `which` result for the process
+    // lifetime, so a CLI that moved would keep failing; an absolute path skips that cache.
+    const executable = (lookup.platform ?? process.platform) === 'win32' && found ? found : cli;
+    return { cli, executable };
 }
 
-export function createContainerClient(cli: ContainerCli): DockerClient | PodmanClient {
-    return cli === 'podman' ? new PodmanClient() : new DockerClient();
+export function createContainerClient({ cli, executable }: ResolvedContainerCli): DockerClient | PodmanClient {
+    return cli === 'podman' ? new PodmanClient(executable) : new DockerClient(executable);
 }

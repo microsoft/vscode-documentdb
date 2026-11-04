@@ -31,7 +31,7 @@ import { type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vsc
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
-import { type ContainerCli, createContainerClient, resolveContainerCli } from './containerCli';
+import { createContainerClient, resolveContainerCli, type ResolvedContainerCli } from './containerCli';
 import { type DockerCommandResponse, getDockerShellProvider, runDockerCommand } from './dockerCommand';
 import { CapturingTeeWritable } from './dockerProbes';
 import { startDockerProvider as launchDockerProvider } from './DockerProviderLauncher';
@@ -173,7 +173,7 @@ export interface IContainerRuntime {
  * line-buffered stdout/stderr writables don't leak state between commands.
  */
 class ContainerRuntimeImpl implements IContainerRuntime {
-    private cli: ContainerCli = resolveContainerCli();
+    private cli: ResolvedContainerCli = resolveContainerCli();
     private client: DockerClient | PodmanClient = createContainerClient(this.cli);
     private readonly readinessService = new DockerReadinessService({
         getClient: () => this.refreshClient(),
@@ -189,10 +189,10 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         },
     });
 
-    /** Re-resolved on every readiness check so installing Docker or Podman needs no reload. */
+    /** Re-resolved on every readiness check so installing or moving Docker or Podman needs no reload. */
     private refreshClient(): DockerClient | PodmanClient {
         const cli = resolveContainerCli();
-        if (cli !== this.cli) {
+        if (cli.cli !== this.cli.cli || cli.executable !== this.cli.executable) {
             this.cli = cli;
             this.client = createContainerClient(cli);
         }
