@@ -111,8 +111,9 @@ const armMetadataCache = new Map<string, string>();
  * The token audience for interactive Entra ID sign-in (decisions D6 and D8).
  *
  * It follows `microsoft-sovereign-cloud.environment`, the same setting that chooses the sign-in
- * authority, so the two cannot disagree. A custom cloud is resolved from explicit configuration or
- * the cloud's own metadata and never falls back to the public audience.
+ * authority, so the two cannot disagree unless an explicit override is set. A custom cloud is
+ * resolved from explicit configuration or the cloud's own metadata and never falls back to the public
+ * audience.
  */
 export async function resolveInteractiveTokenResource(
     connectionString: string,

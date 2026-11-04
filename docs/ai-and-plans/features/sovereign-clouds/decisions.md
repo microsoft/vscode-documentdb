@@ -87,7 +87,7 @@ fallback; failing clearly is better.
 **Accepted** by the operator.
 
 The audience follows the same setting that chooses the sign-in authority,
-`microsoft-sovereign-cloud.environment`, so the two cannot disagree.
+`microsoft-sovereign-cloud.environment`, so the two cannot disagree unless an explicit override is set.
 
 | Setting        | Audience                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------- |
