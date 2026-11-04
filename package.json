@@ -151,7 +151,7 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "~8.58.2",
     "vite": "~8.0.16",
-    "vitest": "~4.1.11"
+    "vitest": "~4.1.12"
   },
   "dependencies": {
     "@azure/arm-compute": "^22.4.0",
