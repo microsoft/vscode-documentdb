@@ -21,7 +21,7 @@ explanations when Entra sign-in fails.
 
 ## Status
 
-**Parts A and B implemented; sovereign-cloud verification pending.** Draft
+**Parts A and B implemented; sovereign-cloud verification pending.**
 [PR #1050](https://github.com/microsoft/vscode-documentdb/pull/1050). Nobody on the team
 has access to a sovereign cloud, so every change here is made without being able to test it end to end. See
 [D2](decisions.md#d2-implement-without-sovereign-cloud-access).
