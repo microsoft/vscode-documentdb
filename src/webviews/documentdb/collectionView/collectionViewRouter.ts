@@ -27,7 +27,6 @@ import { recordSurveyActivityWithInvitation } from '../../../services/survey/Sur
 import {
     COMPLETION_CATEGORIES,
     COMPLETION_OFFERED_EVENT,
-    COMPLETION_TELEMETRY_OPTIONS,
     CompletionSources,
 } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
@@ -708,13 +707,9 @@ export const collectionsViewRouter = router({
     completionOffered: publicProcedureWithTelemetry.mutation(({ ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
         myCtx.actionContext.telemetry.suppressAll = true;
-        accumulateTelemetry(
-            COMPLETION_OFFERED_EVENT,
-            (sample) => {
-                sample.measurements[`src_${CompletionSources.CollectionView}`] = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry(COMPLETION_OFFERED_EVENT, (sample) => {
+            sample.measurements[`src_${CompletionSources.CollectionView}`] = 1;
+        });
     }),
 
     completionAccepted: publicProcedureWithTelemetry
@@ -733,12 +728,8 @@ export const collectionsViewRouter = router({
                     `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
                 );
             }
-            accumulateTelemetry(
-                'completion.accepted.cv',
-                (sample) => {
-                    sample.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
-                },
-                COMPLETION_TELEMETRY_OPTIONS,
-            );
+            accumulateTelemetry('completion.accepted.cv', (sample) => {
+                sample.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
+            });
         }),
 });

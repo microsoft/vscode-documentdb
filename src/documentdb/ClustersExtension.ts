@@ -116,7 +116,6 @@ import { TaskService } from '../services/taskService/taskService';
 import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
 import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
 import {
-    COMPLETION_TELEMETRY_OPTIONS,
     CompletionCommandIds,
     normalizeCompletionCategory,
     normalizeCompletionSource,
@@ -606,13 +605,9 @@ export class ClustersExtension implements vscode.Disposable {
                                 `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
                             );
                         }
-                        accumulateTelemetry(
-                            'completion.accepted',
-                            (sample) => {
-                                sample.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
-                            },
-                            COMPLETION_TELEMETRY_OPTIONS,
-                        );
+                        accumulateTelemetry('completion.accepted', (sample) => {
+                            sample.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
+                        });
                     },
                 );
 

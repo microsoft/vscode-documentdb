@@ -100,19 +100,21 @@ No separate `decisions.md` yet. The one genuine architecture decision with recor
 the Monaco language choice in
 [iterations/03.5-monaco-language-architecture.md](./iterations/03.5-monaco-language-architecture.md).
 
-**Completion telemetry reports first use at once (2026-11-04, for 1.1.0).** Accepted completions
-are counted with `accumulateTelemetry`, which sends a batch only after 20 uses; the flush on
+**Accumulated telemetry grows its batch size (2026-11-04, for 1.1.0).** Accepted completions
+are counted with `accumulateTelemetry`, which sent a batch only after 20 uses; the flush on
 deactivation rarely arrives (4 of about 190 batches in 28 days). Only heavy bursts reached the
 warehouse (2 Playground machines, none from shell Tab completion), so the share of people who
-use completions was unanswerable. All completion accumulators (`completion.accepted`,
-`completion.accepted.cv`, `shell.completionGhost`, `.completionList`, `.historySuggestion`,
-`.closingBrackets`) now pass `COMPLETION_TELEMETRY_OPTIONS` (`flushNewKeysImmediately`): the
-first use of each surface and category in a session is sent at once, repeats stay batched. A new
+use completions was unanswerable. Operator decision: instead of a completion-specific option,
+`accumulateTelemetry` now grows the batch size for every accumulator by default — 1, 2, 4, 8,
+16, then 32 — and applies the 30 s throttle only at the cap. The first use of each event in a
+session is sent at once; at most 31 calls per event can be lost when the extension host stops.
+A fixed `batchSize` turns growth off. This also affects silent catches and RPC concurrency
+logging: sums are unchanged, but more light machines become visible from 1.1.0. A new
 `completion.offered` event (`src_playground`, `src_collectionView`, `src_shell`) is the
 denominator: the Playground counts when its provider returns items (the TypeScript service's
 own suggestions are not counted), Collection View once per panel, the shell when it shows ghost
-text or a list. Rejected: one event per acceptance (volume) and a lower batch size (still loses
-light users).
+text or a list. Rejected: one event per acceptance (volume); flushing the first use of each
+measurement key (a second mechanism, superseded by growth).
 
 ## Open gaps
 

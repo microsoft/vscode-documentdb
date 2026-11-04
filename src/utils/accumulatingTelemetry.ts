@@ -70,40 +70,46 @@ export const AUTO_DURATION_DISTRIBUTION_KEY = 'auto_duration_ms';
  */
 export interface AccumulateTelemetryOptions {
     /**
-     * How many accumulated calls trigger a flush attempt.
+     * A fixed number of accumulated calls per flush attempt. Turns off the growing batch size.
      *
-     * @default 20
+     * Leave unset for the default: the batch size starts at {@link INITIAL_BATCH_SIZE} and
+     * doubles after every flush up to {@link MAX_BATCH_SIZE} (1, 2, 4, 8, 16, 32). See
+     * "Batching" on {@link accumulateTelemetry} for why. Set it only when every flush must
+     * represent the same number of calls.
+     *
+     * @default undefined (growing: 1, 2, 4, 8, 16, then 32)
      */
     batchSize?: number;
 
     /**
-     * Minimum ms between flushes. If `batchSize` is hit sooner, we keep
-     * accumulating and retry on the next call.
+     * Minimum ms between flushes once the batch size has stopped growing. If the batch fills
+     * sooner, we keep accumulating and retry on the next call. Small early batches are not
+     * throttled.
      *
      * @default 30_000
      */
     minFlushIntervalMs?: number;
-
-    /**
-     * Flush at once, ignoring both gates, whenever a measurement key appears for the first
-     * time in this extension host.
-     *
-     * A batch is otherwise only sent after `batchSize` calls, and the flush on deactivation
-     * rarely arrives, so light use never reaches the warehouse. With this set, the first use
-     * of every key (for example each completion category per surface) is always reported,
-     * while repeated use is still batched. The extra events are bounded by the number of keys.
-     *
-     * @default false
-     */
-    flushNewKeysImmediately?: boolean;
 }
 
+/**
+ * The batch size a growing accumulator starts with. 1 sends the first call of every
+ * accumulator at once, so a single use in a session is never lost.
+ */
+export const INITIAL_BATCH_SIZE = 1;
+
+/**
+ * The batch size a growing accumulator stops doubling at, and from which the
+ * `minFlushIntervalMs` throttle applies. Bounds both the steady-state event rate (one per 32
+ * calls) and what can be lost when the extension host stops (at most 31 calls).
+ */
+export const MAX_BATCH_SIZE = 32;
+
 interface AccumulatorState {
+    /** Calls needed for the next flush. Doubles after each size-triggered flush until it reaches `maxBatchSize`. */
     batchSize: number;
+    /** {@link MAX_BATCH_SIZE}, or the caller's fixed `batchSize`, in which case `batchSize` never changes. */
+    maxBatchSize: number;
     minFlushIntervalMs: number;
-    flushNewKeysImmediately: boolean;
-    /** Measurement keys already seen in this process; only kept when flushNewKeysImmediately is set. */
-    seenKeys: Set<string>;
     sinceLastFlush: number;
     lastFlushTime: number;
     measurements: Record<string, number>;
@@ -117,10 +123,9 @@ function getOrCreateState(callbackId: string, options: AccumulateTelemetryOption
     let state = accumulators.get(callbackId);
     if (!state) {
         state = {
-            batchSize: options?.batchSize ?? 20,
+            batchSize: options?.batchSize ?? INITIAL_BATCH_SIZE,
+            maxBatchSize: options?.batchSize ?? MAX_BATCH_SIZE,
             minFlushIntervalMs: options?.minFlushIntervalMs ?? 30_000,
-            flushNewKeysImmediately: options?.flushNewKeysImmediately ?? false,
-            seenKeys: new Set<string>(),
             sinceLastFlush: 0,
             lastFlushTime: 0,
             measurements: {},
@@ -158,8 +163,28 @@ function getOrCreateState(callbackId: string, options: AccumulateTelemetryOption
  *   bucket data — encode the bucket into a measurement key instead:
  *   `sample.measurements[`cat_${category}`] = 1`.
  *
+ * Batching (growing batch size, the default):
+ * - The batch size starts at {@link INITIAL_BATCH_SIZE} (1) and doubles after each flush up to
+ *   {@link MAX_BATCH_SIZE} (32): events go out after 1, 2, 4, 8, 16 calls and then every 32.
+ *   Growth is per `callbackId` and lasts for the extension host's lifetime; it is never reset.
+ * - Why: the flush on deactivation ({@link flushAccumulatedTelemetry}) rarely reaches the
+ *   telemetry backend, so a fixed batch loses every user who never fills one. A fixed size of
+ *   20 made light users invisible (for example, only machines with 20+ accepted completions
+ *   in a session were ever counted). Growing from 1 reports the first use at once, so "how
+ *   many machines used X" is answerable, while steady-state volume stays at one event per
+ *   32 calls. The first 63 calls cost 6 events.
+ * - `minFlushIntervalMs` (default 30 s) throttles only at the cap: early small batches flush
+ *   as soon as they fill, so a burst of first uses is not held back.
+ * - What is still lost: calls pending in the current batch when the extension host stops
+ *   (at most 31 per `callbackId`). Sums in the backend are therefore floors, and growth is
+ *   per event name, not per measurement key: a rarely used key can still sit in a pending
+ *   batch.
+ * - Passing `batchSize` turns growth off and restores a fixed size, throttled by
+ *   `minFlushIntervalMs` on every flush.
+ * - When reading the data: count machines or sum measurements; never count rows, because the
+ *   number of rows per machine depends on the batch sequence, not on usage.
+ *
  * Behavior:
- * - Flushes every `batchSize` calls with a `minFlushIntervalMs` throttle.
  * - Flushed event name is exactly `callbackId` (same as the non-accumulating
  *   variant — no `.batch` suffix, no schema split).
  * - Errors NEVER accumulate: if the populator throws, the sample is discarded
@@ -210,17 +235,14 @@ export function accumulateTelemetry(
  * are summed, properties are last-wins, and distributions are reduced to
  * min / max / sum / count. Non-finite numbers are skipped defensively so a stray
  * `NaN` / `Infinity` from a caller cannot poison a sum or a min/max reduction.
- * Bumps the batch counter and flushes when both the size and interval gates pass.
+ * Bumps the batch counter and flushes once the batch is full. While the batch size is still
+ * growing, a full batch flushes immediately and the size doubles; at the cap, it also waits
+ * for `minFlushIntervalMs` since the previous flush.
  */
 function accumulate(callbackId: string, state: AccumulatorState, sample: TelemetrySample): void {
-    let hasNewKey = false;
     for (const [k, v] of Object.entries(sample.measurements)) {
         if (Number.isFinite(v)) {
             state.measurements[k] = (state.measurements[k] ?? 0) + v;
-            if (state.flushNewKeysImmediately && !state.seenKeys.has(k)) {
-                state.seenKeys.add(k);
-                hasNewKey = true;
-            }
         }
     }
     for (const [k, v] of Object.entries(sample.properties)) {
@@ -242,15 +264,15 @@ function accumulate(callbackId: string, state: AccumulatorState, sample: Telemet
     }
     state.sinceLastFlush++;
 
-    if (hasNewKey) {
-        flushState(callbackId, state, Date.now());
-        return;
-    }
-
     if (state.sinceLastFlush >= state.batchSize) {
         const now = Date.now();
-        if (now - state.lastFlushTime >= state.minFlushIntervalMs) {
+        // Small batches are the point of growing (first uses reach the backend quickly), so
+        // the interval throttle applies only once the size has reached its cap.
+        const growing = state.batchSize < state.maxBatchSize;
+        if (growing || now - state.lastFlushTime >= state.minFlushIntervalMs) {
             flushState(callbackId, state, now);
+            // Only size-triggered flushes grow the batch; an explicit flushAccumulatedTelemetry() does not.
+            state.batchSize = Math.min(state.batchSize * 2, state.maxBatchSize);
         }
         // Otherwise keep accumulating; the next call will re-check.
     }

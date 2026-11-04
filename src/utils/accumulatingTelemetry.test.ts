@@ -8,8 +8,11 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import {
     AUTO_DURATION_DISTRIBUTION_KEY,
+    INITIAL_BATCH_SIZE,
+    MAX_BATCH_SIZE,
     accumulateTelemetry,
     flushAccumulatedTelemetry,
+    type TelemetrySample,
 } from './accumulatingTelemetry';
 
 // Records the measurements snapshot each time the telemetry pipeline is entered
@@ -41,6 +44,14 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
 
 const mockCallWith = callWithTelemetryAndErrorHandling as Mock;
 
+/**
+ * Accumulates with a fixed batch size far above what any test reaches, so tests about how a
+ * batch is folded (sums, distributions, errors) are not affected by the growing batch size.
+ */
+function accumulateFixed(id: string, populate: (sample: TelemetrySample) => void): void {
+    accumulateTelemetry(id, populate, { batchSize: 1_000 });
+}
+
 describe('accumulateTelemetry', () => {
     beforeEach(() => {
         emitted.length = 0;
@@ -55,7 +66,7 @@ describe('accumulateTelemetry', () => {
     it('sums numeric measurements across the batch', () => {
         const id = 'test.counter';
         for (let i = 0; i < 20; i++) {
-            accumulateTelemetry(id, (sample) => {
+            accumulateFixed(id, (sample) => {
                 sample.measurements.hits = 1;
             });
         }
@@ -69,7 +80,7 @@ describe('accumulateTelemetry', () => {
     it('records caller-provided distribution gauges as min/max/sum/count', () => {
         const id = 'test.callerGauge';
         for (let i = 0; i < 20; i++) {
-            accumulateTelemetry(id, (sample) => {
+            accumulateFixed(id, (sample) => {
                 sample.distributions.candidateCount = i;
             });
         }
@@ -86,7 +97,7 @@ describe('accumulateTelemetry', () => {
     it('automatically records per-call duration with no caller bookkeeping', () => {
         const id = 'test.autoDuration';
         for (let i = 0; i < 20; i++) {
-            accumulateTelemetry(id, () => {
+            accumulateFixed(id, () => {
                 // Caller records nothing; duration must still be captured.
             });
         }
@@ -104,7 +115,7 @@ describe('accumulateTelemetry', () => {
     it('skips non-finite numbers so a stray NaN/Infinity cannot poison the batch', () => {
         const id = 'test.finiteGuard';
         for (let i = 0; i < 20; i++) {
-            accumulateTelemetry(id, (sample) => {
+            accumulateFixed(id, (sample) => {
                 sample.measurements.hits = i === 0 ? Number.NaN : 1; // one bad value
                 sample.distributions.gauge = i === 1 ? Number.POSITIVE_INFINITY : 5;
             });
@@ -124,7 +135,7 @@ describe('accumulateTelemetry', () => {
         const id = 'test.cheapPath';
         // Stay below the default batch size so no auto-flush fires.
         for (let i = 0; i < 5; i++) {
-            accumulateTelemetry(id, (sample) => {
+            accumulateFixed(id, (sample) => {
                 sample.measurements.hits = 1;
             });
         }
@@ -140,7 +151,7 @@ describe('accumulateTelemetry', () => {
 
     it('does not accumulate when the populator throws, and reports the error once', () => {
         const id = 'test.errorsNeverBatch';
-        accumulateTelemetry(id, () => {
+        accumulateFixed(id, () => {
             throw new Error('boom');
         });
 
@@ -154,27 +165,86 @@ describe('accumulateTelemetry', () => {
         expect(findFlush(countKey)).toBeUndefined();
     });
 
-    describe('flushNewKeysImmediately', () => {
-        it('reports the first use of each key at once and batches repeats', () => {
-            const id = 'test.newKeys';
-            const options = { flushNewKeysImmediately: true };
+    describe('growing batch size (default)', () => {
+        const count = (sample: TelemetrySample): void => {
+            sample.measurements.hits = 1;
+        };
 
-            accumulateTelemetry(id, (sample) => (sample.measurements.src_shell = 1), options);
-            expect(emitted).toHaveLength(1);
-            expect(emitted[0].src_shell).toBe(1);
+        it('flushes after 1, 2, 4, 8, 16 calls and then every 32', () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(1_000_000);
+                const id = 'test.growing';
+                // 1 + 2 + 4 + 8 + 16 = 31 calls fill the growing batches.
+                for (let i = 0; i < 31; i++) {
+                    accumulateTelemetry(id, count);
+                }
+                // At the cap the interval applies; let it pass so the next 32 calls flush as one batch.
+                vi.advanceTimersByTime(30_000);
+                for (let i = 0; i < 32; i++) {
+                    accumulateTelemetry(id, count);
+                }
 
-            accumulateTelemetry(id, (sample) => (sample.measurements.src_shell = 1), options);
-            expect(emitted).toHaveLength(1);
-
-            accumulateTelemetry(id, (sample) => (sample.measurements.src_playground = 1), options);
-            expect(emitted).toHaveLength(2);
-            expect(emitted[1]).toMatchObject({ src_shell: 1, src_playground: 1 });
+                expect(emitted.map((m) => m.hits)).toEqual([1, 2, 4, 8, 16, 32]);
+                expect(INITIAL_BATCH_SIZE).toBe(1);
+                expect(MAX_BATCH_SIZE).toBe(32);
+            } finally {
+                vi.useRealTimers();
+            }
         });
 
-        it('leaves other accumulators batched', () => {
-            const id = 'test.noNewKeyFlush';
-            accumulateTelemetry(id, (sample) => (sample.measurements.first = 1));
+        it('reports the very first call at once, so a single use is never lost', () => {
+            accumulateTelemetry('test.firstUse', count);
+
+            expect(emitted).toEqual([expect.objectContaining({ hits: 1 })]);
+        });
+
+        it('throttles by minFlushIntervalMs only once the size has reached the cap', () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(1_000_000);
+                const id = 'test.throttleAtCap';
+                // All growing batches flush back to back, without waiting for the interval.
+                for (let i = 0; i < 31; i++) {
+                    accumulateTelemetry(id, count);
+                }
+                expect(emitted).toHaveLength(5);
+
+                // The first capped batch is full, but the interval since the last flush has not passed.
+                for (let i = 0; i < 32; i++) {
+                    accumulateTelemetry(id, count);
+                }
+                expect(emitted).toHaveLength(5);
+
+                vi.advanceTimersByTime(30_000);
+                accumulateTelemetry(id, count);
+                expect(emitted).toHaveLength(6);
+                expect(emitted[5].hits).toBe(33);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('keeps a fixed size when batchSize is passed', () => {
+            const id = 'test.fixedSize';
+            for (let i = 0; i < 4; i++) {
+                accumulateTelemetry(id, count, { batchSize: 5 });
+            }
             expect(emitted).toHaveLength(0);
+
+            accumulateTelemetry(id, count, { batchSize: 5 });
+            expect(emitted.map((m) => m.hits)).toEqual([5]);
+        });
+
+        it('does not grow on an explicit flush', () => {
+            const id = 'test.explicitFlush';
+            accumulateTelemetry(id, count); // size 1: flushes, size becomes 2
+            accumulateTelemetry(id, count);
+            flushAccumulatedTelemetry(id); // explicit: size stays 2
+            accumulateTelemetry(id, count);
+            accumulateTelemetry(id, count); // fills the batch of 2
+
+            expect(emitted.map((m) => m.hits)).toEqual([1, 1, 2]);
         });
     });
 });

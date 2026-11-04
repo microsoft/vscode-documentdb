@@ -12,7 +12,7 @@ vi.mock('./CollectionNameCache', () => ({ CollectionNameCache: { getInstance: vi
 vi.mock('../../../utils/accumulatingTelemetry', () => ({ accumulateTelemetry: vi.fn() }));
 
 import type * as vscode from 'vscode';
-import { COMPLETION_OFFERED_EVENT, COMPLETION_TELEMETRY_OPTIONS } from '../../../telemetry/completionCategories';
+import { COMPLETION_OFFERED_EVENT } from '../../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { PlaygroundCompletionItemProvider } from './PlaygroundCompletionItemProvider';
 
@@ -36,16 +36,12 @@ describe('PlaygroundCompletionItemProvider offered telemetry', () => {
         vi.mocked(accumulateTelemetry).mockClear();
     });
 
-    it('counts an offer when the provider returns items, with first-use batching', () => {
+    it('counts an offer when the provider returns items', () => {
         const items = [{ label: 'name' } as vscode.CompletionItem];
 
         expect(provide(items)).toBe(items);
 
-        expect(accumulateTelemetry).toHaveBeenCalledWith(
-            COMPLETION_OFFERED_EVENT,
-            expect.any(Function),
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        expect(accumulateTelemetry).toHaveBeenCalledWith(COMPLETION_OFFERED_EVENT, expect.any(Function));
         const sample = { measurements: {} as Record<string, number> };
         (vi.mocked(accumulateTelemetry).mock.calls[0][1] as (s: typeof sample) => void)(sample);
         expect(sample.measurements).toEqual({ src_playground: 1 });

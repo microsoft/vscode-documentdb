@@ -8,7 +8,6 @@ import { BSONTypes } from '@documentdb-js/schema-analyzer';
 import * as vscode from 'vscode';
 import {
     COMPLETION_OFFERED_EVENT,
-    COMPLETION_TELEMETRY_OPTIONS,
     CompletionCommandIds,
     CompletionSources,
     type CompletionCategory,
@@ -67,13 +66,9 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
         if (items && items.length > 0) {
             // Only items from this provider carry the accepted command; the TypeScript
             // service's own suggestions are neither offered nor accepted here.
-            accumulateTelemetry(
-                COMPLETION_OFFERED_EVENT,
-                (sample) => {
-                    sample.measurements[`src_${CompletionSources.Playground}`] = 1;
-                },
-                COMPLETION_TELEMETRY_OPTIONS,
-            );
+            accumulateTelemetry(COMPLETION_OFFERED_EVENT, (sample) => {
+                sample.measurements[`src_${CompletionSources.Playground}`] = 1;
+            });
         }
         return items;
     }

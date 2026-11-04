@@ -970,7 +970,7 @@ describe('DocumentDBShellPty', () => {
             expect(written).not.toContain(`${GHOST_STYLE}p me`);
         });
 
-        it('counts a shown completion as offered by the shell, reported on first use', async () => {
+        it('counts a shown completion as offered by the shell', async () => {
             (accumulateTelemetry as Mock).mockClear();
 
             pty.handleInput('hel');
@@ -980,7 +980,6 @@ describe('DocumentDBShellPty', () => {
                 ([eventName]) => eventName === 'completion.offered',
             );
             expect(offered).toBeDefined();
-            expect(offered?.[2]).toEqual({ flushNewKeysImmediately: true });
             const sample = { measurements: {} as Record<string, number> };
             (offered?.[1] as (s: typeof sample) => void)(sample);
             expect(sample.measurements).toEqual({ src_shell: 1 });

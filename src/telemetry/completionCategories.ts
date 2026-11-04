@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AccumulateTelemetryOptions } from '../utils/accumulatingTelemetry';
-
 /**
  * Single source of truth for the "completion accepted" telemetry signal.
  *
@@ -64,15 +62,12 @@ export const CompletionCommandIds = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Batching
+// Offered
 // ---------------------------------------------------------------------------
 
 /**
- * Batching for every completion telemetry accumulator: the first use of each surface and
- * category is reported at once, repeats are batched. Without it a batch needs 20 uses and
- * light users never reach the warehouse, so "how many people use completions" is unanswerable.
+ * Counts surfaces offering completions (`src_<surface>`), the denominator of the accepted
+ * counts. Like the accepted counters it is accumulated; the default growing batch size sends
+ * the first offer of a session at once.
  */
-export const COMPLETION_TELEMETRY_OPTIONS: AccumulateTelemetryOptions = { flushNewKeysImmediately: true };
-
-/** Counts surfaces offering completions (`src_<surface>`), the denominator of the accepted counts. */
 export const COMPLETION_OFFERED_EVENT = 'completion.offered';

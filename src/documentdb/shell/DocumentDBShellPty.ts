@@ -12,11 +12,7 @@ import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosti
 import { maskSecrets } from '../../services/localQuickStart/outputMasking';
 import { recordSurveyActivity } from '../../services/survey/SurveyService';
 import { settingsKeys } from '../../settingsKeys';
-import {
-    COMPLETION_OFFERED_EVENT,
-    COMPLETION_TELEMETRY_OPTIONS,
-    type CompletionCategory,
-} from '../../telemetry/completionCategories';
+import { COMPLETION_OFFERED_EVENT, type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
 import { ClustersClient } from '../ClustersClient';
@@ -1582,40 +1578,28 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private trackCompletionAccepted(kind: CompletionCandidate['kind'], trigger: 'tab' | 'ghostText'): void {
         const category = DocumentDBShellPty.shellKindToCategory(kind);
-        accumulateTelemetry(
-            'completion.accepted',
-            (sample) => {
-                sample.measurements[`cat_${category}_src_shell`] = 1;
-                sample.measurements[`trigger_${trigger}`] = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry('completion.accepted', (sample) => {
+            sample.measurements[`cat_${category}_src_shell`] = 1;
+            sample.measurements[`trigger_${trigger}`] = 1;
+        });
     }
 
     /**
      * Track that a closing-brackets ghost text suggestion was shown.
      */
     private trackClosingBracketsShown(): void {
-        accumulateTelemetry(
-            'shell.closingBrackets',
-            (sample) => {
-                sample.measurements.shown = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry('shell.closingBrackets', (sample) => {
+            sample.measurements.shown = 1;
+        });
     }
 
     /**
      * Track that a closing-brackets ghost text suggestion was accepted.
      */
     private trackClosingBracketsAccepted(): void {
-        accumulateTelemetry(
-            'shell.closingBrackets',
-            (sample) => {
-                sample.measurements.accepted = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry('shell.closingBrackets', (sample) => {
+            sample.measurements.accepted = 1;
+        });
     }
 
     /**
@@ -1626,26 +1610,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
         this._lastShownHistorySuggestion = historyEntry;
-        accumulateTelemetry(
-            'shell.historySuggestion',
-            (sample) => {
-                sample.measurements.shown = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry('shell.historySuggestion', (sample) => {
+            sample.measurements.shown = 1;
+        });
     }
 
     /**
      * Track that a history-based autosuggestion was accepted.
      */
     private trackHistorySuggestionAccepted(): void {
-        accumulateTelemetry(
-            'shell.historySuggestion',
-            (sample) => {
-                sample.measurements.accepted = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry('shell.historySuggestion', (sample) => {
+            sample.measurements.accepted = 1;
+        });
     }
 
     /**
@@ -1653,13 +1629,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * the shell's accepted completions, comparable with the other surfaces.
      */
     private trackCompletionOffered(): void {
-        accumulateTelemetry(
-            COMPLETION_OFFERED_EVENT,
-            (sample) => {
-                sample.measurements.src_shell = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry(COMPLETION_OFFERED_EVENT, (sample) => {
+            sample.measurements.src_shell = 1;
+        });
     }
 
     /**
@@ -1669,13 +1641,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const kind = candidates[0]?.kind ?? 'command';
         const category = DocumentDBShellPty.shellKindToCategory(kind);
         this.trackCompletionOffered();
-        accumulateTelemetry(
-            'shell.completionList',
-            (sample) => {
-                sample.measurements[`shown_${category}`] = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry('shell.completionList', (sample) => {
+            sample.measurements[`shown_${category}`] = 1;
+        });
     }
 
     /**
@@ -1684,13 +1652,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private trackCompletionGhostShown(kind: CompletionCandidate['kind']): void {
         const category = DocumentDBShellPty.shellKindToCategory(kind);
         this.trackCompletionOffered();
-        accumulateTelemetry(
-            'shell.completionGhost',
-            (sample) => {
-                sample.measurements[`shown_${category}`] = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry('shell.completionGhost', (sample) => {
+            sample.measurements[`shown_${category}`] = 1;
+        });
     }
 
     /**
@@ -1698,12 +1662,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private trackCompletionGhostAccepted(kind: CompletionCandidate['kind']): void {
         const category = DocumentDBShellPty.shellKindToCategory(kind);
-        accumulateTelemetry(
-            'shell.completionGhost',
-            (sample) => {
-                sample.measurements[`accepted_${category}`] = 1;
-            },
-            COMPLETION_TELEMETRY_OPTIONS,
-        );
+        accumulateTelemetry('shell.completionGhost', (sample) => {
+            sample.measurements[`accepted_${category}`] = 1;
+        });
     }
 }
