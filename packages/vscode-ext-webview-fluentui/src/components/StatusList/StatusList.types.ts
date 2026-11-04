@@ -22,6 +22,13 @@ export interface StatusListProps extends ComponentPropsWithoutRef<'div'> {
      * localized words if the consumer ships translations.
      */
     readonly statusLabels?: Partial<Record<StatusListItemStatus, string>>;
+    /**
+     * Shade the row under the pointer, and the row whose control has keyboard focus, with Fluent's
+     * subtle `colorNeutralBackground2` (VS Code's alternating-row colour). Turn it on when rows carry
+     * an `aside` far from their label, so the eye can follow a row across a wide list. Off by
+     * default; the layout is the same either way.
+     */
+    readonly highlightRowsOnHover?: boolean;
     /** `StatusListItem` rows. */
     readonly children: ReactNode;
 }
@@ -47,6 +54,13 @@ export interface StatusListItemProps extends ComponentPropsWithoutRef<'div'> {
      * it out on a row with nothing more to say.
      */
     readonly disclosure?: StatusListItemDisclosure;
+    /**
+     * A short value at the end of the label line, for example a duration in a `Badge`. It stays on
+     * one line and the label wraps before it does. Named after `TreeItemLayout`'s `aside` slot. The
+     * package formats nothing: units, rounding and locale belong to the consumer. In a wide list,
+     * pair it with `StatusList`'s `highlightRowsOnHover`.
+     */
+    readonly aside?: ReactNode;
 }
 
 /**

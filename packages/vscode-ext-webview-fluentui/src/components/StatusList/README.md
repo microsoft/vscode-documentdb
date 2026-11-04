@@ -146,6 +146,44 @@ its label, on the label's own line, and a region below its detail line:
   long detail line wraps around the toggle like a word, so it stays on its own row and never covers
   the text, and a row with no detail text still shows the toggle on its second line.
 
+## `aside`
+
+A short value at the end of the label line, for example how long the stage took. Named after
+`TreeItemLayout`'s `aside` slot, which holds the same kind of thing. The aside keeps its line and the
+label wraps first. Its box is exactly the label line's height, so a `size="small"` `Badge` centres on
+the label without making the row taller.
+
+```tsx
+<StatusListItem
+    label={l10n.t('Authentication')}
+    status="done"
+    detail={evidence}
+    aside={
+        <Badge appearance="outline" shape="rounded" size="small" color="informative">
+            {formatDuration(durationMs)}
+        </Badge>
+    }
+/>
+```
+
+The package formats nothing: units, rounding and locale belong to the consumer, as with `detail`.
+Use squared (`shape="rounded"`) badges, like the rest of the extension's webviews. A value pinned to
+the far end of a wide list is hard to match to its row; turn on `highlightRowsOnHover`.
+
+## `highlightRowsOnHover`
+
+Set on `StatusList`. It shades the row under the pointer, and the row whose control has keyboard
+focus, with `colorNeutralBackground2`, which the adaptive theme maps to VS Code's alternating-row
+colour: the subtlest surface that still follows the theme. High contrast, where a shade cannot show,
+gets a `colorTransparentStrokeInteractive` outline instead, as Fluent's subtle controls do.
+
+- **The layout does not move.** Each row gains padding and an equal negative margin, so the shade has
+  room while every row stays where it was.
+- **`:focus-visible`, not `:focus-within`.** A mouse click on a row's control would otherwise leave
+  that row shaded while the pointer shades another.
+- **It is not a click target.** The cursor stays the default; only controls inside the row act.
+- Off by default; turn it on when rows carry an `aside`.
+
 ## Details content
 
 What goes **inside** a disclosure, for anyone writing `disclosure.content`, human or coding agent.

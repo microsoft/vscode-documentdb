@@ -136,6 +136,75 @@ describe('StatusList', () => {
         expect(copy?.children).toHaveLength(1);
     });
 
+    test('aside sits after the label and its status word, on the label line', async () => {
+        const { root } = await renderSurface(
+            <StatusList ariaLabel="Connection checks">
+                <StatusListItem
+                    label="Authentication"
+                    status="done"
+                    detail="Username and password"
+                    aside={<span data-testid="duration">4.38 s</span>}
+                />
+            </StatusList>,
+        );
+
+        const row = root.querySelector('[role="listitem"]');
+        const copy = row?.lastElementChild;
+        // Still two lines: the label line (now holding the aside) and the detail line.
+        expect(copy?.children).toHaveLength(2);
+        expect(copy?.firstElementChild?.textContent).toBe('Authentication, done4.38 s');
+        expect(copy?.firstElementChild?.querySelector('[data-testid="duration"]')).not.toBeNull();
+        expect(copy?.lastElementChild?.textContent).toBe('Username and password');
+    });
+
+    test('an empty aside renders exactly as no aside', async () => {
+        const markup = async (aside?: false | null | ''): Promise<string | undefined> => {
+            const { root } = await renderSurface(
+                <StatusList ariaLabel="Connection checks">
+                    <StatusListItem label="Authentication" status="done" aside={aside} />
+                </StatusList>,
+            );
+            return root.querySelector('[role="listitem"]')?.innerHTML;
+        };
+
+        const without = await markup();
+        for (const empty of [false, null, ''] as const) {
+            expect(await markup(empty)).toBe(without);
+        }
+    });
+
+    test('aside works with a label-placed disclosure toggle', async () => {
+        const { root } = await renderSurface(
+            <StatusList ariaLabel="Connection checks">
+                <StatusListItem
+                    label="Authentication"
+                    status="warning"
+                    aside="4.38 s"
+                    disclosure={{ content: 'More', toggleText: 'Details', toggleLabel: 'Details for Authentication' }}
+                />
+            </StatusList>,
+        );
+
+        const labelLine = root.querySelector('[role="listitem"]')?.lastElementChild?.firstElementChild;
+        expect(labelLine?.querySelector('button')?.textContent).toBe('Details');
+        expect(labelLine?.textContent).toBe('Authentication, warningDetails4.38 s');
+    });
+
+    test('highlightRowsOnHover never changes the markup of its rows', async () => {
+        // The shade is CSS on the list (Griffel classes, which this renderer does not emit); the rows'
+        // structure, and so their layout and accessible text, stay the same.
+        const rowsMarkup = async (highlight: boolean): Promise<string | undefined> => {
+            const { root } = await renderSurface(
+                <StatusList ariaLabel="Connection checks" highlightRowsOnHover={highlight}>
+                    <StatusListItem label="Authentication" status="done" />
+                </StatusList>,
+            );
+            return root.querySelector('[role="list"]')?.innerHTML;
+        };
+
+        expect(await rowsMarkup(true)).toBe(await rowsMarkup(false));
+    });
+
     describe('disclosure', () => {
         const disclosureRow = (extra: Partial<StatusListItemDisclosure> = {}): ReactElement => (
             <StatusList ariaLabel="Connection checks">

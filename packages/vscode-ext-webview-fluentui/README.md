@@ -169,7 +169,8 @@ import { FocusableBadge, Wizard, WizardStep } from '@microsoft/vscode-ext-webvie
 Six components ship today, each usable on its own. `Container` is the shell of a full-window surface: scrolling header and
 content, over a footer pinned to the bottom. `StepList` is a step indicator that collapses into an
 overflow menu and never hides the current step. `StatusList` is a bordered list of stages, each
-with a status glyph and a line of evidence, and optional expandable details whose content follows a
+with a status glyph and a line of evidence, an optional short value (such as a duration) at the end
+of its label line, and optional expandable details whose content follows a
 documented type scale. `Wizard` is all three of those assembled into a
 complete wizard surface, for the common case where you do not want to wire them yourself.
 `MetricGrid` and `MetricCard` are a dashboard strip: one measurement per card, told apart from

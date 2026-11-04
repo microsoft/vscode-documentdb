@@ -37,6 +37,25 @@ const useStyles = makeStyles({
     // The toggle follows the label on the label's own line, so it reads as part of that row.
     labelLine: { display: 'flex', alignItems: 'flex-start', columnGap: tokens.spacingHorizontalS, minWidth: 0 },
     labelText: { minWidth: 0 },
+    // With an `aside` the copy takes the row's width, so the aside can sit at its far end.
+    copyWithAside: { flexGrow: 1 },
+    // The label (and a label-placed toggle) wraps; the aside keeps its line.
+    asideLine: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        alignSelf: 'stretch',
+        columnGap: tokens.spacingHorizontalM,
+        minWidth: 0,
+    },
+    asideLabel: { flexGrow: 1, minWidth: 0 },
+    // Exactly the label line's height, so a small badge centres on the label without growing the row.
+    aside: {
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        height: tokens.lineHeightBase300,
+        whiteSpace: 'nowrap',
+    },
     // Exactly the label line's height, so a collapsed row with a toggle is as tall as one without.
     toggle: {
         flexShrink: 0,
@@ -117,6 +136,7 @@ export const StatusListItem = ({
     detail,
     reserveDetailSpace,
     disclosure,
+    aside,
     className,
     ...rest
 }: StatusListItemProps): JSX.Element => {
@@ -190,18 +210,34 @@ export const StatusListItem = ({
                 {toggleDescription}
             </span>
         ) : undefined;
+    const labelLine =
+        hasDisclosure && !onDetailLine ? (
+            <div className={styles.labelLine}>
+                {labelText}
+                {toggleButton}
+            </div>
+        ) : (
+            labelText
+        );
+    const hasAside = aside !== undefined && aside !== null && aside !== false && aside !== '';
 
     return (
         <div className={mergeClasses(styles.row, className)} role="listitem" {...rest}>
             <span className={styles.icon}>{icon}</span>
-            <div className={mergeClasses(styles.copy, hasDisclosure ? styles.copyWithDisclosure : undefined)}>
-                {hasDisclosure && !onDetailLine ? (
-                    <div className={styles.labelLine}>
-                        {labelText}
-                        {toggleButton}
+            <div
+                className={mergeClasses(
+                    styles.copy,
+                    hasDisclosure ? styles.copyWithDisclosure : undefined,
+                    hasAside ? styles.copyWithAside : undefined,
+                )}
+            >
+                {hasAside ? (
+                    <div className={styles.asideLine}>
+                        <div className={styles.asideLabel}>{labelLine}</div>
+                        <span className={styles.aside}>{aside}</span>
                     </div>
                 ) : (
-                    labelText
+                    labelLine
                 )}
                 {onDetailLine ? (
                     <Text size={200} className={styles.detail}>
