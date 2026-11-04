@@ -156,7 +156,6 @@ export type WorkerToMainMessage =
     | {
           readonly type: 'tokenRequest';
           readonly requestId: string;
-          readonly scopes: readonly string[];
           readonly tenantId?: string;
           /** Where the main thread should get the token from. Absent means 'vscode', for compatibility. */
           readonly source?: 'vscode' | 'managedIdentity';

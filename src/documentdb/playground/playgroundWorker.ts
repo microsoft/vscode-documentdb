@@ -23,7 +23,6 @@ import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
-import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
 import { type MainToWorkerMessage, type WorkerStartupStage, type WorkerToMainMessage } from './workerTypes';
@@ -159,7 +158,6 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 const tokenRequest: WorkerToMainMessage = {
                     type: 'tokenRequest',
                     requestId,
-                    scopes: [DOCUMENTDB_ENTRA_SCOPE],
                     tenantId: msg.tenantId,
                     source: usesManagedIdentity ? 'managedIdentity' : 'vscode',
                     clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,

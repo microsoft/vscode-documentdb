@@ -5,7 +5,37 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { getOidcAllowedHosts } from './oidcAllowedHosts';
+import {
+    getAzureCloudFromHosts,
+    getOidcAllowedHosts,
+    hasDocumentDBHost,
+    normalizeCustomHostnameSuffix,
+} from './oidcAllowedHosts';
+
+describe('hasDocumentDBHost', () => {
+    it.each(['com', 'us', 'cn'])('recognizes DocumentDB service hosts under azure.%s', (tld) => {
+        expect(hasDocumentDBHost([`CLUSTER.GLOBAL.mongocluster.cosmos.azure.${tld}:10255`])).toBe(true);
+    });
+
+    it.each([
+        'cluster.mongocluster.cosmos.azure.us.evil.com',
+        'xmongocluster.cosmos.azure.com',
+        'cluster.mongocluster.cosmos.azure.tk',
+        'cluster.other.azure.us',
+        'cluster.mongo.cosmos.azure.com',
+        '[::1]:27017',
+    ])('does not recognize lookalikes, other services, or RU hosts: %s', (host) => {
+        expect(hasDocumentDBHost([host])).toBe(false);
+    });
+
+    it('uses the hardened configured suffix with a dot boundary', () => {
+        expect(hasDocumentDBHost(['CLUSTER.database.example.com:10255'], ' .DATABASE.EXAMPLE.COM ')).toBe(true);
+        expect(hasDocumentDBHost(['notdatabase.example.com'], '.database.example.com')).toBe(false);
+        expect(hasDocumentDBHost(['cluster.database.example.com.evil.com'], '.database.example.com')).toBe(false);
+        expect(hasDocumentDBHost(['attacker.com.cn'], '.com.cn')).toBe(false);
+        expect(hasDocumentDBHost([])).toBe(false);
+    });
+});
 
 describe('getOidcAllowedHosts', () => {
     it('allows only the Azure suffix for a public-cloud host, not the full host', () => {
@@ -34,12 +64,14 @@ describe('getOidcAllowedHosts', () => {
         expect(getOidcAllowedHosts('mongodb://evil.com:10255/')).toEqual(['*.azure.com']);
         // Lookalike where "azure" is not the registrable second level.
         expect(getOidcAllowedHosts('mongodb://node.azure.com.evil.com:10255/')).toEqual(['*.azure.com']);
+        expect(getOidcAllowedHosts('mongodb://node.azure.us.evil.com:10255/')).toEqual(['*.azure.com']);
     });
 
     it('does not trust an azure second-level label under an unknown top-level domain', () => {
         expect(getOidcAllowedHosts('mongodb://db.azure.tk:10255/')).toEqual(['*.azure.com']);
         expect(getOidcAllowedHosts('mongodb://db.azure.io:10255/')).toEqual(['*.azure.com']);
         expect(getOidcAllowedHosts('mongodb://db.azure.co:10255/')).toEqual(['*.azure.com']);
+        expect(getOidcAllowedHosts('mongodb://db.azure.xyz:10255/')).toEqual(['*.azure.com']);
     });
 
     it('does not let one known-cloud host carry an unknown-TLD host into the allowlist', () => {
@@ -62,5 +94,86 @@ describe('getOidcAllowedHosts', () => {
     it('falls back to the safe default when the connection string cannot be parsed', () => {
         expect(getOidcAllowedHosts('not a connection string')).toEqual(['*.azure.com']);
         expect(getOidcAllowedHosts('')).toEqual(['*.azure.com']);
+    });
+
+    it('trusts a custom suffix only when configured and matching a hostname boundary', () => {
+        const connectionString = 'mongodb://cluster.database.example.com:10255/';
+        expect(getOidcAllowedHosts(connectionString)).toEqual(['*.azure.com']);
+        expect(getOidcAllowedHosts(connectionString, '.database.example.com')).toEqual(['*.database.example.com']);
+        expect(getOidcAllowedHosts(connectionString, '.other.example.com')).toEqual(['*.azure.com']);
+        expect(getOidcAllowedHosts('mongodb://notdatabase.example.com/', '.database.example.com')).toEqual([
+            '*.azure.com',
+        ]);
+        expect(getOidcAllowedHosts('mongodb://database.example.com.evil.com/', '.database.example.com')).toEqual([
+            '*.azure.com',
+        ]);
+    });
+
+    it('normalizes the custom suffix without trusting invalid or bare TLD values', () => {
+        expect(normalizeCustomHostnameSuffix(' .DATABASE.EXAMPLE.COM ')).toBe('database.example.com');
+        for (const value of [undefined, '', '.', 'com', '*.example.com', 'https://example.com', '..example.com']) {
+            expect(normalizeCustomHostnameSuffix(value)).toBeUndefined();
+        }
+    });
+
+    it.each(['.com.cn', '.co.uk', 'net.au', '.org.uk', '.gov.us', ' CO.ZA '])(
+        'rejects the public suffix %s without widening the token allowlist',
+        (suffix) => {
+            expect(normalizeCustomHostnameSuffix(suffix)).toBeUndefined();
+            const normalized = suffix.trim().toLowerCase().replace(/^\./, '');
+            expect(getOidcAllowedHosts(`mongodb://attacker.${normalized}/`, suffix)).toEqual(['*.azure.com']);
+        },
+    );
+
+    it.each(['example.com', 'database.co.uk', 'service.com.cn'])('accepts the narrower custom suffix %s', (suffix) => {
+        expect(normalizeCustomHostnameSuffix(` .${suffix.toUpperCase()} `)).toBe(suffix);
+        expect(getOidcAllowedHosts(`mongodb://cluster.${suffix}/`, suffix)).toEqual([`*.${suffix}`]);
+    });
+});
+
+describe('getAzureCloudFromHosts', () => {
+    it.each([
+        ['azure.com', 'AzureCloud'],
+        ['azure.us', 'AzureUSGovernment'],
+        ['azure.cn', 'AzureChinaCloud'],
+    ])('classifies %s hosts', (suffix, cloud) => {
+        expect(getAzureCloudFromHosts(`mongodb://a.${suffix}:10255,b.${suffix}:10255/`)).toEqual({
+            cloud,
+            hasOtherHosts: false,
+        });
+        expect(getAzureCloudFromHosts(`mongodb+srv://CLUSTER.${suffix}/`)).toEqual({ cloud, hasOtherHosts: false });
+    });
+
+    it.each([
+        'mongodb://a.mongocluster.cosmos.azure.us,b.documentdb.private.example/',
+        'mongodb://b.documentdb.private.example,a.mongocluster.cosmos.azure.us/',
+        'mongodb://a.mongocluster.cosmos.azure.us,10.0.0.4:10260/',
+        'mongodb://a.mongocluster.cosmos.azure.us,[::1]:10260/',
+    ])('keeps the recognized cloud when other hosts are present: %s', (connectionString) => {
+        expect(getAzureCloudFromHosts(connectionString)).toEqual({
+            cloud: 'AzureUSGovernment',
+            hasOtherHosts: true,
+        });
+    });
+
+    it.each([
+        'mongodb://a.azure.com,b.azure.us/',
+        'mongodb://a.azure.cn,b.azure.com/',
+        'mongodb://a.azure.com,b.azure.us,private.example.com/',
+    ])('reports hosts in more than one cloud as conflicting: %s', (connectionString) => {
+        expect(getAzureCloudFromHosts(connectionString).cloud).toBe('conflicting');
+    });
+
+    it.each([
+        'mongodb://private.example.com/',
+        'mongodb://node.azure.us.evil.com/',
+        'mongodb://node.azure.xyz/',
+        'mongodb://127.0.0.1/',
+    ])('does not classify unrecognized hosts: %s', (connectionString) => {
+        expect(getAzureCloudFromHosts(connectionString)).toEqual({ cloud: undefined, hasOtherHosts: true });
+    });
+
+    it.each(['not a connection string', ''])('does not classify invalid input: %s', (connectionString) => {
+        expect(getAzureCloudFromHosts(connectionString)).toEqual({ cloud: undefined, hasOtherHosts: false });
     });
 });
