@@ -247,6 +247,16 @@ describe('Stage 0 L2 production browser harness', (): void => {
                     })
                 ).status,
             ).toBe(201);
+            for (const route of ['awsCredentials', 'awsCredentials-broken-css', 'unknown']) {
+                expect(
+                    (
+                        await fetch(`${origin}/stage0/l2/reports/${route}`, {
+                            method: 'POST',
+                            body: JSON.stringify({ verified: true }),
+                        })
+                    ).status,
+                ).toBe(route === 'unknown' ? 405 : 201);
+            }
         } finally {
             await new Promise<void>((resolve, reject): void => {
                 server.close((error): void => {

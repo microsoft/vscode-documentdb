@@ -309,6 +309,29 @@ describe('AWS credential acceptance and discovery', () => {
         expect(snapshot).toMatchObject({ clusters: [], errors: [{ credentialId: record.id, kind: 'auth' }] });
     });
 
+    it('preserves verified profile identities when discovery is refreshed', async () => {
+        const provider = vi.fn(
+            (_profile: string, _region: string, interactive: boolean) => async (): Promise<AwsCredentialIdentity> => {
+                if (!interactive) {
+                    throw new AwsInteractionRequiredError();
+                }
+                return { accessKeyId: 'profile-key', secretAccessKey: 'profile-secret' };
+            },
+        );
+        const { service, discover } = setup({ profileProvider: provider });
+        const record = await service.verifyAndSave({
+            authMethod: 'profile',
+            profile: 'role-with-mfa',
+            regions: ['us-east-1'],
+        });
+
+        service.refreshDiscovery();
+
+        expect(await service.listAll()).toMatchObject({ clusters: [], errors: [] });
+        expect(provider.mock.calls.map((call) => call[2])).toEqual([true]);
+        expect(discover).toHaveBeenCalledWith(record, expect.anything(), 'us-east-1', expect.anything());
+    });
+
     it('deduplicates clusters by ARN independently of credential ownership', async () => {
         const { service, discover } = setup();
         const first = await service.verifyAndSave({ ...input, regions: ['us-east-1'] });

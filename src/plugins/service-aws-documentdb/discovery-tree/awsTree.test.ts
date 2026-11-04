@@ -120,6 +120,7 @@ vi.mock('../../../tree/documentdb/DatabaseItem', () => ({
     },
 }));
 
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { resetDiscoveryProviderVisibilityCacheForTests } from '../../../services/discoveryProviderVisibility';
@@ -160,6 +161,7 @@ const service = {
     listCredentials: vi.fn().mockResolvedValue([{ id: 'credential' }]),
     listAll: vi.fn().mockResolvedValue(snapshot),
     invalidate: vi.fn(),
+    refreshDiscovery: vi.fn(),
 };
 
 describe('AWS native discovery tree', () => {
@@ -244,11 +246,69 @@ describe('AWS native discovery tree', () => {
         const failures = await root.getChildren();
         expect(root.hasRetryNode(failures)).toBe(true);
         expect(await failures[0].getTreeItem()).toMatchObject({
+            label: 'Click here to revisit credentials',
             command: { command: 'vscode-documentdb.command.discoveryView.manageCredentials' },
             tooltip: expect.stringContaining('Access denied'),
+            description: '1 discovery failure',
         });
         service.listAll.mockResolvedValueOnce({ clusters: [], errors: [] });
-        expect(await (await root.getChildren())[0].getTreeItem()).toMatchObject({ label: 'empty' });
+        expect(await (await root.getChildren())[0].getTreeItem()).toMatchObject({
+            label: 'empty',
+            tooltip: 'No provisioned clusters found in the selected regions',
+        });
+    });
+
+    it('treats a superseded root scan as cancellation instead of discovery failure', async () => {
+        const root = new AwsServiceRootItem(service, 'discoveryView');
+        const aborted = Object.assign(new Error('aborted scan'), { name: 'AbortError' });
+        service.listAll.mockRejectedValueOnce(aborted);
+
+        await expect(root.getChildren()).rejects.toBeInstanceOf(UserCancelledError);
+    });
+
+    it('sends mixed discovery failures to credential management with clear recovery guidance', async () => {
+        const root = new AwsServiceRootItem(service, 'discoveryView');
+        service.listAll.mockResolvedValueOnce({
+            clusters: [],
+            errors: [
+                { credentialId: 'credential', region: 'us-east-1', message: 'Access denied', kind: 'permission' },
+                { credentialId: 'credential', region: 'eu-west-1', message: 'Network unavailable', kind: 'network' },
+            ],
+        });
+
+        const recovery = (await root.getChildren())[0];
+
+        expect(await recovery.getTreeItem()).toMatchObject({
+            label: 'Click here to resolve the issues',
+            command: { command: 'vscode-documentdb.command.discoveryView.manageCredentials' },
+            description: '2 discovery failures',
+            tooltip: expect.stringContaining('update credentials or retry discovery'),
+        });
+        expect(await recovery.getTreeItem()).toMatchObject({
+            tooltip: expect.stringContaining('Access denied'),
+        });
+        expect(await recovery.getTreeItem()).toMatchObject({
+            tooltip: expect.stringContaining('Network unavailable'),
+        });
+    });
+
+    it('offers retry guidance for transient discovery failures without implying credentials are wrong', async () => {
+        const root = new AwsServiceRootItem(service, 'discoveryView');
+        service.listAll.mockResolvedValueOnce({
+            clusters: [],
+            errors: [
+                { credentialId: 'credential', region: 'us-east-1', message: 'Network unavailable', kind: 'network' },
+            ],
+        });
+
+        const recovery = (await root.getChildren())[0];
+
+        expect(await recovery.getTreeItem()).toMatchObject({
+            label: 'Click here to retry',
+            command: { command: 'vscode-documentdb.command.refresh' },
+            tooltip: expect.stringContaining('stored credentials may still be fine'),
+            iconPath: { id: 'refresh' },
+        });
     });
 
     it('retains shared retry and shell recovery after database listing fails', async () => {

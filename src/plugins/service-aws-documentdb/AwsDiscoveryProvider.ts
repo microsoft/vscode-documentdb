@@ -24,7 +24,7 @@ export class AwsDiscoveryProvider implements DiscoveryProvider, vscode.Disposabl
     public readonly id = AWS_DISCOVERY_PROVIDER_ID;
     public readonly label = vscode.l10n.t('AWS DocumentDB');
     public readonly description = vscode.l10n.t(
-        'Discover Amazon DocumentDB clusters in your AWS accounts and regions.',
+        'Discover provisioned Amazon DocumentDB clusters in your AWS accounts and regions.',
     );
     public readonly iconPath = new vscode.ThemeIcon('cloud');
 

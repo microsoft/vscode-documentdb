@@ -214,6 +214,10 @@ export class AwsDiscoveryService {
         }
     }
 
+    public refreshDiscovery(): void {
+        this.invalidateSnapshot();
+    }
+
     public async listCredentials(): Promise<AwsCredentialRecord[]> {
         return this.operation(undefined, async (): Promise<AwsCredentialRecord[]> => this.store.list());
     }

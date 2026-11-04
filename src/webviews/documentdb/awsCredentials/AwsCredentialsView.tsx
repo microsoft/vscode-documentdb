@@ -214,7 +214,11 @@ export const AwsCredentialsView = (): JSX.Element => {
 
     const navigateBack = (target: 'choose' | 'form'): void => {
         void runOperation(async (signal) => {
-            await clearFlow();
+            const preserveApprovedSso =
+                target === 'form' && chosenMethod === 'sso' && flowRef.current !== undefined && accounts !== undefined;
+            if (!preserveApprovedSso) {
+                await clearFlow();
+            }
             if (!signal.aborted) {
                 setPhase(target);
                 if (target === 'choose') {
@@ -459,8 +463,15 @@ export const AwsCredentialsView = (): JSX.Element => {
         secret = false,
         required = true,
         placeholder?: string,
+        validationMessage?: string,
     ): JSX.Element => (
-        <Field key={key} label={label} required={required}>
+        <Field
+            key={key}
+            label={label}
+            required={required}
+            validationState={validationMessage ? 'error' : 'none'}
+            validationMessage={validationMessage}
+        >
             <Input
                 value={values[key] ?? ''}
                 type={secret && !showSecret ? 'password' : 'text'}
@@ -635,8 +646,8 @@ export const AwsCredentialsView = (): JSX.Element => {
                     false,
                     false,
                     '2026-12-01T12:00:00Z',
+                    validExpiration ? undefined : l10n.t('Enter a valid future expiration time.'),
                 )}
-            {isTemporary && !validExpiration && <Text>{l10n.t('Enter a valid future expiration time.')}</Text>}
             {isTemporary && (
                 <MessageBlock title={l10n.t('Session only')}>
                     {l10n.t(

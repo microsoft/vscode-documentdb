@@ -6,9 +6,12 @@
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { openAwsCredentialsWebview } from '../../../webviews/documentdb/awsCredentials/awsCredentialsController';
+import { errorName } from '../auth/errors';
+import { AWS_DISCOVERY_PROVIDER_ID } from '../config';
 import { awsDiscoveryService } from '../discovery/AwsDiscoveryService';
 import { type AwsCredentialRecord } from '../types';
 
@@ -22,9 +25,8 @@ interface ActionChoice extends vscode.QuickPickItem {
 }
 
 function refreshDiscoveryTree(node?: TreeElement): void {
-    if (node?.id) {
-        ext.discoveryBranchDataProvider.resetNodeErrorState(node.id);
-    }
+    const nodeId = node?.id ?? `${Views.DiscoveryView}/${AWS_DISCOVERY_PROVIDER_ID}`;
+    ext.discoveryBranchDataProvider.resetNodeErrorState(nodeId);
     if (node) {
         ext.discoveryBranchDataProvider.refresh(node);
     } else {
@@ -42,7 +44,6 @@ function correlationId(context: IActionContext): string {
 export async function addAwsCredential(context: IActionContext, node?: TreeElement): Promise<boolean> {
     const stored = await openAwsCredentialsWebview({ journeyCorrelationId: correlationId(context) });
     if (stored) {
-        awsDiscoveryService.invalidate();
         refreshDiscoveryTree(node);
     }
     return stored;
@@ -143,12 +144,11 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
                         })
                     ) {
                         changed = true;
-                        awsDiscoveryService.invalidate(credential.id);
                         refreshDiscoveryTree(node);
                     }
                     break;
                 case 'retry': {
-                    awsDiscoveryService.invalidate(credential.id);
+                    awsDiscoveryService.refreshDiscovery();
                     const snapshot = await vscode.window.withProgress(
                         {
                             location: vscode.ProgressLocation.Notification,
@@ -186,7 +186,6 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
                     if (confirmation === remove) {
                         await awsDiscoveryService.removeCredential(credential.id);
                         changed = true;
-                        awsDiscoveryService.invalidate(credential.id);
                         refreshDiscoveryTree(node);
                     }
                     break;
@@ -194,7 +193,7 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
             }
         }
     } catch (error) {
-        if (!(error instanceof UserCancelledError)) {
+        if (!(error instanceof UserCancelledError) && errorName(error) !== 'AbortError') {
             throw error;
         }
         return changed;

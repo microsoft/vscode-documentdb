@@ -774,6 +774,7 @@ export class ClustersExtension implements vscode.Disposable {
                             throw new Error(vscode.l10n.t('Select an AWS DocumentDB cluster to change its CA bundle.'));
                         }
                         await node.selectCertificate();
+                        ext.discoveryBranchDataProvider.resetNodeErrorState(node.id);
                         ext.discoveryBranchDataProvider.refresh(node);
                     }),
                 );

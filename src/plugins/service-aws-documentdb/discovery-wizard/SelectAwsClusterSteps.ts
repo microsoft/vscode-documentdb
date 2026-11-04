@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep, UserCancelledError, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { nonNullValue } from '../../../utils/nonNull';
+import { errorName } from '../auth/errors';
 import { prepareAwsConnection } from '../connect/awsConnection';
 import { configureAwsCredentials } from '../credentialsManagement/configureAwsCredentials';
 import { awsDiscoveryService } from '../discovery/AwsDiscoveryService';
@@ -23,7 +24,12 @@ interface AwsWizardContext extends NewConnectionWizardContext {
 export class SelectAwsRegionStep extends AzureWizardPromptStep<AwsWizardContext> {
     public async prompt(context: AwsWizardContext): Promise<void> {
         while (true) {
-            const snapshot = await awsDiscoveryService.listAll();
+            const snapshot = await awsDiscoveryService.listAll().catch((error: unknown) => {
+                if (errorName(error) === 'AbortError') {
+                    throw new UserCancelledError();
+                }
+                throw error;
+            });
             const locations = new Map<string, { accountId: string; region: string }>();
             for (const resource of snapshot.clusters) {
                 locations.set(`${resource.accountId}:${resource.region}`, resource);
@@ -55,7 +61,7 @@ export class SelectAwsRegionStep extends AzureWizardPromptStep<AwsWizardContext>
             if (choice.data === 'manage') {
                 await configureAwsCredentials(context);
             } else if (choice.data === 'refresh') {
-                awsDiscoveryService.invalidate();
+                awsDiscoveryService.refreshDiscovery();
             } else {
                 context.awsLocation = choice.data;
                 return;
@@ -71,7 +77,12 @@ export class SelectAwsRegionStep extends AzureWizardPromptStep<AwsWizardContext>
 export class SelectAwsClusterStep extends AzureWizardPromptStep<AwsWizardContext> {
     public async prompt(context: AwsWizardContext): Promise<void> {
         const location = nonNullValue(context.awsLocation, 'awsLocation', 'SelectAwsClusterStep');
-        const snapshot = await awsDiscoveryService.listAll();
+        const snapshot = await awsDiscoveryService.listAll().catch((error: unknown) => {
+            if (errorName(error) === 'AbortError') {
+                throw new UserCancelledError();
+            }
+            throw error;
+        });
         const resources = snapshot.clusters.filter(
             (resource) => resource.accountId === location.accountId && resource.region === location.region,
         );

@@ -246,6 +246,33 @@ describe('AWS credentials onboarding', () => {
         expect(host.querySelector('input[type="password"]')).toBeNull();
     });
 
+    it('associates invalid expiration guidance with its input and clears it when corrected', async () => {
+        const host = await renderView();
+        await choose(host, 'Temporary credentials');
+        await fill(host, 'Access Key ID', 'temporary-key');
+        await fill(host, 'Secret Access Key', 'temporary-secret');
+        await fill(host, 'Session token', 'temporary-token');
+        await fill(host, 'Expiration (optional, ISO 8601)', 'not-a-date');
+
+        const expirationLabel = Array.from(host.querySelectorAll('label')).find((candidate) =>
+            candidate.textContent?.startsWith('Expiration (optional, ISO 8601)'),
+        );
+        const expirationInput = expirationLabel ? document.getElementById(expirationLabel.htmlFor) : null;
+        const errorMessage = Array.from(host.querySelectorAll('*')).find(
+            (element) => element.textContent === 'Enter a valid future expiration time.',
+        );
+        expect(expirationInput).toBeInstanceOf(HTMLInputElement);
+        expect(errorMessage).toBeDefined();
+        const describedBy = expirationInput?.getAttribute('aria-describedby')?.split(/\s+/) ?? [];
+        expect(describedBy).toContain(errorMessage?.id);
+        expect(button(host, 'Verify & Save').disabled).toBe(true);
+
+        await fill(host, 'Expiration (optional, ISO 8601)', new Date(Date.now() + 60_000).toISOString());
+
+        expect(host.textContent).not.toContain('Enter a valid future expiration time.');
+        expect(button(host, 'Verify & Save').disabled).toBe(false);
+    });
+
     it('keeps a failed verification on Verify and lets the user return to the same details', async () => {
         mockSubmit.mockResolvedValue({
             success: false,
