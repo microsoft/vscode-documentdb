@@ -206,12 +206,24 @@ describe('serverFacts', (): void => {
         ['mongodb://fixture.mongocluster.cosmos.azure.com/', 'public'],
         ['mongodb://fixture.mongocluster.cosmos.azure.us/', 'usGovernment'],
         ['mongodb://fixture.mongocluster.cosmos.azure.cn/', 'china'],
+        ['mongodb://fixture.mongocluster.cosmos.azure.com,private.example/', 'public'],
+        ['mongodb://fixture.mongocluster.cosmos.azure.us,private.example/', 'usGovernment'],
+        ['mongodb://fixture.mongocluster.cosmos.azure.cn,private.example/', 'china'],
     ])('classifies Azure endpoints with their cloud: %s', async (uri, cloud): Promise<void> => {
         expect((await fixture({ uri }).running).facts).toMatchObject({
             platform: 'azureDocumentDB',
             platformCloud: cloud,
             platformEvidence: 'hostSuffix',
         });
+    });
+
+    it('does not assign a platform cloud when the Azure hosts conflict', async (): Promise<void> => {
+        const { facts } = await fixture({
+            uri: 'mongodb://fixture.mongocluster.cosmos.azure.us,fixture.mongocluster.cosmos.azure.cn/',
+        }).running;
+
+        expect(facts).toMatchObject({ platform: 'other', platformEvidence: 'none' });
+        expect(facts).not.toHaveProperty('platformCloud');
     });
 
     it('recognizes Atlas without trusting lookalike domains', async (): Promise<void> => {

@@ -347,7 +347,7 @@ host WSL: Ubuntu-24.04, not this computer".
 matters as soon as a connection switches to Entra ID: the selected cloud
 (`microsoft-sovereign-cloud.environment`: public, US Government, China, custom or unreadable), the
 sign-in provider and broker implementation, whether `documentDB.customEnvironment.ossrdbmsEndpoint`
-is absent, valid or invalid, and whether a custom `mongoClusterHostnameSuffix` is set and in which
+is absent, valid or invalid, and whether a custom `hostnameSuffix` is set and in which
 scope. These are the values #1050 computes for its `entraCloud.resolved` trace. Today they exist
 only inside `ResolvedTokenResource.details` / `TokenResourceResolutionError.details`, built by the
 module-private `createResolutionDetails` in

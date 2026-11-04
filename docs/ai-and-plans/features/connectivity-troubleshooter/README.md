@@ -19,7 +19,7 @@ code:
 
 **Status:** implemented; ready for operator review (work items in [the implementation log](./iterations/02-implementation-log.md)) ·
 **Issue:** [#100](https://github.com/microsoft/vscode-documentdb/issues/100) ·
-**Branch:** `dev/tnaum/connectivity-troubleshooter` (on top of #1050, sovereign clouds)
+**Branch:** `dev/tnaum/connectivity-troubleshooter` (rebased onto `main` after #1050 merged)
 
 > A step-by-step check of one connection that says which step fails and what to do next, ends with
 > a summary of the server that answered, and produces a readable report a support engineer can

@@ -3240,7 +3240,7 @@
   "vector search": "vector search",
   "Verify": "Verify",
   "Verify & Save": "Verify & Save",
-  "Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.mongoClusterHostnameSuffix in user settings. Only trust your service domain.": "Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.mongoClusterHostnameSuffix in user settings. Only trust your service domain.",
+  "Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.hostnameSuffix in user settings. Only trust your service domain.": "Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.hostnameSuffix in user settings. Only trust your service domain.",
   "Verify your Docker setup": "Verify your Docker setup",
   "Verify your MongoDB Atlas API Key": "Verify your MongoDB Atlas API Key",
   "Verify your MongoDB Atlas Service Account": "Verify your MongoDB Atlas Service Account",

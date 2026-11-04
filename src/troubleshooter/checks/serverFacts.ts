@@ -32,8 +32,8 @@ function platformFacts(
     ) {
         return { platform: 'localQuickStart', platformEvidence: 'connectionProperties' };
     }
-    const cloud = getAzureCloudFromHosts(context.input.connectionString);
-    if (cloud !== undefined) {
+    const { cloud } = getAzureCloudFromHosts(context.input.connectionString);
+    if (cloud !== undefined && cloud !== 'conflicting') {
         const clouds = { AzureCloud: 'public', AzureUSGovernment: 'usGovernment', AzureChinaCloud: 'china' } as const;
         return { platform: 'azureDocumentDB', platformCloud: clouds[cloud], platformEvidence: 'hostSuffix' };
     }

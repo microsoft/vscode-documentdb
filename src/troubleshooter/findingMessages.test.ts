@@ -100,6 +100,16 @@ describe('localized finding messages', () => {
         expect(Object.keys(findingMessages).sort()).toEqual([...codes].sort());
     });
 
+    it('points disallowed sign-in hosts to the current hostname suffix setting', (): void => {
+        expect(describeFinding({
+            code: 'auth.oidcHostNotAllowed',
+            severity: 'error',
+            detail: { language: 'en', text: sentinel },
+        }).nextStep).toBe(
+            'Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.hostnameSuffix in user settings. Only trust your service domain.',
+        );
+    });
+
     it.each(codes)('describes %s with representative, empty, absent and wrong-typed data', (code) => {
         const sample = representativeData[code];
         const wrongTypes = Object.fromEntries(

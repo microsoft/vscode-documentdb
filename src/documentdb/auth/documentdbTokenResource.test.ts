@@ -136,11 +136,11 @@ describe('describeEntraSignInEnvironment', () => {
         ['.private.example.com', 'user', true],
         ['.private.example.com', 'workspace', true],
         ['invalid suffix', 'workspace', false],
-    ] as const)('describes custom hostname suffix %p from %s', (mongoClusterHostnameSuffix, source, isSet) => {
+    ] as const)('describes custom hostname suffix %p from %s', (hostnameSuffix, source, isSet) => {
         const deps = createDeps();
         vi.mocked(deps.getCustomHostnameSuffixSource).mockReturnValue(source);
 
-        const details = describeEntraSignInEnvironment(deps, { mongoClusterHostnameSuffix });
+        const details = describeEntraSignInEnvironment(deps, { hostnameSuffix });
 
         expect(details.customHostnameSuffixSet).toBe(isSet);
         expect(details.customHostnameSuffixSource).toBe(source);
@@ -211,13 +211,13 @@ describe('describeEntraSignInEnvironment', () => {
                     case 'documentDB.customEnvironment':
                         return {
                             ossrdbmsEndpoint: governmentResource,
-                            mongoClusterHostnameSuffix: '.private.example.com',
+                            hostnameSuffix: '.private.example.com',
                         };
                     default:
                         return undefined;
                 }
             },
-            inspect: () => ({ globalValue: { mongoClusterHostnameSuffix: '.private.example.com' } }),
+            inspect: () => ({ globalValue: { hostnameSuffix: '.private.example.com' } }),
         } as unknown as vscode.WorkspaceConfiguration);
 
         expect(describeEntraSignInEnvironment()).toMatchObject({

@@ -967,7 +967,7 @@ export const findingMessages: {
             'The driver does not allow this cluster host for Microsoft Entra ID authentication.',
         ),
         nextStep: vscode.l10n.t(
-            'Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.mongoClusterHostnameSuffix in user settings. Only trust your service domain.',
+            'Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.hostnameSuffix in user settings. Only trust your service domain.',
         ),
     }),
     'auth.entraTokenFailed': (data): FindingMessage => tokenFailureMessage(data),
