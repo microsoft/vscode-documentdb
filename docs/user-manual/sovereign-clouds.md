@@ -159,9 +159,10 @@ To find more details:
 
 As a manual diagnostic step only, set `microsoft-authentication.implementation` to
 `msal-no-broker`. The raw AADSTS error then reaches the extension. This setting affects all of VS
-Code. In Azure China, tokens are currently not kept in this mode. See
-[VS Code issue 307340](https://github.com/microsoft/vscode/issues/307340). Change the setting back
-after you finish diagnosing the problem.
+Code. Token-cache failures and repeated sign-in prompts have been reported in this mode for sovereign
+clouds, including Azure China and Azure US Government. See
+[microsoft/vscode#307340](https://github.com/microsoft/vscode/issues/307340). Restore the setting
+after diagnosis.
 
 ## Report a problem
 
