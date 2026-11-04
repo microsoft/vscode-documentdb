@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type CloudCategory } from '../documentdbTokenResource';
+import { CaseInsensitiveMap } from '../../../utils/CaseInsensitiveMap';
 
 export interface EntraTokenFailureContext {
     readonly cloudCategory: CloudCategory;
@@ -14,7 +15,7 @@ export interface EntraTokenFailure extends EntraTokenFailureContext {
     readonly timestamp: number;
 }
 
-const failures = new Map<string, EntraTokenFailure>();
+const failures = new CaseInsensitiveMap<EntraTokenFailure>();
 
 export function recordEntraTokenFailure(clusterId: string, context: EntraTokenFailureContext): void {
     failures.set(clusterId, {

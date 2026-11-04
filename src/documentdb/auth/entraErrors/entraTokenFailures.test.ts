@@ -34,6 +34,38 @@ describe('Entra token failure registry', () => {
         expect(getRecentEntraTokenFailure('another-cluster')).toBeUndefined();
     });
 
+    it('reads a failure when the cluster ID casing differs', (): void => {
+        recordEntraTokenFailure('AzureResource', { cloudCategory: 'usgov', authMethod: 'interactive' });
+
+        expect(getRecentEntraTokenFailure('azureresource')).toEqual({
+            cloudCategory: 'usgov',
+            authMethod: 'interactive',
+            timestamp: Date.now(),
+        });
+    });
+
+    it('clears a failure when the cluster ID casing differs', (): void => {
+        recordEntraTokenFailure('AzureResource', { cloudCategory: 'usgov', authMethod: 'interactive' });
+
+        clearEntraTokenFailure('azureresource');
+
+        expect(getRecentEntraTokenFailure('AzureResource')).toBeUndefined();
+    });
+
+    it('replaces a failure recorded with different cluster ID casing', (): void => {
+        recordEntraTokenFailure('AzureResource', { cloudCategory: 'usgov', authMethod: 'interactive' });
+        vi.advanceTimersByTime(60_000);
+        recordEntraTokenFailure('azureresource', { cloudCategory: 'china', authMethod: 'managedIdentity' });
+
+        const latestFailure = {
+            cloudCategory: 'china',
+            authMethod: 'managedIdentity',
+            timestamp: Date.now(),
+        };
+        expect(getRecentEntraTokenFailure('AzureResource')).toEqual(latestFailure);
+        expect(getRecentEntraTokenFailure('azureresource')).toEqual(latestFailure);
+    });
+
     it('expires a failure after ten minutes by default', (): void => {
         recordEntraTokenFailure('cluster-1', { cloudCategory: 'china', authMethod: 'managedIdentity' });
         vi.advanceTimersByTime(10 * 60_000);
