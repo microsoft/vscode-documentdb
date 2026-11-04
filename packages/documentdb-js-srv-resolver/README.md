@@ -116,6 +116,7 @@ These are exported too, for callers that need only one step:
 
 - `rewriteSrvUri()`: pure rewrite of a `+srv` string plus SRV and TXT records into a `mongodb://` string.
 - `resolveSrvFallback()` and `resolveTxtFallback()`: the `dns-packet` client (UDP, then TCP on truncation, one absolute deadline).
+- `SRV_FALLBACK_ELIGIBLE_ERROR_CODES`: the Node.js error codes after which `fallback: 'auto'` runs the fallback, for callers that diagnose an SRV failure and need to know whether the fallback would have run.
 
 ## Guarantees and limits
 

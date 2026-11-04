@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.0.1
+## 1.1.0
 
-- Export the fallback-eligible SRV error codes for consumers using the same recovery policy.
+- Added `SRV_FALLBACK_ELIGIBLE_ERROR_CODES`: the Node.js SRV error codes (`EBADRESP`, `EFORMERR`, `ECONNREFUSED`) after which `fallback: 'auto'` runs the in-memory DNS fallback, so consumers that diagnose SRV failures can apply the same policy as `resolveSrvForDriver()`.
 
 ## 1.0.0
 

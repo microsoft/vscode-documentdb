@@ -36,7 +36,7 @@
     "node": ">=22.18.0"
   },
   "dependencies": {
-    "@documentdb-js/srv-resolver": "^1.0.1",
+    "@documentdb-js/srv-resolver": "^1.1.0",
     "bson": "^7.2.0",
     "mongodb-connection-string-url": "~3.0.2"
   }

@@ -1,6 +1,6 @@
 {
   "name": "@documentdb-js/srv-resolver",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "In-memory SRV DNS fallback for mongodb+srv:// connection strings when Node.js's c-ares resolver rejects a valid DNS reply",
   "type": "module",
   "main": "dist/index.js",
