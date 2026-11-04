@@ -79,6 +79,11 @@ const DockerInfoSchema = z.object({
     ServerErrors: z.array(z.string()).nullish(),
 });
 
+const PodmanInfoSchema = z.object({
+    host: z.object({ arch: z.string().optional(), os: z.string().optional() }).optional(),
+    version: z.object({ Version: z.string().optional() }).optional(),
+});
+
 export class CapturingTeeWritable extends Writable {
     private readonly chunks: string[] = [];
 
@@ -187,15 +192,18 @@ export async function runDockerProbe(options: RunDockerProbeOptions): Promise<Do
 
 export function parseDockerInfoFacts(output: string): DockerInfoFacts | undefined {
     try {
-        const result = DockerInfoSchema.safeParse(JSON.parse(output));
+        const json: unknown = JSON.parse(output);
+        const result = DockerInfoSchema.safeParse(json);
         if (!result.success) {
             return undefined;
         }
+        // `podman info` nests the same facts under `host` and `version`.
+        const podman = PodmanInfoSchema.safeParse(json).data;
         return {
-            osType: result.data.OSType,
+            osType: result.data.OSType ?? podman?.host?.os,
             operatingSystem: result.data.OperatingSystem,
-            architecture: result.data.Architecture,
-            serverVersion: result.data.ServerVersion,
+            architecture: result.data.Architecture ?? podman?.host?.arch,
+            serverVersion: result.data.ServerVersion ?? podman?.version?.Version,
             serverErrors: result.data.ServerErrors ?? [],
         };
     } catch {

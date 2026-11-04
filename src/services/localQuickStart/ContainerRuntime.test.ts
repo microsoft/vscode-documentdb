@@ -11,7 +11,12 @@ import {
     type ShellStreamCommandRunnerOptions,
 } from '@microsoft/vscode-container-client';
 import * as vscode from 'vscode';
-import { ContainerRuntime, disposeQuickStartOutputChannel } from './ContainerRuntime';
+import {
+    ContainerRuntime,
+    disposeQuickStartOutputChannel,
+    getExitCode,
+    getPublishedHostPort,
+} from './ContainerRuntime';
 import type * as DockerCommand from './dockerCommand';
 import { runDockerCommand, type DockerCommandOptions } from './dockerCommand';
 
@@ -80,5 +85,22 @@ describe('ContainerRuntime output channel', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(lines).toContain('c1');
+    });
+});
+
+describe('raw inspect readers', () => {
+    const record = {
+        Id: 'abc',
+        State: { ExitCode: 3 },
+        HostConfig: { PortBindings: { '10260/tcp': [{ HostIp: '127.0.0.1', HostPort: '39733' }] } },
+    };
+    const item = (raw: unknown) => ({ id: 'abc', raw: JSON.stringify(raw) }) as ContainerClient.InspectContainersItem;
+
+    it.each([
+        ['Docker (one record)', record],
+        ['Podman (whole inspect array)', [{ ...record, Id: 'other', State: { ExitCode: 9 } }, record]],
+    ])('reads the exit code and published port from %s', (_label, raw) => {
+        expect(getExitCode(item(raw))).toBe(3);
+        expect(getPublishedHostPort(item(raw))).toBe(39733);
     });
 });

@@ -195,7 +195,7 @@ describe('Local Quick Start localized strings (#852)', () => {
     // proof the call goes through localization rather than a raw template literal.
     it.each([
         'Port {0} is already in use. Go back to Configure to pick a different port, or free it, then try again.',
-        'Docker CLI was not found on your PATH. Install Docker and retry.',
+        'Neither Docker nor Podman was found on your PATH. Install Docker or Podman and retry.',
         'Docker is installed but the daemon is not reachable. Start Docker and retry.',
         'DocumentDB Local is running on localhost:{0}.',
         'Setup is already in progress.',

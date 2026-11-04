@@ -60,6 +60,8 @@ export interface DockerProbeOutput {
 
 export interface DockerReadinessServiceDependencies {
     readonly client?: DockerReadinessClient;
+    /** Called once per check, so a CLI installed or removed since the last one is picked up. */
+    readonly getClient?: () => DockerReadinessClient;
     readonly shellProvider?: Shell;
     readonly platform?: NodeJS.Platform;
     readonly arch?: string;
@@ -79,7 +81,7 @@ export interface DockerReadinessServiceDependencies {
 }
 
 interface ResolvedDependencies {
-    readonly client: DockerReadinessClient;
+    readonly getClient: () => DockerReadinessClient;
     readonly shellProvider: Shell;
     readonly platform: NodeJS.Platform;
     readonly arch: string;
@@ -228,8 +230,9 @@ export class DockerReadinessService {
 
     public constructor(dependencies: DockerReadinessServiceDependencies = {}) {
         const platform = dependencies.platform ?? process.platform;
+        const client = dependencies.client ?? new DockerClient();
         this.dependencies = {
-            client: dependencies.client ?? new DockerClient(),
+            getClient: dependencies.getClient ?? (() => client),
             shellProvider: dependencies.shellProvider ?? getDockerShellProvider(platform),
             platform,
             arch: dependencies.arch ?? process.arch,
@@ -351,11 +354,18 @@ export class DockerReadinessService {
     }
 
     private async readContexts(
+        client: DockerReadinessClient,
         cancellationToken: vscode.CancellationToken,
         didDeadlineExpire: () => boolean,
         suppressCommandEcho: boolean,
     ): Promise<DockerContextProbeResult> {
-        const response = await this.dependencies.client.listContexts({});
+        let response: PromiseCommandResponse<ListContextItem[]>;
+        try {
+            response = await client.listContexts({});
+        } catch {
+            // Podman has no contexts.
+            return { contexts: [], succeeded: false };
+        }
         const evidence = await this.runProbe(
             'contexts',
             response,
@@ -423,23 +433,18 @@ export class DockerReadinessService {
             cancellationController.abort();
         }, this.dependencies.deadlineMs);
         const didDeadlineExpire = (): boolean => deadlineExpired;
+        const client = this.dependencies.getClient();
 
         try {
             const [versionProbe, infoProbe] = await Promise.all([
                 this.runProbe(
                     'cliVersion',
-                    this.dependencies.client.checkInstall({}),
+                    client.checkInstall({}),
                     cancellationToken,
                     didDeadlineExpire,
                     suppressCommandEcho,
                 ),
-                this.runProbe(
-                    'info',
-                    this.dependencies.client.info({}),
-                    cancellationToken,
-                    didDeadlineExpire,
-                    suppressCommandEcho,
-                ),
+                this.runProbe('info', client.info({}), cancellationToken, didDeadlineExpire, suppressCommandEcho),
             ]);
 
             if (callerCancelled) {
@@ -540,6 +545,7 @@ export class DockerReadinessService {
             let contextsResolved = false;
             if (!deadlineExpired && !this.dependencies.environmentVariables['DOCKER_HOST']) {
                 const contextResult = await this.readContexts(
+                    client,
                     cancellationToken,
                     didDeadlineExpire,
                     suppressCommandEcho,

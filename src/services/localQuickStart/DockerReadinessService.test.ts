@@ -104,6 +104,43 @@ describe('DockerReadinessService', () => {
         });
     });
 
+    it('diagnoses a stopped Podman machine although Podman has no contexts', async () => {
+        const runProbe = vi.fn(
+            async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
+                options.probe === 'info'
+                    ? evidence('info', {
+                          exitCode: 125,
+                          stderr: 'Error: unable to connect to Podman socket: dial unix /tmp/podman.sock: connect: connection refused',
+                      })
+                    : evidence(options.probe, { stdout: 'podman version 6.0.2' }),
+        );
+        const service = new DockerReadinessService({
+            getClient: () => ({
+                ...createClient(),
+                listContexts: () => Promise.reject(new Error('listContexts is not supported for this runtime')),
+            }),
+            shellProvider: new Bash(),
+            platform: 'darwin',
+            arch: 'arm64',
+            environmentVariables: {},
+            remoteName: undefined,
+            runProbe,
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'ECONNREFUSED',
+            }),
+            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+            readProviderMemory: () => undefined,
+            writeProviderMemory: async () => undefined,
+        });
+
+        const result = await service.getReadiness();
+
+        expect(runProbe).not.toHaveBeenCalledWith(expect.objectContaining({ probe: 'contexts' }));
+        expect(result).toMatchObject({ outcome: 'diagnosed', failureKind: 'daemonUnavailable', cliInstalled: true });
+    });
+
     it('refines only a unix-socket permission failure with socket group facts', async () => {
         const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             switch (options.probe) {
