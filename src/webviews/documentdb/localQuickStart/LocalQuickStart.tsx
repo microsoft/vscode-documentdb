@@ -491,42 +491,18 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
     };
 }
 
-function dockerGuides(): Readonly<Record<DockerGuideKey, { readonly label: string; readonly href: string }>> {
+function dockerGuideLabels(): Readonly<Record<DockerGuideKey, string>> {
     return {
-        install: { label: l10n.t('Open Docker install guide'), href: 'https://docs.docker.com/engine/install/' },
-        installWindowsDesktop: {
-            label: l10n.t('Get Docker Desktop for Windows'),
-            href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
-        },
-        installMacDesktop: {
-            label: l10n.t('Get Docker Desktop for Mac'),
-            href: 'https://docs.docker.com/desktop/setup/install/mac-install/',
-        },
-        linuxPostInstall: {
-            label: l10n.t('Open Linux setup guide'),
-            href: 'https://docs.docker.com/engine/install/linux-postinstall/',
-        },
-        dockerTroubleshooting: {
-            label: l10n.t('Open Docker troubleshooting guide'),
-            href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
-        },
-        dockerContexts: {
-            label: l10n.t('Open Docker context guide'),
-            href: 'https://docs.docker.com/engine/manage-resources/contexts/',
-        },
-        wslIntegration: {
-            label: l10n.t('Open WSL integration guide'),
-            href: 'https://docs.docker.com/desktop/features/wsl/',
-        },
-        remoteDocker: {
-            label: l10n.t('Open remote Docker guide'),
-            href: 'https://docs.docker.com/engine/security/protect-access/',
-        },
-        linuxContainers: {
-            label: l10n.t('Open Linux containers guide'),
-            href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
-        },
-        learnMore: { label: l10n.t('Open Docker documentation'), href: 'https://docs.docker.com/engine/install/' },
+        install: l10n.t('Open Docker install guide'),
+        installWindowsDesktop: l10n.t('Get Docker Desktop for Windows'),
+        installMacDesktop: l10n.t('Get Docker Desktop for Mac'),
+        linuxPostInstall: l10n.t('Open Linux setup guide'),
+        dockerTroubleshooting: l10n.t('Open Docker troubleshooting guide'),
+        dockerContexts: l10n.t('Open Docker context guide'),
+        wslIntegration: l10n.t('Open WSL integration guide'),
+        remoteDocker: l10n.t('Open remote Docker guide'),
+        linuxContainers: l10n.t('Open Linux containers guide'),
+        learnMore: l10n.t('Open Docker documentation'),
     };
 }
 
@@ -1037,7 +1013,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const planItemList = useMemo(() => planItems(), []);
     const dockerFailureLabelMap = useMemo(() => dockerFailureLabels(), []);
     const dockerGuidanceMap = useMemo(() => dockerGuidance(), []);
-    const dockerGuideMap = useMemo(() => dockerGuides(), []);
+    const dockerGuideLabelMap = useMemo(() => dockerGuideLabels(), []);
     const dockerStartLabelMap = useMemo(() => dockerStartLabels(), []);
     const dockerRecoveryNoteMap = useMemo(() => dockerRecoveryNotes(), []);
 
@@ -1564,9 +1540,17 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
     }, [trpcClient]);
 
-    const handleOpenGuide = useCallback(
+    const handleOpenUrl = useCallback(
         (url: string): void => {
             void trpcClient.common.openUrl.mutate({ url }).catch(() => undefined);
+        },
+        [trpcClient],
+    );
+
+    // Docker guides open by key on the host, which counts each click against the guide.
+    const handleOpenDockerGuide = useCallback(
+        (guide: DockerGuideKey): void => {
+            void trpcClient.localQuickStart.openGuide.mutate({ guide }).catch(() => undefined);
         },
         [trpcClient],
     );
@@ -2077,11 +2061,9 @@ export const LocalQuickStart = (): JSX.Element => {
                                     // Windows and macOS users were sent to a Linux-only install (#856).
                                     <Button
                                         appearance="secondary"
-                                        onClick={() =>
-                                            handleOpenGuide(dockerGuideMap[shownDocker.presentation.guide].href)
-                                        }
+                                        onClick={() => handleOpenDockerGuide(shownDocker.presentation.guide)}
                                     >
-                                        {dockerGuideMap[shownDocker.presentation.guide].label}
+                                        {dockerGuideLabelMap[shownDocker.presentation.guide]}
                                     </Button>
                                 )}
                                 {startingDocker ? (
@@ -2099,11 +2081,9 @@ export const LocalQuickStart = (): JSX.Element => {
                                 {!shownDocker.presentation.showInstall && (
                                     <Button
                                         appearance="secondary"
-                                        onClick={() =>
-                                            handleOpenGuide(dockerGuideMap[shownDocker.presentation.guide].href)
-                                        }
+                                        onClick={() => handleOpenDockerGuide(shownDocker.presentation.guide)}
                                     >
-                                        {dockerGuideMap[shownDocker.presentation.guide].label}
+                                        {dockerGuideLabelMap[shownDocker.presentation.guide]}
                                     </Button>
                                 )}
                                 {shownDocker.presentation.showContinueAnyway && (
@@ -2387,7 +2367,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     <Link
                         inline
                         className={styles.inheritFont}
-                        onClick={() => handleOpenGuide(DOCUMENTDB_LOCAL_PRIVACY_URL)}
+                        onClick={() => handleOpenUrl(DOCUMENTDB_LOCAL_PRIVACY_URL)}
                     >
                         {l10n.t('Open DocumentDB Local privacy statement')}
                     </Link>
@@ -2545,7 +2525,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         contentEnd={
                             <Button
                                 appearance="secondary"
-                                onClick={() => handleOpenGuide(DOCUMENTDB_LOCAL_LEARN_MORE_URL)}
+                                onClick={() => handleOpenUrl(DOCUMENTDB_LOCAL_LEARN_MORE_URL)}
                             >
                                 {l10n.t('Learn more')}
                             </Button>

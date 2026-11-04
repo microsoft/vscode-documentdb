@@ -1,5 +1,11 @@
 # Change Log
 
+## 1.1.0
+
+### Improvements
+
+- **Local Quick Start Telemetry**: Records which Docker install or troubleshooting guide is opened from the Local Quick Start panel; for each setup run, whether Docker was ready beforehand, the stage that failed and a fixed failure code, whether the image was downloaded, and whether the port was changed from the suggested one (this replaces a port flag that was always set); and whether a connection goes to the Local Quick Start instance. Also reports the Docker problem when setup stops because Docker is not available. No names, ports, credentials or Docker output are sent.
+
 ## 1.0.2
 
 ### Security

@@ -72,13 +72,16 @@ import {
     clusterId,
     containerName,
     DEFAULT_ALIAS,
+    type DockerFailureKind,
     type DockerHostEnvironment,
     type DockerReadiness,
+    type ImagePullOutcome,
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
     type OpenLocalQuickStartOptions,
     type PortAvailability,
+    type ProvisionFailureCode,
     type ProvisionStage,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
@@ -289,6 +292,77 @@ class DockerNotReadyError extends Error {
     }
 }
 
+/** What is known about a failed setup run when it is classified for telemetry. */
+interface ProvisionFailureFacts {
+    readonly error: unknown;
+    readonly aborted: boolean;
+    /** The Docker command stage in flight when the run failed. */
+    readonly activeDockerStage?: Extract<ProvisionStage, 'pulling' | 'creating'>;
+    /** Docker re-checked after a pull/create failure; present only when that check diagnosed a problem. */
+    readonly dockerReadiness?: DockerReadiness;
+    /** The run's own `checking` result. */
+    readonly checkedReadiness?: DockerReadiness;
+}
+
+function dockerFailureCode(kind: DockerFailureKind | undefined): ProvisionFailureCode {
+    if (kind === 'cliMissing') {
+        return 'dockerCliMissing';
+    }
+    if (kind === 'permissionDenied') {
+        return 'dockerPermissionDenied';
+    }
+    return 'dockerDaemonUnreachable';
+}
+
+function isDiskFull(error: unknown): boolean {
+    return /no space left on device/i.test(dockerErrorText(error));
+}
+
+/**
+ * The fixed `failureCode` reported for a failed run. Built from the typed errors and the readiness
+ * classification; Docker's text is only matched for the conditions those cannot tell apart.
+ */
+function classifyProvisionFailure(facts: ProvisionFailureFacts): ProvisionFailureCode {
+    const { error } = facts;
+    if (facts.aborted) {
+        return 'cancelled';
+    }
+    if (error instanceof DockerNotReadyError) {
+        return error.messageKey === 'dockerCliMissing'
+            ? 'dockerCliMissing'
+            : dockerFailureCode(facts.checkedReadiness?.failureKind);
+    }
+    if (error instanceof ReadinessTimeoutError) {
+        return 'readinessTimeout';
+    }
+    if (error instanceof ReadinessFailedError) {
+        return error.reason.key === 'containerExited' ? 'containerExited' : 'other';
+    }
+    if (facts.activeDockerStage === 'creating' && isPortAllocationFailure(error)) {
+        return 'portInUse';
+    }
+    if (facts.dockerReadiness) {
+        return dockerFailureCode(facts.dockerReadiness.failureKind);
+    }
+    if (facts.activeDockerStage && isDiskFull(error)) {
+        return 'diskFull';
+    }
+    if (facts.activeDockerStage === 'pulling') {
+        return 'imagePullFailed';
+    }
+    return 'other';
+}
+
+function toImagePulled(outcome: ImagePullOutcome | undefined): 'true' | 'false' | 'unknown' {
+    if (outcome === 'downloaded') {
+        return 'true';
+    }
+    if (outcome === 'upToDate') {
+        return 'false';
+    }
+    return 'unknown';
+}
+
 /**
  * Everything a "Wait longer" resume needs to finish adopting a container whose database was
  * still initializing when the initial readiness window elapsed. Retained across the timeout
@@ -341,6 +415,8 @@ interface InstanceRuntimeState {
     inFlight?: QuickStartOperation;
     /** The credentials in use were restored from the container during this host session. */
     credentialsRestored?: boolean;
+    /** The port last suggested to the Configure step, so telemetry can tell whether the user changed it. */
+    suggestedPort?: number;
 }
 
 /** What reconcile concluded for one alias; counted into the `documentDB.quickstart.reconcile` event. */
@@ -708,6 +784,7 @@ export class QuickStartServiceImpl {
         stage: Exclude<ProvisionStage, 'done' | 'error'>,
         provisionCorrelationId: string,
         operation: () => Promise<T>,
+        classifyFailure: (error: Error) => Promise<ProvisionFailureCode>,
         valuesToMask: ReadonlyArray<string> = [],
     ): Promise<T> {
         // Throwing inside the callback is what records the stage as Failed. The error is captured and
@@ -725,6 +802,7 @@ export class QuickStartServiceImpl {
                 result = await operation();
             } catch (error) {
                 operationError = error instanceof Error ? error : new Error(String(error));
+                telemetryContext.telemetry.properties.failureCode = await classifyFailure(operationError);
                 throw operationError;
             }
         });
@@ -753,6 +831,8 @@ export class QuickStartServiceImpl {
         }
         this.stateFor(alias).provisioning = true;
         const endOperation = this.beginOperation(alias, 'provisioning');
+        // What the host knew about Docker before this run's own check (the panel's last readiness).
+        const dockerReadinessAtStart = this.dockerReadiness?.outcome ?? 'notChecked';
         // Starting a fresh run supersedes any container left running by a prior readiness
         // timeout — drop its retained "Wait longer" state (the run below removes the container).
         this.stateFor(alias).pendingReadiness = undefined;
@@ -794,6 +874,9 @@ export class QuickStartServiceImpl {
         // Always explicit from here on (L3): the wizard suggests and validates the port, so
         // `provision` binds exactly this one and never relocates it.
         const chosenPort = explicitPort ?? QUICK_START_PORT;
+        // The panel always sends a port, so only a value other than the one it suggested was changed by the user.
+        const portChanged =
+            explicitPort !== undefined && explicitPort !== (this.stateFor(alias).suggestedPort ?? QUICK_START_PORT);
         const sampleDataRequested = options?.loadSampleData !== false;
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
@@ -824,7 +907,49 @@ export class QuickStartServiceImpl {
         // Whether this run mounts a volume that already existed; otherwise its `docker run` creates it.
         let reusesVolume = reusing;
         let activeDockerStage: Extract<ProvisionStage, 'pulling' | 'creating'> | undefined;
-        let provisioningDockerFailureKind: string | undefined;
+        let provisioningDockerFailureKind: DockerFailureKind | undefined;
+        // Outcome telemetry (design §14): the stage in progress, why the run failed, and whether it downloaded the image.
+        let currentStage: Exclude<ProvisionStage, 'done' | 'error'> = 'checking';
+        let failedStage: Exclude<ProvisionStage, 'done' | 'error'> | 'none' = 'none';
+        let failureCode: ProvisionFailureCode = 'none';
+        let imagePulled: 'true' | 'false' | 'unknown' = 'unknown';
+        let checkedReadiness: DockerReadiness | undefined;
+        // A failure is analysed once: inside its stage event (for the stage's `failureCode`) and again
+        // by the catch below, which must not re-run the follow-up Docker check.
+        let failureAnalysis:
+            | {
+                  readonly error: unknown;
+                  readonly dockerReadiness?: DockerReadiness;
+                  readonly code: ProvisionFailureCode;
+              }
+            | undefined;
+        const analyzeFailure = async (
+            error: unknown,
+        ): Promise<{ readonly dockerReadiness?: DockerReadiness; readonly code: ProvisionFailureCode }> => {
+            const previous = failureAnalysis;
+            if (previous && previous.error === error) {
+                return previous;
+            }
+            const aborted = signal.aborted;
+            // A pull/create failure may mean Docker itself went away; ask it again rather than guess from the text.
+            const dockerReadiness =
+                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
+            const analysis = {
+                error,
+                dockerReadiness,
+                code: classifyProvisionFailure({
+                    error,
+                    aborted,
+                    activeDockerStage,
+                    dockerReadiness,
+                    checkedReadiness,
+                }),
+            };
+            failureAnalysis = analysis;
+            return analysis;
+        };
+        const classifyStageFailure = async (error: Error): Promise<ProvisionFailureCode> =>
+            (await analyzeFailure(error)).code;
         // The terminal StageEvent (timeout OR hard error) is buffered and yielded AFTER `finally`
         // runs, so by the time the webview shows "Wait longer" / "Retry" the service flags
         // (provisioning/lifecycleBusy) are already clean — otherwise a fast click could hit the
@@ -840,18 +965,24 @@ export class QuickStartServiceImpl {
 
             // --- checking ---
             yield stageEvent('checking', 'active');
-            const readiness = await this.runProvisionStage('checking', provisionCorrelationId, async () => {
-                const result = await this.checkDockerReadiness();
-                this.throwIfAborted(signal);
-                const continueAfterIndeterminateReadiness =
-                    options?.continueAnyway === true && result.outcome === 'indeterminate';
-                if ((!result.cliInstalled || !result.daemonReachable) && !continueAfterIndeterminateReadiness) {
-                    throw new DockerNotReadyError(
-                        !result.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
-                    );
-                }
-                return result;
-            });
+            const readiness = await this.runProvisionStage(
+                'checking',
+                provisionCorrelationId,
+                async () => {
+                    const result = await this.checkDockerReadiness();
+                    checkedReadiness = result;
+                    this.throwIfAborted(signal);
+                    const continueAfterIndeterminateReadiness =
+                        options?.continueAnyway === true && result.outcome === 'indeterminate';
+                    if ((!result.cliInstalled || !result.daemonReachable) && !continueAfterIndeterminateReadiness) {
+                        throw new DockerNotReadyError(
+                            !result.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
+                        );
+                    }
+                    return result;
+                },
+                classifyStageFailure,
+            );
             readinessEnvironment = readiness.environment;
 
             // Remove a pre-existing managed container so the run starts clean (it is labelled as
@@ -872,6 +1003,8 @@ export class QuickStartServiceImpl {
                 } else if (existing || hasReadyRecord || volumeAtGate) {
                     const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
                     refusedCredentialsUnavailable = true;
+                    failedStage = 'checking';
+                    failureCode = 'other';
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
                     yield stageEvent('checking', 'error', credentialsUnavailable);
                     return;
@@ -889,6 +1022,8 @@ export class QuickStartServiceImpl {
             // Setup never relocates it — a conflict here is a hard, explained error.
             if (!(await this.runtime.isPortFree(chosenPort))) {
                 const message: QuickStartMessage = { key: 'portInUse', port: chosenPort };
+                failedStage = 'checking';
+                failureCode = 'portInUse';
                 this.setStatus(alias, InstanceState.Error, undefined, message);
                 yield stageEvent('checking', 'error', message);
                 return;
@@ -907,21 +1042,24 @@ export class QuickStartServiceImpl {
             }
 
             // --- pulling ---
+            currentStage = 'pulling';
             yield stageEvent('pulling', 'active');
             activeDockerStage = 'pulling';
             await this.runProvisionStage(
                 'pulling',
                 provisionCorrelationId,
                 async () => {
-                    await this.runtime.pullImage(imageRef, cts.token);
+                    imagePulled = toImagePulled(await this.runtime.pullImage(imageRef, cts.token));
                     this.throwIfAborted(signal);
                 },
+                classifyStageFailure,
                 [imageRef],
             );
             activeDockerStage = undefined;
             yield stageEvent('pulling', 'done');
 
             // --- creating (docker run -d creates and starts) ---
+            currentStage = 'creating';
             yield stageEvent('creating', 'active');
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, chosenPort);
@@ -1025,6 +1163,7 @@ export class QuickStartServiceImpl {
                     this.throwIfAborted(signal);
                     return createdContainerId;
                 },
+                classifyStageFailure,
                 [imageRef],
             );
             activeDockerStage = undefined;
@@ -1037,12 +1176,18 @@ export class QuickStartServiceImpl {
             yield stageEvent('creating', 'done');
 
             // --- starting (confirm running, read bound port, follow logs) ---
+            currentStage = 'starting';
             yield stageEvent('starting', 'active');
-            const inspected = await this.runProvisionStage('starting', provisionCorrelationId, async () => {
-                const result = await this.runtime.inspectContainer(provisionedContainerId);
-                this.throwIfAborted(signal);
-                return result;
-            });
+            const inspected = await this.runProvisionStage(
+                'starting',
+                provisionCorrelationId,
+                async () => {
+                    const result = await this.runtime.inspectContainer(provisionedContainerId);
+                    this.throwIfAborted(signal);
+                    return result;
+                },
+                classifyStageFailure,
+            );
             // Fall back to the port we actually requested (not the canonical default) if the
             // inspect can't report the binding, so a custom port stays correct in the success
             // message + stored connection string.
@@ -1052,6 +1197,7 @@ export class QuickStartServiceImpl {
             yield stageEvent('starting', 'done');
 
             // --- waiting (wire-protocol readiness, D7) ---
+            currentStage = 'waiting';
             yield stageEvent('waiting', 'active');
             const connectionString = composeConnectionString(credentials.username, credentials.password, boundPort);
             // Retain everything a "Wait longer" resume needs BEFORE probing, so a readiness
@@ -1077,22 +1223,32 @@ export class QuickStartServiceImpl {
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, boundPort);
             }
-            await this.runProvisionStage('waiting', provisionCorrelationId, async () => {
-                await this.waitForReadiness(connectionString, provisionedContainerId, secrets, signal, cts.token);
-                this.throwIfAborted(signal);
+            await this.runProvisionStage(
+                'waiting',
+                provisionCorrelationId,
+                async () => {
+                    await this.waitForReadiness(connectionString, provisionedContainerId, secrets, signal, cts.token);
+                    this.throwIfAborted(signal);
 
-                // --- success (seed sample data, store creds, adopt as Running) ---
-                await this.finalizeReadyInstance(pending, cts.token, signal);
-            });
+                    // --- success (seed sample data, store creds, adopt as Running) ---
+                    await this.finalizeReadyInstance(pending, cts.token, signal);
+                },
+                classifyStageFailure,
+            );
             success = true;
             yield stageEvent('waiting', 'done');
             yield stageEvent('done', 'done', { key: 'instanceRunning', port: boundPort }, boundPort);
         } catch (error) {
             const aborted = signal.aborted;
             createTimedOut = error instanceof DockerCommandTimeoutError;
-            const dockerReadiness =
-                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
-            provisioningDockerFailureKind = dockerReadiness?.failureKind;
+            const analysis = await analyzeFailure(error);
+            const dockerReadiness = aborted ? undefined : analysis.dockerReadiness;
+            failedStage = currentStage;
+            failureCode = aborted ? 'cancelled' : analysis.code;
+            // A failed `checking` stage is the common Docker failure; its own result says why.
+            provisioningDockerFailureKind =
+                dockerReadiness?.failureKind ??
+                (!aborted && error instanceof DockerNotReadyError ? checkedReadiness?.failureKind : undefined);
             const detail = errMessage(error);
             let message: QuickStartMessage = aborted ? { key: 'setupCancelled' } : { key: 'unexpectedFailure', detail };
             if (!aborted && error instanceof DockerNotReadyError) {
@@ -1213,8 +1369,9 @@ export class QuickStartServiceImpl {
                 await this.removeEnvFile(envFilePath);
             }
             // Provisioning outcome telemetry (design §14): result + whether we reused a
-            // prior volume/creds + whether a port fallback was used + total duration, plus
-            // which Advanced overrides were exercised (booleans only — never names/ports/creds).
+            // prior volume/creds + whether the user changed the suggested port + total duration, plus
+            // which Advanced overrides were exercised (booleans only — never names/ports/creds), and
+            // where and why a failed run stopped (fixed codes, never Docker's or the driver's text).
             const provisionResult = success
                 ? 'success'
                 : signal.aborted
@@ -1222,16 +1379,25 @@ export class QuickStartServiceImpl {
                   : readinessTimedOut
                     ? 'timeout'
                     : 'error';
+            if (!success && failureCode === 'none') {
+                // The consumer stopped iterating (panel closed) before the run settled.
+                failedStage = currentStage;
+                failureCode = 'cancelled';
+            }
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.provision', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
                 telemetryContext.telemetry.properties.provisionResult = provisionResult;
                 telemetryContext.telemetry.properties.reused = String(reusing);
                 telemetryContext.telemetry.properties.portTaken = String(portTaken);
-                telemetryContext.telemetry.properties.customPort = String(explicitPort !== undefined);
+                telemetryContext.telemetry.properties.portChanged = portChanged ? 'true' : 'false';
                 telemetryContext.telemetry.properties.customCreds = String(usedCustomCreds);
                 telemetryContext.telemetry.properties.customImage = String(usedCustomImage);
                 telemetryContext.telemetry.properties.sampleData = String(sampleDataRequested);
                 telemetryContext.telemetry.properties.dockerFailureKind = provisioningDockerFailureKind ?? 'none';
+                telemetryContext.telemetry.properties.dockerReadinessAtStart = dockerReadinessAtStart;
+                telemetryContext.telemetry.properties.failedStage = failedStage;
+                telemetryContext.telemetry.properties.failureCode = failureCode;
+                telemetryContext.telemetry.properties.imagePulled = imagePulled;
                 telemetryContext.telemetry.properties.priorState = priorState;
                 telemetryContext.telemetry.properties.startFresh = startFresh ? 'true' : 'false';
                 telemetryContext.telemetry.properties.refusedCredentialsUnavailable = refusedCredentialsUnavailable
@@ -1357,17 +1523,22 @@ export class QuickStartServiceImpl {
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
             void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
-            await this.runProvisionStage('waiting', pending.provisionCorrelationId, async () => {
-                await this.waitForReadiness(
-                    pending.connectionString,
-                    pending.containerId,
-                    secretVariants(pending.password),
-                    signal,
-                    cts.token,
-                );
-                this.throwIfAborted(signal);
-                await this.finalizeReadyInstance(pending, cts.token, signal);
-            });
+            await this.runProvisionStage(
+                'waiting',
+                pending.provisionCorrelationId,
+                async () => {
+                    await this.waitForReadiness(
+                        pending.connectionString,
+                        pending.containerId,
+                        secretVariants(pending.password),
+                        signal,
+                        cts.token,
+                    );
+                    this.throwIfAborted(signal);
+                    await this.finalizeReadyInstance(pending, cts.token, signal);
+                },
+                (error) => Promise.resolve(classifyProvisionFailure({ error, aborted: signal.aborted })),
+            );
             finalized = true;
             resumeResult = 'success';
             yield stageEvent('waiting', 'done');
@@ -1659,6 +1830,12 @@ export class QuickStartServiceImpl {
      * empty; the Configure-step validation then reports the conflict.
      */
     public async suggestPort(alias: string = DEFAULT_ALIAS): Promise<number> {
+        const suggested = await this.findSuggestedPort(alias);
+        this.stateFor(alias).suggestedPort = suggested;
+        return suggested;
+    }
+
+    private async findSuggestedPort(alias: string): Promise<number> {
         const reserved = await this.reservedPorts(alias);
         const own = (await getInstance(alias))?.port;
         if (typeof own === 'number' && !reserved.has(own) && (await this.runtime.isPortFree(own))) {
@@ -1945,6 +2122,9 @@ export class QuickStartServiceImpl {
             connectionString,
             { connectionUser: username, connectionPassword: password },
             { isEmulator: true, disableEmulatorSecurity: true },
+            undefined,
+            undefined,
+            { localQuickStartInstance: true },
         );
     }
 

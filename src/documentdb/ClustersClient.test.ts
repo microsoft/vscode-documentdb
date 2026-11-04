@@ -218,6 +218,35 @@ describe('regular connection startup diagnostics', () => {
         expect(vi.mocked(MongoClient)).toHaveBeenCalledTimes(1);
     });
 
+    it.each([true, false])(
+        'marks whether the client is the Local Quick Start instance on every connection event (%s)',
+        async (localQuickStartInstance): Promise<void> => {
+            CredentialCache.setAuthCredentials(
+                clusterId,
+                AuthMethodId.NativeAuth,
+                'mongodb://private-host:27017',
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                { localQuickStartInstance },
+            );
+            await ClustersClient.getClient(clusterId);
+            await vi.dynamicImportSettled();
+            await vi.waitFor(() =>
+                expect(mockTelemetryEvents.map((event) => event.eventName)).toEqual(
+                    expect.arrayContaining(['connect.startup', 'connect.staticmetadata', 'connect.getmetadata']),
+                ),
+            );
+
+            const expected = localQuickStartInstance ? 'true' : 'false';
+            for (const eventName of ['connect.startup', 'connect.staticmetadata', 'connect.getmetadata']) {
+                const event = mockTelemetryEvents.find((recorded) => recorded.eventName === eventName);
+                expect(event?.telemetry.properties.localQuickStartInstance).toBe(expected);
+            }
+        },
+    );
+
     it('passes its startup ID to auth configuration', async (): Promise<void> => {
         let traceContext: AuthTraceContext | undefined;
         vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(

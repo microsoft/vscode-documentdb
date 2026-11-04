@@ -90,11 +90,12 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Decisions
 
-See [decisions.md](./decisions.md). Seven entries: the single-instance model (0001, superseded), its
+See [decisions.md](./decisions.md). Eight entries: the single-instance model (0001, superseded), its
 reversal to multi-instance (0002), the Concept F wizard information architecture (0003), the
 managed-node cluster-command context boundary plus its deferred replacement (0004), restoring
 missing credentials from the managed container (0005), the wizard journey telemetry and its
-correlation ids (0006), and the image's usage telemetry following VS Code's setting (0007).
+correlation ids (0006), the image's usage telemetry following VS Code's setting (0007), and the
+setup outcome, guide and instance connection telemetry added in 1.1.0 (0008).
 
 ## Open gaps
 
