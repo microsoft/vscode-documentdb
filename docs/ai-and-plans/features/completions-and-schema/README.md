@@ -100,6 +100,20 @@ No separate `decisions.md` yet. The one genuine architecture decision with recor
 the Monaco language choice in
 [iterations/03.5-monaco-language-architecture.md](./iterations/03.5-monaco-language-architecture.md).
 
+**Completion telemetry reports first use at once (2026-11-04, for 1.1.0).** Accepted completions
+are counted with `accumulateTelemetry`, which sends a batch only after 20 uses; the flush on
+deactivation rarely arrives (4 of about 190 batches in 28 days). Only heavy bursts reached the
+warehouse (2 Playground machines, none from shell Tab completion), so the share of people who
+use completions was unanswerable. All completion accumulators (`completion.accepted`,
+`completion.accepted.cv`, `shell.completionGhost`, `.completionList`, `.historySuggestion`,
+`.closingBrackets`) now pass `COMPLETION_TELEMETRY_OPTIONS` (`flushNewKeysImmediately`): the
+first use of each surface and category in a session is sent at once, repeats stay batched. A new
+`completion.offered` event (`src_playground`, `src_collectionView`, `src_shell`) is the
+denominator: the Playground counts when its provider returns items (the TypeScript service's
+own suggestions are not counted), Collection View once per panel, the shell when it shows ghost
+text or a list. Rejected: one event per acceptance (volume) and a lower batch size (still loses
+light users).
+
 ## Open gaps
 
 - [future-work.md](./future-work.md) — completion and IntelliSense improvements

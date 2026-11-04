@@ -153,4 +153,28 @@ describe('accumulateTelemetry', () => {
         const countKey = `dist_${AUTO_DURATION_DISTRIBUTION_KEY}_count`;
         expect(findFlush(countKey)).toBeUndefined();
     });
+
+    describe('flushNewKeysImmediately', () => {
+        it('reports the first use of each key at once and batches repeats', () => {
+            const id = 'test.newKeys';
+            const options = { flushNewKeysImmediately: true };
+
+            accumulateTelemetry(id, (sample) => (sample.measurements.src_shell = 1), options);
+            expect(emitted).toHaveLength(1);
+            expect(emitted[0].src_shell).toBe(1);
+
+            accumulateTelemetry(id, (sample) => (sample.measurements.src_shell = 1), options);
+            expect(emitted).toHaveLength(1);
+
+            accumulateTelemetry(id, (sample) => (sample.measurements.src_playground = 1), options);
+            expect(emitted).toHaveLength(2);
+            expect(emitted[1]).toMatchObject({ src_shell: 1, src_playground: 1 });
+        });
+
+        it('leaves other accumulators batched', () => {
+            const id = 'test.noNewKeyFlush';
+            accumulateTelemetry(id, (sample) => (sample.measurements.first = 1));
+            expect(emitted).toHaveLength(0);
+        });
+    });
 });

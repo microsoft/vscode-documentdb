@@ -24,7 +24,12 @@ import { parseFindExpression } from '../../../documentdb/playground/parseFindExp
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { recordSurveyActivityWithInvitation } from '../../../services/survey/SurveyService';
-import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
+import {
+    COMPLETION_CATEGORIES,
+    COMPLETION_OFFERED_EVENT,
+    COMPLETION_TELEMETRY_OPTIONS,
+    CompletionSources,
+} from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { escapeJsString } from '../../../utils/escapeJsString';
@@ -699,6 +704,19 @@ export const collectionsViewRouter = router({
         };
     }),
 
+    /** Called once per panel, the first time the query editor offers a completion. */
+    completionOffered: publicProcedureWithTelemetry.mutation(({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        myCtx.actionContext.telemetry.suppressAll = true;
+        accumulateTelemetry(
+            COMPLETION_OFFERED_EVENT,
+            (sample) => {
+                sample.measurements[`src_${CompletionSources.CollectionView}`] = 1;
+            },
+            COMPLETION_TELEMETRY_OPTIONS,
+        );
+    }),
+
     completionAccepted: publicProcedureWithTelemetry
         .input(
             z.object({
@@ -715,8 +733,12 @@ export const collectionsViewRouter = router({
                     `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
                 );
             }
-            accumulateTelemetry('completion.accepted.cv', (sample) => {
-                sample.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
-            });
+            accumulateTelemetry(
+                'completion.accepted.cv',
+                (sample) => {
+                    sample.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
+                },
+                COMPLETION_TELEMETRY_OPTIONS,
+            );
         }),
 });

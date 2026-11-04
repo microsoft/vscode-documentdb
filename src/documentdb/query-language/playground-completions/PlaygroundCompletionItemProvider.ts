@@ -7,10 +7,13 @@ import { getFilteredCompletions, loadOperators } from '@documentdb-js/operator-r
 import { BSONTypes } from '@documentdb-js/schema-analyzer';
 import * as vscode from 'vscode';
 import {
+    COMPLETION_OFFERED_EVENT,
+    COMPLETION_TELEMETRY_OPTIONS,
     CompletionCommandIds,
     CompletionSources,
     type CompletionCategory,
 } from '../../../telemetry/completionCategories';
+import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';
 import { SchemaStore } from '../../SchemaStore';
@@ -55,6 +58,27 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
     }
 
     provideCompletionItems(
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        token: vscode.CancellationToken,
+        context: vscode.CompletionContext,
+    ): vscode.CompletionItem[] | undefined {
+        const items = this.computeCompletionItems(document, position, token, context);
+        if (items && items.length > 0) {
+            // Only items from this provider carry the accepted command; the TypeScript
+            // service's own suggestions are neither offered nor accepted here.
+            accumulateTelemetry(
+                COMPLETION_OFFERED_EVENT,
+                (sample) => {
+                    sample.measurements[`src_${CompletionSources.Playground}`] = 1;
+                },
+                COMPLETION_TELEMETRY_OPTIONS,
+            );
+        }
+        return items;
+    }
+
+    private computeCompletionItems(
         document: vscode.TextDocument,
         position: vscode.Position,
         _token: vscode.CancellationToken,

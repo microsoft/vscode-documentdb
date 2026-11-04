@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type AccumulateTelemetryOptions } from '../utils/accumulatingTelemetry';
+
 /**
  * Single source of truth for the "completion accepted" telemetry signal.
  *
@@ -60,3 +62,17 @@ export function normalizeCompletionSource(raw: string | undefined): CompletionSo
 export const CompletionCommandIds = {
     completionAccepted: 'vscode-documentdb.command.internal.completionAccepted',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Batching
+// ---------------------------------------------------------------------------
+
+/**
+ * Batching for every completion telemetry accumulator: the first use of each surface and
+ * category is reported at once, repeats are batched. Without it a batch needs 20 uses and
+ * light users never reach the warehouse, so "how many people use completions" is unanswerable.
+ */
+export const COMPLETION_TELEMETRY_OPTIONS: AccumulateTelemetryOptions = { flushNewKeysImmediately: true };
+
+/** Counts surfaces offering completions (`src_<surface>`), the denominator of the accepted counts. */
+export const COMPLETION_OFFERED_EVENT = 'completion.offered';

@@ -83,11 +83,27 @@ export interface AccumulateTelemetryOptions {
      * @default 30_000
      */
     minFlushIntervalMs?: number;
+
+    /**
+     * Flush at once, ignoring both gates, whenever a measurement key appears for the first
+     * time in this extension host.
+     *
+     * A batch is otherwise only sent after `batchSize` calls, and the flush on deactivation
+     * rarely arrives, so light use never reaches the warehouse. With this set, the first use
+     * of every key (for example each completion category per surface) is always reported,
+     * while repeated use is still batched. The extra events are bounded by the number of keys.
+     *
+     * @default false
+     */
+    flushNewKeysImmediately?: boolean;
 }
 
 interface AccumulatorState {
     batchSize: number;
     minFlushIntervalMs: number;
+    flushNewKeysImmediately: boolean;
+    /** Measurement keys already seen in this process; only kept when flushNewKeysImmediately is set. */
+    seenKeys: Set<string>;
     sinceLastFlush: number;
     lastFlushTime: number;
     measurements: Record<string, number>;
@@ -103,6 +119,8 @@ function getOrCreateState(callbackId: string, options: AccumulateTelemetryOption
         state = {
             batchSize: options?.batchSize ?? 20,
             minFlushIntervalMs: options?.minFlushIntervalMs ?? 30_000,
+            flushNewKeysImmediately: options?.flushNewKeysImmediately ?? false,
+            seenKeys: new Set<string>(),
             sinceLastFlush: 0,
             lastFlushTime: 0,
             measurements: {},
@@ -195,9 +213,14 @@ export function accumulateTelemetry(
  * Bumps the batch counter and flushes when both the size and interval gates pass.
  */
 function accumulate(callbackId: string, state: AccumulatorState, sample: TelemetrySample): void {
+    let hasNewKey = false;
     for (const [k, v] of Object.entries(sample.measurements)) {
         if (Number.isFinite(v)) {
             state.measurements[k] = (state.measurements[k] ?? 0) + v;
+            if (state.flushNewKeysImmediately && !state.seenKeys.has(k)) {
+                state.seenKeys.add(k);
+                hasNewKey = true;
+            }
         }
     }
     for (const [k, v] of Object.entries(sample.properties)) {
@@ -218,6 +241,11 @@ function accumulate(callbackId: string, state: AccumulatorState, sample: Telemet
         }
     }
     state.sinceLastFlush++;
+
+    if (hasNewKey) {
+        flushState(callbackId, state, Date.now());
+        return;
+    }
 
     if (state.sinceLastFlush >= state.batchSize) {
         const now = Date.now();
