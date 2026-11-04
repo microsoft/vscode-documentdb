@@ -388,10 +388,20 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             return this.createErrorRecoveryChildren(true);
         }
 
-        if (!wasConnected && (SettingsService.getSetting<boolean>(settingsKeys.showDashboardOnConnect) ?? true)) {
-            await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
-                activationSource: 'autoOpenOnConnect',
-            });
+        if (!wasConnected) {
+            if (SettingsService.getSetting<boolean>(settingsKeys.showDashboardOnConnect) ?? true) {
+                await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
+                    activationSource: 'autoOpenOnConnect',
+                });
+            } else {
+                // The counterpart of an automatic open: without it, people who turned automatic
+                // opening off in Settings, rather than from the dashboard, are invisible.
+                void callWithTelemetryAndErrorHandling('clusterDashboard.autoOpenSkipped', (context) => {
+                    context.errorHandling.suppressDisplay = true;
+                    context.telemetry.properties.reason = 'settingDisabled';
+                    context.telemetry.properties.experience = this.experience.api;
+                });
+            }
         }
 
         if (databases.length === 0) {

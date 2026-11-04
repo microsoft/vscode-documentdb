@@ -5,6 +5,7 @@
 ### Improvements
 
 - **Local Quick Start Telemetry**: Records which Docker install or troubleshooting guide is opened from the Local Quick Start panel; for each setup run, whether Docker was ready beforehand, the stage that failed and a fixed failure code, whether the image was downloaded, and whether the port was changed from the suggested one (this replaces a port flag that was always set); and whether a connection goes to the Local Quick Start instance. Also reports the Docker problem when setup stops because Docker is not available. No names, ports, credentials or Docker output are sent.
+- **Cluster Dashboard And Index Telemetry**: Records how long a Cluster Dashboard stayed open and on screen, and when a connection does not open it because automatic opening is turned off. Records each use of the filters in the dashboard's database and collection lists and in the Indexes tab (which filters, how many items matched), never the filter text. The tree's drop, hide and unhide index commands now record when the confirmation is declined and no longer send the index name.
 
 ## 1.0.2
 
