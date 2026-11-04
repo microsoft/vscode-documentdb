@@ -383,9 +383,7 @@ describe('resolveInteractiveTokenResource', () => {
     it('stops hosts in more than one cloud before resolving a resource', async () => {
         const deps = createDeps();
         useCustomCloud(deps);
-        await expect(
-            resolveInteractiveTokenResource('mongodb://a.azure.com,b.azure.us/', deps),
-        ).rejects.toMatchObject({
+        await expect(resolveInteractiveTokenResource('mongodb://a.azure.com,b.azure.us/', deps)).rejects.toMatchObject({
             kind: 'hostCloudConflict',
             details: expect.objectContaining({ hostCloud: 'conflicting', errorKind: 'hostCloudConflict' }),
         });
