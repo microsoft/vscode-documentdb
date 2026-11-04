@@ -21,6 +21,7 @@ import {
     resolveInteractiveTokenResource,
     resolveManagedIdentityTokenResource,
     TokenResourceResolutionError,
+    type ResolvedTokenResource,
 } from '../auth/documentdbTokenResource';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../CredentialCache';
@@ -74,6 +75,8 @@ import { type MainToWorkerMessage, type SerializableMongoClientOptions, type Wor
  */
 export class PlaygroundEvaluator implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
+    private _sessionConnectionString: string | undefined;
+    private _resolvedTokenResource: ResolvedTokenResource | undefined;
 
     /**
      * Telemetry session ID — generated on worker spawn, stable across evals within the
@@ -160,9 +163,10 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             onTokenRequest: (
                 msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
                 postResponse: (response: MainToWorkerMessage) => void,
+                isCurrent: () => boolean,
                 timings?: ConnectionStartupTimings,
                 traceContext?: AuthTraceContext,
-            ) => this.handleTokenRequest(msg, postResponse, timings, traceContext),
+            ) => this.handleTokenRequest(msg, postResponse, isCurrent, timings, traceContext),
             onWorkerExit: (exitCode: number) => {
                 ext.outputChannel.debug(`${logPrefix} Worker exited with code ${String(exitCode)}`);
                 this.resetSession();
@@ -197,6 +201,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
         // Start a new telemetry session if we're spawning a new worker
         if (needsSpawn) {
+            this._sessionConnectionString = CredentialCache.getCredentials(connection.clusterId)?.connectionString;
+            this._resolvedTokenResource = undefined;
             this._sessionId = randomUUID();
             this._sessionEvalCount = 0;
             this._sessionAuthMethod = initMsg.authMechanism;
@@ -376,21 +382,26 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     private async handleTokenRequest(
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
+        isCurrent: () => boolean,
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
     ): Promise<void> {
         try {
             const clusterId = this._workerManager.workerClusterId;
-            const credentials = clusterId ? CredentialCache.getCredentials(clusterId) : undefined;
-            if (!clusterId || !credentials) {
+            const connectionString = this._sessionConnectionString;
+            if (!clusterId || !connectionString) {
                 throw new Error(l10n.t('No credentials found for the query playground connection.'));
             }
-            let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
+            let resolved: ResolvedTokenResource;
             try {
                 resolved =
-                    msg.source === 'managedIdentity'
-                        ? await resolveManagedIdentityTokenResource(credentials.connectionString)
-                        : await resolveInteractiveTokenResource(credentials.connectionString);
+                    this._resolvedTokenResource ??
+                    (msg.source === 'managedIdentity'
+                        ? await resolveManagedIdentityTokenResource(connectionString)
+                        : await resolveInteractiveTokenResource(connectionString));
+                if (isCurrent()) {
+                    this._resolvedTokenResource = resolved;
+                }
                 traceAuthFlow('entraCloud.resolved', resolved.details, msg.requestId, traceContext);
             } catch (error) {
                 if (error instanceof TokenResourceResolutionError) {
@@ -419,10 +430,12 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                     if (traceContext?.startupProperties) {
                         traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
                     }
-                    recordEntraTokenFailure(clusterId, {
-                        cloudCategory: resolved.cloudCategory,
-                        authMethod: 'managedIdentity',
-                    });
+                    if (isCurrent()) {
+                        recordEntraTokenFailure(clusterId, {
+                            cloudCategory: resolved.cloudCategory,
+                            authMethod: 'managedIdentity',
+                        });
+                    }
                     throw error;
                 }
             } else {
@@ -455,17 +468,21 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                     if (traceContext?.startupProperties) {
                         traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
                     }
-                    recordEntraTokenFailure(clusterId, {
-                        cloudCategory: resolved.cloudCategory,
-                        authMethod: 'interactive',
-                    });
+                    if (isCurrent()) {
+                        recordEntraTokenFailure(clusterId, {
+                            cloudCategory: resolved.cloudCategory,
+                            authMethod: 'interactive',
+                        });
+                    }
                     throw error;
                 }
 
                 accessToken = session.accessToken;
             }
 
-            clearEntraTokenFailure(clusterId);
+            if (isCurrent()) {
+                clearEntraTokenFailure(clusterId);
+            }
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,
@@ -495,6 +512,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             });
         }
 
+        this._sessionConnectionString = undefined;
+        this._resolvedTokenResource = undefined;
         this._sessionId = undefined;
         this._sessionEvalCount = 0;
         this._sessionAuthMethod = undefined;

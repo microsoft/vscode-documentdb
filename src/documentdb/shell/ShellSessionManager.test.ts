@@ -27,6 +27,7 @@ const mockGetSessionFromVSCode = vi.fn();
 const mockGetManagedIdentityAccessToken = vi.fn();
 let workerCallbacks: WorkerSessionCallbacks;
 let workerClusterId: string | undefined;
+let requestTokenOnInit = false;
 
 vi.mock('../../extensionVariables', () => ({
     ext: {
@@ -61,7 +62,7 @@ vi.mock('../playground/WorkerSessionManager', () => ({
             ensureWorker: vi.fn(
                 async (clusterId: string, initMessage: MainToWorkerMessage & { type: 'init' }): Promise<void> => {
                     workerClusterId = clusterId;
-                    if (initMessage.authMechanism !== 'MicrosoftEntraID') {
+                    if (!requestTokenOnInit || initMessage.authMechanism !== 'MicrosoftEntraID') {
                         return;
                     }
 
@@ -74,9 +75,12 @@ vi.mock('../playground/WorkerSessionManager', () => ({
                     await workerCallbacks.onTokenRequest?.(
                         tokenRequest,
                         (_response: MainToWorkerMessage): void => undefined,
+                        () => true,
                     );
                 },
             ),
+            isConnectedTo: vi.fn(() => false),
+            sendEval: vi.fn().mockResolvedValue({ result: { type: 'number', printable: '1', durationMs: 0 } }),
             get isAlive(): boolean {
                 return true;
             },
@@ -98,6 +102,7 @@ describe('ShellSessionManager', () => {
         vi.clearAllMocks();
         resetEntraTokenFailuresForTests();
         workerClusterId = clusterId;
+        requestTokenOnInit = false;
         const publicResolution = {
             resource: 'https://ossrdbms-aad.database.windows.net',
             scope: 'https://ossrdbms-aad.database.windows.net/.default',
@@ -125,7 +130,16 @@ describe('ShellSessionManager', () => {
         resetEntraTokenFailuresForTests();
     });
 
+    async function initializeSession(manager: ShellSessionManager | PlaygroundEvaluator): Promise<void> {
+        if (manager instanceof ShellSessionManager) {
+            await manager.initialize();
+        } else {
+            await manager.evaluate({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' }, '1');
+        }
+    }
+
     it('returns the optional Microsoft Entra account display name', async () => {
+        requestTokenOnInit = true;
         const session: AuthenticationSession = {
             id: 'session-id',
             accessToken: 'access-token',
@@ -197,6 +211,7 @@ describe('ShellSessionManager', () => {
             now = 40;
             return { accessToken: 'private-token', account: { label: 'private-account' } };
         });
+        await initializeSession(manager);
         const stopDatabase = timings.startDatabaseConnect();
         now = 10;
         const stopWait = timings.startTokenWait();
@@ -206,6 +221,7 @@ describe('ShellSessionManager', () => {
         await workerCallbacks.onTokenRequest?.(
             { type: 'tokenRequest', requestId: 'token-request', source },
             postResponse,
+            () => true,
             timings,
             traceContext,
         );
@@ -276,11 +292,13 @@ describe('ShellSessionManager', () => {
             surface === 'shell'
                 ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                 : new PlaygroundEvaluator();
+        await initializeSession(manager);
         const postResponse = vi.fn();
         const startupProperties: Record<string, string> = {};
         await workerCallbacks.onTokenRequest?.(
             { type: 'tokenRequest', requestId: 'token-request', source },
             postResponse,
+            () => true,
             undefined,
             { startupCorrelationId: 'startup-id', surface, startupProperties },
         );
@@ -324,11 +342,13 @@ describe('ShellSessionManager', () => {
                 surface === 'shell'
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
+            await initializeSession(manager);
             const postResponse = vi.fn();
             const startupProperties: Record<string, string> = {};
             await workerCallbacks.onTokenRequest?.(
                 { type: 'tokenRequest', requestId: 'token-request', source },
                 postResponse,
+                () => true,
                 undefined,
                 { startupCorrelationId: 'startup-id', surface, startupProperties },
             );
@@ -374,12 +394,14 @@ describe('ShellSessionManager', () => {
                 surface === 'shell'
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
+            await initializeSession(manager);
             const postResponse = vi.fn();
             const startupProperties: Record<string, string> = {};
 
             await workerCallbacks.onTokenRequest?.(
                 { type: 'tokenRequest', requestId: 'token-request', source },
                 postResponse,
+                () => true,
                 undefined,
                 { startupCorrelationId: 'startup-id', surface, startupProperties },
             );
@@ -425,11 +447,13 @@ describe('ShellSessionManager', () => {
                 surface === 'shell'
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
+            await initializeSession(manager);
             const postResponse = vi.fn();
             const failedProperties: Record<string, string> = {};
             await workerCallbacks.onTokenRequest?.(
                 { type: 'tokenRequest', requestId: 'failed-token-request', source },
                 postResponse,
+                () => true,
                 undefined,
                 { startupCorrelationId: 'failed-startup', surface, startupProperties: failedProperties },
             );
@@ -454,6 +478,7 @@ describe('ShellSessionManager', () => {
             await workerCallbacks.onTokenRequest?.(
                 { type: 'tokenRequest', requestId: 'successful-token-request', source },
                 postResponse,
+                () => true,
                 undefined,
                 { startupCorrelationId: 'successful-startup', surface, startupProperties: successfulProperties },
             );
@@ -484,11 +509,13 @@ describe('ShellSessionManager', () => {
                 surface === 'shell'
                     ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
                     : new PlaygroundEvaluator();
+            await initializeSession(manager);
             const postResponse = vi.fn();
 
             await workerCallbacks.onTokenRequest?.(
                 { type: 'tokenRequest', requestId: 'token-request', source: 'vscode' },
                 postResponse,
+                () => true,
             );
 
             expect(postResponse).toHaveBeenCalledExactlyOnceWith({
@@ -517,6 +544,7 @@ describe('ShellSessionManager', () => {
             await workerCallbacks.onTokenRequest?.(
                 { type: 'tokenRequest', requestId: 'token-request', source: 'vscode' },
                 postResponse,
+                () => true,
             );
 
             expect(postResponse).toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenError' }));

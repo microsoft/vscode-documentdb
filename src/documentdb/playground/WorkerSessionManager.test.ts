@@ -749,7 +749,7 @@ describe('WorkerSessionManager', () => {
             const timing = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
                 worker._emit('message', { type: 'initTiming', requestId, activity, activityId, started });
             };
-            callbacks.onTokenRequest = vi.fn(async (message, postResponse, timings): Promise<void> => {
+            callbacks.onTokenRequest = vi.fn(async (message, postResponse, _isCurrent, timings): Promise<void> => {
                 const stop = timings?.startTokenAcquire();
                 vi.advanceTimersByTime(20);
                 stop?.();
@@ -785,7 +785,7 @@ describe('WorkerSessionManager', () => {
 
         it('freezes partial worker timings on timeout and ignores late provider completion', async () => {
             let finishProvider: (() => void) | undefined;
-            callbacks.onTokenRequest = vi.fn((message, postResponse, timings): Promise<void> => {
+            callbacks.onTokenRequest = vi.fn((message, postResponse, _isCurrent, timings): Promise<void> => {
                 const stop = timings?.startTokenAcquire();
                 return new Promise<void>((resolve) => {
                     finishProvider = (): void => {
@@ -902,9 +902,11 @@ describe('WorkerSessionManager', () => {
 
         it('ties token requests to the startup ID of the worker that sent them', async (): Promise<void> => {
             const contexts: (AuthTraceContext | undefined)[] = [];
-            callbacks.onTokenRequest = vi.fn(async (_message, _postResponse, _timings, context): Promise<void> => {
-                contexts.push(context);
-            });
+            callbacks.onTokenRequest = vi.fn(
+                async (_message, _postResponse, _isCurrent, _timings, context): Promise<void> => {
+                    contexts.push(context);
+                },
+            );
             const { manager, initPromise, requestId, worker } = await startWorker();
             worker._emit('message', { type: 'tokenRequest', requestId: 'token-request' });
             worker._emit('message', { type: 'initResult', requestId, success: true });
@@ -929,22 +931,24 @@ describe('WorkerSessionManager', () => {
             'keeps cloud properties on their own worker attempt (persistent=%s)',
             async (persistent) => {
                 let firstContext: AuthTraceContext | undefined;
-                callbacks.onTokenRequest = vi.fn(async (_message, _postResponse, _timings, context): Promise<void> => {
-                    firstContext = context;
-                    traceAuthFlow(
-                        'entraCloud.unresolved',
-                        {
-                            cloudCategory: 'china',
-                            reason: 'setting',
-                            configuredCloud: 'AzureChinaCloud',
-                            hostCloud: 'AzureUSGovernment',
-                            errorKind: 'cloudMismatch',
-                            tokenResource: 'private-resource',
-                        },
-                        undefined,
-                        context,
-                    );
-                });
+                callbacks.onTokenRequest = vi.fn(
+                    async (_message, _postResponse, _isCurrent, _timings, context): Promise<void> => {
+                        firstContext = context;
+                        traceAuthFlow(
+                            'entraCloud.unresolved',
+                            {
+                                cloudCategory: 'china',
+                                reason: 'setting',
+                                configuredCloud: 'AzureChinaCloud',
+                                hostCloud: 'AzureUSGovernment',
+                                errorKind: 'cloudMismatch',
+                                tokenResource: 'private-resource',
+                            },
+                            undefined,
+                            context,
+                        );
+                    },
+                );
                 const first = await startWorker(persistent);
                 first.worker._emit('message', { type: 'tokenRequest', requestId: 'token-request' });
                 first.worker._emit('message', {

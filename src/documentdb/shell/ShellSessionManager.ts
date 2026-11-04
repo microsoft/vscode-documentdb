@@ -15,6 +15,7 @@ import {
     resolveInteractiveTokenResource,
     resolveManagedIdentityTokenResource,
     TokenResourceResolutionError,
+    type ResolvedTokenResource,
 } from '../auth/documentdbTokenResource';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from '../auth/entraErrors/entraTokenFailures';
 import {
@@ -89,6 +90,8 @@ export interface ShellSessionCallbacks {
  */
 export class ShellSessionManager implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
+    private _sessionConnectionString: string | undefined;
+    private _resolvedTokenResource: ResolvedTokenResource | undefined;
     private readonly _connectionInfo: ShellConnectionInfo;
     private readonly _callbacks: ShellSessionCallbacks | undefined;
     private readonly _managedIdentityTokenCorrelationId = randomUUID();
@@ -139,9 +142,10 @@ export class ShellSessionManager implements vscode.Disposable {
             onTokenRequest: (
                 msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
                 postResponse: (response: MainToWorkerMessage) => void,
+                isCurrent: () => boolean,
                 timings?: ConnectionStartupTimings,
                 traceContext?: AuthTraceContext,
-            ) => this.handleTokenRequest(msg, postResponse, timings, traceContext),
+            ) => this.handleTokenRequest(msg, postResponse, isCurrent, timings, traceContext),
             onWorkerExit: callbacks?.onWorkerExit,
         };
 
@@ -192,6 +196,8 @@ export class ShellSessionManager implements vscode.Disposable {
      */
     async initialize(): Promise<ShellConnectionMetadata> {
         const initMsg = this.buildInitMessage();
+        this._sessionConnectionString = CredentialCache.getCredentials(this._connectionInfo.clusterId)?.connectionString;
+        this._resolvedTokenResource = undefined;
 
         const timeoutMs = getConnectionTimeoutMs();
         await this._workerManager.ensureWorker(
@@ -360,20 +366,25 @@ export class ShellSessionManager implements vscode.Disposable {
     private async handleTokenRequest(
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
+        isCurrent: () => boolean,
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
     ): Promise<void> {
         try {
-            const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
-            if (!credentials) {
+            const connectionString = this._sessionConnectionString;
+            if (!connectionString) {
                 throw new Error(l10n.t('No credentials found for cluster {0}', this._connectionInfo.clusterId));
             }
-            let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
+            let resolved: ResolvedTokenResource;
             try {
                 resolved =
-                    msg.source === 'managedIdentity'
-                        ? await resolveManagedIdentityTokenResource(credentials.connectionString)
-                        : await resolveInteractiveTokenResource(credentials.connectionString);
+                    this._resolvedTokenResource ??
+                    (msg.source === 'managedIdentity'
+                        ? await resolveManagedIdentityTokenResource(connectionString)
+                        : await resolveInteractiveTokenResource(connectionString));
+                if (isCurrent()) {
+                    this._resolvedTokenResource = resolved;
+                }
                 traceAuthFlow('entraCloud.resolved', resolved.details, msg.requestId, traceContext);
             } catch (error) {
                 if (error instanceof TokenResourceResolutionError) {
@@ -401,10 +412,12 @@ export class ShellSessionManager implements vscode.Disposable {
                     if (traceContext?.startupProperties) {
                         traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
                     }
-                    recordEntraTokenFailure(this._connectionInfo.clusterId, {
-                        cloudCategory: resolved.cloudCategory,
-                        authMethod: 'managedIdentity',
-                    });
+                    if (isCurrent()) {
+                        recordEntraTokenFailure(this._connectionInfo.clusterId, {
+                            cloudCategory: resolved.cloudCategory,
+                            authMethod: 'managedIdentity',
+                        });
+                    }
                     throw error;
                 }
             } else {
@@ -437,10 +450,12 @@ export class ShellSessionManager implements vscode.Disposable {
                     if (traceContext?.startupProperties) {
                         traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
                     }
-                    recordEntraTokenFailure(this._connectionInfo.clusterId, {
-                        cloudCategory: resolved.cloudCategory,
-                        authMethod: 'interactive',
-                    });
+                    if (isCurrent()) {
+                        recordEntraTokenFailure(this._connectionInfo.clusterId, {
+                            cloudCategory: resolved.cloudCategory,
+                            authMethod: 'interactive',
+                        });
+                    }
                     throw error;
                 }
 
@@ -448,7 +463,9 @@ export class ShellSessionManager implements vscode.Disposable {
                 this._displayName = session.account.label || undefined;
             }
 
-            clearEntraTokenFailure(this._connectionInfo.clusterId);
+            if (isCurrent()) {
+                clearEntraTokenFailure(this._connectionInfo.clusterId);
+            }
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,

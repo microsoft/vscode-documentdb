@@ -85,6 +85,7 @@ export interface WorkerSessionCallbacks {
     onTokenRequest?: (
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
+        isCurrent: () => boolean,
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
     ) => Promise<void>;
@@ -626,6 +627,7 @@ export class WorkerSessionManager implements vscode.Disposable {
                                 worker?.postMessage(response);
                             }
                         },
+                        () => this._worker === worker,
                         this._startup?.costTimings,
                         connection,
                     );
