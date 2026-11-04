@@ -9,19 +9,20 @@ status: active
 "Accepted" entries were approved by the operator. Superseded entries are kept for their rejected
 alternatives.
 
-| ID  | Status                      | Summary                                                                                            |
-| --- | --------------------------- | -------------------------------------------------------------------------------------------------- |
-| D1  | **Accepted** (operator)     | The preauthorization gap is fixed outside the extension; no own client ID                          |
-| D2  | **Accepted** (operator)     | Implement without sovereign-cloud access, copying patterns proven elsewhere                        |
-| D3  | **Accepted** (operator)     | Entra sign-in errors are classified in one table, routed through the diagnostics service           |
-| D4  | **Superseded** by D6 and D7 | Which signal decides the cloud                                                                     |
-| D5  | **Superseded** by D6        | Custom clouds keep the public audience                                                             |
-| D6  | **Accepted** (operator)     | Interactive sign-in: cloud from VS Code's setting; custom clouds resolved, never public            |
-| D7  | **Accepted** (operator)     | Managed identity: cloud from an override, the cluster host, then IMDS; otherwise fail clearly      |
-| D8  | **Accepted** (operator)     | Stop before requesting a token when the cluster host and the selected cloud clearly disagree       |
-| D9  | **Accepted** (operator)     | An opaque broker error in a sovereign cloud gets a hedged message that asks for the on-screen code |
-| D10 | **Accepted** (operator)     | Messages are text only in this iteration; no buttons                                               |
-| D11 | **Accepted** (operator)     | No public-audience fallback for China unless telemetry shows it works today                        |
+| ID  | Status                      | Summary                                                                                                         |
+| --- | --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| D1  | **Accepted** (operator)     | The preauthorization gap is fixed outside the extension; no own client ID                                       |
+| D2  | **Accepted** (operator)     | Implement without sovereign-cloud access, copying patterns proven elsewhere                                     |
+| D3  | **Accepted** (operator)     | Entra sign-in errors are classified in one table, routed through the diagnostics service                        |
+| D4  | **Superseded** by D6 and D7 | Which signal decides the cloud                                                                                  |
+| D5  | **Superseded** by D6        | Custom clouds keep the public audience                                                                          |
+| D6  | **Accepted** (operator)     | Interactive sign-in: cloud from VS Code's setting; custom clouds resolved, never public                         |
+| D7  | **Accepted** (operator)     | Managed identity: cloud from an override, the cluster host, then IMDS; otherwise fail clearly                   |
+| D8  | **Accepted** (operator)     | Stop before requesting a token when the cluster host and the selected cloud clearly disagree                    |
+| D9  | **Accepted** (operator)     | An opaque broker error in a sovereign cloud gets a hedged message that asks for the on-screen code              |
+| D10 | **Accepted** (operator)     | Messages are text only in this iteration; no buttons                                                            |
+| D11 | **Accepted** (operator)     | No public-audience fallback for China unless telemetry shows it works today                                     |
+| D12 | **Accepted** (operator)     | Open sessions keep the token audience and credentials they started with; Update Credentials does not touch them |
 
 ---
 
@@ -164,3 +165,41 @@ Microsoft's DocumentDB China documentation uses the China audience, so the exten
 Before shipping, check telemetry for successful Entra connections to `*.azure.cn` hosts. If there are
 any, add a China-only fallback to the public audience after a failure, with telemetry, and remove it
 once the data is clear. If there are none, no fallback.
+
+## D12. Open sessions keep what they started with
+
+**Accepted** by the operator on 2026-11-04. Source: finding C3 in
+[review iteration 02](iterations/02-copilot-feedback-and-edge-case-review.md#c3-existing-workers-cannot-refresh-after-credential-cache-eviction).
+
+Shell and playground workers already receive the connection string at start, including the password
+for native authentication, along with the tenant and client ID. The token **audience** is now resolved
+once on the main thread, when a shell starts or a playground worker is spawned. It is kept on that
+session and reused for every token refresh. Tokens are still acquired on the main thread. Sessions
+hold no tokens and no new secrets, because the audience is a public URL.
+
+- Token refresh in an open session never reads `CredentialCache`. Clearing the cache therefore does
+  not break it, whether the cause is Update Credentials, a failed tree connection, Remove Connection
+  or Quick Start. Changing a setting mid-session does not change that session's audience.
+- Update Credentials **writes the new values into `CredentialCache`** instead of deleting them. It
+  still drops the main-thread client, so the next connection uses the new values. Implementation
+  must confirm that the tree connects from these cached values exactly as it would from the stored
+  ones.
+- Update Credentials shuts down the cluster's playground worker. Each playground run starts with a
+  fresh context, so no user state is lost, and the next run uses the new credentials.
+- Open shells keep their current connection. If a shell for the cluster is open, a modal says that
+  the new credentials apply to new connections and that open shells keep theirs until closed.
+- An explicit **Disconnect** action, to force new sessions, is future work in
+  [#1059](https://github.com/microsoft/vscode-documentdb/issues/1059). Once it exists, the modal
+  offers it.
+
+Rejected alternatives:
+
+- **Restart every worker when credentials change.** Shells lose their state, and the user does not
+  control when. Replaced by Disconnect.
+- **Reload from saved connections when the cache has no entry.** That means storage I/O inside a
+  token callback and possible prompts. Azure and Discovery nodes have no saved entry, so it would not
+  cover them.
+- **Only stop deleting the cache entry on update.** Failed tree connections still clear the cache,
+  so open sessions would still break.
+- **Keep credentials in the cache when a tree connection fails.** This changes about 10 tree items
+  and the behaviour of credential prompts. It is deferred to the Disconnect design (#1059).
