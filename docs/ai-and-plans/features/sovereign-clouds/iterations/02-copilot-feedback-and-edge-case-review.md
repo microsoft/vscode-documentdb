@@ -867,6 +867,12 @@ preview version bump (R1) and the C3 refresh regression. The other pre-merge ite
   `package.json` and `package-lock.json` from `1.0.2-alpha.0` to `1.0.2-sov-cloud-preview`. That
   is a preview-build artifact and must not reach `main`. Revert it before merge, or produce the
   preview VSIX from a side branch or tag.
+
+  > **Done (2026-11-04), no commit:** still open. The coordinator asked the operator whether to
+  > revert `7f2a288` or keep it for a preview build. The operator was unavailable, so the version
+  > stays `1.0.2-sov-cloud-preview` and the question is handed back. A `git revert 7f2a288` is
+  > enough; no history rewrite is needed.
+
 - **C3**, as above. This is a regression from `main` for every Entra or managed-identity shell
   and playground, not just sovereign ones.
 
@@ -877,8 +883,15 @@ preview version bump (R1) and the C3 refresh regression. The other pre-merge ite
   deferred" and "The AI pre-review has not run yet". The PR is no longer a draft, and the
   iteration-01 review is committed. Update the verification section to say which Case 2 checks
   ran on the final head. Also set a milestone.
+
+  > **Done (2026-11-04), no commit:** the coordinator drafted an updated description (not a
+  > draft, the Case 2 checks that ran on `293ec03b`, and links to both reviews) and gave it to the
+  > operator. The PR on GitHub was not edited, and the milestone is still unset.
+
 - **R3. Feature README status.** The feature README still calls the PR a draft (as this review
   already noted). Update it in the same PR.
+
+  > **Done (2026-11-04), commit `c938efa9`:** removed "Draft" from the README status line.
 
 ### Non-blocking observations
 
