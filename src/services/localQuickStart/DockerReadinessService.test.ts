@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
+import { PodmanClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash } from '@microsoft/vscode-processutils';
 import { Writable } from 'stream';
 import type * as vscode from 'vscode';
@@ -117,6 +117,7 @@ describe('DockerReadinessService', () => {
         const service = new DockerReadinessService({
             getClient: () => ({
                 ...createClient(),
+                id: PodmanClient.ClientId,
                 listContexts: () => Promise.reject(new Error('listContexts is not supported for this runtime')),
             }),
             shellProvider: new Bash(),
@@ -138,7 +139,12 @@ describe('DockerReadinessService', () => {
         const result = await service.getReadiness();
 
         expect(runProbe).not.toHaveBeenCalledWith(expect.objectContaining({ probe: 'contexts' }));
-        expect(result).toMatchObject({ outcome: 'diagnosed', failureKind: 'daemonUnavailable', cliInstalled: true });
+        expect(result).toMatchObject({
+            outcome: 'diagnosed',
+            failureKind: 'daemonUnavailable',
+            cliInstalled: true,
+            cli: 'podman',
+        });
     });
 
     it('refines only a unix-socket permission failure with socket group facts', async () => {

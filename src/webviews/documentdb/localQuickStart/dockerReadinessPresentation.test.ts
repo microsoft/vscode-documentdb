@@ -274,6 +274,14 @@ describe('getDockerReadinessPresentation', () => {
         });
     });
 
+    it('points a stopped Podman machine at podman machine start', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({ environment: 'macos', failureKind: 'daemonUnavailable', cli: 'podman' }),
+            ),
+        ).toMatchObject({ state: 'notRunning', guidance: 'podmanNotRunning', guide: 'podmanMachine' });
+    });
+
     it('omits Retry on an unsupported host', () => {
         expect(getDockerReadinessPresentation(readiness({ failureKind: 'unsupportedHost' }))).toMatchObject({
             state: 'unsupported',

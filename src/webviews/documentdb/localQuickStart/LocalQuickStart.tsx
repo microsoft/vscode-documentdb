@@ -471,6 +471,9 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
         ),
         dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
         daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
+        podmanNotRunning: l10n.t(
+            'Podman is installed but its machine is not running. Run "podman machine start" or start it from Podman Desktop, then check again.',
+        ),
         daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
         wslIntegrationUnavailable: l10n.t(
             'Enable Docker Desktop integration for this WSL distribution, then check again.',
@@ -509,6 +512,10 @@ function dockerGuides(): Readonly<Record<DockerGuideKey, { readonly label: strin
         dockerTroubleshooting: {
             label: l10n.t('Open Docker troubleshooting guide'),
             href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
+        },
+        podmanMachine: {
+            label: l10n.t('Open Podman machine guide'),
+            href: 'https://docs.podman.io/en/latest/markdown/podman-machine-start.1.html',
         },
         dockerContexts: {
             label: l10n.t('Open Docker context guide'),

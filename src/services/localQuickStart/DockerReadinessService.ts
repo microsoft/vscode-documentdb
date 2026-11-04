@@ -3,7 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DockerClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
+import {
+    DockerClient,
+    PodmanClient,
+    type ListContextItem,
+    type PromiseCommandResponse,
+} from '@microsoft/vscode-container-client';
 import { CancellationTokenLike, type Shell } from '@microsoft/vscode-processutils';
 import { type Writable } from 'stream';
 import * as vscode from 'vscode';
@@ -46,6 +51,7 @@ export const PROVIDER_MEMORY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 export const DOCKER_PROVIDER_MEMORY_KEY = 'documentdb.quickstart.dockerProvider';
 
 interface DockerReadinessClient {
+    readonly id?: string;
     checkInstall(options: object): Promise<PromiseCommandResponse<string>>;
     info(options: object): Promise<PromiseCommandResponse<unknown>>;
     listContexts(options: object): Promise<PromiseCommandResponse<ListContextItem[]>>;
@@ -296,7 +302,11 @@ export class DockerReadinessService {
     }
 
     private async runAndMemoize(request: DockerReadinessRequest): Promise<DockerReadiness> {
-        const check = this.runReadiness(request.cancellationToken, request.suppressCommandEcho === true);
+        const client = this.dependencies.getClient();
+        const cli = client.id === PodmanClient.ClientId ? 'podman' : 'docker';
+        const check = this.runReadiness(client, request.cancellationToken, request.suppressCommandEcho === true).then(
+            (readiness): DockerReadiness => ({ ...readiness, cli }),
+        );
         this.inFlight = check;
         try {
             const result = await check;
@@ -391,6 +401,7 @@ export class DockerReadinessService {
     }
 
     private async runReadiness(
+        client: DockerReadinessClient,
         callerToken: vscode.CancellationToken | undefined,
         suppressCommandEcho: boolean,
     ): Promise<DockerReadiness> {
@@ -433,7 +444,6 @@ export class DockerReadinessService {
             cancellationController.abort();
         }, this.dependencies.deadlineMs);
         const didDeadlineExpire = (): boolean => deadlineExpired;
-        const client = this.dependencies.getClient();
 
         try {
             const [versionProbe, infoProbe] = await Promise.all([
