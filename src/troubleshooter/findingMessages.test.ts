@@ -64,6 +64,14 @@ const representativeData: Readonly<Record<FindingCode, Readonly<Record<string, u
     'cs.credentialsMissing': { missing: 'password', authMethod: 'NativeAuth' },
     'prepare.localPortInUse': { localPort: 27017, holder: 'otherProgram' },
     'prepare.sharedTunnel': { tunnel: 'started' },
+    'dns.mixedHostDomains': {
+        kind: 'crossCloud',
+        clouds: ['AzureCloud', 'AzureUSGovernment'],
+        builtInHostCount: 2,
+        customHostCount: 0,
+        otherHostCount: 0,
+        customSuffixConfigured: false,
+    },
     'hello.advertisedMembersUnreachable': { unreachableCount: 2 },
     'auth.failed': { authMethod: 'MicrosoftEntraID', serverCode: 18, serverCodeName: 'AuthenticationFailed' },
     'auth.mechanismMismatch': { requested: 'SCRAM-SHA-256', offered: ['SCRAM-SHA-1'] },
@@ -108,6 +116,29 @@ describe('localized finding messages', () => {
         }).nextStep).toBe(
             'Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.hostnameSuffix in user settings. Only trust your service domain.',
         );
+    });
+
+    it('names the clouds of mixed host names and points to the hostname suffix setting', (): void => {
+        expect(
+            findingMessages['dns.mixedHostDomains']({
+                kind: 'crossCloud',
+                clouds: ['AzureCloud', 'AzureUSGovernment'],
+            }),
+        ).toEqual({
+            title: 'Host names in different Azure clouds',
+            explanation:
+                "The host names belong to different Azure clouds (Azure (public cloud), Azure US Government). One connection can't use more than one cloud.",
+            nextStep: 'Check the host names in the connection string.',
+        });
+        expect(
+            findingMessages['dns.mixedHostDomains']({ kind: 'unrecognizedHosts', clouds: ['AzureUSGovernment'] }),
+        ).toEqual({
+            title: 'Host names outside the Azure domains',
+            explanation:
+                "Some host names are in Azure US Government, others are outside the built-in Azure domains. Microsoft Entra ID sends tokens only to recognized or trusted hosts, and the cloud check can't use the other names.",
+            nextStep:
+                'If they are private names for this cluster, set documentDB.customEnvironment.hostnameSuffix to their trusted suffix.',
+        });
     });
 
     it.each(codes)('describes %s with representative, empty, absent and wrong-typed data', (code) => {

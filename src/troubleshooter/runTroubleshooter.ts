@@ -33,6 +33,7 @@ import { createConnectionAccessCheck } from './checks/connectionAccess';
 import { createContextHintsCheck } from './checks/contextHints';
 import { createCredentialsCheck } from './checks/credentials';
 import { createExtensionEnvironmentCheck, getTroubleshooterRemoteKind } from './checks/extensionEnvironment';
+import { withMixedHostDomainsWarning } from './checks/hostDomains';
 import { createPrepareCheck } from './checks/prepare';
 import { createResolveTargetCheck } from './checks/resolveTarget';
 import { createServerFactsCheck } from './checks/serverFacts';
@@ -120,7 +121,8 @@ function buildTroubleshooterChecks(
         } else if (check.id === 'connectionString') {
             dependsOn = [...(check.dependsOn ?? []), 'resolveTarget'];
         }
-        checks.push(dependsOn === check.dependsOn ? check : { ...check, dependsOn });
+        const ordered = dependsOn === check.dependsOn ? check : { ...check, dependsOn };
+        checks.push(check.id === 'dns' ? withMixedHostDomainsWarning(ordered, peekSetup) : ordered);
         if (check.id === 'environment') {
             checks.push(createExtensionEnvironmentCheck());
         }

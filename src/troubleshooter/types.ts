@@ -16,6 +16,7 @@ export const extensionFindingCodes = [
     'cs.credentialsMissing',
     'prepare.localPortInUse',
     'prepare.sharedTunnel',
+    'dns.mixedHostDomains',
     'hello.advertisedMembersUnreachable',
     'auth.failed',
     'auth.mechanismMismatch',

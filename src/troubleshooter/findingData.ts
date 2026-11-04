@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type DocumentDBEntraCloud } from '../documentdb/auth/entraScopes';
+
 export interface EnvRemoteExtensionHostData {
     readonly remoteKind: string;
 }
@@ -41,6 +43,16 @@ export interface PrepareSharedTunnelData {
 export interface CsCredentialsMissingData {
     readonly missing: 'method' | 'password';
     readonly authMethod?: string;
+}
+
+/** Counts and cloud enums only: host names never enter finding data. */
+export interface DnsMixedHostDomainsData {
+    readonly kind: 'crossCloud' | 'unrecognizedHosts';
+    readonly clouds: readonly DocumentDBEntraCloud[];
+    readonly builtInHostCount: number;
+    readonly customHostCount: number;
+    readonly otherHostCount: number;
+    readonly customSuffixConfigured: boolean;
 }
 
 export interface HelloAdvertisedMembersUnreachableData {

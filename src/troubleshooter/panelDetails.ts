@@ -125,6 +125,9 @@ function allFindings(result: CheckResult<FindingCode>): readonly Finding<Finding
     ];
 }
 
+/** Findings about the connection's whole host list; they sit on one host's result but name no host. */
+const connectionWideFindings: ReadonlySet<FindingCode> = new Set(['dns.mixedHostDomains']);
+
 function findings(results: readonly CheckResult<FindingCode>[], describe: Describe): PanelFindingDetail[] {
     const merged: { key: string; detail: PanelFindingDetail; targets: string[] }[] = [];
     for (const result of results) {
@@ -143,7 +146,10 @@ function findings(results: readonly CheckResult<FindingCode>[], describe: Descri
                 ...(message.nextStep ? { nextStep: message.nextStep } : {}),
             };
             const key = JSON.stringify(detail);
-            const host = result.target === undefined ? undefined : splitTarget(result.target).host;
+            const host =
+                result.target === undefined || connectionWideFindings.has(finding.code)
+                    ? undefined
+                    : splitTarget(result.target).host;
             const entry = merged.find((candidate): boolean => candidate.key === key);
             if (entry) {
                 if (host !== undefined && !entry.targets.includes(host)) {

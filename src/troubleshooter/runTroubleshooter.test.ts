@@ -350,6 +350,58 @@ describe('runConnectivityTroubleshooter', (): void => {
         ).toBe(true);
     });
 
+    it('warns once in the DNS step about mixed Entra ID host domains without host names in telemetry or the trace', async (): Promise<void> => {
+        const govHost = 'fixture.mongocluster.cosmos.azure.us';
+        const checks = builtIns();
+        const cs = checks.find((check): boolean => check.id === 'connectionString');
+        if (!cs) {
+            throw new Error('Missing fixture check');
+        }
+        cs.run = async (context): Promise<CheckOutcome<BuiltInFindingCode>> => {
+            context.setTargets([
+                { host: govHost, port: 10260, source: 'uri' },
+                { host, port: 10260, source: 'uri' },
+            ]);
+            return { status: 'pass', facts: {}, findings: [] };
+        };
+        vi.mocked(createBuiltInChecks).mockReturnValue(checks);
+        const request = options();
+        const run = await runConnectivityTroubleshooter({
+            ...request,
+            target: {
+                ...request.target,
+                getCredentials: vi.fn().mockResolvedValue({
+                    connectionString: `mongodb://${govHost}:10260,${host}:10260/`,
+                    availableAuthMethods: [AuthMethodId.MicrosoftEntraID],
+                    selectedAuthMethod: AuthMethodId.MicrosoftEntraID,
+                }),
+            },
+        });
+        const dns = run.results.filter((result): boolean => result.checkId === 'dns');
+        expect(dns.map((result): string => result.status)).toEqual(['warning', 'pass']);
+        expect(dns[0].findings).toEqual([
+            expect.objectContaining({
+                code: 'dns.mixedHostDomains',
+                severity: 'warning',
+                data: {
+                    kind: 'unrecognizedHosts',
+                    clouds: ['AzureUSGovernment'],
+                    builtInHostCount: 1,
+                    customHostCount: 0,
+                    otherHostCount: 1,
+                    customSuffixConfigured: false,
+                },
+            }),
+        ]);
+        const context = terminalContext();
+        expect(context.telemetry.properties.findingCodes).toContain('dns.mixedHostDomains');
+        for (const name of [govHost, host]) {
+            expect(JSON.stringify(dns[0].findings)).not.toContain(name);
+            expect(JSON.stringify(context.telemetry)).not.toContain(name);
+            expect(outputLines().join('\n')).not.toContain(name);
+        }
+    });
+
     it('masks before sensitive setup parsing or I/O, including passwords available only in the session cache', async (): Promise<void> => {
         vi.mocked(CredentialCache.getCredentials).mockReturnValue({
             clusterId: 'stable-id',

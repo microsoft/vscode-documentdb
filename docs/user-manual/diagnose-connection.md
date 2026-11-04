@@ -67,7 +67,10 @@ step has its status, and what was found behind its detail line, for example whic
 name resolved to or which connection string options were used. A step with a warning or an error
 always explains it there. If your computer's own name lookup and a direct query to your DNS servers
 give different answers, for example with a VPN, split DNS or a hosts file entry, **Server address (DNS)**
-shows both. These details show your real host names and user names; **Hide identifiers in the report**
+shows both. With Microsoft Entra ID or managed identity, **Server address (DNS)** also warns when the
+host names belong to different Azure clouds, or mix an Azure cloud with names outside the Azure domains;
+for your own DNS names, see [`hostnameSuffix`](./sovereign-clouds#documentdbcustomenvironmenthostnamesuffix).
+This warning never stops the check. These details show your real host names and user names; **Hide identifiers in the report**
 changes only the report.
 
 The network steps run on their own, before the real sign-in. If one of them fails, connection diagnosis

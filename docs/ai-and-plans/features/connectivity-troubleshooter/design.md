@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: design
 status: active
 created: 2026-10-27
-updated: 2026-11-02
+updated: 2026-11-04
 ---
 
 # Diagnose connection: design
@@ -507,6 +507,22 @@ No separate "is this machine online" step, and no lookup of an unrelated public 
 > adds the conditional private-access advice through `contextHints`, after any provider guidance.
 > A successful connection has no such hint and no warning from this finding. The two successful
 > private-endpoint L2-dev scenarios keep their info Details; `private-endpoint-blocked` covers TCP timeout.
+
+> **Implemented (WI-29):** `dns.mixedHostDomains` (warning, extension), because of #1050 review
+> finding [E2](../sovereign-clouds/iterations/02-copilot-feedback-and-edge-case-review.md#e2-unclassified-seeds-erase-known-cloud-evidence).
+> For Microsoft Entra ID and managed identity only, `src/troubleshooter/checks/hostDomains.ts` wraps the
+> package DNS check. It classifies the hosts the driver contacts (the seeds, which for `mongodb+srv://`
+> is the SRV name, and the resolved targets) with `getAzureHostSuffix` and the trusted
+> `documentDB.customEnvironment.hostnameSuffix` (`normalizeCustomHostnameSuffix`); IP literals and
+> every other name are unrecognized. It warns when the hosts span two or more built-in clouds, or one
+> built-in cloud plus an unrecognized host. It never warns when every host is unrecognized: that is
+> normal for private endpoints, and the authentication findings already explain it. The finding is
+> attached once, to the first host the DNS check resolves, and turns only a pass into a warning;
+> dependencies, the headline and later checks do not change. Its data holds counts, cloud enums and
+> whether a custom suffix is configured, never a host name, and the panel shows it without a host.
+> The wording holds whether or not the E2 resolver fix is present. Through the real resolver, the
+> SRV parent-domain rule keeps resolved targets in the SRV name's domain, so they add evidence
+> rather than a mix.
 
 ### 4.6 TCP (per host)
 

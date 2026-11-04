@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: notes
 status: active
 created: 2026-10-27
-updated: 2026-11-03
+updated: 2026-11-04
 code:
   - packages/documentdb-js-connectivity-troubleshooter/**
   - src/troubleshooter/**
@@ -221,7 +221,7 @@ Main code:
   method
 - `src/utils/clusterVersions.ts`: version helpers shared by the dashboard and connection diagnosis
 - `src/troubleshooter/`: input building, extension checks (extensionEnvironment, credentials, prepare,
-  authenticate, connectionAccess, serverFacts, contextHints),
+  authenticate, connectionAccess, serverFacts, contextHints), the DNS host-domain warning (`hostDomains`, WI-29),
   `runConnectivityTroubleshooter`, pure `result.ts` derivation, Output trace, telemetry, finding messages, report text, panel rows
 - `src/commands/troubleshootConnection/`: the command and its entry points
 - `src/webviews/documentdb/connectivityTroubleshooter/`: router, controller, panel session and React view

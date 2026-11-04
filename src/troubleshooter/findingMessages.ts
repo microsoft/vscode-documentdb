@@ -5,6 +5,8 @@
 
 import { type Finding } from '@documentdb-js/connectivity-troubleshooter';
 import * as vscode from 'vscode';
+import { getCloudDisplayName } from '../documentdb/auth/documentdbTokenResource';
+import { type DocumentDBEntraCloud } from '../documentdb/auth/entraScopes';
 import { type FindingCode } from './types';
 
 export interface FindingMessage {
@@ -608,6 +610,45 @@ export const findingMessages: {
             'Confirm that the database or local tunnel is running on that host, especially in remote VS Code sessions.',
         ),
     }),
+    'dns.mixedHostDomains': (data): FindingMessage => {
+        const clouds = Array.isArray(data.clouds)
+            ? data.clouds
+                  .filter((cloud): cloud is DocumentDBEntraCloud =>
+                      ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud'].includes(cloud as string),
+                  )
+                  .map(getCloudDisplayName)
+            : [];
+        if (stringField(data, 'kind') === 'crossCloud') {
+            return {
+                title: vscode.l10n.t('Host names in different Azure clouds'),
+                explanation:
+                    clouds.length > 1
+                        ? vscode.l10n.t(
+                              "The host names belong to different Azure clouds ({0}). One connection can't use more than one cloud.",
+                              clouds.join(', '),
+                          )
+                        : vscode.l10n.t(
+                              "The host names belong to different Azure clouds. One connection can't use more than one cloud.",
+                          ),
+                nextStep: vscode.l10n.t('Check the host names in the connection string.'),
+            };
+        }
+        return {
+            title: vscode.l10n.t('Host names outside the Azure domains'),
+            explanation:
+                clouds.length === 1
+                    ? vscode.l10n.t(
+                          "Some host names are in {0}, others are outside the built-in Azure domains. Microsoft Entra ID sends tokens only to recognized or trusted hosts, and the cloud check can't use the other names.",
+                          clouds[0],
+                      )
+                    : vscode.l10n.t(
+                          "Some host names are in an Azure cloud, others are outside the built-in Azure domains. Microsoft Entra ID sends tokens only to recognized or trusted hosts, and the cloud check can't use the other names.",
+                      ),
+            nextStep: vscode.l10n.t(
+                'If they are private names for this cluster, set documentDB.customEnvironment.hostnameSuffix to their trusted suffix.',
+            ),
+        };
+    },
     'tcp.refused': (): FindingMessage => ({
         title: vscode.l10n.t('Network connection refused'),
         explanation: vscode.l10n.t(
