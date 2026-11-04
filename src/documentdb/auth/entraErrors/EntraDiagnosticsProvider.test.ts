@@ -7,6 +7,8 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Links } from '../../../constants';
 import { ConnectionDiagnosticsService } from '../../../services/connectionDiagnosticsService';
+import { CredentialCache } from '../../CredentialCache';
+import { AuthMethodId } from '../AuthMethod';
 import { EntraDiagnosticsProvider } from './EntraDiagnosticsProvider';
 import {
     getRecentEntraTokenFailure,
@@ -42,6 +44,7 @@ describe('EntraDiagnosticsProvider', () => {
     beforeEach((): void => {
         vi.clearAllMocks();
         resetEntraTokenFailuresForTests();
+        CredentialCache.deleteCredentials(clusterId);
         telemetryContext.telemetry.properties = {};
         telemetryContext.errorHandling.suppressDisplay = false;
         telemetryContext.errorHandling.suppressReportIssue = false;
@@ -49,6 +52,7 @@ describe('EntraDiagnosticsProvider', () => {
 
     afterEach((): void => {
         resetEntraTokenFailuresForTests();
+        CredentialCache.deleteCredentials(clusterId);
         vi.useRealTimers();
     });
 
@@ -106,6 +110,56 @@ describe('EntraDiagnosticsProvider', () => {
             expect(message).toContain('managed identity on an Azure VM');
             expect(message).toContain('GitHub');
             expect(message).toContain(Links.SovereignClouds);
+        },
+    );
+
+    it('keeps the existing AADSTS500011 wording for an interactive failure, even with cached managed identity', async (): Promise<void> => {
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.ManagedIdentity, 'mongodb://localhost:27017');
+        recordEntraTokenFailure(clusterId, { cloudCategory: 'public', authMethod: 'interactive' });
+
+        const message = await provider.explain({ clusterId, error: 'AADSTS500011: Resource not in tenant' });
+        expect(message).toBe(
+            `The selected Azure cloud very likely does not match the cluster. Check the "microsoft-sovereign-cloud.environment" setting. If it already matches, report this on GitHub or ask your tenant administrator to check whether the sign-in resource is available in your tenant. See ${Links.SovereignClouds}`,
+        );
+        expect(telemetryContext.telemetry.properties.authMethod).toBe('interactive');
+    });
+
+    it('uses the managed identity AADSTS500011 wording from a failure record', async (): Promise<void> => {
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://localhost:27017');
+        recordEntraTokenFailure(clusterId, { cloudCategory: 'public', authMethod: 'managedIdentity' });
+
+        const message = await provider.explain({ clusterId, error: 'AADSTS500011: Resource not in tenant' });
+        expect(message).toBe(
+            `The managed identity token very likely targets a different Azure cloud than the cluster. If "documentDB.customEnvironment.ossrdbmsEndpoint" is set, check its value or clear it. Then verify that the virtual machine and the cluster are in the same Azure cloud. If both are correct, report this on GitHub or ask your tenant administrator to check whether the resource is available in your tenant. See ${Links.SovereignClouds}`,
+        );
+        expect(message).not.toContain('microsoft-sovereign-cloud.environment');
+        expect(telemetryContext.telemetry.properties.authMethod).toBe('managedIdentity');
+    });
+
+    it('uses cached managed identity for AADSTS500011 without a failure record', async (): Promise<void> => {
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.ManagedIdentity, 'mongodb://localhost:27017');
+
+        const message = await provider.explain({ clusterId, error: 'AADSTS500011: Resource not in tenant' });
+        expect(message).toContain('documentDB.customEnvironment.ossrdbmsEndpoint');
+        expect(message).not.toContain('microsoft-sovereign-cloud.environment');
+        expect(telemetryContext.telemetry.properties.authMethod).toBe('unknown');
+    });
+
+    it('keeps the existing AADSTS500011 wording when the auth method is unknown', async (): Promise<void> => {
+        const message = await provider.explain({ clusterId, error: 'AADSTS500011: Resource not in tenant' });
+        expect(message).toBe(
+            `The selected Azure cloud very likely does not match the cluster. Check the "microsoft-sovereign-cloud.environment" setting. If it already matches, report this on GitHub or ask your tenant administrator to check whether the sign-in resource is available in your tenant. See ${Links.SovereignClouds}`,
+        );
+        expect(telemetryContext.telemetry.properties.authMethod).toBe('unknown');
+    });
+
+    it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.NativeAuth, AuthMethodId.NoAuth])(
+        'keeps the existing AADSTS500011 wording for cached %s credentials',
+        async (authMethod): Promise<void> => {
+            CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://localhost:27017');
+            const message = await provider.explain({ clusterId, error: 'AADSTS500011: Resource not in tenant' });
+            expect(message).toContain('microsoft-sovereign-cloud.environment');
+            expect(telemetryContext.telemetry.properties.authMethod).toBe('unknown');
         },
     );
 

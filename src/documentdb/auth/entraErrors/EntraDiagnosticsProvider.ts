@@ -9,6 +9,8 @@ import {
     type ConnectionDiagnosticsRequest,
 } from '../../../services/connectionDiagnosticsService';
 import { traceAuthFlow } from '../../../utils/authTrace';
+import { CredentialCache } from '../../CredentialCache';
+import { AuthMethodId } from '../AuthMethod';
 import { classifyEntraError } from './classifyEntraError';
 import { entraErrorRules } from './entraErrorRules';
 import { getRecentEntraTokenFailure } from './entraTokenFailures';
@@ -30,6 +32,15 @@ export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
         }
 
         const failure = getRecentEntraTokenFailure(clusterId);
+        let authMethod = failure?.authMethod;
+        if (authMethod === undefined && clusterId) {
+            const authMechanism = CredentialCache.getCredentials(clusterId)?.authMechanism;
+            if (authMechanism === AuthMethodId.ManagedIdentity) {
+                authMethod = 'managedIdentity';
+            } else if (authMechanism === AuthMethodId.MicrosoftEntraID) {
+                authMethod = 'interactive';
+            }
+        }
         traceAuthFlow('entraSignIn.classified', {
             ruleId: classification.ruleId,
             aadstsCode: classification.code ?? 'none',
@@ -40,6 +51,7 @@ export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
         const message = rule.explain({
             code: classification.code,
             cloudCategory: failure?.cloudCategory,
+            authMethod,
             recentTokenFailure: failure !== undefined,
         });
         void callWithTelemetryAndErrorHandling('entraSignIn.classified', async (context): Promise<void> => {

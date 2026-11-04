@@ -10,6 +10,7 @@ import { getCloudDisplayName, type CloudCategory } from '../documentdbTokenResou
 export interface EntraErrorContext {
     readonly code?: string;
     readonly cloudCategory?: CloudCategory;
+    readonly authMethod?: 'interactive' | 'managedIdentity';
     readonly recentTokenFailure: boolean;
 }
 
@@ -34,11 +35,18 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
     {
         id: 'resourceNotInTenant',
         aadsts: ['500011'],
-        explain: (): string =>
-            l10n.t(
+        explain: (context): string => {
+            if (context.authMethod === 'managedIdentity') {
+                return l10n.t(
+                    'The managed identity token very likely targets a different Azure cloud than the cluster. If "documentDB.customEnvironment.ossrdbmsEndpoint" is set, check its value or clear it. Then verify that the virtual machine and the cluster are in the same Azure cloud. If both are correct, report this on GitHub or ask your tenant administrator to check whether the resource is available in your tenant. See {link}',
+                    { link: Links.SovereignClouds },
+                );
+            }
+            return l10n.t(
                 'The selected Azure cloud very likely does not match the cluster. Check the "microsoft-sovereign-cloud.environment" setting. If it already matches, report this on GitHub or ask your tenant administrator to check whether the sign-in resource is available in your tenant. See {link}',
                 { link: Links.SovereignClouds },
-            ),
+            );
+        },
     },
     {
         id: 'invalidResource',
