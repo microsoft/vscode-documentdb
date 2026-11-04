@@ -21,6 +21,7 @@ import {
 } from '../auth/errors';
 import { listAwsProfiles, profileProvider } from '../auth/profiles';
 import { AwsCredentialStore, type AwsCredentialSecrets, type AwsKeySecrets } from '../credentials/awsCredentialStore';
+import { isAwsRegionId } from './regions';
 import {
     type AwsCluster,
     type AwsCredentialInput,
@@ -92,7 +93,7 @@ function validateInput(input: AwsCredentialInput): void {
         !Array.isArray(input.regions) ||
         input.regions.length === 0 ||
         input.regions.length > 50 ||
-        input.regions.some((region) => !/^[a-z]{2}(?:-[a-z]+)+-\d+$/.test(region))
+        input.regions.some((region) => !isAwsRegionId(region))
     ) {
         throw new AwsValidationError(vscode.l10n.t('Choose an AWS sign-in method and at least one valid region.'));
     }
@@ -216,6 +217,20 @@ export class AwsDiscoveryService {
 
     public refreshDiscovery(): void {
         this.invalidateSnapshot();
+    }
+
+    public async retryCredentialDiscovery(credentialId: string): Promise<AwsDiscoverySnapshot> {
+        this.refreshDiscovery();
+        let snapshot = await this.listAll(false);
+        if (
+            snapshot.errors.some(
+                (error) => error.credentialId === credentialId && error.kind === 'auth',
+            )
+        ) {
+            this.invalidate(credentialId);
+            snapshot = await this.listAll(false);
+        }
+        return snapshot;
     }
 
     public async listCredentials(): Promise<AwsCredentialRecord[]> {

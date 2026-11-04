@@ -24,7 +24,7 @@ function parseIni(text: string): Map<string, Record<string, string>> {
         if (header) {
             section = Object.create(null) as Record<string, string>;
             sections.set(header[1].trim(), section);
-        } else if (section && !/^\s/.test(raw)) {
+        } else if (section) {
             const separator = line.indexOf('=');
             if (separator > 0) {
                 section[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();

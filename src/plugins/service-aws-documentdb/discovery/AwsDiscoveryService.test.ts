@@ -332,6 +332,65 @@ describe('AWS credential acceptance and discovery', () => {
         expect(discover).toHaveBeenCalledWith(record, expect.anything(), 'us-east-1', expect.anything());
     });
 
+    it('re-resolves profile identity after an authentication failure on retry', async () => {
+        const provider = vi.fn(
+            (_profile: string, _region: string, interactive: boolean) => async (): Promise<AwsCredentialIdentity> => ({
+                accessKeyId: interactive ? 'verified-key' : 'renewed-key',
+                secretAccessKey: interactive ? 'verified-secret' : 'renewed-secret',
+            }),
+        );
+        const { service, discover } = setup({ profileProvider: provider });
+        const record = await service.verifyAndSave({
+            authMethod: 'profile',
+            profile: 'work',
+            regions: ['us-east-1'],
+        });
+        discover.mockImplementation(async (credential, resolvedIdentity): Promise<AwsCluster[]> => {
+            if (resolvedIdentity.accessKeyId === 'verified-key') {
+                const error = new Error('The cached session has expired.');
+                error.name = 'ExpiredTokenException';
+                throw error;
+            }
+            return [cluster(credential.id)];
+        });
+
+        await expect(service.retryCredentialDiscovery(record.id)).resolves.toEqual({
+            clusters: [cluster(record.id)],
+            errors: [],
+        });
+        expect(provider.mock.calls.map((call) => call[2])).toEqual([true, false]);
+        expect(discover).toHaveBeenCalledTimes(2);
+    });
+
+    it('preserves verified profile identity for permission-only retries', async () => {
+        const provider = vi.fn(
+            (_profile: string, _region: string, interactive: boolean) => async (): Promise<AwsCredentialIdentity> => {
+                if (!interactive) {
+                    throw new AwsInteractionRequiredError();
+                }
+                return { accessKeyId: 'profile-key', secretAccessKey: 'profile-secret' };
+            },
+        );
+        const { service, discover } = setup({ profileProvider: provider });
+        const record = await service.verifyAndSave({
+            authMethod: 'profile',
+            profile: 'work',
+            regions: ['us-east-1'],
+        });
+        discover.mockImplementation(async (): Promise<AwsCluster[]> => {
+            const error = new Error('AWS denied this operation.');
+            error.name = 'AccessDeniedException';
+            throw error;
+        });
+
+        await expect(service.retryCredentialDiscovery(record.id)).resolves.toMatchObject({
+            clusters: [],
+            errors: [{ credentialId: record.id, kind: 'permission' }],
+        });
+        expect(provider.mock.calls.map((call) => call[2])).toEqual([true]);
+        expect(discover).toHaveBeenCalledTimes(1);
+    });
+
     it('deduplicates clusters by ARN independently of credential ownership', async () => {
         const { service, discover } = setup();
         const first = await service.verifyAndSave({ ...input, regions: ['us-east-1'] });

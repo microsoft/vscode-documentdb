@@ -148,13 +148,12 @@ export async function configureAwsCredentials(context: IActionContext, node?: Tr
                     }
                     break;
                 case 'retry': {
-                    awsDiscoveryService.refreshDiscovery();
                     const snapshot = await vscode.window.withProgress(
                         {
                             location: vscode.ProgressLocation.Notification,
                             title: vscode.l10n.t('Retrying {0}…', credential.label),
                         },
-                        async () => awsDiscoveryService.listAll(false),
+                        async () => awsDiscoveryService.retryCredentialDiscovery(credential.id),
                     );
                     changed = true;
                     const failures = snapshot.errors.filter((error) => error.credentialId === credential.id);

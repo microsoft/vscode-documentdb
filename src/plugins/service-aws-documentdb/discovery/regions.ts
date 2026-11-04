@@ -8,6 +8,10 @@ export interface AwsRegion {
     name: string;
 }
 
+export function isAwsRegionId(region: string): boolean {
+    return /^[a-z]{2}(?:-[a-z]+)+-\d+$/.test(region);
+}
+
 /** Suggested commercial regions, not an exhaustive list or a guarantee of DocumentDB availability. */
 export const AWS_REGIONS: readonly AwsRegion[] = [
     { id: 'us-east-1', name: 'US East (N. Virginia)' },

@@ -44,7 +44,7 @@ import {
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AWS_REGIONS } from '../../../plugins/service-aws-documentdb/discovery/regions';
+import { AWS_REGIONS, isAwsRegionId } from '../../../plugins/service-aws-documentdb/discovery/regions';
 import {
     type AwsAuthMethod,
     type AwsCredentialRecord,
@@ -126,6 +126,8 @@ export const AwsCredentialsView = (): JSX.Element => {
     const [profileRevision, setProfileRevision] = useState(0);
     const [submitError, setSubmitError] = useState<CredentialSubmitError>();
     const [showSecret, setShowSecret] = useState(false);
+    const [customRegion, setCustomRegion] = useState('');
+    const [customRegionError, setCustomRegionError] = useState<string>();
     const [busy, setBusy] = useState(false);
     const [isCompleting, setIsCompleting] = useState(false);
     const [flow, setFlow] = useState<AwsSsoStart>();
@@ -293,6 +295,21 @@ export const AwsCredentialsView = (): JSX.Element => {
                 hasValue('sessionToken') &&
                 validExpiration) ||
             (chosenMethod === 'sso' && !!flow && hasValue('accountId') && hasValue('roleName')));
+
+    const addCustomRegion = (): void => {
+        const region = customRegion.trim().toLowerCase();
+        if (!isAwsRegionId(region)) {
+            setCustomRegionError(l10n.t('Enter a valid AWS region identifier.'));
+        } else if (regions.includes(region)) {
+            setCustomRegionError(l10n.t('This region is already selected.'));
+        } else if (regions.length >= 50) {
+            setCustomRegionError(l10n.t('Select no more than 50 regions.'));
+        } else {
+            setRegions((previous) => [...previous, region]);
+            setCustomRegion('');
+            setCustomRegionError(undefined);
+        }
+    };
 
     const handleSubmit = (): void => {
         if (!canSubmit) {
@@ -786,6 +803,24 @@ export const AwsCredentialsView = (): JSX.Element => {
                     ))}
                 </Dropdown>
             </Field>
+            <Field
+                label={l10n.t('Add an AWS region')}
+                hint={l10n.t('Enter a region identifier, such as cn-north-1 or us-gov-west-1.')}
+                validationState={customRegionError ? 'error' : 'none'}
+                validationMessage={customRegionError}
+            >
+                <Input
+                    value={customRegion}
+                    placeholder="us-gov-west-1"
+                    onChange={(_event, data) => {
+                        setCustomRegion(data.value);
+                        setCustomRegionError(undefined);
+                    }}
+                />
+            </Field>
+            <Button type="button" onClick={addCustomRegion}>
+                {l10n.t('Add region')}
+            </Button>
             {guide}
             <button type="submit" hidden disabled={!canSubmit} />
         </form>

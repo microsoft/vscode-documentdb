@@ -449,6 +449,16 @@ an unverified root cause. Preserve strict TLS and certificate/hostname verificat
 certificate, reachability, and unknown-error cases. A fabricated error that merely matches the
 desired branch does not validate the original claim.
 
+## Subsequent PR review comments
+
+- **[Resolved] Parse indented AWS profile assignments.** The INI parser now accepts trimmed
+  assignments regardless of indentation, with coverage for profile and SSO-session properties.
+- **[Resolved] Re-resolve identity on authentication retry.** Explicit credential Retry clears and
+  re-resolves the selected identity only after an authentication failure; permission-only retries
+  and ordinary discovery refreshes preserve verified identities.
+- **[Resolved] Allow custom AWS discovery regions.** The credential form accepts syntactically valid
+  region identifiers beyond the suggested list, including China and GovCloud examples.
+
 ## Historical review and CI provenance
 
 The previous document recorded a GitHub snapshot retrieved on 2026-11-04 for head
@@ -483,6 +493,10 @@ blocked as noted above; no behavior changes were made for them. The work was ver
 and the browser harness tests (15 passing). No live AWS flow or browser integration run was
 performed. Issues 3, 4, and 10a have no dedicated regression test; their code paths compile, but
 the corresponding interactive behavior remains unverified by an automated test.
+
+The subsequent PR-comment fixes were verified with `npm run l10n`, `npm run build`, and the focused
+profile, discovery-service, and credential-webview suites (34 tests passing); `git diff --check`
+also passed.
 
 The prior review separately reported **64 passing tests** for the initial pass and **96 passing
 tests plus `npm run l10n:check`** for the deep-review follow-up. Exact commands and suite scopes

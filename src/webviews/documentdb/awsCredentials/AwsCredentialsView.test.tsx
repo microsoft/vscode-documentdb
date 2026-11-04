@@ -213,6 +213,37 @@ describe('AWS credentials onboarding', () => {
         expect(mockComplete).toHaveBeenCalledTimes(1);
     });
 
+    it('accepts custom AWS regions and validates their identifiers', async () => {
+        mockConfiguration = { mode: 'edit', authMethod: 'profile', profile: 'work', regions: ['us-east-1'] };
+        mockListProfiles.mockResolvedValue([{ name: 'work', kind: 'role' }]);
+        mockSubmit.mockResolvedValue({
+            success: true,
+            credential: {
+                id: 'work',
+                label: 'Work',
+                authMethod: 'profile',
+                regions: ['us-east-1', 'us-gov-west-1'],
+                accountId: '123456789012',
+                arn: 'arn:aws:iam::123456789012:role/work',
+            },
+        });
+        const host = await renderView();
+
+        await fill(host, 'Add an AWS region', 'not-a-region');
+        await click(button(host, 'Add region'));
+        expect(host.textContent).toContain('Enter a valid AWS region identifier.');
+
+        await fill(host, 'Add an AWS region', 'us-gov-west-1');
+        await click(button(host, 'Add region'));
+        expect(host.textContent).not.toContain('Enter a valid AWS region identifier.');
+        await click(button(host, 'Verify & Save'));
+
+        expect(mockSubmit).toHaveBeenCalledWith(
+            { authMethod: 'profile', profile: 'work', regions: ['us-east-1', 'us-gov-west-1'], label: undefined },
+            expect.objectContaining({ signal: expect.any(AbortSignal) as AbortSignal }),
+        );
+    });
+
     it('masks temporary credentials and truthfully describes session-only completion', async () => {
         mockSubmit.mockResolvedValue({
             success: true,
