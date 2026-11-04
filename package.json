@@ -1992,7 +1992,7 @@
             "type": "object",
             "default": {},
             "scope": "machine",
-            "markdownDescription": "DocumentDB settings for sovereign and custom clouds. Interactive sign-in uses `ossrdbmsEndpoint` only when `#microsoft-sovereign-cloud.environment#` is `custom`. Managed identity uses it first, before the cluster host and the virtual machine's metadata, for every managed-identity connection on this machine. `hostnameSuffix` applies in any cloud and never selects a token audience. Empty values restore automatic selection.",
+            "markdownDescription": "DocumentDB settings for sovereign and custom clouds. Interactive sign-in uses `ossrdbmsEndpoint` only when `#microsoft-sovereign-cloud.environment#` is `custom`. Managed identity uses it first, before the cluster host and the virtual machine's metadata, for every managed-identity connection on this machine. `hostnameSuffix` applies in any cloud and never selects a token audience. Empty values restore automatic selection. Set this in User settings, or in Remote settings when VS Code is connected to a remote machine. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/sovereign-clouds)",
             "properties": {
               "ossrdbmsEndpoint": {
                 "type": "string",

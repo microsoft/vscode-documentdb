@@ -122,7 +122,7 @@ If `ENVIRONMENT:azure` is missing, the string establishes only the Microsoft Ent
 GUID in the user position is highlighted as a managed identity candidate, but you confirm it in the
 identity list because a GUID alone does not prove which kind of Entra identity it names.
 
-The extension reads those parameters to work out what you meant and then removes them from the stored connection string, so the mechanism is configured in exactly one place.
+The extension reads those parameters to work out what you meant and then removes them from the stored connection string, so the mechanism is configured in exactly one place. The `TOKEN_RESOURCE` value is not kept: the extension chooses the token resource for the cluster's cloud each time it connects. See [Sovereign Clouds](./sovereign-clouds).
 
 ## Copying the connection string
 
@@ -139,6 +139,8 @@ No password prompt appears, because there is no password to include. See [Copy C
 | The managed identity with client ID ... is not assigned to this machine                       | The client ID is valid but that identity is not attached to this VM. Check the VM's Identity blade in the Azure portal.                                                                                                                                                       |
 | This managed identity belongs to Microsoft Entra tenant ..., but the cluster is in tenant ... | The VM and the cluster are in different tenants. Use Entra ID sign-in instead. See [the tenant section](#important-the-identity-and-the-cluster-must-be-in-the-same-tenant).                                                                                                  |
 | The connection is refused after a token was obtained                                          | Authentication worked but the cluster does not recognize the identity. Register it on the cluster as described in [Before you start](#before-you-start). If the connection came from a pasted connection string, also check that the cluster is in the same tenant as the VM. |
+| We could not determine which Azure cloud this virtual machine is in                           | The cluster uses your own DNS name and the VM is not in the public cloud. Set `documentDB.customEnvironment.ossrdbmsEndpoint`. See [Sovereign Clouds](./sovereign-clouds#what-you-need-to-configure).                                                                         |
+| The driver does not appear to allow this cluster host for Microsoft Entra ID authentication   | The cluster uses your own DNS name. Set `documentDB.customEnvironment.hostnameSuffix`. See [Sovereign Clouds](./sovereign-clouds#documentdbcustomenvironmenthostnamesuffix).                                                                                                  |
 
 ## How it differs from Entra ID
 
