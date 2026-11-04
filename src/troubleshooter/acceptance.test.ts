@@ -49,7 +49,7 @@ import { type PanelRow } from '../webviews/documentdb/connectivityTroubleshooter
 import { TroubleshooterPanelSession } from '../webviews/documentdb/connectivityTroubleshooter/troubleshooterPanelSession';
 import { describeFinding } from './findingMessages';
 import { withRowDetails } from './panelDetails';
-import { createExtensionReportText } from './reportText';
+import { createExtensionReportText, renderExtensionReportFooter } from './reportText';
 import type * as Troubleshooter from './runTroubleshooter';
 import { getPlannedTroubleshooterChecks, type RunConnectivityTroubleshooterOptions } from './runTroubleshooter';
 import { deferred, detailSentinel, gatewayReply, host, offlineIo, outputs, socketError } from './test/fixtures';
@@ -453,7 +453,7 @@ describe('Acceptance (design §8.1)', (): void => {
         const shown = vi.mocked(readOnlyJsonDocumentProvider.openMarkdownDocument).mock.calls.at(-1)?.[1];
         const copied = vi.mocked(vscode.env.clipboard.writeText).mock.calls.at(-1)?.[0];
         const saved = vi.mocked(vscode.workspace.fs.writeFile).mock.calls.at(-1)?.[1];
-        expect(shown).toBe(render());
+        expect(shown).toBe(`${render().trimEnd()}\n\n${renderExtensionReportFooter()}\n`);
         expect(copied).toBe(shown);
         expect(saved && Buffer.from(saved).toString('utf8')).toBe(shown);
         expect(vi.mocked(view.ctx.target.getCredentials).mock.calls).toHaveLength(reads);
