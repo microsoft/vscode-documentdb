@@ -178,6 +178,17 @@ side effects inside the provider.
 > auth method. Add a managed-identity variant for AADSTS500011 only. When the method is still
 > unknown, keep the current interactive wording. Fix before merge.
 
+> **Done (2026-11-04), commit `446765a8`:** `EntraErrorContext` has an optional `authMethod`.
+> `EntraDiagnosticsProvider` takes it from the failure record and falls back to the cached
+> credential (`ManagedIdentity` maps to `managedIdentity`, `MicrosoftEntraID` to `interactive`,
+> anything else to unknown). Only `resourceNotInTenant` (AADSTS500011) has a managed-identity
+> variant. It names `documentDB.customEnvironment.ossrdbmsEndpoint` and the VM and cluster cloud,
+> not `microsoft-sovereign-cloud.environment`. Interactive and unknown keep the old text; 700016,
+> 90002 and telemetry are unchanged. The coordinator wrote the managed-identity wording, because
+> the decision gave no exact text (confidence 80%; it follows the recommendation's content).
+> Tests: interactive, managed identity from the record, managed identity from the cache, unknown,
+> and other cached auth methods.
+
 ### C2. Failure context uses a different cluster-key contract from credentials
 
 **Source:** [comment 4454295514](https://github.com/microsoft/vscode-documentdb/pull/1050#discussion_r4454295514),
@@ -227,6 +238,9 @@ expiry, and isolation between different cluster IDs. Never substitute `treeId`.
 
 > **Operator decision (2026-11-04): accepted as recommended.** Use `CaseInsensitiveMap` in the
 > failure registry, with regression tests for casing on record, read and clear. Fix before merge.
+
+> **Done (2026-11-04), commit `1645df8c`:** the registry uses `CaseInsensitiveMap`. Tests cover
+> read, clear and replacement with different casing.
 
 ### C3. Existing workers cannot refresh after credential-cache eviction
 
@@ -349,6 +363,40 @@ during invalidation; no automatic query replay. Include E4's late-completion cas
 > - **Rejected:** restarting workers when credentials change; reloading from storage when the cache
 >   has no entry; stopping the cache wipe on update alone.
 
+> **Done (2026-11-04), commits `f1d820e5` (shell and playground) and `d287a857` (Update
+> Credentials):**
+>
+> - **Pinned audience.** Each session keeps the non-secret connection string captured when its
+>   worker is started (shell: every `initialize()`; playground: when a worker is spawned). The
+>   first token request resolves the audience from it; a successful `ResolvedTokenResource` is
+>   memoized for that worker and reused. Failures are not memoized. `handleTokenRequest` no
+>   longer reads `CredentialCache`. Errors, traces and registry behaviour are unchanged.
+> - **Deviation in timing.** D12 says the audience is resolved "when a shell starts or a
+>   playground worker is spawned". It is resolved on the worker's first token request, which for
+>   Entra and managed identity happens while the worker connects, so the effect is the same. The
+>   coordinator prompt asked for this simpler form.
+> - **Decision (coordinator, 90%):** the memo is written only while the requesting worker is
+>   still current, so a late resolution from a replaced worker cannot seed the new worker.
+> - **Update Credentials** re-reads the saved connection and writes it into `CredentialCache`
+>   with the same arguments as `DocumentDBClusterItem.authenticateAndConnect`, still drops the
+>   client, calls `shutdownEvaluator(clusterId)`, and shows the localized modal only when a
+>   registered shell has the same `clusterId`. Evidence that the tree connects from these cached
+>   values as it would from storage: with an entry cached, `ClusterItemBase.connect` and
+>   `getChildren` call `beforeCachedClientConnect` (which runs the same `ensureConnectionReachable`
+>   as the storage path) and then build the client from the cache.
+> - **Decision (coordinator, 85%):** where the tree's storage path would prompt instead of
+>   connecting (no auth method, or native auth without both user and password), Update
+>   Credentials deletes the cache entry as before rather than writing it through. Otherwise the
+>   old entry would survive, or a cached entry would bypass the prompt.
+> - Tests: all four surface and auth-method combinations for eviction then refresh, a setting
+>   change after the first token, a resolution failure not memoized, replacement workers, and E4
+>   (below); Update Credentials cache contents for each auth method, the fallback deletes,
+>   playground shutdown, and the modal only for a matching shell.
+> - Noticed, not changed: `ExecuteStep` swallows a save failure, so the command then re-caches the
+>   stored (old) values and can still show the modal; its header comment still says "cache
+>   clearing". Playground `evaluate()` still reads `CredentialCache` to build the init message on
+>   every run (tracked in #1059).
+
 ### C4. The no-broker warning is narrower than its cited source
 
 **Source:** [comment 4454295628](https://github.com/microsoft/vscode-documentdb/pull/1050#discussion_r4454295628),
@@ -391,6 +439,10 @@ the setting affects all of VS Code. Do not prescribe it as a permanent fix.
 > sovereign clouds, including Azure China and Azure US Government, using the suggested wording.
 > Keep the link to microsoft/vscode#307340 and the instruction to restore the setting. Fix before
 > merge.
+
+> **Done (2026-11-04), commit `0aa47386`:** the caveat uses the suggested wording and links
+> microsoft/vscode#307340. It replaced the old "change the setting back" sentence rather than
+> repeating it. The warning that the setting affects all of VS Code is kept.
 
 ### C5. Settings text misstates applicability and precedence
 
@@ -447,6 +499,11 @@ to predict the two auth-source branches and the effect on another managed-identi
 > connection on the machine, and that the suffix applies in any cloud and does not choose an
 > audience. Fix before merge.
 
+> **Done (2026-11-04), commit `1f3ae591`:** rewrote the object `markdownDescription` and both
+> property descriptions in `package.json`. The coordinator rejected the first draft because the
+> plain `description` fields used Markdown setting links and the suffix text no longer said which
+> hosts receive tokens, and supplied the final text. `src/settingsContributions.test.ts` passes.
+
 ## Findings beyond Copilot
 
 ### E1. An unknown AADSTS code becomes an "opaque" broker error
@@ -499,6 +556,11 @@ code precedence and the truly code-less broker behavior. Record the chosen prece
 > `brokered: true`) instead of `brokerOpaque`. Only a code-less broker error stays opaque. Update
 > the pinned test, add the `Error.cause` case, and record the new precedence in
 > [D9](../decisions.md#d9-opaque-broker-errors). Fix before merge.
+
+> **Done (2026-11-04), commit `093b7ac9`:** an unknown AADSTS code is now classified before the
+> opaque broker rule, as `unknownAadsts` with `brokered: true`. A broker error without a code stays
+> `brokerOpaque`. The pinned test was updated as approved, a test with the code only in
+> `Error.cause` was added, and D9 states the new precedence.
 
 ### E2. Unclassified seeds erase known cloud evidence
 
@@ -620,6 +682,10 @@ generalize a built-in lookup into validation of arbitrary sovereign deployments.
 > disagree" guarantee in D6 and in the JSDoc of `resolveInteractiveTokenResource`. No runtime
 > warning is planned. Docs fix before merge.
 
+> **Done (2026-11-04), commit `cb2d769e`:** D6 and the JSDoc of
+> `resolveInteractiveTokenResource` now say the two "cannot disagree unless an explicit override is
+> set". No runtime change.
+
 ### E4. Late token completions can update diagnostics after their worker is gone
 
 **Assessment: P3, reproduced in both worker surfaces.**
@@ -673,6 +739,12 @@ new success and late success after new failure for both token sources and both s
 > **Operator decision (2026-11-04): accepted as recommended.** Option A, implemented together
 > with the C3 fix. Skip registry writes and clears when the worker that issued the token request
 > is no longer the current worker.
+
+> **Done (2026-11-04), commit `f1d820e5`:** `WorkerSessionManager` passes
+> `isCurrent = () => this._worker === worker` next to `postResponse`. Both token handlers skip
+> failure-registry writes and clears when it is false. Tests: a late failure after a replacement
+> worker succeeded records nothing, and a late success does not clear a newer failure, on both
+> surfaces and both auth methods.
 
 ## Other branches and assumptions checked
 
