@@ -55,7 +55,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
         }
         const customHostnameSuffix = vscode.workspace
             .getConfiguration()
-            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
+            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.hostnameSuffix;
         const allowedHosts = getOidcAllowedHosts(this.clusterCredentials.connectionString, customHostnameSuffix);
         traceAuthFlow(
             'managedIdentity.configureOidc',

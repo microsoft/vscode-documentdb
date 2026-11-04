@@ -109,7 +109,7 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
 
         const customHostnameSuffix = vscode.workspace
             .getConfiguration()
-            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
+            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.hostnameSuffix;
         const entraHostRecognized = hasDocumentDBHost(parsedConnectionString.hosts, customHostnameSuffix);
         if (entraHostRecognized) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);

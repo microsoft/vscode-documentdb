@@ -78,7 +78,7 @@ describe('EntraDiagnosticsProvider', () => {
                 expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
                 const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error });
                 expect(diagnosis?.providerId).toBe('entra-sign-in');
-                expect(diagnosis?.message).toContain('documentDB.customEnvironment.mongoClusterHostnameSuffix');
+                expect(diagnosis?.message).toContain('documentDB.customEnvironment.hostnameSuffix');
                 expect(diagnosis?.message).toContain('user settings');
                 expect(diagnosis?.message).not.toMatch(/private-cluster|example.com|10255|azure.com/);
                 expect(Object.getOwnPropertyDescriptors(error)).toEqual(descriptors);
@@ -96,7 +96,7 @@ describe('EntraDiagnosticsProvider', () => {
                 clusterId,
                 error: "Host 'private.example.com' is not valid for OIDC authentication with ALLOWED_HOSTS of '*.azure.us,*.azure.cn'",
             }),
-        ).toContain('documentDB.customEnvironment.mongoClusterHostnameSuffix');
+        ).toContain('documentDB.customEnvironment.hostnameSuffix');
         expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
     });
 

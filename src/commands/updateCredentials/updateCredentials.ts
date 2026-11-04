@@ -73,7 +73,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
 
     const customHostnameSuffix = vscode.workspace
         .getConfiguration()
-        .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
+        .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.hostnameSuffix;
     if (hasDocumentDBHost(parsedCS.hosts, customHostnameSuffix)) {
         if (!supportedAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);

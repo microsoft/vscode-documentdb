@@ -85,7 +85,7 @@ describe('PromptConnectionStringStep', () => {
         ['cluster.mongo.cosmos.azure.com', undefined, false],
     ])('classifies configured, lookalike, and RU host %s', async (host, suffix, recognized) => {
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-            get: vi.fn().mockReturnValue({ mongoClusterHostnameSuffix: suffix }),
+            get: vi.fn().mockReturnValue({ hostnameSuffix: suffix }),
         } as unknown as vscode.WorkspaceConfiguration);
         const context = makeContext(`mongodb://${host}:10255/`);
         await new PromptConnectionStringStep().prompt(context);

@@ -350,7 +350,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             oidcAllowedHosts: getOidcAllowedHosts(
                 initMsg.connectionString,
                 vscode.workspace.getConfiguration().get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)
-                    ?.mongoClusterHostnameSuffix,
+                    ?.hostnameSuffix,
             ),
         };
         this._spawnCount++;

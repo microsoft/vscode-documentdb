@@ -1992,7 +1992,7 @@
             "type": "object",
             "default": {},
             "scope": "machine",
-            "markdownDescription": "DocumentDB settings for sovereign and custom clouds. Interactive sign-in uses `ossrdbmsEndpoint` only when `#microsoft-sovereign-cloud.environment#` is `custom`. Managed identity uses it first, before the cluster host and the virtual machine's metadata, for every managed-identity connection on this machine. `mongoClusterHostnameSuffix` applies in any cloud and never selects a token audience. Empty values restore automatic selection.",
+            "markdownDescription": "DocumentDB settings for sovereign and custom clouds. Interactive sign-in uses `ossrdbmsEndpoint` only when `#microsoft-sovereign-cloud.environment#` is `custom`. Managed identity uses it first, before the cluster host and the virtual machine's metadata, for every managed-identity connection on this machine. `hostnameSuffix` applies in any cloud and never selects a token audience. Empty values restore automatic selection.",
             "properties": {
               "ossrdbmsEndpoint": {
                 "type": "string",
@@ -2000,7 +2000,7 @@
                 "patternErrorMessage": "Use an HTTPS resource such as https://ossrdbms-aad.database.usgovcloudapi.net, with no path or /.default, or leave it empty.",
                 "description": "Microsoft Entra token audience for DocumentDB, such as https://ossrdbms-aad.database.usgovcloudapi.net. Interactive sign-in uses it only when the cloud is custom. Managed identity uses it first, for every connection on this machine. Leave empty for automatic selection."
               },
-              "mongoClusterHostnameSuffix": {
+              "hostnameSuffix": {
                 "type": "string",
                 "pattern": "^\\s*(?:\\.?(?!(?:[cC][oO][mM]|[cC][oO]|[nN][eE][tT]|[oO][rR][gG]|[gG][oO][vV])\\.[a-zA-Z]{2}\\s*$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)?\\s*$",
                 "patternErrorMessage": "Use a trusted service hostname suffix such as .mongocluster.cosmos.example, with valid DNS labels and no wildcard, URL, port, or path. Bare top-level domains and common public suffixes such as com.cn are not allowed. Leave it empty to clear.",

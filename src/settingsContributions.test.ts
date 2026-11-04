@@ -67,7 +67,9 @@ describe('settings contributions', () => {
         if (!setting || !('properties' in setting)) {
             throw new Error('Missing custom environment schema');
         }
-        const schema = setting.properties.mongoClusterHostnameSuffix;
+        expect(Object.keys(setting.properties).sort()).toEqual(['hostnameSuffix', 'ossrdbmsEndpoint']);
+        expect(setting.additionalProperties).toBe(false);
+        const schema = setting.properties.hostnameSuffix;
         const pattern = new RegExp(schema.pattern);
         expect(schema.patternErrorMessage).toContain('.mongocluster.cosmos.example');
         expect(schema.patternErrorMessage).toContain('com.cn');

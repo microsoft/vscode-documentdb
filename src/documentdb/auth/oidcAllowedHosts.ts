@@ -45,7 +45,7 @@ export function hasDocumentDBHost(hosts: readonly string[], customHostnameSuffix
  * sovereign clouds. Anything we cannot positively classify as one of these
  * clouds falls back to the safe public-cloud default.
  *
- * A custom cloud's DocumentDB host suffix (`documentDB.customEnvironment.mongoClusterHostnameSuffix`)
+ * A custom cloud's DocumentDB host suffix (`documentDB.customEnvironment.hostnameSuffix`)
  * is trusted only when the user configured it explicitly and the host actually ends with it.
  *
  * The token audience for each cloud is chosen separately, in `documentdbTokenResource.ts`.
@@ -129,7 +129,7 @@ export function getAzureCloudFromHosts(connectionString: string): AzureHostCloud
 }
 
 /**
- * Validates `documentDB.customEnvironment.mongoClusterHostnameSuffix` and returns it without the
+ * Validates `documentDB.customEnvironment.hostnameSuffix` and returns it without the
  * leading dot. Bare TLDs and common two-label public suffixes can never be trusted.
  */
 export function normalizeCustomHostnameSuffix(value: unknown): string | undefined {

@@ -69,7 +69,7 @@ async function inferMethods(
     storedMethods: AuthMethodId[] = [AuthMethodId.NativeAuth, AuthMethodId.NoAuth],
 ): Promise<UpdateCredentialsWizardContext> {
     vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-        get: vi.fn().mockReturnValue({ mongoClusterHostnameSuffix: suffix }),
+        get: vi.fn().mockReturnValue({ hostnameSuffix: suffix }),
     } as unknown as vscode.WorkspaceConfiguration);
     mockGet.mockResolvedValue({
         id: 'stable-cluster-id',

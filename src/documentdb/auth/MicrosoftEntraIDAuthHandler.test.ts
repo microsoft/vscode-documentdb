@@ -280,7 +280,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
 
     it('passes the explicitly configured custom hostname suffix to the OIDC allowlist', async () => {
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-            get: vi.fn().mockReturnValue({ mongoClusterHostnameSuffix: '.database.example.com' }),
+            get: vi.fn().mockReturnValue({ hostnameSuffix: '.database.example.com' }),
         } as unknown as vscode.WorkspaceConfiguration);
         const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.database.example.com/'));
         const { options } = await handler.configureAuth();

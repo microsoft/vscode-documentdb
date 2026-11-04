@@ -47,7 +47,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         }
         const customHostnameSuffix = vscode.workspace
             .getConfiguration()
-            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.mongoClusterHostnameSuffix;
+            .get<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment)?.hostnameSuffix;
         // Get Microsoft Entra ID token
         let session: vscode.AuthenticationSession | undefined;
         try {

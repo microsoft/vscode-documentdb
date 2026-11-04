@@ -277,7 +277,7 @@ describe('WorkerSessionManager', () => {
 
         it('passes the configured custom hostname suffix to the worker allowlist', async (): Promise<void> => {
             vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-                get: vi.fn().mockReturnValue({ mongoClusterHostnameSuffix: '.database.example.com' }),
+                get: vi.fn().mockReturnValue({ hostnameSuffix: '.database.example.com' }),
             } as unknown as vscode.WorkspaceConfiguration);
             const manager = new WorkerSessionManager(callbacks);
             const initializing = manager.ensureWorker(

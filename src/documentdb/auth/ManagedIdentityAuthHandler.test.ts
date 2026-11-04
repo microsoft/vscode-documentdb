@@ -181,10 +181,10 @@ describe('ManagedIdentityAuthHandler', () => {
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
             get: vi.fn().mockReturnValue({
                 ossrdbmsEndpoint: 'https://database.example.com',
-                mongoClusterHostnameSuffix: '.database.example.com',
+                hostnameSuffix: '.database.example.com',
             }),
             inspect: vi.fn().mockReturnValue({
-                globalValue: { mongoClusterHostnameSuffix: '.database.example.com' },
+                globalValue: { hostnameSuffix: '.database.example.com' },
             }),
         } as unknown as vscode.WorkspaceConfiguration);
         const connectionString = 'mongodb://cluster.database.example.com/';

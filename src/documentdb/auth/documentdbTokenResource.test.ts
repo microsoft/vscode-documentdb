@@ -614,13 +614,13 @@ describe('resolveManagedIdentityTokenResource', () => {
 
 describe('resolveTokenResourceForCopy', () => {
     it.each([
-        [{ globalValue: { mongoClusterHostnameSuffix: '.private.example.com' } }, 'user'],
-        [{ workspaceValue: { mongoClusterHostnameSuffix: '.private.example.com' } }, 'workspace'],
-        [{ workspaceFolderValue: { mongoClusterHostnameSuffix: '.private.example.com' } }, 'workspace'],
+        [{ globalValue: { hostnameSuffix: '.private.example.com' } }, 'user'],
+        [{ workspaceValue: { hostnameSuffix: '.private.example.com' } }, 'workspace'],
+        [{ workspaceFolderValue: { hostnameSuffix: '.private.example.com' } }, 'workspace'],
         [
             {
-                globalValue: { mongoClusterHostnameSuffix: '.user.example.com' },
-                workspaceValue: { mongoClusterHostnameSuffix: '.private.example.com' },
+                globalValue: { hostnameSuffix: '.user.example.com' },
+                workspaceValue: { hostnameSuffix: '.private.example.com' },
             },
             'user',
         ],

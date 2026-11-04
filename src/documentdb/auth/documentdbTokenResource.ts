@@ -50,7 +50,7 @@ export interface ConfiguredCloud {
 /** `documentDB.customEnvironment`. */
 export interface DocumentDBCustomEnvironment {
     readonly ossrdbmsEndpoint?: string;
-    readonly mongoClusterHostnameSuffix?: string;
+    readonly hostnameSuffix?: string;
 }
 
 export interface TokenResourceResolverDeps {
@@ -473,7 +473,7 @@ function createResolutionDetails(
               ? 'valid'
               : 'invalid',
         customOssrdbmsEndpointApplicable: false,
-        customHostnameSuffixSet: !!normalizeCustomHostnameSuffix(customEnvironment.mongoClusterHostnameSuffix),
+        customHostnameSuffixSet: !!normalizeCustomHostnameSuffix(customEnvironment.hostnameSuffix),
         customHostnameSuffixSource: deps.getCustomHostnameSuffixSource(),
         armMetadata: 'notNeeded',
         imdsAzEnvironment: 'notQueried',
@@ -546,12 +546,12 @@ function getDefaultDeps(): TokenResourceResolverDeps {
             const inspected = vscode.workspace
                 .getConfiguration()
                 .inspect<DocumentDBCustomEnvironment>(settingsKeys.customEnvironment);
-            if (inspected?.globalValue?.mongoClusterHostnameSuffix?.trim()) {
+            if (inspected?.globalValue?.hostnameSuffix?.trim()) {
                 return 'user';
             }
             if (
-                inspected?.workspaceValue?.mongoClusterHostnameSuffix?.trim() ||
-                inspected?.workspaceFolderValue?.mongoClusterHostnameSuffix?.trim()
+                inspected?.workspaceValue?.hostnameSuffix?.trim() ||
+                inspected?.workspaceFolderValue?.hostnameSuffix?.trim()
             ) {
                 return 'workspace';
             }

@@ -70,7 +70,7 @@ If none is available, connecting fails with a message that names
 `documentDB.customEnvironment.ossrdbmsEndpoint`. It never falls back to the public cloud.
 
 The token audience and trusted hostnames are separate settings. For a custom cloud's service
-domain, configure `documentDB.customEnvironment.mongoClusterHostnameSuffix` as described below.
+domain, configure `documentDB.customEnvironment.hostnameSuffix` as described below.
 
 ## Private endpoints and custom DNS names
 
@@ -80,7 +80,7 @@ and selects the corresponding OIDC hostname allowlist. For other names it defaul
 A private endpoint that keeps its recognized Azure hostname needs no suffix override.
 
 For a trusted private service name outside those domains, set
-`documentDB.customEnvironment.mongoClusterHostnameSuffix` to the service's DNS suffix, for example
+`documentDB.customEnvironment.hostnameSuffix` to the service's DNS suffix, for example
 `.documentdb.private.example`. This applies to **built-in Government and China clouds too**, not
 only custom clouds. The connection-string hostname must be a subdomain of the configured suffix.
 For a non-SRV (`mongodb://`) CNAME, the name in the connection string is checked, not its canonical
@@ -94,7 +94,7 @@ such as `cluster.documentdb.private.example`:
 {
     "documentDB.customEnvironment": {
         "ossrdbmsEndpoint": "https://ossrdbms-aad.database.usgovcloudapi.net",
-        "mongoClusterHostnameSuffix": ".documentdb.private.example"
+        "hostnameSuffix": ".documentdb.private.example"
     }
 }
 ```
@@ -110,7 +110,7 @@ SRV-domain or TLS checks. Do not broaden it to an arbitrary domain or public suf
 unrelated targets.
 
 If the driver rejects a host for OIDC authentication, the extension explains that the host does not
-appear to be allowed and names `documentDB.customEnvironment.mongoClusterHostnameSuffix` in User
+appear to be allowed and names `documentDB.customEnvironment.hostnameSuffix` in User
 settings. Verify the trusted service domain with your cloud administrator, configure it, and
 connect again. The audience override alone does not authorize a hostname.
 
@@ -121,7 +121,7 @@ Both are properties of the `documentDB.customEnvironment` setting, so they go in
 {
     "documentDB.customEnvironment": {
         "ossrdbmsEndpoint": "https://ossrdbms-aad.database.example",
-        "mongoClusterHostnameSuffix": ".mongocluster.cosmos.example"
+        "hostnameSuffix": ".mongocluster.cosmos.example"
     }
 }
 ```

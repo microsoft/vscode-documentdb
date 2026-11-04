@@ -100,7 +100,7 @@ and this local evidence is excluded from startup telemetry.
 
 The existing Entra diagnostics rule table also recognizes the driver's precise OIDC
 `ALLOWED_HOSTS` host-rejection message. Through `ConnectionDiagnosticsService`, it returns a
-text-only explanation naming `documentDB.customEnvironment.mongoClusterHostnameSuffix` in user
+text-only explanation naming `documentDB.customEnvironment.hostnameSuffix` in user
 settings, without echoing the host, changing the error, or requiring a recent token failure.
 
 Both custom-environment properties have Settings schema patterns and actionable validation
@@ -108,6 +108,9 @@ messages. The audience validation added in R1 is reused; the hostname-suffix pat
 the existing normalizer, including case, an optional leading dot, valid DNS labels, and R5's
 bare/common-public-suffix rejection. Empty or whitespace-only values still clear either property.
 There is no new runtime validation path.
+
+The hostname property is `hostnameSuffix`, renamed before shipping without a compatibility alias.
+Earlier iteration records retain the original property name.
 
 `sovereignAuth.integration.test.ts` exercises the real default audience resolvers and cloud
 configuration reader through Government/China handlers, plus Government shell/playground worker
