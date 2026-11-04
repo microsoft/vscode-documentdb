@@ -638,6 +638,25 @@ Government plus public; all-private; bracketed IPs; custom suffix; zero token ca
 > and treat more than one recognized cloud as a contradiction. Include tests for interactive,
 > managed identity and copy.
 
+> **Done (2026-11-04), commit `134c7083`.** The operator brought this forward into #1050 before
+> the production merge.
+>
+> - `getAzureCloudFromHosts` ignores hosts outside the built-in Azure domains and returns
+>   `{ cloud, hasOtherHosts }`. `cloud` is the single recognized cloud, `'conflicting'`, or
+>   `undefined`.
+> - **Interactive:** the mismatch check works again with mixed hosts. Conflicting hosts stop sign-in
+>   with `hostCloudConflict` before any resource is resolved.
+> - **Managed identity:** the explicit override still wins (D7). After it, conflicting hosts stop,
+>   and a recognized host cloud is used without asking IMDS.
+> - **Copy:** conflicting hosts fall back to the VS Code cloud, because copying never fails.
+> - **Trace:** `hostsOutsideAzure` added; the telemetry allowlists gained `conflicting` and
+>   `hostCloudConflict`. No host names are recorded.
+> - **Docs:** D8 and the user guide describe the new rules.
+> - **Tests:** both host orders; IPv4 and IPv6 hosts; conflicts across the three flows; the
+>   override precedence; no IMDS call; trace mapping.
+>
+> Case 2 ran in full on `1d388086` and passed: Vitest 5633 passed, 1 skipped.
+
 ### E3. A custom override can contradict a known login authority
 
 **Assessment: P3 hardening gap, not a claim that explicit-override precedence is wrong.**
