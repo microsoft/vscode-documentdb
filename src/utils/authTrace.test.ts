@@ -56,6 +56,17 @@ describe('describeAuthError', () => {
             expect(JSON.stringify(properties)).not.toMatch(/private|https|AzurePrivateCloud/i);
         });
 
+        it('copies a host-cloud conflict', () => {
+            const properties: Record<string, string> = {};
+            traceAuthFlow(
+                'entraCloud.unresolved',
+                { hostCloud: 'conflicting', errorKind: 'hostCloudConflict', hostsOutsideAzure: true },
+                undefined,
+                { startupCorrelationId: 'startup-id', surface: 'extension', startupProperties: properties },
+            );
+            expect(properties).toMatchObject({ hostCloud: 'conflicting', errorKind: 'hostCloudConflict' });
+        });
+
         it('rejects dynamic values even under known property names', () => {
             const properties: Record<string, string> = {};
             traceAuthFlow(

@@ -364,6 +364,34 @@ describe('resolveInteractiveTokenResource', () => {
         });
     });
 
+    it.each([
+        'mongodb://a.mongocluster.cosmos.azure.us,b.documentdb.private.example/',
+        'mongodb://b.documentdb.private.example,a.mongocluster.cosmos.azure.us/',
+    ])('keeps the mismatch check when private hosts are mixed in: %s', async (connectionString) => {
+        const deps = createDeps();
+        await expect(resolveInteractiveTokenResource(connectionString, deps)).rejects.toMatchObject({
+            kind: 'cloudMismatch',
+            details: expect.objectContaining({ hostCloud: 'AzureUSGovernment', hostsOutsideAzure: true }),
+        });
+
+        vi.mocked(deps.getConfiguredCloud).mockReturnValue({ name: 'AzureUSGovernment', isCustomCloud: false });
+        const resolution = await resolveInteractiveTokenResource(connectionString, deps);
+        expect(resolution).toMatchObject({ resource: governmentResource });
+        expect(JSON.stringify(resolution.details)).not.toContain('private.example');
+    });
+
+    it('stops hosts in more than one cloud before resolving a resource', async () => {
+        const deps = createDeps();
+        useCustomCloud(deps);
+        await expect(
+            resolveInteractiveTokenResource('mongodb://a.azure.com,b.azure.us/', deps),
+        ).rejects.toMatchObject({
+            kind: 'hostCloudConflict',
+            details: expect.objectContaining({ hostCloud: 'conflicting', errorKind: 'hostCloudConflict' }),
+        });
+        expect(deps.fetchArmMetadata).not.toHaveBeenCalled();
+    });
+
     it('retains examined host evidence when custom resolution fails', async () => {
         const deps = createDeps();
         useCustomCloud(deps);
@@ -554,6 +582,36 @@ describe('resolveManagedIdentityTokenResource', () => {
             });
         },
     );
+
+    it('uses the recognized host cloud when private hosts are mixed in, without IMDS', async () => {
+        const deps = createDeps();
+        expect(
+            await resolveManagedIdentityTokenResource(
+                'mongodb://a.mongocluster.cosmos.azure.us,b.documentdb.private.example/',
+                deps,
+            ),
+        ).toMatchObject({
+            resource: governmentResource,
+            reason: 'host',
+            details: { hostCloud: 'AzureUSGovernment', hostsOutsideAzure: true },
+        });
+        expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('stops hosts in more than one cloud without IMDS, unless the override is set', async () => {
+        const deps = createDeps();
+        const conflicting = 'mongodb://a.azure.com,b.azure.us/';
+        await expect(resolveManagedIdentityTokenResource(conflicting, deps)).rejects.toMatchObject({
+            kind: 'hostCloudConflict',
+        });
+        expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
+
+        vi.mocked(deps.getCustomEnvironment).mockReturnValue({ ossrdbmsEndpoint: governmentResource });
+        expect(await resolveManagedIdentityTokenResource(conflicting, deps)).toMatchObject({
+            resource: governmentResource,
+            reason: 'customOverride',
+        });
+    });
 });
 
 describe('resolveTokenResourceForCopy', () => {
@@ -630,6 +688,25 @@ describe('resolveTokenResourceForCopy', () => {
         });
         expect(deps.fetchArmMetadata).not.toHaveBeenCalled();
         expect(deps.readImdsAzEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('uses the recognized host cloud when private hosts are mixed in', () => {
+        expect(
+            resolveTokenResourceForCopy(
+                'mongodb://b.documentdb.private.example,a.mongocluster.cosmos.azure.us/',
+                createDeps(),
+            ),
+        ).toMatchObject({ resource: governmentResource, reason: 'host' });
+    });
+
+    it('falls back to the VS Code cloud for hosts in more than one cloud', () => {
+        const deps = createDeps();
+        vi.mocked(deps.getConfiguredCloud).mockReturnValue({ name: 'AzureChinaCloud', isCustomCloud: false });
+        expect(resolveTokenResourceForCopy('mongodb://a.azure.com,b.azure.us/', deps)).toMatchObject({
+            resource: chinaResource,
+            reason: 'setting',
+            details: { hostCloud: 'conflicting' },
+        });
     });
 });
 

@@ -136,22 +136,44 @@ describe('getAzureCloudFromHosts', () => {
         ['azure.com', 'AzureCloud'],
         ['azure.us', 'AzureUSGovernment'],
         ['azure.cn', 'AzureChinaCloud'],
-    ])('classifies %s only when every host agrees', (suffix, cloud) => {
-        expect(getAzureCloudFromHosts(`mongodb://a.${suffix}:10255,b.${suffix}:10255/`)).toBe(cloud);
-        expect(getAzureCloudFromHosts(`mongodb+srv://CLUSTER.${suffix}/`)).toBe(cloud);
+    ])('classifies %s hosts', (suffix, cloud) => {
+        expect(getAzureCloudFromHosts(`mongodb://a.${suffix}:10255,b.${suffix}:10255/`)).toEqual({
+            cloud,
+            hasOtherHosts: false,
+        });
+        expect(getAzureCloudFromHosts(`mongodb+srv://CLUSTER.${suffix}/`)).toEqual({ cloud, hasOtherHosts: false });
+    });
+
+    it.each([
+        'mongodb://a.mongocluster.cosmos.azure.us,b.documentdb.private.example/',
+        'mongodb://b.documentdb.private.example,a.mongocluster.cosmos.azure.us/',
+        'mongodb://a.mongocluster.cosmos.azure.us,10.0.0.4:10260/',
+        'mongodb://a.mongocluster.cosmos.azure.us,[::1]:10260/',
+    ])('keeps the recognized cloud when other hosts are present: %s', (connectionString) => {
+        expect(getAzureCloudFromHosts(connectionString)).toEqual({
+            cloud: 'AzureUSGovernment',
+            hasOtherHosts: true,
+        });
     });
 
     it.each([
         'mongodb://a.azure.com,b.azure.us/',
         'mongodb://a.azure.cn,b.azure.com/',
-        'mongodb://a.azure.com,private.example.com/',
+        'mongodb://a.azure.com,b.azure.us,private.example.com/',
+    ])('reports hosts in more than one cloud as conflicting: %s', (connectionString) => {
+        expect(getAzureCloudFromHosts(connectionString).cloud).toBe('conflicting');
+    });
+
+    it.each([
         'mongodb://private.example.com/',
         'mongodb://node.azure.us.evil.com/',
         'mongodb://node.azure.xyz/',
         'mongodb://127.0.0.1/',
-        'not a connection string',
-        '',
-    ])('does not classify mixed, unknown, or invalid hosts: %s', (connectionString) => {
-        expect(getAzureCloudFromHosts(connectionString)).toBeUndefined();
+    ])('does not classify unrecognized hosts: %s', (connectionString) => {
+        expect(getAzureCloudFromHosts(connectionString)).toEqual({ cloud: undefined, hasOtherHosts: true });
+    });
+
+    it.each(['not a connection string', ''])('does not classify invalid input: %s', (connectionString) => {
+        expect(getAzureCloudFromHosts(connectionString)).toEqual({ cloud: undefined, hasOtherHosts: false });
     });
 });

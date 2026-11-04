@@ -36,7 +36,9 @@ These values are published by each cloud in its Azure Resource Manager metadata 
 
 If a cluster host ends in `azure.com`, `azure.us`, or `azure.cn`, and that suffix identifies a
 different cloud from the one VS Code is signed in to, the extension stops before sign-in and asks
-you to change `microsoft-sovereign-cloud.environment` to the cluster's cloud.
+you to change `microsoft-sovereign-cloud.environment` to the cluster's cloud. Hosts outside these
+domains, such as private DNS names, are ignored for this check. If the hosts belong to more than one
+of these clouds, the extension stops and asks you to check the connection string.
 
 ## Managed identity
 
@@ -44,6 +46,8 @@ For a managed identity, the extension selects the token resource in this order:
 
 1. `documentDB.customEnvironment.ossrdbmsEndpoint`, if configured.
 2. The cluster host: `azure.com` for public, `azure.us` for Government, or `azure.cn` for China.
+   Other host names, such as private DNS names, are ignored. Hosts in more than one cloud stop the
+   connection.
 3. The Azure VM's instance metadata (IMDS), but **only `AZUREPUBLICCLOUD` is recognized**.
 
 Government, China, and other IMDS environment values are not mapped to a cloud. If the host is

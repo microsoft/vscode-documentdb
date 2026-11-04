@@ -71,6 +71,7 @@ export type TokenResourceErrorKind =
     | 'customCloudDefinitionInvalid'
     | 'invalidCustomOverride'
     | 'cloudMismatch'
+    | 'hostCloudConflict'
     | 'managedIdentityCloudUnknown';
 
 /** A failure to choose a token audience. The message is user-facing and already actionable. */
@@ -119,10 +120,9 @@ export async function resolveInteractiveTokenResource(
     connectionString: string,
     deps: TokenResourceResolverDeps = getDefaultDeps(),
 ): Promise<ResolvedTokenResource> {
-    const hostCloud = getAzureCloudFromHosts(connectionString);
     const customEnvironment = deps.getCustomEnvironment();
     const details = createResolutionDetails('interactive', customEnvironment, deps);
-    details.hostCloud = hostCloud ?? 'none';
+    const hostCloud = readHostCloud(connectionString, details);
     const configured = getConfiguredCloudForDetails(deps, details);
     if (!configured) {
         throw resolutionError(
@@ -132,6 +132,9 @@ export async function resolveInteractiveTokenResource(
             'customCloudDefinitionInvalid',
             details,
         );
+    }
+    if (hostCloud === 'conflicting') {
+        throw hostCloudConflictError(details);
     }
     const resolved = configured.isCustomCloud
         ? await resolveCustomCloud(configured, customEnvironment, deps, details)
@@ -179,16 +182,18 @@ export async function resolveManagedIdentityTokenResource(
     connectionString: string,
     deps: TokenResourceResolverDeps = getDefaultDeps(),
 ): Promise<ResolvedTokenResource> {
-    const hostCloud = getAzureCloudFromHosts(connectionString);
     const customEnvironment = deps.getCustomEnvironment();
     const details = createResolutionDetails('managedIdentity', customEnvironment, deps);
-    details.hostCloud = hostCloud ?? 'none';
+    const hostCloud = readHostCloud(connectionString, details);
     getConfiguredCloudForDetails(deps, details);
     const override = getApplicableOverride(customEnvironment, details);
     if (override) {
         return withDetails(fromResource(override, 'customOverride'), details);
     }
 
+    if (hostCloud === 'conflicting') {
+        throw hostCloudConflictError(details);
+    }
     if (hostCloud) {
         return withDetails(fromBuiltInCloud(hostCloud, 'host'), details);
     }
@@ -227,10 +232,9 @@ export function resolveTokenResourceForCopy(
         | 'warn'
     > = getDefaultDeps(),
 ): ResolvedTokenResource {
-    const hostCloud = getAzureCloudFromHosts(connectionString);
     const customEnvironment = deps.getCustomEnvironment();
     const details = createResolutionDetails('copy', customEnvironment, deps);
-    details.hostCloud = hostCloud ?? 'none';
+    const hostCloud = readHostCloud(connectionString, details);
     details.customOssrdbmsEndpointApplicable = true;
     const override = parseTokenResource(customEnvironment.ossrdbmsEndpoint);
     if (override) {
@@ -244,7 +248,8 @@ export function resolveTokenResourceForCopy(
         );
     }
 
-    if (hostCloud) {
+    // Copying never fails; hosts in several clouds give no usable evidence, so the setting decides.
+    if (hostCloud && hostCloud !== 'conflicting') {
         return withDetails(fromBuiltInCloud(hostCloud, 'host'), details);
     }
 
@@ -414,6 +419,27 @@ function resolutionError(
     details: Record<string, string | boolean>,
 ): TokenResourceResolutionError {
     return new TokenResourceResolutionError(message, kind, { ...details, errorKind: kind });
+}
+
+/** Reads the cloud evidence of the hosts into `details`, without recording any host name. */
+function readHostCloud(
+    connectionString: string,
+    details: Record<string, string | boolean>,
+): DocumentDBEntraCloud | 'conflicting' | undefined {
+    const { cloud, hasOtherHosts } = getAzureCloudFromHosts(connectionString);
+    details.hostCloud = cloud ?? 'none';
+    details.hostsOutsideAzure = hasOtherHosts;
+    return cloud;
+}
+
+function hostCloudConflictError(details: Record<string, string | boolean>): TokenResourceResolutionError {
+    return resolutionError(
+        l10n.t(
+            'The host names of this cluster belong to more than one Azure cloud (azure.com, azure.us, azure.cn). A connection can use only one cloud. Check the connection string, then connect again.',
+        ),
+        'hostCloudConflict',
+        details,
+    );
 }
 
 function createResolutionDetails(

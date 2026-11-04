@@ -81,39 +81,51 @@ export function getOidcAllowedHosts(connectionString: string, customHostnameSuff
     return DEFAULT_ALLOWED_HOSTS;
 }
 
+export interface AzureHostCloud {
+    /**
+     * The one built-in cloud of the recognized hosts, `'conflicting'` when they span more than one
+     * cloud, or `undefined` when no host is recognized.
+     */
+    readonly cloud: DocumentDBEntraCloud | 'conflicting' | undefined;
+    /** Whether any host is outside the built-in Azure domains, such as a private DNS name or an IP address. */
+    readonly hasOtherHosts: boolean;
+}
+
 /**
- * Returns the built-in Azure cloud a connection string's hosts belong to, when every host agrees.
+ * Returns the built-in Azure cloud of a connection string's hosts.
  *
  * `azure.com` is the public cloud, `azure.us` Azure US Government, and `azure.cn` Azure China. Hosts
- * outside these domains (private DNS names, IP addresses) return `undefined`.
+ * outside these domains (private DNS names, IP addresses) carry no cloud evidence, so they are ignored
+ * rather than discarding the evidence of the recognized hosts.
  */
-export function getAzureCloudFromHosts(connectionString: string): DocumentDBEntraCloud | undefined {
+export function getAzureCloudFromHosts(connectionString: string): AzureHostCloud {
     let hosts: string[];
     try {
         hosts = new DocumentDBConnectionString(connectionString).hosts ?? [];
     } catch {
-        return undefined;
+        return { cloud: undefined, hasOtherHosts: false };
     }
 
-    const clouds = new Set<DocumentDBEntraCloud | undefined>(
-        hosts.map((host) => {
-            switch (getAzureHostSuffix(host)) {
-                case 'azure.com':
-                    return 'AzureCloud';
-                case 'azure.us':
-                    return 'AzureUSGovernment';
-                case 'azure.cn':
-                    return 'AzureChinaCloud';
-                default:
-                    return undefined;
-            }
-        }),
-    );
-
-    if (clouds.size !== 1) {
-        return undefined;
+    const clouds = new Set<DocumentDBEntraCloud>();
+    let hasOtherHosts = false;
+    for (const host of hosts) {
+        switch (getAzureHostSuffix(host)) {
+            case 'azure.com':
+                clouds.add('AzureCloud');
+                break;
+            case 'azure.us':
+                clouds.add('AzureUSGovernment');
+                break;
+            case 'azure.cn':
+                clouds.add('AzureChinaCloud');
+                break;
+            default:
+                hasOtherHosts = true;
+        }
     }
-    return [...clouds][0];
+
+    const cloud = clouds.size > 1 ? 'conflicting' : [...clouds][0];
+    return { cloud, hasOtherHosts };
 }
 
 /**

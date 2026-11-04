@@ -177,6 +177,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             authProvider: 'microsoft-sovereign-cloud',
             brokerImplementation: 'default',
             hostCloud: 'AzureUSGovernment',
+            hostsOutsideAzure: false,
             customOssrdbmsEndpointState: 'valid',
             customOssrdbmsEndpointApplicable: true,
             customHostnameSuffixSet: false,

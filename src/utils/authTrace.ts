@@ -96,7 +96,7 @@ function recordCloudResolution(details: AuthTraceDetails, properties: ITelemetry
             : 'unknown';
     properties.hostCloud =
         typeof details.hostCloud === 'string' &&
-        ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud', 'none'].includes(details.hostCloud)
+        ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud', 'conflicting', 'none'].includes(details.hostCloud)
             ? details.hostCloud
             : 'unknown';
     properties.errorKind =
@@ -106,6 +106,7 @@ function recordCloudResolution(details: AuthTraceDetails, properties: ITelemetry
             'customCloudDefinitionInvalid',
             'invalidCustomOverride',
             'cloudMismatch',
+            'hostCloudConflict',
             'managedIdentityCloudUnknown',
         ].includes(details.errorKind)
             ? details.errorKind

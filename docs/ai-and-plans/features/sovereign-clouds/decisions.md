@@ -136,7 +136,14 @@ reason to set it, and a stale value would pick the wrong audience silently.
 For interactive sign-in, when the cluster host's Azure domain (`azure.com`, `azure.us`, `azure.cn`)
 belongs to a different cloud than the one VS Code is signed in to, the request is stopped before a
 token is requested, with a message naming both clouds and the setting. Hosts outside these domains,
-such as private DNS names, are not checked.
+such as private DNS names or IP addresses, carry no cloud evidence and are ignored, so they no longer
+hide the cloud of the recognized hosts.
+
+When the recognized hosts belong to more than one cloud, the request stops with a message to check
+the connection string (`hostCloudConflict`). Managed identity does the same, after its explicit
+override (D7). Copy Connection String never fails, so for conflicting hosts it falls back to the
+VS Code cloud. These rules were added on 2026-11-04 for review finding E2
+([iteration 02](iterations/02-copilot-feedback-and-edge-case-review.md#e2-unclassified-seeds-erase-known-cloud-evidence)).
 
 ## D9. Opaque broker errors
 
