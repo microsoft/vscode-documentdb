@@ -231,7 +231,12 @@ function context(
 }
 
 function withoutDetails(row: PanelRow): PanelRow {
-    return { id: row.id, status: row.status, segments: row.segments };
+    return {
+        id: row.id,
+        status: row.status,
+        segments: row.segments,
+        ...(row.durationMs === undefined ? {} : { durationMs: row.durationMs }),
+    };
 }
 
 /** WI-18: a warning or error row always explains itself in its details; pending rows offer none. */
@@ -421,7 +426,8 @@ describe('Acceptance (design §8.1)', (): void => {
             authenticated: true,
             serverLine: { engineVersion: '0.107.0', apiVersion: '7.0.12', host },
         });
-        expect(rowText(view, 'databaseAccess')).toMatch(/Ping \d+ ms · 1 database visible/);
+        // The fake server answers the ping at once, which the panel formats as "< 1 ms" (decision 0050).
+        expect(rowText(view, 'databaseAccess')).toMatch(/Ping (?:< )?\d+ ms · 1 database visible/);
         expect(view.run.results.map((item): string => item.checkId)).toEqual(
             getPlannedTroubleshooterChecks().map((check): string => check.id),
         );
@@ -970,7 +976,7 @@ describe('Acceptance (design §8.1)', (): void => {
                 });
                 const access = view.finished.rows.find((row): boolean => row.id === 'databaseAccess');
                 expect(access?.status).toBe('warning');
-                expect(rowText(view, 'databaseAccess')).toMatch(/^Ping \d+ ms · Listing databases needs sign-in$/);
+                expect(rowText(view, 'databaseAccess')).toMatch(/^Ping (?:< )?\d+ ms · Listing databases needs sign-in$/);
                 expect(access?.details?.findings[0]).toMatchObject({
                     severity: 'warning',
                     title: 'Sign-in required to use this connection',
@@ -1014,7 +1020,7 @@ describe('Acceptance (design §8.1)', (): void => {
             expect(view.result).toMatchObject({ outcome: 'connected', authenticated: false });
             expect(view.result.signInRequired).toBeUndefined();
             expect(view.result.headline).toBeUndefined();
-            expect(rowText(view, 'databaseAccess')).toMatch(/^Ping \d+ ms · 1 database visible$/);
+            expect(rowText(view, 'databaseAccess')).toMatch(/^Ping (?:< )?\d+ ms · 1 database visible$/);
         });
 
         it('19. an unsupported command stays "not supported", not a sign-in requirement', async (): Promise<void> => {

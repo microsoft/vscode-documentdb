@@ -244,11 +244,18 @@ describe('panel row details (WI-18 prototype)', () => {
         ]);
     });
 
-    it('shows evidence for the other healthy rows, with the ping as the only timing', (): void => {
+    it('shows evidence for the other healthy rows; with one host and one attempt, the ping is the only timing', (): void => {
         const output = withRowDetails(rows(), operatorRun(), describeFinding);
 
+        // One host: its time would repeat the row's badge. One attempt: nothing to compare (WI-33).
         expect(details(output, 'networkConnection')?.evidence).toEqual([
-            { kind: 'tcpHost', host: srvTarget, port: 10260, connectedAddress: publicAddress, failedAddresses: [] },
+            {
+                kind: 'tcpHost',
+                host: srvTarget,
+                port: 10260,
+                connectedAddress: publicAddress,
+                failedAddresses: [],
+            },
         ]);
         expect(details(output, 'secureConnection')?.evidence).toEqual([
             {
@@ -296,10 +303,82 @@ describe('panel row details (WI-18 prototype)', () => {
                 serverVersion: '7.0.0',
             },
         ]);
+        // Decision 0050 allows each host's check time and each TCP connect time, but a single-host row
+        // and a single-attempt host leave them out (WI-33). The checks' other timing facts, the greeting
+        // round trip (40) and command times (50, 20), stay out too.
         const text = JSON.stringify(output);
-        for (const timing of ['4321', 'latencyMs', 'roundTripMs', 'durationMs', '"40"', '31']) {
+        for (const timing of ['latencyMs', 'roundTripMs', 'durationMs', 'connectMs', ':40', ':50', ':20', ':31']) {
             expect(text).not.toContain(timing);
         }
+    });
+
+    it('gives each host section its time only when the row has two or more hosts (WI-33)', (): void => {
+        const hello = (target: string, durationMs: number): CheckResult<FindingCode> =>
+            result('hello', { target, durationMs, facts: { handshake: 'opMsg', topology: 'documentdbGateway' } });
+        const two = withRowDetails(
+            rows(),
+            [hello('host-a.test:27017', 120), hello('host-b.test:27017', 340)],
+            describeFinding,
+        );
+        const one = withRowDetails(rows(), [hello('host-a.test:27017', 120)], describeFinding);
+
+        expect(
+            details(two, 'serverResponse')?.evidence.map((evidence) => ('durationMs' in evidence ? evidence.durationMs : undefined)),
+        ).toEqual([120, 340]);
+        expect(details(one, 'serverResponse')?.evidence).toHaveLength(1);
+        expect(details(one, 'serverResponse')?.evidence[0]).not.toHaveProperty('durationMs');
+    });
+
+    it("gives each TCP host its time and connect times only to a host with two or more attempts (WI-33)", (): void => {
+        const output = withRowDetails(
+            rows({ networkConnection: 'warning' }),
+            [
+                result('tcp', {
+                    target: 'host-a.test:27017',
+                    durationMs: 3046.5,
+                    facts: {
+                        attempts: [
+                            { address: '2001:db8::5', family: 6, outcome: 'failed', errorCode: 'ETIMEDOUT', latencyMs: 3000 },
+                            // A repeated address keeps its first attempt.
+                            { address: '2001:db8::5', family: 6, outcome: 'failed', errorCode: 'ETIMEDOUT', latencyMs: 9 },
+                            { address: '203.0.113.9', family: 4, outcome: 'failed', errorCode: 'ECONNREFUSED' },
+                            { address: '203.0.113.10', family: 4, outcome: 'connected', latencyMs: 42.5 },
+                        ],
+                        connectedAddress: { address: '203.0.113.10', family: 4 },
+                    },
+                }),
+                result('tcp', {
+                    target: 'host-b.test:27017',
+                    status: 'fail',
+                    durationMs: 12,
+                    facts: {
+                        attempts: [{ address: '203.0.113.11', family: 4, outcome: 'failed', latencyMs: 11 }],
+                        connectedAddress: null,
+                    },
+                }),
+            ],
+            describeFinding,
+        );
+
+        expect(details(output, 'networkConnection')?.evidence).toEqual([
+            {
+                kind: 'tcpHost',
+                host: 'host-a.test',
+                port: 27017,
+                connectedAddress: '203.0.113.10',
+                connectMs: 42.5,
+                failedAddresses: [{ address: '2001:db8::5', connectMs: 3000 }, { address: '203.0.113.9' }],
+                durationMs: 3046.5,
+            },
+            {
+                kind: 'tcpHost',
+                host: 'host-b.test',
+                port: 27017,
+                // One attempt: its connect time is all but the host's own time.
+                failedAddresses: [{ address: '203.0.113.11' }],
+                durationMs: 12,
+            },
+        ]);
     });
 
     it('lists what the Connection settings evidence line counts, without any secret', (): void => {
@@ -403,7 +482,12 @@ describe('panel row details (WI-18 prototype)', () => {
 
             expect(network?.findings.map((item): string => item.severity)).toEqual(['error']);
             expect(network?.evidence).toEqual([
-                { kind: 'tcpHost', host: 'host-a.test', port: 27017, failedAddresses: ['203.0.113.9'] },
+                {
+                    kind: 'tcpHost',
+                    host: 'host-a.test',
+                    port: 27017,
+                    failedAddresses: [{ address: '203.0.113.9' }],
+                },
             ]);
         });
 

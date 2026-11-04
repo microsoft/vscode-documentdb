@@ -13,6 +13,7 @@ import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line
 
 import { ConnectivityTroubleshooter } from './ConnectivityTroubleshooter';
 import { type PanelEvent, type RunUpdate, type TimeoutProfile } from './connectivityTroubleshooterTypes';
+import { formatDuration } from './formatEvidence';
 import { panelRowIds, type PanelRow } from './panelTypes';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -147,7 +148,7 @@ const connected: PanelRow[] = [
     {
         id: 'secureConnection',
         status: 'done',
-        segments: [{ kind: 'tlsProtocol', protocol: 'TLSv1.3' }, { kind: 'certificateTrusted' }],
+        segments: [{ kind: 'certificateTrusted' }],
     },
     {
         id: 'serverResponse',
@@ -684,6 +685,7 @@ describe('ConnectivityTroubleshooter', () => {
             expect(save).not.toHaveBeenCalled();
             expect(host.textContent).toContain('Could not save the report: No window');
         });
+
     });
 
     it('keeps only Re-run, Show report and Share report in the finished footer and reveals both sharing choices', async () => {
@@ -1292,6 +1294,147 @@ describe('ConnectivityTroubleshooter', () => {
                 expect(text).toContain(line);
             }
             expect(text).not.toMatch(/denied|\b(?:13|18|59|115)\b|Unauthorized|CommandNotFound/);
+        });
+
+        it('says how long each host took and when each attempt connected or failed, the TLS version as people write it and a formatted ping (0050, WI-33)', async () => {
+            const hostA = 'node-a.example.test';
+            const hostB = 'node-b.example.test';
+            await render();
+            await send({ type: 'started', runId: 'run-1', startedAt: 1, rows: pending });
+            await send({
+                type: 'finished',
+                runId: 'run-1',
+                finishedAt: 2,
+                rows: rowsWith(connected, [
+                    {
+                        id: 'serverAddress',
+                        status: 'done',
+                        segments: [{ kind: 'resolved', resolved: 1, total: 1 }],
+                        details: {
+                            findings: [],
+                            evidence: [
+                                {
+                                    kind: 'dnsHost',
+                                    host: hostA,
+                                    cnameChain: [],
+                                    system: [{ address: '203.0.113.10', family: 4, addressClass: 'public' }],
+                                    direct: [{ address: '203.0.113.10', family: 4, addressClass: 'public' }],
+                                    systemFailed: false,
+                                    directFailed: false,
+                                    agree: true,
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        id: 'networkConnection',
+                        status: 'error',
+                        segments: [{ kind: 'reachable', reachable: 1, total: 2 }],
+                        details: {
+                            findings: [],
+                            evidence: [
+                                {
+                                    kind: 'tcpHost',
+                                    host: hostA,
+                                    port: 27017,
+                                    connectedAddress: '203.0.113.10',
+                                    connectMs: 23,
+                                    failedAddresses: [{ address: '2001:db8::5', connectMs: 3000 }],
+                                    durationMs: 3024,
+                                },
+                                {
+                                    kind: 'tcpHost',
+                                    host: hostB,
+                                    port: 27017,
+                                    failedAddresses: [{ address: '203.0.113.11', connectMs: 2 }, { address: '203.0.113.12' }],
+                                    durationMs: 5,
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        id: 'secureConnection',
+                        status: 'done',
+                        segments: [{ kind: 'certificateTrusted' }],
+                        details: {
+                            findings: [],
+                            evidence: [
+                                { kind: 'tlsHost', host: hostA, protocol: 'TLSv1.3', trusted: true, durationMs: 61 },
+                                { kind: 'tlsHost', host: hostB, protocol: 'TLSv1.2', trusted: true, durationMs: 75 },
+                            ],
+                        },
+                    },
+                    {
+                        id: 'serverResponse',
+                        status: 'done',
+                        segments: [{ kind: 'answeredBeforeSignIn' }],
+                        details: {
+                            findings: [],
+                            evidence: [
+                                {
+                                    kind: 'serverHost',
+                                    host: hostA,
+                                    command: 'hello',
+                                    passwordMechanisms: ['SCRAM-SHA-256'],
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        id: 'databaseAccess',
+                        status: 'done',
+                        segments: [{ kind: 'ping', ms: 0.4 }],
+                        details: {
+                            findings: [],
+                            evidence: [{ kind: 'access', commands: [{ command: 'ping', outcome: 'ok' }], pingMs: 1234 }],
+                        },
+                    },
+                ]),
+                outcome: 'connected',
+                result: cardResult('connected'),
+                coverage,
+            });
+            const facts = async (label: string): Promise<string[]> => {
+                const toggle = toggles().find(
+                    (button): boolean => button.getAttribute('aria-label') === `Details for ${label}`,
+                );
+                if (!toggle) {
+                    throw new Error(`Missing ${label} details toggle`);
+                }
+                await click(toggle);
+                return [...region(toggle).querySelectorAll('dt')].map(
+                    (term): string =>
+                        `${term.textContent ?? ''}: ${(term.nextElementSibling?.textContent ?? '').replace(/\s+/g, ' ').trim()}`,
+                );
+            };
+
+            // A single-host row has no per-host time: the row's badge already says it.
+            expect((await facts('Server address (DNS)')).join('\n')).not.toMatch(/Took|Time/);
+            const network = await facts('Network connection (TCP)');
+            expect(network).toEqual(
+                expect.arrayContaining([
+                    `Connected to: 203.0.113.10:27017 in ${formatDuration(23)}`,
+                    `Could not connect to: [2001:db8::5]:27017 after ${formatDuration(3000)}`,
+                    `Took: ${formatDuration(3024)}`,
+                    `Could not connect to: 203.0.113.11:27017 after ${formatDuration(2)}203.0.113.12:27017`,
+                    `Took: ${formatDuration(5)}`,
+                ]),
+            );
+            expect(await facts('Secure connection (TLS)')).toEqual(
+                expect.arrayContaining([
+                    'Protocol: TLS 1.3',
+                    `Took: ${formatDuration(61)}`,
+                    'Protocol: TLS 1.2',
+                    `Took: ${formatDuration(75)}`,
+                ]),
+            );
+            expect((await facts('Server greeting (hello)')).join('\n')).not.toMatch(/Took|Time/);
+            expect(await facts('Database access')).toContain(`Ping: ${formatDuration(1234)}`);
+            const text = host.textContent ?? '';
+            expect(text).toContain('Ping < 1 ms');
+            expect(text).not.toContain('TLSv1');
+            // A time never carries a slow or fast rating.
+            expect(text).not.toMatch(/\b(?:slow|fast)\b/i);
         });
 
         it('offers a disclosure only on settled rows that have details', async () => {

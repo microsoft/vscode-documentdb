@@ -352,7 +352,7 @@ describe('L2-dev manifest and routes', (): void => {
         for (const text of [
             'c-stage0.mongocluster.cosmos.azure.com',
             'alice@contoso.com',
-            'TLSv1.3 · Certificate trusted',
+            'Protocol TLS 1.3',
             'Set microsoft-sovereign-cloud.environment to the cluster cloud, then connect again.',
             'Check access from the computer or remote host where these checks ran.',
             "Your system's lookup",

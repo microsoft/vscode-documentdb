@@ -20,6 +20,8 @@ export type PanelRowStatus = 'pending' | 'active' | 'done' | 'warning' | 'error'
 export type EvidenceSegment =
     | { readonly kind: 'authMethod'; readonly method: 'native' | 'entraId' | 'managedIdentity' | 'none' }
     | { readonly kind: 'account'; readonly label: string }
+    /** Username and password: the configured mechanism, or the negotiated one (decision 0050). */
+    | { readonly kind: 'authMechanism'; readonly mechanism: string }
     | { readonly kind: 'cloud'; readonly cloud: 'usGovernment' | 'china' | 'custom' }
     | { readonly kind: 'managedIdentityKind'; readonly identityKind: 'systemAssigned' | 'userAssigned' }
     | { readonly kind: 'noSilentSignIn' }
@@ -52,7 +54,6 @@ export type EvidenceSegment =
     | { readonly kind: 'privateEndpoint' }
     | { readonly kind: 'reachable'; readonly reachable: number; readonly total: number }
     | { readonly kind: 'port'; readonly port: number }
-    | { readonly kind: 'tlsProtocol'; readonly protocol: string }
     | { readonly kind: 'certificateTrusted' }
     | { readonly kind: 'validUntil'; readonly date: string }
     | { readonly kind: 'topology'; readonly topology: string; readonly setName?: string }
@@ -104,7 +105,8 @@ export type PanelCommandOutcome = 'ok' | 'denied' | 'signInRequired' | 'unsuppor
 /**
  * Semantic evidence for a row's details; the view localizes the labels. Host names, addresses,
  * user names and certificate names are identifiers; the panel shows them in full (decision 0040).
- * No timings, except the database ping (design 5.2).
+ * The only timings are the database ping, each host check's time, and each TCP address's connect
+ * time (decision 0050); the view formats them.
  */
 export interface PanelConnectionOption {
     readonly name: string;
@@ -113,6 +115,13 @@ export interface PanelConnectionOption {
     readonly hidden: boolean;
     /** `dns`: from the SRV host's TXT record rather than the connection string. */
     readonly source: 'uri' | 'dns';
+}
+
+/** One TCP connection attempt to one address. */
+export interface PanelAddressAttempt {
+    /** An identifier. */
+    readonly address: string;
+    readonly connectMs?: number;
 }
 
 export type PanelAuthMethod = 'native' | 'entraId' | 'managedIdentity' | 'none';
@@ -176,13 +185,20 @@ export type PanelEvidenceDetail =
           readonly directFailed: boolean;
           /** Both lookups answered with the same set of addresses. */
           readonly agree: boolean;
+          /** How long this host's check took; only when the row has two or more hosts (decision 0050). */
+          readonly durationMs?: number;
       }
     | {
           readonly kind: 'tcpHost';
           readonly host: string;
           readonly port?: number;
           readonly connectedAddress?: string;
-          readonly failedAddresses: readonly string[];
+          /** How long connecting to `connectedAddress` took (`latencyMs`); only with two or more attempts. */
+          readonly connectMs?: number;
+          /** Each address that refused or timed out; with its connect time when the host had two or more attempts. */
+          readonly failedAddresses: readonly PanelAddressAttempt[];
+          /** How long this host's check took, all attempts included; only with two or more hosts (decision 0050). */
+          readonly durationMs?: number;
       }
     | {
           readonly kind: 'tlsHost';
@@ -194,6 +210,8 @@ export type PanelEvidenceDetail =
           readonly trusted: boolean;
           /** `undefined` when the handshake did not get far enough to tell. */
           readonly hostNameMatched?: boolean;
+          /** How long this host's check took; only when the row has two or more hosts (decision 0050). */
+          readonly durationMs?: number;
       }
     | {
           readonly kind: 'serverHost';
@@ -208,6 +226,8 @@ export type PanelEvidenceDetail =
           readonly passwordMechanisms: readonly string[];
           /** Replica set members only: whether this member is the primary. */
           readonly role?: 'primary' | 'notPrimary';
+          /** How long this host's check took; only when the row has two or more hosts (decision 0050). */
+          readonly durationMs?: number;
       }
     | {
           readonly kind: 'auth';
@@ -240,6 +260,13 @@ export interface PanelRow {
     readonly status: PanelRowStatus;
     /** At most four semantic pieces; formatting and localization belong to the view. */
     readonly segments: readonly EvidenceSegment[];
+    /**
+     * How long the row's checks took: the wall-clock span from the first one starting to the last one
+     * finishing, never a sum (host checks run in parallel). Only on a settled row that ran; absent
+     * on pending, active and skipped rows. These are real timings; the panel's pacing (decision
+     * 0043) never changes them. The view formats it (decision 0050).
+     */
+    readonly durationMs?: number;
     /**
      * Prototype (WI-18): what the row's disclosure shows. Absent on a row with nothing to show and on
      * every pending or active row; always present on a warning or error row. Always shows full

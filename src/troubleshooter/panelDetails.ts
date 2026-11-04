@@ -13,6 +13,7 @@ import {
 import * as vscode from 'vscode';
 import {
     type PanelAddress,
+    type PanelAddressAttempt,
     type PanelAddressClass,
     type PanelAuthMethod,
     type PanelAuthSource,
@@ -26,6 +27,7 @@ import {
     type PanelRowId,
     type PanelRowStatus,
 } from '../webviews/documentdb/connectivityTroubleshooter/panelTypes';
+import { authMechanismOf, knownAuthMethod } from './authMechanism';
 import { type FindingMessage } from './findingMessages';
 import { troubleshooterIdentifierKeys } from './identifierKeys';
 import { rowForCheck } from './panelRows';
@@ -46,6 +48,7 @@ import { type FindingCode } from './types';
  *   with both lookups' answers only when they differ. This is what the evidence line cannot say, and
  *   what a private endpoint diagnosis needs.
  * - Network connection (TCP): which address connected for each host, and which addresses failed.
+ *   Each attempt's connect time only when the host had two or more attempts (WI-33).
  * - Secure connection (TLS): protocol, certificate subject, issuer and expiry, and the host name match.
  * - Server greeting (hello): the unauthenticated greeting that ran, and what answered (server type,
  *   DocumentDB version, API compatibility, password mechanisms offered, and a replica set member's
@@ -54,7 +57,11 @@ import { type FindingCode } from './types';
  *   authentication database, and each sign-in stage with its outcome, in one layout for every method.
  * - Database access: which commands ran and how each ended, the ping and the server version.
  *
- * Only the ping is a timing (design 5.2). Codes, raw errors and English package details never appear.
+ * - Each per-host section (DNS, TCP, TLS, greeting) says how long that host's check took, but only
+ *   when the row has two or more hosts: with one, the row's badge already says it (WI-33).
+ *
+ * The timings are the ping, each host check's time and each TCP attempt's connect time (decision
+ * 0050), as numbers the view formats. Codes, raw errors and English package details never appear.
  */
 
 type Describe = (finding: Finding<FindingCode>) => FindingMessage;
@@ -186,6 +193,16 @@ function ran(result: CheckResult<FindingCode>): boolean {
     return result.status !== 'skipped';
 }
 
+/**
+ * How long one host's check took, for its Details section (decision 0050). Only when the row has two
+ * or more hosts; with one, it would repeat the row's badge (WI-33).
+ */
+function hostDuration(result: CheckResult<FindingCode>, timed: boolean): { durationMs?: number } {
+    return timed && Number.isFinite(result.durationMs) && result.durationMs >= 0
+        ? { durationMs: result.durationMs }
+        : {};
+}
+
 function srvEvidence(result: CheckResult<FindingCode>): PanelEvidenceDetail {
     const facts = result.facts;
     const targets = list(facts.records).flatMap((entry): string[] => {
@@ -212,7 +229,7 @@ function srvEvidence(result: CheckResult<FindingCode>): PanelEvidenceDetail {
     };
 }
 
-function dnsEvidence(result: CheckResult<FindingCode>, target: string): PanelEvidenceDetail {
+function dnsEvidence(result: CheckResult<FindingCode>, target: string, timed: boolean): PanelEvidenceDetail {
     const facts = result.facts;
     const system = addresses(facts.osAddresses);
     const direct = addresses(facts.caresAddresses);
@@ -227,23 +244,37 @@ function dnsEvidence(result: CheckResult<FindingCode>, target: string): PanelEvi
         systemFailed,
         directFailed,
         agree: !systemFailed && !directFailed && sameAddresses(system, direct),
+        ...hostDuration(result, timed),
     };
 }
 
-function tcpEvidence(result: CheckResult<FindingCode>, target: string): PanelEvidenceDetail {
+function tcpEvidence(result: CheckResult<FindingCode>, target: string, timed: boolean): PanelEvidenceDetail {
     const { host, port } = splitTarget(target);
     const connectedAddress = text(record(result.facts.connectedAddress), 'address');
-    const failedAddresses = list(result.facts.attempts).flatMap((entry): string[] => {
-        const attempt = record(entry);
+    const attempts = list(result.facts.attempts).map(record);
+    const connectMs = attempts
+        .filter((attempt): boolean => attempt.outcome === 'connected' && text(attempt, 'address') === connectedAddress)
+        .map((attempt): number | undefined => finiteNumber(attempt, 'latencyMs'))
+        .find((latency): boolean => latency !== undefined);
+    const failedAddresses: PanelAddressAttempt[] = [];
+    for (const attempt of attempts) {
         const address = text(attempt, 'address');
-        return attempt.outcome === 'failed' && address ? [address] : [];
-    });
+        if (attempt.outcome !== 'failed' || !address || failedAddresses.some((entry) => entry.address === address)) {
+            continue;
+        }
+        const latency = finiteNumber(attempt, 'latencyMs');
+        failedAddresses.push(latency === undefined ? { address } : { address, connectMs: latency });
+    }
+    // A single attempt's connect time is all but the host's own time; it is shown only to compare attempts.
+    const compared = (connectedAddress ? 1 : 0) + failedAddresses.length >= 2;
     return {
         kind: 'tcpHost',
         host,
         ...(port === undefined ? {} : { port }),
         ...(connectedAddress ? { connectedAddress } : {}),
-        failedAddresses: [...new Set(failedAddresses)],
+        ...(compared && connectedAddress && connectMs !== undefined ? { connectMs } : {}),
+        failedAddresses: compared ? failedAddresses : failedAddresses.map(({ address }) => ({ address })),
+        ...hostDuration(result, timed),
     };
 }
 
@@ -252,7 +283,7 @@ function certificateName(value: unknown): string | undefined {
     return text(name, 'CN') ?? text(name, 'O');
 }
 
-function tlsEvidence(result: CheckResult<FindingCode>, target: string): PanelEvidenceDetail {
+function tlsEvidence(result: CheckResult<FindingCode>, target: string, timed: boolean): PanelEvidenceDetail {
     const facts = result.facts;
     const certificate = record(facts.certificate);
     const subject = certificateName(certificate.subject);
@@ -277,10 +308,11 @@ function tlsEvidence(result: CheckResult<FindingCode>, target: string): PanelEvi
         ...(validTo && Number.isFinite(Date.parse(validTo)) ? { validTo: new Date(validTo).toISOString() } : {}),
         trusted: result.status === 'pass',
         ...(hostNameMatched === undefined ? {} : { hostNameMatched }),
+        ...hostDuration(result, timed),
     };
 }
 
-function helloEvidence(result: CheckResult<FindingCode>, target: string): PanelEvidenceDetail {
+function helloEvidence(result: CheckResult<FindingCode>, target: string, timed: boolean): PanelEvidenceDetail {
     const facts = result.facts;
     const topology = text(facts, 'topology');
     const setName = text(facts, 'setName');
@@ -307,20 +339,8 @@ function helloEvidence(result: CheckResult<FindingCode>, target: string): PanelE
         ...(maxWireVersion === undefined ? {} : { maxWireVersion }),
         passwordMechanisms: strings(facts.saslSupportedMechs),
         ...(role ? { role } : {}),
+        ...hostDuration(result, timed),
     };
-}
-
-const authMethods = {
-    NativeAuth: 'native',
-    MicrosoftEntraID: 'entraId',
-    ManagedIdentity: 'managedIdentity',
-    NoAuth: 'none',
-} as const;
-
-function knownAuthMethod(value: unknown): PanelAuthMethod | undefined {
-    return typeof value === 'string' && Object.hasOwn(authMethods, value)
-        ? authMethods[value as keyof typeof authMethods]
-        : undefined;
 }
 
 /** URI options as parsed by the package, then TXT options from the SRV lookup. */
@@ -410,22 +430,6 @@ function connectionSettingsEvidence(
     ];
 }
 
-/**
- * The password mechanism the driver picks when none is configured, from what the server offered
- * in the greeting (the driver's `getDefaultAuthMechanism`). `undefined` when no list was offered:
- * an empty list cannot be told apart from no list, and the driver treats those differently.
- */
-function negotiatedMechanism(context: readonly CheckResult<FindingCode>[]): string | undefined {
-    const offered = context
-        .filter((result): boolean => result.checkId === 'hello' && result.status === 'pass')
-        .map((result): string[] => strings(result.facts.saslSupportedMechs))
-        .find((mechanisms): boolean => mechanisms.length > 0);
-    if (!offered) {
-        return undefined;
-    }
-    return offered.includes('SCRAM-SHA-256') ? 'SCRAM-SHA-256' : 'SCRAM-SHA-1';
-}
-
 function stageOutcome(status: CheckResult<FindingCode>['status'], rejected: boolean): PanelAuthStage['outcome'] {
     switch (status) {
         case 'pass':
@@ -473,11 +477,7 @@ function authEvidence(
 ): PanelEvidenceDetail[] {
     const facts = result.facts;
     const known = knownAuthMethod(facts.authMethod);
-    const rawMechanism = text(facts, 'mechanism');
-    // `DEFAULT` and `none` are the driver's and the check's placeholders, not a mechanism name.
-    const configured = rawMechanism && rawMechanism !== 'DEFAULT' && rawMechanism !== 'none' ? rawMechanism : undefined;
-    const negotiated = !configured && known === 'native' ? negotiatedMechanism(context) : undefined;
-    const mechanism = configured ?? negotiated;
+    const mechanism = authMechanismOf(result, context);
     const user = text(facts, 'userName') ?? text(facts, 'account');
     const parsed = context.find((entry): boolean => entry.checkId === 'connectionString' && ran(entry));
     const authSource = known === 'native' && parsed ? authSourceOf(parsed, connectionOptions(parsed, context)) : undefined;
@@ -489,8 +489,8 @@ function authEvidence(
         {
             kind: 'auth',
             ...(known ? { method: known } : {}),
-            ...(mechanism ? { mechanism } : {}),
-            ...(negotiated ? { mechanismNegotiated: true } : {}),
+            ...(mechanism ? { mechanism: mechanism.mechanism } : {}),
+            ...(mechanism?.negotiated ? { mechanismNegotiated: true } : {}),
             ...(user ? { user } : {}),
             ...(authSource ? { authSource } : {}),
             stages,
@@ -536,14 +536,17 @@ function accessEvidence(results: readonly CheckResult<FindingCode>[]): PanelEvid
     ];
 }
 
+/** One section per host; each says how long it took only when there are two or more to compare. */
 function perHost(
     results: readonly CheckResult<FindingCode>[],
     checkId: string,
-    build: (result: CheckResult<FindingCode>, target: string) => PanelEvidenceDetail,
+    build: (result: CheckResult<FindingCode>, target: string, timed: boolean) => PanelEvidenceDetail,
 ): PanelEvidenceDetail[] {
-    return results.flatMap((result): PanelEvidenceDetail[] =>
-        result.checkId === checkId && result.target !== undefined && ran(result) ? [build(result, result.target)] : [],
+    const hosts = results.filter(
+        (result): result is CheckResult<FindingCode> & { target: string } =>
+            result.checkId === checkId && result.target !== undefined && ran(result),
     );
+    return hosts.map((result): PanelEvidenceDetail => build(result, result.target, hosts.length >= 2));
 }
 
 function evidence(
@@ -658,7 +661,12 @@ export function withRowDetails(
         ? partialReport(source as readonly CheckResult<FindingCode>[])
         : (source as TroubleshooterReport<FindingCode>);
     return rows.map((row): PanelRow => {
-        const plain: PanelRow = { id: row.id, status: row.status, segments: row.segments };
+        const plain: PanelRow = {
+            id: row.id,
+            status: row.status,
+            segments: row.segments,
+            ...(row.durationMs === undefined ? {} : { durationMs: row.durationMs }),
+        };
         if (!isSettled(row.status)) {
             return plain;
         }

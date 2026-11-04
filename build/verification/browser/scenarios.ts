@@ -905,7 +905,7 @@ const severalFindingsRows = withRows([
                     [seedA],
                 ),
             ],
-            [{ kind: 'tcpHost', host: seedA, port: 27017, failedAddresses: ['127.0.0.1'] }],
+            [{ kind: 'tcpHost', host: seedA, port: 27017, failedAddresses: [{ address: '127.0.0.1' }] }],
         ),
     },
     notChecked('secureConnection', 'networkConnection'),
@@ -1051,7 +1051,15 @@ const troubleshooterScenarios = {
                 count: 1,
                 steps: [{ action: 'click', role: 'button', name: 'Hide identifiers in the report' }],
             },
-        ],
+            // Three hosts: each says how long it took; the host with two attempts names both (WI-33).
+            ...expandDetails('networkConnection'),
+            detailsText('networkConnection', [
+                'Connected to 203.0.113.10:10260 in 31 ms',
+                'Could not connect to [2001:db8::10]:10260 after 2 ms',
+                'Took 34 ms',
+                'Took 105 ms',
+            ]),
+        ] satisfies readonly ScenarioAssertion[],
     },
     running: {
         config: troubleshooter.config,
@@ -1222,14 +1230,24 @@ const troubleshooterScenarios = {
                     'Operating system Linux 6.6.87.2-microsoft-standard-WSL2',
                 ]),
                 ...expandDetails('networkConnection'),
-                detailsText('networkConnection', [`Connected to ${privateEndpointAddress}:10260`]),
+                // One host and one attempt: no per-host or connect time, the badge says it (WI-33).
+                detailsText(
+                    'networkConnection',
+                    [`Connected to ${privateEndpointAddress}:10260`],
+                    ['\\bTook\\b', `${privateEndpointAddress}:10260 in `],
+                ),
                 ...expandDetails('secureConnection'),
-                detailsText('secureConnection', [
-                    'Protocol TLSv1.3',
-                    `Certificate for *.${troubleshooterHost}`,
-                    'Issued by Microsoft Azure RSA TLS Issuing CA 03',
-                    'Host name Matches the certificate',
-                ]),
+                detailsText(
+                    'secureConnection',
+                    [
+                        'Protocol TLS 1.3',
+                        `Certificate for *.${troubleshooterHost}`,
+                        'Issued by Microsoft Azure RSA TLS Issuing CA 03',
+                        'Host name Matches the certificate',
+                    ],
+                    // Details word the protocol as people write it; the evidence line names none.
+                    ['TLSv1', '\\bTook\\b'],
+                ),
                 ...expandDetails('databaseAccess'),
                 detailsText(
                     'databaseAccess',
@@ -1323,7 +1341,7 @@ const troubleshooterScenarios = {
                                 kind: 'tcpHost',
                                 host: troubleshooterSrvTargets[0],
                                 port: 10260,
-                                failedAddresses: [privateEndpointAddress],
+                                failedAddresses: [{ address: privateEndpointAddress }],
                             },
                         ],
                     ),
@@ -1430,22 +1448,29 @@ const troubleshooterScenarios = {
             {
                 id: 'secureConnection',
                 status: 'warning',
-                segments: [
-                    { kind: 'finding', title: 'Certificate checks weakened' },
-                    { kind: 'tlsProtocol', protocol: 'TLSv1.2' },
-                ],
-                details: troubleshooterDetails([
-                    troubleshooterFinding(
-                        'warning',
-                        'Certificate checks weakened',
-                        'Connection options disable certificate or host name verification.',
-                        'Restore certificate verification and configure a trusted CA and matching server host name.',
-                    ),
-                ]),
+                segments: [{ kind: 'finding', title: 'Certificate checks weakened' }],
+                details: troubleshooterDetails(
+                    [
+                        troubleshooterFinding(
+                            'warning',
+                            'Certificate checks weakened',
+                            'Connection options disable certificate or host name verification.',
+                            'Restore certificate verification and configure a trusted CA and matching server host name.',
+                        ),
+                    ],
+                    // The version is in Details only, per host (decision 0050).
+                    troubleshooterSrvTargets.map((host, index) => ({
+                        kind: 'tlsHost' as const,
+                        host,
+                        protocol: 'TLSv1.2',
+                        trusted: false,
+                        durationMs: [512, 498, 530][index],
+                    })),
+                ),
             },
         ]),
         troubleshooterConnectedCard,
-        ['Certificate checks weakened · TLSv1.2'],
+        ['Certificate checks weakened'],
         [
             'Connection successful, with 1 warning',
             attentionLine,
@@ -1862,7 +1887,7 @@ const troubleshooterScenarios = {
                                 kind: 'tcpHost',
                                 host: troubleshooterHost,
                                 port: 10260,
-                                failedAddresses: ['203.0.113.10'],
+                                failedAddresses: [{ address: '203.0.113.10' }],
                             },
                         ],
                     ),
@@ -1917,7 +1942,7 @@ const troubleshooterScenarios = {
                                 [seedB],
                             ),
                         ],
-                        [{ kind: 'tcpHost', host: seedB, port: 27017, failedAddresses: ['203.0.113.11'] }],
+                        [{ kind: 'tcpHost', host: seedB, port: 27017, failedAddresses: [{ address: '203.0.113.11' }] }],
                     ),
                 },
             ]),
@@ -1939,7 +1964,11 @@ const troubleshooterScenarios = {
             {
                 id: 'authentication',
                 status: 'error',
-                segments: [{ kind: 'authMethod', method: 'native' }, { kind: 'credentialsRejected' }],
+                segments: [
+                    { kind: 'authMethod', method: 'native' },
+                    { kind: 'authMechanism', mechanism: 'SCRAM-SHA-256' },
+                    { kind: 'credentialsRejected' },
+                ],
                 details: troubleshooterDetails(
                     [
                         troubleshooterFinding(
@@ -1972,7 +2001,7 @@ const troubleshooterScenarios = {
                 'Check the user name and password, and the authentication database.',
             ),
         ),
-        ['Username and password · The cluster rejected the user name or password'],
+        ['Username and password · SCRAM-SHA-256 · The cluster rejected the user name or password'],
         [
             'Connection failed at Authentication',
             'The server rejected the selected authentication credentials.',

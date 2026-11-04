@@ -70,6 +70,11 @@ not a configuration or permissions audit.
   evidence line change, so nothing shifts and the user always knows where the run is. There is no
   dynamic row set ([0029](./decisions.md#0029--the-outcome-is-a-card-below-a-fixed-eight-row-list);
   row 6 and the Authentication details: [0049](./decisions.md#0049--server-greeting-hello-one-authentication-layout-and-the-shell-on-every-tree-failure)).
+  A settled row that ran also shows its real duration in a squared badge at the end of its label
+  line, with no rating and no total; the list shades the row under the pointer so the badge stays
+  tied to its row ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-squared-badge-the-list-shades-the-row-under-the-pointer)).
+  Details add each host's time and each TCP address's connect time where they inform (WI-31,
+  WI-33).
 - **Evidence lines, detailed report.** As in Local Quick Start, each row's detail says what was done
   and what was detected ("3 of 3 hosts reachable · Port 10260"); the mechanics are in the report.
   Entra ID sign-in is one Authentication row, while its three phases
@@ -266,7 +271,8 @@ See [decisions.md](./decisions.md); its index table is the current status of eve
 - **Tried and reverted:** a "Sign-in required" row in the Connections tree instead of the modal
   (WI-28). The tree shows actions only; see
   [connections-tree](../connections-tree/README.md) and the
-  [tree skill](../../../../.github/skills/tree-cluster-architecture/SKILL.md).
+  [tree skill](../../../../.github/skills/tree-cluster-architecture/SKILL.md). Also a **Copy summary**
+  share item that copied the panel as text (WI-32, [0050](./decisions.md#0050--each-row-shows-its-duration-in-a-squared-badge-the-list-shades-the-row-under-the-pointer)).
 
 ## Open gaps
 

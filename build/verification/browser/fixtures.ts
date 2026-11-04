@@ -146,6 +146,8 @@ interface HealthyRunShape {
     readonly dnsFindings?: TroubleshooterFinding[];
     readonly pingMs: number;
     readonly databaseCount: number;
+    /** An address the first host refused before its own connected, so its Details compare two attempts. */
+    readonly firstHostRefused?: string;
 }
 
 /**
@@ -165,6 +167,10 @@ export function troubleshooterHealthyDetails(
 > {
     const query = `_mongodb._tcp.${troubleshooterHost}`;
     const certificate = `*.${troubleshooterHost}`;
+    // Each host's check time, sent only when a row has two or more hosts (decision 0050, WI-33); host
+    // checks run in parallel, so the row's badge is the longest of them, not their sum.
+    const hostTime = (times: readonly number[], index: number): { durationMs?: number } =>
+        shape.hosts.length >= 2 ? { durationMs: times[index % times.length] } : {};
     const address = (index: number): TroubleshooterEvidence & { kind: 'dnsHost' } => {
         const answer = [{ address: shape.addresses[index], family: 4 as const, addressClass: 'public' as const }];
         return {
@@ -176,6 +182,7 @@ export function troubleshooterHealthyDetails(
             systemFailed: false,
             directFailed: false,
             agree: true,
+            ...hostTime([1.6, 0.9, 1.2], index),
         };
     };
     return {
@@ -219,14 +226,18 @@ export function troubleshooterHealthyDetails(
                     host: name,
                     port: 10260,
                     connectedAddress: shape.addresses[index],
-                    failedAddresses: [],
+                    // Connect times only for a host that made two or more attempts (WI-33).
+                    ...(index === 0 && shape.firstHostRefused !== undefined
+                        ? { connectMs: 31, failedAddresses: [{ address: shape.firstHostRefused, connectMs: 2 }] }
+                        : { failedAddresses: [] }),
+                    ...hostTime([34, 105, 48], index),
                 }),
             ),
         ),
         secureConnection: troubleshooterDetails(
             [],
             shape.hosts.map(
-                (name): TroubleshooterEvidence => ({
+                (name, index): TroubleshooterEvidence => ({
                     kind: 'tlsHost',
                     host: name,
                     protocol: 'TLSv1.3',
@@ -235,13 +246,14 @@ export function troubleshooterHealthyDetails(
                     validTo: '2027-03-01T00:00:00.000Z',
                     trusted: true,
                     hostNameMatched: true,
+                    ...hostTime([612, 761, 540], index),
                 }),
             ),
         ),
         serverResponse: troubleshooterDetails(
             [],
             shape.hosts.map(
-                (name): TroubleshooterEvidence => ({
+                (name, index): TroubleshooterEvidence => ({
                     kind: 'serverHost',
                     host: name,
                     topology: 'documentdbGateway',
@@ -249,6 +261,7 @@ export function troubleshooterHealthyDetails(
                     command: 'hello',
                     maxWireVersion: 21,
                     passwordMechanisms: ['SCRAM-SHA-256'],
+                    ...hostTime([71, 88, 64], index),
                 }),
             ),
         ),
@@ -292,6 +305,7 @@ const troubleshooterConnectedDetails = troubleshooterHealthyDetails({
     addresses: ['203.0.113.10', '203.0.113.11', '203.0.113.12'],
     pingMs: 12,
     databaseCount: 5,
+    firstHostRefused: '2001:db8::10',
 });
 
 /** A healthy DocumentDB connection, with evidence on every row the host fills today. */
@@ -299,6 +313,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
     {
         id: 'setup',
         status: 'done',
+        durationMs: 0.4,
         segments: [
             { kind: 'location', remoteKind: 'local' },
             { kind: 'platform', platform: 'linux' },
@@ -308,6 +323,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
     {
         id: 'connectionSettings',
         status: 'done',
+        durationMs: 147,
         segments: [
             { kind: 'scheme', scheme: 'mongodb+srv' },
             { kind: 'user', userName: 'stage0user' },
@@ -318,6 +334,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
     {
         id: 'serverAddress',
         status: 'done',
+        durationMs: 2,
         segments: [
             { kind: 'srvHosts', count: 3 },
             { kind: 'resolved', resolved: 3, total: 3 },
@@ -327,6 +344,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
     {
         id: 'networkConnection',
         status: 'done',
+        durationMs: 105,
         segments: [
             { kind: 'reachable', reachable: 3, total: 3 },
             { kind: 'port', port: 10260 },
@@ -336,8 +354,8 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
     {
         id: 'secureConnection',
         status: 'done',
+        durationMs: 761,
         segments: [
-            { kind: 'tlsProtocol', protocol: 'TLSv1.3' },
             { kind: 'certificateTrusted' },
             { kind: 'validUntil', date: '2027-03-01T00:00:00.000Z' },
         ],
@@ -346,14 +364,17 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
     {
         id: 'serverResponse',
         status: 'done',
+        durationMs: 88,
         segments: [{ kind: 'topology', topology: 'documentdbGateway' }, { kind: 'answeredBeforeSignIn' }],
         details: troubleshooterConnectedDetails.serverResponse,
     },
     {
         id: 'authentication',
         status: 'done',
+        durationMs: 4378,
         segments: [
             { kind: 'authMethod', method: 'native' },
+            { kind: 'authMechanism', mechanism: 'SCRAM-SHA-256' },
             { kind: 'account', label: 'stage0user' },
         ],
         details: troubleshooterConnectedDetails.authentication,
@@ -361,6 +382,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
     {
         id: 'databaseAccess',
         status: 'done',
+        durationMs: 692,
         segments: [
             { kind: 'ping', ms: 12 },
             { kind: 'databasesVisible', count: 5 },
@@ -599,7 +621,7 @@ export const fixtures = {
             'connectivityTroubleshooter.copyReport': reply<void>('mutation', undefined),
             'connectivityTroubleshooter.saveReport': reply<void>('mutation', undefined),
             'common.openFeedback': reply<void>('mutation', undefined),
-            // The share warning before Copy or Save with identifiers; the fixture always continues.
+            // The share warning before a copy or save with identifiers; the fixture always continues.
             'common.confirm': reply<{ confirmed: boolean }>('mutation', { confirmed: true }),
         },
     },

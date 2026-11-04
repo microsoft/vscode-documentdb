@@ -11,6 +11,7 @@ import {
     type PanelRowId,
     type PanelRowStatus,
 } from '../webviews/documentdb/connectivityTroubleshooter/panelTypes';
+import { authMechanismOf, knownAuthMethod } from './authMechanism';
 import { hasSpecificTimeoutWording } from './findingMessages';
 import { type FindingCode } from './types';
 
@@ -97,6 +98,8 @@ export class PanelRowProjector {
     private readonly checks: readonly CheckState[];
     private readonly startedRows = new Set<PanelRowId>();
     private readonly settledRows = new Map<PanelRowId, PanelRow>();
+    /** When each result's `checkFinished` event arrived, for the row's elapsed time. */
+    private readonly finishedAt = new WeakMap<CheckResult<FindingCode>, number>();
     private shownRows: readonly PanelRow[] = panelRowIds.map(
         (id): PanelRow => ({ id, status: 'pending', segments: [] }),
     );
@@ -146,6 +149,7 @@ export class PanelRowProjector {
                 this.startedRows.add(rowId);
             } else if (!check.results.has(event.result.target)) {
                 check.results.set(event.result.target, event.result);
+                this.finishedAt.set(event.result, event.at);
             }
         }
         for (const id of panelRowIds) {
@@ -225,6 +229,34 @@ export class PanelRowProjector {
     }
 
     private settle(id: PanelRowId): PanelRow {
+        const settled = this.settleEvidence(id);
+        if (settled.status === 'skipped') {
+            return settled;
+        }
+        const durationMs = this.elapsed(this.results(id));
+        return durationMs === undefined ? settled : { ...settled, durationMs };
+    }
+
+    /**
+     * Wall-clock time from the first of the row's checks starting to the last one finishing. Host
+     * checks run in parallel, so this is a span, never a sum. Skipped checks did not run and are left
+     * out; a row whose checks all skipped has no elapsed time.
+     */
+    private elapsed(results: readonly CheckResult<FindingCode>[]): number | undefined {
+        let start = Number.POSITIVE_INFINITY;
+        let end = Number.NEGATIVE_INFINITY;
+        for (const result of results) {
+            const finishedAt = this.finishedAt.get(result);
+            if (result.status === 'skipped' || finishedAt === undefined) {
+                continue;
+            }
+            start = Math.min(start, finishedAt - result.durationMs);
+            end = Math.max(end, finishedAt);
+        }
+        return end >= start ? Math.max(0, end - start) : undefined;
+    }
+
+    private settleEvidence(id: PanelRowId): PanelRow {
         const results = this.results(id);
         if (results.length === 0) {
             return { id, status: 'skipped', segments: [{ kind: 'notChecked', reason: 'notRun' }] };
@@ -404,11 +436,7 @@ export class PanelRowProjector {
                     return [{ kind: 'notApplicable', reason: 'tlsOff' }];
                 }
                 const passed = tls.find((result): boolean => result.status === 'pass');
-                const protocol = text(
-                    (passed ?? tls.find((result): boolean => text(result.facts, 'protocol') !== undefined))?.facts ??
-                        {},
-                    'protocol',
-                );
+                // No TLS version: the line stays high level; Details shows each host's (decision 0050).
                 if (status === 'error') {
                     const segments = this.finding(tls, 'error', true);
                     if (segments.length > 0) {
@@ -416,16 +444,9 @@ export class PanelRowProjector {
                     }
                 }
                 if (status === 'warning') {
-                    const segments = this.finding(tls, 'warning');
-                    if (protocol) {
-                        segments.push({ kind: 'tlsProtocol', protocol });
-                    }
-                    return segments;
+                    return this.finding(tls, 'warning');
                 }
                 const segments: EvidenceSegment[] = [];
-                if (protocol) {
-                    segments.push({ kind: 'tlsProtocol', protocol });
-                }
                 if (passed) {
                     segments.push({ kind: 'certificateTrusted' });
                     const date = text(record(passed.facts.certificate), 'validTo');
@@ -469,16 +490,17 @@ export class PanelRowProjector {
                 if (!auth) {
                     return [];
                 }
-                const methods = {
-                    NativeAuth: 'native',
-                    MicrosoftEntraID: 'entraId',
-                    ManagedIdentity: 'managedIdentity',
-                    NoAuth: 'none',
-                } as const;
-                const method = text(auth.facts, 'authMethod');
-                const knownMethod =
-                    method && Object.hasOwn(methods, method) ? methods[method as keyof typeof methods] : undefined;
+                const knownMethod = knownAuthMethod(auth.facts.authMethod);
                 const segments: EvidenceSegment[] = knownMethod ? [{ kind: 'authMethod', method: knownMethod }] : [];
+                // Username and password names its mechanism, configured or negotiated (decision 0050), once
+                // a sign-in was tried. Not when no server was reached: that line needs the room.
+                const mechanism =
+                    knownMethod === 'native' && auth.status !== 'skipped'
+                        ? authMechanismOf(auth, this.results('serverResponse'))
+                        : undefined;
+                const mechanismSegments: EvidenceSegment[] = mechanism
+                    ? [{ kind: 'authMechanism', mechanism: mechanism.mechanism }]
+                    : [];
                 const findings = [
                     ...auth.findings,
                     ...(auth.steps ?? []).flatMap((step): readonly Finding<FindingCode>[] => step.findings),
@@ -515,7 +537,7 @@ export class PanelRowProjector {
                     return [...segments, { kind: 'signedInNotAccepted' }];
                 }
                 if (knownMethod === 'native' && findings.some((finding): boolean => finding.code === 'auth.failed')) {
-                    return [...segments, { kind: 'credentialsRejected' }];
+                    return [...segments, ...mechanismSegments, { kind: 'credentialsRejected' }];
                 }
                 // The driver reached no server: say so, rather than a title that reads like a credential problem.
                 if (
@@ -529,6 +551,7 @@ export class PanelRowProjector {
                     ];
                 }
                 if (status === 'error' || status === 'skipped') {
+                    segments.push(...mechanismSegments);
                     const finding = findings.find(
                         (item): boolean =>
                             (item.severity === 'error' && item.code !== 'check.timeout') ||
@@ -539,6 +562,7 @@ export class PanelRowProjector {
                     }
                     return segments;
                 }
+                segments.push(...mechanismSegments);
                 const account = text(auth.facts, 'account') ?? text(auth.facts, 'userName');
                 if (account) {
                     segments.push({ kind: 'account', label: account });

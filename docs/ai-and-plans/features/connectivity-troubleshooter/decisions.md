@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: decisions
 status: active
 created: 2026-10-27
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 
 # Connectivity troubleshooter: decisions
@@ -62,6 +62,7 @@ updated: 2026-11-03
 | 0047 | The root cause leads when the driver reached no server                                      | Accepted            | Operator report from a real run                                    | 2026-11-02 | —   |
 | 0048 | No authentication that the server will not serve needs sign-in                              | Accepted            | Operator approved direction B                                      | 2026-11-02 | —   |
 | 0049 | Server greeting (hello), one Authentication layout, and the shell on every tree failure     | Accepted            | Operator approved the proposals                                    | 2026-11-03 | —   |
+| 0050 | Each row shows its duration in a squared badge; the list shades the row under the pointer   | Accepted            | Operator chose the layout from mocks                               | 2026-11-04 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -1853,3 +1854,93 @@ Its text is left as it was; the design row and Details tables are updated.
   permissions reading. A replica set's member role keeps the useful part.
 - **Show the shell only when the client exists.** The shell connects on its own and is the expert's
   way to see the raw driver error, so it is most useful exactly when the tree cannot connect.
+
+## 0050 — Each row shows its duration in a squared badge; the list shades the row under the pointer
+
+**Status:** Accepted · **Date:** 2026-11-04 · **Raised by:** operator, comparing another tool's
+connectivity check, which lists each step with its duration; operator chose the layout from mocks
+
+**Context:** the other tool's per-step times made the slow step (sign-in, 4.38 s) the most useful
+thing on its screen. [0039](#0039--rows-expand-to-show-their-findings-and-the-evidence-behind-them)
+kept "timings other than ping" out of the panel; durations were only in the report's Timings table
+and the Output trace, and design 5.2 left open "whether any timing is essential". A duration pinned
+to the right of a wide panel has the problem 0039 solved for Details: the eye loses the row.
+
+**Decision:**
+
+- **Every settled row that ran shows its duration**, with no slow or fast rating. Operator: "I'd
+  show them at every step, with no rating what is slow and what is fast. locale formatting is
+  important." Skipped, pending and active rows show none; there is no running timer (0045).
+- **What a duration is:** the wall-clock span from the first of the row's checks starting to the last
+  one finishing. Host checks run in parallel, so it is a span, never a sum. Skipped checks are left
+  out. `PanelRowProjector` derives it from each `checkFinished` event's time minus the result's
+  `durationMs`; the package API is unchanged. The values are real; the panel's pacing (0043) changes
+  only when a row appears.
+- **No total.** Operator: "no total run (as we have delays per step etc.)". With paced rows, a total
+  would not match what the user watched.
+- **Format:** whole milliseconds below one second, three significant digits of seconds below a
+  minute, then minutes and whole seconds; below one millisecond, "< 1 ms". `Intl.NumberFormat` with
+  short units in the webview's default locale, as the other webviews format numbers; not
+  `Intl.DurationFormat`, which VS Code's Electron may not have.
+- **Layout:** a small, outline, squared (`shape="rounded"`) informative `Badge` at the end of the
+  label line, through `StatusListItem`'s new `aside`. Operator: "with the badges, but squared, as
+  we do everywhere else … no dotted lines".
+- **Row tracking:** `StatusList`'s new `highlightRowsOnHover` shades the row under the pointer, and
+  the row whose control has keyboard focus (`:focus-visible`, so a mouse click leaves nothing
+  behind), with `colorNeutralBackground2`: VS Code's alternating-row colour, the subtlest
+  theme-adaptive surface. Operator: "choose some really subtle fluent shade". High contrast, where a
+  shade cannot show, gets Fluent's `colorTransparentStrokeInteractive` outline instead. Padding with
+  an equal negative margin keeps the layout unchanged.
+
+- **Each host's time in Details (WI-31).** The per-host sections of Server address (DNS), Network
+  connection (TCP), Secure connection (TLS) and Server greeting (hello) end with a "Time" fact: that
+  host's check duration. Network connection also gives each address its connect time, failed
+  attempts included ("203.0.113.10:27017 (23 ms)"). The host sends numbers; the webview formats them
+  with the same `formatDuration`, and rates none of them.
+- **The password mechanism on the Authentication line (WI-31).** Username and password reads
+  "Username and password · SCRAM-SHA-256 · alice": the configured mechanism, else the one negotiated
+  from the greeting, by the same helper the Details use (`authMechanismOf`). It is left out when no
+  mechanism is known, when the check did not run, and when no server was reached (that line needs its
+  room). Microsoft Entra ID and managed identity are unchanged.
+- **The Secure connection evidence line names no TLS version (WI-31).** Details shows each host's
+  version as "TLS 1.3" (Node's `TLSv1`…`TLSv1.3` become "TLS 1.0"…"TLS 1.3"; anything else is shown
+  as it is). Operator: everything else on the line is high level, and expanding Details gives the
+  version. This replaces the agreed "TLS 1.3 rather than TLSv1.3 on the TLS line".
+- **The ping is formatted like every other duration (WI-31):** "Ping 12 ms", "Ping < 1 ms", "Ping
+  1.23 sec" in the evidence line and the Details "Ping" fact. The Markdown report and the Output trace
+  keep raw milliseconds.
+
+**Amends:** [0039](#0039--rows-expand-to-show-their-findings-and-the-evidence-behind-them): row
+durations, each host's time and each TCP address's connect time are now in the panel. Codes, URIs
+and the checks' other timing facts (the greeting's round trip, command times) still stay out of it.
+
+**Amended (WI-33): timings in Details only where they inform, in plain words.** Operator, on a
+single-host TCP row whose badge said 298 ms: Details repeated it as "Time 298 ms", and "Connected to
+4.197.233.101:10260 (290 ms)" did not say what the number was (a TCP connect time, not a ping).
+
+- A host section says how long it took ("Took 61 ms") only when the row has two or more host
+  sections; with one, the row's badge already says it.
+- An address's connect time is shown only when its host made two or more attempts, in words: "…:10260
+  in 31 ms" for the address that connected, "…:10260 after 3 sec" for a failed attempt.
+- `panelDetails.ts` leaves the numbers out of the data when they would not inform, so the view only
+  formats what it gets.
+
+**Copy summary (WI-32): built, then reverted by the operator (2026-11-04).** A Share report item,
+"Copy summary to clipboard", copied the panel as plain text with every row's Details expanded. Two
+versions were built: one rebuilt the panel from shared view models (rejected: "drop all that
+complexity"), then one in which the router kept the lines it sent to the panel in a string list. The
+operator then reverted the whole feature: "revert that full copy summary feature". Share report keeps
+Copy report and Save report.
+
+**Alternatives (all mocked):**
+
+- **Plain text at the right end.** The operator's first concern: in a wide panel it is unclear which
+  row a number belongs to. Badges plus the hover shade answer it.
+- **After the label** ("Authentication · 4.38 s"). Clearly owned, but the numbers do not line up.
+- **First on the evidence line.** With a variable width it misaligns the evidence after it; with a
+  fixed width it aligns, but the operator found it "adds noise in the UI".
+- **Last on the evidence line, before Details.** Reads as one more evidence fact ("2 options ·
+  147 ms") and puts two times on one line ("Ping 12 ms · 5 databases visible · 692 ms").
+- **A dotted leader to the right-hand number.** Clear but busy; the operator chose no dotted lines.
+- **No durations.** Keeps the panel unchanged, but leaves the slow-step signal in the report only.
+- **Round badges.** Every other badge in the webviews is squared.

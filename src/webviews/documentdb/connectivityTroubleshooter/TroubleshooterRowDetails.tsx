@@ -11,7 +11,15 @@ import {
 } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX, type ReactNode } from 'react';
-import { apiCompatibilityText, formatDate, locationText, platformText, topologyText } from './formatEvidence';
+import {
+    apiCompatibilityText,
+    formatDate,
+    formatDuration,
+    locationText,
+    platformText,
+    tlsProtocolText,
+    topologyText,
+} from './formatEvidence';
 import {
     type PanelAddress,
     type PanelAuthStage,
@@ -170,6 +178,34 @@ function ValueList({ values, styles }: { values: readonly ReactNode[]; styles: S
                 <li key={index}>{value}</li>
             ))}
         </ul>
+    );
+}
+
+/**
+ * How long a host's check took. The host sends it only when the row has two or more host sections;
+ * with one, it would repeat the row's badge (decision 0050). No rating.
+ */
+function tookFact(durationMs: number | undefined): { term: string; value: string } | false {
+    return durationMs !== undefined && { term: l10n.t('Took'), value: formatDuration(durationMs) };
+}
+
+/**
+ * An address, with its TCP connect time when the host sent one (two or more attempts, decision 0050):
+ * "203.0.113.10:27017 in 23 ms" when it connected, "… after 3 s" when the attempt failed.
+ */
+function addressAttempt(address: string, connectMs: number | undefined, connected: boolean, styles: Styles): ReactNode {
+    return (
+        <>
+            {code(address)}
+            {connectMs !== undefined && (
+                <span className={styles.muted}>
+                    {' '}
+                    {connected
+                        ? l10n.t('in {0}', formatDuration(connectMs))
+                        : l10n.t('after {0}', formatDuration(connectMs))}
+                </span>
+            )}
+        </>
     );
 }
 
@@ -332,6 +368,7 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                                                   : addressList(evidence.direct, styles),
                                       },
                                   ]),
+                            tookFact(evidence.durationMs),
                         ]}
                     />
                 </StatusListDetailsSection>
@@ -345,7 +382,12 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                                 term: l10n.t('Connected to'),
                                 value:
                                     evidence.connectedAddress !== undefined ? (
-                                        code(withPort(evidence.connectedAddress, evidence.port))
+                                        addressAttempt(
+                                            withPort(evidence.connectedAddress, evidence.port),
+                                            evidence.connectMs,
+                                            true,
+                                            styles,
+                                        )
                                     ) : (
                                         <span className={styles.muted}>{l10n.t('No address accepted')}</span>
                                     ),
@@ -355,12 +397,18 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                                 value: (
                                     <ValueList
                                         styles={styles}
-                                        values={evidence.failedAddresses.map((address) =>
-                                            code(withPort(address, evidence.port)),
+                                        values={evidence.failedAddresses.map((attempt) =>
+                                            addressAttempt(
+                                                withPort(attempt.address, evidence.port),
+                                                attempt.connectMs,
+                                                false,
+                                                styles,
+                                            ),
                                         )}
                                     />
                                 ),
                             },
+                            tookFact(evidence.durationMs),
                         ]}
                     />
                 </StatusListDetailsSection>
@@ -371,7 +419,10 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                 <StatusListDetailsSection title={code(evidence.host)}>
                     <StatusListDetailsFacts
                         items={[
-                            evidence.protocol !== undefined && { term: l10n.t('Protocol'), value: evidence.protocol },
+                            evidence.protocol !== undefined && {
+                                term: l10n.t('Protocol'),
+                                value: tlsProtocolText(evidence.protocol),
+                            },
                             evidence.subject !== undefined && {
                                 term: l10n.t('Certificate for'),
                                 value: evidence.subject,
@@ -389,6 +440,7 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                                 term: l10n.t('Certificate'),
                                 value: evidence.trusted ? l10n.t('Trusted') : l10n.t('Not verified as trusted'),
                             },
+                            tookFact(evidence.durationMs),
                         ]}
                     />
                 </StatusListDetailsSection>
@@ -433,6 +485,7 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                                 term: l10n.t('Password sign-in offered'),
                                 value: <ValueList styles={styles} values={evidence.passwordMechanisms.map(code)} />,
                             },
+                            tookFact(evidence.durationMs),
                         ]}
                     />
                 </StatusListDetailsSection>
@@ -510,7 +563,7 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                         },
                         evidence.pingMs !== undefined && {
                             term: l10n.t('Ping'),
-                            value: l10n.t('{0} ms', evidence.pingMs),
+                            value: formatDuration(evidence.pingMs),
                         },
                         evidence.databaseCount !== undefined && {
                             term: l10n.t('Databases visible'),

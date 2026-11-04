@@ -151,6 +151,45 @@ afterEach((): void => {
 });
 
 describe('PanelRowProjector', (): void => {
+    it('gives a settled row the wall-clock span of the checks that ran, never a sum (decision 0050)', (): void => {
+        const projector = new PanelRowProjector(describeFinding, planned);
+        const finish = (checkId: string, at: number, options: Partial<CheckResult<FindingCode>>): void =>
+            projector.apply({ type: 'checkFinished', runId: 'run', at, result: result(checkId, options) });
+        finish('environment', 1_010, { durationMs: 10 });
+        finish('extensionEnvironment', 1_011, { durationMs: 1 });
+        finish('connectionString', 1_020, { durationMs: 5 });
+        finish('credentials', 1_030, { durationMs: 2 });
+        finish('prepare', 1_160, { durationMs: 100 });
+        finish('srv', 1_160, { status: 'skipped', skippedBecause: { reason: 'notApplicable' }, durationMs: 0 });
+        phase(projector);
+        // Three hosts in parallel: 1,100-1,200, 1,150-1,250 and 1,120-1,180. The span is 150, not 230.
+        finish('dns', 1_200, { target: targets[0], durationMs: 100 });
+        finish('dns', 1_250, { target: targets[1], durationMs: 100 });
+        finish('dns', 1_180, { target: targets[2], durationMs: 60 });
+        for (const target of targets) {
+            finish('tls', 1_300, { target, status: 'skipped', skippedBecause: { reason: 'notApplicable' } });
+        }
+
+        expect(row(projector, 'setup').durationMs).toBe(11);
+        // From connectionString's start (1,015) to prepare's end (1,160).
+        expect(row(projector, 'connectionSettings').durationMs).toBe(145);
+        // The skipped SRV check adds nothing to the DNS hosts' span.
+        expect(row(projector, 'serverAddress').durationMs).toBe(150);
+
+        for (const target of targets) {
+            finish('tcp', 1_300, { target, durationMs: 40 });
+        }
+        expect(row(projector, 'networkConnection').durationMs).toBe(40);
+        // A row whose checks all skipped did not run, so it has no duration.
+        expect(row(projector, 'secureConnection')).toMatchObject({ status: 'skipped' });
+        expect(row(projector, 'secureConnection').durationMs).toBeUndefined();
+        // Pending and active rows never carry one.
+        expect(row(projector, 'serverResponse').durationMs).toBeUndefined();
+        projector.finish();
+        // Not run at all: skipped, no duration.
+        expect(row(projector, 'authentication')).toMatchObject({ status: 'skipped' });
+        expect(row(projector, 'authentication').durationMs).toBeUndefined();
+    });
     it('always starts with the same eight pending rows, even with no planned checks', (): void => {
         for (const checks of [planned, []]) {
             const projector = new PanelRowProjector(describeFinding, checks);
@@ -219,6 +258,7 @@ describe('PanelRowProjector', (): void => {
                 { kind: 'optionCount', count: 2 },
                 { kind: 'preparedBy', providerId: 'kubernetes' },
             ],
+            durationMs: 12345,
         });
     });
 
@@ -344,9 +384,10 @@ describe('PanelRowProjector', (): void => {
                 findings: status === 'pass' ? [] : [finding('tls.expired', status === 'warning' ? 'warning' : 'error')],
             });
             const segments = row(projector, 'secureConnection').segments;
+            // The line stays high level: the TLS version is in Details only (decision 0050).
+            expect(JSON.stringify(segments)).not.toContain('TLSv1');
             if (status === 'pass') {
                 expect(segments).toEqual([
-                    { kind: 'tlsProtocol', protocol: 'TLSv1.3' },
                     { kind: 'certificateTrusted' },
                     { kind: 'validUntil', date: '2027-03-01T00:00:00.000Z' },
                 ]);
@@ -358,7 +399,7 @@ describe('PanelRowProjector', (): void => {
                 });
                 expect(segments.some((segment): boolean => segment.kind === 'certificateTrusted')).toBe(false);
                 if (status === 'warning') {
-                    expect(segments[1]).toEqual({ kind: 'tlsProtocol', protocol: 'TLSv1.3' });
+                    expect(segments).toHaveLength(1);
                 }
             }
         },
@@ -531,7 +572,7 @@ describe('PanelRowProjector', (): void => {
         expect(row(projector, 'serverAddress').status).toBe('pending');
     });
 
-    it('ignores unknown checks, caps evidence and never projects codes, English details, URIs or timings', (): void => {
+    it('ignores unknown checks, caps evidence and never projects codes, English details, URIs or fact timings', (): void => {
         const projector = new PanelRowProjector(describeFinding, [
             ...planned,
             { id: 'contextHints', scope: 'run' },
@@ -547,7 +588,7 @@ describe('PanelRowProjector', (): void => {
                 isWritablePrimary: true,
                 resource: 'http://private',
                 ruleId: 'hidden',
-                durationMs: 12345,
+                durationMs: 54321,
             },
             findings: [finding('hello.clockOffset', 'info', { offsetMs: 720000 })],
         });
@@ -567,6 +608,8 @@ describe('PanelRowProjector', (): void => {
             { kind: 'finding', title: describeFinding(finding('auth.failed')).title },
         ]);
         expect(row(projector, 'databaseAccess').status).toBe('warning');
+        // Row durations are deliberate (decision 0050); a check's own timing facts never are.
+        expect(row(projector, 'authentication').durationMs).toBe(12345);
         const serialized = JSON.stringify(projector.rows());
         for (const forbidden of [
             'hello.clockOffset',
@@ -574,10 +617,9 @@ describe('PanelRowProjector', (): void => {
             'access.noDatabasesVisible',
             'AADSTS',
             'http',
-            '12345',
+            '54321',
             '98765',
             'ruleId',
-            'durationMs',
             'Do not display',
         ]) {
             expect(serialized).not.toContain(forbidden);
@@ -717,6 +759,92 @@ describe('Authentication and Database access evidence', (): void => {
         expect(authentication({ facts: { authMethod: 'NoAuth', authenticated: false } }).segments).toEqual([
             { kind: 'authMethod', method: 'none' },
         ]);
+    });
+
+    describe('names the password mechanism on the Authentication line (decision 0050)', () => {
+        function withGreeting(
+            offered: readonly string[] | undefined,
+            options: Partial<CheckResult<FindingCode>>,
+        ): PanelRow {
+            const projector = new PanelRowProjector(describeFinding, [
+                { id: 'hello', scope: 'run' },
+                { id: 'authenticate', scope: 'run' },
+            ]);
+            complete(projector, 'hello', { facts: offered === undefined ? {} : { saslSupportedMechs: offered } });
+            complete(projector, 'authenticate', options);
+            projector.finish();
+            return row(projector, 'authentication');
+        }
+
+        it('shows the configured mechanism between the method and the user', (): void => {
+            expect(
+                withGreeting(['SCRAM-SHA-1'], {
+                    facts: { authMethod: 'NativeAuth', mechanism: 'SCRAM-SHA-256', userName: 'alice' },
+                }).segments,
+            ).toEqual([
+                { kind: 'authMethod', method: 'native' },
+                { kind: 'authMechanism', mechanism: 'SCRAM-SHA-256' },
+                { kind: 'account', label: 'alice' },
+            ]);
+        });
+
+        it.each([
+            [['SCRAM-SHA-1', 'SCRAM-SHA-256'], 'SCRAM-SHA-256'],
+            [['SCRAM-SHA-1'], 'SCRAM-SHA-1'],
+        ] as const)('negotiates from the greeting when none is configured: %j', (offered, expected): void => {
+            expect(
+                withGreeting(offered, { facts: { authMethod: 'NativeAuth', mechanism: 'DEFAULT', userName: 'alice' } })
+                    .segments,
+            ).toEqual([
+                { kind: 'authMethod', method: 'native' },
+                { kind: 'authMechanism', mechanism: expected },
+                { kind: 'account', label: 'alice' },
+            ]);
+        });
+
+        it('omits the mechanism when none is configured and the greeting offered none', (): void => {
+            for (const offered of [undefined, []]) {
+                expect(
+                    withGreeting(offered, { facts: { authMethod: 'NativeAuth', userName: 'alice' } }).segments,
+                ).toEqual([
+                    { kind: 'authMethod', method: 'native' },
+                    { kind: 'account', label: 'alice' },
+                ]);
+            }
+        });
+
+        it('keeps the mechanism next to a rejected password', (): void => {
+            expect(
+                withGreeting(['SCRAM-SHA-256'], {
+                    status: 'fail',
+                    facts: { authMethod: 'NativeAuth', mechanism: 'DEFAULT', userName: 'alice' },
+                    findings: [finding('auth.failed', 'error')],
+                }).segments,
+            ).toEqual([
+                { kind: 'authMethod', method: 'native' },
+                { kind: 'authMechanism', mechanism: 'SCRAM-SHA-256' },
+                { kind: 'credentialsRejected' },
+            ]);
+        });
+
+        it('leaves Microsoft Entra ID and managed identity unchanged', (): void => {
+            expect(
+                withGreeting(['SCRAM-SHA-256'], {
+                    facts: { authMethod: 'MicrosoftEntraID', mechanism: 'MONGODB-OIDC', account: 'alice@contoso.com' },
+                }).segments,
+            ).toEqual([
+                { kind: 'authMethod', method: 'entraId' },
+                { kind: 'account', label: 'alice@contoso.com' },
+            ]);
+            expect(
+                withGreeting(['SCRAM-SHA-256'], {
+                    facts: { authMethod: 'ManagedIdentity', mechanism: 'MONGODB-OIDC', managedIdentityKind: 'userAssigned' },
+                }).segments,
+            ).toEqual([
+                { kind: 'authMethod', method: 'managedIdentity' },
+                { kind: 'managedIdentityKind', identityKind: 'userAssigned' },
+            ]);
+        });
     });
 
     it.each([

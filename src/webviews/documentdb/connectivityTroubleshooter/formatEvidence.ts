@@ -132,6 +132,15 @@ function cloudText(cloud: string): string {
     }
 }
 
+/**
+ * Node's protocol name as people write it, for each host's Details: `TLSv1.3` is "TLS 1.3", `TLSv1`
+ * is "TLS 1.0" (decision 0050). Anything else is shown as it is. The evidence line names no version.
+ */
+export function tlsProtocolText(protocol: string): string {
+    const match = /^TLSv1(?:\.([0-3]))?$/.exec(protocol);
+    return match ? `TLS 1.${match[1] ?? '0'}` : protocol;
+}
+
 export function formatDate(isoDate: string): string | undefined {
     const time = Date.parse(isoDate);
     if (!Number.isFinite(time)) {
@@ -184,6 +193,8 @@ export function formatEvidenceSegment(segment: EvidenceSegment): string | undefi
         // Falls through only for an unrecognized authentication method.
         case 'account':
             return segment.label;
+        case 'authMechanism':
+            return segment.mechanism;
         case 'cloud':
             return segment.cloud === 'custom' ? l10n.t('Custom cloud') : cloudText(segment.cloud);
         case 'managedIdentityKind':
@@ -207,7 +218,7 @@ export function formatEvidenceSegment(segment: EvidenceSegment): string | undefi
         case 'signedInCloud':
             return l10n.t('VS Code signed in to {0}', cloudText(segment.cloud));
         case 'ping':
-            return l10n.t('Ping {0} ms', segment.ms);
+            return l10n.t('Ping {0}', formatDuration(segment.ms));
         case 'databasesVisible':
             return segment.count === 1 ? l10n.t('1 database visible') : l10n.t('{0} databases visible', segment.count);
         case 'connected':
@@ -248,8 +259,6 @@ export function formatEvidenceSegment(segment: EvidenceSegment): string | undefi
             return l10n.t('{0} of {1} hosts reachable', segment.reachable, segment.total);
         case 'port':
             return l10n.t('Port {0}', segment.port);
-        case 'tlsProtocol':
-            return segment.protocol;
         case 'certificateTrusted':
             return l10n.t('Certificate trusted');
         case 'validUntil': {
@@ -288,4 +297,33 @@ export function formatEvidence(segments: readonly EvidenceSegment[]): string | u
         .map(formatEvidenceSegment)
         .filter((part): part is string => part !== undefined && part.length > 0);
     return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
+function formatUnit(value: number, unit: 'millisecond' | 'second' | 'minute', options: Intl.NumberFormatOptions): string {
+    return new Intl.NumberFormat(undefined, { style: 'unit', unit, unitDisplay: 'short', ...options }).format(value);
+}
+
+/**
+ * A row's elapsed time in the user's locale (decision 0050): whole milliseconds below a second,
+ * three significant digits of seconds below a minute, then minutes and whole seconds. No "slow" or
+ * "fast" rating. `Intl.DurationFormat` is not used: VS Code's Electron may not have it.
+ */
+export function formatDuration(durationMs: number): string {
+    const milliseconds = Math.round(Math.max(0, durationMs));
+    if (milliseconds < 1) {
+        return l10n.t('< {0}', formatUnit(1, 'millisecond', { maximumFractionDigits: 0 }));
+    }
+    if (milliseconds < 1000) {
+        return formatUnit(milliseconds, 'millisecond', { maximumFractionDigits: 0 });
+    }
+    const seconds = Number((milliseconds / 1000).toPrecision(3));
+    if (seconds < 60) {
+        return formatUnit(seconds, 'second', { maximumSignificantDigits: 3 });
+    }
+    const totalSeconds = Math.round(milliseconds / 1000);
+    const minutes = formatUnit(Math.floor(totalSeconds / 60), 'minute', { maximumFractionDigits: 0 });
+    const remainder = totalSeconds % 60;
+    return remainder === 0
+        ? minutes
+        : l10n.t('{0} {1}', minutes, formatUnit(remainder, 'second', { maximumFractionDigits: 0 }));
 }

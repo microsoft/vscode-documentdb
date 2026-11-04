@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    Badge,
     Button,
     Link,
     makeStyles,
@@ -15,6 +16,7 @@ import {
     MessageBar,
     MessageBarActions,
     MessageBarBody,
+    tokens,
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
@@ -46,7 +48,14 @@ import {
     type RunUpdate,
     type TimeoutProfile,
 } from './connectivityTroubleshooterTypes';
-import { formatEvidence, isSettled, rowLabels, statusWords, toStatusListStatus } from './formatEvidence';
+import {
+    formatDuration,
+    formatEvidence,
+    isSettled,
+    rowLabels,
+    statusWords,
+    toStatusListStatus,
+} from './formatEvidence';
 import { panelRowIds, type PanelRow, type PanelRowId } from './panelTypes';
 import { resultCardTitle, TroubleshooterResultCard } from './TroubleshooterResultCard';
 import { detailsDescription, TroubleshooterRowDetails } from './TroubleshooterRowDetails';
@@ -77,6 +86,8 @@ const useStyles = makeStyles({
     // A single screen, so no step indicator: drop the empty `nav` row and the gap it would leave.
     body: { '& > div': { gridTemplateAreas: '"header" "main"' } },
     identifiersLink: { fontSize: 'inherit' },
+    // Digits keep their width, so durations in the right-hand column line up.
+    duration: { fontVariantNumeric: 'tabular-nums', fontWeight: tokens.fontWeightRegular },
 });
 
 const HOUR_MS = 60 * 60_000;
@@ -178,9 +189,11 @@ interface CheckRowProps {
  * One fixed row. A settled row with details gets a disclosure (WI-18 prototype); a pending or active
  * row never does. The toggle ends the row's evidence line, so the label stays a plain heading (WI-19).
  * It unmounts when a new run resets the row, so it has its own focus fallback. The details always
- * show full identifiers: Hide identifiers applies to the report only (decision 0040).
+ * show full identifiers: Hide identifiers applies to the report only (decision 0040). A settled row
+ * that ran shows its real duration in a squared badge at the end of its label line (decision 0050).
  */
 const CheckRow = ({ id, row, label, expanded, onExpandedChange, focusFallback }: CheckRowProps): JSX.Element => {
+    const styles = useStyles();
     const toggleRef = useFocusFallback(focusFallback);
     const handleExpandedChange = useCallback(
         (next: boolean): void => onExpandedChange(id, next),
@@ -188,6 +201,7 @@ const CheckRow = ({ id, row, label, expanded, onExpandedChange, focusFallback }:
     );
     const status = row?.status ?? 'pending';
     const details = isSettled(status) ? row?.details : undefined;
+    const durationMs = isSettled(status) && status !== 'skipped' ? row?.durationMs : undefined;
     return (
         <StatusListItem
             id={`${CHECKS_LIST_ID}-${id}`}
@@ -197,6 +211,19 @@ const CheckRow = ({ id, row, label, expanded, onExpandedChange, focusFallback }:
             status={toStatusListStatus(status)}
             detail={row ? formatEvidence(row.segments) : undefined}
             reserveDetailSpace
+            aside={
+                durationMs === undefined ? undefined : (
+                    <Badge
+                        appearance="outline"
+                        shape="rounded"
+                        size="small"
+                        color="informative"
+                        className={styles.duration}
+                    >
+                        {formatDuration(durationMs)}
+                    </Badge>
+                )
+            }
             disclosure={
                 details
                     ? {
@@ -523,7 +550,12 @@ export const ConnectivityTroubleshooter = (): JSX.Element => {
                         </MessageBar>
                     )}
                     <ContainerSection title={configuration.connectionName} subtitle={runStatusText(view, now)}>
-                        <StatusList id={CHECKS_LIST_ID} ariaLabel={l10n.t('Connection checks')} statusLabels={words}>
+                        <StatusList
+                            id={CHECKS_LIST_ID}
+                            ariaLabel={l10n.t('Connection checks')}
+                            statusLabels={words}
+                            highlightRowsOnHover
+                        >
                             {panelRowIds.map((id) => (
                                 <CheckRow
                                     key={id}

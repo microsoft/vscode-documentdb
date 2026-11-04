@@ -916,7 +916,9 @@ evidence when another member answered; an auth rejection outranks it. Warnings n
 "Connected".
 
 The content subtitle follows the run: static "Checking the connection…" while running,
-then relative "Checked … ago" wording (WI-24). There is no running timer; durations stay in the report.
+then relative "Checked … ago" wording (WI-24). There is no running timer and no total. Each settled row
+that ran shows its own duration in a squared badge at the end of its label line; the report keeps
+the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-squared-badge-the-list-shades-the-row-under-the-pointer)).
 
 > **Changed:** the plan made the outcome the list's last row, and a separate "What to do next"
 > section below it. The operator: "summary should be just a 'card' or a message bar, not a part of
@@ -1026,9 +1028,9 @@ then relative "Checked … ago" wording (WI-24). There is no running timer; dura
   | 2   | Connection settings      | connectionString, prepare     | "mongodb+srv · User alice · 2 options"; Kubernetes adds "· Port forward ready"; on failure "Unknown option sslCert · Did you mean tlsCertificateKeyFile?"                                                              | always applies                                        |
   | 3   | Server address (DNS)     | srv, dns                      | "SRV record lists 3 hosts · All resolve · Private endpoint"                                                                                                                                                            | `skipped`: "Not needed: the host is an IP address"    |
   | 4   | Network connection (TCP) | tcp                           | "3 of 3 hosts reachable · Port 10260"; "host-b refused the connection · 2 of 3 reachable"                                                                                                                              | —                                                     |
-  | 5   | Secure connection (TLS)  | tls                           | "TLS 1.3 · Certificate trusted · Valid until 1 Mar 2027"                                                                                                                                                               | `skipped`: "Not used: TLS is off for this connection" |
+  | 5   | Secure connection (TLS)  | tls                           | "Certificate trusted · Valid until 1 Mar 2027" (no TLS version: Details has it, 0050)                                                                                                                                  | `skipped`: "Not used: TLS is off for this connection" |
   | 6   | Server greeting (hello)  | hello                         | DocumentDB: "DocumentDB gateway · Answered before sign-in"; MongoDB: "Replica set rs0 · Primary found · Answered before sign-in"; adds "· This computer's clock is 12 min behind" only with `hello.clockOffset` (0049) | —                                                     |
-  | 7   | Authentication           | authenticate                  | 4.9.2; native: "Username and password · alice"                                                                                                                                                                         | `skipped` with the reason (4.9.1)                     |
+  | 7   | Authentication           | authenticate                  | 4.9.2; native: "Username and password · SCRAM-SHA-256 · alice" (0050)                                                                                                                                                  | `skipped` with the reason (4.9.1)                     |
   | 8   | Database access          | connectionAccess, serverFacts | "Ping 12 ms · 5 databases visible"; "Connected · listing databases was denied"                                                                                                                                         | `skipped` when authentication did not succeed         |
 
   Labels name what the user cares about, with the technical term in brackets where support or
@@ -1054,7 +1056,9 @@ then relative "Checked … ago" wording (WI-24). There is no running timer; dura
   from keyboard and screen-reader users.
 - **What the panel never shows** ([0027](./decisions.md#0027--the-panel-shows-one-plain-authenticate-row-entra-id-details-live-in-the-report)):
   facts tables, nested sub-step rows, finding or AADSTS codes, resource URIs, rule IDs or per-check
-  timings. Show report (called Show diagnostics until WI-19) has them.
+  timings. Show report (called Show diagnostics until WI-19) has them. Each row's own duration, and in
+  Details each host's time and each TCP address's connect time, are the exception
+  ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-squared-badge-the-list-shades-the-row-under-the-pointer)).
 - **The result card** (4.13) below the list, expanding into place.
 - One panel per `clusterId`; opening it again focuses the panel and offers to re-run.
 - Live narration through the existing `Announcer`, as Local Quick Start does: one announcement per
@@ -1135,11 +1139,16 @@ then relative "Checked … ago" wording (WI-24). There is no running timer; dura
   | Diagnosis setup          | where the checks ran, OS and release, architecture                                                                                                                            | only with findings    |
   | Connection settings      | scheme, hosts, user, password present, authentication method and source, every URI option as name = value; TXT options marked "from DNS"                                      | settled               |
   | Server address (DNS)     | SRV query, listed targets, TXT options, resolver, DNS servers; per host the CNAME chain and addresses (family, public/private), resolvers                                     | settled               |
-  | Network connection (TCP) | per host the address and port that connected, and the addresses that did not                                                                                                  | settled               |
-  | Secure connection (TLS)  | per host protocol, certificate subject, issuer, expiry, host name match, trusted                                                                                              | settled               |
+  | Network connection (TCP) | per host the address and port that connected, and the addresses that did not, each with its connect time                                                                      | settled               |
+  | Secure connection (TLS)  | per host protocol ("TLS 1.3"), certificate subject, issuer, expiry, host name match, trusted                                                                                  | settled               |
   | Server greeting (hello)  | lead "answered before sign-in"; per host the command run, server type, replica set and member role, DocumentDB version, API compatibility, password mechanisms offered (0049) | settled               |
   | Authentication           | method, mechanism (configured or negotiated), user or signed-in identity, authentication database, sign-in steps (0049)                                                       | settled with a method |
   | Database access          | commands run and how each ended, ping, databases visible, server version, answering host                                                                                      | settled after sign-in |
+
+  Each per-host section (DNS, TCP, TLS, greeting) ends with "Took …" when the row has two or more
+  host sections, and a TCP address gives its connect time ("in 31 ms", "after 3 sec") only when its
+  host made two or more attempts (0050, WI-33). The view formats every time with `formatDuration`,
+  with no rating.
 
 - **Invariant.** A warning or error row always has details that explain it. With no finding of that
   severity, the host adds a generic "This check did not succeed" or "This check reported a warning"
@@ -1155,7 +1164,8 @@ then relative "Checked … ago" wording (WI-24). There is no running timer; dura
   new run collapses every row, and a toggle that disappears while focused hands focus to the primary
   action (the R5 fallback). No hover-only content.
 - **Panel safety and Hide identifiers.** No codes, raw errors, English package details or timings
-  (only the database ping). Secret-bearing and unknown URI options are named with "(hidden)"; the
+  (only the database ping, each row's duration, and in Details each host's time and TCP connect
+  times, 0050). Secret-bearing and unknown URI options are named with "(hidden)"; the
   package never records their values, and the password is only "present". Each row carries a `full`
   and a `redacted` copy built from the same report results: `redacted` from `redactReport`, so its
   placeholders are the shared report's. During a run, the copy comes from a report of the results so
@@ -1239,7 +1249,11 @@ Open questions for the UX test: whether healthy rows should offer details at all
 do), whether the toggle should look different on a warning or error row, whether a warning row should
 start expanded, whether the evidence line should name the warning's cause, whether evidence lines and
 the card should honour Hide identifiers too, how much per-host detail a three-host cluster should
-show, and whether any timing (for example TCP connect time) is essential.
+show, and whether any timing (for example TCP connect time) is essential. The last is answered by
+[0050](./decisions.md#0050--each-row-shows-its-duration-in-a-squared-badge-the-list-shades-the-row-under-the-pointer):
+every row that ran shows its duration, and Details give each host's time and each TCP address's
+connect time where they inform (WI-31, WI-33). A Copy summary share item was built and reverted
+(WI-32).
 
 #### Why there is no dynamic row set
 
