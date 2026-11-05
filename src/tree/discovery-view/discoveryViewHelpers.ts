@@ -69,7 +69,6 @@ export async function revealInDiscoveryView(
     request: DiscoveryRevealRequest,
     report?: (message: string) => void,
 ): Promise<DiscoveryRevealResult | undefined> {
-    report?.(vscode.l10n.t('Finding the cluster in the Discovery view…'));
     ext.outputChannel.trace('[DeepLink] Focusing the Discovery view');
     await vscode.commands.executeCommand(`${Views.DiscoveryView}.focus`);
     await waitForDiscoveryViewReady(context);
@@ -81,13 +80,35 @@ export async function revealInDiscoveryView(
             ext.outputChannel.trace('[DeepLink] Looking up the Discovery provider root');
             const roots = await provider.getChildren(undefined as never);
             const providerRoot = roots?.find((node): boolean => node.id.endsWith(`/${request.providerId}`));
-            ext.outputChannel.trace('[DeepLink] Looking up the subscription node');
-            const subscriptions = providerRoot ? await provider.getChildren(providerRoot) : undefined;
+            if (providerRoot) {
+                report?.(vscode.l10n.t('Loading subscriptions…'));
+                ext.outputChannel.trace('[DeepLink] Revealing and expanding the Discovery provider root');
+                await ext.discoveryTreeView.reveal(providerRoot, { select: false, focus: false, expand: true });
+            }
+            ext.outputChannel.trace('[DeepLink] Looking up the subscription node in the cache');
+            let subscriptions = providerRoot ? provider.getCachedChildren(providerRoot) : undefined;
+            if (providerRoot && subscriptions?.length === 0) {
+                ext.outputChannel.trace(
+                    '[DeepLink] Provider root children not cached (already expanded); loading directly',
+                );
+                subscriptions = (await provider.getChildren(providerRoot)) ?? undefined;
+            }
             const subscriptionNode = subscriptions?.find((node): boolean =>
                 node.id.toLowerCase().endsWith(`/${request.subscriptionId.toLowerCase()}`),
             );
-            ext.outputChannel.trace('[DeepLink] Looking up the cluster node');
-            const clusters = subscriptionNode ? await provider.getChildren(subscriptionNode) : undefined;
+            if (subscriptionNode) {
+                report?.(vscode.l10n.t('Loading clusters…'));
+                ext.outputChannel.trace('[DeepLink] Revealing and expanding the subscription node');
+                await ext.discoveryTreeView.reveal(subscriptionNode, { select: false, focus: false, expand: true });
+            }
+            ext.outputChannel.trace('[DeepLink] Looking up the cluster node in the cache');
+            let clusters = subscriptionNode ? provider.getCachedChildren(subscriptionNode) : undefined;
+            if (subscriptionNode && clusters?.length === 0) {
+                ext.outputChannel.trace(
+                    '[DeepLink] Subscription children not cached (already expanded); loading directly',
+                );
+                clusters = (await provider.getChildren(subscriptionNode)) ?? undefined;
+            }
             const clusterNode = clusters?.find(
                 (node): node is ClusterItemBase<AzureClusterModel> =>
                     'cluster' in node &&
@@ -158,9 +179,7 @@ export async function revealInDiscoveryView(
                 if (request.collection) {
                     report?.(vscode.l10n.t('Opening the collection…'));
                     ext.outputChannel.trace(`[DeepLink] Looking up collection ${request.collection}`);
-                    const collectionNode = await provider.findNodeById(
-                        `${databaseNode.id}/${request.collection}`,
-                    );
+                    const collectionNode = await provider.findNodeById(`${databaseNode.id}/${request.collection}`);
                     if (!collectionNode) {
                         ext.outputChannel.trace('[DeepLink] Collection not found');
                         throw new Error(

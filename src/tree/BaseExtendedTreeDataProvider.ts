@@ -196,6 +196,11 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         return this.parentCache.getParent(element);
     }
 
+    /** Returns only children the view has already loaded; never triggers a fetch. */
+    public getCachedChildren(parent: T): T[] {
+        return this.parentCache.getChildren(parent);
+    }
+
     /**
      * Gets the tree item representation for VS Code. Required by vscode.TreeDataProvider.
      *
