@@ -33,16 +33,22 @@ import { generateDocumentDBStorageId } from './utils/storageUtils';
 
 // #region Type Definitions
 
-/**
- * Interface for URI parameters used for connecting to DocumentDB resources.
- */
-interface UriParams {
-    /** The connection string to the DocumentDB/MongoDB account */
-    connectionString?: string;
-    /** The name of the database in the DocumentDB account */
+const OPEN_TARGETS = ['dashboard', 'shell'] as const;
+type OpenTarget = (typeof OPEN_TARGETS)[number];
+
+interface SharedUriParams {
     database?: string;
-    /** The name of the collection within the database */
     collection?: string;
+    open?: OpenTarget;
+}
+
+interface ConnectionStringUriParams extends SharedUriParams {
+    connectionString?: string;
+}
+
+interface AzureUriParams extends SharedUriParams {
+    resourceId?: string;
+    tenantId?: string;
 }
 
 /**
@@ -161,8 +167,10 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
                     context.telemetry.properties.deepLinkConnectSource = source;
 
                     if (source === 'azure') {
+                        context.telemetry.properties.failureStage = 'extractParams';
+                        const params = extractAndValidateAzureParams(context, uri.query);
                         context.telemetry.properties.failureStage = 'handleAzureRequest';
-                        await handleAzureResourceLinkRequest(context, uri.query);
+                        await handleAzureResourceLinkRequest(context, params);
                         break;
                     }
 
@@ -306,7 +314,7 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
 }
 
 // Placeholder until WI7
-async function handleAzureResourceLinkRequest(_context: IActionContext, _query: string): Promise<void> {
+async function handleAzureResourceLinkRequest(_context: IActionContext, _params: AzureUriParams): Promise<void> {
     throw new Error('Azure resource links are not implemented yet.');
 }
 
@@ -323,7 +331,7 @@ async function handleAzureResourceLinkRequest(_context: IActionContext, _query: 
  */
 async function handleConnectionStringRequest(
     context: IActionContext,
-    params: ReturnType<typeof extractParams>,
+    params: ConnectionStringUriParams,
 ): Promise<void> {
     // Validate connection string
     validateConnectionString(params.connectionString);
@@ -696,59 +704,88 @@ function generateUniqueLabel(existingLabel: string): string {
 
 // #region Parameter Processing
 
-/**
- * Extracts query parameters from a URL query string.
- *
- * @param query - The URL query string to extract parameters from (already decoded once by VS Code)
- * @returns UriParams object containing the extracted parameters
- */
-function extractParams(query: string): UriParams {
-    const params: UriParams = {};
-    // Note: URLSearchParams constructor performs the second URI decode automatically
-    // This completes the double decoding process for parameters that were double-encoded in the original URL
-    const queryParams = new URLSearchParams(query);
+function parseOpenTarget(value: string | null): OpenTarget | undefined {
+    if (!value) {
+        return undefined;
+    }
 
-    // URLSearchParams.get() returns already decoded values
-    params.connectionString = queryParams.get('connectionString') || undefined;
-    params.database = queryParams.get('database') || undefined;
-    params.collection = queryParams.get('collection') || undefined;
+    const target = OPEN_TARGETS.find((candidate) => candidate === value.toLowerCase());
+    if (target) {
+        return target;
+    }
 
-    return params;
+    throw new Error(
+        l10n.t(
+            'This DocumentDB link asks to open something the extension does not support. Supported values for open: {0}.',
+            OPEN_TARGETS.join(', '),
+        ),
+    );
 }
 
-/**
- * Extracts and validates URI parameters from a query string.
- *
- * @param context - The action context used for telemetry tracking
- * @param queryFragment - The query fragment string from the URL
- * @returns The extracted and validated URI parameters
- * @throws Error when the parameters are invalid
- */
-function extractAndValidateParams(context: IActionContext, queryFragment: string): UriParams {
-    const params: UriParams = extractParams(queryFragment);
-
-    // Add sensitive values to valuesToMask to prevent sensitive data in logs
-    maskParamsInTelemetry(context, params);
-
-    // Record non-sensitive shape diagnostics: how many params were present and
-    // how many were not ones we recognize. This helps spot malformed deep-links
-    // (for example empty queries or links built against an older URL format)
-    // without ever capturing the parameter values themselves.
-    const knownKeys = new Set(['connectionString', 'database', 'collection']);
-    const allParams = new URLSearchParams(queryFragment);
+/** Records parameter shape and masks sensitive values before validation can fail. */
+function recordParamsInTelemetry(context: IActionContext, queryFragment: string): URLSearchParams {
+    const queryParams = new URLSearchParams(queryFragment);
+    const sensitiveKeys = ['connectionString', 'resourceId', 'tenantId', 'database', 'collection'];
+    const knownKeys = new Set([...sensitiveKeys, 'open']);
     let paramCount = 0;
     let unknownParamCount = 0;
-    for (const [key] of allParams) {
+    for (const [key] of queryParams) {
         paramCount++;
         if (!knownKeys.has(key)) {
             unknownParamCount++;
         }
     }
+    for (const key of sensitiveKeys) {
+        const value = queryParams.get(key);
+        if (value) {
+            context.valuesToMask.push(value);
+        }
+    }
     context.telemetry.properties.uriParamCount = String(paramCount);
     context.telemetry.properties.uriUnknownParamCount = String(unknownParamCount);
+    context.telemetry.properties.hasParamConnectionString = queryParams.get('connectionString') ? 'true' : undefined;
+    context.telemetry.properties.hasParamResourceId = queryParams.get('resourceId') ? 'true' : undefined;
+    context.telemetry.properties.hasParamTenantId = queryParams.get('tenantId') ? 'true' : undefined;
+    context.telemetry.properties.hasParamDatabase = queryParams.get('database') ? 'true' : undefined;
+    context.telemetry.properties.hasParamCollection = queryParams.get('collection') ? 'true' : undefined;
+    return queryParams;
+}
 
+function extractSharedParams(context: IActionContext, queryParams: URLSearchParams): SharedUriParams {
+    const params: SharedUriParams = {
+        database: queryParams.get('database') || undefined,
+        collection: queryParams.get('collection') || undefined,
+        open: parseOpenTarget(queryParams.get('open')),
+    };
+    context.telemetry.properties.openTarget = params.open ?? 'none';
+    if (params.open && params.collection) {
+        throw new Error(
+            l10n.t('This DocumentDB link cannot combine a collection with the open parameter. Remove one of them.'),
+        );
+    }
+    return params;
+}
+
+function refuseMixedLocators(context: IActionContext): never {
+    context.telemetry.properties.mixedLocatorRefused = 'true';
+    throw new Error(
+        l10n.t(
+            'This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId and tenantId with /connect/azure.',
+        ),
+    );
+}
+
+/** Extracts and validates parameters for a connection-string link. */
+function extractAndValidateParams(context: IActionContext, queryFragment: string): ConnectionStringUriParams {
+    const queryParams = recordParamsInTelemetry(context, queryFragment);
+    if (queryParams.has('resourceId') || queryParams.has('tenantId')) {
+        refuseMixedLocators(context);
+    }
+    const params: ConnectionStringUriParams = {
+        ...extractSharedParams(context, queryParams),
+        connectionString: queryParams.get('connectionString') || undefined,
+    };
     if (!params.connectionString) {
-        // Throw a descriptive error so the telemetry wrapper will surface it to the user.
         throw new Error(
             l10n.t(
                 'A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.',
@@ -763,29 +800,33 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
         : params.connectionString.startsWith('mongodb://')
           ? 'mongodb'
           : 'other';
-
-    context.telemetry.properties.hasParamConnectionString = params.connectionString ? 'true' : undefined;
-    context.telemetry.properties.hasParamDatabase = params.database ? 'true' : undefined;
-    context.telemetry.properties.hasParamCollection = params.collection ? 'true' : undefined;
-
     return params;
 }
 
-/**
- * Masks sensitive parameter values in telemetry data
- */
-function maskParamsInTelemetry(context: IActionContext, params: UriParams): void {
-    Object.entries(params).forEach(([key, value]) => {
-        switch (key) {
-            case 'connectionString':
-            case 'database':
-            case 'collection':
-                if (value !== undefined && typeof value === 'string') {
-                    context.valuesToMask.push(value);
-                }
-                break;
-        }
-    });
+/** Extracts and validates parameters for an Azure resource link. */
+function extractAndValidateAzureParams(context: IActionContext, queryFragment: string): AzureUriParams {
+    const queryParams = recordParamsInTelemetry(context, queryFragment);
+    if (queryParams.has('connectionString')) {
+        refuseMixedLocators(context);
+    }
+    const params: AzureUriParams = {
+        ...extractSharedParams(context, queryParams),
+        resourceId: queryParams.get('resourceId') || undefined,
+        tenantId: queryParams.get('tenantId') || undefined,
+    };
+    if (!params.resourceId) {
+        throw new Error(
+            l10n.t(
+                'A DocumentDB Azure link was opened without a resource ID. Ensure the link includes a resourceId query parameter.',
+            ),
+        );
+    }
+    if (params.collection && !params.database) {
+        throw new Error(
+            l10n.t('This DocumentDB link specifies a collection without a database. Add a database parameter.'),
+        );
+    }
+    return params;
 }
 
 /**

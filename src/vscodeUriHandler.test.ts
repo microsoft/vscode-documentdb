@@ -13,6 +13,7 @@ import { globalUriHandler } from './vscodeUriHandler';
 
 /** Telemetry recorded by the mocked azext wrapper, so routing decisions can be asserted. */
 let lastTelemetry: Record<string, string> = {};
+let lastValuesToMask: string[] = [];
 let showUrlHandlingConfirmations = true;
 const mockGetAllConnections = vi.fn().mockResolvedValue([]);
 const mockSaveConnection = vi.fn().mockResolvedValue(undefined);
@@ -31,6 +32,7 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
                 return await callback(context);
             } finally {
                 lastTelemetry = context.telemetry.properties;
+                lastValuesToMask = context.valuesToMask;
             }
         },
     ),
@@ -85,6 +87,7 @@ async function runHandler(path: string, query: string = ''): Promise<Error | und
 beforeEach(() => {
     vi.clearAllMocks();
     lastTelemetry = {};
+    lastValuesToMask = [];
     showUrlHandlingConfirmations = true;
     mockGetAllConnections.mockResolvedValue([]);
     mockSaveConnection.mockResolvedValue(undefined);
@@ -195,6 +198,175 @@ describe('globalUriHandler — route parsing', () => {
         expect(lastTelemetry.failureStage).toBe('validateLocalResourceType');
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
         expect(mockOpenLocalQuickStart).not.toHaveBeenCalled();
+    });
+});
+
+describe('globalUriHandler — connect parameter validation', () => {
+    const connectionQuery = 'connectionString=mongodb%3A%2F%2Fhost';
+    const azureQuery = 'resourceId=%2Fsubscriptions%2Fsub%2FresourceGroups%2Frg';
+    const mixedError =
+        'This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId and tenantId with /connect/azure.';
+
+    it.each([
+        ['/connect', `${connectionQuery}&resourceId=resource`],
+        ['/connect', `${connectionQuery}&tenantId=tenant`],
+        ['', `${connectionQuery}&resourceId=`],
+        ['/connect/azure', `${azureQuery}&connectionString=mongodb%3A%2F%2Fhost`],
+        ['/connect/azure', `${azureQuery}&connectionString=`],
+    ])('refuses mixed locators for %s before confirmation', async (path, query) => {
+        const error = await runHandler(path, query);
+
+        expect(error?.message).toBe(mixedError);
+        expect(lastTelemetry.mixedLocatorRefused).toBe('true');
+        expect(lastTelemetry.failureStage).toBe('extractParams');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['/connect', connectionQuery],
+        ['/connect/azure', azureQuery],
+    ])('refuses open with collection for %s before confirmation', async (path, query) => {
+        const error = await runHandler(path, `${query}&database=db&collection=items&open=shell`);
+
+        expect(error?.message).toBe(
+            'This DocumentDB link cannot combine a collection with the open parameter. Remove one of them.',
+        );
+        expect(lastTelemetry.failureStage).toBe('extractParams');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it('refuses an Azure collection without a database before confirmation', async () => {
+        const error = await runHandler('/connect/azure', `${azureQuery}&collection=items`);
+
+        expect(error?.message).toBe(
+            'This DocumentDB link specifies a collection without a database. Add a database parameter.',
+        );
+        expect(lastTelemetry.failureStage).toBe('extractParams');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it('refuses an Azure link without a resource ID before confirmation', async () => {
+        const error = await runHandler('/connect/azure', 'tenantId=tenant');
+
+        expect(error?.message).toBe(
+            'A DocumentDB Azure link was opened without a resource ID. Ensure the link includes a resourceId query parameter.',
+        );
+        expect(lastTelemetry.failureStage).toBe('extractParams');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it('keeps the existing missing connection string refusal', async () => {
+        const error = await runHandler('/connect', 'database=db');
+
+        expect(error?.message).toBe(
+            'A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.',
+        );
+        expect(lastTelemetry.failureStage).toBe('extractParams');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['/connect', connectionQuery, 'Shell', 'shell'],
+        ['/connect', connectionQuery, 'DASHBOARD', 'dashboard'],
+        ['/connect/azure', azureQuery, 'Shell', 'shell'],
+        ['/connect/azure', azureQuery, 'DASHBOARD', 'dashboard'],
+    ])('accepts and records an open target on %s', async (path, query, open, expected) => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+        const error = await runHandler(path, `${query}&open=${open}`);
+
+        expect(lastTelemetry.openTarget).toBe(expected);
+        expect(lastTelemetry.uriParamCount).toBe('2');
+        expect(lastTelemetry.uriUnknownParamCount).toBe('0');
+        if (path === '/connect/azure') {
+            expect(error?.message).toBe('Azure resource links are not implemented yet.');
+            expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
+        } else {
+            expect(error).toBeUndefined();
+            expect(lastTelemetry.hasParamResourceId).toBeUndefined();
+            expect(lastTelemetry.hasParamTenantId).toBeUndefined();
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
+        }
+    });
+
+    it.each([
+        ['/connect', connectionQuery, 'collection'],
+        ['/connect', connectionQuery, 'script'],
+        ['/connect/azure', azureQuery, 'collection'],
+        ['/connect/azure', azureQuery, 'script'],
+    ])('refuses an unsupported open target for %s before confirmation', async (path, query, open) => {
+        const error = await runHandler(path, `${query}&open=${open}`);
+
+        expect(error?.message).toBe(
+            'This DocumentDB link asks to open something the extension does not support. Supported values for open: dashboard, shell.',
+        );
+        expect(lastTelemetry.failureStage).toBe('extractParams');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['/connect', connectionQuery],
+        ['/connect/azure', azureQuery],
+    ])('records no open target for %s when open is missing or empty', async (path, query) => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+        await runHandler(path, query);
+        expect(lastTelemetry.openTarget).toBe('none');
+        await runHandler(path, `${query}&open=`);
+        expect(lastTelemetry.openTarget).toBe('none');
+    });
+
+    it('records and masks Azure parameters before reaching the placeholder', async () => {
+        const error = await runHandler(
+            '/connect/azure',
+            `${azureQuery}&tenantId=tenant&database=sales&collection=orders&unknown=value`,
+        );
+
+        expect(error?.message).toBe('Azure resource links are not implemented yet.');
+        expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
+        expect(lastTelemetry.hasParamResourceId).toBe('true');
+        expect(lastTelemetry.hasParamTenantId).toBe('true');
+        expect(lastTelemetry.hasParamDatabase).toBe('true');
+        expect(lastTelemetry.hasParamCollection).toBe('true');
+        expect(lastTelemetry.hasParamConnectionString).toBeUndefined();
+        expect(lastTelemetry.openTarget).toBe('none');
+        expect(lastTelemetry.uriParamCount).toBe('5');
+        expect(lastTelemetry.uriUnknownParamCount).toBe('1');
+        expect(lastValuesToMask).toEqual(
+            expect.arrayContaining(['/subscriptions/sub/resourceGroups/rg', 'tenant', 'sales', 'orders']),
+        );
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    });
+
+    it('masks Azure values before refusing an unsupported open target', async () => {
+        await runHandler('/connect/azure', `${azureQuery}&tenantId=tenant&database=sales&open=script`);
+
+        expect(lastTelemetry.failureStage).toBe('extractParams');
+        expect(lastValuesToMask).toEqual(
+            expect.arrayContaining(['/subscriptions/sub/resourceGroups/rg', 'tenant', 'sales']),
+        );
+    });
+
+    it('masks locator and destination values before refusing a mixed link', async () => {
+        await runHandler(
+            '/connect/azure',
+            `${azureQuery}&tenantId=tenant&database=sales&collection=orders&${connectionQuery}`,
+        );
+
+        expect(lastTelemetry.mixedLocatorRefused).toBe('true');
+        expect(lastValuesToMask).toEqual(
+            expect.arrayContaining([
+                'mongodb://host',
+                '/subscriptions/sub/resourceGroups/rg',
+                'tenant',
+                'sales',
+                'orders',
+            ]),
+        );
     });
 });
 
