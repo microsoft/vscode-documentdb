@@ -11,6 +11,8 @@ code:
 # Deep Links
 
 **Status:** in progress — the action switch is new; `local` is its first non-`connect` action.
+Iteration 3 ([plan](./iterations/03-azure-resource-links.md)) adds `/connect/azure` for Azure
+portal links and an `open=` argument; planned, not started.
 
 > How a URL from outside VS Code reaches this extension, and why the vocabulary looks the way it
 > does.
@@ -22,6 +24,7 @@ vscode://ms-azuretools.vscode-documentdb/connect?connectionString=…&database=�
 vscode://ms-azuretools.vscode-documentdb/local
 vscode://ms-azuretools.vscode-documentdb/local/documentdb
 vscode://ms-azuretools.vscode-documentdb?connectionString=…            ← legacy, means /connect
+vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=…&tenantId=…&open=shell   ← planned (iteration 3)
 ```
 
 ## Why this exists
@@ -70,22 +73,42 @@ Local" link has no connection string by definition, because the container does n
 - **Telemetry keeps the `failureStage` / `errorName` shape.** It exists because of issue #655
   ("URL handler error rate at 100%"), and every new branch fills it in.
 
+### Planned in iteration 3
+
+- **`/connect/<source>` names how the cluster is located.** `/connect` is a connection string;
+  `/connect/azure` is an ARM resource ID, for portal links that cannot carry a connection string.
+  Each variant refuses the other's locator
+  ([0008](./decisions.md#0008--azure-resource-links-use-connectazure)).
+- **Azure links go through our Discovery tree**, not the Azure Resources view, and save nothing to
+  the Connections View ([0009](./decisions.md#0009--azure-links-resolve-through-our-discovery-tree)).
+- **The resource type picks vCore or RU**; RU must be a MongoDB account
+  ([0010](./decisions.md#0010--the-resource-id-selects-vcore-or-ru-we-handle-both)).
+- **Hidden resources are made visible permanently**, including the subscription filter shared with
+  the Azure Resources extension
+  ([0011](./decisions.md#0011--azure-links-change-visibility-filters-permanently)).
+- **One confirmation, gated by the setting**, like `/local`
+  ([0012](./decisions.md#0012--azure-links-confirm-like-local)).
+- **`open=dashboard|shell` on every `/connect` variant**; `dashboard` opens even when the automatic
+  dashboard is turned off ([0013](./decisions.md#0013--open-names-the-surface-dashboard-always-opens),
+  [0014](./decisions.md#0014--open-applies-to-connect-as-well)).
+
 ## Timeline
 
-| Date       | What                                                                        |
-| ---------- | --------------------------------------------------------------------------- |
-| —          | `connect` shipped as the only mode; dispatch read `uri.query` only          |
-| 2026-08-24 | Action switch added in the path; `local` opens the DocumentDB Local wizard  |
-| 2026-09-01 | `local` gained a validated resource type and one setting-gated confirmation |
+| Date       | What                                                                          |
+| ---------- | ----------------------------------------------------------------------------- |
+| —          | `connect` shipped as the only mode; dispatch read `uri.query` only            |
+| 2026-08-24 | Action switch added in the path; `local` opens the DocumentDB Local wizard    |
+| 2026-09-01 | `local` gained a validated resource type and one setting-gated confirmation   |
+| 2026-11-05 | Iteration 3 planned: `/connect/azure` for portal links, `open=` (D0008–D0014) |
 
 ## Open gaps
 
 - **Discovery plugin actions are unimplemented.** The handler's original JSDoc anticipated that
   "other modes … will be handled by our discoverability plugins", and five discovery plugins exist
   (`service-atlas-mongodb`, `service-azure-mongo-ru`, `service-azure-mongo-vcore`,
-  `service-azure-vm`, `service-kubernetes`). The shape reserved for them is `/discovery/<provider>`,
-  but nothing consumes it yet and no provider-id vocabulary has been agreed.
-  `DeepLinkRoute.qualifiers` exists to carry it.
+  `service-azure-vm`, `service-kubernetes`). The `/discovery/<provider>` shape once reserved for
+  them was dropped: sources are qualifiers of `/connect` instead (D0008). Iteration 3 plans
+  `/connect/azure` for the two Azure Mongo plugins; the other plugins have no link yet.
 - **`connect` still depends on the legacy emulator branch.** `isLegacyEmulatorMigrationComplete()`
   and `ConnectionType.Emulators` are removed by issue
   [#870](https://github.com/microsoft/vscode-documentdb/issues/870), milestone 0.11.0. That work and
