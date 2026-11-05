@@ -3,10 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
-import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
@@ -24,7 +20,7 @@ import { type CopyPasteConfig } from './copyPasteConfig';
  * Error thrown when source validation fails for copy-paste operations.
  * This is used to distinguish user-facing validation errors from other errors (e.g., network issues).
  */
-class SourceValidationError extends Error {
+export class SourceValidationError extends Error {
     constructor(message: string) {
         super(message);
         this.name = 'SourceValidationError';
@@ -44,6 +40,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
     private readonly config: CopyPasteConfig;
     private readonly copyCollectionStrings: CopyCollectionStrings;
+    private readonly validateSource?: CopyPasteCollectionTaskOptions['validateSource'];
+    private readonly collectMetadata?: CopyPasteCollectionTaskOptions['collectMetadata'];
     private readonly documentReader: DocumentReader;
     private readonly documentWriter: StreamingDocumentWriter;
     private readonly indexCopier?: CollectionIndexCopier;
@@ -77,6 +75,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         super(options);
         this.config = config;
         this.copyCollectionStrings = { ...defaultCopyCollectionStrings, ...options?.copyCollectionStrings };
+        this.validateSource = options?.validateSource;
+        this.collectMetadata = options?.collectMetadata;
         this.documentReader = documentReader;
         this.documentWriter = documentWriter;
         this.indexCopier = indexCopier;
@@ -113,35 +113,6 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     }
 
     /**
-     * Collects cluster metadata for telemetry purposes.
-     * This method attempts to gather cluster information without failing the task if metadata collection fails.
-     *
-     * @param clusterId Cluster ID to collect metadata for
-     * @param prefix Prefix for telemetry properties (e.g., 'source' or 'target')
-     * @param context Telemetry context to add properties to
-     */
-    private async collectClusterMetadata(clusterId: string, prefix: string, context: TaskTelemetryContext): Promise<void> {
-        try {
-            const client = await ClustersClient.getClient(clusterId);
-            const metadata = await client.getClusterMetadata();
-
-            // Add metadata with prefix to avoid conflicts between source and target
-            for (const [key, value] of Object.entries(metadata)) {
-                if (value !== undefined && value !== null) {
-                    context.telemetry.properties[`${prefix}_${key}`] = String(value);
-                }
-            }
-
-            context.telemetry.properties[`${prefix}_metadataCollectionSuccess`] = 'true';
-        } catch (error) {
-            // Log the error but don't fail the task
-            context.telemetry.properties[`${prefix}_metadata_error`] =
-                error instanceof Error ? error.message : 'Unknown error';
-            context.telemetry.properties[`${prefix}_metadataCollectionSuccess`] = 'false';
-        }
-    }
-
-    /**
      * Initializes the task by counting documents and ensuring target collection exists.
      *
      * @param signal AbortSignal to check for cancellation
@@ -151,59 +122,20 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         if (context) {
             context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
         }
-        // Validate source cluster credentials (stale reference protection)
-        if (!CredentialCache.hasCredentials(this.config.source.clusterId)) {
-            // Clear the stale clipboard reference
-            ext.copiedCollectionNode = undefined;
-            void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
-
-            if (context) {
-                context.telemetry.properties.sourceClusterDisconnected = 'true';
-            }
-
-            throw new SourceValidationError(
-                vscode.l10n.t(
-                    'The source cluster is no longer connected. Please reconnect and copy the collection again.',
-                ),
-            );
-        }
-
-        // Validate source collection still exists
-        this.updateStatus(this.getStatus().state, vscode.l10n.t('Validating source collection...'));
-        try {
-            const sourceClient = await ClustersClient.getClient(this.config.source.clusterId);
-            const collections = await sourceClient.listCollections(this.config.source.databaseName);
-            const collectionExists = collections.some((c) => c.name === this.config.source.collectionName);
-
-            if (!collectionExists) {
-                // Clear the stale clipboard reference
-                ext.copiedCollectionNode = undefined;
-                void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
-
-                if (context) {
-                    context.telemetry.properties.sourceCollectionNotFound = 'true';
+        if (this.validateSource) {
+            this.updateStatus(this.getStatus().state, this.copyCollectionStrings.validatingSourceCollection);
+            try {
+                await this.validateSource(signal, context);
+            } catch (error) {
+                if (error instanceof SourceValidationError) {
+                    throw error;
                 }
-
-                throw new SourceValidationError(
-                    vscode.l10n.t(
-                        'The source collection "{0}" no longer exists in database "{1}". It may have been deleted or renamed.',
-                        this.config.source.collectionName,
-                        this.config.source.databaseName,
+                throw new Error(
+                    this.copyCollectionStrings.failedToValidateSource(
+                        error instanceof Error ? error.message : String(error),
                     ),
                 );
             }
-        } catch (error) {
-            // Re-throw our own validation errors
-            if (error instanceof SourceValidationError) {
-                throw error;
-            }
-            // Wrap other errors (e.g., network issues)
-            throw new Error(
-                vscode.l10n.t(
-                    'Failed to validate source collection: {0}',
-                    error instanceof Error ? error.message : String(error),
-                ),
-            );
         }
 
         // Add copy-paste specific telemetry properties
@@ -213,12 +145,11 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             context.telemetry.properties.isCrossConnection =
                 this.config.source.clusterId !== this.config.target.clusterId ? 'true' : 'false';
 
-            // Collect cluster metadata for source and target connections and await their completion (non-blocking for errors)
-            const metadataPromises = [this.collectClusterMetadata(this.config.source.clusterId, 'source', context)];
-            if (this.config.source.clusterId !== this.config.target.clusterId) {
-                metadataPromises.push(this.collectClusterMetadata(this.config.target.clusterId, 'target', context));
+            try {
+                await this.collectMetadata?.(context);
+            } catch {
+                // Metadata collection must not fail the task.
             }
-            await Promise.allSettled(metadataPromises);
         }
 
         // Count total documents for progress calculation

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type TaskOptions } from '../../taskHost';
+import { type TaskOptions, type TaskTelemetryContext } from '../../taskHost';
 
 export interface CopyCollectionStrings {
     taskName: (
@@ -12,6 +12,8 @@ export interface CopyCollectionStrings {
         targetDatabase: string,
         targetCollection: string,
     ) => string;
+    validatingSourceCollection: string;
+    failedToValidateSource: (message: string) => string;
     countingSourceDocuments: string;
     failedToCountSourceDocuments: string;
     ensuringTargetExists: string;
@@ -39,6 +41,8 @@ export const defaultCopyCollectionStrings: CopyCollectionStrings = {
         targetDatabase: string,
         targetCollection: string,
     ): string => `Copy "${sourceCollection}" from "${sourceDatabase}" to "${targetDatabase}/${targetCollection}"`,
+    validatingSourceCollection: 'Validating source collection...',
+    failedToValidateSource: (message: string): string => `Failed to validate source collection: ${message}`,
     countingSourceDocuments: 'Counting documents in the source collection...',
     failedToCountSourceDocuments: 'Failed to count documents in the source collection.',
     ensuringTargetExists: 'Ensuring target exists...',
@@ -61,4 +65,6 @@ export const defaultCopyCollectionStrings: CopyCollectionStrings = {
 
 export interface CopyPasteCollectionTaskOptions extends TaskOptions {
     copyCollectionStrings?: Partial<CopyCollectionStrings>;
+    validateSource?: (signal: AbortSignal, context?: TaskTelemetryContext) => Promise<void>;
+    collectMetadata?: (context: TaskTelemetryContext) => Promise<void>;
 }

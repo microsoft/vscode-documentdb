@@ -18,6 +18,9 @@ export function getExtensionCopyCollectionStrings(): CopyCollectionStrings {
                 'Copy "{sourceCollection}" from "{sourceDatabase}" to "{targetDatabase}/{targetCollection}"',
                 { sourceCollection, sourceDatabase, targetDatabase, targetCollection },
             ),
+        validatingSourceCollection: vscode.l10n.t('Validating source collection...'),
+        failedToValidateSource: (message: string): string =>
+            vscode.l10n.t('Failed to validate source collection: {0}', message),
         countingSourceDocuments: vscode.l10n.t('Counting documents in the source collection...'),
         failedToCountSourceDocuments: vscode.l10n.t('Failed to count documents in the source collection.'),
         ensuringTargetExists: vscode.l10n.t('Ensuring target exists...'),

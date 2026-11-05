@@ -17,6 +17,7 @@ import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-
 import { isTerminalState, TaskState, type Task } from '../../services/taskService/taskService';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
+import { createCollectMetadata, createValidateSource } from './copyPasteCollectionHooks';
 import { createIndexCopier } from './createIndexCopier';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
@@ -81,7 +82,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
             writer,
             indexCopier,
             undefined,
-            { ...createExtensionTaskOptions(), copyCollectionStrings: getExtensionCopyCollectionStrings() },
+            {
+                ...createExtensionTaskOptions(),
+                copyCollectionStrings: getExtensionCopyCollectionStrings(),
+                validateSource: createValidateSource(config),
+                collectMetadata: createCollectMetadata(config),
+            },
         );
 
         // Register task with the task service

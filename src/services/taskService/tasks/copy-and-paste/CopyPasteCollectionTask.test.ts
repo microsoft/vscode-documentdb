@@ -3,14 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
 import { ConflictResolutionStrategy, type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter } from '../../data-api/writers/StreamingDocumentWriter';
-import { CopyPasteCollectionTask } from './CopyPasteCollectionTask';
+import { type TaskTelemetryContext } from '../../taskHost';
+import { CopyPasteCollectionTask, SourceValidationError } from './CopyPasteCollectionTask';
 import { type CopyPasteConfig } from './copyPasteConfig';
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
@@ -266,5 +269,85 @@ describe('CopyPasteCollectionTask injected strings', () => {
         expect(task.name).toBe('Transfer sourceDb/sourceCollection to targetDb/targetCollection');
         expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Preparing 20 indexes' });
         expect(task.progressUpdates).toContainEqual({ progress: 100, message: 'Source collection is empty.' });
+    });
+});
+
+describe('CopyPasteCollectionTask injected hooks', () => {
+    class InitializableCopyPasteCollectionTask extends CopyPasteCollectionTask {
+        public runInitializeForTest(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
+            return this.onInitialize(signal, context);
+        }
+    }
+
+    const reader = { countDocuments: vi.fn().mockResolvedValue(3) } as unknown as DocumentReader;
+    const writer = {
+        ensureTargetExists: vi.fn().mockResolvedValue({ targetWasCreated: false }),
+    } as unknown as StreamingDocumentWriter;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('rethrows source validation errors unchanged before counting documents', async () => {
+        const error = new SourceValidationError('source is unavailable');
+        const validateSource = vi.fn().mockRejectedValue(error);
+        const task = new InitializableCopyPasteCollectionTask(config, reader, writer, undefined, undefined, {
+            validateSource,
+        });
+        const signal = new AbortController().signal;
+        const context = createContext();
+
+        await expect(task.runInitializeForTest(signal, context)).rejects.toBe(error);
+
+        expect(validateSource).toHaveBeenCalledWith(signal, context);
+        expect(task.getStatus().message).toBe('Validating source collection...');
+        expect(reader.countDocuments).not.toHaveBeenCalled();
+        expect(writer.ensureTargetExists).not.toHaveBeenCalled();
+    });
+
+    it.each([new Error('connection failed'), 'connection failed'])(
+        'wraps unexpected validation failures: %s',
+        async (error) => {
+            const task = new InitializableCopyPasteCollectionTask(config, reader, writer, undefined, undefined, {
+                validateSource: vi.fn().mockRejectedValue(error),
+            });
+
+            await expect(task.runInitializeForTest(new AbortController().signal, createContext())).rejects.toThrow(
+                'Failed to validate source collection: connection failed',
+            );
+        },
+    );
+
+    it('ignores metadata hook errors and continues initialization', async () => {
+        const context = createContext();
+        const collectMetadata = vi.fn().mockRejectedValue(new Error('metadata unavailable'));
+        const task = new InitializableCopyPasteCollectionTask(config, reader, writer, undefined, undefined, {
+            collectMetadata,
+        });
+        const signal = new AbortController().signal;
+
+        await expect(task.runInitializeForTest(signal, context)).resolves.toBeUndefined();
+
+        expect(collectMetadata).toHaveBeenCalledWith(context);
+        expect(reader.countDocuments).toHaveBeenCalledWith(signal, context);
+        expect(writer.ensureTargetExists).toHaveBeenCalledOnce();
+        expect(context.telemetry.properties).toMatchObject({
+            onConflict: config.onConflict,
+            copyIndexes: 'true',
+            isCrossConnection: 'true',
+        });
+    });
+
+    it('initializes without hooks or DocumentDB infrastructure access', async () => {
+        const task = new InitializableCopyPasteCollectionTask(config, reader, writer);
+        const signal = new AbortController().signal;
+        const context = createContext();
+
+        await expect(task.runInitializeForTest(signal, context)).resolves.toBeUndefined();
+
+        expect(ClustersClient.getClient).not.toHaveBeenCalled();
+        expect(CredentialCache.hasCredentials).not.toHaveBeenCalled();
+        expect(reader.countDocuments).toHaveBeenCalledWith(signal, context);
+        expect(writer.ensureTargetExists).toHaveBeenCalledOnce();
     });
 });
