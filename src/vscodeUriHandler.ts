@@ -200,7 +200,9 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
                             ...params,
                             resourceId: nonNullValue(params.resourceId, 'resourceId', 'vscodeUriHandler.ts'),
                         });
-                        ext.outputChannel.trace(`[DeepLink] Azure flow finished: ${result ? 'opened target' : 'stopped'}`);
+                        ext.outputChannel.trace(
+                            `[DeepLink] Azure flow finished: ${result ? 'opened target' : 'stopped'}`,
+                        );
                         if (result) {
                             context.telemetry.properties.failureStage = 'openTarget';
                             if (params.database && params.collection) {
@@ -231,7 +233,10 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
 
                 case 'local': {
                     context.telemetry.properties.failureStage = 'openLocalQuickStart';
-                    await handleLocalQuickStartRequest(context, nonNullValue(resourceType, 'resourceType', 'vscodeUriHandler.ts'));
+                    await handleLocalQuickStartRequest(
+                        context,
+                        nonNullValue(resourceType, 'resourceType', 'vscodeUriHandler.ts'),
+                    );
                     break;
                 }
             }
@@ -242,7 +247,7 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             // Record the error type (not the message, which can carry user data)
             // so we can group failures without exposing connection details.
             context.telemetry.properties.errorName = error instanceof Error ? error.name : 'NonError';
-            ext.outputChannel.trace(
+            ext.outputChannel.error(
                 `[DeepLink] Failed: failureStage=${context.telemetry.properties.failureStage} errorName=${context.telemetry.properties.errorName}`,
             );
             throw error;
@@ -360,7 +365,9 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
             openSetup,
         );
 
-        ext.outputChannel.trace(`[DeepLink] Local setup confirmation: ${confirmation === openSetup ? 'accepted' : 'dismissed'}`);
+        ext.outputChannel.trace(
+            `[DeepLink] Local setup confirmation: ${confirmation === openSetup ? 'accepted' : 'dismissed'}`,
+        );
         if (confirmation !== openSetup) {
             context.telemetry.properties.userCancelledAtStep = 'OpenLocalQuickStart';
             return;
@@ -466,7 +473,9 @@ async function handleConnectionStringRequest(
         surface = params.open === 'dashboard' ? l10n.t('Cluster Dashboard') : l10n.t('Shell');
     }
 
-    ext.outputChannel.trace(`[DeepLink] ${existingDuplicateConnection ? 'Existing saved connection found' : 'New connection'}`);
+    ext.outputChannel.trace(
+        `[DeepLink] ${existingDuplicateConnection ? 'Existing saved connection found' : 'New connection'}`,
+    );
     if (existingDuplicateConnection) {
         // the connection already exists, let's just reveal it later in the Connections View
         storageId = existingDuplicateConnection.id;

@@ -12,10 +12,7 @@ import { AuthMethodId } from './documentdb/auth/AuthMethod';
 import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
 import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
-import {
-    buildConnectionsViewTreePath,
-    revealInConnectionsView,
-} from './tree/connections-view/connectionsViewHelpers';
+import { buildConnectionsViewTreePath, revealInConnectionsView } from './tree/connections-view/connectionsViewHelpers';
 import { type DiscoveryRevealResult } from './tree/discovery-view/discoveryViewHelpers';
 import { type EmulatorConfiguration } from './utils/emulatorConfiguration';
 import { globalUriHandler } from './vscodeUriHandler';
@@ -76,7 +73,14 @@ vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
 }));
 vi.mock('./extensionVariables', () => ({
     ext: {
-        outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
+        outputChannel: {
+            info: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            appendLine: vi.fn(),
+        },
         settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' },
         connectionsBranchDataProvider: { refresh: vi.fn(), findNodeById: vi.fn() },
     },
@@ -106,8 +110,9 @@ beforeEach(() => {
     vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(undefined);
     vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(undefined);
     vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
-    vi.spyOn(vscode.window, 'withProgress').mockImplementation(async (_options, task): Promise<unknown> =>
-        task({ report: vi.fn() }, new vscode.CancellationTokenSource().token),
+    vi.spyOn(vscode.window, 'withProgress').mockImplementation(
+        async (_options, task): Promise<unknown> =>
+            task({ report: vi.fn() }, new vscode.CancellationTokenSource().token),
     );
     (vscode.workspace.getConfiguration as Mock).mockReturnValue({
         get: vi.fn(() => showUrlHandlingConfirmations),
@@ -123,7 +128,10 @@ describe('globalUriHandler — diagnostic logging', () => {
         expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
             '[DeepLink] Handling link: action=connect source=azure parameters=resourceId,tenantId,open open=shell',
         );
-        const logged = [...vi.mocked(ext.outputChannel.info).mock.calls, ...vi.mocked(ext.outputChannel.trace).mock.calls]
+        const logged = [
+            ...vi.mocked(ext.outputChannel.info).mock.calls,
+            ...vi.mocked(ext.outputChannel.trace).mock.calls,
+        ]
             .flat()
             .join(' ');
         expect(logged).not.toContain('resource-private');
@@ -137,7 +145,10 @@ describe('globalUriHandler — diagnostic logging', () => {
         expect(mockSaveConnection).toHaveBeenCalledOnce();
         expect(revealInConnectionsView).toHaveBeenCalledOnce();
 
-        const logged = [...vi.mocked(ext.outputChannel.info).mock.calls, ...vi.mocked(ext.outputChannel.trace).mock.calls]
+        const logged = [
+            ...vi.mocked(ext.outputChannel.info).mock.calls,
+            ...vi.mocked(ext.outputChannel.trace).mock.calls,
+        ]
             .flat()
             .join(' ');
         expect(logged).not.toContain('secret');
@@ -152,8 +163,14 @@ describe('globalUriHandler — diagnostic logging', () => {
         mockSaveConnection.mockRejectedValue(new Error('user secret host'));
         await runHandler('/connect', 'connectionString=mongodb%3A%2F%2Fuser%3Asecret%40host');
 
-        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Failed: failureStage=handleRequest errorName=Error');
-        const logged = [...vi.mocked(ext.outputChannel.info).mock.calls, ...vi.mocked(ext.outputChannel.trace).mock.calls]
+        expect(ext.outputChannel.error).toHaveBeenCalledWith(
+            '[DeepLink] Failed: failureStage=handleRequest errorName=Error',
+        );
+        const logged = [
+            ...vi.mocked(ext.outputChannel.info).mock.calls,
+            ...vi.mocked(ext.outputChannel.trace).mock.calls,
+            ...vi.mocked(ext.outputChannel.error).mock.calls,
+        ]
             .flat()
             .join(' ');
         expect(logged).not.toContain('secret');
@@ -217,18 +234,27 @@ describe('globalUriHandler — route parsing', () => {
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
 
-    it.each(['/connect/azure', '/CONNECT/Azure'])('routes %s to the Azure resource handler', async (path): Promise<void> => {
-        const error = await runHandler(path, 'resourceId=example');
+    it.each(['/connect/azure', '/CONNECT/Azure'])(
+        'routes %s to the Azure resource handler',
+        async (path): Promise<void> => {
+            const error = await runHandler(path, 'resourceId=example');
 
-        expect(error).toBeUndefined();
-        expect(handleAzureResourceLinkRequest).toHaveBeenCalledExactlyOnceWith(
-            expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
-            { resourceId: 'example', tenantId: undefined, database: undefined, collection: undefined, open: undefined },
-        );
-        expect(lastTelemetry.deepLinkConnectSource).toBe('azure');
-        expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
-        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
-    });
+            expect(error).toBeUndefined();
+            expect(handleAzureResourceLinkRequest).toHaveBeenCalledExactlyOnceWith(
+                expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
+                {
+                    resourceId: 'example',
+                    tenantId: undefined,
+                    database: undefined,
+                    collection: undefined,
+                    open: undefined,
+                },
+            );
+            expect(lastTelemetry.deepLinkConnectSource).toBe('azure');
+            expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
+            expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        },
+    );
 
     it.each(['/connect/aws', '/connect/azure/x', '/connect/../local'])(
         'rejects unsupported connect source paths in %s without opening local setup',
@@ -628,7 +654,10 @@ describe('globalUriHandler — saved connection open target', () => {
             );
             expect(buildConnectionsViewTreePath).toHaveBeenCalledExactlyOnceWith('existing-id', false, database);
             expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(treePath, false);
-            expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith('vscode-documentdb.command.shell.open', node);
+            expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith(
+                'vscode-documentdb.command.shell.open',
+                node,
+            );
             expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
             expect(openCollectionViewInternal).not.toHaveBeenCalled();
             expect(lastTelemetry.failureStage).toBe('openTarget');
@@ -863,7 +892,11 @@ describe('globalUriHandler — connection confirmation', () => {
 
     it.each([
         { target: 'shell', surface: 'Shell', command: 'vscode-documentdb.command.shell.open' },
-        { target: 'dashboard', surface: 'Cluster Dashboard', command: 'vscode-documentdb.command.clusterDashboard.open' },
+        {
+            target: 'dashboard',
+            surface: 'Cluster Dashboard',
+            command: 'vscode-documentdb.command.clusterDashboard.open',
+        },
     ])(
         'names $surface in the new-connection confirmation and opens it',
         async ({ target, surface, command }): Promise<void> => {
@@ -925,7 +958,10 @@ describe('globalUriHandler — connection confirmation', () => {
         expect(error?.message).toBe(
             'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
         );
-        expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith('collection-path', false);
+        expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(
+            'collection-path',
+            false,
+        );
         expect(openCollectionViewInternal).not.toHaveBeenCalled();
     });
 });
