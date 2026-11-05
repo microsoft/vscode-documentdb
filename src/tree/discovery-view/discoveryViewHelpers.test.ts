@@ -116,7 +116,10 @@ describe('Discovery view helpers', () => {
         exists.mockImplementation((clusterId: string): boolean => {
             expect(clusterId).toBe(clusterNode.cluster.clusterId);
             expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
-            expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: true, expand: true }]]);
+            expect(reveal.mock.calls).toEqual([
+                [clusterNode, { select: true, focus: false, expand: false }],
+                [clusterNode, { select: true, focus: true, expand: true }],
+            ]);
             return true;
         });
 
@@ -125,6 +128,7 @@ describe('Discovery view helpers', () => {
         expect(result).toEqual({ clusterNode, clusterId: clusterNode.cluster.clusterId, databaseNode: undefined });
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Discovery view ready: attempts=1');
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Cluster node found');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Showing the cluster in the Discovery view');
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Cluster connected');
         const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
         expect(logged).not.toContain(request.subscriptionId);
@@ -136,7 +140,10 @@ describe('Discovery view helpers', () => {
             rootNode,
             subscriptionNode,
         ]);
-        expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: true, expand: true }]]);
+        expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: false }],
+            [clusterNode, { select: true, focus: true, expand: true }],
+        ]);
         expect(findNodeById).not.toHaveBeenCalled();
         expect(vscode.window.withProgress).toHaveBeenCalledExactlyOnceWith(
             { location: { viewId: Views.DiscoveryView }, cancellable: false },
@@ -144,27 +151,37 @@ describe('Discovery view helpers', () => {
         );
     });
 
-    it('reports finding and connecting before expanding the cluster', async (): Promise<void> => {
+    it('reports connecting after showing and before expanding the cluster', async (): Promise<void> => {
         const report = vi.fn<(message: string) => void>();
-        reveal.mockImplementation(async (): Promise<void> => {
-            expect(report.mock.calls).toEqual([
-                ['Finding the cluster in the Discovery view…'],
-                ['Connecting…'],
-            ]);
+        reveal.mockImplementationOnce(async (): Promise<void> => {
+            await Promise.resolve();
+            expect(report.mock.calls).toEqual([['Finding the cluster in the Discovery view…']]);
         });
 
         await revealInDiscoveryView(context, request, report);
 
+        expect(report.mock.calls).toEqual([
+            ['Finding the cluster in the Discovery view…'],
+            ['Connecting…'],
+        ]);
         expect(report.mock.invocationCallOrder[0]).toBeLessThan(getChildren.mock.invocationCallOrder[0]);
-        expect(reveal).toHaveBeenCalledExactlyOnceWith(clusterNode, { select: true, focus: true, expand: true });
+        expect(reveal.mock.invocationCallOrder[0]).toBeLessThan(report.mock.invocationCallOrder[1]);
+        expect(report.mock.invocationCallOrder[1]).toBeLessThan(reveal.mock.invocationCallOrder[1]);
+        expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: false }],
+            [clusterNode, { select: true, focus: true, expand: true }],
+        ]);
+        expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
     });
 
     it('waits for cluster expansion before checking the client', async () => {
         exists.mockReturnValue(false);
-        reveal.mockImplementation(async (): Promise<void> => {
+        reveal.mockImplementation(async (_node, options): Promise<void> => {
             await Promise.resolve();
             expect(exists).not.toHaveBeenCalled();
-            exists.mockReturnValue(true);
+            if (options?.expand) {
+                exists.mockReturnValue(true);
+            }
         });
 
         expect(await revealInDiscoveryView(context, request)).toEqual({
@@ -172,7 +189,10 @@ describe('Discovery view helpers', () => {
             clusterId: clusterNode.cluster.clusterId,
             databaseNode: undefined,
         });
-        expect(reveal).toHaveBeenCalledExactlyOnceWith(clusterNode, { select: true, focus: true, expand: true });
+        expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: false }],
+            [clusterNode, { select: true, focus: true, expand: true }],
+        ]);
         expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
     });
 
@@ -215,7 +235,10 @@ describe('Discovery view helpers', () => {
 
         expect(result).toBeUndefined();
         expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
-        expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: false, expand: true }]]);
+        expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: false }],
+            [clusterNode, { select: true, focus: false, expand: true }],
+        ]);
         expect(getChildren).not.toHaveBeenCalledWith(databaseNode);
         expect(findNodeById).not.toHaveBeenCalled();
         expect(exists).toHaveBeenCalledWith(clusterNode.cluster.clusterId);
@@ -235,6 +258,7 @@ describe('Discovery view helpers', () => {
         expect(result).toEqual({ clusterNode, clusterId: clusterNode.cluster.clusterId, databaseNode });
         expect(findNodeById).toHaveBeenCalledExactlyOnceWith(`${clusterNode.id}/db`);
         expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: false }],
             [clusterNode, { select: true, focus: false, expand: true }],
             [databaseNode, { select: true, focus: true, expand: true }],
         ]);
@@ -247,14 +271,20 @@ describe('Discovery view helpers', () => {
             revealInDiscoveryView(context, { ...request, database: 'missing-database' }),
         ).rejects.toThrow(missingTargetMessage);
         expect(findNodeById).toHaveBeenCalledExactlyOnceWith(`${clusterNode.id}/missing-database`);
-        expect(reveal).toHaveBeenCalledExactlyOnceWith(clusterNode, { select: true, focus: false, expand: true });
+        expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: false }],
+            [clusterNode, { select: true, focus: false, expand: true }],
+        ]);
     });
 
     it('finds a requested collection by its tree id after expanding the database', async (): Promise<void> => {
         const report = vi.fn<(message: string) => void>();
         findNodeById.mockImplementation(async (id: string): Promise<TreeElement | undefined> => {
             if (id === databaseNode.id) {
-                expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: false, expand: true }]]);
+                expect(reveal.mock.calls).toEqual([
+                    [clusterNode, { select: true, focus: false, expand: false }],
+                    [clusterNode, { select: true, focus: false, expand: true }],
+                ]);
                 return databaseNode;
             }
             expect(reveal).toHaveBeenLastCalledWith(databaseNode, { select: true, focus: false, expand: true });
@@ -276,6 +306,7 @@ describe('Discovery view helpers', () => {
         expect(result?.databaseNode).toBe(databaseNode);
         expect(findNodeById.mock.calls).toEqual([[`${clusterNode.id}/db`], [`${databaseNode.id}/products`]]);
         expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: false }],
             [clusterNode, { select: true, focus: false, expand: true }],
             [databaseNode, { select: true, focus: false, expand: true }],
             [collectionNode, { select: true, focus: true, expand: true }],
@@ -290,6 +321,7 @@ describe('Discovery view helpers', () => {
         ).rejects.toThrow(missingTargetMessage);
         expect(findNodeById.mock.calls).toEqual([[`${clusterNode.id}/db`], [`${databaseNode.id}/missing-collection`]]);
         expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: false }],
             [clusterNode, { select: true, focus: false, expand: true }],
             [databaseNode, { select: true, focus: false, expand: true }],
         ]);

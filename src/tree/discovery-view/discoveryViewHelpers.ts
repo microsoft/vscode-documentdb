@@ -108,9 +108,12 @@ export async function revealInDiscoveryView(
                 );
             }
 
-            ext.outputChannel.trace('[DeepLink] Revealing and expanding the cluster');
-            // Reveal with expand awaits the node's children, so the connect flow runs once through expansion.
+            // Show the cluster first, then expand it. Reveal with expand awaits the node's children,
+            // so expansion is the only connect.
+            ext.outputChannel.trace('[DeepLink] Showing the cluster in the Discovery view');
+            await ext.discoveryTreeView.reveal(clusterNode, { select: true, focus: false, expand: false });
             report?.(vscode.l10n.t('Connecting…'));
+            ext.outputChannel.trace('[DeepLink] Revealing and expanding the cluster');
             await ext.discoveryTreeView.reveal(clusterNode, {
                 select: true,
                 focus: !request.database,
