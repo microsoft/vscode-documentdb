@@ -82,7 +82,7 @@ describe('resolveAzureSubscription', (): void => {
             return true;
         });
         azureSubscriptionProvider.getSubscriptions.mockImplementation(async (): Promise<AzureSubscription[]> => {
-            expect(report).toHaveBeenLastCalledWith('Looking for the subscription in your Azure accounts…');
+            expect(report).toHaveBeenLastCalledWith('Looking for the subscription…');
             return [found];
         });
 
@@ -90,7 +90,7 @@ describe('resolveAzureSubscription', (): void => {
 
         expect(report.mock.calls).toEqual([
             ['Checking Azure sign-in…'],
-            ['Looking for the subscription in your Azure accounts…'],
+            ['Looking for the subscription…'],
         ]);
     });
 
@@ -214,9 +214,9 @@ describe('resolveAzureSubscription', (): void => {
 
         expect(report.mock.calls).toEqual([
             ['Checking Azure sign-in…'],
-            ['Looking for the subscription in your Azure accounts…'],
+            ['Looking for the subscription…'],
             ['Signing in to tenant…'],
-            ['Looking for the subscription in your Azure accounts…'],
+            ['Looking for the subscription…'],
         ]);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(

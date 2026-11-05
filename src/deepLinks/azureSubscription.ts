@@ -73,7 +73,7 @@ export async function resolveAzureSubscription(
     context.telemetry.properties.tenantSignInRequired = 'false';
     for (let attempt = 0; attempt < 2; attempt++) {
         ext.outputChannel.trace('[DeepLink] Listing subscriptions');
-        report?.(vscode.l10n.t('Looking for the subscription in your Azure accounts…'));
+        report?.(vscode.l10n.t('Looking for the subscription…'));
         const subscriptions = await azureSubscriptionProvider.getSubscriptions(false);
         const candidates = subscriptions.filter(
             (subscription) =>

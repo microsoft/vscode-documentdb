@@ -69,7 +69,7 @@ export async function revealInDiscoveryView(
     request: DiscoveryRevealRequest,
     report?: (message: string) => void,
 ): Promise<DiscoveryRevealResult | undefined> {
-    report?.(vscode.l10n.t('Finding {0} in the Discovery view…', request.displayName));
+    report?.(vscode.l10n.t('Finding the cluster in the Discovery view…'));
     ext.outputChannel.trace('[DeepLink] Focusing the Discovery view');
     await vscode.commands.executeCommand(`${Views.DiscoveryView}.focus`);
     await waitForDiscoveryViewReady(context);
@@ -110,7 +110,7 @@ export async function revealInDiscoveryView(
 
             ext.outputChannel.trace('[DeepLink] Revealing and expanding the cluster');
             // Reveal with expand awaits the node's children, so the connect flow runs once through expansion.
-            report?.(vscode.l10n.t('Connecting to {0}…', request.displayName));
+            report?.(vscode.l10n.t('Connecting…'));
             await ext.discoveryTreeView.reveal(clusterNode, {
                 select: true,
                 focus: !request.database,
@@ -125,7 +125,7 @@ export async function revealInDiscoveryView(
 
             let databaseNode: DatabaseItem | undefined;
             if (request.database) {
-                report?.(vscode.l10n.t('Opening database {0}…', request.database));
+                report?.(vscode.l10n.t('Opening the database…'));
                 ext.outputChannel.trace(`[DeepLink] Looking up database ${request.database}`);
                 const node = await provider.findNodeById(`${clusterNode.id}/${request.database}`);
                 if (
@@ -153,7 +153,7 @@ export async function revealInDiscoveryView(
                 });
 
                 if (request.collection) {
-                    report?.(vscode.l10n.t('Opening collection {0}…', request.collection));
+                    report?.(vscode.l10n.t('Opening the collection…'));
                     ext.outputChannel.trace(`[DeepLink] Looking up collection ${request.collection}`);
                     const collectionNode = await provider.findNodeById(
                         `${databaseNode.id}/${request.collection}`,

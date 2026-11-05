@@ -93,7 +93,7 @@ export async function handleAzureResourceLinkRequest(
     return vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: vscode.l10n.t('Opening {0}', link.name),
+            title: vscode.l10n.t('Opening from Azure'),
             cancellable: true,
         },
         async (progress, token): Promise<DiscoveryRevealResult | undefined> => {
@@ -118,7 +118,7 @@ export async function handleAzureResourceLinkRequest(
             }
 
             context.telemetry.properties.failureStage = 'readAzureResource';
-            report(vscode.l10n.t('Reading {0} from Azure…', link.name));
+            report(vscode.l10n.t('Reading the resource from Azure…'));
             const { name: displayName } = await readAzureResource(context, subscription, {
                 kind: link.kind,
                 resourceGroup: link.resourceGroup,

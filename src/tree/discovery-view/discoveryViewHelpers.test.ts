@@ -148,8 +148,8 @@ describe('Discovery view helpers', () => {
         const report = vi.fn<(message: string) => void>();
         reveal.mockImplementation(async (): Promise<void> => {
             expect(report.mock.calls).toEqual([
-                ['Finding example in the Discovery view…'],
-                ['Connecting to example…'],
+                ['Finding the cluster in the Discovery view…'],
+                ['Connecting…'],
             ]);
         });
 
@@ -226,9 +226,9 @@ describe('Discovery view helpers', () => {
         const result = await revealInDiscoveryView(context, { ...request, database: 'db' }, report);
 
         expect(report.mock.calls).toEqual([
-            ['Finding example in the Discovery view…'],
-            ['Connecting to example…'],
-            ['Opening database db…'],
+            ['Finding the cluster in the Discovery view…'],
+            ['Connecting…'],
+            ['Opening the database…'],
         ]);
         expect(report.mock.invocationCallOrder[2]).toBeLessThan(findNodeById.mock.invocationCallOrder[0]);
 
@@ -267,10 +267,10 @@ describe('Discovery view helpers', () => {
         );
 
         expect(report.mock.calls).toEqual([
-            ['Finding example in the Discovery view…'],
-            ['Connecting to example…'],
-            ['Opening database db…'],
-            ['Opening collection products…'],
+            ['Finding the cluster in the Discovery view…'],
+            ['Connecting…'],
+            ['Opening the database…'],
+            ['Opening the collection…'],
         ]);
         expect(report.mock.invocationCallOrder[3]).toBeLessThan(findNodeById.mock.invocationCallOrder[1]);
         expect(result?.databaseNode).toBe(databaseNode);

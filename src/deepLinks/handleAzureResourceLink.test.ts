@@ -126,8 +126,9 @@ describe('handleAzureResourceLinkRequest', (): void => {
 
         await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
 
+        expect(vi.mocked(vscode.window.withProgress).mock.calls[0][0].title).toBe('Opening from Azure');
         expect(vscode.window.withProgress).toHaveBeenCalledExactlyOnceWith(
-            { location: vscode.ProgressLocation.Notification, title: 'Opening my-resource', cancellable: true },
+            { location: vscode.ProgressLocation.Notification, title: 'Opening from Azure', cancellable: true },
             expect.any(Function),
         );
     });
@@ -140,7 +141,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
             },
         );
         vi.mocked(readAzureResource).mockImplementation(async (): Promise<{ name: string }> => {
-            expect(progress.report).toHaveBeenLastCalledWith({ message: 'Reading my-resource from Azure…' });
+            expect(progress.report).toHaveBeenLastCalledWith({ message: 'Reading the resource from Azure…' });
             return { name: 'My-Resource' };
         });
         vi.mocked(applyVisibilityChanges).mockImplementation(async (): Promise<void> => {
@@ -148,7 +149,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
         });
         vi.mocked(revealInDiscoveryView).mockImplementation(
             async (_context, _request, report): Promise<DiscoveryRevealResult> => {
-                report?.('Finding My-Resource in the Discovery view…');
+                report?.('Finding the cluster in the Discovery view…');
                 return revealResult;
             },
         );
@@ -160,9 +161,9 @@ describe('handleAzureResourceLinkRequest', (): void => {
         );
         expect(progress.report.mock.calls).toEqual([
             [{ message: 'Checking Azure sign-in…' }],
-            [{ message: 'Reading my-resource from Azure…' }],
+            [{ message: 'Reading the resource from Azure…' }],
             [{ message: 'Updating filters…' }],
-            [{ message: 'Finding My-Resource in the Discovery view…' }],
+            [{ message: 'Finding the cluster in the Discovery view…' }],
         ]);
     });
 
