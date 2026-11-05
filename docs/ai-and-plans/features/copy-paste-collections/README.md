@@ -136,7 +136,8 @@ behavioral decisions that originally lived in the obsolete root-level index-copy
 
 - Source validation and cluster metadata collection in `CopyPasteCollectionTask` still reach
   directly into DocumentDB infrastructure, so the complete task is less provider-neutral than its
-  document data plane.
+  document data plane. Planned as step 1.4 of the
+  [task-packages extraction plan](../task-packages/iterations/01-extraction-plan.md).
 - The older Task Service and Data API READMEs do not yet show the index-copy phase in their diagrams
   or file trees.
 - Cross-database document transfer needs concrete reader/writer implementations and provider-aware
