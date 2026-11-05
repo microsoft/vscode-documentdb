@@ -7,6 +7,7 @@ import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 import { settingsKeys } from '../settingsKeys';
 import { revealInDiscoveryView, type DiscoveryRevealResult } from '../tree/discovery-view/discoveryViewHelpers';
 import { readAzureResource } from './azureResource';
@@ -19,6 +20,10 @@ import {
     type VisibilityChanges,
 } from './azureVisibility';
 import { handleAzureResourceLinkRequest, type AzureResourceLinkRequest } from './handleAzureResourceLink';
+
+vi.mock('../extensionVariables', () => ({
+    ext: { outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() } },
+}));
 
 vi.mock('./azureResourceLink', (): typeof import('./azureResourceLink') => ({
     parseAzureResourceLink: vi.fn(),
@@ -98,6 +103,17 @@ beforeEach((): void => {
 });
 
 describe('handleAzureResourceLinkRequest', (): void => {
+    it('logs the parsed link and confirmation without Azure identifiers', async (): Promise<void> => {
+        await handleAzureResourceLinkRequest(context, request);
+
+        expect(ext.outputChannel.trace).toHaveBeenNthCalledWith(1, '[DeepLink] Azure link parsed: kind=vcore resource=my-resource');
+        expect(ext.outputChannel.trace).toHaveBeenNthCalledWith(2, '[DeepLink] Showing Azure confirmation');
+        const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
+        expect(logged).not.toContain(link.subscriptionId);
+        expect(logged).not.toContain('tenant-id');
+        expect(logged).not.toContain(link.resourceId);
+    });
+
     it('parses, confirms, resolves, reads, computes, confirms filter changes, applies, and reveals using the ARM display name', async (): Promise<void> => {
         const result = await handleAzureResourceLinkRequest(context, request);
 
@@ -149,6 +165,11 @@ describe('handleAzureResourceLinkRequest', (): void => {
         expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith();
         expect(getSetting).toHaveBeenCalledExactlyOnceWith(settingsKeys.showUrlHandlingConfirmations, true);
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2);
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure confirmation: accepted');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Showing filter change confirmation');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Filter change confirmation: accepted');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Applying filter changes');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Revealing My-Resource in the Discovery view');
     });
 
     it('shows link details first and every filter change with the resolved subscription name second', async (): Promise<void> => {
@@ -214,6 +235,8 @@ describe('handleAzureResourceLinkRequest', (): void => {
             visibilitySubscriptionAdded: 'false',
         });
         expect(applyVisibilityChanges).not.toHaveBeenCalled();
+        expect(ext.outputChannel.trace).not.toHaveBeenCalledWith('[DeepLink] Showing filter change confirmation');
+        expect(ext.outputChannel.trace).not.toHaveBeenCalledWith('[DeepLink] Applying filter changes');
         expect(revealInDiscoveryView).toHaveBeenCalledWith(
             context,
             expect.objectContaining({ database: undefined, collection: undefined }),
@@ -270,6 +293,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
 
             await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBeUndefined();
 
+            expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure confirmation: dismissed');
             expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureConfirmation');
             expect(context.telemetry.properties.failureStage).toBe('confirm');
             expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
@@ -289,6 +313,8 @@ describe('handleAzureResourceLinkRequest', (): void => {
 
             await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBeUndefined();
 
+            expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Filter change confirmation: dismissed');
+            expect(ext.outputChannel.trace).not.toHaveBeenCalledWith('[DeepLink] Applying filter changes');
             expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureFilterChanges');
             expect(context.telemetry.properties.failureStage).toBe('confirmFilterChanges');
             expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2);
@@ -304,6 +330,8 @@ describe('handleAzureResourceLinkRequest', (): void => {
         await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
 
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure confirmation skipped (confirmations disabled)');
+        expect(ext.outputChannel.trace).not.toHaveBeenCalledWith('[DeepLink] Showing filter change confirmation');
         expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes);
         expect(revealInDiscoveryView).toHaveBeenCalledTimes(1);
     });

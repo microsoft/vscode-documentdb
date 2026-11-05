@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 import { settingsKeys } from '../settingsKeys';
 import { revealInDiscoveryView, type DiscoveryRevealResult } from '../tree/discovery-view/discoveryViewHelpers';
 import { readAzureResource } from './azureResource';
@@ -27,6 +28,7 @@ export async function handleAzureResourceLinkRequest(
 ): Promise<DiscoveryRevealResult | undefined> {
     context.telemetry.properties.failureStage = 'parseResourceId';
     const link = parseAzureResourceLink(request.resourceId, request.tenantId);
+    ext.outputChannel.trace(`[DeepLink] Azure link parsed: kind=${link.kind} resource=${link.name}`);
     context.valuesToMask.push(link.subscriptionId, link.resourceGroup, link.name);
     context.telemetry.properties.azureResourceKind = link.kind;
 
@@ -71,15 +73,19 @@ export async function handleAzureResourceLinkRequest(
         );
 
         const openButton = vscode.l10n.t('Open');
+        ext.outputChannel.trace('[DeepLink] Showing Azure confirmation');
         const choice = await vscode.window.showInformationMessage(
             vscode.l10n.t('You clicked a link that wants to open an Azure resource in VS Code.'),
             { modal: true, detail: detail.join('\n') },
             openButton,
         );
+        ext.outputChannel.trace(`[DeepLink] Azure confirmation: ${choice === openButton ? 'accepted' : 'dismissed'}`);
         if (choice !== openButton) {
             context.telemetry.properties.userCancelledAtStep = 'AzureConfirmation';
             return undefined;
         }
+    } else {
+        ext.outputChannel.trace('[DeepLink] Azure confirmation skipped (confirmations disabled)');
     }
 
     const subscription = await resolveAzureSubscription(context, {
@@ -133,10 +139,14 @@ export async function handleAzureResourceLinkRequest(
         );
 
         const changeFiltersButton = vscode.l10n.t('Change filters and open');
+        ext.outputChannel.trace('[DeepLink] Showing filter change confirmation');
         const choice = await vscode.window.showInformationMessage(
             vscode.l10n.t('To show {0}, the extension needs to change your filters.', displayName),
             { modal: true, detail: detail.join('\n') },
             changeFiltersButton,
+        );
+        ext.outputChannel.trace(
+            `[DeepLink] Filter change confirmation: ${choice === changeFiltersButton ? 'accepted' : 'dismissed'}`,
         );
         if (choice !== changeFiltersButton) {
             context.telemetry.properties.userCancelledAtStep = 'AzureFilterChanges';
@@ -146,10 +156,12 @@ export async function handleAzureResourceLinkRequest(
 
     context.telemetry.properties.failureStage = 'applyVisibility';
     if (visibilityChangesNeeded) {
+        ext.outputChannel.trace('[DeepLink] Applying filter changes');
         await applyVisibilityChanges(link.providerId, subscription, changes);
     }
 
     context.telemetry.properties.failureStage = 'revealCluster';
+    ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
     return revealInDiscoveryView(context, {
         providerId: link.providerId,
         subscriptionId: link.subscriptionId,
