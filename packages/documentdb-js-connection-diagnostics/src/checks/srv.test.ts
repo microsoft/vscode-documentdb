@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createConnectionStringCheck, createSrvCheck, runTroubleshooter } from '../index.js';
+import { createConnectionStringCheck, createSrvCheck, runDiagnostics } from '../index.js';
 
 import { type FallbackDnsOptions, type FallbackDnsResult, type SrvFallbackMode } from '@documentdb-js/srv-resolver';
 import { type SrvRecord } from 'node:dns';
@@ -16,7 +16,7 @@ import {
     type CheckResult,
     type DnsIo,
     type RunContext,
-    type TroubleshooterRun,
+    type DiagnosticsRun,
 } from '../index.js';
 
 const records: SrvRecord[] = [
@@ -51,15 +51,15 @@ async function runSrv(
     dns: DnsIo,
     srvFallbackMode?: SrvFallbackMode,
     connectionString = 'mongodb+srv://cluster.example.test/',
-): Promise<TroubleshooterRun<BuiltInFindingCode>> {
-    return runTroubleshooter({
+): Promise<DiagnosticsRun<BuiltInFindingCode>> {
+    return runDiagnostics({
         input: { connectionString, srvFallbackMode },
         checks: [createConnectionStringCheck(), createSrvCheck()],
         io: { dns },
     });
 }
 
-function srvResult(run: TroubleshooterRun<BuiltInFindingCode>): CheckResult<BuiltInFindingCode> {
+function srvResult(run: DiagnosticsRun<BuiltInFindingCode>): CheckResult<BuiltInFindingCode> {
     return run.results[1];
 }
 
@@ -325,7 +325,7 @@ describe('SRV/TXT check', (): void => {
             scope: 'run',
             run: async (): Promise<CheckOutcome<BuiltInFindingCode>> => ({ status: 'pass', findings: [], facts: {} }),
         };
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input: { connectionString: 'mongodb+srv://' },
             checks: [prerequisite, createSrvCheck()],
             io: { dns: dnsIo() },
@@ -340,7 +340,7 @@ describe('SRV/TXT check', (): void => {
             vi.setSystemTime(1000);
             try {
                 const io = dnsIo();
-                const run = await runTroubleshooter({
+                const run = await runDiagnostics({
                     input: { connectionString: 'mongodb+srv://cluster.example.test', srvFallbackMode: 'force' },
                     checks: [createConnectionStringCheck(), createSrvCheck()],
                     timeouts: { runTimeoutMs: null, srvTimeoutMs: timeoutMs },
@@ -360,7 +360,7 @@ describe('SRV/TXT check', (): void => {
         vi.setSystemTime(0);
         try {
             const io = dnsIo({ resolveSrv: vi.fn((): Promise<SrvRecord[]> => new Promise((): void => {})) });
-            const promise = runTroubleshooter({
+            const promise = runDiagnostics({
                 input: { connectionString: 'mongodb+srv://cluster.example.test' },
                 checks: [createConnectionStringCheck(), createSrvCheck()],
                 timeouts: { srvTimeoutMs: 25 },

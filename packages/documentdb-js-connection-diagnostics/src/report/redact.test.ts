@@ -13,12 +13,12 @@ import {
     DEFAULT_TIMEOUTS,
     redactReport,
     renderJson,
-    runTroubleshooter,
+    runDiagnostics,
 } from '../index.js';
 import { replyFrame } from '../test/wireResponder.js';
 
 import { type TLSSocket } from 'node:tls';
-import { type CheckResult, type DnsIo, type IdentifierKind, type TroubleshooterReport } from '../index.js';
+import { type CheckResult, type DnsIo, type IdentifierKind, type DiagnosticsReport } from '../index.js';
 
 const host = 'node.cluster.test';
 const identifiers = [
@@ -40,7 +40,7 @@ const identifiers = [
 ];
 const prose = `### <b>Connect</b> [to the host](https://${host}) \`code\``;
 
-async function fixture(): Promise<TroubleshooterReport<string>> {
+async function fixture(): Promise<DiagnosticsReport<string>> {
     const dns: DnsIo = {
         lookup: async (): ReturnType<DnsIo['lookup']> => [{ address: '10.11.12.13', family: 4 }],
         resolve4: async (): Promise<string[]> => ['10.11.12.13'],
@@ -91,7 +91,7 @@ async function fixture(): Promise<TroubleshooterReport<string>> {
             }),
         }) as unknown as TLSSocket;
     }
-    const run = await runTroubleshooter({
+    const run = await runDiagnostics({
         input: { connectionString: 'mongodb+srv://alice:fixture-password@service.cluster.test/sales' },
         checks: createBuiltInChecks(),
         io: {
@@ -155,7 +155,7 @@ function customReport(
     identifierKeys: Readonly<Record<string, IdentifierKind>> = {},
     detail = '',
     target?: string,
-): TroubleshooterReport<string> {
+): DiagnosticsReport<string> {
     return buildReport(
         {
             runId: 'redaction-test',

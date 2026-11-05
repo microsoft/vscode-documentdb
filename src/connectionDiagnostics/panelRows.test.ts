@@ -12,7 +12,7 @@ import {
     type CheckResult,
     type Finding,
     type RunContext,
-    type TroubleshooterEvent,
+    type DiagnosticsEvent,
 } from '@documentdb-js/connection-diagnostics';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -676,7 +676,7 @@ describe('planned troubleshooter checks', (): void => {
                 { id: 'serverFacts', scope: 'run' },
                 { id: 'contextHints', scope: 'run' },
             ]);
-            const observed: TroubleshooterEvent<FindingCode>[] = [];
+            const observed: DiagnosticsEvent<FindingCode>[] = [];
             const projector = new PanelRowProjector(describeFinding, plan);
             const foreign = new PanelRowProjector(describeFinding, plan);
             start(foreign, 'environment');

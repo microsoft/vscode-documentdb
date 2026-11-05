@@ -5,7 +5,7 @@
 
 import {
     type NetworkOptions,
-    type TroubleshooterInput,
+    type DiagnosticsInput,
     type WireCompressor,
 } from '@documentdb-js/connection-diagnostics';
 import { CredentialCache, type CachedClusterCredentials } from '../documentdb/CredentialCache';
@@ -19,7 +19,7 @@ import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 
 /** Host-only, transient input. Never include this object in results, events or telemetry. */
 export interface TroubleshooterSetup {
-    readonly input: TroubleshooterInput;
+    readonly input: DiagnosticsInput;
     readonly chosenAuthMethod: AuthMethodId | undefined;
     readonly credentialState: 'available' | 'noMethod' | 'passwordMissing';
     readonly connectionProperties: Record<string, unknown> | undefined;
@@ -43,7 +43,7 @@ export function detectAvailableCompressors(resolve: (moduleId: string) => string
 }
 
 /** The package input before the target is resolved; the `resolveTarget` check supplies the real one. */
-export function unresolvedTroubleshooterInput(): TroubleshooterInput {
+export function unresolvedTroubleshooterInput(): DiagnosticsInput {
     return {
         connectionString: '',
         availableCompressors: detectAvailableCompressors(),

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type TimeoutProfile } from '../timeouts.js';
-import { type CheckResult, type TroubleshooterRun, type TroubleshooterTimeouts } from '../types.js';
+import { type CheckResult, type DiagnosticsRun, type DiagnosticsTimeouts } from '../types.js';
 
 export type ReportOutcome = 'connected' | 'failed' | 'notTested';
 
@@ -40,15 +40,15 @@ export interface ClockOffsetSummary {
     readonly uncertaintyMs: number;
 }
 
-export interface TroubleshooterReport<TCode extends string> {
+export interface DiagnosticsReport<TCode extends string> {
     readonly schemaVersion: 1;
     readonly runId: string;
     readonly startedAt: string;
     readonly finishedAt: string;
     readonly durationMs: number;
     readonly timeoutProfile: TimeoutProfile;
-    readonly timeouts: TroubleshooterTimeouts;
-    readonly coverage: TroubleshooterRun<TCode>['coverage'];
+    readonly timeouts: DiagnosticsTimeouts;
+    readonly coverage: DiagnosticsRun<TCode>['coverage'];
     readonly targets: readonly string[];
     readonly results: readonly CheckResult<TCode>[];
     readonly summary?: ReportSummary;

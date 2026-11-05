@@ -13,9 +13,9 @@ import {
     type Finding,
     type NetIo,
     type ReportSummary,
-    type TroubleshooterEvent,
-    type TroubleshooterIo,
-    type TroubleshooterRun,
+    type DiagnosticsEvent,
+    type DiagnosticsIo,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import { type Socket } from 'node:net';
 import { Duplex } from 'node:stream';
@@ -58,7 +58,7 @@ export function socketError(code: string): Error & { code: string } {
 
 /** The package hello tests' paired-Duplex responder, using its shared wire encoder/parser. */
 export function offlineIo(): {
-    io: TroubleshooterIo;
+    io: DiagnosticsIo;
     dns: DnsIo;
     sockets: Duplex[];
     requests: WireRequest[];
@@ -200,7 +200,7 @@ export function checkResult(
     return { checkId, status: 'pass', durationMs: 37, findings: [], facts: {}, ...overrides };
 }
 
-export function fixtureRun(results: readonly CheckResult<FindingCode>[]): TroubleshooterRun<FindingCode> {
+export function fixtureRun(results: readonly CheckResult<FindingCode>[]): DiagnosticsRun<FindingCode> {
     return {
         runId: 'wording-run',
         startedAt: 1000,
@@ -214,9 +214,9 @@ export function fixtureRun(results: readonly CheckResult<FindingCode>[]): Troubl
     };
 }
 
-export function runEvents(run: TroubleshooterRun<FindingCode>): TroubleshooterEvent<FindingCode>[] {
+export function runEvents(run: DiagnosticsRun<FindingCode>): DiagnosticsEvent<FindingCode>[] {
     return [
-        ...run.results.flatMap((result): TroubleshooterEvent<FindingCode>[] => [
+        ...run.results.flatMap((result): DiagnosticsEvent<FindingCode>[] => [
             {
                 type: 'checkStarted',
                 runId: run.runId,
@@ -230,7 +230,7 @@ export function runEvents(run: TroubleshooterRun<FindingCode>): TroubleshooterEv
     ];
 }
 
-export function projectRun(run: TroubleshooterRun<FindingCode>, events = runEvents(run)): PanelRowProjector {
+export function projectRun(run: DiagnosticsRun<FindingCode>, events = runEvents(run)): PanelRowProjector {
     const plan = [...new Set(run.results.map((result): string => result.checkId))].map(
         (id): { id: string; scope: 'host' | 'run' } => ({
             id,
@@ -247,7 +247,7 @@ export function projectRun(run: TroubleshooterRun<FindingCode>, events = runEven
 }
 
 export function outputs(
-    run: TroubleshooterRun<FindingCode>,
+    run: DiagnosticsRun<FindingCode>,
     events = runEvents(run),
     summary?: ReportSummary,
 ): {

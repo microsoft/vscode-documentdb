@@ -5,16 +5,16 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { buildReport, createEnvironmentCheck, DEFAULT_TIMEOUTS, runTroubleshooter } from '../index.js';
+import { buildReport, createEnvironmentCheck, DEFAULT_TIMEOUTS, runDiagnostics } from '../index.js';
 import { defaultIdentifierKeys } from './buildReport.js';
 
-import { type CheckResult, type ReportSummary, type TroubleshooterRun } from '../index.js';
+import { type CheckResult, type ReportSummary, type DiagnosticsRun } from '../index.js';
 
 function result(checkId: string, facts: Readonly<Record<string, unknown>> = {}, target?: string): CheckResult<string> {
     return { checkId, ...(target === undefined ? {} : { target }), status: 'pass', durationMs: 1, findings: [], facts };
 }
 
-function run(results: readonly CheckResult<string>[]): TroubleshooterRun<string> {
+function run(results: readonly CheckResult<string>[]): DiagnosticsRun<string> {
     return {
         runId: 'snapshot-test',
         startedAt: 0,
@@ -162,7 +162,7 @@ describe('report snapshots', (): void => {
     });
 
     it('builds a snapshot from actual checks with injected IO', async (): Promise<void> => {
-        const source = await runTroubleshooter({
+        const source = await runDiagnostics({
             input: { connectionString: 'mongodb://db.test' },
             checks: [createEnvironmentCheck()],
             io: {

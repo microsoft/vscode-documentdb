@@ -16,11 +16,11 @@ import {
     createBuiltInChecks,
     englishReportText,
     renderMarkdown,
-    runTroubleshooter,
+    runDiagnostics,
 } from '@documentdb-js/connection-diagnostics';
 
 const input = { connectionString: 'mongodb://localhost:27017/' };
-const run = await runTroubleshooter({ input, checks: createBuiltInChecks() });
+const run = await runDiagnostics({ input, checks: createBuiltInChecks() });
 const report = buildReport(run);
 const markdown = renderMarkdown(report, { text: englishReportText, redact: false });
 ```
@@ -76,7 +76,7 @@ Values below are milliseconds. These are diagnostic timeouts, not evidence that 
 | Authentication / `authenticationTimeoutMs`                      | 45000               | 90000             | `null`                                               |
 | Each post-connect operation / `postConnectTimeoutMs`            | 5000                | 10000             | `null`                                               |
 
-Use `timeoutProfile` on `runTroubleshooter` or `timeoutsForProfile(profile)` to select a profile. Per-run `timeouts` overrides accept positive finite milliseconds or `null`; **`null` means no diagnostic timeout** for that field. Preparation, authentication and post-connect timeouts are available to consumer checks that declare those kinds.
+Use `timeoutProfile` on `runDiagnostics` or `timeoutsForProfile(profile)` to select a profile. Per-run `timeouts` overrides accept positive finite milliseconds or `null`; **`null` means no diagnostic timeout** for that field. Preparation, authentication and post-connect timeouts are available to consumer checks that declare those kinds.
 
 Each operation uses the least of its diagnostic timeout, remaining whole-run time and applicable `input.connectionTimeouts` entry. **Shorter connection-configured timeouts win.** The effective network option `connectTimeoutMS` also bounds establishing each new socket when it is shorter than the probe timeout: each TCP address attempt (reported as `tcp.timeout` with source `connection`), and the TCP connection and TLS handshake of the TLS and `hello` probes (reported as `check.timeout` with source `connection`). It does not bound the `hello` reply wait. Diagnostic address attempts and auxiliary lookups share one host probe timeout; inspection-only TLS does not receive another full timeout. The `hello` reply deadline normally reserves 250 ms before its effective probe timeout to classify no reply or a truncated reply. It can therefore emit `hello.noReply` or `hello.inconclusive` rather than `check.timeout`.
 
@@ -87,7 +87,7 @@ Each operation uses the least of its diagnostic timeout, remaining whole-run tim
 
 Retry profiles **never retry automatically**. Select `longer` or `noDiagnosticTimeouts` explicitly for a fresh run and report; saved connection settings and existing reports do not change. `longer` doubles the default diagnostic timeouts; neither profile lengthens connection-configured timeouts. If those caused the timeout, change the connection setting before a longer retry can help. OS, resolver and driver limits may still end an operation. Neither retry profile removes safety limits or weakens TLS or authentication.
 
-Pass an `AbortSignal` through `signal` to cancel. Without diagnostic timeouts, cancellation may be needed. Cancellation stops scheduling, aborts supported I/O, ignores late completions and runs cleanup; non-abortable I/O may still finish later. The run rejects with `TroubleshooterCancelledError`, separately from a completed, timeout-limited report. An `onEvent` observer can receive `hostPhaseStarted`, `checkStarted`, `checkFinished` and `runFinished` events. No events, including host-phase announcements and `runFinished`, are emitted after cancellation.
+Pass an `AbortSignal` through `signal` to cancel. Without diagnostic timeouts, cancellation may be needed. Cancellation stops scheduling, aborts supported I/O, ignores late completions and runs cleanup; non-abortable I/O may still finish later. The run rejects with `DiagnosticsCancelledError`, separately from a completed, timeout-limited report. An `onEvent` observer can receive `hostPhaseStarted`, `checkStarted`, `checkFinished` and `runFinished` events. No events, including host-phase announcements and `runFinished`, are emitted after cancellation.
 
 ## Safety limits
 

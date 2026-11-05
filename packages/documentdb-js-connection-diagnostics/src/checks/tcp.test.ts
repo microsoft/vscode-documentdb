@@ -6,7 +6,7 @@
 import * as net from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createConnectionStringCheck, createDnsCheck, createTcpCheck, runTroubleshooter } from '../index.js';
+import { createConnectionStringCheck, createDnsCheck, createTcpCheck, runDiagnostics } from '../index.js';
 
 import {
     type BuiltInFindingCode,
@@ -16,7 +16,7 @@ import {
     type NetIo,
     type NetworkOptions,
     type RunContext,
-    type TroubleshooterClock,
+    type DiagnosticsClock,
 } from '../index.js';
 
 const servers: net.Server[] = [];
@@ -70,7 +70,7 @@ function fakeNet(connect: NetIo['connect']): NetIo {
     };
 }
 
-const clock: TroubleshooterClock = {
+const clock: DiagnosticsClock = {
     now: (): number => Date.now(),
     setTimeout: (callback, ms): unknown => setTimeout(callback, ms),
     clearTimeout: (handle): void => {
@@ -99,7 +99,7 @@ async function runTcp(
               }),
           }
         : createDnsCheck();
-    const run = await runTroubleshooter({
+    const run = await runDiagnostics({
         input: {
             connectionString: `mongodb://${options.host ?? '127.0.0.1'}:${options.port ?? 27017}`,
             networkOptionLayers: [{ origin: 'setting', options: options.network ?? {} }],

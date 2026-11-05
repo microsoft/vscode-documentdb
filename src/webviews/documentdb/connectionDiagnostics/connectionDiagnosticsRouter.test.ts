@@ -6,7 +6,7 @@
 import {
     timeoutsForProfile,
     type CheckResult,
-    type TroubleshooterRun,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type initWebviewTrpc } from '@microsoft/vscode-ext-webview';
@@ -81,7 +81,7 @@ function result(checkId: string, facts: Readonly<Record<string, unknown>> = {}):
     return { checkId, status: 'pass', durationMs: 1, findings: [], facts };
 }
 
-function completedRun(runId: string, remoteKind = 'local'): TroubleshooterRun<FindingCode> {
+function completedRun(runId: string, remoteKind = 'local'): DiagnosticsRun<FindingCode> {
     return {
         runId,
         startedAt: 1000,
@@ -109,7 +109,7 @@ function completedRun(runId: string, remoteKind = 'local'): TroubleshooterRun<Fi
 function emitRun(
     options: RunConnectivityTroubleshooterOptions,
     run = completedRun(options.runId ?? 'missing'),
-): TroubleshooterRun<FindingCode> {
+): DiagnosticsRun<FindingCode> {
     for (const item of run.results) {
         options.onEvent?.({
             type: 'checkStarted',
@@ -196,7 +196,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
         vi.clearAllMocks();
         scopes.length = 0;
         vi.mocked(runConnectivityTroubleshooter).mockImplementation(
-            async (options): Promise<TroubleshooterRun<FindingCode>> => emitRun(options),
+            async (options): Promise<DiagnosticsRun<FindingCode>> => emitRun(options),
         );
         vi.spyOn(readOnlyJsonDocumentProvider, 'openMarkdownDocument').mockResolvedValue(
             vscode.Uri.parse('documentdb-readonly-json:/report.md'),
@@ -250,7 +250,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     );
 
     it('cancels during preparation with the started run ID before any check event, without waiting for the runner', async (): Promise<void> => {
-        const pending = deferred<TroubleshooterRun<FindingCode>>();
+        const pending = deferred<DiagnosticsRun<FindingCode>>();
         vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
         const ctx = context();
         const stream = iterator(await caller(ctx).run(runInput('default', 'initial', 'request-1')));
@@ -276,8 +276,8 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('ignores a delayed Cancel from a replaced run instead of cancelling the replacement', async (): Promise<void> => {
-        const oldRun = deferred<TroubleshooterRun<FindingCode>>();
-        const newRun = deferred<TroubleshooterRun<FindingCode>>();
+        const oldRun = deferred<DiagnosticsRun<FindingCode>>();
+        const newRun = deferred<DiagnosticsRun<FindingCode>>();
         vi.mocked(runConnectivityTroubleshooter)
             .mockReturnValueOnce(oldRun.promise)
             .mockReturnValueOnce(newRun.promise);
@@ -303,7 +303,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('cancels a run whose Cancel arrives before its subscription starts', async (): Promise<void> => {
-        const pending = deferred<TroubleshooterRun<FindingCode>>();
+        const pending = deferred<DiagnosticsRun<FindingCode>>();
         vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
         const ctx = context();
 
@@ -320,7 +320,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('a second run aborts the first as rerun and drops late events and snapshots', async (): Promise<void> => {
-        const old = deferred<TroubleshooterRun<FindingCode>>();
+        const old = deferred<DiagnosticsRun<FindingCode>>();
         vi.mocked(runConnectivityTroubleshooter).mockReturnValueOnce(old.promise);
         const ctx = context();
         const first = iterator(await caller(ctx).run(runInput('default', 'initial')));
@@ -340,7 +340,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('closing the subscription aborts as subscriptionClosed and stops the stream', async (): Promise<void> => {
-        const pending = deferred<TroubleshooterRun<FindingCode>>();
+        const pending = deferred<DiagnosticsRun<FindingCode>>();
         vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
         const subscription = new AbortController();
         const stream = iterator(await caller(context(subscription.signal)).run(runInput('default', 'initial')));
@@ -354,7 +354,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('returning the subscription iterator aborts its runner', async (): Promise<void> => {
-        const pending = deferred<TroubleshooterRun<FindingCode>>();
+        const pending = deferred<DiagnosticsRun<FindingCode>>();
         vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
         const stream = iterator(await caller(context()).run(runInput('default', 'initial')));
         await stream.next();
@@ -395,7 +395,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
                 'This report is no longer available. Run the check again.',
             );
         }
-        const pending = deferred<TroubleshooterRun<FindingCode>>();
+        const pending = deferred<DiagnosticsRun<FindingCode>>();
         vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
         const stream = iterator(await actions.run(runInput('default', 'rerun', 'request-2')));
         await stream.next();
@@ -409,7 +409,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('finishes with derived result-card data and a connected report with server rows', async (): Promise<void> => {
         vi.mocked(runConnectivityTroubleshooter).mockImplementation(
-            async (options): Promise<TroubleshooterRun<FindingCode>> => {
+            async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
                     ...run,
@@ -462,7 +462,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('reports the resolved managed-identity cloud, not the unrelated interactive sign-in setting', async (): Promise<void> => {
         vi.mocked(runConnectivityTroubleshooter).mockImplementation(
-            async (options): Promise<TroubleshooterRun<FindingCode>> => {
+            async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
                     ...run,
@@ -498,7 +498,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('reports the real failure, provider and firewall next steps without sending codes in result-card data', async (): Promise<void> => {
         vi.mocked(runConnectivityTroubleshooter).mockImplementation(
-            async (options): Promise<TroubleshooterRun<FindingCode>> => {
+            async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing', 'ssh');
                 return emitRun(options, {
                     ...run,
@@ -566,7 +566,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
         'reports earlier-in-session and silent-lookup notes for %s without changing not tested',
         async (configuredCloud, cloudCategory, log): Promise<void> => {
             vi.mocked(runConnectivityTroubleshooter).mockImplementation(
-                async (options): Promise<TroubleshooterRun<FindingCode>> => {
+                async (options): Promise<DiagnosticsRun<FindingCode>> => {
                     const run = completedRun(options.runId ?? 'missing');
                     return emitRun(options, {
                         ...run,
@@ -629,7 +629,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('reports a whole-run timeout before an attempt without claiming an unreachable server', async (): Promise<void> => {
         vi.mocked(runConnectivityTroubleshooter).mockImplementation(
-            async (options): Promise<TroubleshooterRun<FindingCode>> => {
+            async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
                     ...run,
@@ -713,7 +713,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('includes version attribution when environment checks were skipped', async (): Promise<void> => {
         vi.mocked(runConnectivityTroubleshooter).mockImplementation(
-            async (options): Promise<TroubleshooterRun<FindingCode>> => {
+            async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
                     ...run,
@@ -892,7 +892,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
             const runId = await finish(ctx);
             await actions.showDiagnostics({ runId, hideIdentifiers: false });
             const uri = previewUri(ctx);
-            const next = deferred<TroubleshooterRun<FindingCode>>();
+            const next = deferred<DiagnosticsRun<FindingCode>>();
             vi.mocked(runConnectivityTroubleshooter).mockImplementationOnce(() => next.promise);
             const stream = iterator(await actions.run(runInput('default', 'rerun')));
             const started = (await stream.next()).value;
@@ -922,7 +922,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
             const runId = await finish(ctx);
             await actions.showDiagnostics({ runId, hideIdentifiers: false });
             const uri = previewUri(ctx);
-            const pending = deferred<TroubleshooterRun<FindingCode>>();
+            const pending = deferred<DiagnosticsRun<FindingCode>>();
             vi.mocked(runConnectivityTroubleshooter).mockReturnValueOnce(pending.promise);
             const input = runInput('default', 'rerun');
             const stream = iterator(await actions.run(input));
@@ -957,7 +957,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('derives the report execution location from the completed extensionEnvironment result', async (): Promise<void> => {
         vi.mocked(runConnectivityTroubleshooter).mockImplementation(
-            async (options): Promise<TroubleshooterRun<FindingCode>> =>
+            async (options): Promise<DiagnosticsRun<FindingCode>> =>
                 emitRun(options, completedRun(options.runId ?? 'missing', 'ssh')),
         );
         const ctx = context();

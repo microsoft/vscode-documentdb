@@ -5,17 +5,17 @@
 
 import {
     createBuiltInChecks,
-    runTroubleshooter,
-    TroubleshooterCancelledError,
+    runDiagnostics,
+    DiagnosticsCancelledError,
     type Check,
     type CheckOutcome,
     type CheckResult,
     type RunContext,
     type TimeoutProfile,
-    type TroubleshooterEvent,
-    type TroubleshooterInput,
-    type TroubleshooterIo,
-    type TroubleshooterRun,
+    type DiagnosticsEvent,
+    type DiagnosticsInput,
+    type DiagnosticsIo,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import {
     callWithTelemetryAndErrorHandling,
@@ -58,10 +58,10 @@ export interface RunConnectivityTroubleshooterOptions {
     readonly troubleshooterSessionId: string;
     readonly timeoutProfile: TimeoutProfile;
     readonly signal: AbortSignal;
-    readonly onEvent?: (event: TroubleshooterEvent<FindingCode>) => void;
+    readonly onEvent?: (event: DiagnosticsEvent<FindingCode>) => void;
     readonly extraChecks?: readonly Check<RunContext, FindingCode>[];
     /** Offline test seam; normal runs use the package defaults. */
-    readonly io?: Partial<TroubleshooterIo>;
+    readonly io?: Partial<DiagnosticsIo>;
     readonly cancelReason?: () => 'cancelButton' | 'panelClosed' | 'rerun' | 'subscriptionClosed';
 }
 
@@ -88,7 +88,7 @@ function withResolvedInput(
         ...check,
         run(context, signal): Promise<CheckOutcome<FindingCode>> {
             const resolved = Object.create(context, {
-                input: { get: (): TroubleshooterInput => peekSetup()?.input ?? context.input },
+                input: { get: (): DiagnosticsInput => peekSetup()?.input ?? context.input },
             }) as RunContext;
             return check.run(resolved, signal);
         },
@@ -175,14 +175,14 @@ export function getPlannedTroubleshooterChecks(
 
 export async function runConnectivityTroubleshooter(
     options: RunConnectivityTroubleshooterOptions,
-): Promise<TroubleshooterRun<FindingCode>> {
+): Promise<DiagnosticsRun<FindingCode>> {
     const runId = options.runId ?? randomUUID();
     await reportRunStarted(options, runId);
     const trace = new TroubleshooterOutputTrace(runId);
     trace.started(options.entryPoint, options.runTrigger, options.timeoutProfile);
     const result = await callWithTelemetryAndErrorHandling(
         'connectivityTroubleshooter.run',
-        async (context): Promise<TroubleshooterRun<FindingCode>> => {
+        async (context): Promise<DiagnosticsRun<FindingCode>> => {
             configureTroubleshooterTelemetry(context);
             applyRunIdentity(context, options, runId);
             const activeChecks = new Map<string, string>();
@@ -266,7 +266,7 @@ export async function runConnectivityTroubleshooter(
                     },
                     options.extraChecks,
                 );
-                const run = await runTroubleshooter<FindingCode>({
+                const run = await runDiagnostics<FindingCode>({
                     runId,
                     input: unresolvedTroubleshooterInput(),
                     checks,
@@ -304,7 +304,7 @@ export async function runConnectivityTroubleshooter(
                 applyCheckTelemetry(context, completed, hosts.size);
                 if (
                     options.signal.aborted ||
-                    error instanceof TroubleshooterCancelledError ||
+                    error instanceof DiagnosticsCancelledError ||
                     error instanceof UserCancelledError
                 ) {
                     context.telemetry.properties.cancelReason = options.cancelReason?.() ?? 'subscriptionClosed';

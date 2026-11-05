@@ -6,12 +6,12 @@
 import { formatTarget } from '../runner.js';
 import { sanitizeValue } from './sanitize.js';
 
-import { type CheckResult, type CheckStepResult, type Finding, type TroubleshooterRun } from '../types.js';
+import { type CheckResult, type CheckStepResult, type Finding, type DiagnosticsRun } from '../types.js';
 import {
     type ClockOffsetSummary,
     type IdentifierKind,
     type ReportSummary,
-    type TroubleshooterReport,
+    type DiagnosticsReport,
 } from './types.js';
 
 // Bare keys match the last path segment. Dotted keys restrict that match to an ancestor:
@@ -92,13 +92,13 @@ function freeze<T>(value: T): T {
 }
 
 export function buildReport<TCode extends string>(
-    run: TroubleshooterRun<TCode>,
+    run: DiagnosticsRun<TCode>,
     options?: {
         summary?: ReportSummary;
         connectionName?: string;
         identifierKeys?: Readonly<Record<string, IdentifierKind>>;
     },
-): TroubleshooterReport<TCode> {
+): DiagnosticsReport<TCode> {
     const results = run.results.map(copyResult);
     let clockOffset: ClockOffsetSummary | null = null;
     for (const result of results) {

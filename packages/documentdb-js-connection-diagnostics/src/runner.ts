@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { TroubleshooterCancelledError, TroubleshooterConfigurationError } from './errors.js';
+import { DiagnosticsCancelledError, DiagnosticsConfigurationError } from './errors.js';
 import { resolveTimeouts, SAFETY_LIMITS } from './timeouts.js';
 
 import { type BuiltInFindingCode } from './findingCodes.js';
@@ -18,15 +18,15 @@ import {
     type ProbeTarget,
     type RunContext,
     type TimedOutOperation,
-    type TroubleshooterClock,
-    type TroubleshooterEvent,
-    type TroubleshooterInput,
-    type TroubleshooterIo,
-    type TroubleshooterRun,
-    type TroubleshooterTimeouts,
+    type DiagnosticsClock,
+    type DiagnosticsEvent,
+    type DiagnosticsInput,
+    type DiagnosticsIo,
+    type DiagnosticsRun,
+    type DiagnosticsTimeouts,
 } from './types.js';
 
-const defaultClock: TroubleshooterClock = {
+const defaultClock: DiagnosticsClock = {
     now: (): number => Date.now(),
     setTimeout: (callback, ms): unknown => globalThis.setTimeout(callback, ms),
     clearTimeout: (handle): void => globalThis.clearTimeout(handle as ReturnType<typeof globalThis.setTimeout>),
@@ -57,16 +57,16 @@ export function createTimeoutFinding(data: {
     };
 }
 
-export async function runTroubleshooter<TCode extends string>(options: {
-    input: TroubleshooterInput;
+export async function runDiagnostics<TCode extends string>(options: {
+    input: DiagnosticsInput;
     checks: readonly Check<RunContext, TCode | BuiltInFindingCode>[];
     timeoutProfile?: TimeoutProfile;
-    timeouts?: Partial<TroubleshooterTimeouts>;
+    timeouts?: Partial<DiagnosticsTimeouts>;
     signal?: AbortSignal;
-    onEvent?: (event: TroubleshooterEvent<TCode | BuiltInFindingCode>) => void;
-    io?: Partial<TroubleshooterIo>;
+    onEvent?: (event: DiagnosticsEvent<TCode | BuiltInFindingCode>) => void;
+    io?: Partial<DiagnosticsIo>;
     runId?: string;
-}): Promise<TroubleshooterRun<TCode | BuiltInFindingCode>> {
+}): Promise<DiagnosticsRun<TCode | BuiltInFindingCode>> {
     type Code = TCode | BuiltInFindingCode;
     const { checks, signal } = options;
     const timeoutProfile = options.timeoutProfile ?? 'default';
@@ -77,7 +77,7 @@ export async function runTroubleshooter<TCode extends string>(options: {
         if (connectionTimeouts && Object.hasOwn(connectionTimeouts, kind)) {
             const value = connectionTimeouts[kind];
             if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-                throw new TroubleshooterConfigurationError(`Invalid connection timeout: ${kind}`);
+                throw new DiagnosticsConfigurationError(`Invalid connection timeout: ${kind}`);
             }
         }
     }
@@ -85,7 +85,7 @@ export async function runTroubleshooter<TCode extends string>(options: {
     const checksById = new Map<string, Check<RunContext, Code>>();
     for (const check of checks) {
         if (checksById.has(check.id)) {
-            throw new TroubleshooterConfigurationError(`Duplicate check ID: ${check.id}`);
+            throw new DiagnosticsConfigurationError(`Duplicate check ID: ${check.id}`);
         }
         checksById.set(check.id, check);
     }
@@ -94,19 +94,19 @@ export async function runTroubleshooter<TCode extends string>(options: {
         for (const id of check.dependsOn ?? []) {
             const dependency = checksById.get(id);
             if (!dependency || !preceding.has(id)) {
-                throw new TroubleshooterConfigurationError(`Unknown or forward dependency: ${id}`);
+                throw new DiagnosticsConfigurationError(`Unknown or forward dependency: ${id}`);
             }
             if (check.scope === 'run' && dependency.scope === 'host') {
-                throw new TroubleshooterConfigurationError(`Run check cannot depend on host check: ${id}`);
+                throw new DiagnosticsConfigurationError(`Run check cannot depend on host check: ${id}`);
             }
         }
         preceding.add(check.id);
     }
     if (signal?.aborted) {
-        throw new TroubleshooterCancelledError();
+        throw new DiagnosticsCancelledError();
     }
 
-    const io: TroubleshooterIo = {
+    const io: DiagnosticsIo = {
         clock: options.io?.clock ?? defaultClock,
         environment: options.io?.environment,
         dns: options.io?.dns,
@@ -129,7 +129,7 @@ export async function runTroubleshooter<TCode extends string>(options: {
 
     function ensureNotCancelled(): void {
         if (cancelled || signal?.aborted) {
-            throw new TroubleshooterCancelledError();
+            throw new DiagnosticsCancelledError();
         }
     }
 
@@ -140,7 +140,7 @@ export async function runTroubleshooter<TCode extends string>(options: {
         }
     }
 
-    function emit(event: TroubleshooterEvent<Code>): void {
+    function emit(event: DiagnosticsEvent<Code>): void {
         if (!ended && !cancelled && !signal?.aborted) {
             try {
                 options.onEvent?.(event);
@@ -282,7 +282,7 @@ export async function runTroubleshooter<TCode extends string>(options: {
             },
             setTargets: (nextTargets): void => {
                 if (check.scope !== 'run' || !active || ended || cancelled || signal?.aborted) {
-                    throw new TroubleshooterConfigurationError('Only an active run-scope check may set targets');
+                    throw new DiagnosticsConfigurationError('Only an active run-scope check may set targets');
                 }
                 const seen = new Set<string>();
                 const selected: ProbeTarget[] = [];
@@ -322,7 +322,7 @@ export async function runTroubleshooter<TCode extends string>(options: {
                 function cancelCheck(): void {
                     if (active) {
                         detach();
-                        reject(new TroubleshooterCancelledError());
+                        reject(new DiagnosticsCancelledError());
                         controller.abort();
                     }
                 }
@@ -431,7 +431,7 @@ export async function runTroubleshooter<TCode extends string>(options: {
         }
         ensureNotCancelled();
         const finishedAt = clock.now();
-        const run: TroubleshooterRun<Code> = {
+        const run: DiagnosticsRun<Code> = {
             runId,
             startedAt,
             finishedAt,

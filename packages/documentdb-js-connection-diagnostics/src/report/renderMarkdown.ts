@@ -6,9 +6,9 @@
 import { redactReport } from './redact.js';
 import { reportTimestamp } from './timestamps.js';
 
-import { type CheckResult, type CheckStepResult, type TroubleshooterTimeouts } from '../types.js';
+import { type CheckResult, type CheckStepResult, type DiagnosticsTimeouts } from '../types.js';
 import { type RenderOptions, type ReportLabelKey, type ReportSectionId } from './text.js';
-import { type TroubleshooterReport } from './types.js';
+import { type DiagnosticsReport } from './types.js';
 
 const checkSections: readonly ReportSectionId[] = [
     'environment',
@@ -22,7 +22,7 @@ const checkSections: readonly ReportSectionId[] = [
     'additionalChecks',
 ];
 
-const timeoutFields: readonly (keyof TroubleshooterTimeouts)[] = [
+const timeoutFields: readonly (keyof DiagnosticsTimeouts)[] = [
     'runTimeoutMs',
     'preparationTimeoutMs',
     'srvTimeoutMs',
@@ -86,7 +86,7 @@ function flattenFacts(
 }
 
 export function renderMarkdown<TCode extends string>(
-    report: TroubleshooterReport<TCode>,
+    report: DiagnosticsReport<TCode>,
     options: RenderOptions<TCode>,
 ): string {
     const snapshot = options.redact ? redactReport(report) : report;

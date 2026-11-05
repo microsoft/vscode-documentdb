@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type CheckResult, type Finding, type TroubleshooterEvent } from '@documentdb-js/connection-diagnostics';
+import { type CheckResult, type Finding, type DiagnosticsEvent } from '@documentdb-js/connection-diagnostics';
 import {
     panelRowIds,
     type EvidenceSegment,
@@ -119,7 +119,7 @@ export class PanelRowProjector {
         );
     }
 
-    public apply(event: TroubleshooterEvent<FindingCode>): void {
+    public apply(event: DiagnosticsEvent<FindingCode>): void {
         if (this.stopped || (this.runId !== undefined && event.runId !== this.runId)) {
             return;
         }

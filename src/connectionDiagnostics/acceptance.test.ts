@@ -10,9 +10,9 @@ import {
     type CheckResult,
     type Finding,
     type TimeoutProfile,
-    type TroubleshooterEvent,
-    type TroubleshooterIo,
-    type TroubleshooterRun,
+    type DiagnosticsEvent,
+    type DiagnosticsIo,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type initWebviewTrpc } from '@microsoft/vscode-ext-webview';
@@ -56,18 +56,18 @@ import { deferred, detailSentinel, gatewayReply, host, offlineIo, outputs, socke
 import { extensionFindingCodes, type FindingCode } from './types';
 
 interface CapturedRun {
-    readonly run: TroubleshooterRun<FindingCode>;
-    readonly events: TroubleshooterEvent<FindingCode>[];
+    readonly run: DiagnosticsRun<FindingCode>;
+    readonly events: DiagnosticsEvent<FindingCode>[];
 }
 interface FakeClient {
     readonly options: MongoClientOptions;
     readonly close: ReturnType<typeof vi.fn>;
 }
 const bridge = vi.hoisted(() => ({
-    io: undefined as Partial<TroubleshooterIo> | undefined,
+    io: undefined as Partial<DiagnosticsIo> | undefined,
     runs: [] as CapturedRun[],
-    events: [] as TroubleshooterEvent<FindingCode>[],
-    observe: undefined as ((event: TroubleshooterEvent<FindingCode>) => void) | undefined,
+    events: [] as DiagnosticsEvent<FindingCode>[],
+    observe: undefined as ((event: DiagnosticsEvent<FindingCode>) => void) | undefined,
     resolverDeps: undefined as unknown,
     getSessionFromVSCode: vi.fn(),
     getManagedIdentityAccessToken: vi.fn(),
@@ -150,8 +150,8 @@ vi.mock('./runConnectionDiagnostics', async (importOriginal) => {
         ...actual,
         runConnectivityTroubleshooter: async (
             options: RunConnectivityTroubleshooterOptions,
-        ): Promise<TroubleshooterRun<FindingCode>> => {
-            const events: TroubleshooterEvent<FindingCode>[] = [];
+        ): Promise<DiagnosticsRun<FindingCode>> => {
+            const events: DiagnosticsEvent<FindingCode>[] = [];
             bridge.events = events;
             const run = await actual.runConnectivityTroubleshooter({
                 ...options,
@@ -312,7 +312,7 @@ async function finish(
     return { ctx, updates, finished, ...captured, ...view };
 }
 
-function result(run: TroubleshooterRun<FindingCode>, checkId: string): CheckResult<FindingCode> {
+function result(run: DiagnosticsRun<FindingCode>, checkId: string): CheckResult<FindingCode> {
     const value = run.results.find((item): boolean => item.checkId === checkId);
     if (!value) {
         throw new Error(`Missing ${checkId}`);
@@ -760,7 +760,7 @@ describe('Acceptance (design §8.1)', (): void => {
         });
         const run = { ...view.run, results: view.run.results.map(replace) };
         const events = view.events.map(
-            (event): TroubleshooterEvent<FindingCode> =>
+            (event): DiagnosticsEvent<FindingCode> =>
                 event.type === 'checkFinished'
                     ? { ...event, result: replace(event.result) }
                     : event.type === 'runFinished'

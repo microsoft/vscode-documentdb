@@ -4,17 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    runTroubleshooter,
-    TroubleshooterCancelledError,
+    runDiagnostics,
+    DiagnosticsCancelledError,
     type Check,
     type CheckOutcome,
     type CheckResult,
     type CheckStepResult,
     type ProbeTarget,
     type RunContext,
-    type TroubleshooterEvent,
-    type TroubleshooterRun,
-    type TroubleshooterTimeouts,
+    type DiagnosticsEvent,
+    type DiagnosticsRun,
+    type DiagnosticsTimeouts,
 } from '@documentdb-js/connection-diagnostics';
 import {
     MongoClient,
@@ -209,25 +209,25 @@ function fakeDeps(): AuthenticateCheckDeps & { createClient: ReturnType<typeof v
 }
 
 interface AuthRun {
-    readonly run: TroubleshooterRun<FindingCode>;
+    readonly run: DiagnosticsRun<FindingCode>;
     readonly result: CheckResult<FindingCode>;
     readonly holder: RunOwnedClient;
     readonly telemetry: Record<string, string | undefined>;
-    readonly events: TroubleshooterEvent<FindingCode>[];
+    readonly events: DiagnosticsEvent<FindingCode>[];
 }
 
 async function runAuth(
     setup: TroubleshooterSetup,
     options: {
         readonly deps?: AuthenticateCheckDeps;
-        readonly timeouts?: Partial<TroubleshooterTimeouts>;
+        readonly timeouts?: Partial<DiagnosticsTimeouts>;
         readonly signal?: AbortSignal;
         readonly targets?: readonly ProbeTarget[];
     } = {},
 ): Promise<AuthRun> {
     const holder = createRunOwnedClient();
     const telemetry: Record<string, string | undefined> = {};
-    const events: TroubleshooterEvent<FindingCode>[] = [];
+    const events: DiagnosticsEvent<FindingCode>[] = [];
     const trace = new TroubleshooterOutputTrace(runId);
     const host = new URL(setup.input.connectionString).hostname;
     const stubs: Check<RunContext, FindingCode>[] = [
@@ -254,7 +254,7 @@ async function runAuth(
         () => holder,
         options.deps ?? fakeDeps(),
     );
-    const run: TroubleshooterRun<FindingCode> = await runTroubleshooter<FindingCode>({
+    const run: DiagnosticsRun<FindingCode> = await runDiagnostics<FindingCode>({
         runId,
         input: setup.input,
         checks: [...stubs, check],
@@ -1083,7 +1083,7 @@ describe('createAuthenticateCheck', (): void => {
             const running = runAuth(setupFor(AuthMethodId.NativeAuth, privateHost), { signal: controller.signal });
             await connecting.promise;
             controller.abort();
-            await expect(running).rejects.toBeInstanceOf(TroubleshooterCancelledError);
+            await expect(running).rejects.toBeInstanceOf(DiagnosticsCancelledError);
             expect(clients[0].close).toHaveBeenCalled();
         });
 

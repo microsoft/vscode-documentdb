@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    runTroubleshooter,
+    runDiagnostics,
     type CheckOutcome,
     type CheckStatus,
     type TimeoutProfile,
@@ -46,7 +46,7 @@ async function runAccess(
         connectionTimeoutMs?: number;
     } = {},
 ): Promise<CheckOutcome<FindingCode>> {
-    const run = await runTroubleshooter<FindingCode>({
+    const run = await runDiagnostics<FindingCode>({
         input: {
             connectionString: 'mongodb://private.example/',
             ...(options.connectionTimeoutMs === undefined

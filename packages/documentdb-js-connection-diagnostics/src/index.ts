@@ -21,7 +21,7 @@ export { createHelloCheck } from './checks/hello.js';
 export { createSrvCheck } from './checks/srv.js';
 export { createTcpCheck } from './checks/tcp.js';
 export { createTlsCheck } from './checks/tls.js';
-export { TroubleshooterCancelledError, TroubleshooterConfigurationError } from './errors.js';
+export { DiagnosticsCancelledError, DiagnosticsConfigurationError } from './errors.js';
 export { builtInFindingCodes, isBuiltInFindingCode, skipReasons } from './findingCodes.js';
 export type { BuiltInFindingCode } from './findingCodes.js';
 export { describeNetworkOptions, resolveNetworkOptions } from './networkOptions.js';
@@ -37,9 +37,9 @@ export type {
     IdentifierKind,
     ReportOutcome,
     ReportSummary,
-    TroubleshooterReport,
+    DiagnosticsReport,
 } from './report/types.js';
-export { createTimeoutFinding, formatTarget, runTroubleshooter } from './runner.js';
+export { createTimeoutFinding, formatTarget, runDiagnostics } from './runner.js';
 export { DEFAULT_TIMEOUTS, resolveTimeouts, SAFETY_LIMITS, timeoutsForProfile } from './timeouts.js';
 export type { EffectiveTimeout, TimeoutKind, TimeoutProfile, TimeoutSource } from './timeouts.js';
 export type {
@@ -61,12 +61,12 @@ export type {
     RunContext,
     SkipReason,
     TimedOutOperation,
-    TroubleshooterClock,
-    TroubleshooterEvent,
-    TroubleshooterInput,
-    TroubleshooterIo,
-    TroubleshooterRun,
-    TroubleshooterTimeouts,
+    DiagnosticsClock,
+    DiagnosticsEvent,
+    DiagnosticsInput,
+    DiagnosticsIo,
+    DiagnosticsRun,
+    DiagnosticsTimeouts,
     WireCompressor,
 } from './types.js';
 

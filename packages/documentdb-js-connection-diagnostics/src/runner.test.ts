@@ -8,10 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     createTimeoutFinding,
     formatTarget,
-    runTroubleshooter,
+    runDiagnostics,
     SAFETY_LIMITS,
-    TroubleshooterCancelledError,
-    TroubleshooterConfigurationError,
+    DiagnosticsCancelledError,
+    DiagnosticsConfigurationError,
 } from './index.js';
 
 import {
@@ -22,16 +22,16 @@ import {
     type EffectiveTimeout,
     type ProbeTarget,
     type RunContext,
-    type TroubleshooterClock,
-    type TroubleshooterEvent,
-    type TroubleshooterInput,
-    type TroubleshooterRun,
+    type DiagnosticsClock,
+    type DiagnosticsEvent,
+    type DiagnosticsInput,
+    type DiagnosticsRun,
 } from './index.js';
 
 type Code = BuiltInFindingCode | 'custom.note';
 type TestCheck = Check<RunContext, Code>;
 type Outcome = CheckOutcome<Code>;
-type Event = TroubleshooterEvent<Code>;
+type Event = DiagnosticsEvent<Code>;
 
 interface Deferred<T> {
     readonly promise: Promise<T>;
@@ -76,7 +76,7 @@ async function flush(): Promise<void> {
     }
 }
 
-const input: TroubleshooterInput = { connectionString: 'mongodb://example.test' };
+const input: DiagnosticsInput = { connectionString: 'mongodb://example.test' };
 
 beforeEach((): void => {
     vi.useFakeTimers();
@@ -93,7 +93,7 @@ describe('ordered host chains', (): void => {
         const pending = targets.map((): Deferred<Outcome> => deferred<Outcome>());
         const starts: string[] = [];
         const events: Event[] = [];
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             checks: [
                 prepare(targets),
@@ -153,7 +153,7 @@ describe('ordered host chains', (): void => {
 
     it('announces each host phase once with ordered checks and fixed formatted targets before any check starts', async (): Promise<void> => {
         const events: Event[] = [];
-        await runTroubleshooter({
+        await runDiagnostics({
             input,
             runId: 'phases',
             checks: [
@@ -205,7 +205,7 @@ describe('ordered host chains', (): void => {
         for (const cancelOn of ['checkFinished', 'hostPhaseStarted'] as const) {
             const controller = new AbortController();
             const events: Event[] = [];
-            const promise = runTroubleshooter({
+            const promise = runDiagnostics({
                 input,
                 signal: controller.signal,
                 checks: [prepare([target('a')]), check('dns', { scope: 'host' })],
@@ -216,7 +216,7 @@ describe('ordered host chains', (): void => {
                     }
                 },
             });
-            await expect(promise).rejects.toBeInstanceOf(TroubleshooterCancelledError);
+            await expect(promise).rejects.toBeInstanceOf(DiagnosticsCancelledError);
             expect(events.filter((event): boolean => event.type === 'hostPhaseStarted')).toHaveLength(
                 cancelOn === 'checkFinished' ? 0 : 1,
             );
@@ -233,7 +233,7 @@ describe('ordered host chains', (): void => {
         let inFlight = 0;
         let peak = 0;
         const started: string[] = [];
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             checks: [
                 prepare(targets),
@@ -266,7 +266,7 @@ describe('ordered host chains', (): void => {
     });
 
     it('supports multiple host phases and target replacement between them', async (): Promise<void> => {
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             checks: [
                 prepare([target('first')]),
@@ -289,7 +289,7 @@ describe('ordered host chains', (): void => {
     });
 
     it('skips missing required host inputs when a later phase probes a new target', async (): Promise<void> => {
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             checks: [
                 prepare([target('first')]),
@@ -312,7 +312,7 @@ describe('ordered host chains', (): void => {
 
     it('deduplicates host and port in order, and disallows host-scope target changes', async (): Promise<void> => {
         const a = target('a');
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             checks: [
                 prepare([a, { ...a, source: 'srv' }, target('a', 27018), target('::1')]),
@@ -320,7 +320,7 @@ describe('ordered host chains', (): void => {
                     scope: 'host',
                     run: async (context): Promise<Outcome> => {
                         expect(context.targets).toHaveLength(3);
-                        expect((): void => context.setTargets([])).toThrow(TroubleshooterConfigurationError);
+                        expect((): void => context.setTargets([])).toThrow(DiagnosticsConfigurationError);
                         return pass();
                     },
                 }),
@@ -344,7 +344,7 @@ describe('required input dependencies', (): void => {
                 skippedBecause: { reason: 'notApplicable' as const },
             },
         ]) {
-            const run = await runTroubleshooter({
+            const run = await runDiagnostics({
                 input,
                 checks: [
                     check('dns', { run: async (): Promise<Outcome> => outcome }),
@@ -356,7 +356,7 @@ describe('required input dependencies', (): void => {
     });
 
     it('propagates failure origins within the same target only', async (): Promise<void> => {
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             checks: [
                 prepare([target('bad'), target('good')]),
@@ -383,7 +383,7 @@ describe('required input dependencies', (): void => {
     });
 
     it('names the skipped dependency itself unless it was a dependency skip', async (): Promise<void> => {
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             checks: [
                 check('origin', {
@@ -403,7 +403,7 @@ describe('required input dependencies', (): void => {
 
     it('records each empty-target host check once without starting it', async (): Promise<void> => {
         const events: Event[] = [];
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             checks: [check('dns', { scope: 'host' }), check('tcp', { scope: 'host', dependsOn: ['dns'] })],
             onEvent: (event): void => {
@@ -439,7 +439,7 @@ describe('required input dependencies', (): void => {
     it.each(['fail', 'skipped'] as const)(
         'uses the run dependency origin for empty targets after %s',
         async (status): Promise<void> => {
-            const run = await runTroubleshooter({
+            const run = await runDiagnostics({
                 input,
                 checks: [
                     check('origin', {
@@ -462,7 +462,7 @@ describe('required input dependencies', (): void => {
     );
 
     it('names a directly failed run dependency when no targets are available', async (): Promise<void> => {
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             checks: [
                 check('prepare', { run: async (): Promise<Outcome> => ({ ...pass(), status: 'fail' }) }),
@@ -483,25 +483,25 @@ describe('configuration validation', (): void => {
     ] as const)('rejects %s dependencies before any events', async (_name, checks): Promise<void> => {
         const events: Event[] = [];
         await expect(
-            runTroubleshooter({
+            runDiagnostics({
                 input,
                 checks,
                 onEvent: (event): void => {
                     events.push(event);
                 },
             }),
-        ).rejects.toBeInstanceOf(TroubleshooterConfigurationError);
+        ).rejects.toBeInstanceOf(DiagnosticsConfigurationError);
         expect(events).toEqual([]);
     });
 
     it('rejects invalid diagnostic and connection timeouts before events', async (): Promise<void> => {
         const onEvent = vi.fn();
         await expect(
-            runTroubleshooter({ input, checks: [], timeouts: { probeTimeoutMs: 0 }, onEvent }),
+            runDiagnostics({ input, checks: [], timeouts: { probeTimeoutMs: 0 }, onEvent }),
         ).rejects.toThrow('probeTimeoutMs');
         await expect(
-            runTroubleshooter({ input: { ...input, connectionTimeouts: { probe: -1 } }, checks: [], onEvent }),
-        ).rejects.toBeInstanceOf(TroubleshooterConfigurationError);
+            runDiagnostics({ input: { ...input, connectionTimeouts: { probe: -1 } }, checks: [], onEvent }),
+        ).rejects.toBeInstanceOf(DiagnosticsConfigurationError);
         expect(onEvent).not.toHaveBeenCalled();
     });
 });
@@ -509,7 +509,7 @@ describe('configuration validation', (): void => {
 describe('timeouts and coverage', (): void => {
     it('times out at the effective deadline, never one unit before, with no host in English detail', async (): Promise<void> => {
         const pending = deferred<Outcome>();
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             checks: [
                 prepare([target('private-host')]),
@@ -563,7 +563,7 @@ describe('timeouts and coverage', (): void => {
     it('keeps a default probe pending at five seconds and until ten seconds', async (): Promise<void> => {
         const pending = deferred<Outcome>();
         const events: Event[] = [];
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             checks: [
                 check('dns', {
@@ -586,7 +586,7 @@ describe('timeouts and coverage', (): void => {
     });
 
     it('honors a shorter connection timeout without suggesting a diagnostic retry', async (): Promise<void> => {
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input: { ...input, connectionTimeouts: { probe: 200 } },
             checks: [check('tcp', { timeout: 'probe', run: (): Promise<Outcome> => deferred<Outcome>().promise })],
         });
@@ -598,7 +598,7 @@ describe('timeouts and coverage', (): void => {
 
     it('bounds in-flight work by the whole run and skips unstarted checks and queued targets', async (): Promise<void> => {
         const targets = Array.from({ length: 6 }, (_, index): ProbeTarget => target(`host${index}`));
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             timeouts: { runTimeoutMs: 50 },
             checks: [
@@ -628,7 +628,7 @@ describe('timeouts and coverage', (): void => {
     });
 
     it('bounds checks without a timeout kind by only the whole-run timeout', async (): Promise<void> => {
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             timeouts: { runTimeoutMs: 100 },
             checks: [check('work', { run: (): Promise<Outcome> => deferred<Outcome>().promise }), check('later')],
@@ -640,7 +640,7 @@ describe('timeouts and coverage', (): void => {
     });
 
     it('skips dependents of a diagnostic timeout as dependencyFailed', async (): Promise<void> => {
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             timeouts: { probeTimeoutMs: 50 },
             checks: [
@@ -657,7 +657,7 @@ describe('timeouts and coverage', (): void => {
     it('removes diagnostic deadlines without removing target limits', async (): Promise<void> => {
         const pending = deferred<Outcome>();
         const targets = Array.from({ length: 20 }, (_, index): ProbeTarget => target(`host${index}`));
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             timeoutProfile: 'noDiagnosticTimeouts',
             checks: [
@@ -681,7 +681,7 @@ describe('timeouts and coverage', (): void => {
     });
 
     it('retains connection deadlines under noDiagnosticTimeouts', async (): Promise<void> => {
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input: { ...input, connectionTimeouts: { probe: 5 } },
             timeoutProfile: 'noDiagnosticTimeouts',
             checks: [
@@ -701,7 +701,7 @@ describe('timeouts and coverage', (): void => {
         async (settlement): Promise<void> => {
             const pending = deferred<Outcome>();
             const events: Event[] = [];
-            const promise = runTroubleshooter({
+            const promise = runDiagnostics({
                 input,
                 timeouts: { probeTimeoutMs: 10 },
                 checks: [check('dns', { timeout: 'probe', run: (): Promise<Outcome> => pending.promise })],
@@ -727,7 +727,7 @@ describe('timeouts and coverage', (): void => {
     it('reports the least timeout with connection, check, run tie priority and remaining time', async (): Promise<void> => {
         const observed: EffectiveTimeout[] = [];
         const pending = deferred<Outcome>();
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input: { ...input, connectionTimeouts: { probe: 100 } },
             timeouts: { probeTimeoutMs: 100, runTimeoutMs: 100, srvTimeoutMs: 100, preparationTimeoutMs: null },
             checks: [
@@ -749,7 +749,7 @@ describe('timeouts and coverage', (): void => {
             { timeoutMs: 100, source: 'check' },
             { timeoutMs: 80, source: 'run' },
         ]);
-        const unbounded = await runTroubleshooter({
+        const unbounded = await runDiagnostics({
             input,
             timeoutProfile: 'noDiagnosticTimeouts',
             checks: [
@@ -766,7 +766,7 @@ describe('timeouts and coverage', (): void => {
 
     it('includes inner-operation timeout findings in coverage', async (): Promise<void> => {
         const finding = createTimeoutFinding({ operation: 'ping', timeoutMs: 5000, source: 'check' });
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             checks: [
                 check('postConnect', {
@@ -794,8 +794,8 @@ describe('cancellation and cleanup', (): void => {
         controller.abort();
         const onEvent = vi.fn();
         const run = vi.fn(async (): Promise<Outcome> => pass());
-        const promise = runTroubleshooter({ input, checks: [check('a', { run })], signal: controller.signal, onEvent });
-        await expect(promise).rejects.toBeInstanceOf(TroubleshooterCancelledError);
+        const promise = runDiagnostics({ input, checks: [check('a', { run })], signal: controller.signal, onEvent });
+        await expect(promise).rejects.toBeInstanceOf(DiagnosticsCancelledError);
         await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
         expect(onEvent).not.toHaveBeenCalled();
         expect(run).not.toHaveBeenCalled();
@@ -807,7 +807,7 @@ describe('cancellation and cleanup', (): void => {
         const events: Event[] = [];
         const cleanupOrder: number[] = [];
         let checkSignal: AbortSignal | undefined;
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             signal: controller.signal,
             checks: [
@@ -834,7 +834,7 @@ describe('cancellation and cleanup', (): void => {
                 events.push(event);
             },
         });
-        const rejection = expect(promise).rejects.toBeInstanceOf(TroubleshooterCancelledError);
+        const rejection = expect(promise).rejects.toBeInstanceOf(DiagnosticsCancelledError);
         await flush();
         controller.abort();
         const eventCount = events.length;
@@ -853,7 +853,7 @@ describe('cancellation and cleanup', (): void => {
         const controller = new AbortController();
         const cleanup = vi.fn();
         const starts = vi.fn();
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             signal: controller.signal,
             checks: [
@@ -869,7 +869,7 @@ describe('cancellation and cleanup', (): void => {
                 check('later'),
             ],
         });
-        const rejection = expect(promise).rejects.toBeInstanceOf(TroubleshooterCancelledError);
+        const rejection = expect(promise).rejects.toBeInstanceOf(DiagnosticsCancelledError);
         await flush();
         expect(starts).toHaveBeenCalledTimes(4);
         controller.abort();
@@ -884,7 +884,7 @@ describe('cancellation and cleanup', (): void => {
             const controller = new AbortController();
             const pending = deferred<Outcome>();
             const cleanup = vi.fn();
-            const promise = runTroubleshooter({
+            const promise = runDiagnostics({
                 input,
                 signal: controller.signal,
                 checks: [
@@ -916,7 +916,7 @@ describe('cancellation and cleanup', (): void => {
     it('cleans up after successful and timed-out runs', async (): Promise<void> => {
         for (const timeout of [false, true]) {
             const cleanup = vi.fn();
-            const promise = runTroubleshooter({
+            const promise = runDiagnostics({
                 input,
                 timeouts: { probeTimeoutMs: 1 },
                 checks: [
@@ -940,7 +940,7 @@ describe('cancellation and cleanup', (): void => {
     it('cleans up and detaches observers on unexpected runner errors', async (): Promise<void> => {
         const cleanup = vi.fn();
         const controller = new AbortController();
-        const clock: TroubleshooterClock = {
+        const clock: DiagnosticsClock = {
             now: (): number => Date.now(),
             setTimeout: (): unknown => {
                 throw new Error('clock failed');
@@ -948,7 +948,7 @@ describe('cancellation and cleanup', (): void => {
             clearTimeout: (): void => {},
         };
         // No timer for preparation; the following check exercises a runner-owned timer failure.
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             signal: controller.signal,
             io: { clock },
@@ -975,7 +975,7 @@ describe('results, clock and events', (): void => {
         const secret = 'private-credentials';
         const events: Event[] = [];
         const cleanup = vi.fn();
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input: { connectionString: secret },
             checks: [
                 check('named', {
@@ -1015,7 +1015,7 @@ describe('results, clock and events', (): void => {
                 facts: {},
             },
         ];
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input,
             runId: 'chosen',
             checks: [
@@ -1054,7 +1054,7 @@ describe('results, clock and events', (): void => {
         let now = 120;
         let fire: (() => void) | undefined;
         const clearTimeout = vi.fn();
-        const clock: TroubleshooterClock = {
+        const clock: DiagnosticsClock = {
             now: (): number => now,
             setTimeout: (callback, ms): unknown => {
                 expect(ms).toBe(25);
@@ -1064,7 +1064,7 @@ describe('results, clock and events', (): void => {
             clearTimeout,
         };
         const events: Event[] = [];
-        const promise = runTroubleshooter({
+        const promise = runDiagnostics({
             input,
             io: { clock },
             timeouts: { probeTimeoutMs: 25 },
@@ -1091,8 +1091,8 @@ describe('results, clock and events', (): void => {
     });
 
     it('creates fresh run IDs for each invocation', async (): Promise<void> => {
-        const first: TroubleshooterRun<Code> = await runTroubleshooter({ input, checks: [] });
-        const second = await runTroubleshooter({ input, checks: [] });
+        const first: DiagnosticsRun<Code> = await runDiagnostics({ input, checks: [] });
+        const second = await runDiagnostics({ input, checks: [] });
         expect(first.runId).not.toBe(second.runId);
         expect(first.runId).toMatch(/^[a-f0-9-]{36}$/);
     });

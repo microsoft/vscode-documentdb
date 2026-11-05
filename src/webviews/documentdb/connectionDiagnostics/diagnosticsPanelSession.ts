@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type TroubleshooterReport } from '@documentdb-js/connection-diagnostics';
+import { type DiagnosticsReport } from '@documentdb-js/connection-diagnostics';
 import { type Uri } from 'vscode';
 import { type RunConnectivityTroubleshooterOptions } from '../../../connectionDiagnostics/runConnectionDiagnostics';
 import { type FindingCode } from '../../../connectionDiagnostics/types';
@@ -36,7 +36,7 @@ export class TroubleshooterPanelRun {
 interface ReportPreview {
     readonly opening: Promise<Uri>;
     uri?: Uri;
-    report: TroubleshooterReport<FindingCode>;
+    report: DiagnosticsReport<FindingCode>;
     hideIdentifiers: boolean;
 }
 
@@ -49,7 +49,7 @@ export class TroubleshooterPanelSession {
     public currentRun: TroubleshooterPanelRun | undefined;
     public runId: string | undefined;
     public runIndex = 0;
-    public completedRun: { readonly runId: string; readonly report: TroubleshooterReport<FindingCode> } | undefined;
+    public completedRun: { readonly runId: string; readonly report: DiagnosticsReport<FindingCode> } | undefined;
     private readonly panelEvents: PanelEvent[] = [];
     private readonly listeners = new Set<() => void>();
     private readonly earlyCancels = new Set<string>();

@@ -6,7 +6,7 @@
 import {
     builtInFindingCodes,
     type CheckResult,
-    type TroubleshooterRun,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { entraErrorRules } from '../documentdb/auth/entraErrors/entraErrorRules';
@@ -84,7 +84,7 @@ export function applyCheckTelemetry(
     }
 }
 
-export function applyCompletedRunTelemetry(context: IActionContext, run: TroubleshooterRun<FindingCode>): void {
+export function applyCompletedRunTelemetry(context: IActionContext, run: DiagnosticsRun<FindingCode>): void {
     applyCheckTelemetry(context, run.results, run.targets.length);
     const result = deriveResult(run.results, (): { title: string; explanation: string } => ({
         title: '',

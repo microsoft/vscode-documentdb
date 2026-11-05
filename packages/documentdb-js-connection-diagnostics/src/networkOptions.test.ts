@@ -9,7 +9,7 @@ import {
     createConnectionStringCheck,
     describeNetworkOptions,
     resolveNetworkOptions,
-    runTroubleshooter,
+    runDiagnostics,
 } from './index.js';
 
 import { type Check, type CheckOutcome, type CheckResult, type NetworkOptionLayer, type RunContext } from './index.js';
@@ -108,7 +108,7 @@ describe('effective network options', (): void => {
             valueSupplied: true,
             origin: 'uri',
         });
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input: { connectionString: uri },
             checks: [createConnectionStringCheck()],
         });
@@ -139,7 +139,7 @@ describe('effective network options', (): void => {
                 facts: { effective: describeNetworkOptions(resolveNetworkOptions(ctx)) },
             }),
         };
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input: { connectionString: 'mongodb+srv://db.test' },
             checks: [createConnectionStringCheck(), srvCheck, inspect],
         });

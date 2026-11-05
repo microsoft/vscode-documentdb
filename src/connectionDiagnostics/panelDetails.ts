@@ -8,7 +8,7 @@ import {
     DEFAULT_TIMEOUTS,
     type CheckResult,
     type Finding,
-    type TroubleshooterReport,
+    type DiagnosticsReport,
 } from '@documentdb-js/connection-diagnostics';
 import * as vscode from 'vscode';
 import {
@@ -624,7 +624,7 @@ export function buildRowDetails(
 }
 
 /** A results-only report, so a live run shows the same sanitized results as the finished report. */
-function partialReport(results: readonly CheckResult<FindingCode>[]): TroubleshooterReport<FindingCode> {
+function partialReport(results: readonly CheckResult<FindingCode>[]): DiagnosticsReport<FindingCode> {
     return buildReport(
         {
             runId: 'live',
@@ -654,12 +654,12 @@ function partialReport(results: readonly CheckResult<FindingCode>[]): Troublesho
  */
 export function withRowDetails(
     rows: readonly PanelRow[],
-    source: TroubleshooterReport<FindingCode> | readonly CheckResult<FindingCode>[],
+    source: DiagnosticsReport<FindingCode> | readonly CheckResult<FindingCode>[],
     describe: Describe,
 ): PanelRow[] {
     const report = Array.isArray(source)
         ? partialReport(source as readonly CheckResult<FindingCode>[])
-        : (source as TroubleshooterReport<FindingCode>);
+        : (source as DiagnosticsReport<FindingCode>);
     return rows.map((row): PanelRow => {
         const plain: PanelRow = {
             id: row.id,

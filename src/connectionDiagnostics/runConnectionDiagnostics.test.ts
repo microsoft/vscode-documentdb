@@ -10,7 +10,7 @@ import {
     type Check,
     type CheckOutcome,
     type RunContext,
-    type TroubleshooterEvent,
+    type DiagnosticsEvent,
 } from '@documentdb-js/connection-diagnostics';
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import type * as MongoDB from 'mongodb';
@@ -207,7 +207,7 @@ describe('runConnectivityTroubleshooter', (): void => {
     });
 
     it('inserts the extension checks in order and appends consumer checks', async (): Promise<void> => {
-        const observed: TroubleshooterEvent<FindingCode>[] = [];
+        const observed: DiagnosticsEvent<FindingCode>[] = [];
         const extra: Check<RunContext, FindingCode> = {
             id: 'laterPhase',
             scope: 'run',
@@ -234,7 +234,7 @@ describe('runConnectivityTroubleshooter', (): void => {
     });
 
     it('uses the supplied run ID in events, Output trace and telemetry', async (): Promise<void> => {
-        const observed: TroubleshooterEvent<FindingCode>[] = [];
+        const observed: DiagnosticsEvent<FindingCode>[] = [];
         const runId = 'caller-generated-run-id';
         const run = await runConnectivityTroubleshooter(
             options({
@@ -547,7 +547,7 @@ describe('runConnectivityTroubleshooter', (): void => {
         } as unknown as IActionContext;
         await troubleshootConnection(context, node);
         const { target } = vi.mocked(openConnectivityTroubleshooter).mock.calls[0][0];
-        const observed: TroubleshooterEvent<FindingCode>[] = [];
+        const observed: DiagnosticsEvent<FindingCode>[] = [];
         const run = await runConnectivityTroubleshooter(
             options({
                 target,
@@ -846,7 +846,7 @@ describe('runConnectivityTroubleshooter', (): void => {
 
     describe('target resolution inside the run (review R1/R2, option A)', (): void => {
         it('reads the target inside the run, after the clock starts, with the run signal', async (): Promise<void> => {
-            const observed: TroubleshooterEvent<FindingCode>[] = [];
+            const observed: DiagnosticsEvent<FindingCode>[] = [];
             const request = options({ onEvent: (event): void => void observed.push(event) });
             const run = await runConnectivityTroubleshooter(request);
             const started = observed.findIndex(

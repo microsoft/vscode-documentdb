@@ -6,9 +6,9 @@
 import { Socket } from 'node:net';
 import { describe, expect, it } from 'vitest';
 
-import { buildReport, createBuiltInChecks, renderJson, runTroubleshooter } from '../index.js';
+import { buildReport, createBuiltInChecks, renderJson, runDiagnostics } from '../index.js';
 
-import { type DnsIo, type TroubleshooterEvent } from '../index.js';
+import { type DnsIo, type DiagnosticsEvent } from '../index.js';
 
 const secrets = [
     'p@ssw0rd-xyz',
@@ -46,9 +46,9 @@ describe('unconditional secret exclusion', (): void => {
     it.each([true, false])(
         'keeps secrets out of events and both report modes (unknown option: %s)',
         async (unknownOption): Promise<void> => {
-            const events: TroubleshooterEvent<string>[] = [];
+            const events: DiagnosticsEvent<string>[] = [];
             let tlsAttempts = 0;
-            const run = await runTroubleshooter({
+            const run = await runDiagnostics({
                 input: {
                     connectionString: unknownOption
                         ? connectionString

@@ -8,7 +8,7 @@ import {
     createDnsCheck,
     DEFAULT_TIMEOUTS,
     renderMarkdown,
-    runTroubleshooter,
+    runDiagnostics,
     type Check,
     type CheckOutcome,
     type CheckResult,
@@ -260,7 +260,7 @@ describe('withMixedHostDomainsWarning', (): void => {
                     return { status: 'pass', facts: {}, findings: [] };
                 },
             };
-            const run = await runTroubleshooter<FindingCode>({
+            const run = await runDiagnostics<FindingCode>({
                 runId: 'host-domains',
                 input: { connectionString: 'mongodb+srv://cluster.mongocluster.cosmos.azure.us/' },
                 checks: [

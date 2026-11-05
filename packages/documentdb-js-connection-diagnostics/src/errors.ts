@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export class TroubleshooterConfigurationError extends Error {
+export class DiagnosticsConfigurationError extends Error {
     constructor(message: string) {
         super(message);
-        this.name = 'TroubleshooterConfigurationError';
+        this.name = 'DiagnosticsConfigurationError';
     }
 }
 
-export class TroubleshooterCancelledError extends Error {
+export class DiagnosticsCancelledError extends Error {
     constructor() {
         super('The connection diagnosis was cancelled.');
         this.name = 'AbortError';

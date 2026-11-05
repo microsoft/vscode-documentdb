@@ -5,22 +5,22 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createBuiltInChecks, createConnectionStringCheck, runTroubleshooter } from '../index.js';
+import { createBuiltInChecks, createConnectionStringCheck, runDiagnostics } from '../index.js';
 import { URI_OPTIONS } from './uriOptions.js';
 
 import {
     type BuiltInFindingCode,
     type CheckOutcome,
-    type TroubleshooterEvent,
-    type TroubleshooterRun,
+    type DiagnosticsEvent,
+    type DiagnosticsRun,
     type WireCompressor,
 } from '../index.js';
 
 async function runUri(
     connectionString: string,
     availableCompressors?: readonly WireCompressor[],
-): Promise<TroubleshooterRun<BuiltInFindingCode>> {
-    return runTroubleshooter({
+): Promise<DiagnosticsRun<BuiltInFindingCode>> {
+    return runDiagnostics({
         input: { connectionString, ...(availableCompressors === undefined ? {} : { availableCompressors }) },
         checks: [createConnectionStringCheck()],
         io: {
@@ -109,12 +109,12 @@ const findingCases: readonly FindingCase[] = [
 
 describe('connection string findings', (): void => {
     it('never publishes ambiguous authority fragments or probes them', async (): Promise<void> => {
-        const events: TroubleshooterEvent<BuiltInFindingCode>[] = [];
+        const events: DiagnosticsEvent<BuiltInFindingCode>[] = [];
         const networkOperation = vi.fn(async (): Promise<never> => {
             throw new Error('Unexpected network operation');
         });
         const getServers = vi.fn((): string[] => []);
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input: { connectionString: 'mongodb://alice:hunter@2pass@db.contoso.com:27017/db' },
             checks: createBuiltInChecks(),
             onEvent: (event): void => {
@@ -422,7 +422,7 @@ describe('connection string facts and targets', (): void => {
 
     it('leaves already published targets untouched for an SRV URI', async (): Promise<void> => {
         const existing = { host: 'prepared.example', port: 27017, source: 'uri' as const };
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input: { connectionString: 'mongodb+srv://example.test' },
             checks: [
                 {

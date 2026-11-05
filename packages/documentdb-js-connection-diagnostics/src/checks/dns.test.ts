@@ -6,12 +6,12 @@
 import { promises as dns } from 'node:dns';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createConnectionStringCheck, createDnsCheck, runTroubleshooter } from '../index.js';
+import { createConnectionStringCheck, createDnsCheck, runDiagnostics } from '../index.js';
 import { nodeDns } from '../io/nodeDns.js';
 
 import { type FallbackDnsResult } from '@documentdb-js/srv-resolver';
 import { type LookupAddress, type LookupAllOptions, type SrvRecord } from 'node:dns';
-import { type BuiltInFindingCode, type CheckResult, type DnsIo, type TroubleshooterRun } from '../index.js';
+import { type BuiltInFindingCode, type CheckResult, type DnsIo, type DiagnosticsRun } from '../index.js';
 
 interface LookupAllIo {
     lookup(host: string, options: LookupAllOptions): Promise<LookupAddress[]>;
@@ -49,15 +49,15 @@ function dnsIo(overrides: Partial<DnsIo> = {}): DnsIo {
 async function runDns(
     dns: DnsIo,
     connectionString = 'mongodb://a.example:27017',
-): Promise<TroubleshooterRun<BuiltInFindingCode>> {
-    return runTroubleshooter({
+): Promise<DiagnosticsRun<BuiltInFindingCode>> {
+    return runDiagnostics({
         input: { connectionString },
         checks: [createConnectionStringCheck(), createDnsCheck()],
         io: { dns },
     });
 }
 
-function dnsResult(run: TroubleshooterRun<BuiltInFindingCode>): CheckResult<BuiltInFindingCode> {
+function dnsResult(run: DiagnosticsRun<BuiltInFindingCode>): CheckResult<BuiltInFindingCode> {
     return run.results[1];
 }
 

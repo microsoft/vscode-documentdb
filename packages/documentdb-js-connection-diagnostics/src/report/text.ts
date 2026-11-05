@@ -5,7 +5,7 @@
 
 import { type TimeoutProfile } from '../timeouts.js';
 import { type CheckResult, type CheckStatus, type Finding, type SkipReason } from '../types.js';
-import { type ReportOutcome, type TroubleshooterReport } from './types.js';
+import { type ReportOutcome, type DiagnosticsReport } from './types.js';
 
 export type ReportSectionId =
     | 'summary'
@@ -83,7 +83,7 @@ export interface ReportText<TCode extends string> {
     readonly describeFinding: (finding: Finding<TCode>, result: CheckResult<TCode>) => FindingText;
     readonly label: (key: ReportLabelKey) => string;
     readonly omitted: (count: number) => string;
-    readonly retryAdvice: (coverage: TroubleshooterReport<TCode>['coverage']) => string | undefined;
+    readonly retryAdvice: (coverage: DiagnosticsReport<TCode>['coverage']) => string | undefined;
     readonly traceNote: (runId: string) => string;
 }
 

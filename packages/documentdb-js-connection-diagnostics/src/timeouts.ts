@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TroubleshooterConfigurationError } from './errors.js';
+import { DiagnosticsConfigurationError } from './errors.js';
 
-import { type TroubleshooterTimeouts } from './types.js';
+import { type DiagnosticsTimeouts } from './types.js';
 
 export type TimeoutKind = 'preparation' | 'srv' | 'probe' | 'authentication' | 'postConnect';
 export type TimeoutProfile = 'default' | 'longer' | 'noDiagnosticTimeouts';
@@ -16,7 +16,7 @@ export interface EffectiveTimeout {
     readonly source: TimeoutSource | null;
 }
 
-export const DEFAULT_TIMEOUTS: TroubleshooterTimeouts = {
+export const DEFAULT_TIMEOUTS: DiagnosticsTimeouts = {
     runTimeoutMs: 300_000,
     preparationTimeoutMs: 15_000,
     srvTimeoutMs: 10_000,
@@ -32,7 +32,7 @@ export const SAFETY_LIMITS = {
     maxWireReplyBytes: 1_048_576,
 } as const;
 
-export function timeoutsForProfile(profile: TimeoutProfile): TroubleshooterTimeouts {
+export function timeoutsForProfile(profile: TimeoutProfile): DiagnosticsTimeouts {
     switch (profile) {
         case 'default':
             return { ...DEFAULT_TIMEOUTS };
@@ -55,20 +55,20 @@ export function timeoutsForProfile(profile: TimeoutProfile): TroubleshooterTimeo
                 postConnectTimeoutMs: null,
             };
         default:
-            throw new TroubleshooterConfigurationError('Unknown timeout profile');
+            throw new DiagnosticsConfigurationError('Unknown timeout profile');
     }
 }
 
 export function resolveTimeouts(
     profile: TimeoutProfile,
-    overrides?: Partial<TroubleshooterTimeouts>,
-): TroubleshooterTimeouts {
+    overrides?: Partial<DiagnosticsTimeouts>,
+): DiagnosticsTimeouts {
     let resolved = timeoutsForProfile(profile);
-    for (const field of Object.keys(DEFAULT_TIMEOUTS) as (keyof TroubleshooterTimeouts)[]) {
+    for (const field of Object.keys(DEFAULT_TIMEOUTS) as (keyof DiagnosticsTimeouts)[]) {
         if (overrides && Object.hasOwn(overrides, field)) {
             const value = overrides[field];
             if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) {
-                throw new TroubleshooterConfigurationError(`Invalid timeout: ${field}`);
+                throw new DiagnosticsConfigurationError(`Invalid timeout: ${field}`);
             }
             resolved = { ...resolved, [field]: value };
         }

@@ -10,8 +10,8 @@ import {
     renderMarkdown,
     type CheckResult,
     type ReportSummary,
-    type TroubleshooterReport,
-    type TroubleshooterRun,
+    type DiagnosticsReport,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
@@ -93,7 +93,7 @@ function shareCancelled(myCtx: WithTelemetry<RouterContext>, input: z.infer<type
     return false;
 }
 
-function completedReport(ctx: RouterContext, runId: string): TroubleshooterReport<FindingCode> {
+function completedReport(ctx: RouterContext, runId: string): DiagnosticsReport<FindingCode> {
     const snapshot = ctx.session.completedRun;
     if (!snapshot || snapshot.runId !== runId) {
         throw new Error(vscode.l10n.t('This report is no longer available. Run the check again.'));
@@ -101,7 +101,7 @@ function completedReport(ctx: RouterContext, runId: string): TroubleshooterRepor
     return snapshot.report;
 }
 
-function markdown(report: TroubleshooterReport<FindingCode>, hideIdentifiers: boolean): string {
+function markdown(report: DiagnosticsReport<FindingCode>, hideIdentifiers: boolean): string {
     const snapshot = hideIdentifiers ? redactReport(report) : report;
     const text = createExtensionReportText();
     const reportMarkdown = renderMarkdown(snapshot, {
@@ -128,7 +128,7 @@ function refreshReport(session: TroubleshooterPanelSession): boolean {
     );
 }
 
-function executionLocation(run: TroubleshooterRun<FindingCode>): string {
+function executionLocation(run: DiagnosticsRun<FindingCode>): string {
     const recordedKind = run.results.find((result): boolean => result.checkId === 'extensionEnvironment')?.facts
         .remoteKind;
     // A whole-run timeout can skip the environment check; the same offline detector still knows the host.
@@ -177,7 +177,7 @@ function topologyName(topology: unknown): string | undefined {
     }
 }
 
-function reportSummary(run: TroubleshooterRun<FindingCode>, result: TroubleshooterResult): ReportSummary {
+function reportSummary(run: DiagnosticsRun<FindingCode>, result: TroubleshooterResult): ReportSummary {
     const auth = run.results.find((check): boolean => check.checkId === 'authenticate');
     const configuration = auth?.steps?.find((step): boolean => step.stepId === 'auth.signInConfiguration')?.facts ?? {};
     const server = run.results.find((check): boolean => check.checkId === 'serverFacts')?.facts ?? {};

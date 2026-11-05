@@ -8,7 +8,7 @@ import * as net from 'node:net';
 import * as tls from 'node:tls';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createConnectionStringCheck, createTcpCheck, createTlsCheck, runTroubleshooter } from '../index.js';
+import { createConnectionStringCheck, createTcpCheck, createTlsCheck, runDiagnostics } from '../index.js';
 import { nodeNet } from '../io/nodeNet.js';
 import { createCertificate } from '../test/certificates.js';
 
@@ -21,7 +21,7 @@ import {
     type NetworkOptions,
     type RunContext,
     type TimeoutProfile,
-    type TroubleshooterClock,
+    type DiagnosticsClock,
 } from '../index.js';
 
 const day = 86400000;
@@ -87,7 +87,7 @@ async function runTls(
         host?: string;
         readFile?: (path: string) => Promise<Uint8Array>;
         net?: NetIo;
-        clock?: TroubleshooterClock;
+        clock?: DiagnosticsClock;
         timeoutProfile?: TimeoutProfile;
     } = {},
 ): Promise<CheckResult<BuiltInFindingCode>> {
@@ -100,7 +100,7 @@ async function runTls(
             facts: { osAddresses: [{ address: '127.0.0.1', family: 4 }] },
         }),
     };
-    const run = await runTroubleshooter({
+    const run = await runDiagnostics({
         input: {
             connectionString: `mongodb://${options.host ?? 'db.test'}:${port}`,
             networkOptionLayers: [{ origin: 'setting', options: { tls: true, ...options.network } }],
@@ -214,7 +214,7 @@ describe('verification-first TLS probe', (): void => {
                 notAfter: new Date(to),
             });
             const { port } = await tlsServer(certificate);
-            const clock: TroubleshooterClock = {
+            const clock: DiagnosticsClock = {
                 now: (): number => now,
                 setTimeout: (callback, ms): unknown => setTimeout(callback, ms),
                 clearTimeout: (handle): void => {

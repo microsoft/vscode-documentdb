@@ -5,7 +5,7 @@
 
 import { timestampFields } from './timestamps.js';
 
-import { type IdentifierKind, type TroubleshooterReport } from './types.js';
+import { type IdentifierKind, type DiagnosticsReport } from './types.js';
 
 const prefixes: Readonly<Record<IdentifierKind, string>> = {
     host: 'host',
@@ -80,7 +80,7 @@ function isMarker(value: string): boolean {
     return value === '[depth limit]' || /^\[\d+ more omitted\]$/.test(value);
 }
 
-export function redactReport<TCode extends string>(report: TroubleshooterReport<TCode>): TroubleshooterReport<TCode> {
+export function redactReport<TCode extends string>(report: DiagnosticsReport<TCode>): DiagnosticsReport<TCode> {
     const replacements: Replacement[] = [];
     const counters = new Map<IdentifierKind, number>();
     const classifications = Object.entries(report.identifierKeys).sort(
@@ -261,5 +261,5 @@ export function redactReport<TCode extends string>(report: TroubleshooterReport<
         return value;
     }
 
-    return replace(report, []) as TroubleshooterReport<TCode>;
+    return replace(report, []) as DiagnosticsReport<TCode>;
 }

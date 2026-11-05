@@ -8,8 +8,8 @@ import {
     type CheckResult,
     type CheckStepResult,
     type TimeoutProfile,
-    type TroubleshooterEvent,
-    type TroubleshooterRun,
+    type DiagnosticsEvent,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import { ext } from '../extensionVariables';
 import { deriveResult } from './result';
@@ -26,8 +26,8 @@ const knownErrorNames: ReadonlySet<string> = new Set([
     'SyntaxError',
     'AbortError',
     'UserCancelledError',
-    'TroubleshooterCancelledError',
-    'TroubleshooterConfigurationError',
+    'DiagnosticsCancelledError',
+    'DiagnosticsConfigurationError',
     // Connection-source and preparation failures (review R2): names only, never messages.
     'RestError',
     'ApiException',
@@ -40,7 +40,7 @@ const knownErrorNames: ReadonlySet<string> = new Set([
     'LocalPortInUseError',
 ]);
 
-export function connectionOutcome(run: Pick<TroubleshooterRun<FindingCode>, 'results'>): ConnectionOutcome {
+export function connectionOutcome(run: Pick<DiagnosticsRun<FindingCode>, 'results'>): ConnectionOutcome {
     return deriveResult(run.results, (): { title: string; explanation: string } => ({ title: '', explanation: '' }))
         .outcome;
 }
@@ -63,7 +63,7 @@ export class TroubleshooterOutputTrace {
         this.write(`started entry=${entryPoint} trigger=${runTrigger} profile=${timeoutProfile}`);
     }
 
-    public onEvent(event: TroubleshooterEvent<FindingCode>): void {
+    public onEvent(event: DiagnosticsEvent<FindingCode>): void {
         if (this.ended) {
             return;
         }

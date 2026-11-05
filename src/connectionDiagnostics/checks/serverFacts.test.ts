@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { runTroubleshooter, type CheckOutcome, type TimeoutProfile } from '@documentdb-js/connection-diagnostics';
+import { runDiagnostics, type CheckOutcome, type TimeoutProfile } from '@documentdb-js/connection-diagnostics';
 import { MongoServerError, type MongoClient } from 'mongodb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
@@ -94,7 +94,7 @@ function fixture(options: FixtureOptions = {}): {
             },
         } as unknown as MongoClient,
     };
-    const running = runTroubleshooter<FindingCode>({
+    const running = runDiagnostics<FindingCode>({
         input,
         timeoutProfile: options.profile,
         checks: [

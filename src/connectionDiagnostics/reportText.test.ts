@@ -11,7 +11,7 @@ import {
     type CheckResult,
     type ReportLabelKey,
     type ReportSectionId,
-    type TroubleshooterRun,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import * as os from 'os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -51,8 +51,8 @@ const checkLabels: Readonly<Record<string, string>> = {
 };
 
 function fixtureRun(
-    coverage: Partial<TroubleshooterRun<FindingCode>['coverage']> = {},
-): TroubleshooterRun<FindingCode> {
+    coverage: Partial<DiagnosticsRun<FindingCode>['coverage']> = {},
+): DiagnosticsRun<FindingCode> {
     return {
         runId: 'fixture-run',
         startedAt: Date.UTC(2026, 9, 29, 12),
@@ -91,7 +91,7 @@ function fixtureRun(
     };
 }
 
-function fixtureMarkdown(run: TroubleshooterRun<FindingCode> = fixtureRun()): string {
+function fixtureMarkdown(run: DiagnosticsRun<FindingCode> = fixtureRun()): string {
     return renderMarkdown(
         buildReport(run, {
             summary: { outcome: 'failed', headline: { checkId: 'tcp', code: 'check.timeout' } },
@@ -275,7 +275,7 @@ describe('localized connectivity report text', () => {
         }).coverage;
         expect(createExtensionReportText().retryAdvice(coverage)).toBeUndefined();
         const run = fixtureRun(coverage);
-        const completedRun: TroubleshooterRun<FindingCode> = {
+        const completedRun: DiagnosticsRun<FindingCode> = {
             ...run,
             results: run.results.map(
                 (result): CheckResult<FindingCode> => ({ ...result, status: 'pass', findings: [] }),

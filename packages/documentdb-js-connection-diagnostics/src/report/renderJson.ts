@@ -5,10 +5,10 @@
 
 import { redactReport } from './redact.js';
 
-import { type TroubleshooterReport } from './types.js';
+import { type DiagnosticsReport } from './types.js';
 
 export function renderJson<TCode extends string>(
-    report: TroubleshooterReport<TCode>,
+    report: DiagnosticsReport<TCode>,
     options: { redact: boolean; generatedBy?: Readonly<Record<string, string>> },
 ): string {
     const output = { ...(options.redact ? redactReport(report) : report) };

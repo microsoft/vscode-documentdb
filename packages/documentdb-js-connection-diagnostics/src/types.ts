@@ -61,7 +61,7 @@ export interface Check<TContext, TCode extends string> {
     run(context: TContext, signal: AbortSignal): Promise<CheckOutcome<TCode>>;
 }
 
-export interface TroubleshooterTimeouts {
+export interface DiagnosticsTimeouts {
     readonly runTimeoutMs: number | null;
     readonly preparationTimeoutMs: number | null;
     readonly srvTimeoutMs: number | null;
@@ -76,7 +76,7 @@ export interface ProbeTarget {
     readonly source: 'uri' | 'srv';
 }
 
-export interface TroubleshooterClock {
+export interface DiagnosticsClock {
     now(): number;
     setTimeout(callback: () => void, ms: number): unknown;
     clearTimeout(handle: unknown): void;
@@ -132,15 +132,15 @@ export interface NetIo {
     connectTls(options: tls.ConnectionOptions & { signal: AbortSignal }): Promise<tls.TLSSocket>;
 }
 
-export interface TroubleshooterIo {
-    readonly clock: TroubleshooterClock;
+export interface DiagnosticsIo {
+    readonly clock: DiagnosticsClock;
     readonly environment?: EnvironmentSource;
     readonly dns?: DnsIo;
     readonly net?: NetIo;
     readonly readFile?: (path: string) => Promise<Uint8Array>;
 }
 
-export interface TroubleshooterInput {
+export interface DiagnosticsInput {
     readonly connectionString: string;
     readonly networkOptionLayers?: readonly NetworkOptionLayer[];
     readonly srvFallbackMode?: SrvFallbackMode;
@@ -150,8 +150,8 @@ export interface TroubleshooterInput {
 
 export interface RunContext {
     readonly runId: string;
-    readonly input: TroubleshooterInput;
-    readonly io: TroubleshooterIo;
+    readonly input: DiagnosticsInput;
+    readonly io: DiagnosticsIo;
     readonly target?: ProbeTarget;
     readonly targets: readonly ProbeTarget[];
     setTargets(targets: readonly ProbeTarget[]): void;
@@ -160,7 +160,7 @@ export interface RunContext {
     addCleanup(cleanup: () => void | Promise<void>): void;
 }
 
-export type TroubleshooterEvent<TCode extends string> =
+export type DiagnosticsEvent<TCode extends string> =
     | {
           readonly type: 'hostPhaseStarted';
           readonly runId: string;
@@ -184,7 +184,7 @@ export type TroubleshooterEvent<TCode extends string> =
     | {
           readonly type: 'runFinished';
           readonly runId: string;
-          readonly run: TroubleshooterRun<TCode>;
+          readonly run: DiagnosticsRun<TCode>;
           readonly at: number;
       };
 
@@ -195,13 +195,13 @@ export interface TimedOutOperation {
     readonly source: TimeoutSource;
 }
 
-export interface TroubleshooterRun<TCode extends string> {
+export interface DiagnosticsRun<TCode extends string> {
     readonly runId: string;
     readonly startedAt: number;
     readonly finishedAt: number;
     readonly durationMs: number;
     readonly timeoutProfile: TimeoutProfile;
-    readonly timeouts: TroubleshooterTimeouts;
+    readonly timeouts: DiagnosticsTimeouts;
     readonly targets: readonly ProbeTarget[];
     readonly results: readonly CheckResult<TCode>[];
     readonly coverage: {

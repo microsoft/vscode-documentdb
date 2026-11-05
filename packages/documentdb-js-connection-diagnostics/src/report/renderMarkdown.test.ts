@@ -13,7 +13,7 @@ import {
     type FindingText,
     type ReportSectionId,
     type ReportText,
-    type TroubleshooterReport,
+    type DiagnosticsReport,
 } from '../index.js';
 
 function finding(code = 'consumer.observed', detail = 'English detail'): Finding<string> {
@@ -26,8 +26,8 @@ function result(checkId: string, overrides: Partial<CheckResult<string>> = {}): 
 
 function fixture(
     results: readonly CheckResult<string>[] = [],
-    overrides: Partial<TroubleshooterReport<string>> = {},
-): TroubleshooterReport<string> {
+    overrides: Partial<DiagnosticsReport<string>> = {},
+): DiagnosticsReport<string> {
     return {
         ...buildReport({
             runId: 'markdown-run',
@@ -83,7 +83,7 @@ const options = {
     sectionOf: (checkId: string): ReportSectionId | undefined => customSections[checkId],
 };
 
-function fullFixture(): TroubleshooterReport<string> {
+function fullFixture(): DiagnosticsReport<string> {
     return fixture(
         [
             result('extra', { findings: [finding('consumer.extra')] }),
@@ -282,7 +282,7 @@ describe('renderMarkdown', (): void => {
         expect(report.results[0]?.facts.localTime).toBe(iso);
         const json = renderJson(report, { redact });
         expect(json).not.toContain('Localized');
-        const snapshot = JSON.parse(json) as TroubleshooterReport<string>;
+        const snapshot = JSON.parse(json) as DiagnosticsReport<string>;
         expect(snapshot.startedAt).toBe(iso);
         expect(snapshot.finishedAt).toBe(iso);
         expect(snapshot.results[0]?.facts.localTime).toBe(iso);

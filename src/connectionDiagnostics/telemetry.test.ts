@@ -7,7 +7,7 @@ import {
     timeoutsForProfile,
     type CheckResult,
     type Finding,
-    type TroubleshooterRun,
+    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { describe, expect, it } from 'vitest';
@@ -112,7 +112,7 @@ describe('completed connection telemetry', (): void => {
 
     function telemetry(results: readonly CheckResult<FindingCode>[]): IActionContext['telemetry'] {
         const ctx = context();
-        const run: TroubleshooterRun<FindingCode> = {
+        const run: DiagnosticsRun<FindingCode> = {
             runId: 'run',
             startedAt: 0,
             finishedAt: 1,

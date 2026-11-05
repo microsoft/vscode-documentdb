@@ -8,7 +8,7 @@ import { Duplex } from 'node:stream';
 import * as tls from 'node:tls';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createBuiltInChecks, createHelloCheck, runTroubleshooter, SAFETY_LIMITS } from '../index.js';
+import { createBuiltInChecks, createHelloCheck, runDiagnostics, SAFETY_LIMITS } from '../index.js';
 import { nodeNet } from '../io/nodeNet.js';
 import { createCertificate } from '../test/certificates.js';
 import { replyFrame, wireResponder, writeReply } from '../test/wireResponder.js';
@@ -20,15 +20,15 @@ import {
     type NetIo,
     type NetworkOptions,
     type RunContext,
-    type TroubleshooterClock,
-    type TroubleshooterInput,
+    type DiagnosticsClock,
+    type DiagnosticsInput,
 } from '../index.js';
 import { type WireRequest } from '../test/wireResponder.js';
 
 type Respond = (request: WireRequest, socket: Duplex) => void;
 const sockets: Duplex[] = [];
 const servers: net.Server[] = [];
-const clock: TroubleshooterClock = {
+const clock: DiagnosticsClock = {
     now: (): number => Date.now(),
     setTimeout: (callback, ms): unknown => setTimeout(callback, ms),
     clearTimeout: (handle): void => {
@@ -38,10 +38,10 @@ const clock: TroubleshooterClock = {
 
 interface ProbeOptions {
     readonly port?: number;
-    readonly input?: TroubleshooterInput;
+    readonly input?: DiagnosticsInput;
     readonly network?: NetworkOptions;
     readonly net?: NetIo;
-    readonly clock?: TroubleshooterClock;
+    readonly clock?: DiagnosticsClock;
     readonly timeout?: number | null;
     readonly readFile?: (path: string) => Promise<Uint8Array>;
 }
@@ -675,7 +675,7 @@ describe('handshake facts and evidence', (): void => {
         'computes an offset of %s ms with half-round-trip uncertainty',
         async (offsetMs, reports): Promise<void> => {
             let now = 1000000;
-            const measuredClock: TroubleshooterClock = { ...clock, now: (): number => now };
+            const measuredClock: DiagnosticsClock = { ...clock, now: (): number => now };
             const { io } = fakeResponder((request, socket): void => {
                 now += 100;
                 socket.write(replyFrame(request.requestId, { ok: 1, localTime: new Date(1000000 + 50 + offsetMs) }));
@@ -859,7 +859,7 @@ describe('built-in check pipeline', (): void => {
         const { io, requests } = fakeResponder(respondWith({ ok: 1, isWritablePrimary: true }));
         const checks = createBuiltInChecks();
         expect(checks[6]).toMatchObject({ id: 'hello', scope: 'host', dependsOn: ['tcp', 'tls'], timeout: 'probe' });
-        const run = await runTroubleshooter({
+        const run = await runDiagnostics({
             input: { connectionString: 'mongodb://db.test:27017' },
             checks,
             io: { dns, net: io },

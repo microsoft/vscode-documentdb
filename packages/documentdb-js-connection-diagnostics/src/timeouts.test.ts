@@ -10,13 +10,13 @@ import {
     resolveTimeouts,
     SAFETY_LIMITS,
     timeoutsForProfile,
-    TroubleshooterConfigurationError,
+    DiagnosticsConfigurationError,
 } from './index.js';
 
-import { type TimeoutProfile, type TroubleshooterTimeouts } from './index.js';
+import { type TimeoutProfile, type DiagnosticsTimeouts } from './index.js';
 
 const profiles: readonly TimeoutProfile[] = ['default', 'longer', 'noDiagnosticTimeouts'];
-const fields = Object.keys(DEFAULT_TIMEOUTS) as (keyof TroubleshooterTimeouts)[];
+const fields = Object.keys(DEFAULT_TIMEOUTS) as (keyof DiagnosticsTimeouts)[];
 
 describe('timeout profiles', (): void => {
     it('uses the specified defaults', (): void => {
@@ -69,11 +69,11 @@ describe('timeout profiles', (): void => {
 
     it.each(fields)('rejects invalid overrides naming %s', (field): void => {
         for (const value of [0, -1, NaN, Infinity, '100', undefined, false]) {
-            const overrides = { [field]: value } as Partial<TroubleshooterTimeouts>;
-            expect((): TroubleshooterTimeouts => resolveTimeouts('default', overrides)).toThrow(
-                TroubleshooterConfigurationError,
+            const overrides = { [field]: value } as Partial<DiagnosticsTimeouts>;
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(
+                DiagnosticsConfigurationError,
             );
-            expect((): TroubleshooterTimeouts => resolveTimeouts('default', overrides)).toThrow(field);
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(field);
         }
         expect(resolveTimeouts('default', { [field]: null })[field]).toBeNull();
         expect(resolveTimeouts('default', { [field]: 0.5 })[field]).toBe(0.5);

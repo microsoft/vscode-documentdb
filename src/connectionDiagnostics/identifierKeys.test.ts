@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { buildReport, renderJson, type TroubleshooterRun } from '@documentdb-js/connection-diagnostics';
+import { buildReport, renderJson, type DiagnosticsRun } from '@documentdb-js/connection-diagnostics';
 import { describe, expect, it } from 'vitest';
 import { troubleshooterIdentifierKeys } from './identifierKeys';
 
-function runWith(facts: readonly Readonly<Record<string, unknown>>[]): TroubleshooterRun<string> {
+function runWith(facts: readonly Readonly<Record<string, unknown>>[]): DiagnosticsRun<string> {
     return {
         runId: 'run-1',
         startedAt: 0,
