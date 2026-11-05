@@ -6,8 +6,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Disposable } from '../events';
 import { type TaskLogger } from '../taskHost';
-import { Task, TaskService, TaskState } from '../taskService';
+import { createTaskService, Task, TaskState } from '../taskService';
 import { attachTaskLifecycleLogger } from './taskLifecycleLogObserver';
+
+const TaskService = createTaskService();
 
 class HostTestTask extends Task {
     public readonly type = 'host-test';

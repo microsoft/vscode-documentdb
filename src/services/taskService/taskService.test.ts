@@ -6,7 +6,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type TaskLogger, type TaskOptions, type TaskTelemetryContext, type TaskTelemetryRunner } from './taskHost';
-import { Task, TaskService, TaskState, type TaskStatus } from './taskService';
+import { createTaskService, Task, TaskState, type TaskStatus } from './taskService';
+
+const TaskService = createTaskService();
 
 // Mock extensionVariables (ext) module
 vi.mock('../../extensionVariables', () => ({
@@ -161,7 +163,7 @@ describe('TaskService', () => {
     let taskService: typeof TaskService;
 
     beforeEach(() => {
-        // Clear the singleton state between tests
+        // Clear the service state between tests
         taskService = TaskService;
         // Clear any existing tasks
         taskService.listTasks().forEach((task) => {
@@ -176,6 +178,18 @@ describe('TaskService', () => {
 
         expect(taskService.getTask(task.id)).toBe(task);
         expect(taskService.listTasks()).toContain(task);
+    });
+
+    it('should not share registered tasks between service instances', () => {
+        const firstService = createTaskService();
+        const secondService = createTaskService();
+        const task = new TestTask('Isolated Task');
+
+        firstService.registerTask(task);
+
+        expect(firstService.getTask(task.id)).toBe(task);
+        expect(secondService.getTask(task.id)).toBeUndefined();
+        expect(secondService.listTasks()).toEqual([]);
     });
 
     it('should track task progress and state transitions in correct order', async () => {

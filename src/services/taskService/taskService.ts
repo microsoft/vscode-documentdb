@@ -723,6 +723,8 @@ class TaskServiceImpl implements TaskService {
 }
 
 /**
- * Singleton instance of the TaskService for managing long-running tasks.
+ * Creates a TaskService instance for managing long-running tasks.
  */
-export const TaskService = new TaskServiceImpl();
+export function createTaskService(options?: { strings?: Partial<TaskStrings> }): TaskService {
+    return new TaskServiceImpl(options);
+}

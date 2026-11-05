@@ -51,7 +51,7 @@ The primary use case is the **Copy-and-Paste Collection** feature, which streams
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                               TaskService                                 │
 │  ─────────────────────────────────────────────────────────────────────    │
-│  • Singleton registry (`TaskServiceImpl` implementation)                  │
+│  • Instance registry (`TaskServiceImpl` implementation)                   │
 │  • Task registration, lookup, and lifecycle events                        │
 │  • Resource conflict queries for destructive operations                   │
 └─────────────────────────────────┬─────────────────────────────────────────┘
@@ -137,11 +137,11 @@ The `Task` class implements the template method pattern for consistent lifecycle
 | `updateProgress()` | Report progress (0-100) with message      | During `doWork()`      |
 | `updateStatus()`   | Update state machine (internal use)       | Managed by base class  |
 
-### TaskService (Singleton)
+### TaskService (Registry)
 
 **Location:** `taskService.ts`
 
-The `TaskService` interface is implemented by `TaskServiceImpl` and exported as the singleton `TaskService`.
+The `TaskService` interface is implemented by the private `TaskServiceImpl` class. `createTaskService()` creates an independent registry. The extension exports its shared registry and progress reporter from `extension/taskServiceInstance.ts`; `ClustersExtension` attaches the reporter once.
 
 **Key Responsibilities:**
 
@@ -275,7 +275,7 @@ class CopyPasteCollectionTask implements ResourceTrackingTask {
 }
 
 // Destructive commands query active task resources before proceeding.
-const canProceed = await checkCanProceedAndInformUser(resource, 'delete collection');
+const canProceed = await checkCanProceedAndInformUser(TaskService, resource, 'delete collection');
 ```
 
 ### Conflict Rules
@@ -519,7 +519,7 @@ The writer uses a single buffer (not two-level buffering) because:
 ```
 src/services/taskService/
 ├── README.md                           # This documentation
-├── taskService.ts                      # Task base class + TaskService singleton registry
+├── taskService.ts                      # Task base class + TaskService registry factory
 ├── taskService.test.ts                 # Task lifecycle tests
 ├── taskServiceResourceTracking.ts      # Resource conflict detection
 ├── taskServiceResourceTracking.test.ts

@@ -112,10 +112,10 @@ import { QuickStartDiagnosticsProvider } from '../services/localQuickStart/Quick
 import { QuickStartService, sweepStaleQuickStartEnvFiles } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { recordSurveyActivity } from '../services/survey/SurveyService';
+import { TaskProgressReportingService, TaskService } from '../services/taskService/extension/taskServiceInstance';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
-import { TaskService, TaskState } from '../services/taskService/taskService';
+import { TaskState } from '../services/taskService/taskService';
 import { attachTaskLifecycleLogger } from '../services/taskService/UI/taskLifecycleLogObserver';
-import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
 import { maybeShowWelcomeScreen } from '../services/welcomeScreen';
 import {
     CompletionCommandIds,

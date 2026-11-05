@@ -342,6 +342,8 @@ class TaskProgressReportingServiceImpl implements TaskProgressReportingService {
 }
 
 /**
- * Singleton instance of the TaskProgressReportingService for managing task progress notifications.
+ * Creates a TaskProgressReportingService instance for managing task progress notifications.
  */
-export const TaskProgressReportingService = new TaskProgressReportingServiceImpl();
+export function createTaskProgressReportingService(): TaskProgressReportingService {
+    return new TaskProgressReportingServiceImpl();
+}

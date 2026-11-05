@@ -11,9 +11,10 @@ import { DocumentDbDocumentReader } from '../../services/taskService/data-api/re
 import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
 import { getExtensionCopyCollectionStrings } from '../../services/taskService/extension/extensionCopyCollectionStrings';
 import { createExtensionTaskOptions } from '../../services/taskService/extension/extensionTaskOptions';
+import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
-import { isTerminalState, TaskService, TaskState, type Task } from '../../services/taskService/taskService';
+import { isTerminalState, TaskState, type Task } from '../../services/taskService/taskService';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { createIndexCopier } from './createIndexCopier';
