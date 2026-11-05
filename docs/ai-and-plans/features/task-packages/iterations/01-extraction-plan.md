@@ -119,10 +119,29 @@ extension and may keep using `vscode.l10n.t` and `ext.outputChannel` directly.
   task types inside the base class.
 - Lifecycle output lines (✓ ■ ! ○ ►): move into an observer that the extension attaches.
 
+> **Done (2026-11-05), commit `01da044a`:** `ClustersExtension` records survey activity from
+> `TaskService.onDidChangeTaskState` for the two copy task types (both are always registered before
+> they start). `UI/taskLifecycleLogObserver.ts` writes the same lines for registered tasks, and
+> its subscription is disposed with the extension context. The ○ line is now written just after
+> the Initializing transition instead of just before it; nothing runs in between. `taskService.ts`
+> imports only its own modules. Tests: observer tests replace the 1.1a lifecycle tests, plus one
+> test that `Task` itself writes no lifecycle lines. No unit test for the survey wiring, because
+> activation has no unit coverage. The orchestrator reverted a progress paragraph the subagent
+> added to `design.md`. Model: sol.
+
 ### 1.3 Make the registry an instance
 
 Export the registry class or a `createTaskService()` factory; the extension creates and exports its
 singleton instance. Same for the progress reporting service.
+
+> **Done (2026-11-05), commit `236b4b66`:** `createTaskService()` and
+> `createTaskProgressReportingService()` replace the module singletons. The extension creates
+> both instances in `src/services/taskService/extension/taskServiceInstance.ts`, with localized
+> registry strings, and call sites only changed their import path.
+> `checkCanProceedAndInformUser` takes the registry as its first parameter, because it is
+> presentation code that will move and cannot import the extension's instance. Test changes are
+> limited to `vi.mock` paths and per-file `createTaskService()` instances, plus one isolation
+> test. Model: sol.
 
 ### 1.4 Remove DocumentDB calls from `CopyPasteCollectionTask`
 
@@ -130,15 +149,42 @@ Inject `validateSource` and `collectMetadata` hooks. The task throws `SourceVali
 command that started the paste clears `ext.copiedCollectionNode` and the context key. This closes
 the open gap in [copy-paste-collections](../../copy-paste-collections/README.md#open-gaps).
 
+> **Done (2026-11-05), commit `264cb88b`:** both hooks are options of the copy task;
+> `SourceValidationError` is exported. `src/commands/pasteCollection/copyPasteCollectionHooks.ts`
+> holds the moved code unchanged in behaviour, and `ExecuteStep` supplies the hooks. The task
+> rethrows `SourceValidationError` unchanged, wraps other errors as before, and ignores
+> `collectMetadata` failures. The open gap in copy-paste-collections is removed.
+>
+> Decision made by the orchestrator (85%): **the paste command's `validateSource` hook clears the
+> clipboard before throwing**, instead of a subscriber to the Failed state. The extension's
+> telemetry runner (`callWithTelemetryAndErrorHandling`) swallows initialization errors, so a
+> Failed state is not guaranteed. Clearing inside the hook keeps today's timing exactly. The
+> "Validating source collection..." status now appears just before the credential check instead
+> of just after it; both are instant. Tests: hook handling in `CopyPasteCollectionTask.test.ts`
+> and `copyPasteCollectionHooks.test.ts`. Model: sol.
+
 ### 1.5 Reader takes a client
 
 `DocumentDbDocumentReader` receives a client instance, as the writer already does, instead of
 calling `ClustersClient.getClient(clusterId)`.
 
+> **Deferred (2026-11-05), escalated to the operator.** As written, `ExecuteStep` would call
+> `ClustersClient.getClient(source)` eagerly. If the source was disconnected after Copy, the paste
+> would then fail inside the wizard with the raw client error, before the task's friendly
+> `SourceValidationError` and the clipboard clearing (decision 0008). The behaviour-neutral option
+> is a lazy client provider (`() => Promise<ClustersClient>`), which deviates from the wording
+> "receives a client instance". The reader stays in the extension either way.
+
 ### 1.6 Publish the writer's subclass contract
 
 Move `StrategyBatchResult`, `ErrorType`, `PartialProgress`, `PreFilterResult` and the type guards
 out of `writerTypes.internal.ts` into the public types.
+
+> **Done (2026-11-05), commit `6a871bd0`:** the strategy batch results, the type guards,
+> `PreFilterResult`, `PartialProgress` and `ErrorType` moved to `data-api/types.ts` unchanged
+> (`BaseBatchResult` stays unexported). Only the batch mode configuration stayed in
+> `writerTypes.internal.ts` (2.1 later replaced its constants). Test changes are import lines
+> only. Model: terra.
 
 ---
 
@@ -149,6 +195,15 @@ out of `writerTypes.internal.ts` into the public types.
 Add `StreamingWriterSettings` with defaults equal to today's constants, layered package < adapter <
 caller (decision 0010). Extract `computeRetryDelay` as a pure function. Include the
 `estimateDocumentSize` hook.
+
+> **Done (2026-11-05), commit `6101f6cb`:** `StreamingWriterSettings`, `ModeConfig` and
+> `StreamingWriterOptions` (`adapterDefaults`, `settings`) are public in `data-api/types.ts`.
+> `writers/streamingWriterSettings.ts` holds the defaults (today's constants), the pure
+> `resolveStreamingWriterSettings` (field-by-field merge) and `computeRetryDelay` (injectable
+> randomness). `BatchSizeAdapter` takes the resolved batching config, including
+> `startMode: 'ru-limited'`. `DocumentDbStreamingWriter` accepts optional caller settings and has
+> no adapter defaults. Tests: `streamingWriterSettings.test.ts` and
+> `StreamingDocumentWriter.settings.test.ts`; the existing writer suite is unchanged. Model: sol.
 
 ### 2.2 Outcome shape for both reporting routes
 
