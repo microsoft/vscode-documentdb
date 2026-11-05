@@ -10,15 +10,15 @@ created: 2026-08-24
 
 > The decisions that shaped the deep-link vocabulary, and what was rejected on the way.
 
-| #    | Decision                                            | Status              | Changed from the proposal?                    | Date       | PR   |
-| ---- | --------------------------------------------------- | ------------------- | --------------------------------------------- | ---------- | ---- |
-| 0001 | The action goes in the path, not the query          | Accepted            | Accepted as proposed                          | 2026-08-24 | #898 |
-| 0002 | An empty path means `connect`, forever              | Accepted            | Accepted as proposed                          | 2026-08-24 | #898 |
-| 0003 | The action list is hand-written, never the registry | Accepted            | Raised from an implementation note to a rule  | 2026-08-24 | #898 |
-| 0004 | `local` names the product, not the internal command | Accepted            | Retained during maintainer review             | 2026-08-24 | #898 |
-| 0005 | `local` opens the wizard without a confirmation     | Superseded by D0007 | Reversed after maintainer review              | 2026-08-24 | #898 |
-| 0006 | Local links model the resource type                 | Accepted            | Added during maintainer review                | 2026-09-01 | #898 |
-| 0007 | Local links show one lightweight confirmation       | Accepted            | Reversed 0005 during maintainer review        | 2026-09-01 | #898 |
+| #    | Decision                                            | Status              | Changed from the proposal?                    | Date       | PR    |
+| ---- | --------------------------------------------------- | ------------------- | --------------------------------------------- | ---------- | ----- |
+| 0001 | The action goes in the path, not the query          | Accepted            | Accepted as proposed                          | 2026-08-24 | #898  |
+| 0002 | An empty path means `connect`, forever              | Accepted            | Accepted as proposed                          | 2026-08-24 | #898  |
+| 0003 | The action list is hand-written, never the registry | Accepted            | Raised from an implementation note to a rule  | 2026-08-24 | #898  |
+| 0004 | `local` names the product, not the internal command | Accepted            | Retained during maintainer review             | 2026-08-24 | #898  |
+| 0005 | `local` opens the wizard without a confirmation     | Superseded by D0007 | Reversed after maintainer review              | 2026-08-24 | #898  |
+| 0006 | Local links model the resource type                 | Accepted            | Added during maintainer review                | 2026-09-01 | #898  |
+| 0007 | Local links show one lightweight confirmation       | Accepted            | Reversed 0005 during maintainer review        | 2026-09-01 | #898  |
 | 0008 | Azure resource links use `/connect/azure`           | Accepted            | Renamed from `/discovery/azure` by maintainer | 2026-11-05 | #1067 |
 | 0009 | Azure links resolve through our Discovery tree      | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
 | 0010 | The resource ID selects vCore or RU; we handle both | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
