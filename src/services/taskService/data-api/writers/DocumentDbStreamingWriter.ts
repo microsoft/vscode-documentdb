@@ -25,6 +25,13 @@ import {
 } from '../types';
 import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 
+export const documentDbSupportedConflictStrategies: readonly ConflictResolutionStrategy[] = [
+    ConflictResolutionStrategy.Abort,
+    ConflictResolutionStrategy.Skip,
+    ConflictResolutionStrategy.Overwrite,
+    ConflictResolutionStrategy.GenerateNewIds,
+];
+
 /**
  * Raw document counts extracted from MongoDB driver responses.
  * Uses MongoDB-specific field names (internal use only).
@@ -61,6 +68,8 @@ interface RawDocumentCounts {
  * );
  */
 export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
+    public override readonly supportedConflictStrategies = documentDbSupportedConflictStrategies;
+
     constructor(
         private readonly client: ClustersClient,
         databaseName: string,

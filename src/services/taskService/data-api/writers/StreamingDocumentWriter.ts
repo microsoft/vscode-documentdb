@@ -265,6 +265,17 @@ export class StreamingWriterError extends Error {
  * @template TDocumentId Type of document identifiers used by the database implementation
  */
 export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
+    /**
+     * Conflict strategies supported by this writer. Subclasses that cannot implement every
+     * strategy override this property; consumers use it to offer only supported strategies.
+     */
+    public readonly supportedConflictStrategies: readonly ConflictResolutionStrategy[] = [
+        ConflictResolutionStrategy.Abort,
+        ConflictResolutionStrategy.Skip,
+        ConflictResolutionStrategy.Overwrite,
+        ConflictResolutionStrategy.GenerateNewIds,
+    ];
+
     /** Batch size adapter for adaptive batching */
     protected readonly batchSizeAdapter: BatchSizeAdapter;
 
@@ -376,7 +387,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * Writes a batch of documents using the specified conflict resolution strategy.
      *
      * This is the primary abstract method that subclasses must implement. It handles
-     * all four conflict resolution strategies internally and returns strategy-specific
+     * the supported conflict resolution strategies internally and returns strategy-specific
      * results using semantic names.
      *
      * EXPECTED RETURN TYPES BY STRATEGY:
