@@ -579,6 +579,17 @@ reliable.
   Rejected because it leaves the node collapsed after a failure or cancel, and because it rested on
   the assumption that `reveal` does not wait for the expansion, which is wrong.
 
+### Amendment (2026-11-05)
+
+Testing with an RU account showed `Connecting…` in the progress notification while the cluster was
+not yet visible. VS Code's single `reveal(…, { expand: true })` first resolves and expands the
+parent nodes, which re-lists subscriptions and accounts, and only then shows and expands the
+cluster. The helper now reveals the cluster without expanding it first, then reports
+`Connecting…`, then reveals it with `expand: true`. The cluster is still always expanded, and the
+expansion is still the only connect. Made by the orchestrator while the maintainer was unavailable;
+the remaining double listing (the helper walks the data provider, VS Code walks its own cache) is
+left until trace timestamps show it matters.
+
 ---
 
 ## 0016 — The Azure confirmation comes before the lookup
