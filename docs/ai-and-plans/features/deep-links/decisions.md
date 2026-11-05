@@ -28,6 +28,7 @@ created: 2026-08-24
 | 0014 | `open=` applies to `/connect` as well               | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
 | 0015 | An Azure link always expands the cluster node       | Accepted            | Orchestrator's collapsed variant reversed     | 2026-11-05 | #1067 |
 | 0016 | The Azure confirmation comes before the lookup      | Accepted            | Requested by maintainer after testing         | 2026-11-05 | #1067 |
+| 0017 | A `/connect` link asks once per target              | Accepted            | Requested by maintainer                       | 2026-11-05 | #1067 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -624,3 +625,38 @@ can be two.
   consent to a change to a shared setting without seeing which subscription or tenant it affects.
 - **Keep the single late dialog and show progress while looking up.** The user still waits for the
   slow steps before deciding whether they wanted the link at all.
+
+---
+
+## 0017 — A `/connect` link asks once per target
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer, after comparing the modal counts
+
+### Question
+
+A new `/connect` link with a collection asked three modal questions about the same target: add the
+connection, open it, and open the Collection View. A saved connection asked two. Each one showed
+details the previous one had already shown. How many questions should a link ask?
+
+### Decision
+
+One per target:
+
+- **New connection:** one modal, `Add and open connection?`, always shown (even with URL handling
+  confirmations off), naming the target and what will open (`Opens: Collection View`, `Cluster
+Dashboard` or `Shell`). The TLS question stays separate and always shown when a localhost link
+  requests it.
+- **Saved connection:** one modal, `Open connection?`, with the same details, skipped when URL
+  handling confirmations are off.
+- No separate question before the Collection View, dashboard or shell.
+
+### Reasoning
+
+The later questions added no information and no new risk: the target and the surface are known when
+the first question is asked, and opening a view is not a separate trust decision. The two questions
+that do protect the user stay: adding a connection from a link (it stores a secret) and relaxing
+certificate validation.
+
+### Rejected alternatives
+
+- **Keep the three questions.** Every one after the first repeated what the user had just accepted.

@@ -282,8 +282,9 @@ When you click a URL for the extension, the following process occurs:
 3. **Connection Handling** (for `connect`):
    - The extension parses the `connectionString` parameter and creates a new connection in the Connections View.
    - If a connection with the same host and username already exists, the existing connection will be selected instead of creating a duplicate.
-   - Before a new connection is added, the extension shows its target (user, hosts, database, and collection) and asks you to confirm. This confirmation is always shown, even when URL handling confirmations are disabled in the extension settings; that setting only skips the follow-up prompts and links to connections you have already saved.
-   - If `open` is provided and URL handling confirmations are enabled, the “open connection” confirmation names what will open.
+   - For a new connection, one confirmation shows its target (user, hosts, database, and collection) and what will open, and asks you to add and open it. This confirmation is always shown, even when URL handling confirmations are disabled in the extension settings, because the link adds a connection.
+   - For a connection you have already saved, one confirmation shows the same details before opening it. Disabling URL handling confirmations skips it.
+   - There is no separate question before the Collection View, Cluster Dashboard, or shell opens: the confirmation already names it.
    - TLS options that turn off certificate validation (such as `tlsAllowInvalidCertificates`) are removed from the connection string. A link can ask to turn off certificate validation only for a target on your own machine (`localhost`, `127.0.0.1`, or `::1`), and the extension always asks you first. For any other target, certificate validation stays on; you can change it later in the connection settings.
 
 4. **Azure resources** (for `connect/azure`):
