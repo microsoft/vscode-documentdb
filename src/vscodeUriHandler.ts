@@ -459,19 +459,25 @@ async function handleConnectionStringRequest(
         .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true);
 
     let storageId: string;
+    let surface: string | undefined;
+    if (selectedDatabase && params.collection) {
+        surface = l10n.t('Collection View');
+    } else if (params.open) {
+        surface = params.open === 'dashboard' ? l10n.t('Cluster Dashboard') : l10n.t('Shell');
+    }
 
     ext.outputChannel.trace(`[DeepLink] ${existingDuplicateConnection ? 'Existing saved connection found' : 'New connection'}`);
     if (existingDuplicateConnection) {
         // the connection already exists, let's just reveal it later in the Connections View
         storageId = existingDuplicateConnection.id;
     } else {
-        // First confirmation: a link from outside VS Code must never add a connection without the
-        // user seeing its target, so this prompt is shown even when URL handling confirmations are
-        // disabled. The setting only skips the follow-up prompts and links to saved connections.
+        // A link from outside VS Code must never add a connection without the user seeing its
+        // target, even when URL handling confirmations are disabled.
         const detail = [
-            l10n.t('A link wants to open a DocumentDB connection in VS Code.'),
+            l10n.t('A link wants to add this DocumentDB connection and open it in VS Code.'),
             '',
             ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
+            ...(surface ? [l10n.t('Opens: {0}', surface)] : []),
             ...(tlsBypassRequested && !tlsBypassEligible
                 ? [
                       '',
@@ -482,18 +488,19 @@ async function handleConnectionStringRequest(
                 : []),
             '',
             l10n.t('A new connection will be added to your Connections View.'),
+            l10n.t('You might be asked for credentials to establish the connection.'),
         ].join('\n');
-        ext.outputChannel.trace('[DeepLink] Showing new connection confirmation');
+        ext.outputChannel.trace('[DeepLink] Showing add-and-open confirmation');
         const connectionConfirmation = await vscode.window.showInformationMessage(
-            l10n.t('Add connection?'),
+            l10n.t('Add and open connection?'),
             { modal: true, detail },
-            l10n.t('Yes, continue'),
+            l10n.t('Add and open'),
         );
 
         ext.outputChannel.trace(
-            `[DeepLink] New connection confirmation: ${connectionConfirmation === l10n.t('Yes, continue') ? 'accepted' : 'dismissed'}`,
+            `[DeepLink] Add-and-open confirmation: ${connectionConfirmation === l10n.t('Add and open') ? 'accepted' : 'dismissed'}`,
         );
-        if (connectionConfirmation !== l10n.t('Yes, continue')) {
+        if (connectionConfirmation !== l10n.t('Add and open')) {
             context.telemetry.properties.userCancelledAtStep = 'CreateNewConnection';
             return; // User cancelled
         }
@@ -573,21 +580,18 @@ async function handleConnectionStringRequest(
         await waitForConnectionsViewReady(context);
     }
 
-    // Second confirmation: Ask user about revealing the connection (if enabled)
-    if (showUrlHandlingConfirmations) {
+    // Ask before opening an existing connection when confirmations are enabled.
+    if (existingDuplicateConnection && showUrlHandlingConfirmations) {
         const targetDetails = formatConnectionTargetDetails(
-            existingDuplicateConnection?.name ?? newConnectionLabel,
+            existingDuplicateConnection.name,
             selectedDatabase,
             params.collection,
         );
-        if (params.open) {
-            const surface = params.open === 'dashboard' ? l10n.t('Cluster Dashboard') : l10n.t('Shell');
+        if (surface) {
             targetDetails.push(l10n.t('Opens: {0}', surface));
         }
         const detail = [
-            existingDuplicateConnection
-                ? l10n.t('A link wants to open a DocumentDB connection in VS Code.')
-                : l10n.t('The connection will now be opened in the Connections View.'),
+            l10n.t('A link wants to open a DocumentDB connection in VS Code.'),
             '',
             ...targetDetails,
             '',
@@ -666,7 +670,6 @@ async function handleConnectionStringRequest(
         await openTargetOnNode(params.open, node);
     }
 
-    // Third confirmation: Ask user about opening collection view (if applicable and enabled)
     if (selectedDatabase && params.collection) {
         // Verify that the connection, database, and collection exist in the tree
         // This is an easy way to verify that the connection is valid
@@ -681,34 +684,6 @@ async function handleConnectionStringRequest(
                     'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
                 ),
             );
-        }
-
-        if (showUrlHandlingConfirmations) {
-            ext.outputChannel.trace('[DeepLink] Showing Collection View confirmation');
-            const collectionViewConfirmation = await vscode.window.showInformationMessage(
-                l10n.t('Open Collection View?'),
-                {
-                    modal: true,
-                    detail: [
-                        ...formatConnectionTargetDetails(
-                            existingDuplicateConnection?.name ?? newConnectionLabel,
-                            selectedDatabase,
-                            params.collection,
-                        ),
-                        '',
-                        l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
-                    ].join('\n'),
-                },
-                l10n.t('Yes, open Collection View'),
-            );
-
-            ext.outputChannel.trace(
-                `[DeepLink] Collection View confirmation: ${collectionViewConfirmation === l10n.t('Yes, open Collection View') ? 'accepted' : 'dismissed'}`,
-            );
-            if (collectionViewConfirmation !== l10n.t('Yes, open Collection View')) {
-                context.telemetry.properties.userCancelledAtStep = 'CollectionView';
-                return;
-            }
         }
 
         ext.outputChannel.trace('[DeepLink] Opening Collection View');

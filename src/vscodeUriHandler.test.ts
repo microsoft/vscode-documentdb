@@ -132,7 +132,7 @@ describe('globalUriHandler — diagnostic logging', () => {
 
     it('never logs connection string credentials or hosts', async (): Promise<void> => {
         showUrlHandlingConfirmations = false;
-        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Yes, continue');
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Add and open');
         expect(await runHandler('/connect', 'connectionString=mongodb%3A%2F%2Fuser%3Asecret%40host')).toBeUndefined();
         expect(mockSaveConnection).toHaveBeenCalledOnce();
         expect(revealInConnectionsView).toHaveBeenCalledOnce();
@@ -148,7 +148,7 @@ describe('globalUriHandler — diagnostic logging', () => {
 
     it('logs only the error name when a failure message contains connection details', async (): Promise<void> => {
         showUrlHandlingConfirmations = false;
-        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Yes, continue');
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Add and open');
         mockSaveConnection.mockRejectedValue(new Error('user secret host'));
         await runHandler('/connect', 'connectionString=mongodb%3A%2F%2Fuser%3Asecret%40host');
 
@@ -751,17 +751,19 @@ describe('globalUriHandler — connection confirmation', () => {
         await runHandler('/connect', `connectionString=${connectionString}&collection=orders`);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'Add connection?',
+            'Add and open connection?',
             {
                 modal: true,
                 detail:
-                    'A link wants to open a DocumentDB connection in VS Code.\n\n' +
+                    'A link wants to add this DocumentDB connection and open it in VS Code.\n\n' +
                     'Connection: user@alpha.example:27017\n' +
                     'Database: sales\n' +
-                    'Collection: orders\n\n' +
-                    'A new connection will be added to your Connections View.',
+                    'Collection: orders\n' +
+                    'Opens: Collection View\n\n' +
+                    'A new connection will be added to your Connections View.\n' +
+                    'You might be asked for credentials to establish the connection.',
             },
-            'Yes, continue',
+            'Add and open',
         );
         expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain('secret');
     });
@@ -789,6 +791,7 @@ describe('globalUriHandler — connection confirmation', () => {
                     'Connection: Production',
                     'Database: sales',
                     'Collection: orders',
+                    'Opens: Collection View',
                     '',
                     'You might be asked for credentials to establish the connection.',
                     '',
@@ -800,20 +803,25 @@ describe('globalUriHandler — connection confirmation', () => {
         expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain('secret');
     });
 
-    it.each([undefined, 'Production'])(
-        'identifies the same target in the open and Collection View dialogs with saved name %s',
-        async (savedName): Promise<void> => {
-            const connectionString = 'mongodb://alpha.example:27017/sales';
-            if (savedName) {
+    it.each([
+        { saved: false, confirmations: true },
+        { saved: true, confirmations: true },
+        { saved: true, confirmations: false },
+        { saved: false, confirmations: false },
+    ])(
+        'opens Collection View with saved=$saved and confirmations=$confirmations',
+        async ({ saved, confirmations }): Promise<void> => {
+            const connectionString = 'mongodb://alpha.example:27017';
+            showUrlHandlingConfirmations = confirmations;
+            if (saved) {
                 mockGetAllConnections.mockResolvedValue([
-                    { id: 'existing-id', name: savedName, secrets: { connectionString } },
+                    { id: 'existing-id', name: 'Production', secrets: { connectionString } },
                 ]);
-            } else {
-                (vscode.window.showInformationMessage as Mock).mockResolvedValueOnce('Yes, continue');
             }
-            (vscode.window.showInformationMessage as Mock)
-                .mockResolvedValueOnce('Yes, open connection')
-                .mockResolvedValueOnce(undefined);
+            (vscode.window.showInformationMessage as Mock).mockResolvedValue(
+                saved ? 'Yes, open connection' : 'Add and open',
+            );
+            vi.mocked(buildConnectionsViewTreePath).mockReturnValue('collection-path');
             vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue({
                 id: 'collection-node',
                 getTreeItem: (): vscode.TreeItem => ({ label: 'orders' }),
@@ -821,48 +829,105 @@ describe('globalUriHandler — connection confirmation', () => {
 
             const error = await runHandler(
                 '/connect',
-                `connectionString=${encodeURIComponent(connectionString)}&collection=orders`,
+                `connectionString=${encodeURIComponent(connectionString)}&database=sales&collection=orders`,
             );
 
             expect(error).toBeUndefined();
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                'Open connection?',
-                {
-                    modal: true,
-                    detail: [
-                        savedName
-                            ? 'A link wants to open a DocumentDB connection in VS Code.'
-                            : 'The connection will now be opened in the Connections View.',
-                        '',
-                        `Connection: ${savedName ?? 'alpha.example:27017'}`,
-                        'Database: sales',
-                        'Collection: orders',
-                        '',
-                        'You might be asked for credentials to establish the connection.',
-                        '',
-                        'Note: You can disable these URL handling confirmations in the extension settings.',
-                    ].join('\n'),
-                },
-                'Yes, open connection',
+            if (saved && !confirmations) {
+                expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+            } else {
+                expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
+                    saved ? 'Open connection?' : 'Add and open connection?',
+                    expect.objectContaining({ detail: expect.stringContaining('Opens: Collection View') }),
+                    saved ? 'Yes, open connection' : 'Add and open',
+                );
+            }
+            const storageId = saved ? 'existing-id' : (mockSaveConnection.mock.calls[0][1] as { id: string }).id;
+            expect(buildConnectionsViewTreePath).toHaveBeenCalledExactlyOnceWith(storageId, false, 'sales', 'orders');
+            expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(
+                'collection-path',
+                false,
             );
-            expect(vscode.window.showInformationMessage).toHaveBeenLastCalledWith(
-                'Open Collection View?',
+            expect(openCollectionViewInternal).toHaveBeenCalledExactlyOnceWith(
+                expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
                 {
-                    modal: true,
-                    detail: [
-                        `Connection: ${savedName ?? 'alpha.example:27017'}`,
-                        'Database: sales',
-                        'Collection: orders',
-                        '',
-                        'Note: You can disable these URL handling confirmations in the extension settings.',
-                    ].join('\n'),
+                    clusterId: storageId,
+                    clusterDisplayName: storageId,
+                    viewId: Views.ConnectionsView,
+                    databaseName: 'sales',
+                    collectionName: 'orders',
                 },
-                'Yes, open Collection View',
             );
-            expect(lastTelemetry.userCancelledAtStep).toBe('CollectionView');
-            expect(openCollectionViewInternal).not.toHaveBeenCalled();
         },
     );
+
+    it.each([
+        { target: 'shell', surface: 'Shell', command: 'vscode-documentdb.command.shell.open' },
+        { target: 'dashboard', surface: 'Cluster Dashboard', command: 'vscode-documentdb.command.clusterDashboard.open' },
+    ])(
+        'names $surface in the new-connection confirmation and opens it',
+        async ({ target, surface, command }): Promise<void> => {
+            (vscode.window.showInformationMessage as Mock).mockResolvedValue('Add and open');
+            const node = { id: 'connection-node', getTreeItem: (): vscode.TreeItem => ({ label: 'host' }) };
+            vi.mocked(buildConnectionsViewTreePath).mockReturnValue('connection-path');
+            vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
+
+            const error = await runHandler('/connect', `connectionString=mongodb%3A%2F%2Fhost&open=${target}`);
+
+            expect(error).toBeUndefined();
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
+                'Add and open connection?',
+                expect.objectContaining({ detail: expect.stringContaining(`Opens: ${surface}`) }),
+                'Add and open',
+            );
+            if (target === 'dashboard') {
+                expect(vscode.commands.executeCommand).toHaveBeenCalledWith(command, node, null, {
+                    activationSource: 'deepLink',
+                });
+            } else {
+                expect(vscode.commands.executeCommand).toHaveBeenCalledWith(command, node);
+            }
+        },
+    );
+
+    it('stops when the saved connection confirmation is dismissed', async (): Promise<void> => {
+        const connectionString = 'mongodb://alpha.example:27017/sales';
+        mockGetAllConnections.mockResolvedValue([
+            { id: 'existing-id', name: 'Production', secrets: { connectionString } },
+        ]);
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+
+        const error = await runHandler(
+            '/connect',
+            `connectionString=${encodeURIComponent(connectionString)}&collection=orders`,
+        );
+
+        expect(error).toBeUndefined();
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
+        expect(lastTelemetry.userCancelledAtStep).toBe('RevealConnection');
+        expect(revealInConnectionsView).not.toHaveBeenCalled();
+        expect(openCollectionViewInternal).not.toHaveBeenCalled();
+    });
+
+    it('aborts when the requested collection cannot be found', async (): Promise<void> => {
+        const connectionString = 'mongodb://alpha.example:27017/sales';
+        mockGetAllConnections.mockResolvedValue([
+            { id: 'existing-id', name: 'Production', secrets: { connectionString } },
+        ]);
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Yes, open connection');
+        vi.mocked(buildConnectionsViewTreePath).mockReturnValue('collection-path');
+
+        const error = await runHandler(
+            '/connect',
+            `connectionString=${encodeURIComponent(connectionString)}&collection=orders`,
+        );
+
+        expect(error?.message).toBe(
+            'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+        );
+        expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith('collection-path', false);
+        expect(openCollectionViewInternal).not.toHaveBeenCalled();
+    });
 });
 
 /** The item passed to `ConnectionStorageService.save`, or `undefined` when nothing was saved. */
@@ -873,11 +938,11 @@ function savedConnection(): { properties: { emulatorConfiguration?: unknown }; s
     };
 }
 
-/** Accepts the "add connection" prompt and dismisses everything after it. */
+/** Accepts the add-and-open connection prompt. */
 function acceptAddConnectionOnly(): void {
     (vscode.window.showInformationMessage as Mock).mockImplementation(
         (_message: string, _options: unknown, ...items: string[]) =>
-            Promise.resolve(items.includes('Yes, continue') ? 'Yes, continue' : undefined),
+            Promise.resolve(items.includes('Add and open') ? 'Add and open' : undefined),
     );
 }
 
@@ -973,13 +1038,13 @@ describe('globalUriHandler — TLS exception requested by a link', () => {
         await runHandler('/connect', `connectionString=${connectionString}`);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'Add connection?',
+            'Add and open connection?',
             expect.objectContaining({
                 detail: expect.stringContaining(
                     'This link asked to turn off TLS certificate validation. The request was ignored, and certificate validation stays on.',
                 ),
             }),
-            'Yes, continue',
+            'Add and open',
         );
         expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
     });
@@ -1032,12 +1097,12 @@ describe('globalUriHandler — URL handling confirmations disabled', () => {
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'Add connection?',
+            'Add and open connection?',
             expect.objectContaining({
                 modal: true,
                 detail: expect.stringContaining('Connection: user@alpha.example:27017\nDatabase: sales'),
             }),
-            'Yes, continue',
+            'Add and open',
         );
         expect(mockSaveConnection).not.toHaveBeenCalled();
         expect(lastTelemetry.userCancelledAtStep).toBe('CreateNewConnection');
@@ -1048,9 +1113,9 @@ describe('globalUriHandler — URL handling confirmations disabled', () => {
 
         await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}`);
 
-        expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain(
-            'disable these URL handling confirmations',
-        );
+        const calls = JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls);
+        expect(calls).not.toContain('disable these URL handling confirmations');
+        expect(calls).not.toContain('Opens:');
     });
 
     it('adds the connection only after the user confirms', async () => {
