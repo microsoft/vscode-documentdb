@@ -50,7 +50,7 @@ the index copy phase. Link both READMEs to this feature folder.
 > use `clusterId` (never `treeId`), state that `registerTask()` only rejects duplicate IDs while
 > destructive commands run the conflict checks, describe the inline retry loop (100 ms × 2ⁿ, 5 s
 > cap, ±30% jitter, abortable, 10 attempts without progress) and the optional index copy phase,
-> and link this folder. The orchestrator restored two correct bullets the subagent had dropped
+> and link this folder. The leader restored two correct bullets the subagent had dropped
 > from the `CopyPasteCollectionTask` box. Docs only. Model: luna.
 
 ---
@@ -76,7 +76,7 @@ the index copy phase. Link both READMEs to this feature folder.
 > - Task core: `taskHost.ts` defines `TaskLogger`, `TaskTelemetryContext`,
 >   `TaskTelemetryRunner`, `TaskStrings` (English defaults) and `TaskOptions`; `events.ts` adds a
 >   minimal `Emitter`/`Event` with the `vscode.Event` call signature. Like `vscode.EventEmitter`,
->   it isolates listener errors (added by the orchestrator in review). `taskService.ts` no
+>   it isolates listener errors (added by the leader in review). `taskService.ts` no
 >   longer imports `vscode`, `ext` or azext utils. The glue in
 >   `src/services/taskService/extension/` injects `ext.outputChannel`, a runner over
 >   `callWithTelemetryAndErrorHandling` and `vscode.l10n.t` strings with the same keys.
@@ -87,7 +87,7 @@ the index copy phase. Link both READMEs to this feature folder.
 > - Copy task: `copyCollectionStrings.ts` holds its user-facing text; the source-validation and
 >   metadata blocks keep `vscode.l10n.t` and `ext` until 1.4.
 >
-> Decisions made by the orchestrator:
+> Decisions made by the leader:
 >
 > - **Log lines are plain English; only user-facing text goes through strings objects** (75%).
 >   Output channel lines are diagnostics, and no translation bundles ship today
@@ -126,7 +126,7 @@ extension and may keep using `vscode.l10n.t` and `ext.outputChannel` directly.
 > the Initializing transition instead of just before it; nothing runs in between. `taskService.ts`
 > imports only its own modules. Tests: observer tests replace the 1.1a lifecycle tests, plus one
 > test that `Task` itself writes no lifecycle lines. No unit test for the survey wiring, because
-> activation has no unit coverage. The orchestrator reverted a progress paragraph the subagent
+> activation has no unit coverage. The leader reverted a progress paragraph the subagent
 > added to `design.md`. Model: sol.
 
 ### 1.3 Make the registry an instance
@@ -155,7 +155,7 @@ the open gap in [copy-paste-collections](../../copy-paste-collections/README.md#
 > rethrows `SourceValidationError` unchanged, wraps other errors as before, and ignores
 > `collectMetadata` failures. The open gap in copy-paste-collections is removed.
 >
-> Decision made by the orchestrator (85%): **the paste command's `validateSource` hook clears the
+> Decision made by the leader (85%): **the paste command's `validateSource` hook clears the
 > clipboard before throwing**, instead of a subscriber to the Failed state. The extension's
 > telemetry runner (`callWithTelemetryAndErrorHandling`) swallows initialization errors, so a
 > Failed state is not guaranteed. Clearing inside the hook keeps today's timing exactly. The
@@ -175,7 +175,7 @@ calling `ClustersClient.getClient(clusterId)`.
 > is a lazy client provider (`() => Promise<ClustersClient>`), which deviates from the wording
 > "receives a client instance". The reader stays in the extension either way.
 >
-> Options the orchestrator analysed:
+> Options the leader analysed:
 >
 > - **A. Eager instance, as worded:** undoes the stale-clipboard handling from PR #490 (message,
 >   clipboard clearing, telemetry), so it breaks 0008.
@@ -186,7 +186,7 @@ calling `ClustersClient.getClient(clusterId)`.
 > - **D. First fix the swallowed-initialization bug (see Outcome), then A:** cleanest end state,
 >   but a deliberate behaviour change for its own PR.
 >
-> Orchestrator recommendation: C now, plus a separate PR for the initialization bug; B if 1.5
+> Leader recommendation: C now, plus a separate PR for the initialization bug; B if 1.5
 > should land in this round. Awaiting the operator's choice.
 
 ### 1.6 Publish the writer's subclass contract
@@ -230,7 +230,7 @@ stays the default when only a count is reported.
 > or an outcome. `writeBatchWithRetry` turns both routes into one outcome. The throwing route keeps
 > its order of side effects and prefix slicing when only a count is reported.
 >
-> Decisions made by the orchestrator:
+> Decisions made by the leader:
 >
 > - **`writeBatch` returns `StrategyBatchResult | BatchAttemptOutcome`**, told apart by the
 >   `result` property (75%). The documented outcome shape stays as designed until the NoSQL
@@ -251,7 +251,7 @@ Add `getRetryAfterMs(error)` (default `undefined`) and `retryAfterMs` on the ret
 > **Done (2026-11-05), commit `d0a1df09`:** the wait is `max(computeRetryDelay(...),
 > retryAfterMs)`, with no cap. Values that are not finite or are negative are ignored, and a
 > trace line is written when the server value wins. The DocumentDB adapter is unchanged (reading
-> `RetryAfterMs` from 16500 errors stays a follow-up). The orchestrator added an early return
+> `RetryAfterMs` from 16500 errors stays a follow-up). The leader added an early return
 > when the signal is already aborted, plus a test. Before this, a Stop pressed during an
 > in-flight write let the uncapped wait run in full, because the `abort` event had already
 > fired. Tests: `StreamingDocumentWriter.retryAfter.test.ts`. Model: sol.
@@ -262,7 +262,7 @@ Add `supportedConflictStrategies` to writers; the DocumentDB writer declares all
 wizard filters its picker by it.
 
 > **Done (2026-11-05), commit `485524ca`:** the base writer defaults to all four strategies. The
-> property is not abstract, so existing test subclasses compile unchanged (orchestrator decision,
+> property is not abstract, so existing test subclasses compile unchanged (leader decision,
 > 70%); a new adapter that forgets to override it claims all four. `DocumentDbStreamingWriter`
 > declares `documentDbSupportedConflictStrategies`. The conflict picker filters by that constant,
 > because the writer is only built after the picker runs. Item ids are now the enum values, which
