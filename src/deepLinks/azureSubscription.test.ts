@@ -7,10 +7,15 @@ import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 import { type AzureSubscriptionProviderWithFilters } from '../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { isTenantFilteredOut } from '../plugins/api-shared/azure/subscriptionFiltering/subscriptionFilteringHelpers';
 import { DiscoveryService } from '../services/discoveryServices';
 import { resolveAzureSubscription, type AzureSubscriptionRequest } from './azureSubscription';
+
+vi.mock('../extensionVariables', () => ({
+    ext: { outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() }, },
+}));
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(),
@@ -86,6 +91,13 @@ describe('resolveAzureSubscription', (): void => {
         );
         expect(azureSubscriptionProvider.signIn).toHaveBeenCalledWith();
         expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledExactlyOnceWith(false);
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure sign-in: sign-in required');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure sign-in confirmation: accepted');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] 1 matching subscription(s) found');
+        const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
+        expect(logged).not.toContain('tenant-id');
+        expect(logged).not.toContain('account-id');
+        expect(logged).not.toContain('Subscription-ID');
         expect(context.telemetry.properties).toEqual({
             failureStage: 'resolveSubscription',
             azureSignInRequired: 'true',
@@ -105,6 +117,7 @@ describe('resolveAzureSubscription', (): void => {
             azureSignInRequired: 'true',
             userCancelledAtStep: 'AzureSignIn',
         });
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure sign-in confirmation: dismissed');
         expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
         expect(azureSubscriptionProvider.getSubscriptions).not.toHaveBeenCalled();
     });

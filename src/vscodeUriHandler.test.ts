@@ -76,6 +76,7 @@ vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
 }));
 vi.mock('./extensionVariables', () => ({
     ext: {
+        outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
         settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' },
         connectionsBranchDataProvider: { refresh: vi.fn(), findNodeById: vi.fn() },
     },
@@ -113,6 +114,76 @@ beforeEach(() => {
     });
     (vscode.window.showInformationMessage as Mock).mockResolvedValue('Open setup');
     (vscode.window.showWarningMessage as Mock).mockResolvedValue(undefined);
+});
+
+describe('globalUriHandler — diagnostic logging', () => {
+    it('logs Azure parameter names and the allow-listed open target without locator values', async (): Promise<void> => {
+        await runHandler('/connect/azure', 'resourceId=resource-private&tenantId=tenant-private&open=shell');
+
+        expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
+            '[DeepLink] Handling link: action=connect source=azure parameters=resourceId,tenantId,open open=shell',
+        );
+        const logged = [...vi.mocked(ext.outputChannel.info).mock.calls, ...vi.mocked(ext.outputChannel.trace).mock.calls]
+            .flat()
+            .join(' ');
+        expect(logged).not.toContain('resource-private');
+        expect(logged).not.toContain('tenant-private');
+    });
+
+    it('never logs connection string credentials or hosts', async (): Promise<void> => {
+        showUrlHandlingConfirmations = false;
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Yes, continue');
+        expect(await runHandler('/connect', 'connectionString=mongodb%3A%2F%2Fuser%3Asecret%40host')).toBeUndefined();
+        expect(mockSaveConnection).toHaveBeenCalledOnce();
+        expect(revealInConnectionsView).toHaveBeenCalledOnce();
+
+        const logged = [...vi.mocked(ext.outputChannel.info).mock.calls, ...vi.mocked(ext.outputChannel.trace).mock.calls]
+            .flat()
+            .join(' ');
+        expect(logged).not.toContain('secret');
+        expect(logged).not.toContain('user');
+        expect(logged).not.toContain('host');
+        expect(ext.outputChannel.info).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs only the error name when a failure message contains connection details', async (): Promise<void> => {
+        showUrlHandlingConfirmations = false;
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Yes, continue');
+        mockSaveConnection.mockRejectedValue(new Error('user secret host'));
+        await runHandler('/connect', 'connectionString=mongodb%3A%2F%2Fuser%3Asecret%40host');
+
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Failed: failureStage=handleRequest errorName=Error');
+        const logged = [...vi.mocked(ext.outputChannel.info).mock.calls, ...vi.mocked(ext.outputChannel.trace).mock.calls]
+            .flat()
+            .join(' ');
+        expect(logged).not.toContain('secret');
+        expect(logged).not.toContain('user');
+        expect(logged).not.toContain('host');
+    });
+
+    it('logs an unrecognized action', async (): Promise<void> => {
+        await runHandler('/unknown');
+
+        expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
+            '[DeepLink] Handling link: action=unrecognized parameters=none',
+        );
+    });
+
+    it('logs an unrecognized source once before refusing the link', async (): Promise<void> => {
+        await runHandler('/connect/unknown');
+
+        expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
+            '[DeepLink] Handling link: action=connect source=unrecognized parameters=none',
+        );
+    });
+
+    it('logs local links even when their resource type is refused', async (): Promise<void> => {
+        await runHandler('/local/unknown');
+
+        expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
+            '[DeepLink] Handling link: action=local parameters=none',
+        );
+    });
 });
 
 describe('globalUriHandler — route parsing', () => {

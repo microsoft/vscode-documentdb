@@ -43,6 +43,7 @@ export async function waitForDiscoveryViewReady(context: IActionContext, maxAtte
                 context.telemetry.measurements.discoveryViewActivationTimeMs = Date.now() - startTime;
                 context.telemetry.measurements.discoveryViewActivationAttempts = attempt + 1;
                 context.telemetry.properties.discoveryViewActivationResult = 'success';
+                ext.outputChannel.trace(`[DeepLink] Discovery view ready: attempts=${attempt + 1}`);
                 return;
             }
         } catch {
@@ -59,6 +60,7 @@ export async function waitForDiscoveryViewReady(context: IActionContext, maxAtte
     context.telemetry.measurements.discoveryViewActivationTimeMs = Date.now() - startTime;
     context.telemetry.measurements.discoveryViewActivationAttempts = maxAttempts;
     context.telemetry.properties.discoveryViewActivationResult = 'timeout';
+    ext.outputChannel.trace(`[DeepLink] Discovery view timed out: attempts=${maxAttempts}`);
 }
 
 /** Returns undefined when the cluster did not connect (the node already explained why). */
@@ -66,6 +68,7 @@ export async function revealInDiscoveryView(
     context: IActionContext,
     request: DiscoveryRevealRequest,
 ): Promise<DiscoveryRevealResult | undefined> {
+    ext.outputChannel.trace('[DeepLink] Focusing the Discovery view');
     await vscode.commands.executeCommand(`${Views.DiscoveryView}.focus`);
     await waitForDiscoveryViewReady(context);
 
@@ -80,12 +83,15 @@ export async function revealInDiscoveryView(
                 { location: { viewId: Views.DiscoveryView }, cancellable: false },
                 async (): Promise<DiscoveryRevealResult | undefined> => {
                     const provider = ext.discoveryBranchDataProvider;
+                    ext.outputChannel.trace('[DeepLink] Looking up the Discovery provider root');
                     const roots = await provider.getChildren(undefined as never);
                     const providerRoot = roots?.find((node): boolean => node.id.endsWith(`/${request.providerId}`));
+                    ext.outputChannel.trace('[DeepLink] Looking up the subscription node');
                     const subscriptions = providerRoot ? await provider.getChildren(providerRoot) : undefined;
                     const subscriptionNode = subscriptions?.find((node): boolean =>
                         node.id.toLowerCase().endsWith(`/${request.subscriptionId.toLowerCase()}`),
                     );
+                    ext.outputChannel.trace('[DeepLink] Looking up the cluster node');
                     const clusters = subscriptionNode ? await provider.getChildren(subscriptionNode) : undefined;
                     const clusterNode = clusters?.find(
                         (node): node is ClusterItemBase<AzureClusterModel> =>
@@ -97,6 +103,7 @@ export async function revealInDiscoveryView(
                             node.cluster.azureResourceId.toLowerCase() === request.azureResourceId.toLowerCase(),
                     );
 
+                    ext.outputChannel.trace(`[DeepLink] Cluster node ${clusterNode ? 'found' : 'not found'}`);
                     if (!clusterNode) {
                         throw new Error(
                             vscode.l10n.t(
@@ -106,6 +113,7 @@ export async function revealInDiscoveryView(
                         );
                     }
 
+                    ext.outputChannel.trace('[DeepLink] Revealing and expanding the cluster');
                     // Reveal with expand awaits the node's children, so the connect flow runs once through expansion.
                     await ext.discoveryTreeView.reveal(clusterNode, {
                         select: true,
@@ -113,12 +121,15 @@ export async function revealInDiscoveryView(
                         expand: true,
                     });
                     const clusterId = clusterNode.cluster.clusterId;
-                    if (!ClustersClient.exists(clusterId)) {
+                    const connected = ClustersClient.exists(clusterId);
+                    ext.outputChannel.trace(`[DeepLink] Cluster ${connected ? 'connected' : 'not connected'}`);
+                    if (!connected) {
                         return undefined;
                     }
 
                     let databaseNode: DatabaseItem | undefined;
                     if (request.database) {
+                        ext.outputChannel.trace(`[DeepLink] Looking up database ${request.database}`);
                         const node = await provider.findNodeById(`${clusterNode.id}/${request.database}`);
                         if (
                             !node ||
@@ -128,6 +139,7 @@ export async function revealInDiscoveryView(
                             !('name' in node.databaseInfo) ||
                             node.databaseInfo.name !== request.database
                         ) {
+                            ext.outputChannel.trace('[DeepLink] Database not found');
                             throw new Error(
                                 vscode.l10n.t(
                                     'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
@@ -136,6 +148,7 @@ export async function revealInDiscoveryView(
                         }
 
                         databaseNode = node as DatabaseItem;
+                        ext.outputChannel.trace(`[DeepLink] Revealing database ${request.database}`);
                         await ext.discoveryTreeView.reveal(databaseNode, {
                             select: true,
                             focus: !request.collection,
@@ -143,10 +156,12 @@ export async function revealInDiscoveryView(
                         });
 
                         if (request.collection) {
+                            ext.outputChannel.trace(`[DeepLink] Looking up collection ${request.collection}`);
                             const collectionNode = await provider.findNodeById(
                                 `${databaseNode.id}/${request.collection}`,
                             );
                             if (!collectionNode) {
+                                ext.outputChannel.trace('[DeepLink] Collection not found');
                                 throw new Error(
                                     vscode.l10n.t(
                                         'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
@@ -154,6 +169,7 @@ export async function revealInDiscoveryView(
                                 );
                             }
 
+                            ext.outputChannel.trace(`[DeepLink] Revealing collection ${request.collection}`);
                             await ext.discoveryTreeView.reveal(collectionNode, {
                                 select: true,
                                 focus: true,

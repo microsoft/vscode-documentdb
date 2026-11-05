@@ -6,6 +6,7 @@
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 import { type AzureSubscriptionProviderWithFilters } from '../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { isTenantFilteredOut } from '../plugins/api-shared/azure/subscriptionFiltering/subscriptionFilteringHelpers';
 import { DiscoveryService } from '../services/discoveryServices';
@@ -45,30 +46,38 @@ export async function resolveAzureSubscription(
     }
 
     const { azureSubscriptionProvider } = provider;
+    ext.outputChannel.trace('[DeepLink] Checking Azure sign-in');
     const isSignedIn = await azureSubscriptionProvider.isSignedIn();
+    ext.outputChannel.trace(`[DeepLink] Azure sign-in: ${isSignedIn ? 'signed in' : 'sign-in required'}`);
     context.telemetry.properties.azureSignInRequired = isSignedIn ? 'false' : 'true';
     if (!isSignedIn) {
         const signInButton = vscode.l10n.t('Sign in');
+        ext.outputChannel.trace('[DeepLink] Showing Azure sign-in confirmation');
         const choice = await vscode.window.showInformationMessage(
             vscode.l10n.t('Sign in to Azure to open {0}.', request.resourceName),
             { modal: true },
             signInButton,
         );
+        ext.outputChannel.trace(`[DeepLink] Azure sign-in confirmation: ${choice === signInButton ? 'accepted' : 'dismissed'}`);
         if (choice !== signInButton || !(await azureSubscriptionProvider.signIn())) {
+            ext.outputChannel.trace('[DeepLink] Azure sign-in stopped');
             context.telemetry.properties.userCancelledAtStep = 'AzureSignIn';
             return undefined;
         }
+        ext.outputChannel.trace('[DeepLink] Azure sign-in: signed in');
     }
 
     context.telemetry.properties.failureStage = 'resolveSubscription';
     context.telemetry.properties.tenantSignInRequired = 'false';
     for (let attempt = 0; attempt < 2; attempt++) {
+        ext.outputChannel.trace('[DeepLink] Listing subscriptions');
         const subscriptions = await azureSubscriptionProvider.getSubscriptions(false);
         const candidates = subscriptions.filter(
             (subscription) =>
                 subscription.subscriptionId.toLowerCase() === request.subscriptionId.toLowerCase() &&
                 (request.tenantId === undefined || subscription.tenantId.toLowerCase() === request.tenantId.toLowerCase()),
         );
+        ext.outputChannel.trace(`[DeepLink] ${candidates.length} matching subscription(s) found`);
         context.telemetry.properties.subscriptionAccountCount = String(candidates.length);
         const subscription =
             candidates.find((candidate) => !isTenantFilteredOut(candidate.tenantId, candidate.account.id)) ?? candidates[0];
@@ -81,6 +90,7 @@ export async function resolveAzureSubscription(
         }
 
         context.telemetry.properties.tenantSignInRequired = 'true';
+        ext.outputChannel.trace('[DeepLink] Tenant sign-in offered');
         const signInButton = vscode.l10n.t('Sign in to tenant');
         const choice = await vscode.window.showInformationMessage(
             vscode.l10n.t('None of your signed-in Azure accounts can access subscription {0}.', request.subscriptionId),
@@ -90,6 +100,7 @@ export async function resolveAzureSubscription(
             },
             signInButton,
         );
+        ext.outputChannel.trace(`[DeepLink] Tenant sign-in ${choice === signInButton ? 'chosen' : 'dismissed'}`);
         if (choice !== signInButton) {
             context.telemetry.properties.userCancelledAtStep = 'AzureTenantSignIn';
             return undefined;
@@ -97,6 +108,7 @@ export async function resolveAzureSubscription(
         await azureSubscriptionProvider.signIn(request.tenantId);
     }
 
+    ext.outputChannel.trace('[DeepLink] Subscription not found');
     context.errorHandling.buttons = [
         {
             title: vscode.l10n.t('Manage Azure accounts'),

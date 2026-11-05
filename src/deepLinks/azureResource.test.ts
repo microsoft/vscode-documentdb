@@ -8,9 +8,14 @@ import { type MongoCluster } from '@azure/arm-mongocluster';
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ext } from '../extensionVariables';
 import { getClusterInformationFromAzure } from '../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { createCosmosDBManagementClient } from '../utils/azureClients';
 import { readAzureResource, type AzureResourceReadRequest } from './azureResource';
+
+vi.mock('../extensionVariables', () => ({
+    ext: { outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() }, },
+}));
 
 vi.mock('../plugins/service-azure-mongo-vcore/utils/clusterHelpers', () => ({
     getClusterInformationFromAzure: vi.fn(),
@@ -38,6 +43,8 @@ describe('readAzureResource', () => {
         await expect(readAzureResource(context, subscription, request)).resolves.toEqual({ name: 'My-Resource' });
         expect(getClusterInformationFromAzure).toHaveBeenCalledWith(context, subscription, 'my-group', 'my-resource');
         expect(createCosmosDBManagementClient).not.toHaveBeenCalled();
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Reading vCore cluster my-resource from Azure');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure resource read finished');
     });
 
     it('returns the ARM casing for a MongoDB RU account, regardless of kind casing', async () => {
@@ -66,6 +73,7 @@ describe('readAzureResource', () => {
         await expect(readAzureResource(context, subscription, { ...request, kind: 'ru' })).rejects.toThrow(
             'This Azure Cosmos DB account does not use the MongoDB API.',
         );
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure resource refused: not MongoDB API');
     });
 
     it.each([

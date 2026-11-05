@@ -26,7 +26,7 @@ export async function computeVisibilityChanges(
 ): Promise<VisibilityChanges> {
     const hiddenProviderIds = await getHiddenDiscoveryProviderIds();
     const selectedSubscriptions = readSelectedSubscriptions();
-    return {
+    const changes: VisibilityChanges = {
         showProvider: hiddenProviderIds.includes(providerId),
         unfilterTenant: isTenantFilteredOut(subscription.tenantId, subscription.account.id),
         addSubscription:
@@ -35,6 +35,10 @@ export async function computeVisibilityChanges(
                 (id): boolean => id.split('/')[1]?.toLowerCase() === subscription.subscriptionId.toLowerCase(),
             ),
     };
+    ext.outputChannel.trace(
+        `[DeepLink] Visibility changes: showProvider=${changes.showProvider} unfilterTenant=${changes.unfilterTenant} addSubscription=${changes.addSubscription}`,
+    );
+    return changes;
 }
 
 export function hasVisibilityChanges(changes: VisibilityChanges): boolean {
@@ -50,10 +54,12 @@ export async function applyVisibilityChanges(
     let changed = false;
     if (changes.showProvider) {
         await showDiscoveryProvider(providerId);
+        ext.outputChannel.trace('[DeepLink] Discovery provider shown');
         changed = true;
     }
     if (changes.unfilterTenant) {
         await removeUnselectedTenant(subscription.tenantId, subscription.account.id);
+        ext.outputChannel.trace('[DeepLink] Tenant unfiltered');
         changed = true;
     }
     if (changes.addSubscription) {
@@ -63,11 +69,13 @@ export async function applyVisibilityChanges(
                 ...selectedSubscriptions,
                 `${subscription.tenantId}/${subscription.subscriptionId}`,
             ]);
+            ext.outputChannel.trace('[DeepLink] Subscription added to filter');
             changed = true;
         }
     }
     if (changed) {
         ext.discoveryBranchDataProvider.refresh();
+        ext.outputChannel.trace('[DeepLink] Discovery view refreshed');
     }
 }
 

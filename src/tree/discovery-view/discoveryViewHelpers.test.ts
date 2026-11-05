@@ -21,6 +21,7 @@ import {
 
 vi.mock('../../extensionVariables', () => ({
     ext: {
+        outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
         discoveryBranchDataProvider: { getChildren: vi.fn(), findNodeById: vi.fn() },
         discoveryTreeView: { reveal: vi.fn() },
     },
@@ -122,6 +123,12 @@ describe('Discovery view helpers', () => {
         const result = await revealInDiscoveryView(context, request);
 
         expect(result).toEqual({ clusterNode, clusterId: clusterNode.cluster.clusterId, databaseNode: undefined });
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Discovery view ready: attempts=1');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Cluster node found');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Cluster connected');
+        const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
+        expect(logged).not.toContain(request.subscriptionId);
+        expect(logged).not.toContain(request.azureResourceId);
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('discoveryView.focus');
         expect(getChildren.mock.calls.map(([node]) => node)).toEqual([
             undefined,

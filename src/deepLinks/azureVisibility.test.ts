@@ -31,6 +31,7 @@ vi.mock('../plugins/api-shared/azure/subscriptionFiltering/subscriptionFiltering
 }));
 vi.mock('../extensionVariables', (): object => ({
     ext: {
+        outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
         context: { globalState: { get: vi.fn(), update: vi.fn() } },
         discoveryBranchDataProvider: { refresh: vi.fn() },
     },
@@ -76,6 +77,9 @@ describe('Azure deep-link visibility', (): void => {
         const changes = await computeVisibilityChanges(providerId, subscription);
 
         expect(changes).toEqual(expected);
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith(
+            `[DeepLink] Visibility changes: showProvider=${expected.showProvider} unfilterTenant=${expected.unfilterTenant} addSubscription=${expected.addSubscription}`,
+        );
         expect(hasVisibilityChanges(changes)).toBe(true);
         expect(isTenantFilteredOut).toHaveBeenCalledExactlyOnceWith(subscription.tenantId, subscription.account.id);
         expect(showDiscoveryProvider).not.toHaveBeenCalled();
@@ -105,6 +109,7 @@ describe('Azure deep-link visibility', (): void => {
             expect(setSelectedSubscriptionIds).not.toHaveBeenCalled();
         }
         expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith();
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Discovery view refreshed');
     });
 
     it.each([false, true])('never writes an empty selection (fallback: %s)', async (useFallback): Promise<void> => {

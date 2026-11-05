@@ -6,6 +6,7 @@
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ext } from '../extensionVariables';
 import { getClusterInformationFromAzure } from '../plugins/service-azure-mongo-vcore/utils/clusterHelpers';
 import { createCosmosDBManagementClient } from '../utils/azureClients';
 
@@ -21,6 +22,7 @@ export async function readAzureResource(
     subscription: AzureSubscription,
     request: AzureResourceReadRequest,
 ): Promise<{ readonly name: string }> {
+    ext.outputChannel.trace(`[DeepLink] Reading ${request.kind === 'vcore' ? 'vCore cluster' : 'RU account'} ${request.name} from Azure`);
     try {
         if (request.kind === 'vcore') {
             const cluster = await getClusterInformationFromAzure(
@@ -29,18 +31,22 @@ export async function readAzureResource(
                 request.resourceGroup,
                 request.name,
             );
+            ext.outputChannel.trace('[DeepLink] Azure resource read finished');
             return { name: cluster.name || request.name };
         }
 
         const client = await createCosmosDBManagementClient(context, subscription);
         const account = await client.databaseAccounts.get(request.resourceGroup, request.name);
         if (account.kind?.toLowerCase() !== 'mongodb') {
+            ext.outputChannel.trace('[DeepLink] Azure resource refused: not MongoDB API');
             throw new Error(vscode.l10n.t('This Azure Cosmos DB account does not use the MongoDB API.'));
         }
+        ext.outputChannel.trace('[DeepLink] Azure resource read finished');
         return { name: account.name || request.name };
     } catch (error: unknown) {
         if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
             if (error.code === 'ResourceNotFound' || error.code === 'ResourceGroupNotFound') {
+                ext.outputChannel.trace('[DeepLink] Azure resource refused: not found');
                 throw new Error(
                     vscode.l10n.t(
                         'The Azure resource {0} was not found in subscription {1}.',
@@ -50,6 +56,7 @@ export async function readAzureResource(
                 );
             }
             if (error.code === 'AuthorizationFailed') {
+                ext.outputChannel.trace('[DeepLink] Azure resource refused: not authorized');
                 throw new Error(vscode.l10n.t('Your Azure account cannot read the Azure resource {0}.', request.name));
             }
         }
