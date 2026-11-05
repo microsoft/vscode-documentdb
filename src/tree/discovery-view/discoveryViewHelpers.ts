@@ -106,31 +106,28 @@ export async function revealInDiscoveryView(
                         );
                     }
 
-                    // Keep the node collapsed until the normal connect flow succeeds, so a cancel cannot be retried by expansion.
-                    await ext.discoveryTreeView.reveal(clusterNode, { select: true, focus: false, expand: false });
-                    const databases = await provider.getChildren(clusterNode);
-                    const clusterId = clusterNode.cluster.clusterId;
-                    if (!ClustersClient.exists(clusterId)) {
-                        return undefined;
-                    }
-
+                    // Reveal with expand awaits the node's children, so the connect flow runs once through expansion.
                     await ext.discoveryTreeView.reveal(clusterNode, {
                         select: true,
                         focus: !request.database,
                         expand: true,
                     });
+                    const clusterId = clusterNode.cluster.clusterId;
+                    if (!ClustersClient.exists(clusterId)) {
+                        return undefined;
+                    }
 
                     let databaseNode: DatabaseItem | undefined;
                     if (request.database) {
-                        databaseNode = databases?.find(
-                            (node): node is DatabaseItem =>
-                                'databaseInfo' in node &&
-                                typeof node.databaseInfo === 'object' &&
-                                node.databaseInfo !== null &&
-                                'name' in node.databaseInfo &&
-                                node.databaseInfo.name === request.database,
-                        );
-                        if (!databaseNode) {
+                        const node = await provider.findNodeById(`${clusterNode.id}/${request.database}`);
+                        if (
+                            !node ||
+                            !('databaseInfo' in node) ||
+                            typeof node.databaseInfo !== 'object' ||
+                            node.databaseInfo === null ||
+                            !('name' in node.databaseInfo) ||
+                            node.databaseInfo.name !== request.database
+                        ) {
                             throw new Error(
                                 vscode.l10n.t(
                                     'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
@@ -138,6 +135,7 @@ export async function revealInDiscoveryView(
                             );
                         }
 
+                        databaseNode = node as DatabaseItem;
                         await ext.discoveryTreeView.reveal(databaseNode, {
                             select: true,
                             focus: !request.collection,
@@ -145,14 +143,8 @@ export async function revealInDiscoveryView(
                         });
 
                         if (request.collection) {
-                            const collections = await provider.getChildren(databaseNode);
-                            const collectionNode = collections?.find(
-                                (node): boolean =>
-                                    'collectionInfo' in node &&
-                                    typeof node.collectionInfo === 'object' &&
-                                    node.collectionInfo !== null &&
-                                    'name' in node.collectionInfo &&
-                                    node.collectionInfo.name === request.collection,
+                            const collectionNode = await provider.findNodeById(
+                                `${databaseNode.id}/${request.collection}`,
                             );
                             if (!collectionNode) {
                                 throw new Error(

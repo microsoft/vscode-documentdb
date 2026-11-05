@@ -21,7 +21,7 @@ import {
 
 vi.mock('../../extensionVariables', () => ({
     ext: {
-        discoveryBranchDataProvider: { getChildren: vi.fn() },
+        discoveryBranchDataProvider: { getChildren: vi.fn(), findNodeById: vi.fn() },
         discoveryTreeView: { reveal: vi.fn() },
     },
 }));
@@ -37,6 +37,7 @@ interface FakeClusterNode extends TreeElement {
 const missingTargetMessage =
     'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.';
 const getChildren = vi.mocked(ext.discoveryBranchDataProvider.getChildren);
+const findNodeById = vi.mocked(ext.discoveryBranchDataProvider.findNodeById);
 const reveal = vi.mocked(ext.discoveryTreeView.reveal);
 const exists = vi.mocked(ClustersClient.exists);
 
@@ -81,16 +82,17 @@ describe('Discovery view helpers', () => {
                 azureResourceId: request.azureResourceId.replace('dev-rg', 'Dev-RG'),
             },
         };
-        databaseNode = { ...createNode('opaque-database-tree-id'), databaseInfo: { name: 'inventory' } };
-        collectionNode = { ...createNode('opaque-collection-tree-id'), collectionInfo: { name: 'products' } };
+        databaseNode = { ...createNode(`${clusterNode.id}/db`), databaseInfo: { name: 'db' } };
+        collectionNode = { ...createNode(`${databaseNode.id}/products`), collectionInfo: { name: 'products' } };
         children = new Map([
             [undefined, [createNode('discoveryView/other-provider'), rootNode]],
             [rootNode, [createNode(`${rootNode.id}/other-subscription`), subscriptionNode]],
             [subscriptionNode, [createNode('not-a-cluster'), clusterNode]],
-            [clusterNode, [createNode('not-a-database'), databaseNode]],
-            [databaseNode, [createNode('not-a-collection'), collectionNode]],
         ]);
         getChildren.mockImplementation(async (node: TreeElement): Promise<TreeElement[]> => children.get(node) ?? []);
+        findNodeById.mockImplementation(async (id: string): Promise<TreeElement | undefined> =>
+            [databaseNode, collectionNode].find((node): boolean => node.id === id),
+        );
         reveal.mockResolvedValue(undefined);
         exists.mockReturnValue(true);
         vi.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
@@ -109,11 +111,11 @@ describe('Discovery view helpers', () => {
         vi.useRealTimers();
     });
 
-    it('matches the ARM resource id case-insensitively and connects once before expanding', async () => {
+    it('matches the ARM resource id case-insensitively and expands the cluster once', async () => {
         exists.mockImplementation((clusterId: string): boolean => {
             expect(clusterId).toBe(clusterNode.cluster.clusterId);
-            expect(getChildren.mock.calls.filter(([node]) => node === clusterNode)).toHaveLength(1);
-            expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: false, expand: false }]]);
+            expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
+            expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: true, expand: true }]]);
             return true;
         });
 
@@ -126,12 +128,9 @@ describe('Discovery view helpers', () => {
             undefined,
             rootNode,
             subscriptionNode,
-            clusterNode,
         ]);
-        expect(reveal.mock.calls).toEqual([
-            [clusterNode, { select: true, focus: false, expand: false }],
-            [clusterNode, { select: true, focus: true, expand: true }],
-        ]);
+        expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: true, expand: true }]]);
+        expect(findNodeById).not.toHaveBeenCalled();
         expect(vscode.window.withProgress).toHaveBeenNthCalledWith(
             1,
             { location: vscode.ProgressLocation.Notification, title: 'Opening example…', cancellable: false },
@@ -142,6 +141,23 @@ describe('Discovery view helpers', () => {
             { location: { viewId: Views.DiscoveryView }, cancellable: false },
             expect.any(Function),
         );
+    });
+
+    it('waits for cluster expansion before checking the client', async () => {
+        exists.mockReturnValue(false);
+        reveal.mockImplementation(async (): Promise<void> => {
+            await Promise.resolve();
+            expect(exists).not.toHaveBeenCalled();
+            exists.mockReturnValue(true);
+        });
+
+        expect(await revealInDiscoveryView(context, request)).toEqual({
+            clusterNode,
+            clusterId: clusterNode.cluster.clusterId,
+            databaseNode: undefined,
+        });
+        expect(reveal).toHaveBeenCalledExactlyOnceWith(clusterNode, { select: true, focus: true, expand: true });
+        expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
     });
 
     it('also resolves an Azure Cosmos DB for MongoDB RU cluster', async () => {
@@ -176,50 +192,75 @@ describe('Discovery view helpers', () => {
         expect(exists).not.toHaveBeenCalled();
     });
 
-    it('returns undefined without expanding or revealing a database when no client exists', async () => {
+    it('returns undefined with the cluster expanded and no database lookup when no client exists', async () => {
         exists.mockReturnValue(false);
 
-        const result = await revealInDiscoveryView(context, { ...request, database: 'inventory' });
+        const result = await revealInDiscoveryView(context, { ...request, database: 'db' });
 
         expect(result).toBeUndefined();
-        expect(getChildren.mock.calls.filter(([node]) => node === clusterNode)).toHaveLength(1);
-        expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: false, expand: false }]]);
+        expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
+        expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: false, expand: true }]]);
         expect(getChildren).not.toHaveBeenCalledWith(databaseNode);
+        expect(findNodeById).not.toHaveBeenCalled();
         expect(exists).toHaveBeenCalledWith(clusterNode.cluster.clusterId);
     });
 
-    it('finds a database by its name and returns the database node', async () => {
-        const result = await revealInDiscoveryView(context, { ...request, database: 'inventory' });
+    it('finds a database by its tree id and returns the database node', async () => {
+        const result = await revealInDiscoveryView(context, { ...request, database: 'db' });
 
         expect(result).toEqual({ clusterNode, clusterId: clusterNode.cluster.clusterId, databaseNode });
-        expect(reveal).toHaveBeenNthCalledWith(2, clusterNode, { select: true, focus: false, expand: true });
-        expect(reveal).toHaveBeenLastCalledWith(databaseNode, { select: true, focus: true, expand: true });
+        expect(findNodeById).toHaveBeenCalledExactlyOnceWith(`${clusterNode.id}/db`);
+        expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: true }],
+            [databaseNode, { select: true, focus: true, expand: true }],
+        ]);
+        expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
+        expect(getChildren).not.toHaveBeenCalledWith(databaseNode);
     });
 
     it('reports the existing URL error when the requested database is missing', async () => {
         await expect(
             revealInDiscoveryView(context, { ...request, database: 'missing-database' }),
         ).rejects.toThrow(missingTargetMessage);
-        expect(reveal).toHaveBeenCalledTimes(2);
+        expect(findNodeById).toHaveBeenCalledExactlyOnceWith(`${clusterNode.id}/missing-database`);
+        expect(reveal).toHaveBeenCalledExactlyOnceWith(clusterNode, { select: true, focus: false, expand: true });
     });
 
-    it('finds and reveals a requested collection by its name', async () => {
+    it('finds a requested collection by its tree id after expanding the database', async () => {
+        findNodeById.mockImplementation(async (id: string): Promise<TreeElement | undefined> => {
+            if (id === databaseNode.id) {
+                expect(reveal.mock.calls).toEqual([[clusterNode, { select: true, focus: false, expand: true }]]);
+                return databaseNode;
+            }
+            expect(reveal).toHaveBeenLastCalledWith(databaseNode, { select: true, focus: false, expand: true });
+            return id === collectionNode.id ? collectionNode : undefined;
+        });
         const result = await revealInDiscoveryView(context, {
             ...request,
-            database: 'inventory',
+            database: 'db',
             collection: 'products',
         });
 
         expect(result?.databaseNode).toBe(databaseNode);
-        expect(reveal).toHaveBeenNthCalledWith(3, databaseNode, { select: true, focus: false, expand: true });
-        expect(reveal).toHaveBeenLastCalledWith(collectionNode, { select: true, focus: true, expand: true });
+        expect(findNodeById.mock.calls).toEqual([[`${clusterNode.id}/db`], [`${databaseNode.id}/products`]]);
+        expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: true }],
+            [databaseNode, { select: true, focus: false, expand: true }],
+            [collectionNode, { select: true, focus: true, expand: true }],
+        ]);
+        expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
+        expect(getChildren).not.toHaveBeenCalledWith(databaseNode);
     });
 
     it('reports the existing URL error when the requested collection is missing', async () => {
         await expect(
-            revealInDiscoveryView(context, { ...request, database: 'inventory', collection: 'missing-collection' }),
+            revealInDiscoveryView(context, { ...request, database: 'db', collection: 'missing-collection' }),
         ).rejects.toThrow(missingTargetMessage);
-        expect(reveal).toHaveBeenCalledTimes(3);
+        expect(findNodeById.mock.calls).toEqual([[`${clusterNode.id}/db`], [`${databaseNode.id}/missing-collection`]]);
+        expect(reveal.mock.calls).toEqual([
+            [clusterNode, { select: true, focus: false, expand: true }],
+            [databaseNode, { select: true, focus: false, expand: true }],
+        ]);
     });
 
     it('records readiness telemetry when the root is available, even when empty', async () => {
