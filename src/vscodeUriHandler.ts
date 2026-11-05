@@ -69,6 +69,9 @@ const LOCAL_RESOURCE_TYPES = ['documentdb'] as const;
 
 type LocalResourceType = (typeof LOCAL_RESOURCE_TYPES)[number];
 
+/** Hand-written allow-list of connection sources, like LOCAL_RESOURCE_TYPES. */
+const CONNECT_SOURCES = ['azure'] as const;
+
 /**
  * The verb assumed when a link names none.
  *
@@ -81,7 +84,7 @@ const DEFAULT_VERB: DeepLinkVerb = 'connect';
 /** A deep link's route: what it asks for, and any path segments qualifying it. */
 interface DeepLinkRoute {
     verb: DeepLinkVerb;
-    /** Segments after the verb, e.g. the provider id in `/discovery/<provider>`. */
+    /** Segments after the verb, e.g. the source in `/connect/azure`. */
     qualifiers: string[];
 }
 
@@ -96,6 +99,7 @@ interface DeepLinkRoute {
  *
  * ```text
  * vscode://ms-azuretools.vscode-documentdb/connect?connectionString=…&database=…&collection=…
+ * vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=…
  * vscode://ms-azuretools.vscode-documentdb/local
  * vscode://ms-azuretools.vscode-documentdb/local/documentdb
  * vscode://ms-azuretools.vscode-documentdb?connectionString=…              (legacy, means /connect)
@@ -152,8 +156,14 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             switch (route.verb) {
                 case 'connect': {
                     context.telemetry.properties.failureStage = 'validateConnectPath';
-                    if (route.qualifiers.length > 0) {
-                        throw new Error(l10n.t('This DocumentDB connection link has an invalid path. Use /connect.'));
+                    context.telemetry.properties.deepLinkConnectSource = 'unrecognized';
+                    const source = parseConnectSource(route.qualifiers);
+                    context.telemetry.properties.deepLinkConnectSource = source;
+
+                    if (source === 'azure') {
+                        context.telemetry.properties.failureStage = 'handleAzureRequest';
+                        await handleAzureResourceLinkRequest(context, uri.query);
+                        break;
                     }
 
                     context.telemetry.properties.failureStage = 'extractParams';
@@ -212,6 +222,22 @@ function parseDeepLinkRoute(path: string): DeepLinkRoute | undefined {
     }
 
     return { verb, qualifiers: segments.slice(1) };
+}
+
+function parseConnectSource(qualifiers: string[]): 'connectionString' | 'azure' {
+    if (qualifiers.length === 0) {
+        return 'connectionString';
+    }
+
+    if (qualifiers.length === 1) {
+        const candidate = qualifiers[0].toLowerCase();
+        const source = CONNECT_SOURCES.find((known) => known === candidate);
+        if (source !== undefined) {
+            return source;
+        }
+    }
+
+    throw new Error(l10n.t('This DocumentDB connection link has an invalid path. Use /connect or /connect/azure.'));
 }
 
 /**
@@ -277,6 +303,11 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
             await openLocalQuickStart(context, undefined, { activationSource: 'deepLink' });
             break;
     }
+}
+
+// Placeholder until WI7
+async function handleAzureResourceLinkRequest(_context: IActionContext, _query: string): Promise<void> {
+    throw new Error('Azure resource links are not implemented yet.');
 }
 
 /**

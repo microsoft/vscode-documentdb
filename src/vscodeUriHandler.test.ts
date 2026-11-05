@@ -102,6 +102,7 @@ describe('globalUriHandler — route parsing', () => {
         // Every link published before verbs existed has an empty path. "No verb" has to keep
         // meaning connect forever, because a link in a blog post cannot be recalled.
         expect(lastTelemetry.deepLinkVerb).toBe('connect');
+        expect(lastTelemetry.deepLinkConnectSource).toBe('connectionString');
         // It reached connect's own validation rather than being rejected as an unknown route.
         expect(error?.message).toContain('connection string');
     });
@@ -110,16 +111,44 @@ describe('globalUriHandler — route parsing', () => {
         const error = await runHandler('/connect', '');
 
         expect(lastTelemetry.deepLinkVerb).toBe('connect');
+        expect(lastTelemetry.deepLinkConnectSource).toBe('connectionString');
         expect(error?.message).toContain('connection string');
     });
 
     it.each(['/connect/anything', '/connect/extra/path'])('rejects connect path qualifiers in %s', async (path) => {
         const error = await runHandler(path, 'connectionString=mongodb%3A%2F%2Fhost');
 
-        expect(error?.message).toContain('invalid path');
+        expect(error?.message).toBe(
+            'This DocumentDB connection link has an invalid path. Use /connect or /connect/azure.',
+        );
         expect(lastTelemetry.failureStage).toBe('validateConnectPath');
+        expect(lastTelemetry.deepLinkConnectSource).toBe('unrecognized');
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
+
+    it.each(['/connect/azure', '/CONNECT/Azure'])('routes %s to the Azure placeholder', async (path) => {
+        const error = await runHandler(path, 'resourceId=example');
+
+        expect(error?.message).toBe('Azure resource links are not implemented yet.');
+        expect(lastTelemetry.deepLinkConnectSource).toBe('azure');
+        expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    });
+
+    it.each(['/connect/aws', '/connect/azure/x', '/connect/../local'])(
+        'rejects unsupported connect source paths in %s without opening local setup',
+        async (path) => {
+            const error = await runHandler(path, 'connectionString=mongodb%3A%2F%2Fhost');
+
+            expect(error?.message).toBe(
+                'This DocumentDB connection link has an invalid path. Use /connect or /connect/azure.',
+            );
+            expect(lastTelemetry.deepLinkConnectSource).toBe('unrecognized');
+            expect(lastTelemetry.failureStage).toBe('validateConnectPath');
+            expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+            expect(mockOpenLocalQuickStart).not.toHaveBeenCalled();
+        },
+    );
 
     it('opens the DocumentDB Local wizard for /local', async () => {
         const error = await runHandler('/local');
