@@ -3,16 +3,36 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as vscode from 'vscode';
-import { ext } from '../../extensionVariables';
 import { recordSurveyActivity } from '../survey/SurveyService';
+import { Emitter, type Disposable, type Event } from './events';
+import {
+    defaultTaskStrings,
+    type TaskLogger,
+    type TaskOptions,
+    type TaskStrings,
+    type TaskTelemetryContext,
+    type TaskTelemetryRunner,
+} from './taskHost';
 import {
     hasResourceConflict,
     type ResourceDefinition,
     type ResourceTrackingTask,
     type TaskInfo,
 } from './taskServiceResourceTracking';
+
+const noopLogger: TaskLogger = {
+    appendLine: (): void => {},
+    trace: (): void => {},
+    debug: (): void => {},
+    info: (): void => {},
+    warn: (): void => {},
+    error: (): void => {},
+};
+
+const defaultTelemetryRunner: TaskTelemetryRunner = async <T>(
+    _eventName: string,
+    callback: (context: TaskTelemetryContext) => Promise<T>,
+): Promise<T> => callback({ telemetry: { properties: {}, measurements: {} } });
 
 /**
  * Enumeration of possible states a task can be in.
@@ -139,32 +159,39 @@ export abstract class Task {
     public abstract readonly type: string;
     public abstract readonly name: string;
 
+    protected readonly logger: TaskLogger;
+    private readonly telemetry: TaskTelemetryRunner;
+    private readonly strings: TaskStrings;
+
     private _status: TaskStatus;
     private abortController: AbortController;
 
     // Event emitters for the events
-    private readonly _onDidChangeState = new vscode.EventEmitter<TaskStateChangeEvent>();
-    private readonly _onDidChangeStatus = new vscode.EventEmitter<TaskStatus>();
+    private readonly _onDidChangeState = new Emitter<TaskStateChangeEvent>();
+    private readonly _onDidChangeStatus = new Emitter<TaskStatus>();
 
     /**
      * Event fired when the task's state changes (e.g., Running to Completed).
      * This event is guaranteed to capture all state transitions.
      */
-    public readonly onDidChangeState = this._onDidChangeState.event;
+    public readonly onDidChangeState: Event<TaskStateChangeEvent> = this._onDidChangeState.event;
 
     /**
      * Event fired on any status update, including progress changes.
      * This is a more granular event that includes all updates.
      */
-    public readonly onDidChangeStatus = this._onDidChangeStatus.event; /**
+    public readonly onDidChangeStatus: Event<TaskStatus> = this._onDidChangeStatus.event; /**
      * Creates a new Task instance with an auto-generated unique ID.
      */
-    protected constructor() {
+    protected constructor(options?: TaskOptions) {
+        this.logger = options?.logger ?? noopLogger;
+        this.telemetry = options?.telemetry ?? defaultTelemetryRunner;
+        this.strings = { ...defaultTaskStrings, ...options?.strings };
         this.id = crypto.randomUUID();
         this._status = {
             state: TaskState.Pending,
             progress: 0,
-            message: vscode.l10n.t('Task created and ready to start'),
+            message: this.strings.taskCreated,
         };
         this.abortController = new AbortController();
     }
@@ -211,32 +238,17 @@ export abstract class Task {
             // Centralized logging for final state transitions
             if (state === TaskState.Completed) {
                 const msg = this._status.message ?? '';
-                ext.outputChannel.appendLine(
-                    vscode.l10n.t("✓ Task '{taskName}' completed successfully. {message}", {
-                        taskName: this.name,
-                        message: msg,
-                    }),
-                );
+                this.logger.appendLine(`✓ Task '${this.name}' completed successfully. ${msg}`);
             } else if (state === TaskState.Stopped) {
                 const msg = this._status.message ?? '';
-                ext.outputChannel.appendLine(
-                    vscode.l10n.t("■ Task '{taskName}' was stopped. {message}", {
-                        taskName: this.name,
-                        message: msg,
-                    }),
-                );
+                this.logger.appendLine(`■ Task '${this.name}' was stopped. ${msg}`);
             } else if (state === TaskState.Failed) {
                 const msg = this._status.message ?? '';
                 const err = this._status.error instanceof Error ? this._status.error.message : '';
                 // Include error details if available
-                const detail = err ? ` ${vscode.l10n.t('Error: {0}', err)}` : '';
+                const detail = err ? ` Error: ${err}` : '';
                 // Use .error() to ensure task failure is always visible regardless of log level
-                ext.outputChannel.error(
-                    vscode.l10n.t("! Task '{taskName}' failed. {message}", {
-                        taskName: this.name,
-                        message: `${msg}${detail}`.trim(),
-                    }),
-                );
+                this.logger.error(`! Task '${this.name}' failed. ${`${msg}${detail}`.trim()}`);
             }
         }
     }
@@ -267,16 +279,16 @@ export abstract class Task {
      */
     public async start(): Promise<void> {
         if (this._status.state !== TaskState.Pending) {
-            throw new Error(vscode.l10n.t('Cannot start task in state: {0}', this._status.state));
+            throw new Error(this.strings.cannotStartInState(this._status.state));
         }
 
-        ext.outputChannel.appendLine(vscode.l10n.t("○ Task '{taskName}' initializing...", { taskName: this.name }));
+        this.logger.appendLine(`○ Task '${this.name}' initializing...`);
 
-        this.updateStatus(TaskState.Initializing, vscode.l10n.t('Initializing task...'), 0);
+        this.updateStatus(TaskState.Initializing, this.strings.initializingTask, 0);
 
         try {
             // Allow subclasses to perform initialization with telemetry
-            await callWithTelemetryAndErrorHandling('taskService.taskInitialization', async (context) => {
+            await this.telemetry('taskService.taskInitialization', async (context) => {
                 // Add base task properties with task_ prefix
                 context.telemetry.properties.task_id = this.id;
                 context.telemetry.properties.task_type = this.type;
@@ -291,23 +303,23 @@ export abstract class Task {
 
             // Check if abort was requested during initialization
             if (this.abortController.signal.aborted) {
-                this.updateStatus(TaskState.Stopping, vscode.l10n.t('Task stopped during initialization'));
+                this.updateStatus(TaskState.Stopping, this.strings.stoppedDuringInitialization);
                 // Let runWork handle the final state transition
                 void this.runWork().catch((error) => {
-                    this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
+                    this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
                 });
                 return;
             }
 
-            this.updateStatus(TaskState.Running, vscode.l10n.t('Task is running'), 0);
-            ext.outputChannel.appendLine(vscode.l10n.t("► Task '{taskName}' starting...", { taskName: this.name }));
+            this.updateStatus(TaskState.Running, this.strings.taskRunning, 0);
+            this.logger.appendLine(`► Task '${this.name}' starting...`);
 
             // Start the actual work asynchronously
             void this.runWork().catch((error) => {
-                this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
+                this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
             });
         } catch (error) {
-            this.updateStatus(TaskState.Failed, vscode.l10n.t('Failed to initialize task'), 0, error);
+            this.updateStatus(TaskState.Failed, this.strings.failedToInitializeTask, 0, error);
             throw error;
         }
     }
@@ -317,7 +329,7 @@ export abstract class Task {
      * This method is private to ensure proper lifecycle management.
      */
     private async runWork(): Promise<void> {
-        await callWithTelemetryAndErrorHandling('taskService.taskExecution', async (context: IActionContext) => {
+        await this.telemetry('taskService.taskExecution', async (context: TaskTelemetryContext) => {
             // Add base task properties with task_ prefix
             context.telemetry.properties.task_id = this.id;
             context.telemetry.properties.task_type = this.type;
@@ -333,21 +345,17 @@ export abstract class Task {
                     // Preserve current progress message to show what was accomplished before stopping
                     const currentMessage = this._status.message;
                     const stoppedMessage = currentMessage
-                        ? vscode.l10n.t('Task stopped. {0}', currentMessage)
-                        : vscode.l10n.t('Task stopped');
+                        ? this.strings.stoppedWithMessage(currentMessage)
+                        : this.strings.taskStopped;
                     this.updateStatus(TaskState.Stopped, stoppedMessage);
                 } else {
                     context.telemetry.properties.task_final_state = 'completed';
-                    this.updateStatus(TaskState.Completed, vscode.l10n.t('Task completed successfully'), 100);
+                    this.updateStatus(TaskState.Completed, this.strings.taskCompletedSuccessfully, 100);
                     if (this.type === 'copy-paste-collection' || this.type === 'copy-paste-indexes') {
                         recordSurveyActivity('dataManagement');
                     }
                 }
             } catch (error) {
-                // Suppress the default error notification from callWithTelemetryAndErrorHandling
-                // because TaskProgressReportingService shows its own notification with a "Show Output" button
-                context.errorHandling.suppressDisplay = true;
-
                 // Add error information to telemetry
                 context.telemetry.properties.task_error = error instanceof Error ? error.message : 'Unknown error';
 
@@ -357,12 +365,12 @@ export abstract class Task {
                     // Preserve current progress message to show what was accomplished before stopping
                     const currentMessage = this._status.message;
                     const stoppedMessage = currentMessage
-                        ? vscode.l10n.t('Task stopped. {0}', currentMessage)
-                        : vscode.l10n.t('Task stopped');
+                        ? this.strings.stoppedWithMessage(currentMessage)
+                        : this.strings.taskStopped;
                     this.updateStatus(TaskState.Stopped, stoppedMessage);
                 } else {
                     context.telemetry.properties.task_final_state = 'failed';
-                    this.updateStatus(TaskState.Failed, vscode.l10n.t('Task failed'), 0, error);
+                    this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
                 }
                 throw error;
             }
@@ -381,7 +389,7 @@ export abstract class Task {
         if (this.isFinalState()) {
             return;
         }
-        this.updateStatus(TaskState.Stopping, vscode.l10n.t('Stopping task...'));
+        this.updateStatus(TaskState.Stopping, this.strings.stoppingTask);
         this.abortController.abort();
 
         // Note: The actual state transition to Stopped will be handled by runWork()
@@ -434,7 +442,7 @@ export abstract class Task {
      *                Use natural domain names (no prefixes) for implementation-specific data.
      *
      * @example
-     * protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
+     * protected async doWork(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
      *     // Add task-specific telemetry
      *     if (context) {
      *         context.telemetry.properties.sourceCollectionSize = this.sourceSize.toString();
@@ -460,7 +468,7 @@ export abstract class Task {
      *     }
      * }
      */
-    protected abstract doWork(signal: AbortSignal, context?: IActionContext): Promise<void>;
+    protected abstract doWork(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void>;
 
     /**
      * Optional hook called during task initialization.
@@ -471,7 +479,7 @@ export abstract class Task {
      * @param context Optional telemetry context for adding initialization-specific properties and measurements.
      *                Use natural domain names (no prefixes) for implementation-specific data.
      */
-    protected onInitialize?(signal: AbortSignal, context?: IActionContext): Promise<void>;
+    protected onInitialize?(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void>;
 
     /**
      * Optional hook called when the task is being deleted.
@@ -525,26 +533,26 @@ export interface TaskService {
      * Event fired when a new task is registered.
      * Use this to update UI or start monitoring a new task.
      */
-    readonly onDidRegisterTask: vscode.Event<Task>;
+    readonly onDidRegisterTask: Event<Task>;
 
     /**
      * Event fired when a task is deleted.
      * The event provides the task ID that was deleted.
      */
-    readonly onDidDeleteTask: vscode.Event<string>;
+    readonly onDidDeleteTask: Event<string>;
 
     /**
      * Event fired when any task's status changes.
      * This aggregates status changes from all registered tasks,
      * providing a single subscription point for monitoring all task activity.
      */
-    readonly onDidChangeTaskStatus: vscode.Event<{ taskId: string; status: TaskStatus }>;
+    readonly onDidChangeTaskStatus: Event<{ taskId: string; status: TaskStatus }>;
 
     /**
      * Event fired when a task's state changes.
      * This provides detailed information about the state transition.
      */
-    readonly onDidChangeTaskState: vscode.Event<TaskStateChangeEvent>;
+    readonly onDidChangeTaskState: Event<TaskStateChangeEvent>;
 
     /**
      * Gets all tasks that are currently using resources that conflict with the specified resource.
@@ -583,25 +591,30 @@ export interface TaskService {
  * tasks and aggregated task monitoring.
  */
 class TaskServiceImpl implements TaskService {
+    private readonly strings: TaskStrings;
     private readonly tasks = new Map<string, Task>();
-    private readonly taskSubscriptions = new Map<string, vscode.Disposable[]>();
+    private readonly taskSubscriptions = new Map<string, Disposable[]>();
 
     // Event emitters for the service events
-    private readonly _onDidRegisterTask = new vscode.EventEmitter<Task>();
-    private readonly _onDidDeleteTask = new vscode.EventEmitter<string>();
-    private readonly _onDidChangeTaskStatus = new vscode.EventEmitter<{ taskId: string; status: TaskStatus }>();
-    private readonly _onDidChangeTaskState = new vscode.EventEmitter<TaskStateChangeEvent>();
+    private readonly _onDidRegisterTask = new Emitter<Task>();
+    private readonly _onDidDeleteTask = new Emitter<string>();
+    private readonly _onDidChangeTaskStatus = new Emitter<{ taskId: string; status: TaskStatus }>();
+    private readonly _onDidChangeTaskState = new Emitter<TaskStateChangeEvent>();
 
     public readonly onDidRegisterTask = this._onDidRegisterTask.event;
     public readonly onDidDeleteTask = this._onDidDeleteTask.event;
     public readonly onDidChangeTaskStatus = this._onDidChangeTaskStatus.event;
     public readonly onDidChangeTaskState = this._onDidChangeTaskState.event;
 
+    constructor(options?: { strings?: Partial<TaskStrings> }) {
+        this.strings = { ...defaultTaskStrings, ...options?.strings };
+    }
+
     public registerTask(task: Task): void {
         if (this.tasks.has(task.id)) {
-            throw new Error(vscode.l10n.t('Task with ID {0} already exists', task.id));
+            throw new Error(this.strings.taskAlreadyExists(task.id));
         } // Subscribe to task events and aggregate them
-        const subscriptions: vscode.Disposable[] = [
+        const subscriptions: Disposable[] = [
             task.onDidChangeStatus((status) => {
                 this._onDidChangeTaskStatus.fire({ taskId: task.id, status });
             }),
@@ -626,7 +639,7 @@ class TaskServiceImpl implements TaskService {
     public async deleteTask(id: string): Promise<void> {
         const task = this.tasks.get(id);
         if (!task) {
-            throw new Error(vscode.l10n.t('Task with ID {0} not found', id));
+            throw new Error(this.strings.taskNotFound(id));
         }
 
         // Clean up event subscriptions

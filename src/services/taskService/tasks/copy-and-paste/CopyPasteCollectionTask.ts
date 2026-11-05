@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
@@ -11,6 +10,7 @@ import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
+import { type TaskOptions, type TaskTelemetryContext } from '../../taskHost';
 import { Task } from '../../taskService';
 import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 import { type CopyPasteConfig } from './copyPasteConfig';
@@ -66,8 +66,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         documentWriter: StreamingDocumentWriter,
         indexCopier?: CollectionIndexCopier,
         indexPresentationDelayMs: number = CopyPasteCollectionTask.INDEX_PRESENTATION_DELAY_MS,
+        options?: TaskOptions,
     ) {
-        super();
+        super(options);
         this.config = config;
         this.documentReader = documentReader;
         this.documentWriter = documentWriter;
@@ -115,7 +116,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param prefix Prefix for telemetry properties (e.g., 'source' or 'target')
      * @param context Telemetry context to add properties to
      */
-    private async collectClusterMetadata(clusterId: string, prefix: string, context: IActionContext): Promise<void> {
+    private async collectClusterMetadata(clusterId: string, prefix: string, context: TaskTelemetryContext): Promise<void> {
         try {
             const client = await ClustersClient.getClient(clusterId);
             const metadata = await client.getClusterMetadata();
@@ -142,7 +143,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param signal AbortSignal to check for cancellation
      * @param context Optional telemetry context for tracking task operations
      */
-    protected async onInitialize(signal: AbortSignal, context?: IActionContext): Promise<void> {
+    protected async onInitialize(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
         if (context) {
             context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
         }
@@ -259,7 +260,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param signal AbortSignal to check for cancellation
      * @param context Optional telemetry context for tracking task operations
      */
-    protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
+    protected async doWork(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
         if (context) {
             context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
         }
@@ -383,7 +384,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
     }
 
-    private async copyIndexes(signal: AbortSignal, context?: IActionContext): Promise<void> {
+    private async copyIndexes(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
         if (!this.indexCopier) {
             throw new Error(vscode.l10n.t('Index copy services were not configured.'));
         }

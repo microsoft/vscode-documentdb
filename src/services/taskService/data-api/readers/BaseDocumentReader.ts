@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { l10n } from 'vscode';
 import { ext } from '../../../../extensionVariables';
+import { type TaskTelemetryContext } from '../../taskHost';
 import { type DocumentDetails, type DocumentReader, type DocumentReaderOptions } from '../types';
 import { KeepAliveOrchestrator } from './KeepAliveOrchestrator';
 
@@ -181,7 +181,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
      * const count = await reader.countDocuments();
      * console.log(`Total documents: ${count}`);
      */
-    public async countDocuments(signal?: AbortSignal, actionContext?: IActionContext): Promise<number> {
+    public async countDocuments(signal?: AbortSignal, actionContext?: TaskTelemetryContext): Promise<number> {
         ext.outputChannel.trace(
             l10n.t('[Reader] Counting documents in {0}.{1}', this.databaseName, this.collectionName),
         );
@@ -219,7 +219,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
      *
      * @example
      * // Azure Cosmos DB for MongoDB API implementation
-     * protected async *streamDocumentsFromDatabase(signal?: AbortSignal, actionContext?: IActionContext) {
+     * protected async *streamDocumentsFromDatabase(signal?: AbortSignal, actionContext?: TaskTelemetryContext) {
      *   const client = await ClustersClient.getClient(this.connectionId);
      *   const documentStream = client.streamDocuments(
      *     this.databaseName,
@@ -237,7 +237,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
      */
     protected abstract streamDocumentsFromDatabase(
         signal?: AbortSignal,
-        actionContext?: IActionContext,
+        actionContext?: TaskTelemetryContext,
     ): AsyncIterable<DocumentDetails>;
 
     /**
@@ -264,11 +264,11 @@ export abstract class BaseDocumentReader implements DocumentReader {
      *
      * @example
      * // Azure Cosmos DB for MongoDB API implementation
-     * protected async countDocumentsInDatabase(signal?: AbortSignal, actionContext?: IActionContext) {
+     * protected async countDocumentsInDatabase(signal?: AbortSignal, actionContext?: TaskTelemetryContext) {
      *   const client = await ClustersClient.getClient(this.connectionId);
      *   // Use estimated count for O(1) performance
      *   return await client.estimateDocumentCount(this.databaseName, this.collectionName);
      * }
      */
-    protected abstract countDocumentsInDatabase(signal?: AbortSignal, actionContext?: IActionContext): Promise<number>;
+    protected abstract countDocumentsInDatabase(signal?: AbortSignal, actionContext?: TaskTelemetryContext): Promise<number>;
 }

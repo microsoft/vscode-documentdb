@@ -9,7 +9,7 @@
  * and StreamingDocumentWriter.
  */
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type TaskTelemetryContext } from '../taskHost';
 
 // =================================
 // PUBLIC INTERFACES
@@ -69,7 +69,7 @@ export interface DocumentReader {
      * @param actionContext Optional action context for telemetry collection
      * @returns Promise resolving to the number of documents
      */
-    countDocuments(signal?: AbortSignal, actionContext?: IActionContext): Promise<number>;
+    countDocuments(signal?: AbortSignal, actionContext?: TaskTelemetryContext): Promise<number>;
 }
 
 /**
@@ -111,7 +111,7 @@ export interface DocumentReaderOptions {
      * Optional action context for telemetry collection.
      * Used to record read operation statistics for analytics and monitoring.
      */
-    actionContext?: IActionContext;
+    actionContext?: TaskTelemetryContext;
 }
 
 /**

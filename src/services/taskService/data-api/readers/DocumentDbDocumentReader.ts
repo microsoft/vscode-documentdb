@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type Document, type WithId } from 'mongodb';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { type TaskTelemetryContext } from '../../taskHost';
 import { type DocumentDetails } from '../types';
 import { BaseDocumentReader } from './BaseDocumentReader';
 
@@ -57,7 +57,7 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
      */
     protected async *streamDocumentsFromDatabase(
         signal?: AbortSignal,
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): AsyncIterable<DocumentDetails> {
         const client = await ClustersClient.getClient(this.clusterId);
 
@@ -88,7 +88,10 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
      * @param _actionContext Optional action context for telemetry (currently unused)
      * @returns Promise resolving to the estimated document count
      */
-    protected async countDocumentsInDatabase(_signal?: AbortSignal, _actionContext?: IActionContext): Promise<number> {
+    protected async countDocumentsInDatabase(
+        _signal?: AbortSignal,
+        _actionContext?: TaskTelemetryContext,
+    ): Promise<number> {
         const client = await ClustersClient.getClient(this.clusterId);
         // Currently we use estimatedDocumentCount to get a rough idea of the document count
         // estimatedDocumentCount evaluates document counts based on metadata with O(1) complexity

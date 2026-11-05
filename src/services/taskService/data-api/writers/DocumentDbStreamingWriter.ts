@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type Document, type WithId, type WriteError } from 'mongodb';
 import { l10n } from 'vscode';
 import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
+import { type TaskTelemetryContext } from '../../taskHost';
 import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
 import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 import {
@@ -83,7 +83,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
     protected override async writeBatch(
         documents: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
-        actionContext?: IActionContext,
+        actionContext?: TaskTelemetryContext,
     ): Promise<StrategyBatchResult<string>> {
         switch (strategy) {
             case ConflictResolutionStrategy.Skip:
@@ -108,7 +108,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      * - Conflict: BulkWriteError with code 11000 (duplicate key)
      * - Other: All other errors
      */
-    protected override classifyError(error: unknown, _actionContext?: IActionContext): ErrorType {
+    protected override classifyError(error: unknown, _actionContext?: TaskTelemetryContext): ErrorType {
         if (!error) {
             return 'other';
         }
@@ -154,7 +154,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      */
     protected override extractPartialProgress(
         error: unknown,
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): PartialProgress | undefined {
         if (!error || typeof error !== 'object') {
             return undefined;
@@ -189,7 +189,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      */
     protected override async preFilterForSkipStrategy(
         documents: DocumentDetails[],
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<PreFilterResult<string> | undefined> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
         const { docsToInsert, conflictIds } = await this.preFilterConflicts(rawDocuments);
@@ -264,7 +264,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      */
     private async writeWithSkipStrategy(
         documents: DocumentDetails[],
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<SkipBatchResult<string>> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
 
@@ -352,7 +352,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      */
     private async writeWithOverwriteStrategy(
         documents: DocumentDetails[],
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<OverwriteBatchResult<string>> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
         const collection = this.client.getCollection(this.databaseName, this.collectionName);
@@ -392,7 +392,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      */
     private async writeWithAbortStrategy(
         documents: DocumentDetails[],
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<AbortBatchResult<string>> {
         const rawDocuments = documents.map((doc) => doc.documentContent as WithId<Document>);
 
@@ -478,7 +478,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
      */
     private async writeWithGenerateNewIdsStrategy(
         documents: DocumentDetails[],
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<GenerateNewIdsBatchResult<string>> {
         const transformedDocuments = documents.map((detail) => {
             const rawDocument = detail.documentContent as WithId<Document>;

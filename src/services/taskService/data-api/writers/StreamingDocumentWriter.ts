@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
+import { type TaskTelemetryContext } from '../../taskHost';
 import {
     ConflictResolutionStrategy,
     type DocumentDetails,
@@ -46,7 +46,7 @@ export interface StreamWriteOptions {
     /** Signal to abort the streaming operation */
     abortSignal?: AbortSignal;
     /** Optional action context for telemetry collection */
-    actionContext?: IActionContext;
+    actionContext?: TaskTelemetryContext;
 }
 
 /**
@@ -385,7 +385,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     protected abstract writeBatch(
         documents: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
-        actionContext?: IActionContext,
+        actionContext?: TaskTelemetryContext,
     ): Promise<StrategyBatchResult<TDocumentId>>;
 
     /**
@@ -402,7 +402,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * @param actionContext Optional context for telemetry
      * @returns Error type classification
      */
-    protected abstract classifyError(error: unknown, actionContext?: IActionContext): ErrorType;
+    protected abstract classifyError(error: unknown, actionContext?: TaskTelemetryContext): ErrorType;
 
     /**
      * Extracts partial progress from an error (for throttle recovery).
@@ -422,7 +422,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      */
     protected abstract extractPartialProgress(
         error: unknown,
-        actionContext?: IActionContext,
+        actionContext?: TaskTelemetryContext,
     ): PartialProgress | undefined;
 
     /**
@@ -447,7 +447,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      */
     protected preFilterForSkipStrategy(
         _documents: DocumentDetails[],
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<PreFilterResult<TDocumentId> | undefined> {
         return Promise.resolve(undefined);
     }
@@ -628,7 +628,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         batch: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
         abortSignal: AbortSignal | undefined,
-        actionContext: IActionContext | undefined,
+        actionContext: TaskTelemetryContext | undefined,
         onPartialProgress: (partialResult: StrategyBatchResult<TDocumentId>) => void,
     ): Promise<StrategyBatchResult<TDocumentId> | null> {
         let currentBatch = batch;

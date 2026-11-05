@@ -5,6 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { type TaskLogger, type TaskOptions, type TaskTelemetryContext, type TaskTelemetryRunner } from './taskHost';
 import { Task, TaskService, TaskState, type TaskStatus } from './taskService';
 
 // Mock extensionVariables (ext) module
@@ -384,5 +385,136 @@ describe('TaskService', () => {
         await waitForTaskCompletion(task);
 
         expect(task.getStatus().state).toBe(TaskState.Stopped);
+    });
+});
+
+describe('Task host options', () => {
+    class HostTestTask extends Task {
+        public readonly type = 'host-test';
+        public readonly name = 'Host Task';
+
+        constructor(
+            options?: TaskOptions,
+            private readonly work: (signal: AbortSignal) => Promise<void> = async (): Promise<void> => {},
+        ) {
+            super(options);
+        }
+
+        protected doWork(signal: AbortSignal): Promise<void> {
+            return this.work(signal);
+        }
+    }
+
+    function createLogger(): TaskLogger {
+        return {
+            appendLine: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+        };
+    }
+
+    it('writes initialization, execution and completion lifecycle lines to the injected logger', async () => {
+        const logger = createLogger();
+        const task = new HostTestTask({ logger });
+
+        await task.start();
+        await waitForTaskCompletion(task);
+
+        expect(logger.appendLine).toHaveBeenNthCalledWith(1, "○ Task 'Host Task' initializing...");
+        expect(logger.appendLine).toHaveBeenNthCalledWith(2, "► Task 'Host Task' starting...");
+        expect(logger.appendLine).toHaveBeenNthCalledWith(
+            3,
+            "✓ Task 'Host Task' completed successfully. Task completed successfully",
+        );
+        expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('writes the failure lifecycle line through the injected logger error method', async () => {
+        const logger = createLogger();
+        const task = new HostTestTask({ logger }, async (): Promise<void> => {
+            throw new Error('expected failure');
+        });
+
+        await task.start();
+        await waitForTaskCompletion(task);
+
+        expect(logger.error).toHaveBeenCalledExactlyOnceWith(
+            "! Task 'Host Task' failed. Task failed Error: expected failure",
+        );
+    });
+
+    it('writes the stopped lifecycle line to the injected logger', async () => {
+        const logger = createLogger();
+        const task = new HostTestTask(
+            { logger },
+            (signal: AbortSignal): Promise<void> =>
+                new Promise((resolve) => {
+                    signal.addEventListener('abort', (): void => resolve(), { once: true });
+                }),
+        );
+
+        await task.start();
+        task.stop();
+        await waitForTaskCompletion(task);
+
+        expect(logger.appendLine).toHaveBeenLastCalledWith(
+            "■ Task 'Host Task' was stopped. Task stopped. Stopping task...",
+        );
+    });
+
+    it('uses the injected runner and populates its contexts with the unchanged task telemetry properties', async () => {
+        const contexts: TaskTelemetryContext[] = [];
+        const eventNames: string[] = [];
+        const telemetry: TaskTelemetryRunner = async <T>(
+            eventName: string,
+            callback: (context: TaskTelemetryContext) => Promise<T>,
+        ): Promise<T> => {
+            const context: TaskTelemetryContext = { telemetry: { properties: {}, measurements: {} } };
+            eventNames.push(eventName);
+            contexts.push(context);
+            return callback(context);
+        };
+        const task = new HostTestTask({ telemetry });
+
+        await task.start();
+        await waitForTaskCompletion(task);
+
+        expect(eventNames).toEqual(['taskService.taskInitialization', 'taskService.taskExecution']);
+        expect(contexts[0].telemetry.properties).toEqual({
+            task_id: task.id,
+            task_type: task.type,
+            task_name: task.name,
+            task_phase: 'initialization',
+            task_initializationCompleted: 'true',
+        });
+        expect(contexts[1].telemetry.properties).toEqual({
+            task_id: task.id,
+            task_type: task.type,
+            task_name: task.name,
+            task_phase: 'execution',
+            task_final_state: 'completed',
+        });
+    });
+
+    it('merges injected partial strings with the English defaults', async () => {
+        const task = new HostTestTask({
+            strings: {
+                taskCreated: 'Ready',
+                taskCompletedSuccessfully: 'Finished',
+                cannotStartInState: (state: string): string => `Already ${state}`,
+            },
+        });
+        const messages: Array<string | undefined> = [];
+        task.onDidChangeStatus((status) => messages.push(status.message));
+
+        expect(task.getStatus().message).toBe('Ready');
+        await task.start();
+        await waitForTaskCompletion(task);
+
+        expect(messages).toEqual(['Initializing task...', 'Task is running', 'Finished']);
+        await expect(task.start()).rejects.toThrow('Already Completed');
     });
 });

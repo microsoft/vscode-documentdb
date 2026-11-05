@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { createExtensionTaskOptions } from '../extension/extensionTaskOptions';
 import { Task } from '../taskService';
 
 /**
@@ -25,7 +26,7 @@ export class DemoTask extends Task {
      * @param shouldFail Optional parameter to make the task fail after a random amount of time for testing purposes.
      */
     constructor(name: string, shouldFail: boolean = false) {
-        super();
+        super(createExtensionTaskOptions());
         this.name = name;
         this.shouldFail = shouldFail;
     }
