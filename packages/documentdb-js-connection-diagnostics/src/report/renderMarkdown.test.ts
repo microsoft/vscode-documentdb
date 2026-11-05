@@ -9,11 +9,11 @@ import { buildReport, DEFAULT_TIMEOUTS, englishReportText, renderJson, renderMar
 
 import {
     type CheckResult,
+    type DiagnosticsReport,
     type Finding,
     type FindingText,
     type ReportSectionId,
     type ReportText,
-    type DiagnosticsReport,
 } from '../index.js';
 
 function finding(code = 'consumer.observed', detail = 'English detail'): Finding<string> {

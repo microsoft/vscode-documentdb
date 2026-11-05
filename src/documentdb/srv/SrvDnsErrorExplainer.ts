@@ -6,10 +6,7 @@
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { Links } from '../../constants';
-import {
-    type ErrorExplanationProvider,
-    type ErrorExplanationRequest,
-} from '../../services/errorExplanationService';
+import { type ErrorExplanationProvider, type ErrorExplanationRequest } from '../../services/errorExplanationService';
 
 export class SrvDnsErrorExplainer implements ErrorExplanationProvider {
     public readonly id = 'srv-dns';

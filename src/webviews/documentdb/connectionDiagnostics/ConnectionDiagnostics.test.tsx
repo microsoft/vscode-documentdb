@@ -685,7 +685,6 @@ describe('ConnectionDiagnostics', () => {
             expect(save).not.toHaveBeenCalled();
             expect(host.textContent).toContain('Could not save the report: No window');
         });
-
     });
 
     it('keeps only Re-run, Show report and Share report in the finished footer and reveals both sharing choices', async () => {
@@ -1346,7 +1345,10 @@ describe('ConnectionDiagnostics', () => {
                                     kind: 'tcpHost',
                                     host: hostB,
                                     port: 27017,
-                                    failedAddresses: [{ address: '203.0.113.11', connectMs: 2 }, { address: '203.0.113.12' }],
+                                    failedAddresses: [
+                                        { address: '203.0.113.11', connectMs: 2 },
+                                        { address: '203.0.113.12' },
+                                    ],
                                     durationMs: 5,
                                 },
                             ],
@@ -1386,7 +1388,9 @@ describe('ConnectionDiagnostics', () => {
                         segments: [{ kind: 'ping', ms: 0.4 }],
                         details: {
                             findings: [],
-                            evidence: [{ kind: 'access', commands: [{ command: 'ping', outcome: 'ok' }], pingMs: 1234 }],
+                            evidence: [
+                                { kind: 'access', commands: [{ command: 'ping', outcome: 'ok' }], pingMs: 1234 },
+                            ],
                         },
                     },
                 ]),

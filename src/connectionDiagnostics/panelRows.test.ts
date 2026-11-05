@@ -10,18 +10,14 @@ import {
     type Check,
     type CheckOutcome,
     type CheckResult,
+    type DiagnosticsEvent,
     type Finding,
     type RunContext,
-    type DiagnosticsEvent,
 } from '@documentdb-js/connection-diagnostics';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
-import {
-    panelRowIds,
-    type PanelRow,
-    type PanelRowId,
-} from '../webviews/documentdb/connectionDiagnostics/panelTypes';
+import { panelRowIds, type PanelRow, type PanelRowId } from '../webviews/documentdb/connectionDiagnostics/panelTypes';
 import { describeFinding } from './findingMessages';
 import { PanelRowProjector } from './panelRows';
 import { getPlannedDiagnosticsChecks, runConnectionDiagnostics } from './runConnectionDiagnostics';
@@ -838,7 +834,11 @@ describe('Authentication and Database access evidence', (): void => {
             ]);
             expect(
                 withGreeting(['SCRAM-SHA-256'], {
-                    facts: { authMethod: 'ManagedIdentity', mechanism: 'MONGODB-OIDC', managedIdentityKind: 'userAssigned' },
+                    facts: {
+                        authMethod: 'ManagedIdentity',
+                        mechanism: 'MONGODB-OIDC',
+                        managedIdentityKind: 'userAssigned',
+                    },
                 }).segments,
             ).toEqual([
                 { kind: 'authMethod', method: 'managedIdentity' },

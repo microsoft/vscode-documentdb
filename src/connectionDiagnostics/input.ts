@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    type NetworkOptions,
-    type DiagnosticsInput,
-    type WireCompressor,
-} from '@documentdb-js/connection-diagnostics';
+import { type DiagnosticsInput, type NetworkOptions, type WireCompressor } from '@documentdb-js/connection-diagnostics';
 import { CredentialCache, type CachedClusterCredentials } from '../documentdb/CredentialCache';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { buildAuthConnectionTarget } from '../documentdb/auth/authConnectionTarget';
@@ -52,10 +48,7 @@ export function unresolvedDiagnosticsInput(): DiagnosticsInput {
 }
 
 /** Builds the run's host-only setup from the target's resolved, non-empty connection details. */
-export function buildDiagnosticsSetup(
-    clusterId: string,
-    credentials: EphemeralClusterCredentials,
-): DiagnosticsSetup {
+export function buildDiagnosticsSetup(clusterId: string, credentials: EphemeralClusterCredentials): DiagnosticsSetup {
     const cached = CredentialCache.getCredentials(clusterId);
     const chosenAuthMethod = credentials.selectedAuthMethod ?? cached?.authMechanism;
     const password = credentials.nativeAuthConfig?.connectionPassword ?? cached?.nativeAuthConfig?.connectionPassword;

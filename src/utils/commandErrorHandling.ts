@@ -136,9 +136,7 @@ export function registerCommandWithTreeNodeUnwrappingAndDiagnostics<T>(
 
                 const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
                     ?.cluster?.clusterId;
-                const explanation = clusterId
-                    ? await ErrorExplanationService.explain({ clusterId, error })
-                    : undefined;
+                const explanation = clusterId ? await ErrorExplanationService.explain({ clusterId, error }) : undefined;
 
                 if (explanation) {
                     context.telemetry.properties.explanationProviderId = explanation.providerId;
@@ -205,9 +203,7 @@ export function registerCommandWithTreeNodeUnwrappingAndModalErrors<T>(
                 // infrastructure can be explained instead of showing the raw driver error.
                 const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
                     ?.cluster?.clusterId;
-                const explanation = clusterId
-                    ? await ErrorExplanationService.explain({ clusterId, error })
-                    : undefined;
+                const explanation = clusterId ? await ErrorExplanationService.explain({ clusterId, error }) : undefined;
 
                 if (explanation) {
                     context.telemetry.properties.explanationProviderId = explanation.providerId;

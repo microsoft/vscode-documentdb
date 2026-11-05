@@ -5,7 +5,7 @@
 
 import { type TimeoutProfile } from '../timeouts.js';
 import { type CheckResult, type CheckStatus, type Finding, type SkipReason } from '../types.js';
-import { type ReportOutcome, type DiagnosticsReport } from './types.js';
+import { type DiagnosticsReport, type ReportOutcome } from './types.js';
 
 export type ReportSectionId =
     | 'summary'

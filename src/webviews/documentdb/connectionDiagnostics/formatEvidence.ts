@@ -299,7 +299,11 @@ export function formatEvidence(segments: readonly EvidenceSegment[]): string | u
     return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
-function formatUnit(value: number, unit: 'millisecond' | 'second' | 'minute', options: Intl.NumberFormatOptions): string {
+function formatUnit(
+    value: number,
+    unit: 'millisecond' | 'second' | 'minute',
+    options: Intl.NumberFormatOptions,
+): string {
     return new Intl.NumberFormat(undefined, { style: 'unit', unit, unitDisplay: 'short', ...options }).format(value);
 }
 

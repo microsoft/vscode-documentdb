@@ -5,9 +5,9 @@
 
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { type DiagnosticsEntryPoint, type DiagnosticsTarget } from '../../../connectionDiagnostics/types';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { type DiagnosticsEntryPoint, type DiagnosticsTarget } from '../../../connectionDiagnostics/types';
 import { isFeedbackPermitted } from '../../../utils/feedbackPermission';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './connectionDiagnosticsRouter';
@@ -21,10 +21,10 @@ interface PanelController {
 
 const panels = new Map<string, PanelController>();
 
-export function openConnectionDiagnostics(options: {
-    target: DiagnosticsTarget;
-    entryPoint: DiagnosticsEntryPoint;
-}): { panelAction: 'created' | 'focused'; diagnosticsSessionId: string } {
+export function openConnectionDiagnostics(options: { target: DiagnosticsTarget; entryPoint: DiagnosticsEntryPoint }): {
+    panelAction: 'created' | 'focused';
+    diagnosticsSessionId: string;
+} {
     const { target, entryPoint } = options;
     const existing = panels.get(target.clusterId);
     if (existing) {

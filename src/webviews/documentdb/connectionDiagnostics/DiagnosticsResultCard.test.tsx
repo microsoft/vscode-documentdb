@@ -11,8 +11,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 
 import { type ResultCardData } from './connectionDiagnosticsTypes';
+import { cardIssues, DiagnosticsResultCard, resultCardTitle, type RunResult } from './DiagnosticsResultCard';
 import { type PanelFindingDetail, type PanelRow } from './panelTypes';
-import { cardIssues, resultCardTitle, DiagnosticsResultCard, type RunResult } from './DiagnosticsResultCard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

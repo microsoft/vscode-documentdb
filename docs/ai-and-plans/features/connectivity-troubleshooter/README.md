@@ -16,7 +16,7 @@ code:
 > Called the **connectivity troubleshooter** until WI-17 (2026-11-02). Older decisions and
 > iteration notes retain that name. The command ID changed in
 > [0038](./decisions.md#0038--the-feature-is-called-diagnose-connection). Internal names (package,
-> source paths, symbols, telemetry) were renamed from *troubleshooter* to *connection diagnostics*
+> source paths, symbols, telemetry) were renamed from _troubleshooter_ to _connection diagnostics_
 > in RN-1…RN-5 ([0051](./decisions.md#0051--internal-names-follow-the-feature-connection-diagnostics));
 > this docs folder keeps its name.
 

@@ -19,7 +19,7 @@ import {
 } from '../../services/errorExplanationService';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
 import { type DiagnosticsSetup } from '../input';
-import { type FindingCode, type DiagnosticsTarget } from '../types';
+import { type DiagnosticsTarget, type FindingCode } from '../types';
 
 function sanitizeExplanation(message: string, context: RunContext, setup: DiagnosticsSetup | undefined): string {
     const credentials = setup?.transientCredentials;

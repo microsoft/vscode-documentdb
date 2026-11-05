@@ -7,15 +7,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type TypedRpcFixtures } from './core/fixtures';
-import { fixtures, diagnosticsRowLabels, type DiagnosticsRow } from './fixtures';
+import { diagnosticsRowLabels, fixtures, type DiagnosticsRow } from './fixtures';
 import { parseScenarioRoute, runnerRoutes, scenarioHtml, scenarioIndex, scenarioRunner } from './scenario-server';
 import {
-    findScenario,
-    scenarioRoutes,
-    scenarios,
     diagnosticsEntraRuleIds,
     diagnosticsForbiddenText,
     diagnosticsListTop,
+    findScenario,
+    scenarioRoutes,
+    scenarios,
     type Scenario,
     type ScenarioAssertion,
 } from './scenarios';

@@ -54,19 +54,19 @@ This file holds the accepted plan (below) and a done note under each work item.
 
 Paths (`git mv`):
 
-| From | To |
-| --- | --- |
-| `packages/documentdb-js-connectivity-troubleshooter/` | `packages/documentdb-js-connection-diagnostics/` |
-| `src/troubleshooter/` | `src/connectionDiagnostics/` |
-| `src/troubleshooter/runTroubleshooter.ts` (+ `.test.ts`) | `src/connectionDiagnostics/runConnectionDiagnostics.ts` (+ `.test.ts`) |
-| `src/webviews/documentdb/connectivityTroubleshooter/` | `src/webviews/documentdb/connectionDiagnostics/` |
-| `…/ConnectivityTroubleshooter.tsx` (+ `.test.tsx`) | `…/ConnectionDiagnostics.tsx` (+ `.test.tsx`) |
-| `…/connectivityTroubleshooter{Types,Router,Controller}.ts` (+ tests) | `…/connectionDiagnostics{Types,Router,Controller}.ts` (+ tests) |
-| `…/connectivityTroubleshooter.scss` | `…/connectionDiagnostics.scss` |
-| `…/TroubleshooterResultCard.tsx` (+ `.test.tsx`, `.intent.test.tsx`) | `…/DiagnosticsResultCard.tsx` (+ tests) |
-| `…/TroubleshooterRowDetails.tsx` | `…/DiagnosticsRowDetails.tsx` |
-| `…/troubleshooterPanelSession.ts` | `…/diagnosticsPanelSession.ts` |
-| `…/troubleshooterViewState.ts` | `…/diagnosticsViewState.ts` |
+| From                                                                           | To                                                                     |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `packages/documentdb-js-connectivity-troubleshooter/`                          | `packages/documentdb-js-connection-diagnostics/`                       |
+| `src/troubleshooter/`                                                          | `src/connectionDiagnostics/`                                           |
+| `src/troubleshooter/runTroubleshooter.ts` (+ `.test.ts`)                       | `src/connectionDiagnostics/runConnectionDiagnostics.ts` (+ `.test.ts`) |
+| `src/webviews/documentdb/connectivityTroubleshooter/`                          | `src/webviews/documentdb/connectionDiagnostics/`                       |
+| `…/ConnectivityTroubleshooter.tsx` (+ `.test.tsx`)                             | `…/ConnectionDiagnostics.tsx` (+ `.test.tsx`)                          |
+| `…/connectivityTroubleshooter{Types,Router,Controller}.ts` (+ tests)           | `…/connectionDiagnostics{Types,Router,Controller}.ts` (+ tests)        |
+| `…/connectivityTroubleshooter.scss`                                            | `…/connectionDiagnostics.scss`                                         |
+| `…/TroubleshooterResultCard.tsx` (+ `.test.tsx`, `.intent.test.tsx`)           | `…/DiagnosticsResultCard.tsx` (+ tests)                                |
+| `…/TroubleshooterRowDetails.tsx`                                               | `…/DiagnosticsRowDetails.tsx`                                          |
+| `…/troubleshooterPanelSession.ts`                                              | `…/diagnosticsPanelSession.ts`                                         |
+| `…/troubleshooterViewState.ts`                                                 | `…/diagnosticsViewState.ts`                                            |
 | `src/commands/troubleshootConnection/troubleshootConnection.ts` (+ `.test.ts`) | `src/commands/diagnoseConnection/diagnoseConnection.ts` (+ `.test.ts`) |
 
 Package metadata: name `@documentdb-js/connection-diagnostics`; `repository.directory`; `test`
@@ -78,46 +78,46 @@ key and `load(...)`; `package-lock.json` via `npm install` (do not hand-edit), w
 
 Identifier rules (apply case-preserving):
 
-| Pattern | Becomes | Examples |
-| --- | --- | --- |
-| `ConnectivityTroubleshooter` / `connectivityTroubleshooter` | `ConnectionDiagnostics` / `connectionDiagnostics` | `ConnectivityTroubleshooterConfiguration` → `ConnectionDiagnosticsConfiguration`, `runConnectivityTroubleshooter` → `runConnectionDiagnostics`, `openConnectivityTroubleshooter` → `openConnectionDiagnostics`, `RunConnectivityTroubleshooterOptions` → `RunConnectionDiagnosticsOptions` |
-| `Troubleshooter` / `troubleshooter` as a name part | `Diagnostics` / `diagnostics` | `TroubleshooterRun` → `DiagnosticsRun`, `TroubleshooterSetup` → `DiagnosticsSetup`, `troubleshooterSessionId` → `diagnosticsSessionId`, `troubleshooterHost` → `diagnosticsHost`, `buildTroubleshooterSetup` → `buildDiagnosticsSetup`, `maskTroubleshooterInput` → `maskDiagnosticsInput`, `configureTroubleshooterTelemetry` → `configureDiagnosticsTelemetry`, `troubleshooterCard` (incl. SCSS classes) → `diagnosticsCard`, `troubleshooterScenario` → `diagnosticsScenario` |
-| `runTroubleshooter` (package export) | `runDiagnostics` | |
-| `TroubleshooterCancelledError` / `TroubleshooterConfigurationError` | `DiagnosticsCancelledError` / `DiagnosticsConfigurationError` | |
-| `TroubleshootTarget` | `DiagnosticsTarget` | |
-| `troubleshootConnection` | `diagnoseConnection` | command handler function, folder, file |
-| Prose in comments, JSDoc, test titles, READMEs | "connection diagnostics" (the feature), "the diagnosis run" / "a diagnostics run" (one run) | "the connectivity troubleshooter" → "connection diagnostics" |
+| Pattern                                                             | Becomes                                                                                     | Examples                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConnectivityTroubleshooter` / `connectivityTroubleshooter`         | `ConnectionDiagnostics` / `connectionDiagnostics`                                           | `ConnectivityTroubleshooterConfiguration` → `ConnectionDiagnosticsConfiguration`, `runConnectivityTroubleshooter` → `runConnectionDiagnostics`, `openConnectivityTroubleshooter` → `openConnectionDiagnostics`, `RunConnectivityTroubleshooterOptions` → `RunConnectionDiagnosticsOptions`                                                                                                                                                                                        |
+| `Troubleshooter` / `troubleshooter` as a name part                  | `Diagnostics` / `diagnostics`                                                               | `TroubleshooterRun` → `DiagnosticsRun`, `TroubleshooterSetup` → `DiagnosticsSetup`, `troubleshooterSessionId` → `diagnosticsSessionId`, `troubleshooterHost` → `diagnosticsHost`, `buildTroubleshooterSetup` → `buildDiagnosticsSetup`, `maskTroubleshooterInput` → `maskDiagnosticsInput`, `configureTroubleshooterTelemetry` → `configureDiagnosticsTelemetry`, `troubleshooterCard` (incl. SCSS classes) → `diagnosticsCard`, `troubleshooterScenario` → `diagnosticsScenario` |
+| `runTroubleshooter` (package export)                                | `runDiagnostics`                                                                            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `TroubleshooterCancelledError` / `TroubleshooterConfigurationError` | `DiagnosticsCancelledError` / `DiagnosticsConfigurationError`                               |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `TroubleshootTarget`                                                | `DiagnosticsTarget`                                                                         |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `troubleshootConnection`                                            | `diagnoseConnection`                                                                        | command handler function, folder, file                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Prose in comments, JSDoc, test titles, READMEs                      | "connection diagnostics" (the feature), "the diagnosis run" / "a diagnostics run" (one run) | "the connectivity troubleshooter" → "connection diagnostics"                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Wire and persisted IDs (all unshipped, change freely):
 
-| From | To |
-| --- | --- |
-| `callWithTelemetryAndErrorHandling('connectivityTroubleshooter.run' …)` in `runTroubleshooter.ts` | `'diagnoseConnection.run'` |
-| `'connectivityTroubleshooter.runStarted'` in `telemetry.ts` | `'diagnoseConnection.runStarted'` |
-| telemetry properties `troubleshooterSessionId`, `troubleshooterRunCorrelationId` | `diagnosticsSessionId`, `diagnosticsRunCorrelationId` |
-| `telemetrySource: 'troubleshootConnection'` | `'diagnoseConnection'` |
-| `SrvResolutionSurface` value `'troubleshooter'` (`src/documentdb/srv/prepareDriverConnectionString.ts`) and every `surface: 'troubleshooter'` | `'connectionDiagnostics'` |
-| explanation-service request `source?: 'troubleshooter'` and its users (`contextHints.ts`, tests) | `'connectionDiagnostics'` |
-| survey activation source `'connectivityTroubleshooter'` (`surveyTypes.ts`, `surveyTelemetry.ts`, tests) | `'connectionDiagnostics'` |
-| `webviewName: 'connectivityTroubleshooter'`, `WebviewRegistry` key, `appRouter` router key and the `viewName !==` check, `trpcClient.connectivityTroubleshooter.*` | `connectionDiagnostics` (automatic `…webview.event.<name>.*`, error and RPC event names follow) |
-| `panelViewType: 'vscode-documentdb-connectivity-troubleshooter'` | `'vscode-documentdb-connection-diagnostics'` (no serializer; not persisted) |
-| L2-dev route `/connectivityTroubleshooter/…`, scenario keys, `Scenario<'connectivityTroubleshooter'>`, the `reports\/(…|connectivityTroubleshooter)` regex in `build/verification/browser/harness.ts`, `runtime.ts`, fixtures (`'stage0-troubleshooter-session'` → `'stage0-diagnostics-session'`), `troubleshooterListTop` etc. | `connectionDiagnostics` / `diagnostics…` |
+| From                                                                                                                                                               | To                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `callWithTelemetryAndErrorHandling('connectivityTroubleshooter.run' …)` in `runTroubleshooter.ts`                                                                  | `'diagnoseConnection.run'`                                                                                                                                                                           |
+| `'connectivityTroubleshooter.runStarted'` in `telemetry.ts`                                                                                                        | `'diagnoseConnection.runStarted'`                                                                                                                                                                    |
+| telemetry properties `troubleshooterSessionId`, `troubleshooterRunCorrelationId`                                                                                   | `diagnosticsSessionId`, `diagnosticsRunCorrelationId`                                                                                                                                                |
+| `telemetrySource: 'troubleshootConnection'`                                                                                                                        | `'diagnoseConnection'`                                                                                                                                                                               |
+| `SrvResolutionSurface` value `'troubleshooter'` (`src/documentdb/srv/prepareDriverConnectionString.ts`) and every `surface: 'troubleshooter'`                      | `'connectionDiagnostics'`                                                                                                                                                                            |
+| explanation-service request `source?: 'troubleshooter'` and its users (`contextHints.ts`, tests)                                                                   | `'connectionDiagnostics'`                                                                                                                                                                            |
+| survey activation source `'connectivityTroubleshooter'` (`surveyTypes.ts`, `surveyTelemetry.ts`, tests)                                                            | `'connectionDiagnostics'`                                                                                                                                                                            |
+| `webviewName: 'connectivityTroubleshooter'`, `WebviewRegistry` key, `appRouter` router key and the `viewName !==` check, `trpcClient.connectivityTroubleshooter.*` | `connectionDiagnostics` (automatic `…webview.event.<name>.*`, error and RPC event names follow)                                                                                                      |
+| `panelViewType: 'vscode-documentdb-connectivity-troubleshooter'`                                                                                                   | `'vscode-documentdb-connection-diagnostics'` (no serializer; not persisted)                                                                                                                          |
+| L2-dev route `/connectivityTroubleshooter/…`, scenario keys, `Scenario<'connectivityTroubleshooter'>`, the `reports\/(…                                            | connectivityTroubleshooter)`regex in`build/verification/browser/harness.ts`, `runtime.ts`, fixtures (`'stage0-troubleshooter-session'`→`'stage0-diagnostics-session'`), `troubleshooterListTop` etc. | `connectionDiagnostics` / `diagnostics…` |
 
 ## Rename map — error-translation layer (connection diagnostics → error explanation)
 
-| From | To |
-| --- | --- |
-| `src/services/connectionDiagnosticsService.ts` (+ `.test.ts`) | `src/services/errorExplanationService.ts` (+ `.test.ts`) |
-| `ConnectionDiagnosticsService`, `ConnectionDiagnosticsServiceImpl` | `ErrorExplanationService`, `ErrorExplanationServiceImpl` |
-| `ConnectionDiagnosticsProvider` | `ErrorExplanationProvider` |
-| `ConnectionDiagnosticsRequest` | `ErrorExplanationRequest` |
-| `ConnectionDiagnosis` (service result with `providerId`) | `ErrorExplanationResult` |
-| `DiagnosisIdentifier`, `DiagnosisIdentifierKind` | `ExplanationIdentifier`, `ExplanationIdentifierKind` |
+| From                                                                                                                                                                               | To                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/connectionDiagnosticsService.ts` (+ `.test.ts`)                                                                                                                      | `src/services/errorExplanationService.ts` (+ `.test.ts`)                                                                     |
+| `ConnectionDiagnosticsService`, `ConnectionDiagnosticsServiceImpl`                                                                                                                 | `ErrorExplanationService`, `ErrorExplanationServiceImpl`                                                                     |
+| `ConnectionDiagnosticsProvider`                                                                                                                                                    | `ErrorExplanationProvider`                                                                                                   |
+| `ConnectionDiagnosticsRequest`                                                                                                                                                     | `ErrorExplanationRequest`                                                                                                    |
+| `ConnectionDiagnosis` (service result with `providerId`)                                                                                                                           | `ErrorExplanationResult`                                                                                                     |
+| `DiagnosisIdentifier`, `DiagnosisIdentifierKind`                                                                                                                                   | `ExplanationIdentifier`, `ExplanationIdentifierKind`                                                                         |
 | `SrvDnsDiagnosticsProvider`, `EntraDiagnosticsProvider`, `KubernetesDiagnosticsProvider`, `QuickStartDiagnosticsProvider`, `AtlasDiagnosticsProvider` (classes and files, + tests) | `SrvDnsErrorExplainer`, `EntraErrorExplainer`, `KubernetesErrorExplainer`, `QuickStartErrorExplainer`, `AtlasErrorExplainer` |
-| telemetry event `connectionDiagnostics.explained` | `errorExplanation.explained` |
-| telemetry properties `diagnosisProviderId`, `diagnosisSource` (service, `EntraDiagnosticsProvider`, `ClusterItemBase`, `BaseExtendedTreeDataProvider`, tests) | `explanationProviderId`, `explanationSource` |
-| local variables such as `diagnosis` holding a service result | `explanation` (only where it reads naturally; do not touch unrelated `diagnosis` wording of the feature) |
-| unchanged | `ConnectionExplanation`, `explain()`, `explainOperationFailure`, provider `id` values |
+| telemetry event `connectionDiagnostics.explained`                                                                                                                                  | `errorExplanation.explained`                                                                                                 |
+| telemetry properties `diagnosisProviderId`, `diagnosisSource` (service, `EntraDiagnosticsProvider`, `ClusterItemBase`, `BaseExtendedTreeDataProvider`, tests)                      | `explanationProviderId`, `explanationSource`                                                                                 |
+| local variables such as `diagnosis` holding a service result                                                                                                                       | `explanation` (only where it reads naturally; do not touch unrelated `diagnosis` wording of the feature)                     |
+| unchanged                                                                                                                                                                          | `ConnectionExplanation`, `explain()`, `explainOperationFailure`, provider `id` values                                        |
 
 ## Work items
 
@@ -251,7 +251,7 @@ Suggested model: luna.
 - Scope: `docs/ai-and-plans/features/connectivity-troubleshooter/README.md` and `design.md`:
   front-matter `paths:` globs, the "Key files" lists, package name, folder names, symbol names,
   telemetry event and property names. Add one line to the existing top note: internal names were
-  renamed from *troubleshooter* to *connection diagnostics* in RN-1…RN-5 (decision 0051). Leave the
+  renamed from _troubleshooter_ to _connection diagnostics_ in RN-1…RN-5 (decision 0051). Leave the
   folder name, `feature:` id, and `docs/ai-and-plans/README.md` index link unchanged. Do not edit
   iteration files or older decision text.
 - Accept: every path in those two files exists; `rg -n "src/troubleshooter|connectivityTroubleshooter/|troubleshootConnection/|connectivity-troubleshooter\b" README.md design.md`

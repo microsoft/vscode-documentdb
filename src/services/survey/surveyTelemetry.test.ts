@@ -249,9 +249,9 @@ describe('SurveyTelemetry', (): void => {
         expect(sink.mock.calls[0][0].properties.activationSource).toBe('localQuickStart');
         sink.mockClear();
         const diagnosticsTelemetry = createTelemetry();
-        expect(
-            diagnosticsTelemetry.reportFeedbackActivated({ source: 'connectionDiagnostics' }, INVITATION_ID),
-        ).toBe(true);
+        expect(diagnosticsTelemetry.reportFeedbackActivated({ source: 'connectionDiagnostics' }, INVITATION_ID)).toBe(
+            true,
+        );
         expect(sink.mock.calls[0][0].properties.activationSource).toBe('connectionDiagnostics');
         sink.mockClear();
         permitted = false;

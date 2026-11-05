@@ -36,6 +36,7 @@ import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
+import { diagnoseConnection } from '../commands/diagnoseConnection/diagnoseConnection';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
@@ -86,13 +87,12 @@ import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
 import { showWorkerStats } from '../commands/showWorkerStats/showWorkerStats';
-import { diagnoseConnection } from '../commands/diagnoseConnection/diagnoseConnection';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
-import { AtlasErrorExplainer } from '../plugins/service-atlas-mongodb/AtlasErrorExplainer';
 import { AtlasDiscoveryProvider } from '../plugins/service-atlas-mongodb/AtlasDiscoveryProvider';
+import { AtlasErrorExplainer } from '../plugins/service-atlas-mongodb/AtlasErrorExplainer';
 import {
     OPEN_ATLAS_CLUSTER_COMMAND_ID,
     openAtlasCluster,
@@ -101,12 +101,12 @@ import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongod
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
-import { KubernetesErrorExplainer } from '../plugins/service-kubernetes/KubernetesErrorExplainer';
 import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/KubernetesDiscoveryProvider';
+import { KubernetesErrorExplainer } from '../plugins/service-kubernetes/KubernetesErrorExplainer';
 import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
-import { ErrorExplanationService } from '../services/errorExplanationService';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 import { migrateLegacyEmulatorConnections } from '../services/legacyEmulatorMigration';
 import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
 import { QuickStartErrorExplainer } from '../services/localQuickStart/QuickStartErrorExplainer';

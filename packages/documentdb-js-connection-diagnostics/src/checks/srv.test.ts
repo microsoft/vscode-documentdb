@@ -14,9 +14,9 @@ import {
     type Check,
     type CheckOutcome,
     type CheckResult,
+    type DiagnosticsRun,
     type DnsIo,
     type RunContext,
-    type DiagnosticsRun,
 } from '../index.js';
 
 const records: SrvRecord[] = [

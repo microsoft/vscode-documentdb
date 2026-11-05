@@ -14,16 +14,16 @@ import {
     type Check,
     type CheckOutcome,
     type CheckResult,
-    type Finding,
-    type ProbeTarget,
-    type RunContext,
-    type TimedOutOperation,
     type DiagnosticsClock,
     type DiagnosticsEvent,
     type DiagnosticsInput,
     type DiagnosticsIo,
     type DiagnosticsRun,
     type DiagnosticsTimeouts,
+    type Finding,
+    type ProbeTarget,
+    type RunContext,
+    type TimedOutOperation,
 } from './types.js';
 
 const defaultClock: DiagnosticsClock = {

@@ -53,9 +53,10 @@ describe('ErrorExplanationService', () => {
         ErrorExplanationService.registerProvider(provider('b', () => Promise.resolve('from b')));
         ErrorExplanationService.registerProvider(provider('c', second));
 
-        await expect(
-            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
-        ).resolves.toEqual({ providerId: 'b', message: 'from b' });
+        await expect(ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') })).resolves.toEqual({
+            providerId: 'b',
+            message: 'from b',
+        });
         expect(second).not.toHaveBeenCalled();
     });
 
@@ -65,9 +66,11 @@ describe('ErrorExplanationService', () => {
             provider('k', () => Promise.resolve({ message: 'from k', identifiers })),
         );
 
-        await expect(
-            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
-        ).resolves.toEqual({ providerId: 'k', message: 'from k', identifiers });
+        await expect(ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') })).resolves.toEqual({
+            providerId: 'k',
+            message: 'from k',
+            identifiers,
+        });
     });
 
     it.each([undefined, 'connectionDiagnostics'] as const)(
@@ -99,9 +102,10 @@ describe('ErrorExplanationService', () => {
         ErrorExplanationService.registerProvider(provider('a', () => Promise.reject(new Error('provider bug'))));
         ErrorExplanationService.registerProvider(provider('b', () => Promise.resolve('from b')));
 
-        await expect(
-            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
-        ).resolves.toEqual({ providerId: 'b', message: 'from b' });
+        await expect(ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') })).resolves.toEqual({
+            providerId: 'b',
+            message: 'from b',
+        });
     });
 
     it('gives up on a provider that never settles so the original error can still be reported', async () => {
@@ -160,9 +164,10 @@ describe('ErrorExplanationService', () => {
         ErrorExplanationService.registerProvider(provider('a', () => Promise.resolve('first')));
         ErrorExplanationService.registerProvider(provider('a', () => Promise.resolve('second')));
 
-        await expect(
-            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
-        ).resolves.toEqual({ providerId: 'a', message: 'second' });
+        await expect(ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') })).resolves.toEqual({
+            providerId: 'a',
+            message: 'second',
+        });
     });
 
     it('never modifies the error it was given', async () => {

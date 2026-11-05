@@ -48,6 +48,9 @@ import {
     type RunUpdate,
     type TimeoutProfile,
 } from './connectionDiagnosticsTypes';
+import { DiagnosticsResultCard, resultCardTitle } from './DiagnosticsResultCard';
+import { detailsDescription, DiagnosticsRowDetails } from './DiagnosticsRowDetails';
+import { applyRunUpdate, cancelRun, failRun, startingState, type DiagnosticsViewState } from './diagnosticsViewState';
 import {
     formatDuration,
     formatEvidence,
@@ -57,15 +60,6 @@ import {
     toStatusListStatus,
 } from './formatEvidence';
 import { panelRowIds, type PanelRow, type PanelRowId } from './panelTypes';
-import { resultCardTitle, DiagnosticsResultCard } from './DiagnosticsResultCard';
-import { detailsDescription, DiagnosticsRowDetails } from './DiagnosticsRowDetails';
-import {
-    applyRunUpdate,
-    cancelRun,
-    failRun,
-    startingState,
-    type DiagnosticsViewState,
-} from './diagnosticsViewState';
 import { usePacedRunEvents } from './usePacedRunEvents';
 
 type ReportAction = 'showDiagnostics' | 'copyReport' | 'saveReport';

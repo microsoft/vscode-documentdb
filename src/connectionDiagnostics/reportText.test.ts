@@ -9,18 +9,14 @@ import {
     renderMarkdown,
     skipReasons,
     type CheckResult,
+    type DiagnosticsRun,
     type ReportLabelKey,
     type ReportSectionId,
-    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import * as os from 'os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import {
-    createExtensionReportAttribution,
-    createExtensionReportText,
-    renderExtensionReportFooter,
-} from './reportText';
+import { createExtensionReportAttribution, createExtensionReportText, renderExtensionReportFooter } from './reportText';
 import { type FindingCode } from './types';
 
 vi.mock('../extensionVariables', () => ({
@@ -50,9 +46,7 @@ const checkLabels: Readonly<Record<string, string>> = {
     contextHints: 'Context hints',
 };
 
-function fixtureRun(
-    coverage: Partial<DiagnosticsRun<FindingCode>['coverage']> = {},
-): DiagnosticsRun<FindingCode> {
+function fixtureRun(coverage: Partial<DiagnosticsRun<FindingCode>['coverage']> = {}): DiagnosticsRun<FindingCode> {
     return {
         runId: 'fixture-run',
         startedAt: Date.UTC(2026, 9, 29, 12),
@@ -319,7 +313,9 @@ describe('report attribution', () => {
             const footer = renderExtensionReportFooter();
             expect(footer).toContain(String.raw`## \[Localized\] About this report`);
             expect(footer).toContain(String.raw`\[Localized\] This report was generated using`);
-            expect(footer).toContain(String.raw`[\[Localized\] Get the extension on Visual Studio Marketplace](https://`);
+            expect(footer).toContain(
+                String.raw`[\[Localized\] Get the extension on Visual Studio Marketplace](https://`,
+            );
             expect(footer).toContain(String.raw`\[Localized\] Extension version\: 1\.2\.3`);
         } finally {
             localize.mockRestore();

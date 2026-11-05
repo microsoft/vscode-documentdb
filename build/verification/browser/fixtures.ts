@@ -128,9 +128,7 @@ export function diagnosticsFinding(
 }
 
 /** `fc-0123456789ab-00N.<cluster>`: the SRV target names Azure DocumentDB returns, fixture-safe. */
-export const diagnosticsSrvTargets = [0, 1, 2].map(
-    (index): string => `fc-0123456789ab-00${index}.${diagnosticsHost}`,
-);
+export const diagnosticsSrvTargets = [0, 1, 2].map((index): string => `fc-0123456789ab-00${index}.${diagnosticsHost}`);
 export const diagnosticsPrivateLinkAlias = 'fc-0123456789ab-000.privatelink.mongocluster.cosmos.azure.com';
 export const diagnosticsPublicAliasTitle = 'Public address for this Azure host name';
 export const diagnosticsPublicAliasExplanation =
@@ -355,10 +353,7 @@ export const diagnosticsConnectedRows: DiagnosticsRow[] = [
         id: 'secureConnection',
         status: 'done',
         durationMs: 761,
-        segments: [
-            { kind: 'certificateTrusted' },
-            { kind: 'validUntil', date: '2027-03-01T00:00:00.000Z' },
-        ],
+        segments: [{ kind: 'certificateTrusted' }, { kind: 'validUntil', date: '2027-03-01T00:00:00.000Z' }],
         details: diagnosticsConnectedDetails.secureConnection,
     },
     {

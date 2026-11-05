@@ -5,12 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-    createConnectionStringCheck,
-    describeNetworkOptions,
-    resolveNetworkOptions,
-    runDiagnostics,
-} from './index.js';
+import { createConnectionStringCheck, describeNetworkOptions, resolveNetworkOptions, runDiagnostics } from './index.js';
 
 import { type Check, type CheckOutcome, type CheckResult, type NetworkOptionLayer, type RunContext } from './index.js';
 

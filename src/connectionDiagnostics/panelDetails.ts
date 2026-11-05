@@ -7,8 +7,8 @@ import {
     buildReport,
     DEFAULT_TIMEOUTS,
     type CheckResult,
-    type Finding,
     type DiagnosticsReport,
+    type Finding,
 } from '@documentdb-js/connection-diagnostics';
 import * as vscode from 'vscode';
 import {
@@ -369,10 +369,7 @@ function connectionOptions(
 }
 
 /** The database authentication looks up the user in: `authSource`, else the path, else `admin`. */
-function authSourceOf(
-    parsed: CheckResult<FindingCode>,
-    options: readonly PanelConnectionOption[],
-): PanelAuthSource {
+function authSourceOf(parsed: CheckResult<FindingCode>, options: readonly PanelConnectionOption[]): PanelAuthSource {
     const explicitSource = options.find(
         (option): boolean => option.name.toLowerCase() === 'authsource' && !option.hidden,
     );
@@ -480,7 +477,8 @@ function authEvidence(
     const mechanism = authMechanismOf(result, context);
     const user = text(facts, 'userName') ?? text(facts, 'account');
     const parsed = context.find((entry): boolean => entry.checkId === 'connectionString' && ran(entry));
-    const authSource = known === 'native' && parsed ? authSourceOf(parsed, connectionOptions(parsed, context)) : undefined;
+    const authSource =
+        known === 'native' && parsed ? authSourceOf(parsed, connectionOptions(parsed, context)) : undefined;
     const stages = known === 'none' ? [] : authStages(result, known);
     if (!known && !mechanism && !user) {
         return [];

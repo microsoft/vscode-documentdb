@@ -7,13 +7,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
     DEFAULT_TIMEOUTS,
+    DiagnosticsConfigurationError,
     resolveTimeouts,
     SAFETY_LIMITS,
     timeoutsForProfile,
-    DiagnosticsConfigurationError,
 } from './index.js';
 
-import { type TimeoutProfile, type DiagnosticsTimeouts } from './index.js';
+import { type DiagnosticsTimeouts, type TimeoutProfile } from './index.js';
 
 const profiles: readonly TimeoutProfile[] = ['default', 'longer', 'noDiagnosticTimeouts'];
 const fields = Object.keys(DEFAULT_TIMEOUTS) as (keyof DiagnosticsTimeouts)[];

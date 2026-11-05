@@ -12,7 +12,6 @@ import {
     type TypedRpcFixtures,
 } from './core/fixtures';
 import {
-    fixtures,
     diagnosticsCard,
     diagnosticsConnectedCard,
     diagnosticsConnectedRows,
@@ -30,11 +29,12 @@ import {
     diagnosticsRowLabels,
     diagnosticsSrvTargets,
     diagnosticsStartedAt,
-    type StyleExpectation,
+    fixtures,
     type DiagnosticsCard,
     type DiagnosticsFinding,
     type DiagnosticsRow,
     type DiagnosticsRunUpdate,
+    type StyleExpectation,
 } from './fixtures';
 
 export interface ScenarioReadiness {
@@ -551,13 +551,9 @@ function finishedScenario(
     card: readonly string[],
     cardExcludes: readonly string[] = [],
 ): Scenario<'connectionDiagnostics'> {
-    return diagnosticsScenario(
-        diagnosticsRun(runId, { type: 'finished', result, rows }),
-        [...evidence, ...card],
-        {
-            assertions: [cardText(card, cardExcludes)],
-        },
-    );
+    return diagnosticsScenario(diagnosticsRun(runId, { type: 'finished', result, rows }), [...evidence, ...card], {
+        assertions: [cardText(card, cardExcludes)],
+    });
 }
 
 const notChecked = (
@@ -624,10 +620,7 @@ const dnsFailureRun = diagnosticsRun('stage0-run-dns', {
 
 const entraHost = 'c-stage0.mongocluster.cosmos.azure.us';
 const entraAccount = 'alice@contoso.com';
-const entraRow = (
-    status: DiagnosticsRow['status'],
-    ...segments: DiagnosticsRow['segments']
-): DiagnosticsRow => ({
+const entraRow = (status: DiagnosticsRow['status'], ...segments: DiagnosticsRow['segments']): DiagnosticsRow => ({
     id: 'authentication',
     status,
     segments: [{ kind: 'authMethod', method: 'entraId' }, ...segments],
@@ -2108,9 +2101,7 @@ const diagnosticsScenarios = {
                         kind: 'text',
                         name: 'The TCP row names the timeout, not a generic "did not finish"',
                         selector: '#connectivity-checks-networkConnection',
-                        includes: [
-                            `${unreachable.title} (${diagnosticsHost}) · 0 of 1 hosts reachable · Port 27017`,
-                        ],
+                        includes: [`${unreachable.title} (${diagnosticsHost}) · 0 of 1 hosts reachable · Port 27017`],
                         excludes: ['Did not finish in time', 'Step timed out'],
                     },
                     {

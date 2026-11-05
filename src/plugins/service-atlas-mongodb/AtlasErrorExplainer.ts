@@ -14,10 +14,7 @@
 
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { getHostsFromConnectionString, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
-import {
-    type ErrorExplanationProvider,
-    type ErrorExplanationRequest,
-} from '../../services/errorExplanationService';
+import { type ErrorExplanationProvider, type ErrorExplanationRequest } from '../../services/errorExplanationService';
 import { isAtlasTlsHandshakeRejection, summarizeAtlasTlsHandshakeRejection } from './atlasConnectionErrors';
 
 /** Atlas clusters are addressed under this suffix, which makes them identifiable without any registration. */

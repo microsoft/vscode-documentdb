@@ -3,12 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    type Check,
-    type CheckOutcome,
-    type Finding,
-    type RunContext,
-} from '@documentdb-js/connection-diagnostics';
+import { type Check, type CheckOutcome, type Finding, type RunContext } from '@documentdb-js/connection-diagnostics';
 import { isIP } from 'net';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';

@@ -91,7 +91,11 @@ describe('server greeting formatting', (): void => {
 describe('row duration formatting (decision 0050)', (): void => {
     // Built with the same platform call, so the test holds in any locale; what it pins is the
     // thresholds and rounding, not the unit words.
-    const unit = (value: number, name: 'millisecond' | 'second' | 'minute', options: Intl.NumberFormatOptions): string =>
+    const unit = (
+        value: number,
+        name: 'millisecond' | 'second' | 'minute',
+        options: Intl.NumberFormatOptions,
+    ): string =>
         new Intl.NumberFormat(undefined, { style: 'unit', unit: name, unitDisplay: 'short', ...options }).format(value);
 
     it('shows a sub-millisecond step as less than one millisecond', (): void => {

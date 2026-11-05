@@ -11,7 +11,7 @@ import { nodeDns } from '../io/nodeDns.js';
 
 import { type FallbackDnsResult } from '@documentdb-js/srv-resolver';
 import { type LookupAddress, type LookupAllOptions, type SrvRecord } from 'node:dns';
-import { type BuiltInFindingCode, type CheckResult, type DnsIo, type DiagnosticsRun } from '../index.js';
+import { type BuiltInFindingCode, type CheckResult, type DiagnosticsRun, type DnsIo } from '../index.js';
 
 interface LookupAllIo {
     lookup(host: string, options: LookupAllOptions): Promise<LookupAddress[]>;

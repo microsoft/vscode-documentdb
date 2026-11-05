@@ -15,9 +15,9 @@
 
 import * as l10n from '@vscode/l10n';
 import {
+    type ConnectionExplanation,
     type ErrorExplanationProvider,
     type ErrorExplanationRequest,
-    type ConnectionExplanation,
     type ExplanationIdentifier,
 } from '../../services/errorExplanationService';
 import { type KubernetesPortForwardMetadata } from './portForwardMetadata';
@@ -56,10 +56,7 @@ export function resetKubernetesClustersForTests(): void {
 export class KubernetesErrorExplainer implements ErrorExplanationProvider {
     public readonly id = 'kubernetes-port-forward';
 
-    public async explain({
-        clusterId,
-        error,
-    }: ErrorExplanationRequest): Promise<ConnectionExplanation | undefined> {
+    public async explain({ clusterId, error }: ErrorExplanationRequest): Promise<ConnectionExplanation | undefined> {
         const metadata = knownClusters.get(clusterId);
         if (!metadata) {
             return undefined;

@@ -42,7 +42,7 @@ import { type AuthTraceContext } from '../../utils/authTrace';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
 import { summarizeTokenClaims, type TokenClaimSummary } from '../auth/tokenClaims';
 import { type DiagnosticsSetup } from '../input';
-import { type FindingCode, type DiagnosticsTarget } from '../types';
+import { type DiagnosticsTarget, type FindingCode } from '../types';
 
 export const AUTH_STEP_IDS = ['auth.signInConfiguration', 'auth.token', 'auth.serverAuthentication'] as const;
 type AuthStepId = (typeof AUTH_STEP_IDS)[number];

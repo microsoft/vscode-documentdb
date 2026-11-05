@@ -5,17 +5,17 @@
 
 import {
     createBuiltInChecks,
-    runDiagnostics,
     DiagnosticsCancelledError,
+    runDiagnostics,
     type Check,
     type CheckOutcome,
     type CheckResult,
-    type RunContext,
-    type TimeoutProfile,
     type DiagnosticsEvent,
     type DiagnosticsInput,
     type DiagnosticsIo,
     type DiagnosticsRun,
+    type RunContext,
+    type TimeoutProfile,
 } from '@documentdb-js/connection-diagnostics';
 import {
     callWithTelemetryAndErrorHandling,
@@ -47,7 +47,7 @@ import {
     maskDiagnosticsInput,
     reportRunStarted,
 } from './telemetry';
-import { type FindingCode, type DiagnosticsEntryPoint, type DiagnosticsTarget } from './types';
+import { type DiagnosticsEntryPoint, type DiagnosticsTarget, type FindingCode } from './types';
 
 export interface RunConnectionDiagnosticsOptions {
     readonly runId?: string;

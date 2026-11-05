@@ -185,9 +185,7 @@ describe('diagnoseConnection', () => {
         const command = (await errorNode?.getTreeItem())?.command;
         expect(command?.command).toBe('vscode-documentdb.command.diagnoseConnection');
         await diagnoseConnection(context, ...unwrapArgs<ClusterItemBase>(command?.arguments));
-        expect(openConnectionDiagnostics).toHaveBeenCalledWith(
-            expect.objectContaining({ entryPoint: 'errorNode' }),
-        );
+        expect(openConnectionDiagnostics).toHaveBeenCalledWith(expect.objectContaining({ entryPoint: 'errorNode' }));
         expect(context.telemetry.properties.entryPoint).toBe('errorNode');
     });
 

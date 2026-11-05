@@ -7,11 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
     createTimeoutFinding,
+    DiagnosticsCancelledError,
+    DiagnosticsConfigurationError,
     formatTarget,
     runDiagnostics,
     SAFETY_LIMITS,
-    DiagnosticsCancelledError,
-    DiagnosticsConfigurationError,
 } from './index.js';
 
 import {
@@ -19,13 +19,13 @@ import {
     type Check,
     type CheckOutcome,
     type CheckStepResult,
-    type EffectiveTimeout,
-    type ProbeTarget,
-    type RunContext,
     type DiagnosticsClock,
     type DiagnosticsEvent,
     type DiagnosticsInput,
     type DiagnosticsRun,
+    type EffectiveTimeout,
+    type ProbeTarget,
+    type RunContext,
 } from './index.js';
 
 type Code = BuiltInFindingCode | 'custom.note';
@@ -496,9 +496,9 @@ describe('configuration validation', (): void => {
 
     it('rejects invalid diagnostic and connection timeouts before events', async (): Promise<void> => {
         const onEvent = vi.fn();
-        await expect(
-            runDiagnostics({ input, checks: [], timeouts: { probeTimeoutMs: 0 }, onEvent }),
-        ).rejects.toThrow('probeTimeoutMs');
+        await expect(runDiagnostics({ input, checks: [], timeouts: { probeTimeoutMs: 0 }, onEvent })).rejects.toThrow(
+            'probeTimeoutMs',
+        );
         await expect(
             runDiagnostics({ input: { ...input, connectionTimeouts: { probe: -1 } }, checks: [], onEvent }),
         ).rejects.toBeInstanceOf(DiagnosticsConfigurationError);

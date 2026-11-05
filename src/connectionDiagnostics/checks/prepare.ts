@@ -3,12 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    type Check,
-    type CheckOutcome,
-    type Finding,
-    type RunContext,
-} from '@documentdb-js/connection-diagnostics';
+import { type Check, type CheckOutcome, type Finding, type RunContext } from '@documentdb-js/connection-diagnostics';
 import {
     ConnectionReachabilityService,
     LocalPortInUseError,
@@ -17,7 +12,7 @@ import {
 } from '../../services/connectionReachabilityService';
 import { type DiagnosticsSetup } from '../input';
 import { safeErrorName } from '../outputTrace';
-import { type FindingCode, type DiagnosticsTarget } from '../types';
+import { type DiagnosticsTarget, type FindingCode } from '../types';
 
 function localPortInUse(error: LocalPortInUseError): Finding<FindingCode> {
     return {

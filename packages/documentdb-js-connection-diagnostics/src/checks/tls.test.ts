@@ -17,11 +17,11 @@ import {
     type Check,
     type CheckOutcome,
     type CheckResult,
+    type DiagnosticsClock,
     type NetIo,
     type NetworkOptions,
     type RunContext,
     type TimeoutProfile,
-    type DiagnosticsClock,
 } from '../index.js';
 
 const day = 86400000;

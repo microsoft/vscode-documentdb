@@ -5,6 +5,7 @@
 
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { type DiagnosticsEntryPoint, type DiagnosticsTarget } from '../../connectionDiagnostics/types';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
@@ -15,7 +16,6 @@ import {
     type EphemeralClusterCredentials,
 } from '../../tree/documentdb/ClusterItemBase';
 import { type DiagnosticCredentialRead } from '../../tree/documentdb/diagnosticCredentialRead';
-import { type DiagnosticsEntryPoint, type DiagnosticsTarget } from '../../connectionDiagnostics/types';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import { pickTreeNode } from '../../utils/pickItem/pickTreeNode';
 import { openConnectionDiagnostics } from '../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';

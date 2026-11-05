@@ -18,7 +18,7 @@ import {
 import { replyFrame } from '../test/wireResponder.js';
 
 import { type TLSSocket } from 'node:tls';
-import { type CheckResult, type DnsIo, type IdentifierKind, type DiagnosticsReport } from '../index.js';
+import { type CheckResult, type DiagnosticsReport, type DnsIo, type IdentifierKind } from '../index.js';
 
 const host = 'node.cluster.test';
 const identifiers = [

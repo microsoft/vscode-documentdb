@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildReport, createBuiltInChecks, renderJson, runDiagnostics } from '../index.js';
 
-import { type DnsIo, type DiagnosticsEvent } from '../index.js';
+import { type DiagnosticsEvent, type DnsIo } from '../index.js';
 
 const secrets = [
     'p@ssw0rd-xyz',

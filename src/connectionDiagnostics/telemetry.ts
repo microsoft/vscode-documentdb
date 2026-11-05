@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    builtInFindingCodes,
-    type CheckResult,
-    type DiagnosticsRun,
-} from '@documentdb-js/connection-diagnostics';
+import { builtInFindingCodes, type CheckResult, type DiagnosticsRun } from '@documentdb-js/connection-diagnostics';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { entraErrorRules } from '../documentdb/auth/entraErrors/entraErrorRules';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';

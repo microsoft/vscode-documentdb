@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type CheckResult, type Finding, type DiagnosticsEvent } from '@documentdb-js/connection-diagnostics';
+import { type CheckResult, type DiagnosticsEvent, type Finding } from '@documentdb-js/connection-diagnostics';
 import {
     panelRowIds,
     type EvidenceSegment,

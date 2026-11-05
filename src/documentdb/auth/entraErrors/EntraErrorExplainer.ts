@@ -4,10 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
-import {
-    type ErrorExplanationProvider,
-    type ErrorExplanationRequest,
-} from '../../../services/errorExplanationService';
+import { type ErrorExplanationProvider, type ErrorExplanationRequest } from '../../../services/errorExplanationService';
 import { traceAuthFlow } from '../../../utils/authTrace';
 import { CredentialCache } from '../../CredentialCache';
 import { AuthMethodId } from '../AuthMethod';

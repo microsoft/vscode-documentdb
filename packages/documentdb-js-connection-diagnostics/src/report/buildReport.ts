@@ -6,13 +6,8 @@
 import { formatTarget } from '../runner.js';
 import { sanitizeValue } from './sanitize.js';
 
-import { type CheckResult, type CheckStepResult, type Finding, type DiagnosticsRun } from '../types.js';
-import {
-    type ClockOffsetSummary,
-    type IdentifierKind,
-    type ReportSummary,
-    type DiagnosticsReport,
-} from './types.js';
+import { type CheckResult, type CheckStepResult, type DiagnosticsRun, type Finding } from '../types.js';
+import { type ClockOffsetSummary, type DiagnosticsReport, type IdentifierKind, type ReportSummary } from './types.js';
 
 // Bare keys match the last path segment. Dotted keys restrict that match to an ancestor:
 // host/hosts/me/primary/srvQueryName/cnameChain/subjectAltNames -> host;

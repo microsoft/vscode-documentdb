@@ -34,10 +34,10 @@ export { englishReportText } from './report/text.js';
 export type { FindingText, RenderOptions, ReportLabelKey, ReportSectionId, ReportText } from './report/text.js';
 export type {
     ClockOffsetSummary,
+    DiagnosticsReport,
     IdentifierKind,
     ReportOutcome,
     ReportSummary,
-    DiagnosticsReport,
 } from './report/types.js';
 export { createTimeoutFinding, formatTarget, runDiagnostics } from './runner.js';
 export { DEFAULT_TIMEOUTS, resolveTimeouts, SAFETY_LIMITS, timeoutsForProfile } from './timeouts.js';
@@ -48,6 +48,12 @@ export type {
     CheckResult,
     CheckStatus,
     CheckStepResult,
+    DiagnosticsClock,
+    DiagnosticsEvent,
+    DiagnosticsInput,
+    DiagnosticsIo,
+    DiagnosticsRun,
+    DiagnosticsTimeouts,
     DnsIo,
     EnvironmentSource,
     Finding,
@@ -61,12 +67,6 @@ export type {
     RunContext,
     SkipReason,
     TimedOutOperation,
-    DiagnosticsClock,
-    DiagnosticsEvent,
-    DiagnosticsInput,
-    DiagnosticsIo,
-    DiagnosticsRun,
-    DiagnosticsTimeouts,
     WireCompressor,
 } from './types.js';
 

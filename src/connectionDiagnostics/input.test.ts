@@ -162,10 +162,7 @@ describe('buildDiagnosticsSetup', (): void => {
                 emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
             }),
         );
-        const setup = buildDiagnosticsSetup(
-            clusterId,
-            credentials({ connectionString: 'mongodb://127.0.0.1:27017/' }),
-        );
+        const setup = buildDiagnosticsSetup(clusterId, credentials({ connectionString: 'mongodb://127.0.0.1:27017/' }));
         expect(setup.input.networkOptionLayers).toEqual([
             { origin: 'authHandler', options: { tlsAllowInvalidCertificates: true } },
         ]);

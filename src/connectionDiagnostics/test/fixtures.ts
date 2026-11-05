@@ -9,13 +9,13 @@ import {
     renderJson,
     renderMarkdown,
     type CheckResult,
+    type DiagnosticsEvent,
+    type DiagnosticsIo,
+    type DiagnosticsRun,
     type DnsIo,
     type Finding,
     type NetIo,
     type ReportSummary,
-    type DiagnosticsEvent,
-    type DiagnosticsIo,
-    type DiagnosticsRun,
 } from '@documentdb-js/connection-diagnostics';
 import { type Socket } from 'node:net';
 import { Duplex } from 'node:stream';

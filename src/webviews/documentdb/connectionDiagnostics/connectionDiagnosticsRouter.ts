@@ -9,9 +9,9 @@ import {
     renderJson,
     renderMarkdown,
     type CheckResult,
-    type ReportSummary,
     type DiagnosticsReport,
     type DiagnosticsRun,
+    type ReportSummary,
 } from '@documentdb-js/connection-diagnostics';
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
@@ -33,16 +33,16 @@ import {
     runConnectionDiagnostics,
 } from '../../../connectionDiagnostics/runConnectionDiagnostics';
 import {
-    type FindingCode,
     type DiagnosticsEntryPoint,
     type DiagnosticsTarget,
+    type FindingCode,
 } from '../../../connectionDiagnostics/types';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { type PanelEvent, type ResultCardData, type RunUpdate } from './connectionDiagnosticsTypes';
-import { type PanelRow } from './panelTypes';
 import { type DiagnosticsPanelSession } from './diagnosticsPanelSession';
+import { type PanelRow } from './panelTypes';
 
 export type RouterContext = BaseRouterContext & {
     target: DiagnosticsTarget;

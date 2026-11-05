@@ -23,9 +23,7 @@ interface ReportAttribution {
 
 export function createExtensionReportAttribution(): ReportAttribution {
     return {
-        description: vscode.l10n.t(
-            'This report was generated using the DocumentDB extension for Visual Studio Code.',
-        ),
+        description: vscode.l10n.t('This report was generated using the DocumentDB extension for Visual Studio Code.'),
         marketplaceUrl: 'https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb',
         ...getExtensionMetadata(),
         vscodeVersion: vscode.version,

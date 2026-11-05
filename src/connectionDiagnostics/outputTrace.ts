@@ -7,13 +7,13 @@ import {
     builtInFindingCodes,
     type CheckResult,
     type CheckStepResult,
-    type TimeoutProfile,
     type DiagnosticsEvent,
     type DiagnosticsRun,
+    type TimeoutProfile,
 } from '@documentdb-js/connection-diagnostics';
 import { ext } from '../extensionVariables';
 import { deriveResult } from './result';
-import { extensionFindingCodes, type FindingCode, type DiagnosticsEntryPoint } from './types';
+import { extensionFindingCodes, type DiagnosticsEntryPoint, type FindingCode } from './types';
 
 export type ConnectionOutcome = 'notTested' | 'failed' | 'connected';
 

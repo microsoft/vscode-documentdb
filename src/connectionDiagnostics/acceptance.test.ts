@@ -8,11 +8,11 @@ import {
     DEFAULT_TIMEOUTS,
     renderMarkdown,
     type CheckResult,
-    type Finding,
-    type TimeoutProfile,
     type DiagnosticsEvent,
     type DiagnosticsIo,
     type DiagnosticsRun,
+    type Finding,
+    type TimeoutProfile,
 } from '@documentdb-js/connection-diagnostics';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type initWebviewTrpc } from '@microsoft/vscode-ext-webview';
@@ -34,8 +34,8 @@ import {
 import { resetEntraTokenFailuresForTests } from '../documentdb/auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../documentdb/CredentialCache';
 import { API } from '../DocumentDBExperiences';
-import { ErrorExplanationService } from '../services/errorExplanationService';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
 import { readOnlyJsonDocumentProvider } from '../utils/readOnlyJsonDocumentProvider';
 import { createCallerFactory } from '../webviews/_integration/trpc';
@@ -44,9 +44,9 @@ import {
     type RouterContext,
 } from '../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsRouter';
 import { type RunUpdate } from '../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsTypes';
+import { DiagnosticsPanelSession } from '../webviews/documentdb/connectionDiagnostics/diagnosticsPanelSession';
 import { formatEvidence } from '../webviews/documentdb/connectionDiagnostics/formatEvidence';
 import { type PanelRow } from '../webviews/documentdb/connectionDiagnostics/panelTypes';
-import { DiagnosticsPanelSession } from '../webviews/documentdb/connectionDiagnostics/diagnosticsPanelSession';
 import { describeFinding } from './findingMessages';
 import { withRowDetails } from './panelDetails';
 import { createExtensionReportText, renderExtensionReportFooter } from './reportText';
@@ -976,7 +976,9 @@ describe('Acceptance (design §8.1)', (): void => {
                 });
                 const access = view.finished.rows.find((row): boolean => row.id === 'databaseAccess');
                 expect(access?.status).toBe('warning');
-                expect(rowText(view, 'databaseAccess')).toMatch(/^Ping (?:< )?\d+ ms · Listing databases needs sign-in$/);
+                expect(rowText(view, 'databaseAccess')).toMatch(
+                    /^Ping (?:< )?\d+ ms · Listing databases needs sign-in$/,
+                );
                 expect(access?.details?.findings[0]).toMatchObject({
                     severity: 'warning',
                     title: 'Sign-in required to use this connection',

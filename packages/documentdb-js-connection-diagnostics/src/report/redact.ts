@@ -5,7 +5,7 @@
 
 import { timestampFields } from './timestamps.js';
 
-import { type IdentifierKind, type DiagnosticsReport } from './types.js';
+import { type DiagnosticsReport, type IdentifierKind } from './types.js';
 
 const prefixes: Readonly<Record<IdentifierKind, string>> = {
     host: 'host',

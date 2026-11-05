@@ -89,9 +89,9 @@ describe('panel text never names DNS libraries (decision 0041)', () => {
     );
 
     it('finds the localized strings it scans', (): void => {
-        expect(
-            localizedStrings('src/webviews/documentdb/connectionDiagnostics/DiagnosticsRowDetails.tsx'),
-        ).toEqual(expect.arrayContaining(["Your system's lookup", 'Direct DNS query']));
+        expect(localizedStrings('src/webviews/documentdb/connectionDiagnostics/DiagnosticsRowDetails.tsx')).toEqual(
+            expect.arrayContaining(["Your system's lookup", 'Direct DNS query']),
+        );
     });
 
     it.each(panelSources)('has no library name in any localized string in %s', (file): void => {

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildReport, createEnvironmentCheck, renderJson, runDiagnostics } from '../index.js';
 
-import { type BuiltInFindingCode, type EnvironmentSource, type DiagnosticsRun } from '../index.js';
+import { type BuiltInFindingCode, type DiagnosticsRun, type EnvironmentSource } from '../index.js';
 
 const source: EnvironmentSource = {
     versions: { node: '22.18.0', ares: '1.34.6', openssl: '3.0.16' },
@@ -18,9 +18,7 @@ const source: EnvironmentSource = {
     timeZone: 'Etc/UTC',
 };
 
-async function runEnvironment(
-    overrides: Partial<EnvironmentSource> = {},
-): Promise<DiagnosticsRun<BuiltInFindingCode>> {
+async function runEnvironment(overrides: Partial<EnvironmentSource> = {}): Promise<DiagnosticsRun<BuiltInFindingCode>> {
     return runDiagnostics({
         input: { connectionString: 'mongodb://example.test' },
         checks: [createEnvironmentCheck()],

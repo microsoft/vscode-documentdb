@@ -13,10 +13,10 @@ import {
     type Check,
     type CheckOutcome,
     type CheckResult,
+    type DiagnosticsClock,
     type NetIo,
     type NetworkOptions,
     type RunContext,
-    type DiagnosticsClock,
 } from '../index.js';
 
 const servers: net.Server[] = [];

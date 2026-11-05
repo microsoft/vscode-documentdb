@@ -3,12 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    buildReport,
-    DEFAULT_TIMEOUTS,
-    type CheckResult,
-    type Finding,
-} from '@documentdb-js/connection-diagnostics';
+import { buildReport, DEFAULT_TIMEOUTS, type CheckResult, type Finding } from '@documentdb-js/connection-diagnostics';
 import { describe, expect, it } from 'vitest';
 import {
     panelRowIds,
@@ -323,13 +318,15 @@ describe('panel row details (WI-18 prototype)', () => {
         const one = withRowDetails(rows(), [hello('host-a.test:27017', 120)], describeFinding);
 
         expect(
-            details(two, 'serverResponse')?.evidence.map((evidence) => ('durationMs' in evidence ? evidence.durationMs : undefined)),
+            details(two, 'serverResponse')?.evidence.map((evidence) =>
+                'durationMs' in evidence ? evidence.durationMs : undefined,
+            ),
         ).toEqual([120, 340]);
         expect(details(one, 'serverResponse')?.evidence).toHaveLength(1);
         expect(details(one, 'serverResponse')?.evidence[0]).not.toHaveProperty('durationMs');
     });
 
-    it("gives each TCP host its time and connect times only to a host with two or more attempts (WI-33)", (): void => {
+    it('gives each TCP host its time and connect times only to a host with two or more attempts (WI-33)', (): void => {
         const output = withRowDetails(
             rows({ networkConnection: 'warning' }),
             [
@@ -338,9 +335,21 @@ describe('panel row details (WI-18 prototype)', () => {
                     durationMs: 3046.5,
                     facts: {
                         attempts: [
-                            { address: '2001:db8::5', family: 6, outcome: 'failed', errorCode: 'ETIMEDOUT', latencyMs: 3000 },
+                            {
+                                address: '2001:db8::5',
+                                family: 6,
+                                outcome: 'failed',
+                                errorCode: 'ETIMEDOUT',
+                                latencyMs: 3000,
+                            },
                             // A repeated address keeps its first attempt.
-                            { address: '2001:db8::5', family: 6, outcome: 'failed', errorCode: 'ETIMEDOUT', latencyMs: 9 },
+                            {
+                                address: '2001:db8::5',
+                                family: 6,
+                                outcome: 'failed',
+                                errorCode: 'ETIMEDOUT',
+                                latencyMs: 9,
+                            },
                             { address: '203.0.113.9', family: 4, outcome: 'failed', errorCode: 'ECONNREFUSED' },
                             { address: '203.0.113.10', family: 4, outcome: 'connected', latencyMs: 42.5 },
                         ],
@@ -697,9 +706,9 @@ describe('panel row details (WI-18 prototype)', () => {
                     role: 'notPrimary',
                 },
             ]);
-            expect(buildRowDetails('serverResponse', 'done', [router], describeFinding)?.evidence[0]).not.toHaveProperty(
-                'role',
-            );
+            expect(
+                buildRowDetails('serverResponse', 'done', [router], describeFinding)?.evidence[0],
+            ).not.toHaveProperty('role');
         });
     });
 });

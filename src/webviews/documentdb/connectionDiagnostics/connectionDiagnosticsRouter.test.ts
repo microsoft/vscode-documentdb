@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    timeoutsForProfile,
-    type CheckResult,
-    type DiagnosticsRun,
-} from '@documentdb-js/connection-diagnostics';
+import { timeoutsForProfile, type CheckResult, type DiagnosticsRun } from '@documentdb-js/connection-diagnostics';
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type initWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -278,9 +274,7 @@ describe('connectionDiagnosticsRouter', (): void => {
     it('ignores a delayed Cancel from a replaced run instead of cancelling the replacement', async (): Promise<void> => {
         const oldRun = deferred<DiagnosticsRun<FindingCode>>();
         const newRun = deferred<DiagnosticsRun<FindingCode>>();
-        vi.mocked(runConnectionDiagnostics)
-            .mockReturnValueOnce(oldRun.promise)
-            .mockReturnValueOnce(newRun.promise);
+        vi.mocked(runConnectionDiagnostics).mockReturnValueOnce(oldRun.promise).mockReturnValueOnce(newRun.promise);
         const ctx = context();
         const first = iterator(await caller(ctx).run(runInput('default', 'initial', 'request-a')));
         await first.next();
@@ -717,15 +711,16 @@ describe('connectionDiagnosticsRouter', (): void => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
                     ...run,
-                    results: run.results.map((check): CheckResult<FindingCode> =>
-                        ['environment', 'extensionEnvironment'].includes(check.checkId)
-                            ? {
-                                  ...check,
-                                  status: 'skipped',
-                                  facts: {},
-                                  skippedBecause: { reason: 'runTimeoutExceeded' },
-                              }
-                            : check,
+                    results: run.results.map(
+                        (check): CheckResult<FindingCode> =>
+                            ['environment', 'extensionEnvironment'].includes(check.checkId)
+                                ? {
+                                      ...check,
+                                      status: 'skipped',
+                                      facts: {},
+                                      skippedBecause: { reason: 'runTimeoutExceeded' },
+                                  }
+                                : check,
                     ),
                 });
             },

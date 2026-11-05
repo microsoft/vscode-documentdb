@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { buildReport, createEnvironmentCheck, DEFAULT_TIMEOUTS, runDiagnostics } from '../index.js';
 import { defaultIdentifierKeys } from './buildReport.js';
 
-import { type CheckResult, type ReportSummary, type DiagnosticsRun } from '../index.js';
+import { type CheckResult, type DiagnosticsRun, type ReportSummary } from '../index.js';
 
 function result(checkId: string, facts: Readonly<Record<string, unknown>> = {}, target?: string): CheckResult<string> {
     return { checkId, ...(target === undefined ? {} : { target }), status: 'pass', durationMs: 1, findings: [], facts };

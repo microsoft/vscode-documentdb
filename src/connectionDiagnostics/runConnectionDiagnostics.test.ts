@@ -9,8 +9,8 @@ import {
     type BuiltInFindingCode,
     type Check,
     type CheckOutcome,
-    type RunContext,
     type DiagnosticsEvent,
+    type RunContext,
 } from '@documentdb-js/connection-diagnostics';
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import type * as MongoDB from 'mongodb';
@@ -507,9 +507,7 @@ describe('runConnectionDiagnostics', (): void => {
     });
 
     it('reports a saved connection provider failure in prepare, not as an unexpected run failure', async (): Promise<void> => {
-        const actual = await vi.importActual<typeof ConnectionDiagnostics>(
-            '@documentdb-js/connection-diagnostics',
-        );
+        const actual = await vi.importActual<typeof ConnectionDiagnostics>('@documentdb-js/connection-diagnostics');
         const probes = actual.createBuiltInChecks();
         const probeRuns = probes
             .filter((check): boolean => ['srv', 'dns', 'tcp', 'tls', 'hello'].includes(check.id))
@@ -691,9 +689,7 @@ describe('runConnectionDiagnostics', (): void => {
     });
 
     it('uses the real built-in connection-string diagnostic without a network operation for malformed input', async (): Promise<void> => {
-        const actual = await vi.importActual<typeof ConnectionDiagnostics>(
-            '@documentdb-js/connection-diagnostics',
-        );
+        const actual = await vi.importActual<typeof ConnectionDiagnostics>('@documentdb-js/connection-diagnostics');
         vi.mocked(createBuiltInChecks).mockReturnValue(actual.createBuiltInChecks());
         const request = options();
         vi.mocked(request.target.getCredentials).mockResolvedValue({

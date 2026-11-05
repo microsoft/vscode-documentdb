@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type RunUpdate } from './connectionDiagnosticsTypes';
+import { type RunResult } from './DiagnosticsResultCard';
 import { isSettled } from './formatEvidence';
 import { panelRowIds, type PanelRow, type PanelRowId } from './panelTypes';
-import { type RunResult } from './DiagnosticsResultCard';
 
 export interface DiagnosticsViewState {
     readonly phase: 'running' | 'finished' | 'cancelled' | 'failed';

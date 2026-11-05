@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    builtInFindingCodes,
-    type CheckResult,
-    type CheckStepResult,
-} from '@documentdb-js/connection-diagnostics';
+import { builtInFindingCodes, type CheckResult, type CheckStepResult } from '@documentdb-js/connection-diagnostics';
 import { describe, expect, it, vi } from 'vitest';
 import { entraErrorRules } from '../documentdb/auth/entraErrors/entraErrorRules';
 import { formatEvidence } from '../webviews/documentdb/connectionDiagnostics/formatEvidence';

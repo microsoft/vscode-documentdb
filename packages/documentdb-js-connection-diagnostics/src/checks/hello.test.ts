@@ -16,12 +16,12 @@ import { replyFrame, wireResponder, writeReply } from '../test/wireResponder.js'
 import {
     type BuiltInFindingCode,
     type CheckOutcome,
+    type DiagnosticsClock,
+    type DiagnosticsInput,
     type DnsIo,
     type NetIo,
     type NetworkOptions,
     type RunContext,
-    type DiagnosticsClock,
-    type DiagnosticsInput,
 } from '../index.js';
 import { type WireRequest } from '../test/wireResponder.js';
 

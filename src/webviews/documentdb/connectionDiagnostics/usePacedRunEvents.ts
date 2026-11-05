@@ -5,9 +5,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { type RunUpdate } from './connectionDiagnosticsTypes';
+import { fixedRows, pendingRows } from './diagnosticsViewState';
 import { isSettled } from './formatEvidence';
 import { type PanelRow } from './panelTypes';
-import { fixedRows, pendingRows } from './diagnosticsViewState';
 
 /**
  * How long the panel shows each settled step at least, in milliseconds (decision 0043). Each step's

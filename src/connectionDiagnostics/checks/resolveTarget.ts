@@ -3,12 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    type Check,
-    type CheckOutcome,
-    type Finding,
-    type RunContext,
-} from '@documentdb-js/connection-diagnostics';
+import { type Check, type CheckOutcome, type Finding, type RunContext } from '@documentdb-js/connection-diagnostics';
 import { type EphemeralClusterCredentials } from '../../tree/documentdb/ClusterItemBase';
 import {
     ConnectionEndpointUnavailableError,
@@ -17,7 +12,7 @@ import {
     type ConnectionDetailsSource,
 } from '../../tree/documentdb/diagnosticCredentialRead';
 import { safeErrorName } from '../outputTrace';
-import { type FindingCode, type DiagnosticsTarget } from '../types';
+import { type DiagnosticsTarget, type FindingCode } from '../types';
 
 /** Why a source that holds the connection details could not be read. Bounded; safe for reports. */
 export type SourceInaccessibleReason = 'signInRequired' | 'accessDenied' | 'unreachable' | 'notConnectable' | 'other';

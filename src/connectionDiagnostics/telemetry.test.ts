@@ -6,8 +6,8 @@
 import {
     timeoutsForProfile,
     type CheckResult,
-    type Finding,
     type DiagnosticsRun,
+    type Finding,
 } from '@documentdb-js/connection-diagnostics';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { describe, expect, it } from 'vitest';

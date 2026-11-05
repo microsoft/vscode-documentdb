@@ -4,17 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    runDiagnostics,
     DiagnosticsCancelledError,
+    runDiagnostics,
     type Check,
     type CheckOutcome,
     type CheckResult,
     type CheckStepResult,
-    type ProbeTarget,
-    type RunContext,
     type DiagnosticsEvent,
     type DiagnosticsRun,
     type DiagnosticsTimeouts,
+    type ProbeTarget,
+    type RunContext,
 } from '@documentdb-js/connection-diagnostics';
 import {
     MongoClient,
@@ -43,7 +43,7 @@ import { ext } from '../../extensionVariables';
 import { createRunOwnedClient, type RunOwnedClient } from '../auth/runOwnedClient';
 import { type DiagnosticsSetup } from '../input';
 import { DiagnosticsOutputTrace } from '../outputTrace';
-import { type FindingCode, type DiagnosticsTarget } from '../types';
+import { type DiagnosticsTarget, type FindingCode } from '../types';
 import { createAuthenticateCheck, type AuthenticateCheckDeps } from './authenticate';
 
 const mocks = vi.hoisted(() => ({
