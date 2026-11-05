@@ -2,7 +2,7 @@
 feature: deep-links
 kind: notes
 status: active
-prs: [898]
+prs: [898, 1067]
 created: 2026-08-24
 code:
     - src/vscodeUriHandler.ts

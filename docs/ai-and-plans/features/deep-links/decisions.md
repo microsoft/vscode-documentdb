@@ -2,7 +2,7 @@
 feature: deep-links
 kind: decisions
 status: active
-prs: [898]
+prs: [898, 1067]
 created: 2026-08-24
 ---
 
@@ -19,14 +19,14 @@ created: 2026-08-24
 | 0005 | `local` opens the wizard without a confirmation     | Superseded by D0007 | Reversed after maintainer review              | 2026-08-24 | #898 |
 | 0006 | Local links model the resource type                 | Accepted            | Added during maintainer review                | 2026-09-01 | #898 |
 | 0007 | Local links show one lightweight confirmation       | Accepted            | Reversed 0005 during maintainer review        | 2026-09-01 | #898 |
-| 0008 | Azure resource links use `/connect/azure`           | Accepted            | Renamed from `/discovery/azure` by maintainer | 2026-11-05 | —    |
-| 0009 | Azure links resolve through our Discovery tree      | Accepted            | Accepted as proposed                          | 2026-11-05 | —    |
-| 0010 | The resource ID selects vCore or RU; we handle both | Accepted            | Accepted as proposed                          | 2026-11-05 | —    |
-| 0011 | Azure links change visibility filters permanently   | Accepted            | Changed from a session-only proposal          | 2026-11-05 | —    |
-| 0012 | Azure links confirm like `/local`                   | Accepted            | Accepted as proposed                          | 2026-11-05 | —    |
-| 0013 | `open=` names the surface; `dashboard` always opens | Accepted            | Override of the setting added by maintainer   | 2026-11-05 | —    |
-| 0014 | `open=` applies to `/connect` as well               | Accepted            | Accepted as proposed                          | 2026-11-05 | —    |
-| 0015 | An Azure link always expands the cluster node       | Accepted            | Orchestrator's collapsed variant reversed     | 2026-11-05 | —    |
+| 0008 | Azure resource links use `/connect/azure`           | Accepted            | Renamed from `/discovery/azure` by maintainer | 2026-11-05 | #1067 |
+| 0009 | Azure links resolve through our Discovery tree      | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0010 | The resource ID selects vCore or RU; we handle both | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0011 | Azure links change visibility filters permanently   | Accepted            | Changed from a session-only proposal          | 2026-11-05 | #1067 |
+| 0012 | Azure links confirm like `/local`                   | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0013 | `open=` names the surface; `dashboard` always opens | Accepted            | Override of the setting added by maintainer   | 2026-11-05 | #1067 |
+| 0014 | `open=` applies to `/connect` as well               | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0015 | An Azure link always expands the cluster node       | Accepted            | Orchestrator's collapsed variant reversed     | 2026-11-05 | #1067 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
