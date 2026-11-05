@@ -30,6 +30,58 @@ export async function handleAzureResourceLinkRequest(
     context.valuesToMask.push(link.subscriptionId, link.resourceGroup, link.name);
     context.telemetry.properties.azureResourceKind = link.kind;
 
+    context.telemetry.properties.failureStage = 'confirm';
+    const showUrlHandlingConfirmations = vscode.workspace
+        .getConfiguration()
+        .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true);
+
+    const kindLabel =
+        link.kind === 'vcore'
+            ? vscode.l10n.t('Azure DocumentDB')
+            : vscode.l10n.t('Azure Cosmos DB for MongoDB (RU)');
+
+    if (showUrlHandlingConfirmations) {
+        const detail = [
+            vscode.l10n.t('Resource: {0} ({1})', link.name, kindLabel),
+            vscode.l10n.t('Resource group: {0}', link.resourceGroup),
+            vscode.l10n.t('Subscription ID: {0}', link.subscriptionId),
+        ];
+        if (request.database) {
+            detail.push(vscode.l10n.t('Database: {0}', request.database));
+        }
+        if (request.collection) {
+            detail.push(vscode.l10n.t('Collection: {0}', request.collection));
+        }
+
+        let surface: string | undefined;
+        if (request.collection) {
+            surface = vscode.l10n.t('Collection View');
+        } else if (request.open === 'dashboard') {
+            surface = vscode.l10n.t('Cluster Dashboard');
+        } else if (request.open === 'shell') {
+            surface = vscode.l10n.t('Shell');
+        }
+        if (surface) {
+            detail.push(vscode.l10n.t('Opens: {0}', surface));
+        }
+
+        detail.push(
+            '',
+            vscode.l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+        );
+
+        const openButton = vscode.l10n.t('Open');
+        const choice = await vscode.window.showInformationMessage(
+            vscode.l10n.t('You clicked a link that wants to open an Azure resource in VS Code.'),
+            { modal: true, detail: detail.join('\n') },
+            openButton,
+        );
+        if (choice !== openButton) {
+            context.telemetry.properties.userCancelledAtStep = 'AzureConfirmation';
+            return undefined;
+        }
+    }
+
     const subscription = await resolveAzureSubscription(context, {
         providerId: link.providerId,
         subscriptionId: link.subscriptionId,
@@ -54,74 +106,40 @@ export async function handleAzureResourceLinkRequest(
     context.telemetry.properties.visibilitySubscriptionAdded = changes.addSubscription ? 'true' : 'false';
     const visibilityChangesNeeded = hasVisibilityChanges(changes);
 
-    context.telemetry.properties.failureStage = 'confirm';
-    const showUrlHandlingConfirmations = vscode.workspace
-        .getConfiguration()
-        .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true);
-
-    if (showUrlHandlingConfirmations) {
-        const kindLabel =
-            link.kind === 'vcore'
-                ? vscode.l10n.t('Azure DocumentDB')
-                : vscode.l10n.t('Azure Cosmos DB for MongoDB (RU)');
-        const detail = [
-            vscode.l10n.t('Resource: {0} ({1})', displayName, kindLabel),
-            vscode.l10n.t('Resource group: {0}', link.resourceGroup),
-            vscode.l10n.t('Subscription: {0}', subscription.name),
-        ];
-        if (request.database) {
-            detail.push(vscode.l10n.t('Database: {0}', request.database));
+    context.telemetry.properties.failureStage = 'confirmFilterChanges';
+    if (showUrlHandlingConfirmations && visibilityChangesNeeded) {
+        const detail: string[] = [];
+        if (changes.showProvider) {
+            detail.push(
+                vscode.l10n.t('• The {0} discovery provider will be shown in the Discovery view.', kindLabel),
+            );
         }
-        if (request.collection) {
-            detail.push(vscode.l10n.t('Collection: {0}', request.collection));
+        if (changes.unfilterTenant) {
+            detail.push(
+                vscode.l10n.t('• Tenant {0} will no longer be hidden by your tenant filter.', subscription.tenantId),
+            );
         }
-
-        let surface: string | undefined;
-        if (request.collection) {
-            surface = vscode.l10n.t('Collection View');
-        } else if (request.open === 'dashboard') {
-            surface = vscode.l10n.t('Cluster Dashboard');
-        } else if (request.open === 'shell') {
-            surface = vscode.l10n.t('Shell');
-        }
-        if (surface) {
-            detail.push(vscode.l10n.t('Opens: {0}', surface));
-        }
-
-        if (visibilityChangesNeeded) {
-            detail.push('', vscode.l10n.t('To show this resource, these filters will change:'));
-            if (changes.showProvider) {
-                detail.push(
-                    vscode.l10n.t('• The {0} discovery provider will be shown in the Discovery view.', kindLabel),
-                );
-            }
-            if (changes.unfilterTenant) {
-                detail.push(
-                    vscode.l10n.t('• Tenant {0} will no longer be hidden by your tenant filter.', subscription.tenantId),
-                );
-            }
-            if (changes.addSubscription) {
-                detail.push(
-                    vscode.l10n.t(
-                        '• Subscription {0} will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
-                        subscription.name,
-                    ),
-                );
-            }
+        if (changes.addSubscription) {
+            detail.push(
+                vscode.l10n.t(
+                    '• Subscription {0} will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
+                    subscription.name,
+                ),
+            );
         }
         detail.push(
             '',
             vscode.l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
         );
 
-        const openButton = vscode.l10n.t('Open');
+        const changeFiltersButton = vscode.l10n.t('Change filters and open');
         const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('You clicked a link that wants to open an Azure resource in VS Code.'),
+            vscode.l10n.t('To show {0}, the extension needs to change your filters.', displayName),
             { modal: true, detail: detail.join('\n') },
-            openButton,
+            changeFiltersButton,
         );
-        if (choice !== openButton) {
-            context.telemetry.properties.userCancelledAtStep = 'AzureConfirmation';
+        if (choice !== changeFiltersButton) {
+            context.telemetry.properties.userCancelledAtStep = 'AzureFilterChanges';
             return undefined;
         }
     }
