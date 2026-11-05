@@ -539,7 +539,7 @@ src/services/taskService/
 │       ├── StreamingDocumentWriter.ts  # Abstract writer (see JSDoc for diagrams)
 │       ├── StreamingDocumentWriter.test.ts # Comprehensive tests
 │       ├── DocumentDbStreamingWriter.ts # MongoDB/DocumentDB implementation
-│       ├── writerTypes.internal.ts     # Internal types (PreFilterResult, etc.)
+│       ├── writerTypes.internal.ts     # Internal adaptive batching configuration
 │       ├── BatchSizeAdapter.ts         # Adaptive batching
 │       └── WriteStats.ts               # Statistics aggregation
 └── tasks/

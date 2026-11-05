@@ -9,10 +9,11 @@ import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/Cl
 import { ext } from '../../../../extensionVariables';
 import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
 import { type TaskTelemetryContext } from '../../taskHost';
-import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
-import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 import {
     type AbortBatchResult,
+    ConflictResolutionStrategy,
+    type DocumentDetails,
+    type EnsureTargetExistsResult,
     type ErrorType,
     type GenerateNewIdsBatchResult,
     type OverwriteBatchResult,
@@ -20,7 +21,8 @@ import {
     type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
-} from './writerTypes.internal';
+} from '../types';
+import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 
 /**
  * Raw document counts extracted from MongoDB driver responses.

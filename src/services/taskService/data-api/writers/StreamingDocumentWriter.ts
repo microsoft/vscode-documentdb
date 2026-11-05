@@ -11,14 +11,10 @@ import {
     noopDataTransferLogger,
 } from '../dataTransferHost';
 import {
+    type AbortBatchResult,
     ConflictResolutionStrategy,
     type DocumentDetails,
     type EnsureTargetExistsResult,
-    type StreamWriteResult,
-} from '../types';
-import { BatchSizeAdapter } from './BatchSizeAdapter';
-import {
-    type AbortBatchResult,
     type ErrorType,
     type GenerateNewIdsBatchResult,
     isSkipResult,
@@ -27,7 +23,9 @@ import {
     type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
-} from './writerTypes.internal';
+    type StreamWriteResult,
+} from '../types';
+import { BatchSizeAdapter } from './BatchSizeAdapter';
 import { WriteStats } from './WriteStats';
 
 /**

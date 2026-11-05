@@ -357,7 +357,7 @@ src/services/taskService/data-api/
     ├── StreamingDocumentWriter.ts        # Abstract base class (see JSDoc for sequence diagrams)
     ├── StreamingDocumentWriter.test.ts   # Comprehensive tests for streaming writer
     ├── DocumentDbStreamingWriter.ts      # MongoDB/DocumentDB implementation
-    ├── writerTypes.internal.ts           # Internal types (StrategyBatchResult, PreFilterResult, etc.)
+    ├── writerTypes.internal.ts           # Internal adaptive batching configuration
     ├── BatchSizeAdapter.ts               # Adaptive batch sizing (fast/RU-limited modes)
     └── WriteStats.ts                     # Statistics aggregation
 ```

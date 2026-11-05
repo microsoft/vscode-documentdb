@@ -4,14 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type DataTransferOptions, type DataTransferStrings, defaultDataTransferStrings } from '../dataTransferHost';
-import { ConflictResolutionStrategy, type StreamWriteResult } from '../types';
 import {
+    ConflictResolutionStrategy,
     isAbortResult,
     isOverwriteResult,
     isSkipResult,
     type PartialProgress,
     type StrategyBatchResult,
-} from './writerTypes.internal';
+    type StreamWriteResult,
+} from '../types';
 
 /**
  * Aggregated statistics tracker for streaming document write operations.

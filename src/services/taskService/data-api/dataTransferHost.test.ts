@@ -7,9 +7,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { type TaskLogger } from '../taskHost';
 import { type DataTransferOptions } from './dataTransferHost';
 import { BaseDocumentReader } from './readers/BaseDocumentReader';
-import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from './types';
+import {
+    ConflictResolutionStrategy,
+    type DocumentDetails,
+    type EnsureTargetExistsResult,
+    type ErrorType,
+    type PartialProgress,
+    type StrategyBatchResult,
+} from './types';
 import { StreamingDocumentWriter } from './writers/StreamingDocumentWriter';
-import { type ErrorType, type PartialProgress, type StrategyBatchResult } from './writers/writerTypes.internal';
 
 const document: DocumentDetails = { id: '1', documentContent: { _id: '1' } };
 const config = { conflictResolutionStrategy: ConflictResolutionStrategy.Abort };
