@@ -74,6 +74,26 @@ beforeEach((): void => {
 });
 
 describe('resolveAzureSubscription', (): void => {
+    it('reports sign-in and subscription lookup before running each step', async (): Promise<void> => {
+        const report = vi.fn<(message: string) => void>();
+        const found = subscription('tenant-id', 'account-id');
+        azureSubscriptionProvider.isSignedIn.mockImplementation(async (): Promise<boolean> => {
+            expect(report).toHaveBeenLastCalledWith('Checking Azure sign-in…');
+            return true;
+        });
+        azureSubscriptionProvider.getSubscriptions.mockImplementation(async (): Promise<AzureSubscription[]> => {
+            expect(report).toHaveBeenLastCalledWith('Looking for the subscription in your Azure accounts…');
+            return [found];
+        });
+
+        await expect(resolveAzureSubscription(context, request, report)).resolves.toBe(found);
+
+        expect(report.mock.calls).toEqual([
+            ['Checking Azure sign-in…'],
+            ['Looking for the subscription in your Azure accounts…'],
+        ]);
+    });
+
     it('prompts a signed-out user, signs in, and resolves an unfiltered subscription', async (): Promise<void> => {
         const found = subscription('tenant-id', 'account-id');
         azureSubscriptionProvider.isSignedIn.mockResolvedValue(false);
@@ -178,11 +198,26 @@ describe('resolveAzureSubscription', (): void => {
     });
 
     it('signs into the hinted tenant and retries unfiltered subscription resolution exactly once', async (): Promise<void> => {
+        const report = vi.fn<(message: string) => void>();
         const found = subscription('tenant-id', 'account-id');
         azureSubscriptionProvider.getSubscriptions.mockResolvedValueOnce([]).mockResolvedValueOnce([found]);
-        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Sign in to tenant');
+        (vscode.window.showInformationMessage as Mock).mockImplementation(async (): Promise<string> => {
+            expect(report).not.toHaveBeenCalledWith('Signing in to tenant…');
+            return 'Sign in to tenant';
+        });
+        azureSubscriptionProvider.signIn.mockImplementation(async (): Promise<boolean> => {
+            expect(report).toHaveBeenLastCalledWith('Signing in to tenant…');
+            return true;
+        });
 
-        await expect(resolveAzureSubscription(context, { ...request, tenantId: 'TENANT-ID' })).resolves.toBe(found);
+        await expect(resolveAzureSubscription(context, { ...request, tenantId: 'TENANT-ID' }, report)).resolves.toBe(found);
+
+        expect(report.mock.calls).toEqual([
+            ['Checking Azure sign-in…'],
+            ['Looking for the subscription in your Azure accounts…'],
+            ['Signing in to tenant…'],
+            ['Looking for the subscription in your Azure accounts…'],
+        ]);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
             'Sign in to tenant',
@@ -240,9 +275,12 @@ describe('resolveAzureSubscription', (): void => {
     });
 
     it('returns undefined when the tenant sign-in prompt is dismissed', async (): Promise<void> => {
+        const report = vi.fn<(message: string) => void>();
         (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
 
-        await expect(resolveAzureSubscription(context, { ...request, tenantId: 'tenant-id' })).resolves.toBeUndefined();
+        await expect(resolveAzureSubscription(context, { ...request, tenantId: 'tenant-id' }, report)).resolves.toBeUndefined();
+
+        expect(report).not.toHaveBeenCalledWith('Signing in to tenant…');
 
         expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureTenantSignIn');
         expect(context.telemetry.properties.tenantSignInRequired).toBe('true');

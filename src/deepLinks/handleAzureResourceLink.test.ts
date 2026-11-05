@@ -74,11 +74,23 @@ const revealResult: DiscoveryRevealResult = {
     clusterId: 'stable-cluster-id',
     databaseNode: {} as DiscoveryRevealResult['databaseNode'],
 };
+const progress = { report: vi.fn() };
+const token = { isCancellationRequested: false, onCancellationRequested: vi.fn() };
 const getSetting = vi.fn().mockReturnValue(true);
 let context: IActionContext;
 
 beforeEach((): void => {
     vi.resetAllMocks();
+    token.isCancellationRequested = false;
+    vi.mocked(vscode.window.withProgress).mockImplementation(
+        async <T>(
+            _options: vscode.ProgressOptions,
+            task: (
+                progress: vscode.Progress<{ message?: string; increment?: number }>,
+                token: vscode.CancellationToken,
+            ) => Thenable<T>,
+        ): Promise<T> => task(progress, token),
+    );
     context = {
         telemetry: { properties: {}, measurements: {} },
         valuesToMask: [],
@@ -103,6 +115,116 @@ beforeEach((): void => {
 });
 
 describe('handleAzureResourceLinkRequest', (): void => {
+    it('starts one cancellable notification only after the first confirmation is accepted', async (): Promise<void> => {
+        (vscode.window.showInformationMessage as Mock)
+            .mockReset()
+            .mockResolvedValue('Change filters and open')
+            .mockImplementationOnce(async (): Promise<string> => {
+                expect(vscode.window.withProgress).not.toHaveBeenCalled();
+                return 'Open';
+            });
+
+        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
+
+        expect(vscode.window.withProgress).toHaveBeenCalledExactlyOnceWith(
+            { location: vscode.ProgressLocation.Notification, title: 'Opening my-resource', cancellable: true },
+            expect.any(Function),
+        );
+    });
+
+    it('forwards progress reporting to subscription resolution and reveal and reports before reads and filter updates', async (): Promise<void> => {
+        vi.mocked(resolveAzureSubscription).mockImplementation(
+            async (_context, _request, report): Promise<AzureSubscription> => {
+                report?.('Checking Azure sign-in…');
+                return subscription;
+            },
+        );
+        vi.mocked(readAzureResource).mockImplementation(async (): Promise<{ name: string }> => {
+            expect(progress.report).toHaveBeenLastCalledWith({ message: 'Reading my-resource from Azure…' });
+            return { name: 'My-Resource' };
+        });
+        vi.mocked(applyVisibilityChanges).mockImplementation(async (): Promise<void> => {
+            expect(progress.report).toHaveBeenLastCalledWith({ message: 'Updating filters…' });
+        });
+        vi.mocked(revealInDiscoveryView).mockImplementation(
+            async (_context, _request, report): Promise<DiscoveryRevealResult> => {
+                report?.('Finding My-Resource in the Discovery view…');
+                return revealResult;
+            },
+        );
+
+        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
+
+        expect(vi.mocked(resolveAzureSubscription).mock.calls[0][2]).toBe(
+            vi.mocked(revealInDiscoveryView).mock.calls[0][2],
+        );
+        expect(progress.report.mock.calls).toEqual([
+            [{ message: 'Checking Azure sign-in…' }],
+            [{ message: 'Reading my-resource from Azure…' }],
+            [{ message: 'Updating filters…' }],
+            [{ message: 'Finding My-Resource in the Discovery view…' }],
+        ]);
+    });
+
+    it.each(['resolve', 'read', 'compute', 'filter confirmation', 'apply'])(
+        'stops between steps when the progress notification is cancelled during %s',
+        async (step): Promise<void> => {
+            if (step === 'resolve') {
+                vi.mocked(resolveAzureSubscription).mockImplementation(async (): Promise<AzureSubscription> => {
+                    token.isCancellationRequested = true;
+                    return subscription;
+                });
+            } else if (step === 'read') {
+                vi.mocked(readAzureResource).mockImplementation(async (): Promise<{ name: string }> => {
+                    token.isCancellationRequested = true;
+                    return { name: 'My-Resource' };
+                });
+            } else if (step === 'compute') {
+                vi.mocked(computeVisibilityChanges).mockImplementation(async (): Promise<VisibilityChanges> => {
+                    token.isCancellationRequested = true;
+                    return changes;
+                });
+            } else if (step === 'filter confirmation') {
+                (vscode.window.showInformationMessage as Mock).mockImplementation(async (): Promise<string> => {
+                    token.isCancellationRequested = true;
+                    return 'Change filters and open';
+                });
+            } else {
+                vi.mocked(applyVisibilityChanges).mockImplementation(async (): Promise<void> => {
+                    token.isCancellationRequested = true;
+                });
+            }
+
+            await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBeUndefined();
+
+            expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureProgress');
+            expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Cancelled from the progress notification');
+            expect(revealInDiscoveryView).not.toHaveBeenCalled();
+            if (step !== 'apply') {
+                expect(applyVisibilityChanges).not.toHaveBeenCalled();
+            } else {
+                expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes);
+            }
+            if (step === 'resolve') {
+                expect(readAzureResource).not.toHaveBeenCalled();
+            }
+            if (step === 'resolve' || step === 'read') {
+                expect(computeVisibilityChanges).not.toHaveBeenCalled();
+            }
+        },
+    );
+
+    it('does not check progress cancellation after reveal has started', async (): Promise<void> => {
+        vi.mocked(revealInDiscoveryView).mockImplementation(async (): Promise<DiscoveryRevealResult> => {
+            token.isCancellationRequested = true;
+            return revealResult;
+        });
+
+        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
+
+        expect(context.telemetry.properties.userCancelledAtStep).toBeUndefined();
+    });
+
     it('logs the parsed link and confirmation without Azure identifiers', async (): Promise<void> => {
         await handleAzureResourceLinkRequest(context, request);
 
@@ -119,12 +241,16 @@ describe('handleAzureResourceLinkRequest', (): void => {
 
         expect(result).toBe(revealResult);
         expect(parseAzureResourceLink).toHaveBeenCalledExactlyOnceWith(request.resourceId, request.tenantId);
-        expect(resolveAzureSubscription).toHaveBeenCalledExactlyOnceWith(context, {
-            providerId: link.providerId,
-            subscriptionId: link.subscriptionId,
-            tenantId: link.tenantId,
-            resourceName: link.name,
-        });
+        expect(resolveAzureSubscription).toHaveBeenCalledExactlyOnceWith(
+            context,
+            {
+                providerId: link.providerId,
+                subscriptionId: link.subscriptionId,
+                tenantId: link.tenantId,
+                resourceName: link.name,
+            },
+            expect.any(Function),
+        );
         expect(readAzureResource).toHaveBeenCalledExactlyOnceWith(context, subscription, {
             kind: link.kind,
             resourceGroup: link.resourceGroup,
@@ -133,17 +259,22 @@ describe('handleAzureResourceLinkRequest', (): void => {
         expect(computeVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription);
         expect(hasVisibilityChanges).toHaveBeenCalledWith(changes);
         expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes);
-        expect(revealInDiscoveryView).toHaveBeenCalledExactlyOnceWith(context, {
-            providerId: link.providerId,
-            subscriptionId: link.subscriptionId,
-            azureResourceId: link.resourceId,
-            displayName: 'My-Resource',
-            database: 'sales',
-            collection: 'orders',
-        });
+        expect(revealInDiscoveryView).toHaveBeenCalledExactlyOnceWith(
+            context,
+            {
+                providerId: link.providerId,
+                subscriptionId: link.subscriptionId,
+                azureResourceId: link.resourceId,
+                displayName: 'My-Resource',
+                database: 'sales',
+                collection: 'orders',
+            },
+            expect.any(Function),
+        );
         const callOrder = [
             vi.mocked(parseAzureResourceLink).mock.invocationCallOrder[0],
             vi.mocked(vscode.window.showInformationMessage).mock.invocationCallOrder[0],
+            vi.mocked(vscode.window.withProgress).mock.invocationCallOrder[0],
             vi.mocked(resolveAzureSubscription).mock.invocationCallOrder[0],
             vi.mocked(readAzureResource).mock.invocationCallOrder[0],
             vi.mocked(computeVisibilityChanges).mock.invocationCallOrder[0],
@@ -242,9 +373,11 @@ describe('handleAzureResourceLinkRequest', (): void => {
         expect(applyVisibilityChanges).not.toHaveBeenCalled();
         expect(ext.outputChannel.trace).not.toHaveBeenCalledWith('[DeepLink] Showing filter change confirmation');
         expect(ext.outputChannel.trace).not.toHaveBeenCalledWith('[DeepLink] Applying filter changes');
+        expect(progress.report).not.toHaveBeenCalledWith({ message: 'Updating filters…' });
         expect(revealInDiscoveryView).toHaveBeenCalledWith(
             context,
             expect.objectContaining({ database: undefined, collection: undefined }),
+            expect.any(Function),
         );
     });
 
@@ -300,6 +433,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
 
             expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure confirmation: dismissed');
             expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureConfirmation');
+            expect(vscode.window.withProgress).not.toHaveBeenCalled();
             expect(context.telemetry.properties.failureStage).toBe('confirm');
             expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
             expect(resolveAzureSubscription).not.toHaveBeenCalled();

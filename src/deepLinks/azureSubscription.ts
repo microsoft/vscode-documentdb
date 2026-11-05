@@ -38,6 +38,7 @@ function isAzureSubscriptionDiscoveryProvider(provider: unknown): provider is Az
 export async function resolveAzureSubscription(
     context: IActionContext,
     request: AzureSubscriptionRequest,
+    report?: (message: string) => void,
 ): Promise<AzureSubscription | undefined> {
     context.telemetry.properties.failureStage = 'azureSignIn';
     const provider = DiscoveryService.getProvider(request.providerId);
@@ -47,6 +48,7 @@ export async function resolveAzureSubscription(
 
     const { azureSubscriptionProvider } = provider;
     ext.outputChannel.trace('[DeepLink] Checking Azure sign-in');
+    report?.(vscode.l10n.t('Checking Azure sign-in…'));
     const isSignedIn = await azureSubscriptionProvider.isSignedIn();
     ext.outputChannel.trace(`[DeepLink] Azure sign-in: ${isSignedIn ? 'signed in' : 'sign-in required'}`);
     context.telemetry.properties.azureSignInRequired = isSignedIn ? 'false' : 'true';
@@ -71,6 +73,7 @@ export async function resolveAzureSubscription(
     context.telemetry.properties.tenantSignInRequired = 'false';
     for (let attempt = 0; attempt < 2; attempt++) {
         ext.outputChannel.trace('[DeepLink] Listing subscriptions');
+        report?.(vscode.l10n.t('Looking for the subscription in your Azure accounts…'));
         const subscriptions = await azureSubscriptionProvider.getSubscriptions(false);
         const candidates = subscriptions.filter(
             (subscription) =>
@@ -111,6 +114,7 @@ export async function resolveAzureSubscription(
             context.telemetry.properties.userCancelledAtStep = 'AzureTenantSignIn';
             return undefined;
         }
+        report?.(vscode.l10n.t('Signing in to tenant…'));
         await azureSubscriptionProvider.signIn(request.tenantId);
     }
 

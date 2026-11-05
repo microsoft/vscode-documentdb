@@ -90,86 +90,132 @@ export async function handleAzureResourceLinkRequest(
         ext.outputChannel.trace('[DeepLink] Azure confirmation skipped (confirmations disabled)');
     }
 
-    const subscription = await resolveAzureSubscription(context, {
-        providerId: link.providerId,
-        subscriptionId: link.subscriptionId,
-        tenantId: link.tenantId,
-        resourceName: link.name,
-    });
-    if (!subscription) {
-        return undefined;
-    }
-
-    context.telemetry.properties.failureStage = 'readAzureResource';
-    const { name: displayName } = await readAzureResource(context, subscription, {
-        kind: link.kind,
-        resourceGroup: link.resourceGroup,
-        name: link.name,
-    });
-
-    context.telemetry.properties.failureStage = 'computeVisibility';
-    const changes = await computeVisibilityChanges(link.providerId, subscription);
-    context.telemetry.properties.visibilityProviderShown = changes.showProvider ? 'true' : 'false';
-    context.telemetry.properties.visibilityTenantUnfiltered = changes.unfilterTenant ? 'true' : 'false';
-    context.telemetry.properties.visibilitySubscriptionAdded = changes.addSubscription ? 'true' : 'false';
-    const visibilityChangesNeeded = hasVisibilityChanges(changes);
-
-    context.telemetry.properties.failureStage = 'confirmFilterChanges';
-    if (showUrlHandlingConfirmations && visibilityChangesNeeded) {
-        const detail = [vscode.l10n.t('To show {0}, the extension needs to change your filters:', displayName)];
-        if (changes.showProvider) {
-            detail.push(
-                vscode.l10n.t('• The {0} discovery provider will be shown in the Discovery view.', kindLabel),
+    return vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: vscode.l10n.t('Opening {0}', link.name),
+            cancellable: true,
+        },
+        async (progress, token): Promise<DiscoveryRevealResult | undefined> => {
+            const report = (message: string): void => progress.report({ message });
+            const subscription = await resolveAzureSubscription(
+                context,
+                {
+                    providerId: link.providerId,
+                    subscriptionId: link.subscriptionId,
+                    tenantId: link.tenantId,
+                    resourceName: link.name,
+                },
+                report,
             );
-        }
-        if (changes.unfilterTenant) {
-            detail.push(
-                vscode.l10n.t('• Tenant {0} will no longer be hidden by your tenant filter.', subscription.tenantId),
+            if (token.isCancellationRequested) {
+                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
+                return undefined;
+            }
+            if (!subscription) {
+                return undefined;
+            }
+
+            context.telemetry.properties.failureStage = 'readAzureResource';
+            report(vscode.l10n.t('Reading {0} from Azure…', link.name));
+            const { name: displayName } = await readAzureResource(context, subscription, {
+                kind: link.kind,
+                resourceGroup: link.resourceGroup,
+                name: link.name,
+            });
+            if (token.isCancellationRequested) {
+                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
+                return undefined;
+            }
+
+            context.telemetry.properties.failureStage = 'computeVisibility';
+            const changes = await computeVisibilityChanges(link.providerId, subscription);
+            if (token.isCancellationRequested) {
+                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
+                return undefined;
+            }
+            context.telemetry.properties.visibilityProviderShown = changes.showProvider ? 'true' : 'false';
+            context.telemetry.properties.visibilityTenantUnfiltered = changes.unfilterTenant ? 'true' : 'false';
+            context.telemetry.properties.visibilitySubscriptionAdded = changes.addSubscription ? 'true' : 'false';
+            const visibilityChangesNeeded = hasVisibilityChanges(changes);
+
+            context.telemetry.properties.failureStage = 'confirmFilterChanges';
+            if (showUrlHandlingConfirmations && visibilityChangesNeeded) {
+                const detail = [vscode.l10n.t('To show {0}, the extension needs to change your filters:', displayName)];
+                if (changes.showProvider) {
+                    detail.push(
+                        vscode.l10n.t('• The {0} discovery provider will be shown in the Discovery view.', kindLabel),
+                    );
+                }
+                if (changes.unfilterTenant) {
+                    detail.push(
+                        vscode.l10n.t('• Tenant {0} will no longer be hidden by your tenant filter.', subscription.tenantId),
+                    );
+                }
+                if (changes.addSubscription) {
+                    detail.push(
+                        vscode.l10n.t(
+                            '• Subscription {0} will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
+                            subscription.name,
+                        ),
+                    );
+                }
+                detail.push(
+                    '',
+                    vscode.l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+                );
+
+                const changeFiltersButton = vscode.l10n.t('Change filters and open');
+                ext.outputChannel.trace('[DeepLink] Showing filter change confirmation');
+                const choice = await vscode.window.showInformationMessage(
+                    vscode.l10n.t('Change filters?'),
+                    { modal: true, detail: detail.join('\n') },
+                    changeFiltersButton,
+                );
+                ext.outputChannel.trace(
+                    `[DeepLink] Filter change confirmation: ${choice === changeFiltersButton ? 'accepted' : 'dismissed'}`,
+                );
+                if (token.isCancellationRequested) {
+                    context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                    ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
+                    return undefined;
+                }
+                if (choice !== changeFiltersButton) {
+                    context.telemetry.properties.userCancelledAtStep = 'AzureFilterChanges';
+                    return undefined;
+                }
+            }
+
+            context.telemetry.properties.failureStage = 'applyVisibility';
+            if (visibilityChangesNeeded) {
+                ext.outputChannel.trace('[DeepLink] Applying filter changes');
+                report(vscode.l10n.t('Updating filters…'));
+                await applyVisibilityChanges(link.providerId, subscription, changes);
+            }
+
+            if (token.isCancellationRequested) {
+                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
+                return undefined;
+            }
+
+            context.telemetry.properties.failureStage = 'revealCluster';
+            ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
+            return revealInDiscoveryView(
+                context,
+                {
+                    providerId: link.providerId,
+                    subscriptionId: link.subscriptionId,
+                    azureResourceId: link.resourceId,
+                    displayName,
+                    database: request.database,
+                    collection: request.collection,
+                },
+                report,
             );
-        }
-        if (changes.addSubscription) {
-            detail.push(
-                vscode.l10n.t(
-                    '• Subscription {0} will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
-                    subscription.name,
-                ),
-            );
-        }
-        detail.push(
-            '',
-            vscode.l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
-        );
-
-        const changeFiltersButton = vscode.l10n.t('Change filters and open');
-        ext.outputChannel.trace('[DeepLink] Showing filter change confirmation');
-        const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('Change filters?'),
-            { modal: true, detail: detail.join('\n') },
-            changeFiltersButton,
-        );
-        ext.outputChannel.trace(
-            `[DeepLink] Filter change confirmation: ${choice === changeFiltersButton ? 'accepted' : 'dismissed'}`,
-        );
-        if (choice !== changeFiltersButton) {
-            context.telemetry.properties.userCancelledAtStep = 'AzureFilterChanges';
-            return undefined;
-        }
-    }
-
-    context.telemetry.properties.failureStage = 'applyVisibility';
-    if (visibilityChangesNeeded) {
-        ext.outputChannel.trace('[DeepLink] Applying filter changes');
-        await applyVisibilityChanges(link.providerId, subscription, changes);
-    }
-
-    context.telemetry.properties.failureStage = 'revealCluster';
-    ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
-    return revealInDiscoveryView(context, {
-        providerId: link.providerId,
-        subscriptionId: link.subscriptionId,
-        azureResourceId: link.resourceId,
-        displayName,
-        database: request.database,
-        collection: request.collection,
-    });
+        },
+    );
 }
