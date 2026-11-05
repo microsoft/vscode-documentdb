@@ -295,6 +295,19 @@ names, then the final checks.
 > bundle is unchanged by this iteration and no localized string changed), so it was not regenerated.
 > Case 2 checks were deferred: PR #1066 is a draft.
 
+> **Follow-up (2026-11-05):** two orchestrator sessions ran this plan at once in the same working
+> tree (operator: probably when monitoring moved from VS Code to the agents window). One wrote the
+> plan, reviewed and committed RN-1, and reviewed RN-2 to RN-4; the other committed RN-2 to RN-4 and
+> did RN-5 to RN-8. The operator kept 0038's index status ("Partly superseded by 0051") and asked for
+> the full checks before pushing. Results: `npm run l10n` regenerated the bundle for the WI-30/31/33
+> strings (`33dc5768`); `prettier-fix` reformatted 74 files, formatting only (`fb5c8973`); `lint`
+> found one pre-existing useless regex escape from WI-29, fixed in `2d0172d9`; `l10n:check`, `lint`,
+> `build`, `typecheck:tests` and `package` passed; full Vitest passed except one 15 s timeout in
+> `vscode-ext-webview-fluentui/src/components.test.ts` under load, which passed when re-run alone.
+> L2-dev, re-run independently: 28 `connectionDiagnostics` scenarios × dark, light, high-contrast
+> (84 routes) at 1280 × 900 were ready with no errors, and all 1,308 assertions passed; the old
+> `/connectivityTroubleshooter/…` route returns 404.
+
 ## Not in scope
 
 - Renaming the docs folder `docs/ai-and-plans/features/connectivity-troubleshooter/`.
