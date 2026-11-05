@@ -744,7 +744,7 @@ test('every Vite graph chunk must exist in both the report and the VSIX', () => 
 });
 
 test('Vite always enforces lightweight views', () => {
-    for (const name of ['localQuickStart', 'atlasCredentials']) {
+    for (const name of ['localQuickStart', 'atlasCredentials', 'awsCredentials']) {
         for (const asset of ['monaco-AbC12345.js', 'slickgrid.js']) {
             const { report, bundled } = viteFixture();
             report.chunks.find((chunk) => chunk.fileName === `${name}.js`).imports.push(asset);

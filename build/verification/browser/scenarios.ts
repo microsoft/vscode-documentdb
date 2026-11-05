@@ -148,6 +148,7 @@ export const scenarios = {
     documentView: { default: defaultScenario('documentView') },
     clusterDashboard: { default: defaultScenario('clusterDashboard') },
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },
+    awsCredentials: { default: defaultScenario('awsCredentials') },
     localQuickStart: {
         default: defaultScenario('localQuickStart', continueSteps),
         introduction: {

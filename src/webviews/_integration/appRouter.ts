@@ -34,6 +34,7 @@ import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmati
 import { isFeedbackPermitted, showFeedbackDisabledMessage } from '../../utils/feedbackPermission';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
+import { awsCredentialsRouter } from '../documentdb/awsCredentials/awsCredentialsRouter';
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
@@ -277,6 +278,7 @@ const commonRouter = router({
 export const appRouter = router({
     common: commonRouter,
     atlasCredentials: atlasCredentialsRouter,
+    awsCredentials: awsCredentialsRouter,
     clusterDashboard: clusterDashboardRouter,
     mongoClusters: {
         documentView: documentViewRouter,

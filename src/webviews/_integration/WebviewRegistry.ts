@@ -50,6 +50,11 @@ export const WebviewRegistry = {
             default: module.AtlasCredentialsView,
         })),
     ),
+    awsCredentials: React.lazy(() =>
+        import('../documentdb/awsCredentials/AwsCredentialsView').then((module) => ({
+            default: module.AwsCredentialsView,
+        })),
+    ),
 } as const;
 
 /**

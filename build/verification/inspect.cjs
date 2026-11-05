@@ -17,6 +17,7 @@ const viewModules = {
     documentView: './src/webviews/documentdb/documentView/documentView.tsx',
     localQuickStart: './src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx',
     atlasCredentials: './src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx',
+    awsCredentials: './src/webviews/documentdb/awsCredentials/AwsCredentialsView.tsx',
     clusterDashboard: './src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx',
 };
 // Dynamic imports whose specifier is not a string cannot be resolved offline. A script may have at
@@ -470,7 +471,7 @@ function viewGraphs(report, files) {
     for (const name of Object.keys(viewModules)) {
         graphs[name] = viteViewGraph(report, name, files);
     }
-    for (const name of ['localQuickStart', 'atlasCredentials']) {
+    for (const name of ['localQuickStart', 'atlasCredentials', 'awsCredentials']) {
         assert.ok(!graphs[name].monaco && !graphs[name].slickgrid, `${name} must exclude Monaco and SlickGrid`);
     }
     return graphs;

@@ -241,7 +241,7 @@ These are exactly the current external categories:
 | Host-provided API                                                | `vscode`                                                              | Supplied by VS Code, never bundled.                                                                                                                                                        |
 | Node runtime                                                     | Every `node:` specifier and members of `builtinModules`               | Supplied by Node.                                                                                                                                                                          |
 | DocumentDB API driver's optional native/compression dependencies | `kerberos`, `@mongodb-js/zstd`, `snappy`, `mongodb-client-encryption` | Guarded driver/devtools loaders; do not manufacture a stub when unavailable.                                                                                                               |
-| Guarded driver authentication loaders                            | `@aws-sdk/credential-providers`, `gcp-metadata`                       | Preserve the previous external behavior instead of adding optional auth stacks to the bundle.                                                                                              |
+| Guarded driver authentication loaders                            | `gcp-metadata`                                                        | Preserve the previous external behavior instead of adding optional auth stacks to the bundle.                                                                                              |
 | `ws` optional native accelerators                                | `bufferutil`, `utf-8-validate`                                        | Guarded loads with Node/JavaScript fallbacks.                                                                                                                                              |
 | Optional OIDC browser opener                                     | `electron`                                                            | Guarded request; falls back to bundled `open`.                                                                                                                                             |
 | Optional devtools DNS loader                                     | `os-dns-native`                                                       | Guarded request.                                                                                                                                                                           |
@@ -254,6 +254,10 @@ The audit removed dead entries `aws4`, `cpu-features`, `pg-native` and `vs`; the
 of this policy. L1 verifies packaged graph edges and permits runtime built-ins/`vscode` in the
 host ESM graph; it is not a behavioral proof of optional authentication/proxy paths. L3 covers
 normal activation, while native-auth/proxy behavior needs its own installed-VSIX exercise.
+
+`@aws-sdk/credential-providers` is bundled: AWS discovery imports `fromIni` directly, so it is
+no longer only an optional driver authentication dependency. Leaving it external would require
+an unshipped package during extension activation.
 
 `caniuse-lite` is **not** an explicit external. The recorded worker-size reduction came from
 Rolldown not expanding browserslist's computed region/feature `require` requests into webpack's
