@@ -23,10 +23,11 @@ created: 2026-08-24
 | 0009 | Azure links resolve through our Discovery tree      | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
 | 0010 | The resource ID selects vCore or RU; we handle both | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
 | 0011 | Azure links change visibility filters permanently   | Accepted            | Changed from a session-only proposal          | 2026-11-05 | #1067 |
-| 0012 | Azure links confirm like `/local`                   | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0012 | Azure links confirm like `/local`                   | Accepted (modified) | Accepted as proposed                          | 2026-11-05 | #1067 |
 | 0013 | `open=` names the surface; `dashboard` always opens | Accepted            | Override of the setting added by maintainer   | 2026-11-05 | #1067 |
 | 0014 | `open=` applies to `/connect` as well               | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
 | 0015 | An Azure link always expands the cluster node       | Accepted            | Orchestrator's collapsed variant reversed     | 2026-11-05 | #1067 |
+| 0016 | The Azure confirmation comes before the lookup      | Accepted            | Requested by maintainer after testing         | 2026-11-05 | #1067 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -576,3 +577,50 @@ reliable.
   implementation did this to keep a cancelled connect from being retried by a later expansion.
   Rejected because it leaves the node collapsed after a failure or cancel, and because it rested on
   the assumption that `reveal` does not wait for the expansion, which is wrong.
+
+---
+
+## 0016 — The Azure confirmation comes before the lookup
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer, after trying the first build
+
+### Question
+
+D0012 put one confirmation after the subscription lookup and the ARM read, so it could name the
+subscription and list every filter change. In practice the dialog appeared long after the click,
+because it waited for the Azure sign-in check, the subscription listing across all accounts and
+tenants, and the ARM read. How should the confirmation be ordered?
+
+### Decision
+
+When URL handling confirmations are enabled:
+
+1. The first confirmation appears right after the link is parsed, before any sign-in prompt or
+   network call. It shows what the link names: the resource name and kind, the resource group, the
+   subscription **ID**, the database, the collection, and what will open. Dismissing it stops
+   everything.
+2. After the lookup, a second confirmation appears **only when a filter has to change**. It lists
+   each change (D0011) before it is applied, including the note that adding a subscription also
+   shows it in the Azure Resources view.
+
+When confirmations are disabled, neither dialog appears, as before.
+
+### Reasoning
+
+The maintainer asked for the first confirmation to come quickly, even with limited details. The
+first dialog no longer verifies the resource, but it changes nothing, and the steps after it only
+read (sign-in is the user's own choice in its own prompt).
+
+Filter changes are persistent and one of them writes a setting shared with another extension, so
+D0011's requirement that the user sees each change before it happens is kept with a second dialog.
+That dialog appears only when something is hidden, which is the uncommon case.
+
+This modifies D0012 ("one confirmation"): the confirmation is still gated by the setting, but there
+can be two.
+
+### Rejected alternatives
+
+- **One early dialog with a generic note that filters may change.** Faster, but the user would
+  consent to a change to a shared setting without seeing which subscription or tenant it affects.
+- **Keep the single late dialog and show progress while looking up.** The user still waits for the
+  slow steps before deciding whether they wanted the link at all.

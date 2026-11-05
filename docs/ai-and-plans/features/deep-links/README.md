@@ -92,8 +92,10 @@ Local" link has no connection string by definition, because the container does n
 - **Hidden resources are made visible permanently**, including the subscription filter shared with
   the Azure Resources extension
   ([0011](./decisions.md#0011--azure-links-change-visibility-filters-permanently)).
-- **One confirmation, gated by the setting**, like `/local`
-  ([0012](./decisions.md#0012--azure-links-confirm-like-local)).
+- **A quick confirmation first, gated by the setting**, with what the link names, before any
+  sign-in or lookup; a second one only when filters must change
+  ([0012](./decisions.md#0012--azure-links-confirm-like-local),
+  [0016](./decisions.md#0016--the-azure-confirmation-comes-before-the-lookup)).
 - **`open=dashboard|shell` on every `/connect` variant**; `dashboard` opens even when the automatic
   dashboard is turned off ([0013](./decisions.md#0013--open-names-the-surface-dashboard-always-opens),
   [0014](./decisions.md#0014--open-applies-to-connect-as-well)).
