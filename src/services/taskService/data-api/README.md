@@ -1,5 +1,7 @@
 # Data API Architecture
 
+Feature design and rationale: [Task Packages](../../../../docs/ai-and-plans/features/task-packages/README.md).
+
 ## Overview
 
 The Data API provides a robust, database-agnostic framework for streaming and bulk writing documents between databases. It's designed to handle large-scale data operations with features like adaptive batching, automatic retry logic, and intelligent conflict resolution.
@@ -8,6 +10,7 @@ The Data API provides a robust, database-agnostic framework for streaming and bu
 
 - **DocumentReader**: Streams documents from source collections
 - **StreamingDocumentWriter**: Abstract base class for streaming writes with integrated buffering, batching, and retry logic
+- **CollectionIndexCopier**: Optionally copies collection indexes before document streaming
 
 **Supported Databases:**
 
@@ -24,12 +27,14 @@ The Data API provides a robust, database-agnostic framework for streaming and bu
 │                           HIGH-LEVEL ARCHITECTURE                           │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-                          ┌──────────────────────┐
-                          │  CopyPasteTask or    │
-                          │  Other Streaming Task│
-                          └──────────┬───────────┘
+                          ┌────────────────────────┐
+                          │ CopyPasteCollectionTask│
+                          │ Validate/count/ensure  │
+                          │ Optional index copy    │
+                          └──────────┬─────────────┘
                                      │
-                                     │ 1. Creates components
+                                     │ Index copy (optional) occurs before
+                                     │ the document stream starts
                                      │
                 ┌────────────────────┴────────────────────┐
                 │                                         │
@@ -57,6 +62,8 @@ The Data API provides a robust, database-agnostic framework for streaming and bu
 └──────────────────┘                  └──────────────────┘
 ```
 
+For `CopyPasteCollectionTask`, the order is: validate the source collection, count documents, ensure the target exists, optionally copy indexes through `CollectionIndexCopier`, then stream documents through the reader and writer.
+
 ---
 
 ## Component Responsibilities
@@ -78,7 +85,7 @@ The Data API provides a robust, database-agnostic framework for streaming and bu
 **Example:**
 
 ```typescript
-const reader = new DocumentDbDocumentReader(connectionId, databaseName, collectionName);
+const reader = new DocumentDbDocumentReader(clusterId, databaseName, collectionName);
 const stream = reader.streamDocuments({ keepAlive: true });
 
 for await (const doc of stream) {
@@ -95,7 +102,7 @@ for await (const doc of stream) {
 **Key Features:**
 
 1. **Buffer Management**: Single-level buffering with adaptive flush triggers
-2. **Integrated Retry Logic**: Uses RetryOrchestrator for transient failure handling
+2. **Inline Retry Logic**: `writeBatchWithRetry()` retries transient failures with backoff
 3. **Adaptive Batching**: Uses BatchSizeAdapter for dual-mode (fast/RU-limited) operation
 4. **Pre-filtering (Skip Strategy)**: Queries target for existing IDs before insert to avoid duplicate logging
 5. **Statistics Aggregation**: Uses WriteStats for progress tracking
@@ -302,14 +309,14 @@ Success:                     Throttle:
 
 ---
 
-## Retry Logic
+## Inline Retry Logic
 
-The `RetryOrchestrator` handles transient failures:
+`StreamingDocumentWriter.writeBatchWithRetry()` retries throttle and network errors in an inline loop:
 
-- **Max attempts**: 10
-- **Backoff**: Exponential with jitter
-- **Retryable errors**: Throttle (429, 16500), Network (ECONNRESET, ETIMEDOUT)
-- **Non-retryable errors**: Conflicts (handled by strategy), Other (bubble up)
+- **Attempts**: Fails after 10 attempts without progress; the attempt counter resets when a write makes progress
+- **Backoff**: 100 ms × 2^attempt, capped at 5 seconds, with ±30% jitter
+- **Cancellation**: The delay is abortable through the operation's `AbortSignal`
+- **Non-retryable errors**: Conflicts, validation errors, and other errors are thrown without retry
 
 ---
 
@@ -338,6 +345,10 @@ When keep-alive is enabled:
 src/services/taskService/data-api/
 ├── README.md                             # This documentation
 ├── types.ts                              # Public interfaces (StreamWriteResult, DocumentDetails, etc.)
+├── indexes/                              # Collection index copying
+│   ├── CollectionIndexCopier.ts
+│   ├── DocumentDbCollectionIndexCopier.ts
+│   └── createIndexCopier.ts
 ├── readers/
 │   ├── BaseDocumentReader.ts             # Abstract reader base class (see JSDoc for sequence diagrams)
 │   ├── DocumentDbDocumentReader.ts       # MongoDB/DocumentDB implementation
@@ -347,7 +358,6 @@ src/services/taskService/data-api/
     ├── StreamingDocumentWriter.test.ts   # Comprehensive tests for streaming writer
     ├── DocumentDbStreamingWriter.ts      # MongoDB/DocumentDB implementation
     ├── writerTypes.internal.ts           # Internal types (StrategyBatchResult, PreFilterResult, etc.)
-    ├── RetryOrchestrator.ts              # Isolated retry logic
     ├── BatchSizeAdapter.ts               # Adaptive batch sizing (fast/RU-limited modes)
     └── WriteStats.ts                     # Statistics aggregation
 ```
@@ -358,7 +368,7 @@ src/services/taskService/data-api/
 
 ```typescript
 // Create reader and writer
-const reader = new DocumentDbDocumentReader(sourceConnectionId, sourceDb, sourceCollection);
+const reader = new DocumentDbDocumentReader(sourceClusterId, sourceDb, sourceCollection);
 const writer = new DocumentDbStreamingWriter(targetClient, targetDb, targetCollection);
 
 // Create task
@@ -370,8 +380,10 @@ await task.start();
 
 The task handles:
 
-1. Counting source documents for progress
-2. Ensuring target collection exists
-3. Streaming documents with progress updates
-4. Handling errors with partial statistics
-5. Reporting final summary
+1. Validating the source collection
+2. Counting source documents for progress
+3. Ensuring target collection exists
+4. Optionally copying indexes through `CollectionIndexCopier`
+5. Streaming documents with progress updates
+6. Handling errors with partial statistics
+7. Reporting final summary
