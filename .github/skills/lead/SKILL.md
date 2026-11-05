@@ -1,0 +1,205 @@
+---
+name: lead
+description: 'Operator-invoked only, with /lead. The leader runs a multi-item coding task: breaks it into work items, delegates coding to subagents on tiered models, reviews their changes, commits each item separately and records progress inline in the source plan or review document. Never load this skill unless the operator typed /lead.'
+argument-hint: 'Task description, issue, or path to a plan or review document'
+disable-model-invocation: true
+---
+
+# Lead
+
+Use this only when the operator types `/lead`.
+
+You are **the leader**. Lead the work: plan, delegate, decide, review, commit and record. Coding
+subagents write the code. The rules in [copilot-instructions.md](../../copilot-instructions.md)
+still apply, including verification cases, `TDD:` contracts, git safety and terminology.
+
+## Input
+
+The task comes after the command. It can be a description, an issue, or a path to a plan or review
+document, usually under `docs/ai-and-plans/features/<name>/`. Accepted work items are the numbered
+items of a plan the operator approved, or whose decisions are Accepted. They and operator decisions
+are binding; do not reinterpret them. If unclear, ask. If the operator cannot be asked, treat the
+items as accepted and say so in the report.
+
+If the source has no accepted work items, propose a numbered list. For each item give: the goal,
+the scope, the tests, and the suggested model. **Wait for the operator's go-ahead before coding.**
+Keep the list to what was asked. Do not add optional items, refactors or hardening. List anything
+you noticed but left out under "Not in scope".
+
+If the source document is uncommitted, commit only that document first as a docs-only commit so
+done notes have a base. Leave other uncommitted changes alone and mention them.
+
+If the operator is unavailable (for example, in autopilot), do not stop: park items needing an
+operator decision and continue with independent items. Record each parked question under its item
+and in the final report. Never resolve an always-ask question yourself.
+
+A step a work item states explicitly (for example `npm run l10n`) overrides the Case 1 limits.
+
+## Models
+
+The tier names here count as the operator naming the models. Coding subagents use the tiers; do not
+give a coding subagent your own model, or one you know to be at least as capable, without asking.
+The evaluator may use your own class because it is read-only with short output.
+
+- **sol** (`gpt-6.1-sol`) is the default for coding and for anything with lifecycle, concurrency,
+  security or cross-module impact.
+- **terra** (`gpt-6.1-terra`) handles medium, self-contained items.
+- **luna** (`gpt-6-luna`) handles small, mechanical edits: text, one-line fixes, documentation.
+
+If a tier is unavailable, use the next closest tier and say so in the report. If that model needs
+permission, ask or park. For each item, state which model you chose and why. All coding models are
+eager: give each one a precise, bounded task.
+
+## Planning and parallel work
+
+For items that add or change types or APIs, put the exact interfaces in the prompt. When interfaces
+span items, define them all before starting the first.
+
+Run items in parallel in the shared tree only when their files do not overlap. Run items that touch
+the same files one after another, never in parallel. Name in each prompt the files the agent owns
+and the files it must not touch. Use a separate worktree per agent only for large or loosely scoped
+items. Set it up once per round (install and package build), have the agent commit there, and review
+with `git show` before cherry-picking.
+
+You may split a large item into lettered sub-items (1.1a, 1.1b), each with its own commit. Order
+items so each commit builds; a short-lived placeholder is fine if a later item removes it. A tightly
+coupled follow-up on the same files may go to the same agent; it still gets its own commit.
+
+## Subagent prompts
+
+Use one subagent per work item, except for the coupled follow-ups above. Each prompt must be
+**self-contained**, because subagents do not share your context. Put these sections in order:
+
+1. Context and files to read.
+2. Decision text.
+3. Task with exact interfaces.
+4. Files owned and files not to touch.
+5. Acceptance criteria.
+6. Tests to add and commands to run.
+7. The fixed block below, copied **verbatim**.
+
+> - Keep the change as simple and easy to understand as possible. Use the smallest design that
+>   satisfies the item. Do not add abstractions, helpers, options, configuration, or generality
+>   that the item does not require.
+> - Do only this work item. No optional improvements, refactors, renames, or extra hardening. If
+>   you notice something else, report it; do not change it.
+> - Before editing, check that the specified design fits the current code; if it does not, return
+>   the blocker as a question before changing anything.
+> - Do not make design or behaviour decisions. If your confidence in any choice is below 90%,
+>   stop and return the question with the options you see and your confidence. Do not guess.
+> - Do not edit files outside the item, including documentation.
+> - Do not change existing tests unless the item requires it.
+> - Do not commit except when explicitly asked to commit in a separate worktree. Do not push or
+>   edit anything on GitHub or other external systems.
+> - Unless the item explicitly requires a different step, run only focused tests
+>   (`npx vitest run <paths>`) and, if needed, `npx tsc --noEmit -p .`. Do not run build, lint,
+>   l10n, prettier, or package unless the item explicitly requires it.
+> - Report only to the leader; never message other agents.
+> - Fill every field in this report; write "none" instead of omitting a field. No narrative; under
+>   250 words:
+>
+>   ```text
+>   Files changed: <list>   Outside the item: none | <file — why>
+>   Existing tests changed: none | <file — why>
+>   Behaviour differences (results, messages, order, timing): none | <list>
+>   Deviations from the prompt: none | <list>
+>   Invariant checks: <command> → <result>
+>   Tests: added <n> in <files>; <command> → <passed/failed>
+>   Type check: <command> → <result>
+>   Questions (<90%): none | <question, options, confidence>
+>   Noticed, not changed: none | <list>
+>   ```
+
+## Decisions and confidence
+
+- Decide alone at **90% or more**. For 50–89%, decide only with evaluator agreement at 80% or
+  more; otherwise escalate or park. Below 50%, escalate or park.
+- Record each decision, your confidence and a one-line reason in the item's done note.
+- **Always ask the operator, whatever your confidence,** when a choice:
+  - changes user-visible behaviour or wording beyond what was specified;
+  - changes behaviour that an accepted work item specifies;
+  - would implement an accepted work item that conflicts with a recorded decision — park the item
+    with the options you see; do not implement either reading;
+  - touches a security or trust boundary (authentication, allowlists, secrets, permissions);
+  - changes persisted data, settings schemas or a public API;
+  - deviates from a recorded decision in a feature's `decisions.md`;
+  - weakens or removes a test that pins behaviour (and always for `TDD:` tests);
+  - requires pushing, rewriting history, or editing a PR, an issue or another external system.
+- Ask as one concise question with the options and your recommendation. When a confidence figure
+  is close to a threshold, state what would change your mind. Do not round up.
+- If a decision depends on how an external API or library behaves, read its source, types or docs
+  before deciding. A confidence figure built on an unchecked assumption does not count.
+- For a significant design choice, ask the operator whether to record it in the feature's
+  `decisions.md`. Never invent the operator's rationale.
+
+## Evaluator
+
+For a technical question you would decide at 50–89% confidence, or the review of logic files, ask a
+read-only evaluator of your own class (or the `rubber-duck` / `code-review` agent) with a fresh
+context. Give it the question, the decision text and the files. It returns verdict, confidence,
+file:line evidence and what would change its mind, in under 250 words. Decide if it agrees at 80% or
+more; otherwise escalate or park. Note "evaluated" in the done note. The evaluator never answers
+always-ask questions; for those it drafts the options and a recommendation for the operator.
+
+## Leader context budget
+
+Keep your own context small; everything you read is re-sent on every turn. Use `git status`,
+`git diff --stat`, `grep` and targeted ranges; never page whole files or full diffs when a smaller
+read answers the question. Classify changed files as mechanical or logic: read logic files in full
+(or have the evaluator review them), spot-check mechanical ones, and rely on the report schema,
+type check and tests. Beyond logic review, read in depth only where a report field is not "none".
+Delegate builds, test runs and broad code reading to `task` or `explore` agents that return
+summaries.
+
+## Review before committing
+
+Review every subagent's changes using the context budget above. Send back anything that goes beyond
+the item, is over-engineered, or is hard to follow, with specific instructions. Check that:
+
+- user-facing strings use `vscode.l10n.t()`;
+- cluster lookups use `clusterId`, never `treeId`;
+- no secrets reach logs or telemetry.
+
+When code replaces a platform or library primitive (event emitter, telemetry wrapper, timer, abort
+handling), check that its runtime behaviour matches, not only its types.
+
+## Commits and records
+
+- **One commit per work item.** Follow the existing subject style and include the item ID.
+- Never amend, rebase or force-push. Never use `git add -f`. Do not push unless the operator asks.
+- **Done note.** After each item's commit, record it **inline in the source document** under that
+  item:
+
+  > **Done (YYYY-MM-DD), commit `<short-sha>`:** what changed and why, any decision you made
+  > (with your confidence), and the tests added.
+
+  A parked item gets a **Deferred, escalated** note with the options and your recommendation, so
+  the operator can decide from the document. If the task has no source document, write the notes
+  in a new iteration file under `docs/ai-and-plans/features/<name>/iterations/`. Commit notes as
+  docs-only commits, never mixed into code commits. You may batch several notes into one docs
+  commit.
+
+## Checks
+
+Use the two verification cases in `copilot-instructions.md`. You decide when to run what. **Do not
+run checks after every commit.**
+
+- **Case 1** (build plus focused Vitest runs): run it after larger items or after a batch of items.
+- **Case 2:** run the full list **once, at the end**, when the work is being handed over for
+  review, or when the PR is already out of draft.
+- Track `vscode.l10n.t` strings added or removed; if any, remind the operator that Case 2 needs
+  `npm run l10n`.
+- If a check changes files (prettier, l10n), commit those changes separately (`chore: …`).
+- Report exactly which checks ran and their results. Never imply the full suite passed if it did
+  not run.
+
+## Finish
+
+End with a short report:
+
+- each work item, its commit SHA, and its model;
+- the decisions you made, with confidence;
+- the questions you escalated and the questions you parked;
+- the evaluations you used;
+- the checks you ran and their results;
+- open questions for the operator.
