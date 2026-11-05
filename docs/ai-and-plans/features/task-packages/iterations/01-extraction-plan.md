@@ -35,11 +35,23 @@ the code.
 Remove `writers/RetryOrchestrator.ts`, the `retryOrchestrator` field and its import from
 `StreamingDocumentWriter`. Correct the class JSDoc and the diagrams that name it (decision 0007).
 
+> **Done (2026-11-05), commit `19004d18`:** deleted `RetryOrchestrator.ts`, its unused field,
+> construction and import; the class JSDoc and the network-retry diagram now describe the inline
+> loop in `writeBatchWithRetry`. No behaviour change; no new tests (writer suite unchanged and
+> passing). Model: terra.
+
 ### 0.2 Correct the Task Service and Data API READMEs
 
 Replace `TaskServiceManager` with the registry, `connectionId` with `clusterId`, remove the claim
 that registration checks conflicts, describe the inline retry loop with its real defaults, and add
 the index copy phase. Link both READMEs to this feature folder.
+
+> **Done (2026-11-05), commit `78d0da80`:** both READMEs now name the `TaskService` registry,
+> use `clusterId` (never `treeId`), state that `registerTask()` only rejects duplicate IDs while
+> destructive commands run the conflict checks, describe the inline retry loop (100 ms × 2ⁿ, 5 s
+> cap, ±30% jitter, abortable, 10 attempts without progress) and the optional index copy phase,
+> and link this folder. The orchestrator restored two correct bullets the subagent had dropped
+> from the `CopyPasteCollectionTask` box. Docs only. Model: luna.
 
 ---
 
@@ -57,6 +69,45 @@ the index copy phase. Link both READMEs to this feature folder.
 - Replace `vscode.EventEmitter` with a minimal emitter whose events keep the `vscode.Event` call
   signature, so existing subscribers compile unchanged.
 - Keep event names and `task_*` properties (decision 0012).
+
+> **Done (2026-11-05), commits `725916ae` (1.1a, task core), `0104c6a4` (1.1b, engine),
+> `7f661ece` (1.1c, copy task):** split into three commits to keep each diff reviewable.
+>
+> - Task core: `taskHost.ts` defines `TaskLogger`, `TaskTelemetryContext`,
+>   `TaskTelemetryRunner`, `TaskStrings` (English defaults) and `TaskOptions`; `events.ts` adds a
+>   minimal `Emitter`/`Event` with the `vscode.Event` call signature. Like `vscode.EventEmitter`,
+>   it isolates listener errors (added by the orchestrator in review). `taskService.ts` no
+>   longer imports `vscode`, `ext` or azext utils. The glue in
+>   `src/services/taskService/extension/` injects `ext.outputChannel`, a runner over
+>   `callWithTelemetryAndErrorHandling` and `vscode.l10n.t` strings with the same keys.
+> - Engine: `data-api/dataTransferHost.ts` defines `DataTransferStrings` and `DataTransferOptions`;
+>   the readers, writer, `BatchSizeAdapter`, `KeepAliveOrchestrator` and `WriteStats` take them
+>   through optional trailing constructor parameters. The DocumentDB adapters inject the
+>   extension's logger and strings.
+> - Copy task: `copyCollectionStrings.ts` holds its user-facing text; the source-validation and
+>   metadata blocks keep `vscode.l10n.t` and `ext` until 1.4.
+>
+> Decisions made by the orchestrator:
+>
+> - **Log lines are plain English; only user-facing text goes through strings objects** (75%).
+>   Output channel lines are diagnostics, and no translation bundles ship today
+>   (`l10n/` has only `bundle.l10n.json`), so the English output is identical. It would change if
+>   the extension starts shipping translations and wants translated logs.
+> - **The extension's runner sets `suppressDisplay` for `taskService.taskExecution`** instead of
+>   the task doing it in its catch block (75%). This keeps the context interface to `telemetry`
+>   only. Display matters only when an error is thrown, so behaviour is the same.
+> - **Telemetry property values are `string | { readonly value: string } | undefined`** (75%).
+>   The object form is structurally `vscode.TelemetryTrustedValue<string>`, so `IActionContext`
+>   satisfies `TaskTelemetryContext` without a cast, as the plan requires. The alternative, a cast
+>   in the glue, would push the same cast onto every consumer.
+> - **Engine hook contexts were narrowed to `TaskTelemetryContext` in 1.1a** (type-only, 90%),
+>   because the task now passes that type to readers and writers.
+>
+> The `TaskService` singleton still uses English defaults for its two programmer-error messages
+> until 1.3. Tests: `events.test.ts`, a host-options block in `taskService.test.ts`,
+> `dataTransferHost.test.ts`, and an injected-strings test for the copy task. Existing writer,
+> reader and keep-alive suites are unchanged; `CopyPasteCollectionTask.test.ts` only passes the
+> mocked output channel as the injected logger. Models: sol (all three).
 
 This is the largest diff, but mechanical. Afterwards, of the code that will move, only `UI/**` and
 `resourceUsageHelper.ts` import `vscode`. The DocumentDB adapters and `CopyIndexesTask` stay in the
