@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: decisions
 status: active
 created: 2026-10-27
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 # Connectivity troubleshooter: decisions
@@ -50,7 +50,7 @@ updated: 2026-11-04
 | 0035 | Azure VM targets keep the existing port prompt when the troubleshooter reads credentials    | Superseded by 0036  | Implementation finding; operator unavailable                       | 2026-10-29 | —   |
 | 0036 | Silent target reads; Kubernetes tunnels are prepared only in `prepare`                      | Accepted (option A) | Pre-review R1/R2; port and VM details Proposed                     | 2026-10-30 | —   |
 | 0037 | The panel borrows the wizard chrome but has no steps                                        | Proposed            | Operator request; agent reasoning on steps                         | 2026-10-30 | —   |
-| 0038 | The feature is called Diagnose connection                                                   | Accepted            | Operator accepted the name, including internal docs and command ID | 2026-11-02 | —   |
+| 0038 | The feature is called Diagnose connection                                                   | Partly superseded by 0051 | Operator accepted the name, including internal docs and command ID | 2026-11-02 | —   |
 | 0039 | Rows expand to show their findings and the evidence behind them                             | Accepted            | Operator accepted the WI-18 prototype after a UX test              | 2026-11-02 | —   |
 | 0040 | Hide identifiers applies to the report only; warn before sharing identifiers                | Accepted            | Operator request after the WI-18 UX test                           | 2026-11-02 | —   |
 | 0041 | The panel never names DNS libraries; the card is a short outcome summary                    | Accepted            | Operator request; wording and layout are the agent's call          | 2026-11-02 | —   |
@@ -63,6 +63,7 @@ updated: 2026-11-04
 | 0048 | No authentication that the server will not serve needs sign-in                              | Accepted            | Operator approved direction B                                      | 2026-11-02 | —   |
 | 0049 | Server greeting (hello), one Authentication layout, and the shell on every tree failure     | Accepted            | Operator approved the proposals                                    | 2026-11-03 | —   |
 | 0050 | Each row shows its duration in a squared badge; the list shades the row under the pointer   | Accepted            | Operator chose the layout from mocks                               | 2026-11-04 | —   |
+| 0051 | Internal names follow the feature: connection diagnostics                                   | Accepted            | Operator: full rename now; vocabulary and explanation-layer rename | 2026-11-05 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -1217,7 +1218,7 @@ framed it as a question.
 
 ## 0038 — The feature is called Diagnose connection
 
-**Status:** Accepted · **Date:** 2026-11-02 · **Raised by:** operator
+**Status:** Accepted · Partly superseded by [0051](#0051--internal-names-follow-the-feature-connection-diagnostics) · **Date:** 2026-11-02 · **Raised by:** operator
 
 **Context:** the operator accepted the naming proposal and added: "also internal docs, and command
 id can change, nothing has shipped yet."
@@ -1944,3 +1945,49 @@ Copy report and Save report.
 - **A dotted leader to the right-hand number.** Clear but busy; the operator chose no dotted lines.
 - **No durations.** Keeps the panel unchanged, but leaves the slow-step signal in the report only.
 - **Round badges.** Every other badge in the webviews is squared.
+
+## 0051 — Internal names follow the feature: connection diagnostics
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** operator
+
+**Context:** [0038](#0038--the-feature-is-called-diagnose-connection) renamed the feature in the UI
+and the command ID, but deliberately kept the internal names: source folders, the package, class,
+function and type names, telemetry, webview and router IDs, and L2-dev routes. Nothing has shipped:
+the package is not on npm, and the feature is not on `main` or in any release tag. Operator: "I'll do
+the full rename now, as it's cheap only now."
+
+**Decision:**
+
+- **Supersedes the "Deliberately unchanged" list of 0038**, except the feature docs folder:
+  `docs/ai-and-plans/features/connectivity-troubleshooter/` keeps its name and its
+  `feature: connectivity-troubleshooter` id. Older decisions, iteration history and `CHANGELOG.md`
+  keep their text.
+- **Vocabulary: diagnostics.** The package is `@documentdb-js/connection-diagnostics`
+  (`packages/documentdb-js-connection-diagnostics/`), the extension code lives in
+  `src/connectionDiagnostics/` and `src/webviews/documentdb/connectionDiagnostics/`, and
+  troubleshooter names become `ConnectionDiagnostics…` or `Diagnostics…` (`runDiagnostics`,
+  `DiagnosticsRun`, `runConnectionDiagnostics`). The command stays `diagnoseConnection`, now also its
+  folder and handler.
+- **The error-translation layer is renamed to error explanation**, so its name no longer collides
+  with the feature: `ConnectionDiagnosticsService` becomes `ErrorExplanationService`, its providers
+  become `*ErrorExplainer`, and its shipped telemetry event `connectionDiagnostics.explained` becomes
+  `errorExplanation.explained`, with `explanationProviderId` and `explanationSource`. Operator: "we
+  don't evaluate the telemetry yet so we can ignore the old data it just shipped recently."
+- **The feature's own telemetry events use the `diagnoseConnection.` prefix**
+  (`diagnoseConnection.run`, `diagnoseConnection.runStarted`), so they do not share a namespace with
+  any other event. Properties are `diagnosticsSessionId` and `diagnosticsRunCorrelationId`; the
+  picker's `telemetrySource` is `diagnoseConnection`.
+- Webview, router and survey source IDs, the SRV surface and the error-explanation source become
+  `connectionDiagnostics`; the panel view type is `vscode-documentdb-connection-diagnostics`; L2-dev
+  routes are `/connectionDiagnostics/<scenario>/<theme>`.
+- No user-visible text changes.
+
+Implemented in iteration 03 ([plan and done notes](./iterations/03-rename-to-connection-diagnostics.md)).
+
+**Alternatives:**
+
+- **"Diagnosis" vocabulary** (`connection-diagnosis`, `Diagnosis…`). No collision with the existing
+  service, but the operator chose diagnostics.
+- **Keep the old internal names** (0038).
+- **Keep the shipped `connectionDiagnostics.explained` telemetry.** Rejected: the operator has not
+  evaluated that data yet.
