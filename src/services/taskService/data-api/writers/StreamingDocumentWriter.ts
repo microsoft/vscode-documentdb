@@ -133,6 +133,7 @@ export class StreamingWriterError extends Error {
  * 3. `extractPartialProgress(error)`: Extract progress and optional remaining documents from thrown throttle errors
  *
  * Plus `ensureTargetExists()` for collection setup.
+ * Optionally override `getRetryAfterMs(error)` for server-suggested waits on thrown retryable errors.
  *
  * ## Sequence Diagrams
  *
@@ -449,6 +450,14 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     ): PartialProgress | undefined;
 
     /**
+     * Gets the server-suggested retry wait in milliseconds from a thrown throttle or network error.
+     * Defaults to undefined, preserving the computed backoff when no suggestion is available.
+     */
+    protected getRetryAfterMs(_error: unknown): number | undefined {
+        return undefined;
+    }
+
+    /**
      * Pre-filters documents for Skip strategy by querying the target for existing IDs.
      *
      * This is called ONCE per batch BEFORE the retry loop to:
@@ -689,6 +698,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                     result: this.progressToResult(progress ?? { processedCount: 0 }, strategy),
                     remaining: progress?.remaining ?? currentBatch.slice(progress?.processedCount ?? 0),
                     errorType,
+                    retryAfterMs: this.getRetryAfterMs(error),
                 };
             }
 
@@ -719,7 +729,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                 break;
             }
 
-            await this.retryDelay(attempt, abortSignal);
+            await this.retryDelay(attempt, abortSignal, outcome.retryAfterMs);
         }
 
         if (currentBatch.length > 0) {
@@ -773,10 +783,24 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * Delays before retry with exponential backoff and jitter.
      *
      * Uses configurable jitter (±30% by default) to prevent thundering herd when multiple clients
-     * are retrying simultaneously against the same server.
+     * are retrying simultaneously against the same server. A valid server suggestion is an
+     * uncapped floor on this delay; cancellation interrupts the wait.
      */
-    private async retryDelay(attempt: number, abortSignal?: AbortSignal): Promise<void> {
-        const delay = computeRetryDelay(attempt, this.settings.retry);
+    private async retryDelay(attempt: number, abortSignal?: AbortSignal, retryAfterMs?: number): Promise<void> {
+        const backoff = computeRetryDelay(attempt, this.settings.retry);
+        const serverDelay =
+            retryAfterMs !== undefined && Number.isFinite(retryAfterMs) && retryAfterMs >= 0 ? retryAfterMs : 0;
+        const delay = Math.max(backoff, serverDelay);
+        if (serverDelay > backoff) {
+            this.logger.trace(
+                `[StreamingWriter] Waiting ${serverDelay} ms as suggested by the server (computed backoff ${backoff} ms)`,
+            );
+        }
+
+        if (abortSignal?.aborted) {
+            // The abort event has already fired; do not wait (a server-suggested wait has no cap).
+            return;
+        }
 
         await new Promise<void>((resolve) => {
             const timeout = setTimeout(resolve, delay);
