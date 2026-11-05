@@ -64,7 +64,7 @@ const connectionName = 'Private fixture connection';
 function context(signal?: AbortSignal): RouterContext {
     return {
         dbExperience: API.DocumentDB,
-        webviewName: 'connectivityTroubleshooter',
+        webviewName: 'connectionDiagnostics',
         target: {
             clusterId: 'stable-cluster',
             displayName: connectionName,
@@ -237,7 +237,7 @@ describe('connectionDiagnosticsRouter', (): void => {
             timeoutProfile: 'longer',
             runTrigger: 'rerun',
             runIndex: 1,
-            troubleshooterSessionId: 'session-id',
+            diagnosticsSessionId: 'session-id',
         });
     });
 
@@ -269,8 +269,8 @@ describe('connectionDiagnosticsRouter', (): void => {
         expect((await stream.next()).done).toBe(true);
         expect(ctx.session.completedRun).toBeUndefined();
         expect(latestTelemetry().properties).toMatchObject({
-            troubleshooterSessionId: 'session-id',
-            troubleshooterRunCorrelationId: first?.runId,
+            diagnosticsSessionId: 'session-id',
+            diagnosticsRunCorrelationId: first?.runId,
         });
         pending.reject(new UserCancelledError());
     });
@@ -292,7 +292,7 @@ describe('connectionDiagnosticsRouter', (): void => {
 
         expect(replacement.signal.aborted).toBe(false);
         expect(ctx.session.currentRun?.runId).toBe(secondStarted?.runId);
-        expect(latestTelemetry().properties.troubleshooterRunCorrelationId).toBeUndefined();
+        expect(latestTelemetry().properties.diagnosticsRunCorrelationId).toBeUndefined();
 
         await caller(ctx).cancel({ requestId: 'request-b' });
         expect(replacement.signal.aborted).toBe(true);
@@ -673,8 +673,8 @@ describe('connectionDiagnosticsRouter', (): void => {
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('The report was copied to the clipboard.');
         expect(runConnectionDiagnostics).toHaveBeenCalledTimes(1);
         expect(latestTelemetry().properties).toEqual({
-            troubleshooterSessionId: 'session-id',
-            troubleshooterRunCorrelationId: runId,
+            diagnosticsSessionId: 'session-id',
+            diagnosticsRunCorrelationId: runId,
             reportFormat: 'markdown',
             reportRedacted: 'false',
             shareWarning: 'notShown',
@@ -994,8 +994,8 @@ describe('connectionDiagnosticsRouter', (): void => {
         expect(content.indexOf('"generatedBy"')).toBeGreaterThan(content.indexOf('"redacted"'));
         const telemetry = latestTelemetry();
         expect(telemetry.properties).toEqual({
-            troubleshooterSessionId: 'session-id',
-            troubleshooterRunCorrelationId: runId,
+            diagnosticsSessionId: 'session-id',
+            diagnosticsRunCorrelationId: runId,
             reportFormat: 'json',
             reportRedacted: 'true',
             shareWarning: 'notShown',

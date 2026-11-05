@@ -151,7 +151,7 @@ function options(overrides: Partial<RunConnectionDiagnosticsOptions> = {}): RunC
         entryPoint: 'contextMenu',
         runTrigger: 'initial',
         runIndex: 1,
-        troubleshooterSessionId: 'panel-session-id',
+        diagnosticsSessionId: 'panel-session-id',
         timeoutProfile: 'default',
         signal: new AbortController().signal,
         ...overrides,
@@ -178,7 +178,7 @@ function outputLines(): string[] {
 }
 
 function terminalContext(): IActionContext {
-    const event = events.find((event): boolean => event.name === 'connectivityTroubleshooter.run');
+    const event = events.find((event): boolean => event.name === 'diagnoseConnection.run');
     if (!event) {
         throw new Error('Missing run event');
     }
@@ -251,7 +251,7 @@ describe('runConnectionDiagnostics', (): void => {
         expect(outputLines().every((line): boolean => line.includes(`run=${runId} `))).toBe(true);
         expect(events).toHaveLength(2);
         for (const event of events) {
-            expect(event.context.telemetry.properties.troubleshooterRunCorrelationId).toBe(runId);
+            expect(event.context.telemetry.properties.diagnosticsRunCorrelationId).toBe(runId);
         }
     });
 
@@ -260,15 +260,15 @@ describe('runConnectionDiagnostics', (): void => {
             options({ runIndex: 2, runTrigger: 'rerun', timeoutProfile: 'longer' }),
         );
         expect(events.map((event): string => event.name)).toEqual([
-            'connectivityTroubleshooter.runStarted',
-            'connectivityTroubleshooter.run',
+            'diagnoseConnection.runStarted',
+            'diagnoseConnection.run',
         ]);
         for (const event of events) {
             expect(event.context.telemetry.maskEntireErrorMessage).toBe(true);
             expect(event.context.telemetry.suppressIfSuccessful).not.toBe(true);
             expect(event.context.telemetry.properties).toMatchObject({
-                troubleshooterSessionId: 'panel-session-id',
-                troubleshooterRunCorrelationId: run.runId,
+                diagnosticsSessionId: 'panel-session-id',
+                diagnosticsRunCorrelationId: run.runId,
                 entryPoint: 'contextMenu',
                 runTrigger: 'rerun',
                 timeoutProfile: 'longer',
@@ -531,7 +531,7 @@ describe('runConnectionDiagnostics', (): void => {
         });
         vi.mocked(openConnectionDiagnostics).mockReturnValue({
             panelAction: 'created',
-            troubleshooterSessionId: 'panel-session-id',
+            diagnosticsSessionId: 'panel-session-id',
         });
         const node = new DocumentDBClusterItem({
             treeId: 'connectionsView/folder/stable-id',

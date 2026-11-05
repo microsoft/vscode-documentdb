@@ -171,7 +171,7 @@ export type SurveyActivationSource =
     | 'collectionView'
     | 'atlasCredentials'
     | 'localQuickStart'
-    | 'connectivityTroubleshooter'
+    | 'connectionDiagnostics'
     | 'helpAndFeedbackView'
     | 'giveFeedbackCommand';
 export type SurveyCollectionTab = 'documents' | 'indexes' | 'queryInsights';

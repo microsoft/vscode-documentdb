@@ -176,7 +176,7 @@ export function serve(output: string, prefix: string, port: number): Server {
         }
         if (
             request.method === 'POST' &&
-            /^reports\/(?:clusterDashboard|collectionView|documentView|localQuickStart|atlasCredentials|connectivityTroubleshooter)(?:-broken-css)?$/.test(
+            /^reports\/(?:clusterDashboard|collectionView|documentView|localQuickStart|atlasCredentials|connectionDiagnostics)(?:-broken-css)?$/.test(
                 pathname,
             )
         ) {

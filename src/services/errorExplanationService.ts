@@ -81,7 +81,7 @@ export interface ErrorExplanationRequest {
     readonly error: unknown;
 
     /** Set by callers that are not real connect failures, so telemetry can tell them apart. */
-    readonly source?: 'troubleshooter';
+    readonly source?: 'connectionDiagnostics';
 }
 
 /** Kinds of infrastructure identifiers a provider can name in its explanation. */

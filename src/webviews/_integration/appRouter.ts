@@ -102,7 +102,7 @@ const commonRouter = router({
                     viewName !== 'clusterDashboard' &&
                     viewName !== 'atlasCredentials' &&
                     viewName !== 'localQuickStart' &&
-                    viewName !== 'connectivityTroubleshooter') ||
+                    viewName !== 'connectionDiagnostics') ||
                 (viewName === 'collectionView') !== (input.collectionTab !== undefined)
             ) {
                 throw new Error('Invalid feedback source');
@@ -296,7 +296,7 @@ export const appRouter = router({
         indexView: indexViewRouter,
     },
     localQuickStart: localQuickStartRouter,
-    connectivityTroubleshooter: connectionDiagnosticsRouter,
+    connectionDiagnostics: connectionDiagnosticsRouter,
 });
 
 // Export type router type signature, this is used by the client.

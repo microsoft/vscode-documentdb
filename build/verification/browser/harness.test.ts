@@ -170,7 +170,7 @@ describe('Stage 0 L2 production browser harness', (): void => {
             'atlasCredentials',
             'clusterDashboard',
             'collectionView',
-            'connectivityTroubleshooter',
+            'connectionDiagnostics',
             'documentView',
             'localQuickStart',
         ]);

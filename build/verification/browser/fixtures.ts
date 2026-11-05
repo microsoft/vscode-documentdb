@@ -23,10 +23,10 @@ type Inputs = FixtureInputs;
 type Outputs = FixtureOutputs;
 type CollectionOutputs = Outputs['mongoClusters']['collectionView'];
 // The router's serialized stream item: what the fake host can send, with tRPC's mutable arrays.
-export type TroubleshooterRunUpdate =
-    Outputs['connectivityTroubleshooter']['run'] extends AsyncIterable<infer Update> ? Update : never;
-export type TroubleshooterRow = Extract<TroubleshooterRunUpdate, { type: 'started' }>['rows'][number];
-export type TroubleshooterCard = Extract<TroubleshooterRunUpdate, { type: 'finished' }>['result'];
+export type DiagnosticsRunUpdate =
+    Outputs['connectionDiagnostics']['run'] extends AsyncIterable<infer Update> ? Update : never;
+export type DiagnosticsRow = Extract<DiagnosticsRunUpdate, { type: 'started' }>['rows'][number];
+export type DiagnosticsCard = Extract<DiagnosticsRunUpdate, { type: 'finished' }>['result'];
 
 export interface ViewFixture {
     readonly config: unknown;
@@ -89,61 +89,61 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
-const troubleshooterConfig: ConnectionDiagnosticsConfiguration = {
+const diagnosticsConfig: ConnectionDiagnosticsConfiguration = {
     connectionName: 'Stage 0 fixture connection',
-    troubleshooterSessionId: 'stage0-troubleshooter-session',
+    diagnosticsSessionId: 'stage0-diagnostics-session',
     feedbackPermitted: true,
     // Static states render at once, so layout assertions see the final state; `paced-run` paces (0043).
     stepPacing: { stepMs: 0, jitterMs: 0 },
 };
-export const troubleshooterStartedAt = 1790884800000;
-export const troubleshooterPendingRows: TroubleshooterRow[] = panelRowIds.map(
-    (id): TroubleshooterRow => ({ id, status: 'pending', segments: [] }),
+export const diagnosticsStartedAt = 1790884800000;
+export const diagnosticsPendingRows: DiagnosticsRow[] = panelRowIds.map(
+    (id): DiagnosticsRow => ({ id, status: 'pending', segments: [] }),
 );
-export const troubleshooterHost = 'c-stage0.mongocluster.cosmos.azure.com';
+export const diagnosticsHost = 'c-stage0.mongocluster.cosmos.azure.com';
 
 // WI-18 prototype: expandable row details. Fixture data only; the live host builds the same shape.
 // The panel always shows full identifiers; Hide identifiers applies to the report only (WI-19).
-export type TroubleshooterDetails = NonNullable<TroubleshooterRow['details']>;
-export type TroubleshooterFinding = TroubleshooterDetails['findings'][number];
-export type TroubleshooterEvidence = TroubleshooterDetails['evidence'][number];
+export type DiagnosticsDetails = NonNullable<DiagnosticsRow['details']>;
+export type DiagnosticsFinding = DiagnosticsDetails['findings'][number];
+export type DiagnosticsEvidence = DiagnosticsDetails['evidence'][number];
 
 /** A row's details, as the host sends them. */
-export function troubleshooterDetails(
-    findings: TroubleshooterFinding[],
-    evidence: TroubleshooterEvidence[] = [],
-): TroubleshooterDetails {
+export function diagnosticsDetails(
+    findings: DiagnosticsFinding[],
+    evidence: DiagnosticsEvidence[] = [],
+): DiagnosticsDetails {
     return { findings, evidence };
 }
 
 /** A finding the host would send, with no identifiers in it. */
-export function troubleshooterFinding(
-    severity: TroubleshooterFinding['severity'],
+export function diagnosticsFinding(
+    severity: DiagnosticsFinding['severity'],
     title: string,
     explanation: string,
     nextStep?: string,
     targets?: string[],
-): TroubleshooterFinding {
+): DiagnosticsFinding {
     return { severity, title, explanation, ...(nextStep ? { nextStep } : {}), ...(targets ? { targets } : {}) };
 }
 
 /** `fc-0123456789ab-00N.<cluster>`: the SRV target names Azure DocumentDB returns, fixture-safe. */
-export const troubleshooterSrvTargets = [0, 1, 2].map(
-    (index): string => `fc-0123456789ab-00${index}.${troubleshooterHost}`,
+export const diagnosticsSrvTargets = [0, 1, 2].map(
+    (index): string => `fc-0123456789ab-00${index}.${diagnosticsHost}`,
 );
-export const troubleshooterPrivateLinkAlias = 'fc-0123456789ab-000.privatelink.mongocluster.cosmos.azure.com';
-export const troubleshooterPublicAliasTitle = 'Public address for this Azure host name';
-export const troubleshooterPublicAliasExplanation =
+export const diagnosticsPrivateLinkAlias = 'fc-0123456789ab-000.privatelink.mongocluster.cosmos.azure.com';
+export const diagnosticsPublicAliasTitle = 'Public address for this Azure host name';
+export const diagnosticsPublicAliasExplanation =
     "The name goes through Azure's private-link alias and resolves to a public address. That is normal outside the cluster's private network.";
-export const troubleshooterPrivateAccessHint =
+export const diagnosticsPrivateAccessHint =
     'This name resolved to a public address. If the cluster allows only private access, connect from its virtual network or a network that resolves the private endpoint (VPN, peering or a private DNS zone).';
-const troubleshooterDnsServer = '172.20.192.1';
+const diagnosticsDnsServer = '172.20.192.1';
 
 interface HealthyRunShape {
     readonly hosts: readonly string[];
     readonly addresses: readonly string[];
     readonly cnameChains?: readonly (readonly string[])[];
-    readonly dnsFindings?: TroubleshooterFinding[];
+    readonly dnsFindings?: DiagnosticsFinding[];
     readonly pingMs: number;
     readonly databaseCount: number;
     /** An address the first host refused before its own connected, so its Details compare two attempts. */
@@ -153,7 +153,7 @@ interface HealthyRunShape {
 /**
  * The details a healthy DocumentDB run sends for rows 2 to 8.
  */
-export function troubleshooterHealthyDetails(
+export function diagnosticsHealthyDetails(
     shape: HealthyRunShape,
 ): Record<
     | 'connectionSettings'
@@ -163,15 +163,15 @@ export function troubleshooterHealthyDetails(
     | 'serverResponse'
     | 'authentication'
     | 'databaseAccess',
-    TroubleshooterDetails
+    DiagnosticsDetails
 > {
-    const query = `_mongodb._tcp.${troubleshooterHost}`;
-    const certificate = `*.${troubleshooterHost}`;
+    const query = `_mongodb._tcp.${diagnosticsHost}`;
+    const certificate = `*.${diagnosticsHost}`;
     // Each host's check time, sent only when a row has two or more hosts (decision 0050, WI-33); host
     // checks run in parallel, so the row's badge is the longest of them, not their sum.
     const hostTime = (times: readonly number[], index: number): { durationMs?: number } =>
         shape.hosts.length >= 2 ? { durationMs: times[index % times.length] } : {};
-    const address = (index: number): TroubleshooterEvidence & { kind: 'dnsHost' } => {
+    const address = (index: number): DiagnosticsEvidence & { kind: 'dnsHost' } => {
         const answer = [{ address: shape.addresses[index], family: 4 as const, addressClass: 'public' as const }];
         return {
             kind: 'dnsHost',
@@ -186,13 +186,13 @@ export function troubleshooterHealthyDetails(
         };
     };
     return {
-        connectionSettings: troubleshooterDetails(
+        connectionSettings: diagnosticsDetails(
             [],
             [
                 {
                     kind: 'connectionSettings',
                     scheme: 'mongodb+srv',
-                    hosts: [troubleshooterHost],
+                    hosts: [diagnosticsHost],
                     user: 'stage0user',
                     passwordPresent: false,
                     authMethod: 'native',
@@ -205,23 +205,23 @@ export function troubleshooterHealthyDetails(
                 },
             ],
         ),
-        serverAddress: troubleshooterDetails(shape.dnsFindings ?? [], [
+        serverAddress: diagnosticsDetails(shape.dnsFindings ?? [], [
             {
                 kind: 'srv',
                 query,
                 targets: shape.hosts.map((name): string => `${name}:10260`),
                 omittedTargets: 0,
                 resolver: 'system',
-                dnsServers: [troubleshooterDnsServer],
+                dnsServers: [diagnosticsDnsServer],
                 txtOptions: [{ name: 'authSource', value: 'admin' }],
                 failed: false,
             },
             ...shape.hosts.map((_name, index) => address(index)),
         ]),
-        networkConnection: troubleshooterDetails(
+        networkConnection: diagnosticsDetails(
             [],
             shape.hosts.map(
-                (name, index): TroubleshooterEvidence => ({
+                (name, index): DiagnosticsEvidence => ({
                     kind: 'tcpHost',
                     host: name,
                     port: 10260,
@@ -234,10 +234,10 @@ export function troubleshooterHealthyDetails(
                 }),
             ),
         ),
-        secureConnection: troubleshooterDetails(
+        secureConnection: diagnosticsDetails(
             [],
             shape.hosts.map(
-                (name, index): TroubleshooterEvidence => ({
+                (name, index): DiagnosticsEvidence => ({
                     kind: 'tlsHost',
                     host: name,
                     protocol: 'TLSv1.3',
@@ -250,10 +250,10 @@ export function troubleshooterHealthyDetails(
                 }),
             ),
         ),
-        serverResponse: troubleshooterDetails(
+        serverResponse: diagnosticsDetails(
             [],
             shape.hosts.map(
-                (name, index): TroubleshooterEvidence => ({
+                (name, index): DiagnosticsEvidence => ({
                     kind: 'serverHost',
                     host: name,
                     topology: 'documentdbGateway',
@@ -265,7 +265,7 @@ export function troubleshooterHealthyDetails(
                 }),
             ),
         ),
-        authentication: troubleshooterDetails(
+        authentication: diagnosticsDetails(
             [],
             [
                 {
@@ -279,7 +279,7 @@ export function troubleshooterHealthyDetails(
                 },
             ],
         ),
-        databaseAccess: troubleshooterDetails(
+        databaseAccess: diagnosticsDetails(
             [],
             [
                 {
@@ -300,8 +300,8 @@ export function troubleshooterHealthyDetails(
     };
 }
 
-const troubleshooterConnectedDetails = troubleshooterHealthyDetails({
-    hosts: troubleshooterSrvTargets,
+const diagnosticsConnectedDetails = diagnosticsHealthyDetails({
+    hosts: diagnosticsSrvTargets,
     addresses: ['203.0.113.10', '203.0.113.11', '203.0.113.12'],
     pingMs: 12,
     databaseCount: 5,
@@ -309,7 +309,7 @@ const troubleshooterConnectedDetails = troubleshooterHealthyDetails({
 });
 
 /** A healthy DocumentDB connection, with evidence on every row the host fills today. */
-export const troubleshooterConnectedRows: TroubleshooterRow[] = [
+export const diagnosticsConnectedRows: DiagnosticsRow[] = [
     {
         id: 'setup',
         status: 'done',
@@ -329,7 +329,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
             { kind: 'user', userName: 'stage0user' },
             { kind: 'optionCount', count: 2 },
         ],
-        details: troubleshooterConnectedDetails.connectionSettings,
+        details: diagnosticsConnectedDetails.connectionSettings,
     },
     {
         id: 'serverAddress',
@@ -339,7 +339,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
             { kind: 'srvHosts', count: 3 },
             { kind: 'resolved', resolved: 3, total: 3 },
         ],
-        details: troubleshooterConnectedDetails.serverAddress,
+        details: diagnosticsConnectedDetails.serverAddress,
     },
     {
         id: 'networkConnection',
@@ -349,7 +349,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
             { kind: 'reachable', reachable: 3, total: 3 },
             { kind: 'port', port: 10260 },
         ],
-        details: troubleshooterConnectedDetails.networkConnection,
+        details: diagnosticsConnectedDetails.networkConnection,
     },
     {
         id: 'secureConnection',
@@ -359,14 +359,14 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
             { kind: 'certificateTrusted' },
             { kind: 'validUntil', date: '2027-03-01T00:00:00.000Z' },
         ],
-        details: troubleshooterConnectedDetails.secureConnection,
+        details: diagnosticsConnectedDetails.secureConnection,
     },
     {
         id: 'serverResponse',
         status: 'done',
         durationMs: 88,
         segments: [{ kind: 'topology', topology: 'documentdbGateway' }, { kind: 'answeredBeforeSignIn' }],
-        details: troubleshooterConnectedDetails.serverResponse,
+        details: diagnosticsConnectedDetails.serverResponse,
     },
     {
         id: 'authentication',
@@ -377,7 +377,7 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
             { kind: 'authMechanism', mechanism: 'SCRAM-SHA-256' },
             { kind: 'account', label: 'stage0user' },
         ],
-        details: troubleshooterConnectedDetails.authentication,
+        details: diagnosticsConnectedDetails.authentication,
     },
     {
         id: 'databaseAccess',
@@ -387,14 +387,14 @@ export const troubleshooterConnectedRows: TroubleshooterRow[] = [
             { kind: 'ping', ms: 12 },
             { kind: 'databasesVisible', count: 5 },
         ],
-        details: troubleshooterConnectedDetails.databaseAccess,
+        details: diagnosticsConnectedDetails.databaseAccess,
     },
 ];
 /** The result card data for a run; every flag is off unless the scenario sets it. */
-export function troubleshooterCard(
-    outcome: TroubleshooterCard['outcome'],
-    extra: Partial<Omit<TroubleshooterCard, 'outcome'>> = {},
-): TroubleshooterCard {
+export function diagnosticsCard(
+    outcome: DiagnosticsCard['outcome'],
+    extra: Partial<Omit<DiagnosticsCard, 'outcome'>> = {},
+): DiagnosticsCard {
     return {
         outcome,
         firewallHint: false,
@@ -404,31 +404,31 @@ export function troubleshooterCard(
         ...extra,
     };
 }
-export const troubleshooterConnectedCard = troubleshooterCard('connected', {
-    serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: troubleshooterHost, pingMs: 12 },
+export const diagnosticsConnectedCard = diagnosticsCard('connected', {
+    serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: diagnosticsHost, pingMs: 12 },
 });
 /** The card's sentence for a clean, signed-in connection; server facts live in the rows' Details (decision 0041). */
-export const troubleshooterConnectedSummary = 'All checks passed. Sign-in succeeded and the database answered.';
-export const troubleshooterFullCoverage = { limited: false, retryWouldHelp: false, connectionTimeoutLimited: false };
-const troubleshooterConnectedRun: TroubleshooterRunUpdate[] = [
+export const diagnosticsConnectedSummary = 'All checks passed. Sign-in succeeded and the database answered.';
+export const diagnosticsFullCoverage = { limited: false, retryWouldHelp: false, connectionTimeoutLimited: false };
+const diagnosticsConnectedRun: DiagnosticsRunUpdate[] = [
     {
         type: 'started',
         runId: 'stage0-run-connected',
-        startedAt: troubleshooterStartedAt,
-        rows: troubleshooterPendingRows,
+        startedAt: diagnosticsStartedAt,
+        rows: diagnosticsPendingRows,
     },
     {
         type: 'finished',
         runId: 'stage0-run-connected',
-        finishedAt: troubleshooterStartedAt + 4000,
-        rows: troubleshooterConnectedRows,
+        finishedAt: diagnosticsStartedAt + 4000,
+        rows: diagnosticsConnectedRows,
         outcome: 'connected',
-        result: troubleshooterConnectedCard,
-        coverage: troubleshooterFullCoverage,
+        result: diagnosticsConnectedCard,
+        coverage: diagnosticsFullCoverage,
     },
 ];
 /** The fixed row labels, in order; spelled out so the scenarios check the view's own strings. */
-export const troubleshooterRowLabels = [
+export const diagnosticsRowLabels = [
     'Diagnosis setup',
     'Connection settings',
     'Server address (DNS)',
@@ -601,25 +601,25 @@ export const fixtures = {
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
         },
     },
-    connectivityTroubleshooter: {
-        config: troubleshooterConfig,
+    connectionDiagnostics: {
+        config: diagnosticsConfig,
         monaco: false,
         content: [
-            ...troubleshooterRowLabels,
+            ...diagnosticsRowLabels,
             'Connection successful',
             'Running on this computer',
-            troubleshooterConnectedSummary,
+            diagnosticsConnectedSummary,
         ],
         styles: [{ selector: '#connectivity-checks', property: 'display', expected: 'flex' }],
         rpc: {
             ...common,
-            'connectivityTroubleshooter.run': { type: 'subscription', results: troubleshooterConnectedRun },
-            'connectivityTroubleshooter.panelEvents': { type: 'subscription', results: [], keepOpen: true },
-            'connectivityTroubleshooter.cancel': reply<void>('mutation', undefined),
-            'connectivityTroubleshooter.showDiagnostics': reply<boolean>('mutation', true),
-            'connectivityTroubleshooter.setReportIdentifiers': reply<boolean>('mutation', false),
-            'connectivityTroubleshooter.copyReport': reply<void>('mutation', undefined),
-            'connectivityTroubleshooter.saveReport': reply<void>('mutation', undefined),
+            'connectionDiagnostics.run': { type: 'subscription', results: diagnosticsConnectedRun },
+            'connectionDiagnostics.panelEvents': { type: 'subscription', results: [], keepOpen: true },
+            'connectionDiagnostics.cancel': reply<void>('mutation', undefined),
+            'connectionDiagnostics.showDiagnostics': reply<boolean>('mutation', true),
+            'connectionDiagnostics.setReportIdentifiers': reply<boolean>('mutation', false),
+            'connectionDiagnostics.copyReport': reply<void>('mutation', undefined),
+            'connectionDiagnostics.saveReport': reply<void>('mutation', undefined),
             'common.openFeedback': reply<void>('mutation', undefined),
             // The share warning before a copy or save with identifiers; the fixture always continues.
             'common.confirm': reply<{ confirmed: boolean }>('mutation', { confirmed: true }),

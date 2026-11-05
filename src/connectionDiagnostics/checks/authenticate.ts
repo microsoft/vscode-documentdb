@@ -362,7 +362,7 @@ export function createAuthenticateCheck(
 
         const traceContext: AuthTraceContext = {
             startupCorrelationId: context.runId,
-            surface: 'troubleshooter',
+            surface: 'connectionDiagnostics',
             startupProperties: getTelemetryProperties(),
         };
 
@@ -452,10 +452,10 @@ export function createAuthenticateCheck(
             const prepared = await prepareDriverConnectionString({
                 connectionString,
                 options,
-                surface: 'troubleshooter',
+                surface: 'connectionDiagnostics',
                 correlation: {
                     startupCorrelationId: context.runId,
-                    troubleshooterRunCorrelationId: context.runId,
+                    diagnosticsRunCorrelationId: context.runId,
                 },
                 abortSignal: signal,
             });

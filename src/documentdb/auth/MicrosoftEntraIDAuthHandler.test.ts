@@ -447,7 +447,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
 
             const result = handler.configureAuth(undefined, {
                 startupCorrelationId: 'run-id',
-                surface: 'troubleshooter',
+                surface: 'connectionDiagnostics',
                 startupProperties,
             });
 
@@ -487,7 +487,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             await expect(
                 handler.configureAuth(undefined, {
                     startupCorrelationId: 'run-id',
-                    surface: 'troubleshooter',
+                    surface: 'connectionDiagnostics',
                     startupProperties,
                 }),
             ).rejects.toBe(error);

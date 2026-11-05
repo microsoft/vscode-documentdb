@@ -1113,7 +1113,7 @@ describe('createAuthenticateCheck', (): void => {
             const authLines = outputLines().filter((line): boolean => line.includes('[Authentication]'));
             expect(authLines.length).toBeGreaterThan(0);
             for (const line of authLines) {
-                expect(line).toContain(`startup=${runId} surface=troubleshooter`);
+                expect(line).toContain(`startup=${runId} surface=connectionDiagnostics`);
             }
         });
 

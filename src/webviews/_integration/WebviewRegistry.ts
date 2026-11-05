@@ -36,7 +36,7 @@ export const WebviewRegistry = {
             default: module.ClusterDashboard,
         })),
     ),
-    connectivityTroubleshooter: React.lazy(() =>
+    connectionDiagnostics: React.lazy(() =>
         import('../documentdb/connectionDiagnostics/ConnectionDiagnostics').then((module) => ({
             default: module.ConnectionDiagnostics,
         })),

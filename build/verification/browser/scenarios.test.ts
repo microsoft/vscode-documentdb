@@ -7,15 +7,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type TypedRpcFixtures } from './core/fixtures';
-import { fixtures, troubleshooterRowLabels, type TroubleshooterRow } from './fixtures';
+import { fixtures, diagnosticsRowLabels, type DiagnosticsRow } from './fixtures';
 import { parseScenarioRoute, runnerRoutes, scenarioHtml, scenarioIndex, scenarioRunner } from './scenario-server';
 import {
     findScenario,
     scenarioRoutes,
     scenarios,
-    troubleshooterEntraRuleIds,
-    troubleshooterForbiddenText,
-    troubleshooterListTop,
+    diagnosticsEntraRuleIds,
+    diagnosticsForbiddenText,
+    diagnosticsListTop,
     type Scenario,
     type ScenarioAssertion,
 } from './scenarios';
@@ -60,7 +60,7 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
         expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(126);
-        expect(runnerRoutes('/scenarios/run-all/connectivityTroubleshooter.js')).toHaveLength(84);
+        expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(30);
         expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(10);
         expect(runnerRoutes('/scenarios/run-all/unknown.js')).toBeUndefined();
@@ -114,8 +114,8 @@ describe('L2-dev manifest and routes', (): void => {
         }
     });
 
-    it('pins the troubleshooter row order, row heights, list position and card position in every troubleshooter scenario', (): void => {
-        const entries = Object.entries(scenarios.connectivityTroubleshooter);
+    it('pins the connection diagnostics row order, row heights, list position and card position in every connection diagnostics scenario', (): void => {
+        const entries = Object.entries(scenarios.connectionDiagnostics);
         expect(entries.map(([name]): string => name).sort()).toEqual([
             'auth-rejected-native',
             'cancelled',
@@ -152,7 +152,7 @@ describe('L2-dev manifest and routes', (): void => {
                 kind: 'order',
                 name: 'The eight row labels are present in order',
                 selector: '#connectivity-checks [role="listitem"]',
-                texts: troubleshooterRowLabels,
+                texts: diagnosticsRowLabels,
             });
             expect(assertions).toContainEqual(
                 name === 'network-refused' || name === 'seed-refused-connected' || name === 'unreachable-host'
@@ -191,14 +191,14 @@ describe('L2-dev manifest and routes', (): void => {
                 kind: 'text',
                 name: 'The content heading names the connection being checked',
                 selector: 'main h2',
-                includes: [fixtures.connectivityTroubleshooter.config.connectionName],
+                includes: [fixtures.connectionDiagnostics.config.connectionName],
                 excludes: [],
             });
             expect(assertions).toContainEqual({
                 kind: 'top',
                 name: 'The list starts at the same offset in every state',
                 selector: '#connectivity-checks',
-                top: troubleshooterListTop,
+                top: diagnosticsListTop,
             });
             expect(assertions).toContainEqual({
                 kind: 'inside',
@@ -213,9 +213,9 @@ describe('L2-dev manifest and routes', (): void => {
                 name: 'No internal codes, DNS library name, absolute checked time or elapsed counter is rendered',
                 selector: 'body',
                 includes: [],
-                excludes: [...troubleshooterForbiddenText, 'Elapsed', 'Checked at'],
+                excludes: [...diagnosticsForbiddenText, 'Elapsed', 'Checked at'],
             });
-            for (const label of troubleshooterRowLabels) expect(scenario.readiness.content).toContain(label);
+            for (const label of diagnosticsRowLabels) expect(scenario.readiness.content).toContain(label);
             if (name === 'running') continue;
             expect(assertions).toContainEqual({
                 kind: 'below',
@@ -230,9 +230,9 @@ describe('L2-dev manifest and routes', (): void => {
         }
     });
 
-    it('clicks the troubleshooter header Give Feedback action once in the default scenario', (): void => {
-        expect(fixtures.connectivityTroubleshooter.config.feedbackPermitted).toBe(true);
-        expect(scenarios.connectivityTroubleshooter.default.assertions).toContainEqual({
+    it('clicks the connection diagnostics header Give Feedback action once in the default scenario', (): void => {
+        expect(fixtures.connectionDiagnostics.config.feedbackPermitted).toBe(true);
+        expect(scenarios.connectionDiagnostics.default.assertions).toContainEqual({
             kind: 'calls',
             name: 'Give Feedback in the header opens the feedback view once',
             path: 'common.openFeedback',
@@ -243,8 +243,8 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('streams a run that is still checking row 4, with no card yet', (): void => {
-        const running = scenarios.connectivityTroubleshooter.running;
-        const updates = running.rpc['connectivityTroubleshooter.run'];
+        const running = scenarios.connectionDiagnostics.running;
+        const updates = running.rpc['connectionDiagnostics.run'];
         expect(updates.keepOpen).toBe(true);
         expect(updates.results.map((update): string => update.type)).toEqual(['started', 'rows']);
         const rows = updates.results[1].type === 'rows' ? updates.results[1].rows : [];
@@ -272,13 +272,13 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('paces only the paced-run scenario, which replays an instant run with the default pacing (decision 0043)', (): void => {
-        for (const [name, scenario] of Object.entries(scenarios.connectivityTroubleshooter)) {
+        for (const [name, scenario] of Object.entries(scenarios.connectionDiagnostics)) {
             expect(scenario.config.stepPacing, name).toEqual(
                 name === 'paced-run' ? undefined : { stepMs: 0, jitterMs: 0 },
             );
         }
-        const paced = scenarios.connectivityTroubleshooter['paced-run'];
-        const updates = paced.rpc['connectivityTroubleshooter.run'];
+        const paced = scenarios.connectionDiagnostics['paced-run'];
+        const updates = paced.rpc['connectionDiagnostics.run'];
         if (!updates) throw new Error('paced-run has no run subscription');
         expect(updates.keepOpen).toBeUndefined();
         expect(updates.results.map((update): string => update.type)).toEqual([
@@ -292,10 +292,10 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('gives every warning or error row details that explain it, and no pending or active row any details (WI-18)', (): void => {
-        for (const [name, scenario] of Object.entries(scenarios.connectivityTroubleshooter)) {
-            for (const update of scenario.rpc['connectivityTroubleshooter.run']?.results ?? []) {
+        for (const [name, scenario] of Object.entries(scenarios.connectionDiagnostics)) {
+            for (const update of scenario.rpc['connectionDiagnostics.run']?.results ?? []) {
                 if (update.type === 'failed') continue;
-                for (const row of update.rows as readonly TroubleshooterRow[]) {
+                for (const row of update.rows as readonly DiagnosticsRow[]) {
                     if (row.status === 'warning' || row.status === 'error') {
                         expect(
                             row.details?.findings.some((finding): boolean => finding.severity !== 'info'),
@@ -310,9 +310,9 @@ describe('L2-dev manifest and routes', (): void => {
         }
     });
 
-    it('carries the host result card data in every finished troubleshooter run', (): void => {
-        for (const [name, scenario] of Object.entries(scenarios.connectivityTroubleshooter)) {
-            for (const update of scenario.rpc['connectivityTroubleshooter.run']?.results ?? []) {
+    it('carries the host result card data in every finished connection diagnostics run', (): void => {
+        for (const [name, scenario] of Object.entries(scenarios.connectionDiagnostics)) {
+            for (const update of scenario.rpc['connectionDiagnostics.run']?.results ?? []) {
                 if (update.type === 'finished') {
                     expect(update.result.outcome, name).toBe(update.outcome);
                 }
@@ -327,15 +327,15 @@ describe('L2-dev manifest and routes', (): void => {
                 (assertion): assertion is Extract<ScenarioAssertion, { kind: 'text' }> =>
                     assertion.kind === 'text' && assertion.selector === '#connectivity-result',
             );
-        expect(cardOf(scenarios.connectivityTroubleshooter['network-refused'])?.includes.join(' ')).toContain(firewall);
-        expect(cardOf(scenarios.connectivityTroubleshooter['auth-rejected-native'])?.excludes).toContain(
+        expect(cardOf(scenarios.connectionDiagnostics['network-refused'])?.includes.join(' ')).toContain(firewall);
+        expect(cardOf(scenarios.connectionDiagnostics['auth-rejected-native'])?.excludes).toContain(
             'A firewall or IP allowlist',
         );
     });
 
     it('rejects codes, AADSTS codes, URLs, rule IDs and DNS library names but not hosts, accounts or setting names', (): void => {
         const matches = (text: string): boolean =>
-            troubleshooterForbiddenText.some((pattern): boolean => new RegExp(pattern, 'i').test(text));
+            diagnosticsForbiddenText.some((pattern): boolean => new RegExp(pattern, 'i').test(text));
         for (const text of [
             'tcp.refused',
             'auth.entraTokenFailed',
@@ -370,7 +370,7 @@ describe('L2-dev manifest and routes', (): void => {
         );
         const ids = [...rules.matchAll(/^\s{8}id: '([A-Za-z]+)'/gm)].map((match): string => match[1]);
         expect(ids.length).toBeGreaterThan(0);
-        expect([...troubleshooterEntraRuleIds].sort()).toEqual(ids.sort());
+        expect([...diagnosticsEntraRuleIds].sort()).toEqual(ids.sort());
     });
 
     it('checks procedure outputs and assertion inputs at compile time', (): void => {

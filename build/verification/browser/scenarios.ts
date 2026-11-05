@@ -13,28 +13,28 @@ import {
 } from './core/fixtures';
 import {
     fixtures,
-    troubleshooterCard,
-    troubleshooterConnectedCard,
-    troubleshooterConnectedRows,
-    troubleshooterConnectedSummary,
-    troubleshooterDetails,
-    troubleshooterFinding,
-    troubleshooterFullCoverage,
-    troubleshooterHealthyDetails,
-    troubleshooterHost,
-    troubleshooterPendingRows,
-    troubleshooterPrivateAccessHint,
-    troubleshooterPrivateLinkAlias,
-    troubleshooterPublicAliasExplanation,
-    troubleshooterPublicAliasTitle,
-    troubleshooterRowLabels,
-    troubleshooterSrvTargets,
-    troubleshooterStartedAt,
+    diagnosticsCard,
+    diagnosticsConnectedCard,
+    diagnosticsConnectedRows,
+    diagnosticsConnectedSummary,
+    diagnosticsDetails,
+    diagnosticsFinding,
+    diagnosticsFullCoverage,
+    diagnosticsHealthyDetails,
+    diagnosticsHost,
+    diagnosticsPendingRows,
+    diagnosticsPrivateAccessHint,
+    diagnosticsPrivateLinkAlias,
+    diagnosticsPublicAliasExplanation,
+    diagnosticsPublicAliasTitle,
+    diagnosticsRowLabels,
+    diagnosticsSrvTargets,
+    diagnosticsStartedAt,
     type StyleExpectation,
-    type TroubleshooterCard,
-    type TroubleshooterFinding,
-    type TroubleshooterRow,
-    type TroubleshooterRunUpdate,
+    type DiagnosticsCard,
+    type DiagnosticsFinding,
+    type DiagnosticsRow,
+    type DiagnosticsRunUpdate,
 } from './fixtures';
 
 export interface ScenarioReadiness {
@@ -280,10 +280,10 @@ function dockerMissing(
     };
 }
 
-const troubleshooter = fixtures.connectivityTroubleshooter;
+const diagnostics = fixtures.connectionDiagnostics;
 
 /** `id` values in `src/documentdb/auth/entraErrors/entraErrorRules.ts`; a test keeps the two in step. */
-export const troubleshooterEntraRuleIds = [
+export const diagnosticsEntraRuleIds = [
     'firstPartyPreauthorization',
     'resourceNotInTenant',
     'invalidResource',
@@ -302,11 +302,11 @@ export const troubleshooterEntraRuleIds = [
  * What the panel never shows (design 5.2): finding codes, AADSTS codes, URLs and Entra rule IDs; and
  * the names of Node.js's DNS libraries (decision 0041).
  */
-export const troubleshooterForbiddenText = [
+export const diagnosticsForbiddenText = [
     '\\b(?:env|cs|srv|dns|tcp|tls|hello|auth|access|check|prepare)\\.[a-z][a-z]+\\b',
     'AADSTS',
     'http',
-    `\\b(?:${troubleshooterEntraRuleIds.join('|')})\\b`,
+    `\\b(?:${diagnosticsEntraRuleIds.join('|')})\\b`,
     '\\bc[-_]?ares\\b',
     'getaddrinfo',
 ] as const;
@@ -339,17 +339,17 @@ function shareWarning(confirmLabel: 'Copy report' | 'Save report'): {
 }
 
 /**
- * Where the list starts, in px from the top of the document, in every troubleshooter scenario. Only the
+ * Where the list starts, in px from the top of the document, in every connection diagnostics scenario. Only the
  * static header and connection section heading are above it, so neither the run's progress nor the
  * result card below may move it.
  */
-export const troubleshooterListTop = 197;
+export const diagnosticsListTop = 197;
 
 /** A row's title: the first line of its text column (`StatusListItem`: icon, then text column). */
-const troubleshooterRowTitle = ':scope > div > :first-child';
+const diagnosticsRowTitle = ':scope > div > :first-child';
 
-/** What holds for the header and the list in every troubleshooter state, with or without a result card. */
-const troubleshooterListLayout = [
+/** What holds for the header and the list in every connection diagnostics state, with or without a result card. */
+const diagnosticsListLayout = [
     {
         kind: 'text',
         name: 'The wizard-style header names the task',
@@ -362,13 +362,13 @@ const troubleshooterListLayout = [
         name: 'The header describes the task without the connection or live run status',
         selector: 'h1 + div',
         includes: ['Check a connection step by step and review the results.'],
-        excludes: [literal(troubleshooter.config.connectionName), 'Elapsed', 'Checked', 'cancelled'],
+        excludes: [literal(diagnostics.config.connectionName), 'Elapsed', 'Checked', 'cancelled'],
     },
     {
         kind: 'text',
         name: 'The content heading names the connection being checked',
         selector: 'main h2',
-        includes: [troubleshooter.config.connectionName],
+        includes: [diagnostics.config.connectionName],
         excludes: [],
     },
     {
@@ -387,21 +387,21 @@ const troubleshooterListLayout = [
         kind: 'order',
         name: 'The eight row labels are present in order',
         selector: '#connectivity-checks [role="listitem"]',
-        texts: troubleshooterRowLabels,
+        texts: diagnosticsRowLabels,
     },
     {
         kind: 'rowHeights',
         name: 'Pending, active, settled and skipped rows, with or without a collapsed Details toggle, are one height',
         list: '#connectivity-checks',
         selector: '#connectivity-checks [role="listitem"]',
-        count: troubleshooterRowLabels.length,
+        count: diagnosticsRowLabels.length,
         tolerance: 1,
     },
     {
         kind: 'top',
         name: 'The list starts at the same offset in every state',
         selector: '#connectivity-checks',
-        top: troubleshooterListTop,
+        top: diagnosticsListTop,
     },
     {
         kind: 'inside',
@@ -409,19 +409,19 @@ const troubleshooterListLayout = [
         container: '#connectivity-checks [role="listitem"]',
         inner: 'button[aria-expanded]',
         minimum: 1,
-        under: troubleshooterRowTitle,
+        under: diagnosticsRowTitle,
     },
     {
         kind: 'text',
         name: 'No internal codes, DNS library name, absolute checked time or elapsed counter is rendered',
         selector: 'body',
         includes: [],
-        excludes: [...troubleshooterForbiddenText, 'Elapsed', 'Checked at'],
+        excludes: [...diagnosticsForbiddenText, 'Elapsed', 'Checked at'],
     },
 ] as const satisfies readonly ScenarioAssertion[];
 
-const troubleshooterLayout = [
-    ...troubleshooterListLayout,
+const diagnosticsLayout = [
+    ...diagnosticsListLayout,
     {
         kind: 'below',
         name: 'The result card renders below the list',
@@ -457,21 +457,21 @@ function cardText(includes: readonly string[], absent: readonly string[] = []): 
     };
 }
 
-type TroubleshooterEnd =
+type DiagnosticsEnd =
     | {
           readonly type: 'finished';
-          readonly result: TroubleshooterCard;
-          readonly rows: TroubleshooterRow[];
-          readonly coverage?: Extract<TroubleshooterRunUpdate, { type: 'finished' }>['coverage'];
+          readonly result: DiagnosticsCard;
+          readonly rows: DiagnosticsRow[];
+          readonly coverage?: Extract<DiagnosticsRunUpdate, { type: 'finished' }>['coverage'];
       }
-    | { readonly type: 'cancelled'; readonly shown: TroubleshooterRow[] };
+    | { readonly type: 'cancelled'; readonly shown: DiagnosticsRow[] };
 
-function troubleshooterRun(runId: string, final: TroubleshooterEnd): TroubleshooterRunUpdate[] {
-    const started: TroubleshooterRunUpdate = {
+function diagnosticsRun(runId: string, final: DiagnosticsEnd): DiagnosticsRunUpdate[] {
+    const started: DiagnosticsRunUpdate = {
         type: 'started',
         runId,
-        startedAt: troubleshooterStartedAt,
-        rows: troubleshooterPendingRows,
+        startedAt: diagnosticsStartedAt,
+        rows: diagnosticsPendingRows,
     };
     if (final.type === 'cancelled') {
         return [started, { type: 'rows', runId, rows: final.shown }, { type: 'cancelled', runId, rows: final.shown }];
@@ -481,18 +481,18 @@ function troubleshooterRun(runId: string, final: TroubleshooterEnd): Troubleshoo
         {
             type: 'finished',
             runId,
-            finishedAt: troubleshooterStartedAt + 4000,
+            finishedAt: diagnosticsStartedAt + 4000,
             rows: final.rows,
             outcome: final.result.outcome,
             result: final.result,
-            coverage: final.coverage ?? troubleshooterFullCoverage,
+            coverage: final.coverage ?? diagnosticsFullCoverage,
         },
     ];
 }
 
-function withRows(replacements: TroubleshooterRow[]): TroubleshooterRow[] {
-    return troubleshooterConnectedRows.map(
-        (row): TroubleshooterRow => replacements.find((replacement): boolean => replacement.id === row.id) ?? row,
+function withRows(replacements: DiagnosticsRow[]): DiagnosticsRow[] {
+    return diagnosticsConnectedRows.map(
+        (row): DiagnosticsRow => replacements.find((replacement): boolean => replacement.id === row.id) ?? row,
     );
 }
 
@@ -501,9 +501,9 @@ function withRows(replacements: TroubleshooterRow[]): TroubleshooterRow[] {
  * (WI-19): the line wraps around the toggle like a word, so only the other rows must share one height.
  */
 function withWrappedEvidence(
-    scenario: Scenario<'connectivityTroubleshooter'>,
-    rows: readonly TroubleshooterRow['id'][],
-): Scenario<'connectivityTroubleshooter'> {
+    scenario: Scenario<'connectionDiagnostics'>,
+    rows: readonly DiagnosticsRow['id'][],
+): Scenario<'connectionDiagnostics'> {
     return {
         ...scenario,
         assertions: (scenario.assertions ?? []).map(
@@ -520,22 +520,22 @@ function withWrappedEvidence(
     };
 }
 
-function troubleshooterScenario(
-    updates: TroubleshooterRunUpdate[],
+function diagnosticsScenario(
+    updates: DiagnosticsRunUpdate[],
     content: readonly string[],
-    extra: Pick<Scenario<'connectivityTroubleshooter'>, 'steps' | 'assertions'> = {},
-): Scenario<'connectivityTroubleshooter'> {
+    extra: Pick<Scenario<'connectionDiagnostics'>, 'steps' | 'assertions'> = {},
+): Scenario<'connectionDiagnostics'> {
     return {
-        config: troubleshooter.config,
-        rpc: { ...troubleshooter.rpc, 'connectivityTroubleshooter.run': { type: 'subscription', results: updates } },
+        config: diagnostics.config,
+        rpc: { ...diagnostics.rpc, 'connectionDiagnostics.run': { type: 'subscription', results: updates } },
         steps: extra.steps,
         readiness: {
-            content: [...troubleshooterRowLabels, ...content],
+            content: [...diagnosticsRowLabels, ...content],
             selectors: ['#connectivity-result'],
             noProgressbar: true,
         },
         assertions: [
-            ...troubleshooterLayout,
+            ...diagnosticsLayout,
             ...(updates.at(-1)?.type === 'finished' ? [checkedStatus] : []),
             ...(extra.assertions ?? []),
         ],
@@ -545,14 +545,14 @@ function troubleshooterScenario(
 /** A finished run whose card must contain `card`; the readiness content waits for the evidence lines. */
 function finishedScenario(
     runId: string,
-    rows: TroubleshooterRow[],
-    result: TroubleshooterCard,
+    rows: DiagnosticsRow[],
+    result: DiagnosticsCard,
     evidence: readonly string[],
     card: readonly string[],
     cardExcludes: readonly string[] = [],
-): Scenario<'connectivityTroubleshooter'> {
-    return troubleshooterScenario(
-        troubleshooterRun(runId, { type: 'finished', result, rows }),
+): Scenario<'connectionDiagnostics'> {
+    return diagnosticsScenario(
+        diagnosticsRun(runId, { type: 'finished', result, rows }),
         [...evidence, ...card],
         {
             assertions: [cardText(card, cardExcludes)],
@@ -561,25 +561,25 @@ function finishedScenario(
 }
 
 const notChecked = (
-    id: TroubleshooterRow['id'],
-    becauseRow: TroubleshooterRow['id'],
+    id: DiagnosticsRow['id'],
+    becauseRow: DiagnosticsRow['id'],
     reason: 'dependencyFailed' | 'dependencySkipped' = 'dependencyFailed',
-): TroubleshooterRow => ({ id, status: 'skipped', segments: [{ kind: 'notChecked', reason, becauseRow }] });
-const notStartedInTime = (id: TroubleshooterRow['id']): TroubleshooterRow => ({
+): DiagnosticsRow => ({ id, status: 'skipped', segments: [{ kind: 'notChecked', reason, becauseRow }] });
+const notStartedInTime = (id: DiagnosticsRow['id']): DiagnosticsRow => ({
     id,
     status: 'skipped',
     segments: [{ kind: 'notChecked', reason: 'runTimeoutExceeded' }],
 });
-const dnsFailureRun = troubleshooterRun('stage0-run-dns', {
+const dnsFailureRun = diagnosticsRun('stage0-run-dns', {
     type: 'finished',
-    result: troubleshooterCard('failed', {
+    result: diagnosticsCard('failed', {
         stoppedAtRow: 'serverAddress',
         headline: {
             title: 'Host name not found',
             explanation: 'The system DNS resolver could not find this host name.',
             nextStep:
                 'Check the host name and the DNS settings used by the computer or remote host running these checks.',
-            target: troubleshooterHost,
+            target: diagnosticsHost,
         },
     }),
     rows: withRows([
@@ -587,23 +587,23 @@ const dnsFailureRun = troubleshooterRun('stage0-run-dns', {
             id: 'serverAddress',
             status: 'error',
             segments: [
-                { kind: 'finding', title: 'Host name not found', target: troubleshooterHost },
+                { kind: 'finding', title: 'Host name not found', target: diagnosticsHost },
                 { kind: 'resolved', resolved: 0, total: 1 },
             ],
-            details: troubleshooterDetails(
+            details: diagnosticsDetails(
                 [
-                    troubleshooterFinding(
+                    diagnosticsFinding(
                         'error',
                         'Host name not found',
                         'The system DNS resolver could not find this host name.',
                         'Check the host name and the DNS settings used by the computer or remote host running these checks.',
-                        [troubleshooterHost],
+                        [diagnosticsHost],
                     ),
                 ],
                 [
                     {
                         kind: 'dnsHost',
-                        host: troubleshooterHost,
+                        host: diagnosticsHost,
                         cnameChain: [],
                         system: [],
                         direct: [],
@@ -625,35 +625,35 @@ const dnsFailureRun = troubleshooterRun('stage0-run-dns', {
 const entraHost = 'c-stage0.mongocluster.cosmos.azure.us';
 const entraAccount = 'alice@contoso.com';
 const entraRow = (
-    status: TroubleshooterRow['status'],
-    ...segments: TroubleshooterRow['segments']
-): TroubleshooterRow => ({
+    status: DiagnosticsRow['status'],
+    ...segments: DiagnosticsRow['segments']
+): DiagnosticsRow => ({
     id: 'authentication',
     status,
     segments: [{ kind: 'authMethod', method: 'entraId' }, ...segments],
 });
 /** Authentication ended without a usable sign-in; Database access was not reached. */
 const afterAuthentication = (
-    authentication: TroubleshooterRow,
+    authentication: DiagnosticsRow,
     reason: 'dependencyFailed' | 'dependencySkipped',
-): TroubleshooterRow[] => withRows([authentication, notChecked('databaseAccess', 'authentication', reason)]);
+): DiagnosticsRow[] => withRows([authentication, notChecked('databaseAccess', 'authentication', reason)]);
 const authenticationHeadline = (
     title: string,
     explanation: string,
     nextStep: string,
-): Pick<TroubleshooterCard, 'stoppedAtRow' | 'headline'> => ({
+): Pick<DiagnosticsCard, 'stoppedAtRow' | 'headline'> => ({
     stoppedAtRow: 'authentication',
     headline: { title, explanation, nextStep },
 });
 
 /** A row with details holding only `findings`, which name no identifiers. */
-const explained = (row: TroubleshooterRow, ...findings: TroubleshooterFinding[]): TroubleshooterRow => ({
+const explained = (row: DiagnosticsRow, ...findings: DiagnosticsFinding[]): DiagnosticsRow => ({
     ...row,
-    details: troubleshooterDetails(findings),
+    details: diagnosticsDetails(findings),
 });
 
-const rowLabel = (id: TroubleshooterRow['id']): string =>
-    troubleshooterRowLabels[
+const rowLabel = (id: DiagnosticsRow['id']): string =>
+    diagnosticsRowLabels[
         (
             [
                 'setup',
@@ -669,7 +669,7 @@ const rowLabel = (id: TroubleshooterRow['id']): string =>
     ];
 
 /** The row's disclosure starts collapsed, then a click on "Details for <row>" expands it in place. */
-function expandDetails(id: TroubleshooterRow['id']): ScenarioAssertion[] {
+function expandDetails(id: DiagnosticsRow['id']): ScenarioAssertion[] {
     const selector = `#connectivity-checks-${id} button[aria-expanded]`;
     return [
         {
@@ -695,7 +695,7 @@ function expandDetails(id: TroubleshooterRow['id']): ScenarioAssertion[] {
  * only the details, for exclusions the evidence line above them does not honour (Hide identifiers).
  */
 function detailsText(
-    id: TroubleshooterRow['id'],
+    id: DiagnosticsRow['id'],
     includes: readonly string[],
     excludes: readonly string[] = [],
     region = false,
@@ -705,7 +705,7 @@ function detailsText(
         name: `The expanded ${rowLabel(id)} details explain the row`,
         selector: region ? `#connectivity-checks-${id} [role="region"]` : `#connectivity-checks-${id}`,
         includes,
-        excludes: [...troubleshooterForbiddenText, ...excludes],
+        excludes: [...diagnosticsForbiddenText, ...excludes],
     };
 }
 
@@ -724,7 +724,7 @@ function identifiersNote(text: string): ScenarioAssertion {
 }
 
 /** Expanded details push the following row down instead of overlapping it. */
-function pushesDown(id: TroubleshooterRow['id'], next: TroubleshooterRow['id']): ScenarioAssertion {
+function pushesDown(id: DiagnosticsRow['id'], next: DiagnosticsRow['id']): ScenarioAssertion {
     return {
         kind: 'below',
         name: `Expanded ${rowLabel(id)} details push ${rowLabel(next)} down`,
@@ -734,20 +734,20 @@ function pushesDown(id: TroubleshooterRow['id'], next: TroubleshooterRow['id']):
 }
 
 const privateEndpointAddress = '203.0.113.24';
-const privateEndpointDetails = troubleshooterHealthyDetails({
-    hosts: [troubleshooterSrvTargets[0]],
+const privateEndpointDetails = diagnosticsHealthyDetails({
+    hosts: [diagnosticsSrvTargets[0]],
     addresses: [privateEndpointAddress],
-    cnameChains: [[troubleshooterPrivateLinkAlias]],
+    cnameChains: [[diagnosticsPrivateLinkAlias]],
     dnsFindings: [
-        troubleshooterFinding('info', troubleshooterPublicAliasTitle, troubleshooterPublicAliasExplanation, undefined, [
-            troubleshooterSrvTargets[0],
+        diagnosticsFinding('info', diagnosticsPublicAliasTitle, diagnosticsPublicAliasExplanation, undefined, [
+            diagnosticsSrvTargets[0],
         ]),
     ],
     pingMs: 31,
     databaseCount: 3,
 });
 /** The operator's report: Azure DocumentDB from WSL, a private-link alias that resolves publicly. */
-const privateEndpointRows: TroubleshooterRow[] = [
+const privateEndpointRows: DiagnosticsRow[] = [
     {
         id: 'setup',
         status: 'done',
@@ -756,14 +756,14 @@ const privateEndpointRows: TroubleshooterRow[] = [
             { kind: 'platform', platform: 'linux' },
             { kind: 'arch', arch: 'x64' },
         ],
-        details: troubleshooterDetails(
+        details: diagnosticsDetails(
             [
-                troubleshooterFinding(
+                diagnosticsFinding(
                     'info',
                     'Known DNS issue in this VS Code version',
                     "Some DNS servers send server list (SRV) replies that this VS Code version can't read. The extension works around this automatically.",
                 ),
-                troubleshooterFinding(
+                diagnosticsFinding(
                     'info',
                     'Checks run on a remote host',
                     'Database checks run in WSL, not on this computer.',
@@ -781,7 +781,7 @@ const privateEndpointRows: TroubleshooterRow[] = [
             ],
         ),
     },
-    { ...troubleshooterConnectedRows[1], details: privateEndpointDetails.connectionSettings },
+    { ...diagnosticsConnectedRows[1], details: privateEndpointDetails.connectionSettings },
     {
         id: 'serverAddress',
         status: 'done',
@@ -800,9 +800,9 @@ const privateEndpointRows: TroubleshooterRow[] = [
         ],
         details: privateEndpointDetails.networkConnection,
     },
-    { ...troubleshooterConnectedRows[4], details: privateEndpointDetails.secureConnection },
-    { ...troubleshooterConnectedRows[5], details: privateEndpointDetails.serverResponse },
-    { ...troubleshooterConnectedRows[6], details: privateEndpointDetails.authentication },
+    { ...diagnosticsConnectedRows[4], details: privateEndpointDetails.secureConnection },
+    { ...diagnosticsConnectedRows[5], details: privateEndpointDetails.serverResponse },
+    { ...diagnosticsConnectedRows[6], details: privateEndpointDetails.authentication },
     {
         id: 'databaseAccess',
         status: 'done',
@@ -813,10 +813,10 @@ const privateEndpointRows: TroubleshooterRow[] = [
         details: privateEndpointDetails.databaseAccess,
     },
 ];
-const privateEndpointCard = troubleshooterCard('connected', {
-    serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: troubleshooterHost, pingMs: 31 },
+const privateEndpointCard = diagnosticsCard('connected', {
+    serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: diagnosticsHost, pingMs: 31 },
 });
-const privateEndpointRun = troubleshooterRun('stage0-run-private-endpoint', {
+const privateEndpointRun = diagnosticsRun('stage0-run-private-endpoint', {
     type: 'finished',
     result: privateEndpointCard,
     rows: privateEndpointRows,
@@ -846,16 +846,16 @@ const severalFindingsRows = withRows([
             { kind: 'finding', title: 'Host name not found', target: seedB },
             { kind: 'resolved', resolved: 1, total: 2 },
         ],
-        details: troubleshooterDetails(
+        details: diagnosticsDetails(
             [
-                troubleshooterFinding(
+                diagnosticsFinding(
                     'error',
                     'Host name not found',
                     'The system DNS resolver could not find this host name.',
                     'Check the host name and the DNS settings used by the computer or remote host running these checks.',
                     [seedB],
                 ),
-                troubleshooterFinding(
+                diagnosticsFinding(
                     'info',
                     'Host points to this computer',
                     'The host name resolves to a loopback address on the host running these checks.',
@@ -895,9 +895,9 @@ const severalFindingsRows = withRows([
             { kind: 'reachable', reachable: 0, total: 1 },
             { kind: 'port', port: 27017 },
         ],
-        details: troubleshooterDetails(
+        details: diagnosticsDetails(
             [
-                troubleshooterFinding(
+                diagnosticsFinding(
                     'error',
                     'Network connection refused',
                     'The TCP connection was refused. The service may be stopped or listening on a different port.',
@@ -921,43 +921,43 @@ const pacedRunId = 'stage0-run-paced';
  * settles in one burst. The panel's default pacing (decision 0043) must still settle the rows one at a
  * time, in order, and show the card last, each at least 300 ms after the one before.
  */
-const pacedRun: TroubleshooterRunUpdate[] = [
-    { type: 'started', runId: pacedRunId, startedAt: troubleshooterStartedAt, rows: troubleshooterPendingRows },
-    ...troubleshooterConnectedRows.map(
-        (row, index): TroubleshooterRunUpdate => ({
+const pacedRun: DiagnosticsRunUpdate[] = [
+    { type: 'started', runId: pacedRunId, startedAt: diagnosticsStartedAt, rows: diagnosticsPendingRows },
+    ...diagnosticsConnectedRows.map(
+        (row, index): DiagnosticsRunUpdate => ({
             type: 'rows',
             runId: pacedRunId,
             rows: [
-                ...troubleshooterConnectedRows.slice(0, index),
+                ...diagnosticsConnectedRows.slice(0, index),
                 { id: row.id, status: 'active', segments: [{ kind: 'checking' }] },
-                ...troubleshooterPendingRows.slice(index + 1),
+                ...diagnosticsPendingRows.slice(index + 1),
             ],
         }),
     ),
     {
         type: 'finished',
         runId: pacedRunId,
-        finishedAt: troubleshooterStartedAt + 40,
-        rows: troubleshooterConnectedRows,
+        finishedAt: diagnosticsStartedAt + 40,
+        rows: diagnosticsConnectedRows,
         outcome: 'connected',
-        result: troubleshooterConnectedCard,
-        coverage: troubleshooterFullCoverage,
+        result: diagnosticsConnectedCard,
+        coverage: diagnosticsFullCoverage,
     },
 ];
 
-const pacedRunScenario: Scenario<'connectivityTroubleshooter'> = troubleshooterScenario(
+const pacedRunScenario: Scenario<'connectionDiagnostics'> = diagnosticsScenario(
     pacedRun,
-    ['Connection successful', troubleshooterConnectedSummary],
+    ['Connection successful', diagnosticsConnectedSummary],
     {
         assertions: [
-            cardText(['Connection successful', troubleshooterConnectedSummary]),
+            cardText(['Connection successful', diagnosticsConnectedSummary]),
             {
                 kind: 'sequence',
                 name: 'The rows settle one at a time and in order, then the card appears, over about 2 s or more',
                 // The list renders as the run starts; the fake host then replays the whole run at once.
                 milestones: [
                     '#connectivity-checks',
-                    ...troubleshooterConnectedRows.map(
+                    ...diagnosticsConnectedRows.map(
                         (row): string => `#connectivity-checks-${row.id}[data-status="done"]`,
                     ),
                     '#connectivity-result',
@@ -972,10 +972,10 @@ const pacedRunScenario: Scenario<'connectivityTroubleshooter'> = troubleshooterS
 );
 
 /** No `stepPacing`: the panel's own default applies, as in the extension. */
-const pacedRunConfig: (typeof troubleshooter)['config'] = {
-    connectionName: troubleshooter.config.connectionName,
-    troubleshooterSessionId: troubleshooter.config.troubleshooterSessionId,
-    feedbackPermitted: troubleshooter.config.feedbackPermitted,
+const pacedRunConfig: (typeof diagnostics)['config'] = {
+    connectionName: diagnostics.config.connectionName,
+    diagnosticsSessionId: diagnostics.config.diagnosticsSessionId,
+    feedbackPermitted: diagnostics.config.feedbackPermitted,
 };
 
 /** `tcp.timeout`'s wording, which a timed-out TCP probe now shares (WI-27). */
@@ -993,25 +993,25 @@ const signInRequired = {
         'Choose an authentication method for this connection (Update Credentials…), then run the diagnosis again.',
 };
 
-const troubleshooterScenarios = {
+const diagnosticsScenarios = {
     'paced-run': {
         ...pacedRunScenario,
         config: pacedRunConfig,
     },
     default: {
-        ...defaultScenario('connectivityTroubleshooter'),
+        ...defaultScenario('connectionDiagnostics'),
         assertions: [
-            ...troubleshooter.styles.map((style): ScenarioAssertion => ({ kind: 'style', ...style })),
-            ...troubleshooterLayout,
+            ...diagnostics.styles.map((style): ScenarioAssertion => ({ kind: 'style', ...style })),
+            ...diagnosticsLayout,
             checkedStatus,
             cardText(
-                ['Connection successful', troubleshooterConnectedSummary],
+                ['Connection successful', diagnosticsConnectedSummary],
                 ['warning', 'Contacting support?', ...serverFacts],
             ),
             {
                 kind: 'calls',
                 name: 'Show report opens the finished run with identifiers included',
-                path: 'connectivityTroubleshooter.showDiagnostics',
+                path: 'connectionDiagnostics.showDiagnostics',
                 input: { runId: 'stage0-run-connected', hideIdentifiers: false },
                 count: 1,
                 steps: [{ action: 'click', role: 'button', name: 'Show report' }],
@@ -1027,7 +1027,7 @@ const troubleshooterScenarios = {
             {
                 kind: 'calls',
                 name: 'Share report copies the finished run with identifiers included, after the share warning',
-                path: 'connectivityTroubleshooter.copyReport',
+                path: 'connectionDiagnostics.copyReport',
                 input: { runId: 'stage0-run-connected', hideIdentifiers: false, shareWarningOutcome: 'continued' },
                 count: 1,
                 steps: [
@@ -1046,7 +1046,7 @@ const troubleshooterScenarios = {
             {
                 kind: 'calls',
                 name: 'Hide identifiers refreshes the open report for the current run',
-                path: 'connectivityTroubleshooter.setReportIdentifiers',
+                path: 'connectionDiagnostics.setReportIdentifiers',
                 input: { runId: 'stage0-run-connected', hideIdentifiers: true },
                 count: 1,
                 steps: [{ action: 'click', role: 'button', name: 'Hide identifiers in the report' }],
@@ -1062,25 +1062,25 @@ const troubleshooterScenarios = {
         ] satisfies readonly ScenarioAssertion[],
     },
     running: {
-        config: troubleshooter.config,
+        config: diagnostics.config,
         rpc: {
-            ...troubleshooter.rpc,
-            'connectivityTroubleshooter.run': {
+            ...diagnostics.rpc,
+            'connectionDiagnostics.run': {
                 type: 'subscription',
                 results: [
                     {
                         type: 'started',
                         runId: 'stage0-run-running',
-                        startedAt: troubleshooterStartedAt,
-                        rows: troubleshooterPendingRows,
+                        startedAt: diagnosticsStartedAt,
+                        rows: diagnosticsPendingRows,
                     },
                     {
                         type: 'rows',
                         runId: 'stage0-run-running',
                         rows: [
-                            ...troubleshooterConnectedRows.slice(0, 3),
+                            ...diagnosticsConnectedRows.slice(0, 3),
                             { id: 'networkConnection', status: 'active', segments: [{ kind: 'checking' }] },
-                            ...troubleshooterPendingRows.slice(4),
+                            ...diagnosticsPendingRows.slice(4),
                         ],
                     },
                 ],
@@ -1088,12 +1088,12 @@ const troubleshooterScenarios = {
             },
         },
         readiness: {
-            content: [...troubleshooterRowLabels, 'Checking the connection…', 'Checking…'],
+            content: [...diagnosticsRowLabels, 'Checking the connection…', 'Checking…'],
             selectors: ['#connectivity-checks-networkConnection .fui-Spinner'],
             noProgressbar: false,
         },
         assertions: [
-            ...troubleshooterListLayout,
+            ...diagnosticsListLayout,
             {
                 kind: 'order',
                 name: 'Rows 1 to 3 have settled, row 4 is checking and rows 5 to 8 wait',
@@ -1133,11 +1133,11 @@ const troubleshooterScenarios = {
             },
         ],
     },
-    'dns-failure': troubleshooterScenario(
+    'dns-failure': diagnosticsScenario(
         dnsFailureRun,
         [
             'Connection failed at Server address (DNS)',
-            `Host name not found (${troubleshooterHost})`,
+            `Host name not found (${diagnosticsHost})`,
             'Not checked: Server address (DNS) did not succeed',
             supportLine,
         ],
@@ -1146,7 +1146,7 @@ const troubleshooterScenarios = {
                 cardText(
                     [
                         'Connection failed at Server address (DNS)',
-                        `Host name not found (${troubleshooterHost})`,
+                        `Host name not found (${diagnosticsHost})`,
                         'The system DNS resolver could not find this host name.',
                         'Next: Check the host name and the DNS settings used by the computer or remote host running these checks.',
                         supportLine,
@@ -1156,7 +1156,7 @@ const troubleshooterScenarios = {
                 {
                     kind: 'calls',
                     name: 'Save report saves the failed run after the share warning',
-                    path: 'connectivityTroubleshooter.saveReport',
+                    path: 'connectionDiagnostics.saveReport',
                     input: { runId: 'stage0-run-dns', hideIdentifiers: false, shareWarningOutcome: 'continued' },
                     count: 1,
                     steps: [
@@ -1176,20 +1176,20 @@ const troubleshooterScenarios = {
                 detailsText('serverAddress', [
                     'Host name not found',
                     'Next: Check the host name and the DNS settings',
-                    `${troubleshooterHost} Your system's lookup No answer Direct DNS query No answer`,
+                    `${diagnosticsHost} Your system's lookup No answer Direct DNS query No answer`,
                 ]),
                 pushesDown('serverAddress', 'networkConnection'),
             ],
         },
     ),
-    'private-endpoint-public': troubleshooterScenario(
+    'private-endpoint-public': diagnosticsScenario(
         privateEndpointRun,
         [...privateEndpointEvidence, 'Connection successful'],
         {
             assertions: [
                 cardText(
-                    ['Connection successful', troubleshooterConnectedSummary],
-                    [supportLine, ...serverFacts, 'warning', literal(troubleshooterPrivateAccessHint)],
+                    ['Connection successful', diagnosticsConnectedSummary],
+                    [supportLine, ...serverFacts, 'warning', literal(diagnosticsPrivateAccessHint)],
                 ),
                 {
                     kind: 'text',
@@ -1201,7 +1201,7 @@ const troubleshooterScenarios = {
                 ...expandDetails('connectionSettings'),
                 detailsText('connectionSettings', [
                     'Scheme mongodb+srv',
-                    `Host ${troubleshooterHost}`,
+                    `Host ${diagnosticsHost}`,
                     'User stage0user',
                     'Authentication method Username and password',
                     'Authentication database admin (from DNS TXT record)',
@@ -1211,13 +1211,13 @@ const troubleshooterScenarios = {
                 ]),
                 ...expandDetails('serverAddress'),
                 detailsText('serverAddress', [
-                    troubleshooterPublicAliasTitle,
-                    troubleshooterPublicAliasExplanation,
-                    `Query _mongodb._tcp.${troubleshooterHost}`,
-                    `Hosts listed ${troubleshooterSrvTargets[0]}:10260`,
+                    diagnosticsPublicAliasTitle,
+                    diagnosticsPublicAliasExplanation,
+                    `Query _mongodb._tcp.${diagnosticsHost}`,
+                    `Hosts listed ${diagnosticsSrvTargets[0]}:10260`,
                     'TXT options authSource=admin',
                     'DNS servers 172.20.192.1',
-                    `Alias chain (CNAME) ${troubleshooterPrivateLinkAlias}`,
+                    `Alias chain (CNAME) ${diagnosticsPrivateLinkAlias}`,
                     `Addresses ${privateEndpointAddress} (IPv4, public)`,
                 ]),
                 pushesDown('serverAddress', 'networkConnection'),
@@ -1241,7 +1241,7 @@ const troubleshooterScenarios = {
                     'secureConnection',
                     [
                         'Protocol TLS 1.3',
-                        `Certificate for *.${troubleshooterHost}`,
+                        `Certificate for *.${diagnosticsHost}`,
                         'Issued by Microsoft Azure RSA TLS Issuing CA 03',
                         'Host name Matches the certificate',
                     ],
@@ -1267,7 +1267,7 @@ const troubleshooterScenarios = {
         },
     ),
     // Hide identifiers applies to the report only (decision 0040): the panel keeps every identifier.
-    'private-endpoint-report-identifiers-hidden': troubleshooterScenario(
+    'private-endpoint-report-identifiers-hidden': diagnosticsScenario(
         privateEndpointRun,
         // Text both info-line states share: the last assertion switches the report back to identifiers.
         [...privateEndpointEvidence, 'Review the report before sharing.'],
@@ -1276,19 +1276,19 @@ const troubleshooterScenarios = {
             assertions: [
                 identifiersNote(reportIdentifiersHidden),
                 cardText(
-                    ['Connection successful', troubleshooterConnectedSummary],
-                    ['warning', literal(troubleshooterPrivateAccessHint)],
+                    ['Connection successful', diagnosticsConnectedSummary],
+                    ['warning', literal(diagnosticsPrivateAccessHint)],
                 ),
                 ...expandDetails('serverAddress'),
                 detailsText(
                     'serverAddress',
                     [
-                        `Public address for this Azure host name (${troubleshooterSrvTargets[0]})`,
-                        `Query _mongodb._tcp.${troubleshooterHost}`,
-                        `Hosts listed ${troubleshooterSrvTargets[0]}:10260`,
+                        `Public address for this Azure host name (${diagnosticsSrvTargets[0]})`,
+                        `Query _mongodb._tcp.${diagnosticsHost}`,
+                        `Hosts listed ${diagnosticsSrvTargets[0]}:10260`,
                         'TXT options authSource=admin',
                         'DNS servers 172.20.192.1',
-                        `Alias chain (CNAME) ${troubleshooterPrivateLinkAlias}`,
+                        `Alias chain (CNAME) ${diagnosticsPrivateLinkAlias}`,
                         `Addresses ${privateEndpointAddress} (IPv4, public)`,
                     ],
                     [placeholderText],
@@ -1299,7 +1299,7 @@ const troubleshooterScenarios = {
                 detailsText(
                     'connectionSettings',
                     [
-                        `Host ${troubleshooterHost}`,
+                        `Host ${diagnosticsHost}`,
                         'User stage0user',
                         'Authentication database admin',
                         'authSource = admin',
@@ -1317,8 +1317,8 @@ const troubleshooterScenarios = {
             ],
         },
     ),
-    'private-endpoint-blocked': troubleshooterScenario(
-        troubleshooterRun('stage0-run-private-endpoint-blocked', {
+    'private-endpoint-blocked': diagnosticsScenario(
+        diagnosticsRun('stage0-run-private-endpoint-blocked', {
             type: 'finished',
             rows: [
                 ...privateEndpointRows.slice(0, 3),
@@ -1326,20 +1326,20 @@ const troubleshooterScenarios = {
                     id: 'networkConnection',
                     status: 'error',
                     segments: [{ kind: 'finding', title: 'Network connection timed out' }],
-                    details: troubleshooterDetails(
+                    details: diagnosticsDetails(
                         [
-                            troubleshooterFinding(
+                            diagnosticsFinding(
                                 'error',
                                 'Network connection timed out',
                                 'The TCP connection attempt timed out without connecting. This does not identify what blocked it.',
                                 `Check network access to this host and port. ${firewallSentence}`,
-                                [troubleshooterSrvTargets[0]],
+                                [diagnosticsSrvTargets[0]],
                             ),
                         ],
                         [
                             {
                                 kind: 'tcpHost',
-                                host: troubleshooterSrvTargets[0],
+                                host: diagnosticsSrvTargets[0],
                                 port: 10260,
                                 failedAddresses: [{ address: privateEndpointAddress }],
                             },
@@ -1351,27 +1351,27 @@ const troubleshooterScenarios = {
                 notChecked('authentication', 'networkConnection'),
                 notChecked('databaseAccess', 'networkConnection'),
             ],
-            result: troubleshooterCard('failed', {
+            result: diagnosticsCard('failed', {
                 stoppedAtRow: 'networkConnection',
                 headline: {
                     title: 'Network connection timed out',
-                    target: `${troubleshooterSrvTargets[0]}:10260`,
+                    target: `${diagnosticsSrvTargets[0]}:10260`,
                     explanation:
                         'The TCP connection attempt timed out without connecting. This does not identify what blocked it.',
                     nextStep: `Check network access to this host and port. ${firewallSentence}`,
                 },
-                providerHint: troubleshooterPrivateAccessHint,
+                providerHint: diagnosticsPrivateAccessHint,
                 firewallHint: true,
             }),
         }),
-        [...privateEndpointEvidence, 'Connection failed at Network connection (TCP)', troubleshooterPrivateAccessHint],
+        [...privateEndpointEvidence, 'Connection failed at Network connection (TCP)', diagnosticsPrivateAccessHint],
         {
             assertions: [
                 cardText(
                     [
                         'Connection failed at Network connection (TCP)',
                         'Network connection timed out',
-                        troubleshooterPrivateAccessHint,
+                        diagnosticsPrivateAccessHint,
                         firewallSentence,
                         supportLine,
                     ],
@@ -1388,8 +1388,8 @@ const troubleshooterScenarios = {
                 detailsText(
                     'serverAddress',
                     [
-                        troubleshooterPublicAliasTitle,
-                        troubleshooterPublicAliasExplanation,
+                        diagnosticsPublicAliasTitle,
+                        diagnosticsPublicAliasExplanation,
                         `Addresses ${privateEndpointAddress} (IPv4, public)`,
                     ],
                     ['Next:'],
@@ -1402,10 +1402,10 @@ const troubleshooterScenarios = {
             ],
         },
     ),
-    'several-findings': troubleshooterScenario(
-        troubleshooterRun('stage0-run-several-findings', {
+    'several-findings': diagnosticsScenario(
+        diagnosticsRun('stage0-run-several-findings', {
             type: 'finished',
-            result: troubleshooterCard('failed', {
+            result: diagnosticsCard('failed', {
                 stoppedAtRow: 'serverAddress',
                 headline: {
                     title: 'Host name not found',
@@ -1449,9 +1449,9 @@ const troubleshooterScenarios = {
                 id: 'secureConnection',
                 status: 'warning',
                 segments: [{ kind: 'finding', title: 'Certificate checks weakened' }],
-                details: troubleshooterDetails(
+                details: diagnosticsDetails(
                     [
-                        troubleshooterFinding(
+                        diagnosticsFinding(
                             'warning',
                             'Certificate checks weakened',
                             'Connection options disable certificate or host name verification.',
@@ -1459,7 +1459,7 @@ const troubleshooterScenarios = {
                         ),
                     ],
                     // The version is in Details only, per host (decision 0050).
-                    troubleshooterSrvTargets.map((host, index) => ({
+                    diagnosticsSrvTargets.map((host, index) => ({
                         kind: 'tlsHost' as const,
                         host,
                         protocol: 'TLSv1.2',
@@ -1469,7 +1469,7 @@ const troubleshooterScenarios = {
                 ),
             },
         ]),
-        troubleshooterConnectedCard,
+        diagnosticsConnectedCard,
         ['Certificate checks weakened'],
         [
             'Connection successful, with 1 warning',
@@ -1492,9 +1492,9 @@ const troubleshooterScenarios = {
                 ],
             },
         ]),
-        troubleshooterConnectedCard,
+        diagnosticsConnectedCard,
         ['Running on remote host WSL, not this computer'],
-        ['Connection successful', troubleshooterConnectedSummary],
+        ['Connection successful', diagnosticsConnectedSummary],
         serverFacts,
     ),
     'ip-address-tls-off': finishedScenario(
@@ -1528,15 +1528,15 @@ const troubleshooterScenarios = {
                 ],
             },
         ]),
-        troubleshooterCard('connected', { serverLine: { serverVersion: '7.0.12', host: '10.0.0.4', pingMs: 2 } }),
+        diagnosticsCard('connected', { serverLine: { serverVersion: '7.0.12', host: '10.0.0.4', pingMs: 2 } }),
         ['Not needed: the host is an IP address', 'Not used: TLS is off for this connection'],
-        ['Connection successful', troubleshooterConnectedSummary],
+        ['Connection successful', diagnosticsConnectedSummary],
         ['10.0.0.4', '7.0.12', 'Ping'],
     ),
-    'timeout-limited': troubleshooterScenario(
-        troubleshooterRun('stage0-run-timeout', {
+    'timeout-limited': diagnosticsScenario(
+        diagnosticsRun('stage0-run-timeout', {
             type: 'finished',
-            result: troubleshooterCard('notTested', { runTimeoutBeforeAttempt: true }),
+            result: diagnosticsCard('notTested', { runTimeoutBeforeAttempt: true }),
             rows: withRows([notStartedInTime('authentication'), notStartedInTime('databaseAccess')]),
             coverage: { limited: true, retryWouldHelp: true, connectionTimeoutLimited: true },
         }),
@@ -1561,14 +1561,14 @@ const troubleshooterScenarios = {
             ],
         },
     ),
-    cancelled: troubleshooterScenario(
-        troubleshooterRun('stage0-run-cancelled', {
+    cancelled: diagnosticsScenario(
+        diagnosticsRun('stage0-run-cancelled', {
             type: 'cancelled',
             shown: [
-                troubleshooterConnectedRows[0],
-                troubleshooterConnectedRows[1],
+                diagnosticsConnectedRows[0],
+                diagnosticsConnectedRows[1],
                 { id: 'serverAddress', status: 'active', segments: [{ kind: 'checking' }] },
-                ...troubleshooterPendingRows.slice(3),
+                ...diagnosticsPendingRows.slice(3),
             ],
         }),
         ['Diagnosis cancelled', 'You cancelled the diagnosis. The results so far are kept.'],
@@ -1581,17 +1581,17 @@ const troubleshooterScenarios = {
             ],
         },
     ),
-    'report-identifiers-hidden': troubleshooterScenario(
-        troubleshooter.rpc['connectivityTroubleshooter.run'].results,
+    'report-identifiers-hidden': diagnosticsScenario(
+        diagnostics.rpc['connectionDiagnostics.run'].results,
         ['Connection successful', 'The report will replace host and identity details with placeholders.'],
         {
             steps: [{ action: 'click', role: 'button', name: 'Hide identifiers in the report' }],
             assertions: [
-                cardText(['Connection successful', troubleshooterConnectedSummary]),
+                cardText(['Connection successful', diagnosticsConnectedSummary]),
                 {
                     kind: 'calls',
                     name: 'Save report passes the hidden-identifiers choice',
-                    path: 'connectivityTroubleshooter.saveReport',
+                    path: 'connectionDiagnostics.saveReport',
                     input: { runId: 'stage0-run-connected', hideIdentifiers: true },
                     count: 1,
                     steps: [
@@ -1613,9 +1613,9 @@ const troubleshooterScenarios = {
     'entra-connected': finishedScenario(
         'stage0-run-entra',
         withRows([entraRow('done', { kind: 'account', label: entraAccount })]),
-        troubleshooterConnectedCard,
+        diagnosticsConnectedCard,
         [`Microsoft Entra ID · ${entraAccount}`],
-        ['Connection successful', troubleshooterConnectedSummary],
+        ['Connection successful', diagnosticsConnectedSummary],
         serverFacts,
     ),
     'entra-us-gov-connected': finishedScenario(
@@ -1623,17 +1623,17 @@ const troubleshooterScenarios = {
         withRows([
             entraRow('done', { kind: 'account', label: entraAccount }, { kind: 'cloud', cloud: 'usGovernment' }),
         ]),
-        troubleshooterCard('connected', {
+        diagnosticsCard('connected', {
             serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: entraHost, pingMs: 31 },
         }),
         [`Microsoft Entra ID · ${entraAccount} · Azure US Government`],
-        ['Connection successful', troubleshooterConnectedSummary],
+        ['Connection successful', diagnosticsConnectedSummary],
         [entraHost, ...serverFacts],
     ),
     'entra-no-silent-session': finishedScenario(
         'stage0-run-entra-no-session',
         afterAuthentication(entraRow('skipped', { kind: 'noSilentSignIn' }), 'dependencySkipped'),
-        troubleshooterCard('notTested', {
+        diagnosticsCard('notTested', {
             ...authenticationHeadline(
                 'Sign-in needed',
                 'No Microsoft Entra ID sign-in is available without a prompt.',
@@ -1660,7 +1660,7 @@ const troubleshooterScenarios = {
                     { kind: 'clusterCloud', cloud: 'AzureUSGovernment' },
                     { kind: 'signedInCloud', cloud: 'AzureCloud' },
                 ),
-                troubleshooterFinding(
+                diagnosticsFinding(
                     'error',
                     'Azure cloud mismatch',
                     'The Azure cloud selected for sign-in does not match the cluster cloud.',
@@ -1669,7 +1669,7 @@ const troubleshooterScenarios = {
             ),
             'dependencyFailed',
         ),
-        troubleshooterCard(
+        diagnosticsCard(
             'failed',
             authenticationHeadline(
                 'Azure cloud mismatch',
@@ -1691,7 +1691,7 @@ const troubleshooterScenarios = {
         afterAuthentication(
             explained(
                 entraRow('error', { kind: 'signInFailed' }),
-                troubleshooterFinding(
+                diagnosticsFinding(
                     'error',
                     'Microsoft Entra ID sign-in failed',
                     "This account does not appear to belong to the cluster's organization.",
@@ -1700,7 +1700,7 @@ const troubleshooterScenarios = {
             ),
             'dependencyFailed',
         ),
-        troubleshooterCard(
+        diagnosticsCard(
             'failed',
             authenticationHeadline(
                 'Microsoft Entra ID sign-in failed',
@@ -1722,7 +1722,7 @@ const troubleshooterScenarios = {
         afterAuthentication(
             explained(
                 entraRow('error', { kind: 'signedInNotAccepted' }),
-                troubleshooterFinding(
+                diagnosticsFinding(
                     'error',
                     'Authentication rejected',
                     'Sign-in succeeded, but the cluster did not accept this identity.',
@@ -1731,7 +1731,7 @@ const troubleshooterScenarios = {
             ),
             'dependencyFailed',
         ),
-        troubleshooterCard(
+        diagnosticsCard(
             'failed',
             authenticationHeadline(
                 'Authentication rejected',
@@ -1760,12 +1760,12 @@ const troubleshooterScenarios = {
                 ],
             },
         ]),
-        troubleshooterCard('connected', {
-            serverLine: { engineVersion: '0.107.0', host: troubleshooterHost, pingMs: 3 },
+        diagnosticsCard('connected', {
+            serverLine: { engineVersion: '0.107.0', host: diagnosticsHost, pingMs: 3 },
         }),
         ['Managed identity · User-assigned'],
-        ['Connection successful', troubleshooterConnectedSummary],
-        [troubleshooterHost, ...serverFacts],
+        ['Connection successful', diagnosticsConnectedSummary],
+        [diagnosticsHost, ...serverFacts],
     ),
     'listing-denied': finishedScenario(
         'stage0-run-listing-denied',
@@ -1774,8 +1774,8 @@ const troubleshooterScenarios = {
                 id: 'databaseAccess',
                 status: 'warning',
                 segments: [{ kind: 'connected' }, { kind: 'finding', title: 'Listing databases denied' }],
-                details: troubleshooterDetails([
-                    troubleshooterFinding(
+                details: diagnosticsDetails([
+                    diagnosticsFinding(
                         'warning',
                         'Listing databases denied',
                         'The connection succeeded, but the server denied the database-list request used by the extension.',
@@ -1784,7 +1784,7 @@ const troubleshooterScenarios = {
                 ]),
             },
         ]),
-        troubleshooterConnectedCard,
+        diagnosticsConnectedCard,
         ['Connected · Listing databases denied'],
         [
             'Connection successful, with 1 warning',
@@ -1812,9 +1812,9 @@ const troubleshooterScenarios = {
                 segments: [
                     { kind: 'finding', title: 'Compressor unavailable', target: 'mongo-stage0.example.internal' },
                 ],
-                details: troubleshooterDetails(
+                details: diagnosticsDetails(
                     [
-                        troubleshooterFinding(
+                        diagnosticsFinding(
                             'error',
                             'Compressor unavailable',
                             'The server accepted snappy, but the extension cannot use it for commands after sign-in.',
@@ -1830,8 +1830,8 @@ const troubleshooterScenarios = {
                 status: 'error',
                 segments: [],
                 // No finding of its own: the host's generic line still explains the status.
-                details: troubleshooterDetails([
-                    troubleshooterFinding(
+                details: diagnosticsDetails([
+                    diagnosticsFinding(
                         'error',
                         'This check did not succeed',
                         'No further explanation is available here.',
@@ -1840,7 +1840,7 @@ const troubleshooterScenarios = {
                 ]),
             },
         ]),
-        troubleshooterCard('failed', {
+        diagnosticsCard('failed', {
             stoppedAtRow: 'databaseAccess',
             headline: {
                 title: 'Compressor unavailable',
@@ -1868,24 +1868,24 @@ const troubleshooterScenarios = {
                     id: 'networkConnection',
                     status: 'error',
                     segments: [
-                        { kind: 'finding', title: 'Network connection refused', target: troubleshooterHost },
+                        { kind: 'finding', title: 'Network connection refused', target: diagnosticsHost },
                         { kind: 'reachable', reachable: 0, total: 1 },
                         { kind: 'port', port: 10260 },
                     ],
-                    details: troubleshooterDetails(
+                    details: diagnosticsDetails(
                         [
-                            troubleshooterFinding(
+                            diagnosticsFinding(
                                 'error',
                                 'Network connection refused',
                                 'The TCP connection was refused. The service may be stopped or listening on a different port.',
                                 `Check the port and that the database service or tunnel is running. ${firewallSentence}`,
-                                [troubleshooterHost],
+                                [diagnosticsHost],
                             ),
                         ],
                         [
                             {
                                 kind: 'tcpHost',
-                                host: troubleshooterHost,
+                                host: diagnosticsHost,
                                 port: 10260,
                                 failedAddresses: [{ address: '203.0.113.10' }],
                             },
@@ -1897,21 +1897,21 @@ const troubleshooterScenarios = {
                 notChecked('authentication', 'networkConnection'),
                 notChecked('databaseAccess', 'networkConnection'),
             ]),
-            troubleshooterCard('failed', {
+            diagnosticsCard('failed', {
                 stoppedAtRow: 'networkConnection',
                 headline: {
                     title: 'Network connection refused',
                     explanation:
                         'The TCP connection was refused. The service may be stopped or listening on a different port.',
                     nextStep: `Check the port and that the database service or tunnel is running. ${firewallSentence}`,
-                    target: `${troubleshooterHost}:10260`,
+                    target: `${diagnosticsHost}:10260`,
                 },
                 firewallHint: true,
             }),
-            [`Network connection refused (${troubleshooterHost}) · 0 of 1 hosts reachable · Port 10260`],
+            [`Network connection refused (${diagnosticsHost}) · 0 of 1 hosts reachable · Port 10260`],
             [
                 'Connection failed at Network connection (TCP)',
-                `Network connection refused (${troubleshooterHost}:10260)`,
+                `Network connection refused (${diagnosticsHost}:10260)`,
                 'The TCP connection was refused. The service may be stopped or listening on a different port.',
                 'Next: Check the port and that the database service or tunnel is running.',
                 firewallSentence,
@@ -1932,9 +1932,9 @@ const troubleshooterScenarios = {
                         { kind: 'finding', title: 'Network connection refused', target: seedB },
                         { kind: 'reachable', reachable: 1, total: 2 },
                     ],
-                    details: troubleshooterDetails(
+                    details: diagnosticsDetails(
                         [
-                            troubleshooterFinding(
+                            diagnosticsFinding(
                                 'error',
                                 'Network connection refused',
                                 'The TCP connection was refused. The service may be stopped or listening on a different port.',
@@ -1946,7 +1946,7 @@ const troubleshooterScenarios = {
                     ),
                 },
             ]),
-            troubleshooterConnectedCard,
+            diagnosticsConnectedCard,
             [`Network connection refused (${seedB}) · 1 of 2 hosts reachable`],
             [
                 'Connection successful, but 1 check failed',
@@ -1969,9 +1969,9 @@ const troubleshooterScenarios = {
                     { kind: 'authMechanism', mechanism: 'SCRAM-SHA-256' },
                     { kind: 'credentialsRejected' },
                 ],
-                details: troubleshooterDetails(
+                details: diagnosticsDetails(
                     [
-                        troubleshooterFinding(
+                        diagnosticsFinding(
                             'error',
                             'Authentication rejected',
                             'The server rejected the selected authentication credentials.',
@@ -1993,7 +1993,7 @@ const troubleshooterScenarios = {
             },
             'dependencyFailed',
         ),
-        troubleshooterCard(
+        diagnosticsCard(
             'failed',
             authenticationHeadline(
                 'Authentication rejected',
@@ -2013,8 +2013,8 @@ const troubleshooterScenarios = {
     // WI-27 (decision 0047): the operator's unreachable server. TCP timed out on the only host and the
     // driver selected no server; the card leads with the TCP timeout, and the driver only corroborates it.
     'unreachable-host': withWrappedEvidence(
-        troubleshooterScenario(
-            troubleshooterRun('stage0-run-unreachable', {
+        diagnosticsScenario(
+            diagnosticsRun('stage0-run-unreachable', {
                 type: 'finished',
                 rows: withRows([
                     {
@@ -2034,21 +2034,21 @@ const troubleshooterScenarios = {
                         id: 'networkConnection',
                         status: 'error',
                         segments: [
-                            { kind: 'finding', title: unreachable.title, target: troubleshooterHost },
+                            { kind: 'finding', title: unreachable.title, target: diagnosticsHost },
                             { kind: 'reachable', reachable: 0, total: 1 },
                             { kind: 'port', port: 27017 },
                         ],
-                        details: troubleshooterDetails(
+                        details: diagnosticsDetails(
                             [
-                                troubleshooterFinding(
+                                diagnosticsFinding(
                                     'error',
                                     unreachable.title,
                                     unreachable.explanation,
                                     unreachable.nextStep,
-                                    [troubleshooterHost],
+                                    [diagnosticsHost],
                                 ),
                             ],
-                            [{ kind: 'tcpHost', host: troubleshooterHost, port: 27017, failedAddresses: [] }],
+                            [{ kind: 'tcpHost', host: diagnosticsHost, port: 27017, failedAddresses: [] }],
                         ),
                     },
                     notChecked('secureConnection', 'networkConnection'),
@@ -2057,9 +2057,9 @@ const troubleshooterScenarios = {
                         id: 'authentication',
                         status: 'error',
                         segments: [{ kind: 'authMethod', method: 'none' }, { kind: 'serverNotReached' }],
-                        details: troubleshooterDetails(
+                        details: diagnosticsDetails(
                             [
-                                troubleshooterFinding(
+                                diagnosticsFinding(
                                     'error',
                                     'No server selected',
                                     'The driver could not select a server before its time limit. This does not show that credentials were rejected.',
@@ -2071,16 +2071,16 @@ const troubleshooterScenarios = {
                     },
                     notChecked('databaseAccess', 'authentication'),
                 ]),
-                result: troubleshooterCard('failed', {
+                result: diagnosticsCard('failed', {
                     stoppedAtRow: 'networkConnection',
-                    headline: { ...unreachable, target: `${troubleshooterHost}:27017` },
+                    headline: { ...unreachable, target: `${diagnosticsHost}:27017` },
                     supporting: { title: 'No server selected', corroboration: 'serverSelection' },
                     firewallHint: true,
                     authenticated: false,
                 }),
             }),
             [
-                `${unreachable.title} (${troubleshooterHost}) · 0 of 1 hosts reachable · Port 27017`,
+                `${unreachable.title} (${diagnosticsHost}) · 0 of 1 hosts reachable · Port 27017`,
                 'No authentication · Could not reach a server',
                 'Connection failed at Network connection (TCP)',
             ],
@@ -2089,7 +2089,7 @@ const troubleshooterScenarios = {
                     cardText(
                         [
                             'Connection failed at Network connection (TCP)',
-                            `${unreachable.title} (${troubleshooterHost}:27017)`,
+                            `${unreachable.title} (${diagnosticsHost}:27017)`,
                             unreachable.explanation,
                             'Next: Check the endpoint and network path, then try again.',
                             firewallSentence,
@@ -2109,7 +2109,7 @@ const troubleshooterScenarios = {
                         name: 'The TCP row names the timeout, not a generic "did not finish"',
                         selector: '#connectivity-checks-networkConnection',
                         includes: [
-                            `${unreachable.title} (${troubleshooterHost}) · 0 of 1 hosts reachable · Port 27017`,
+                            `${unreachable.title} (${diagnosticsHost}) · 0 of 1 hosts reachable · Port 27017`,
                         ],
                         excludes: ['Did not finish in time', 'Step timed out'],
                     },
@@ -2127,8 +2127,8 @@ const troubleshooterScenarios = {
     ),
     // WI-27 (decision 0048): the operator's screenshot. Azure DocumentDB answered every probe with No
     // authentication, but the gateway refuses to list databases until the connection signs in.
-    'no-auth-signin-required': troubleshooterScenario(
-        troubleshooterRun('stage0-run-no-auth-signin', {
+    'no-auth-signin-required': diagnosticsScenario(
+        diagnosticsRun('stage0-run-no-auth-signin', {
             type: 'finished',
             rows: withRows([
                 {
@@ -2138,21 +2138,21 @@ const troubleshooterScenarios = {
                         { kind: 'scheme', scheme: 'mongodb+srv' },
                         { kind: 'optionCount', count: 2 },
                     ],
-                    details: troubleshooterConnectedRows.find((row) => row.id === 'connectionSettings')?.details,
+                    details: diagnosticsConnectedRows.find((row) => row.id === 'connectionSettings')?.details,
                 },
                 {
                     id: 'authentication',
                     status: 'done',
                     segments: [{ kind: 'authMethod', method: 'none' }],
-                    details: troubleshooterDetails([], [{ kind: 'auth', method: 'none', stages: [] }]),
+                    details: diagnosticsDetails([], [{ kind: 'auth', method: 'none', stages: [] }]),
                 },
                 {
                     id: 'databaseAccess',
                     status: 'warning',
                     segments: [{ kind: 'ping', ms: 93 }, { kind: 'listingNeedsSignIn' }],
-                    details: troubleshooterDetails(
+                    details: diagnosticsDetails(
                         [
-                            troubleshooterFinding(
+                            diagnosticsFinding(
                                 'warning',
                                 signInRequired.title,
                                 signInRequired.explanation,
@@ -2176,11 +2176,11 @@ const troubleshooterScenarios = {
                     ),
                 },
             ]),
-            result: troubleshooterCard('connected', {
+            result: diagnosticsCard('connected', {
                 authenticated: false,
                 signInRequired: true,
                 headline: signInRequired,
-                serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: troubleshooterHost, pingMs: 93 },
+                serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: diagnosticsHost, pingMs: 93 },
             }),
         }),
         [
@@ -2230,14 +2230,14 @@ const troubleshooterScenarios = {
             ],
         },
     ),
-} as const satisfies Readonly<Record<string, Scenario<'connectivityTroubleshooter'>>>;
+} as const satisfies Readonly<Record<string, Scenario<'connectionDiagnostics'>>>;
 
 export const scenarios = {
     collectionView: { default: defaultScenario('collectionView') },
     documentView: { default: defaultScenario('documentView') },
     clusterDashboard: { default: defaultScenario('clusterDashboard') },
     atlasCredentials: { default: defaultScenario('atlasCredentials', atlasSteps) },
-    connectivityTroubleshooter: troubleshooterScenarios,
+    connectionDiagnostics: diagnosticsScenarios,
     localQuickStart: {
         default: defaultScenario('localQuickStart', continueSteps),
         introduction: {

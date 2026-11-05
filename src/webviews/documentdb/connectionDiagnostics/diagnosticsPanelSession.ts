@@ -55,7 +55,7 @@ export class DiagnosticsPanelSession {
     private readonly earlyCancels = new Set<string>();
     private disposed = false;
 
-    public constructor(public readonly troubleshooterSessionId: string) {}
+    public constructor(public readonly diagnosticsSessionId: string) {}
 
     public startRun(runId: string, requestId: string): DiagnosticsPanelRun {
         this.currentRun?.abort('rerun');

@@ -208,7 +208,7 @@ export function createContextHintsCheck(
                     getResolutionError() ??
                     getRunOwnedClient().authError ??
                     new Error(firstFailure.findings[0]?.code ?? 'check.failed'),
-                source: 'troubleshooter',
+                source: 'connectionDiagnostics',
             });
             signal.throwIfAborted();
             const explanation = [

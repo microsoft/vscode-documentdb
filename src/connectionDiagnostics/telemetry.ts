@@ -42,8 +42,8 @@ export function applyRunIdentity(
     runId: string,
 ): void {
     Object.assign(context.telemetry.properties, {
-        troubleshooterSessionId: options.troubleshooterSessionId,
-        troubleshooterRunCorrelationId: runId,
+        diagnosticsSessionId: options.diagnosticsSessionId,
+        diagnosticsRunCorrelationId: runId,
         entryPoint: options.entryPoint,
         runTrigger: options.runTrigger,
         timeoutProfile: options.timeoutProfile,
@@ -52,7 +52,7 @@ export function applyRunIdentity(
 }
 
 export async function reportRunStarted(options: RunConnectionDiagnosticsOptions, runId: string): Promise<void> {
-    await callWithTelemetryAndErrorHandling('connectivityTroubleshooter.runStarted', async (context): Promise<void> => {
+    await callWithTelemetryAndErrorHandling('diagnoseConnection.runStarted', async (context): Promise<void> => {
         configureDiagnosticsTelemetry(context);
         applyRunIdentity(context, options, runId);
     });

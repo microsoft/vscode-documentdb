@@ -361,7 +361,7 @@ a selector contain the given texts one to one); that the eight rows share one he
 pending, active, settled and skipped rows all reserve one detail line and no evidence line wraps
 (`rowHeights`: exactly `count` elements match the selector and their heights differ by at most
 `tolerance` px at the page's current viewport width; it also reports that width and the list's top
-offset); that the list starts at `troubleshooterListTop` px from the top of the document in every
+offset); that the list starts at `diagnosticsListTop` px from the top of the document in every
 state, so the card appearing below never moves it (`top`: the first element matching the selector
 starts at that offset, rounded); and that no rendered text matches a finding code, an AADSTS code,
 `http` or a Microsoft Entra ID rule ID (`text`: the first element matching a selector contains every
@@ -375,7 +375,7 @@ Details toggle at any width, so it wraps around the toggle, and that scenario's 
 out the Network connection row. Below about 700 px, other evidence lines wrap and `rowHeights`
 fails. That is expected: narrow panels may wrap evidence lines rather than cut them off (design §5.2). The fake host replays the same subscription results for
 every call, so a re-run that streams a different second run is covered by the view's jsdom test
-(`ConnectivityTroubleshooter.test.tsx`), not by a scenario. `network-refused` and `private-endpoint-blocked`
+(`ConnectionDiagnostics.test.tsx`), not by a scenario. `network-refused` and `private-endpoint-blocked`
 expect the possible-firewall sentence; `auth-rejected-native` and the other non-network failures
 assert its absence. Report-action assertions check the run ID and the Hide identifiers choice, and
 that Copy or Save with identifiers first calls `common.confirm` (the share warning, decision 0040;

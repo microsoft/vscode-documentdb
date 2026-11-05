@@ -63,10 +63,10 @@ const requestId = z.string().min(1);
 function telemetryContext(ctx: unknown, runId?: string, correlateCurrentRun = true): WithTelemetry<RouterContext> {
     const myCtx = ctx as WithTelemetry<RouterContext>;
     myCtx.actionContext.telemetry.maskEntireErrorMessage = true;
-    myCtx.actionContext.telemetry.properties.troubleshooterSessionId = myCtx.session.troubleshooterSessionId;
+    myCtx.actionContext.telemetry.properties.diagnosticsSessionId = myCtx.session.diagnosticsSessionId;
     const correlationId = runId ?? (correlateCurrentRun ? myCtx.session.runId : undefined);
     if (correlationId !== undefined) {
-        myCtx.actionContext.telemetry.properties.troubleshooterRunCorrelationId = correlationId;
+        myCtx.actionContext.telemetry.properties.diagnosticsRunCorrelationId = correlationId;
     }
     return myCtx;
 }
@@ -366,7 +366,7 @@ export const connectionDiagnosticsRouter = router({
                         runId,
                         runTrigger: input.trigger,
                         runIndex: active.runIndex,
-                        troubleshooterSessionId: session.troubleshooterSessionId,
+                        diagnosticsSessionId: session.diagnosticsSessionId,
                         timeoutProfile: input.timeoutProfile,
                         signal: abortController.signal,
                         cancelReason: (): typeof active.cancelReason => active.cancelReason,

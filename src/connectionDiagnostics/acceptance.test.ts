@@ -218,7 +218,7 @@ function context(
     sessions.push(session);
     return {
         dbExperience: API.DocumentDB,
-        webviewName: 'connectivityTroubleshooter',
+        webviewName: 'connectionDiagnostics',
         entryPoint: 'contextMenu',
         session,
         target: {

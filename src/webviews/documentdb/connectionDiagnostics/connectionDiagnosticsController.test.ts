@@ -96,13 +96,13 @@ describe('openConnectionDiagnostics', (): void => {
         const events = opened[0].context.session.events(subscription.signal);
         const offer = events.next();
         const second = open('first');
-        expect(second).toEqual({ panelAction: 'focused', troubleshooterSessionId: first.troubleshooterSessionId });
+        expect(second).toEqual({ panelAction: 'focused', diagnosticsSessionId: first.diagnosticsSessionId });
         expect(first.panelAction).toBe('created');
         expect(opened[0].reveal).toHaveBeenCalledOnce();
         expect((await offer).value).toEqual({ type: 'offerRerun' });
         const third = open('second');
         expect(third.panelAction).toBe('created');
-        expect(third.troubleshooterSessionId).not.toBe(first.troubleshooterSessionId);
+        expect(third.diagnosticsSessionId).not.toBe(first.diagnosticsSessionId);
         expect(openAppWebview).toHaveBeenCalledTimes(2);
         subscription.abort();
         expect((await events.next()).done).toBe(true);
@@ -112,19 +112,19 @@ describe('openConnectionDiagnostics', (): void => {
         const result = open('fixture');
         expect(opened[0].config).toEqual({
             connectionName: 'Connection fixture',
-            troubleshooterSessionId: result.troubleshooterSessionId,
+            diagnosticsSessionId: result.diagnosticsSessionId,
             feedbackPermitted: true,
         });
         expect(opened[0].context).toMatchObject({
             target: { clusterId: 'fixture' },
             entryPoint: 'contextMenu',
-            webviewName: 'connectivityTroubleshooter',
+            webviewName: 'connectionDiagnostics',
         });
         expect(openAppWebview).toHaveBeenCalledWith(
             expect.objectContaining({
                 title: 'Diagnose: Connection fixture',
-                panelViewType: 'vscode-documentdb-connectivity-troubleshooter',
-                webviewName: 'connectivityTroubleshooter',
+                panelViewType: 'vscode-documentdb-connection-diagnostics',
+                webviewName: 'connectionDiagnostics',
                 viewColumn: vscode.ViewColumn.Active,
                 icon: {
                     light: vscode.Uri.file(
@@ -155,7 +155,7 @@ describe('openConnectionDiagnostics', (): void => {
         expect(session.completedRun).toBeUndefined();
         const second = open('fixture');
         expect(second.panelAction).toBe('created');
-        expect(second.troubleshooterSessionId).not.toBe(first.troubleshooterSessionId);
+        expect(second.diagnosticsSessionId).not.toBe(first.diagnosticsSessionId);
         expect(openAppWebview).toHaveBeenCalledTimes(2);
     });
 
@@ -163,7 +163,7 @@ describe('openConnectionDiagnostics', (): void => {
         const first = open('stable-cluster', 'folder-a/cluster');
         expect(open('stable-cluster', 'folder-b/cluster')).toEqual({
             panelAction: 'focused',
-            troubleshooterSessionId: first.troubleshooterSessionId,
+            diagnosticsSessionId: first.diagnosticsSessionId,
         });
         expect(open('other-stable-cluster', 'folder-a/cluster').panelAction).toBe('created');
         expect(openAppWebview).toHaveBeenCalledTimes(2);

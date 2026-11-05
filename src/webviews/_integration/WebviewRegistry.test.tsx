@@ -15,8 +15,8 @@ const moduleLoads = vi.hoisted(() => ({
     collectionView: vi.fn(() => ({ CollectionView: (): string => 'collectionView' })),
     documentView: vi.fn(() => ({ DocumentView: (): string => 'documentView' })),
     localQuickStart: vi.fn(() => ({ LocalQuickStart: (): string => 'localQuickStart' })),
-    connectivityTroubleshooter: vi.fn(() => ({
-        ConnectionDiagnostics: (): string => 'connectivityTroubleshooter',
+    connectionDiagnostics: vi.fn(() => ({
+        ConnectionDiagnostics: (): string => 'connectionDiagnostics',
     })),
     atlasCredentials: vi.fn(() => ({ AtlasCredentialsView: (): string => 'atlasCredentials' })),
 }));
@@ -25,7 +25,7 @@ vi.mock('../documentdb/clusterDashboard/ClusterDashboard', moduleLoads.clusterDa
 vi.mock('../documentdb/collectionView/CollectionView', moduleLoads.collectionView);
 vi.mock('../documentdb/documentView/documentView', moduleLoads.documentView);
 vi.mock('../documentdb/localQuickStart/LocalQuickStart', moduleLoads.localQuickStart);
-vi.mock('../documentdb/connectionDiagnostics/ConnectionDiagnostics', moduleLoads.connectivityTroubleshooter);
+vi.mock('../documentdb/connectionDiagnostics/ConnectionDiagnostics', moduleLoads.connectionDiagnostics);
 vi.mock('../documentdb/atlasCredentials/AtlasCredentialsView', moduleLoads.atlasCredentials);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -38,7 +38,7 @@ describe('WebviewRegistry', () => {
             | 'documentView'
             | 'localQuickStart'
             | 'atlasCredentials'
-            | 'connectivityTroubleshooter'
+            | 'connectionDiagnostics'
         >();
         expect(Object.keys(WebviewRegistry).sort()).toEqual(Object.keys(moduleLoads).sort());
         for (const load of Object.values(moduleLoads)) {
@@ -50,7 +50,7 @@ describe('WebviewRegistry', () => {
         const root = createRoot(host);
         const loaded = new Set<WebviewName>();
         const names: WebviewName[] = [
-            'connectivityTroubleshooter',
+            'connectionDiagnostics',
             'atlasCredentials',
             'localQuickStart',
             'documentView',

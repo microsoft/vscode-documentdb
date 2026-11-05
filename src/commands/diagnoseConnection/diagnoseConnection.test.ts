@@ -103,7 +103,7 @@ describe('diagnoseConnection', () => {
         vi.mocked(pickTreeNode).mockReset();
         vi.mocked(openConnectionDiagnostics).mockReturnValue({
             panelAction: 'created',
-            troubleshooterSessionId: 'session-id',
+            diagnosticsSessionId: 'session-id',
         });
         vi.spyOn(ClusterItemBase.prototype, 'connect');
         node = new TestClusterItem();
@@ -142,7 +142,7 @@ describe('diagnoseConnection', () => {
             entryPoint,
             sourceView: Views.ConnectionsView,
             panelAction: 'created',
-            troubleshooterSessionId: 'session-id',
+            diagnosticsSessionId: 'session-id',
             journeyCorrelationId: 'journey-id',
         });
 
@@ -209,11 +209,11 @@ describe('diagnoseConnection', () => {
     it('records a focused panel and keeps its session ID', async () => {
         vi.mocked(openConnectionDiagnostics).mockReturnValue({
             panelAction: 'focused',
-            troubleshooterSessionId: 'existing-session',
+            diagnosticsSessionId: 'existing-session',
         });
         await diagnoseConnection(context, node);
         expect(context.telemetry.properties.panelAction).toBe('focused');
-        expect(context.telemetry.properties.troubleshooterSessionId).toBe('existing-session');
+        expect(context.telemetry.properties.diagnosticsSessionId).toBe('existing-session');
         expect(node.getCredentials).not.toHaveBeenCalled();
     });
 
@@ -223,7 +223,7 @@ describe('diagnoseConnection', () => {
         expect(pickTreeNode).toHaveBeenCalledWith(
             expect.objectContaining({
                 leafContextValue: CLUSTER_ITEM_CONTEXT_VALUE,
-                telemetrySource: 'troubleshootConnection',
+                telemetrySource: 'diagnoseConnection',
                 placeHolder: 'Select a connection to diagnose',
             }),
         );
@@ -235,7 +235,7 @@ describe('diagnoseConnection', () => {
             entryPoint: 'commandPalette',
             sourceView: 'commandPalette',
             panelAction: 'created',
-            troubleshooterSessionId: 'session-id',
+            diagnosticsSessionId: 'session-id',
         });
         expect(node.getCredentials).not.toHaveBeenCalled();
     });

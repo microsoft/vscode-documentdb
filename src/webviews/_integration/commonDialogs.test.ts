@@ -10,7 +10,7 @@ import { appRouter, type BaseRouterContext } from './appRouter';
 import { showModalConfirmation } from './commonDialogs';
 import { createCallerFactory } from './trpc';
 
-const context: BaseRouterContext = { dbExperience: API.DocumentDB, webviewName: 'connectivityTroubleshooter' };
+const context: BaseRouterContext = { dbExperience: API.DocumentDB, webviewName: 'connectionDiagnostics' };
 const caller = createCallerFactory(appRouter)(context);
 
 const input = {

@@ -69,7 +69,7 @@ export interface PanelEvent {
 
 export interface ConnectionDiagnosticsConfiguration {
     readonly connectionName: string;
-    readonly troubleshooterSessionId: string;
+    readonly diagnosticsSessionId: string;
     /** Read when the panel opens; the host checks again when Give Feedback is clicked. */
     readonly feedbackPermitted?: boolean;
     /**

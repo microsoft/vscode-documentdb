@@ -324,7 +324,7 @@ describe('contextHints', (): void => {
         expect(explain).toHaveBeenCalledExactlyOnceWith({
             clusterId: 'stable-id',
             error: authError,
-            source: 'troubleshooter',
+            source: 'connectionDiagnostics',
         });
         expect(holder.authError).toBe(authError);
     });
@@ -341,7 +341,7 @@ describe('contextHints', (): void => {
             { status: 'pass', findings: [], facts: { providerId: null } },
         );
         const request = explain.mock.calls[0][0];
-        expect(request).toMatchObject({ clusterId: 'stable-id', source: 'troubleshooter' });
+        expect(request).toMatchObject({ clusterId: 'stable-id', source: 'connectionDiagnostics' });
         expect(request.error).toBeInstanceOf(Error);
         expect((request.error as Error).message).toBe('tcp.refused');
     });

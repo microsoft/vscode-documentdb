@@ -693,7 +693,7 @@ describe('planned diagnostics checks', (): void => {
                 entryPoint: 'contextMenu',
                 runTrigger: 'initial',
                 runIndex: 1,
-                troubleshooterSessionId: 'fixture',
+                diagnosticsSessionId: 'fixture',
                 timeoutProfile: 'default',
                 signal: new AbortController().signal,
                 extraChecks: extra,

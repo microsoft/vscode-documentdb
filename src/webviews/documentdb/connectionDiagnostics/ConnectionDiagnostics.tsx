@@ -278,7 +278,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
     const pendingIdentifiersRef = useRef(false);
     const refreshReportIdentifiers = useCallback(
         (runId: string, hide: boolean): void => {
-            trpcClient.connectivityTroubleshooter.setReportIdentifiers
+            trpcClient.connectionDiagnostics.setReportIdentifiers
                 .mutate({ runId, hideIdentifiers: hide })
                 .catch((error: unknown) => {
                     const message = error instanceof Error ? error.message : String(error);
@@ -322,7 +322,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
             const requestId = crypto.randomUUID();
             requestIdRef.current = requestId;
             pacer.start(sequence);
-            const subscription = trpcClient.connectivityTroubleshooter.run.subscribe(
+            const subscription = trpcClient.connectionDiagnostics.run.subscribe(
                 { timeoutProfile, trigger, requestId },
                 {
                     onData(update: RunUpdate): void {
@@ -346,7 +346,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
     useEffect(() => {
         const subscriptions = subscriptionsRef.current;
         subscribeRun(sequenceRef.current, 'default', 'initial');
-        const events = trpcClient.connectivityTroubleshooter.panelEvents.subscribe(undefined, {
+        const events = trpcClient.connectionDiagnostics.panelEvents.subscribe(undefined, {
             onData(event: PanelEvent): void {
                 // An offer arriving mid-run would push the rows down; the run already answers it.
                 if (event.type === 'offerRerun' && viewRef.current.phase !== 'running') {
@@ -412,7 +412,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
         if (ended || requestId === undefined) {
             return;
         }
-        trpcClient.connectivityTroubleshooter.cancel.mutate({ requestId }).catch(() => {
+        trpcClient.connectionDiagnostics.cancel.mutate({ requestId }).catch(() => {
             // The panel already shows the run as cancelled and ignores its late updates.
         });
     }, [trpcClient, pacer]);
@@ -448,13 +448,13 @@ export const ConnectionDiagnostics = (): JSX.Element => {
             try {
                 if (action === 'showDiagnostics') {
                     setReportError(undefined);
-                    await trpcClient.connectivityTroubleshooter.showDiagnostics.mutate({ runId, hideIdentifiers });
+                    await trpcClient.connectionDiagnostics.showDiagnostics.mutate({ runId, hideIdentifiers });
                     return;
                 }
                 const shareWarningOutcome = await confirmShare(action);
                 if (shareWarningOutcome === 'cancelled') {
                     // Only records the outcome; the host shares nothing and the view stays as it was.
-                    trpcClient.connectivityTroubleshooter[action]
+                    trpcClient.connectionDiagnostics[action]
                         .mutate({ runId, hideIdentifiers, shareWarningOutcome })
                         .catch(() => {
                             // Telemetry only; nothing to tell the user.
@@ -462,7 +462,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
                     return;
                 }
                 setReportError(undefined);
-                await trpcClient.connectivityTroubleshooter[action].mutate({
+                await trpcClient.connectionDiagnostics[action].mutate({
                     runId,
                     hideIdentifiers,
                     ...(shareWarningOutcome ? { shareWarningOutcome } : {}),

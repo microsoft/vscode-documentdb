@@ -44,7 +44,7 @@ const ACTIVATION_SOURCES = [
     'collectionView',
     'atlasCredentials',
     'localQuickStart',
-    'connectivityTroubleshooter',
+    'connectionDiagnostics',
     'helpAndFeedbackView',
     'giveFeedbackCommand',
 ] as const;

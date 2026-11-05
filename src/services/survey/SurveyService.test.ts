@@ -224,7 +224,7 @@ describe('SurveyService', (): void => {
         expect(h.sent('survey.invitationResolved')).toHaveLength(0);
     });
 
-    it.each(['atlasCredentials', 'localQuickStart', 'connectivityTroubleshooter', 'helpAndFeedbackView'] as const)(
+    it.each(['atlasCredentials', 'localQuickStart', 'connectionDiagnostics', 'helpAndFeedbackView'] as const)(
         'attributes %s feedback through activation and form opening',
         async (source): Promise<void> => {
             const h = createHarness();

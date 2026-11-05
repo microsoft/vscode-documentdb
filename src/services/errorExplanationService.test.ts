@@ -70,7 +70,7 @@ describe('ErrorExplanationService', () => {
         ).resolves.toEqual({ providerId: 'k', message: 'from k', identifiers });
     });
 
-    it.each([undefined, 'troubleshooter'] as const)(
+    it.each([undefined, 'connectionDiagnostics'] as const)(
         'records the explanation source and passes it unchanged to providers (source=%s)',
         async (source): Promise<void> => {
             const explain = vi.fn().mockResolvedValue('explained');

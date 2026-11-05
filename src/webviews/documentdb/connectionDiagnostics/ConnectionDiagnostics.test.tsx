@@ -60,7 +60,7 @@ const client = vi.hoisted(() => {
                 openFeedback: mutation(),
                 confirm: { mutate: vi.fn(async (): Promise<{ confirmed: boolean }> => ({ confirmed: true })) },
             },
-            connectivityTroubleshooter: {
+            connectionDiagnostics: {
                 run: {
                     subscribe: vi.fn((input: RunCall['input'], handlers: Handlers<RunUpdate>) => {
                         const unsubscribe = vi.fn();
@@ -91,7 +91,7 @@ vi.mock('@vscode/l10n', () => ({
 vi.mock('@microsoft/vscode-ext-webview/react', () => ({
     useConfiguration: () => ({
         connectionName: 'Orders cluster',
-        troubleshooterSessionId: 'session-1',
+        diagnosticsSessionId: 'session-1',
         feedbackPermitted: client.configuration.feedbackPermitted,
         stepPacing: client.configuration.stepPacing,
     }),
@@ -297,7 +297,7 @@ describe('ConnectionDiagnostics', () => {
         expect(client.runCalls.map((call) => call.input)).toEqual([
             { timeoutProfile: 'default', trigger: 'initial', requestId: anyRequestId },
         ]);
-        expect(client.trpc.connectivityTroubleshooter.panelEvents.subscribe).toHaveBeenCalledTimes(1);
+        expect(client.trpc.connectionDiagnostics.panelEvents.subscribe).toHaveBeenCalledTimes(1);
         expect(host.querySelector('h1')?.textContent).toBe('Connection Diagnostics');
         expect(host.textContent).toContain('Checking the connection…');
         expect(buttons('Re-run')).toHaveLength(0);
@@ -467,7 +467,7 @@ describe('ConnectionDiagnostics', () => {
             ]),
         });
         await click(footerButton('Cancel'));
-        expect(client.trpc.connectivityTroubleshooter.cancel.mutate).toHaveBeenCalledTimes(1);
+        expect(client.trpc.connectionDiagnostics.cancel.mutate).toHaveBeenCalledTimes(1);
         await send({ type: 'rows', runId: 'run-1', rows: connected });
         await send({ type: 'cancelled', runId: 'run-1', rows: connected });
         const card = host.querySelector('#connectivity-result');
@@ -490,7 +490,7 @@ describe('ConnectionDiagnostics', () => {
         expect(first).toEqual(expect.any(String));
         expect(second).toEqual(expect.any(String));
         expect(second).not.toBe(first);
-        expect(client.trpc.connectivityTroubleshooter.cancel.mutate.mock.calls).toEqual([
+        expect(client.trpc.connectionDiagnostics.cancel.mutate.mock.calls).toEqual([
             [{ requestId: first }],
             [{ requestId: second }],
         ]);
@@ -500,14 +500,14 @@ describe('ConnectionDiagnostics', () => {
         await render();
         await finish('run-1');
         await click(buttons('Hide identifiers in the report')[0]);
-        expect(client.trpc.connectivityTroubleshooter.setReportIdentifiers.mutate).toHaveBeenLastCalledWith({
+        expect(client.trpc.connectionDiagnostics.setReportIdentifiers.mutate).toHaveBeenLastCalledWith({
             runId: 'run-1',
             hideIdentifiers: true,
         });
         await click(footerButton('Re-run'));
         await send({ type: 'started', runId: 'run-2', startedAt: Date.now(), rows: pending });
         await click(buttons('Show identifiers in the report')[0]);
-        expect(client.trpc.connectivityTroubleshooter.setReportIdentifiers.mutate).toHaveBeenLastCalledWith({
+        expect(client.trpc.connectionDiagnostics.setReportIdentifiers.mutate).toHaveBeenLastCalledWith({
             runId: 'run-2',
             hideIdentifiers: false,
         });
@@ -518,9 +518,9 @@ describe('ConnectionDiagnostics', () => {
         await finish('run-1');
         await click(footerButton('Re-run'));
         await click(buttons('Hide identifiers in the report')[0]);
-        expect(client.trpc.connectivityTroubleshooter.setReportIdentifiers.mutate).not.toHaveBeenCalled();
+        expect(client.trpc.connectionDiagnostics.setReportIdentifiers.mutate).not.toHaveBeenCalled();
         await send({ type: 'started', runId: 'run-2', startedAt: Date.now(), rows: pending });
-        expect(client.trpc.connectivityTroubleshooter.setReportIdentifiers.mutate).toHaveBeenLastCalledWith({
+        expect(client.trpc.connectionDiagnostics.setReportIdentifiers.mutate).toHaveBeenLastCalledWith({
             runId: 'run-2',
             hideIdentifiers: true,
         });
@@ -531,16 +531,16 @@ describe('ConnectionDiagnostics', () => {
         for (const name of ['Show report', 'Share report', 'Copy report', 'Save report…']) {
             expect(buttons(name)).toHaveLength(0);
         }
-        expect(client.trpc.connectivityTroubleshooter.showDiagnostics.mutate).not.toHaveBeenCalled();
+        expect(client.trpc.connectionDiagnostics.showDiagnostics.mutate).not.toHaveBeenCalled();
         expect(document.querySelector('[role="menu"]')).toBeNull();
-        expect(client.trpc.connectivityTroubleshooter.copyReport.mutate).not.toHaveBeenCalled();
-        expect(client.trpc.connectivityTroubleshooter.saveReport.mutate).not.toHaveBeenCalled();
+        expect(client.trpc.connectionDiagnostics.copyReport.mutate).not.toHaveBeenCalled();
+        expect(client.trpc.connectionDiagnostics.saveReport.mutate).not.toHaveBeenCalled();
         await finish('run-1');
         for (const name of ['Show report', 'Share report']) {
             expect(footerButton(name).getAttribute('aria-disabled')).not.toBe('true');
         }
         await click(footerButton('Show report'));
-        expect(client.trpc.connectivityTroubleshooter.showDiagnostics.mutate).toHaveBeenCalledWith({
+        expect(client.trpc.connectionDiagnostics.showDiagnostics.mutate).toHaveBeenCalledWith({
             runId: 'run-1',
             hideIdentifiers: false,
         });
@@ -557,7 +557,7 @@ describe('ConnectionDiagnostics', () => {
             'The report will include host and identity details. Hide identifiers in the report. Review the report before sharing.',
         );
         await click(hide);
-        expect(client.trpc.connectivityTroubleshooter.setReportIdentifiers.mutate).toHaveBeenLastCalledWith({
+        expect(client.trpc.connectionDiagnostics.setReportIdentifiers.mutate).toHaveBeenLastCalledWith({
             runId: 'run-1',
             hideIdentifiers: true,
         });
@@ -567,17 +567,17 @@ describe('ConnectionDiagnostics', () => {
         expect(buttons('Hide identifiers in the report')).toHaveLength(0);
         expect(buttons('Show identifiers in the report')).toHaveLength(1);
         await click(footerButton('Show report'));
-        expect(client.trpc.connectivityTroubleshooter.showDiagnostics.mutate).toHaveBeenLastCalledWith({
+        expect(client.trpc.connectionDiagnostics.showDiagnostics.mutate).toHaveBeenLastCalledWith({
             runId: 'run-1',
             hideIdentifiers: true,
         });
         await shareReport('Copy report to clipboard');
         await shareReport('Save report to file…');
-        expect(client.trpc.connectivityTroubleshooter.copyReport.mutate).toHaveBeenCalledWith({
+        expect(client.trpc.connectionDiagnostics.copyReport.mutate).toHaveBeenCalledWith({
             runId: 'run-1',
             hideIdentifiers: true,
         });
-        expect(client.trpc.connectivityTroubleshooter.saveReport.mutate).toHaveBeenCalledWith({
+        expect(client.trpc.connectionDiagnostics.saveReport.mutate).toHaveBeenCalledWith({
             runId: 'run-1',
             hideIdentifiers: true,
         });
@@ -589,7 +589,7 @@ describe('ConnectionDiagnostics', () => {
         );
         await shareReport('Copy report to clipboard');
         expect(client.trpc.common.confirm.mutate).toHaveBeenCalledTimes(1);
-        expect(client.trpc.connectivityTroubleshooter.copyReport.mutate).toHaveBeenLastCalledWith({
+        expect(client.trpc.connectionDiagnostics.copyReport.mutate).toHaveBeenLastCalledWith({
             runId: 'run-1',
             hideIdentifiers: false,
             shareWarningOutcome: 'continued',
@@ -607,8 +607,8 @@ describe('ConnectionDiagnostics', () => {
 
     describe('share warning (decision 0040)', () => {
         const confirm = client.trpc.common.confirm.mutate;
-        const copy = client.trpc.connectivityTroubleshooter.copyReport.mutate;
-        const save = client.trpc.connectivityTroubleshooter.saveReport.mutate;
+        const copy = client.trpc.connectionDiagnostics.copyReport.mutate;
+        const save = client.trpc.connectionDiagnostics.saveReport.mutate;
 
         it('warns before Copy and Save with identifiers, naming the action, and shares after Continue', async () => {
             await render();
@@ -707,14 +707,14 @@ describe('ConnectionDiagnostics', () => {
             'Copy report to clipboard',
             'Save report to file…',
         ]);
-        expect(client.trpc.connectivityTroubleshooter.copyReport.mutate).not.toHaveBeenCalled();
-        expect(client.trpc.connectivityTroubleshooter.saveReport.mutate).not.toHaveBeenCalled();
+        expect(client.trpc.connectionDiagnostics.copyReport.mutate).not.toHaveBeenCalled();
+        expect(client.trpc.connectionDiagnostics.saveReport.mutate).not.toHaveBeenCalled();
     });
 
     it('shows nothing for a dismissed save and an inline error for a failed action', async () => {
         await render();
         await finish('run-1');
-        const save = client.trpc.connectivityTroubleshooter.saveReport.mutate;
+        const save = client.trpc.connectionDiagnostics.saveReport.mutate;
         save.mockRejectedValueOnce(
             Object.assign(new Error('Operation cancelled.'), { cause: { cause: { _isUserCancelledError: true } } }),
         );
@@ -738,7 +738,7 @@ describe('ConnectionDiagnostics', () => {
         expect(buttons('Show report')).toHaveLength(1);
         expect(buttons('Share report')).toHaveLength(1);
         await shareReport('Copy report to clipboard');
-        expect(client.trpc.connectivityTroubleshooter.copyReport.mutate).toHaveBeenCalledWith({
+        expect(client.trpc.connectionDiagnostics.copyReport.mutate).toHaveBeenCalledWith({
             runId: 'run-1',
             hideIdentifiers: false,
             shareWarningOutcome: 'continued',
@@ -991,7 +991,7 @@ describe('ConnectionDiagnostics', () => {
         await render();
         await finish('run-1', { outcome: 'failed', result: cardResult('failed') });
         await settleAnnouncements();
-        const copy = client.trpc.connectivityTroubleshooter.copyReport.mutate;
+        const copy = client.trpc.connectionDiagnostics.copyReport.mutate;
         copy.mockRejectedValueOnce(new Error('Clipboard unavailable'));
         await shareReport('Copy report to clipboard');
         await settleAnnouncements();
@@ -1020,7 +1020,7 @@ describe('ConnectionDiagnostics', () => {
         expect(announcements().filter((text) => text === 'Report copied')).toHaveLength(1);
         // A fresh live region, so screen readers hear the repeated message.
         expect(copiedRegion()).not.toBe(first);
-        expect(client.trpc.connectivityTroubleshooter.copyReport.mutate).toHaveBeenCalledTimes(3);
+        expect(client.trpc.connectionDiagnostics.copyReport.mutate).toHaveBeenCalledTimes(3);
     });
 
     it('offers a re-run from a second open only when no run is active', async () => {
@@ -1127,7 +1127,7 @@ describe('ConnectionDiagnostics', () => {
         it('moves focus to Re-run when a report error is dismissed', async () => {
             await render();
             await finish('run-1');
-            client.trpc.connectivityTroubleshooter.copyReport.mutate.mockRejectedValueOnce(new Error('Clipboard busy'));
+            client.trpc.connectionDiagnostics.copyReport.mutate.mockRejectedValueOnce(new Error('Clipboard busy'));
             await shareReport('Copy report to clipboard');
             const dismiss = host.querySelector<HTMLButtonElement>('.fui-MessageBar button[aria-label="Dismiss"]');
             if (!dismiss) throw new Error('Missing report error Dismiss');
@@ -1648,7 +1648,7 @@ describe('ConnectionDiagnostics', () => {
             await click(cancel);
             expect(statuses()).toEqual(['done', 'done', 'done', 'pending', 'pending', 'pending', 'pending', 'pending']);
             expect(host.querySelector('#connectivity-result')?.textContent).toContain('Diagnosis cancelled');
-            expect(client.trpc.connectivityTroubleshooter.cancel.mutate).toHaveBeenCalledTimes(1);
+            expect(client.trpc.connectionDiagnostics.cancel.mutate).toHaveBeenCalledTimes(1);
             expect(document.activeElement).toBe(footerButton('Re-run'));
             // The cancelled run's later updates never show, however long the timers run.
             await send({ type: 'rows', runId: 'run-1', rows: connected });
@@ -1665,7 +1665,7 @@ describe('ConnectionDiagnostics', () => {
             expect(statuses()).toEqual(Array<string>(8).fill('done'));
             expect(host.querySelector('#connectivity-result')?.textContent).toContain('Connection successful');
             expect(buttons('Show report')).toHaveLength(1);
-            expect(client.trpc.connectivityTroubleshooter.cancel.mutate).not.toHaveBeenCalled();
+            expect(client.trpc.connectionDiagnostics.cancel.mutate).not.toHaveBeenCalled();
         });
 
         it('stops pacing on unmount', async () => {

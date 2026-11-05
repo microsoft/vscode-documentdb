@@ -15,7 +15,7 @@ import { type MongoClientOptions } from 'mongodb';
 import { type SrvResolutionSummary } from './srvResolutionSummary';
 import { type SrvResolutionTelemetry } from './srvResolutionTelemetry';
 
-export type SrvResolutionSurface = 'extension' | 'shell' | 'playground' | 'troubleshooter';
+export type SrvResolutionSurface = 'extension' | 'shell' | 'playground' | 'connectionDiagnostics';
 
 export interface PrepareDriverConnectionStringInput {
     readonly connectionString: string;

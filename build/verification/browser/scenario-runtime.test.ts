@@ -150,13 +150,13 @@ describe('L2-dev layout assertions', (): void => {
                 toJSON: (): object => ({}),
             };
         });
-        const route = parseScenarioRoute('/connectivityTroubleshooter/default/dark');
+        const route = parseScenarioRoute('/connectionDiagnostics/default/dark');
         if (!route) throw new Error('Missing test route');
         window.__harnessErrors = [];
         window.__harnessCalls = [];
         window.__scenario = {
             route,
-            data: { ...scenarios.connectivityTroubleshooter.default, steps: [], assertions },
+            data: { ...scenarios.connectionDiagnostics.default, steps: [], assertions },
             check: (): void => {},
         };
         document.documentElement.dataset.ready = 'true';

@@ -293,7 +293,7 @@ describe('EntraErrorExplainer', () => {
         expect(message).not.toContain('secret-token');
     });
 
-    it.each([undefined, 'troubleshooter'] as const)(
+    it.each([undefined, 'connectionDiagnostics'] as const)(
         'tags classification telemetry and output only when a source is set (source=%s)',
         async (source): Promise<void> => {
             await provider.explain({ clusterId, error: 'AADSTS65002: Preauthorization required', source });

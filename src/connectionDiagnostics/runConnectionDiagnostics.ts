@@ -55,7 +55,7 @@ export interface RunConnectionDiagnosticsOptions {
     readonly entryPoint: DiagnosticsEntryPoint;
     readonly runTrigger: 'initial' | 'rerun';
     readonly runIndex: number;
-    readonly troubleshooterSessionId: string;
+    readonly diagnosticsSessionId: string;
     readonly timeoutProfile: TimeoutProfile;
     readonly signal: AbortSignal;
     readonly onEvent?: (event: DiagnosticsEvent<FindingCode>) => void;
@@ -181,7 +181,7 @@ export async function runConnectionDiagnostics(
     const trace = new DiagnosticsOutputTrace(runId);
     trace.started(options.entryPoint, options.runTrigger, options.timeoutProfile);
     const result = await callWithTelemetryAndErrorHandling(
-        'connectivityTroubleshooter.run',
+        'diagnoseConnection.run',
         async (context): Promise<DiagnosticsRun<FindingCode>> => {
             configureDiagnosticsTelemetry(context);
             applyRunIdentity(context, options, runId);

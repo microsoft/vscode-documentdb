@@ -24,30 +24,30 @@ const panels = new Map<string, PanelController>();
 export function openConnectionDiagnostics(options: {
     target: DiagnosticsTarget;
     entryPoint: DiagnosticsEntryPoint;
-}): { panelAction: 'created' | 'focused'; troubleshooterSessionId: string } {
+}): { panelAction: 'created' | 'focused'; diagnosticsSessionId: string } {
     const { target, entryPoint } = options;
     const existing = panels.get(target.clusterId);
     if (existing) {
         existing.controller.panel.reveal();
         existing.session.offerRerun();
-        return { panelAction: 'focused', troubleshooterSessionId: existing.session.troubleshooterSessionId };
+        return { panelAction: 'focused', diagnosticsSessionId: existing.session.diagnosticsSessionId };
     }
 
     const session = new DiagnosticsPanelSession(randomUUID());
     const context: RouterContext = {
         dbExperience: API.DocumentDB,
-        webviewName: 'connectivityTroubleshooter',
+        webviewName: 'connectionDiagnostics',
         target,
         entryPoint,
         session,
     };
     const controller = openAppWebview<ConnectionDiagnosticsConfiguration>({
         title: vscode.l10n.t('Diagnose: {0}', target.displayName),
-        webviewName: 'connectivityTroubleshooter',
-        panelViewType: 'vscode-documentdb-connectivity-troubleshooter',
+        webviewName: 'connectionDiagnostics',
+        panelViewType: 'vscode-documentdb-connection-diagnostics',
         config: {
             connectionName: target.displayName,
-            troubleshooterSessionId: session.troubleshooterSessionId,
+            diagnosticsSessionId: session.diagnosticsSessionId,
             feedbackPermitted: isFeedbackPermitted(),
         },
         context,
@@ -72,5 +72,5 @@ export function openConnectionDiagnostics(options: {
         session.dispose();
         panels.delete(target.clusterId);
     });
-    return { panelAction: 'created', troubleshooterSessionId: session.troubleshooterSessionId };
+    return { panelAction: 'created', diagnosticsSessionId: session.diagnosticsSessionId };
 }

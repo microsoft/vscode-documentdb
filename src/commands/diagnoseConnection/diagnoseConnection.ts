@@ -38,7 +38,7 @@ export async function diagnoseConnection(
     if (!node) {
         const selected = await pickTreeNode({
             leafContextValue: CLUSTER_ITEM_CONTEXT_VALUE,
-            telemetrySource: 'troubleshootConnection',
+            telemetrySource: 'diagnoseConnection',
             placeHolder: vscode.l10n.t('Select a connection to diagnose'),
             provider: {
                 async getChildren(element?: TreeElement): Promise<TreeElement[]> {
@@ -78,5 +78,5 @@ export async function diagnoseConnection(
     };
     const result = openConnectionDiagnostics({ target, entryPoint });
     context.telemetry.properties.panelAction = result.panelAction;
-    context.telemetry.properties.troubleshooterSessionId = result.troubleshooterSessionId;
+    context.telemetry.properties.diagnosticsSessionId = result.diagnosticsSessionId;
 }
