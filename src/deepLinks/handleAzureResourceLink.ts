@@ -44,6 +44,8 @@ export async function handleAzureResourceLinkRequest(
 
     if (showUrlHandlingConfirmations) {
         const detail = [
+            vscode.l10n.t('A link wants to open this Azure resource in VS Code.'),
+            '',
             vscode.l10n.t('Resource: {0} ({1})', link.name, kindLabel),
             vscode.l10n.t('Resource group: {0}', link.resourceGroup),
             vscode.l10n.t('Subscription ID: {0}', link.subscriptionId),
@@ -75,7 +77,7 @@ export async function handleAzureResourceLinkRequest(
         const openButton = vscode.l10n.t('Open');
         ext.outputChannel.trace('[DeepLink] Showing Azure confirmation');
         const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('You clicked a link that wants to open an Azure resource in VS Code.'),
+            vscode.l10n.t('Open Azure resource?'),
             { modal: true, detail: detail.join('\n') },
             openButton,
         );
@@ -114,7 +116,7 @@ export async function handleAzureResourceLinkRequest(
 
     context.telemetry.properties.failureStage = 'confirmFilterChanges';
     if (showUrlHandlingConfirmations && visibilityChangesNeeded) {
-        const detail: string[] = [];
+        const detail = [vscode.l10n.t('To show {0}, the extension needs to change your filters:', displayName)];
         if (changes.showProvider) {
             detail.push(
                 vscode.l10n.t('• The {0} discovery provider will be shown in the Discovery view.', kindLabel),
@@ -141,7 +143,7 @@ export async function handleAzureResourceLinkRequest(
         const changeFiltersButton = vscode.l10n.t('Change filters and open');
         ext.outputChannel.trace('[DeepLink] Showing filter change confirmation');
         const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('To show {0}, the extension needs to change your filters.', displayName),
+            vscode.l10n.t('Change filters?'),
             { modal: true, detail: detail.join('\n') },
             changeFiltersButton,
         );

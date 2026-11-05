@@ -608,13 +608,13 @@ describe('globalUriHandler — saved connection open target', () => {
 
             expect(error).toBeUndefined();
             expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
-                'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+                'Open connection?',
                 {
                     modal: true,
                     detail:
+                        'A link wants to open a DocumentDB connection in VS Code.\n\n' +
                         `Connection: Production\n${database ? 'Database: db\n' : ''}Opens: Shell\n\n` +
-                        'You might be asked for credentials to establish the connection.\n' +
-                        'Do you want to continue?\n\n' +
+                        'You might be asked for credentials to establish the connection.\n\n' +
                         'Note: You can disable these URL handling confirmations in the extension settings.',
                 },
                 'Yes, open connection',
@@ -751,15 +751,15 @@ describe('globalUriHandler — connection confirmation', () => {
         await runHandler('/connect', `connectionString=${connectionString}&collection=orders`);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            'Add connection?',
             {
                 modal: true,
                 detail:
+                    'A link wants to open a DocumentDB connection in VS Code.\n\n' +
                     'Connection: user@alpha.example:27017\n' +
                     'Database: sales\n' +
                     'Collection: orders\n\n' +
-                    'A new connection will be added to your Connections View.\n' +
-                    'Do you want to continue?',
+                    'A new connection will be added to your Connections View.',
             },
             'Yes, continue',
         );
@@ -780,15 +780,89 @@ describe('globalUriHandler — connection confirmation', () => {
         await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}&collection=orders`);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
-            expect.objectContaining({
+            'Open connection?',
+            {
                 modal: true,
-                detail: expect.stringContaining('Connection: Production\nDatabase: sales\nCollection: orders\n\n'),
-            }),
+                detail: [
+                    'A link wants to open a DocumentDB connection in VS Code.',
+                    '',
+                    'Connection: Production',
+                    'Database: sales',
+                    'Collection: orders',
+                    '',
+                    'You might be asked for credentials to establish the connection.',
+                    '',
+                    'Note: You can disable these URL handling confirmations in the extension settings.',
+                ].join('\n'),
+            },
             'Yes, open connection',
         );
         expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain('secret');
     });
+
+    it.each([undefined, 'Production'])(
+        'identifies the same target in the open and Collection View dialogs with saved name %s',
+        async (savedName): Promise<void> => {
+            const connectionString = 'mongodb://alpha.example:27017/sales';
+            if (savedName) {
+                mockGetAllConnections.mockResolvedValue([
+                    { id: 'existing-id', name: savedName, secrets: { connectionString } },
+                ]);
+            } else {
+                (vscode.window.showInformationMessage as Mock).mockResolvedValueOnce('Yes, continue');
+            }
+            (vscode.window.showInformationMessage as Mock)
+                .mockResolvedValueOnce('Yes, open connection')
+                .mockResolvedValueOnce(undefined);
+            vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue({
+                id: 'collection-node',
+                getTreeItem: (): vscode.TreeItem => ({ label: 'orders' }),
+            });
+
+            const error = await runHandler(
+                '/connect',
+                `connectionString=${encodeURIComponent(connectionString)}&collection=orders`,
+            );
+
+            expect(error).toBeUndefined();
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                'Open connection?',
+                {
+                    modal: true,
+                    detail: [
+                        savedName
+                            ? 'A link wants to open a DocumentDB connection in VS Code.'
+                            : 'The connection will now be opened in the Connections View.',
+                        '',
+                        `Connection: ${savedName ?? 'alpha.example:27017'}`,
+                        'Database: sales',
+                        'Collection: orders',
+                        '',
+                        'You might be asked for credentials to establish the connection.',
+                        '',
+                        'Note: You can disable these URL handling confirmations in the extension settings.',
+                    ].join('\n'),
+                },
+                'Yes, open connection',
+            );
+            expect(vscode.window.showInformationMessage).toHaveBeenLastCalledWith(
+                'Open Collection View?',
+                {
+                    modal: true,
+                    detail: [
+                        `Connection: ${savedName ?? 'alpha.example:27017'}`,
+                        'Database: sales',
+                        'Collection: orders',
+                        '',
+                        'Note: You can disable these URL handling confirmations in the extension settings.',
+                    ].join('\n'),
+                },
+                'Yes, open Collection View',
+            );
+            expect(lastTelemetry.userCancelledAtStep).toBe('CollectionView');
+            expect(openCollectionViewInternal).not.toHaveBeenCalled();
+        },
+    );
 });
 
 /** The item passed to `ConnectionStorageService.save`, or `undefined` when nothing was saved. */
@@ -834,11 +908,17 @@ describe('globalUriHandler — TLS exception requested by a link', () => {
         await runHandler('/connect', `connectionString=${localTlsBypass}`);
 
         expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-            'This link asks to turn off TLS certificate validation.',
-            expect.objectContaining({
+            'Turn off certificate validation?',
+            {
                 modal: true,
-                detail: expect.stringContaining('Connection: localhost:10260'),
-            }),
+                detail: [
+                    'This link asks to turn off TLS certificate validation.',
+                    '',
+                    'Connection: localhost:10260',
+                    '',
+                    'Without certificate validation, the identity of the server is not verified. Only turn it off for a local emulator or test instance you trust.',
+                ].join('\n'),
+            },
             'Turn off validation',
             'Keep validation on',
         );
@@ -893,7 +973,7 @@ describe('globalUriHandler — TLS exception requested by a link', () => {
         await runHandler('/connect', `connectionString=${connectionString}`);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            'Add connection?',
             expect.objectContaining({
                 detail: expect.stringContaining(
                     'This link asked to turn off TLS certificate validation. The request was ignored, and certificate validation stays on.',
@@ -952,7 +1032,7 @@ describe('globalUriHandler — URL handling confirmations disabled', () => {
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            'Add connection?',
             expect.objectContaining({
                 modal: true,
                 detail: expect.stringContaining('Connection: user@alpha.example:27017\nDatabase: sales'),

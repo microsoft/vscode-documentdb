@@ -177,10 +177,12 @@ describe('handleAzureResourceLinkRequest', (): void => {
 
         expect(vscode.window.showInformationMessage).toHaveBeenNthCalledWith(
             1,
-            'You clicked a link that wants to open an Azure resource in VS Code.',
+            'Open Azure resource?',
             {
                 modal: true,
                 detail: [
+                    'A link wants to open this Azure resource in VS Code.',
+                    '',
                     'Resource: my-resource (Azure DocumentDB)',
                     'Resource group: my-group',
                     'Subscription ID: subscription-id',
@@ -195,10 +197,11 @@ describe('handleAzureResourceLinkRequest', (): void => {
         );
         expect(vscode.window.showInformationMessage).toHaveBeenNthCalledWith(
             2,
-            'To show My-Resource, the extension needs to change your filters.',
+            'Change filters?',
             {
                 modal: true,
                 detail: [
+                    'To show My-Resource, the extension needs to change your filters:',
                     '• The Azure DocumentDB discovery provider will be shown in the Discovery view.',
                     '• Tenant tenant-id will no longer be hidden by your tenant filter.',
                     '• Subscription My subscription will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
@@ -220,6 +223,8 @@ describe('handleAzureResourceLinkRequest', (): void => {
             {
                 modal: true,
                 detail: [
+                    'A link wants to open this Azure resource in VS Code.',
+                    '',
                     'Resource: my-resource (Azure DocumentDB)',
                     'Resource group: my-group',
                     'Subscription ID: subscription-id',

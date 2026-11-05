@@ -54,8 +54,8 @@ export async function resolveAzureSubscription(
         const signInButton = vscode.l10n.t('Sign in');
         ext.outputChannel.trace('[DeepLink] Showing Azure sign-in confirmation');
         const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('Sign in to Azure to open {0}.', request.resourceName),
-            { modal: true },
+            vscode.l10n.t('Sign in'),
+            { modal: true, detail: vscode.l10n.t('Sign in to Azure to open {0}.', request.resourceName) },
             signInButton,
         );
         ext.outputChannel.trace(`[DeepLink] Azure sign-in confirmation: ${choice === signInButton ? 'accepted' : 'dismissed'}`);
@@ -93,10 +93,16 @@ export async function resolveAzureSubscription(
         ext.outputChannel.trace('[DeepLink] Tenant sign-in offered');
         const signInButton = vscode.l10n.t('Sign in to tenant');
         const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('None of your signed-in Azure accounts can access subscription {0}.', request.subscriptionId),
+            vscode.l10n.t('Sign in to tenant'),
             {
                 modal: true,
-                detail: vscode.l10n.t('The link names tenant {0}. Sign in to that tenant to continue.', request.tenantId),
+                detail: [
+                    vscode.l10n.t(
+                        'None of your signed-in Azure accounts can access subscription {0}.',
+                        request.subscriptionId,
+                    ),
+                    vscode.l10n.t('The link names tenant {0}. Sign in to that tenant to continue.', request.tenantId),
+                ].join('\n'),
             },
             signInButton,
         );

@@ -469,6 +469,8 @@ async function handleConnectionStringRequest(
         // user seeing its target, so this prompt is shown even when URL handling confirmations are
         // disabled. The setting only skips the follow-up prompts and links to saved connections.
         const detail = [
+            l10n.t('A link wants to open a DocumentDB connection in VS Code.'),
+            '',
             ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
             ...(tlsBypassRequested && !tlsBypassEligible
                 ? [
@@ -480,11 +482,10 @@ async function handleConnectionStringRequest(
                 : []),
             '',
             l10n.t('A new connection will be added to your Connections View.'),
-            l10n.t('Do you want to continue?'),
         ].join('\n');
         ext.outputChannel.trace('[DeepLink] Showing new connection confirmation');
         const connectionConfirmation = await vscode.window.showInformationMessage(
-            l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.'),
+            l10n.t('Add connection?'),
             { modal: true, detail },
             l10n.t('Yes, continue'),
         );
@@ -504,10 +505,12 @@ async function handleConnectionStringRequest(
             const keepOn = l10n.t('Keep validation on');
             ext.outputChannel.trace('[DeepLink] Showing TLS confirmation');
             const tlsChoice = await vscode.window.showWarningMessage(
-                l10n.t('This link asks to turn off TLS certificate validation.'),
+                l10n.t('Turn off certificate validation?'),
                 {
                     modal: true,
                     detail: [
+                        l10n.t('This link asks to turn off TLS certificate validation.'),
+                        '',
                         ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
                         '',
                         l10n.t(
@@ -582,18 +585,19 @@ async function handleConnectionStringRequest(
             targetDetails.push(l10n.t('Opens: {0}', surface));
         }
         const detail = [
+            existingDuplicateConnection
+                ? l10n.t('A link wants to open a DocumentDB connection in VS Code.')
+                : l10n.t('The connection will now be opened in the Connections View.'),
+            '',
             ...targetDetails,
             '',
             l10n.t('You might be asked for credentials to establish the connection.'),
-            l10n.t('Do you want to continue?'),
             '',
             l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
         ].join('\n');
         ext.outputChannel.trace('[DeepLink] Showing reveal connection confirmation');
         const revealConfirmation = await vscode.window.showInformationMessage(
-            existingDuplicateConnection
-                ? l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.')
-                : l10n.t('The connection will now be opened in the Connections View.'),
+            l10n.t('Open connection?'),
             { modal: true, detail },
             l10n.t('Yes, open connection'),
         );
@@ -682,10 +686,18 @@ async function handleConnectionStringRequest(
         if (showUrlHandlingConfirmations) {
             ext.outputChannel.trace('[DeepLink] Showing Collection View confirmation');
             const collectionViewConfirmation = await vscode.window.showInformationMessage(
-                l10n.t('Would you like to open the Collection View?'),
+                l10n.t('Open Collection View?'),
                 {
                     modal: true,
-                    detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+                    detail: [
+                        ...formatConnectionTargetDetails(
+                            existingDuplicateConnection?.name ?? newConnectionLabel,
+                            selectedDatabase,
+                            params.collection,
+                        ),
+                        '',
+                        l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+                    ].join('\n'),
                 },
                 l10n.t('Yes, open Collection View'),
             );

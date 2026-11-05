@@ -85,8 +85,8 @@ describe('resolveAzureSubscription', (): void => {
         expect(DiscoveryService.getProvider).toHaveBeenCalledWith(request.providerId);
         expect(azureSubscriptionProvider.isSignedIn).toHaveBeenCalledWith();
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'Sign in to Azure to open linked-resource.',
-            { modal: true },
+            'Sign in',
+            { modal: true, detail: 'Sign in to Azure to open linked-resource.' },
             'Sign in',
         );
         expect(azureSubscriptionProvider.signIn).toHaveBeenCalledWith();
@@ -185,10 +185,13 @@ describe('resolveAzureSubscription', (): void => {
         await expect(resolveAzureSubscription(context, { ...request, tenantId: 'TENANT-ID' })).resolves.toBe(found);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
-            'None of your signed-in Azure accounts can access subscription Subscription-ID.',
+            'Sign in to tenant',
             {
                 modal: true,
-                detail: 'The link names tenant TENANT-ID. Sign in to that tenant to continue.',
+                detail: [
+                    'None of your signed-in Azure accounts can access subscription Subscription-ID.',
+                    'The link names tenant TENANT-ID. Sign in to that tenant to continue.',
+                ].join('\n'),
             },
             'Sign in to tenant',
         );
