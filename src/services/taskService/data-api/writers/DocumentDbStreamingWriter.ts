@@ -21,6 +21,7 @@ import {
     type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
+    type StreamingWriterSettings,
 } from '../types';
 import { StreamingDocumentWriter } from './StreamingDocumentWriter';
 
@@ -64,8 +65,9 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         private readonly client: ClustersClient,
         databaseName: string,
         collectionName: string,
+        settings?: StreamingWriterSettings,
     ) {
-        super(databaseName, collectionName, createExtensionDataTransferOptions());
+        super(databaseName, collectionName, { ...createExtensionDataTransferOptions(), settings });
     }
 
     // =================================

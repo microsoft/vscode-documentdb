@@ -10,6 +10,7 @@
  */
 
 import { type TaskTelemetryContext } from '../taskHost';
+import { type DataTransferOptions } from './dataTransferHost';
 
 // =================================
 // PUBLIC INTERFACES
@@ -30,6 +31,44 @@ export interface DocumentDetails {
      * For DocumentDB, this would typically be a BSON document.
      */
     documentContent: unknown;
+}
+
+/**
+ * Batch sizes and growth for one streaming writer mode.
+ */
+export interface ModeConfig {
+    initialBatchSize: number;
+    maxBatchSize: number;
+    growthFactor: number;
+}
+
+/**
+ * Optional overrides for streaming writer batching, retry and memory estimation.
+ */
+export interface StreamingWriterSettings {
+    batching?: {
+        startMode?: 'fast' | 'ru-limited';
+        fast?: Partial<ModeConfig>;
+        ruLimited?: Partial<ModeConfig>;
+        minBatchSize?: number;
+        bufferMemoryLimitMB?: number;
+    };
+    retry?: {
+        maxAttemptsWithoutProgress?: number;
+        baseDelayMs?: number;
+        multiplier?: number;
+        maxDelayMs?: number;
+        jitterFraction?: number;
+    };
+    estimateDocumentSize?: (doc: DocumentDetails) => number;
+}
+
+/**
+ * Adapter defaults are applied before caller settings.
+ */
+export interface StreamingWriterOptions extends DataTransferOptions {
+    adapterDefaults?: StreamingWriterSettings;
+    settings?: StreamingWriterSettings;
 }
 
 /**

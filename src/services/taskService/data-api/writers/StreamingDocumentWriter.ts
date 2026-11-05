@@ -5,7 +5,6 @@
 
 import { type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
 import {
-    type DataTransferOptions,
     type DataTransferStrings,
     defaultDataTransferStrings,
     noopDataTransferLogger,
@@ -23,9 +22,15 @@ import {
     type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
+    type StreamingWriterOptions,
     type StreamWriteResult,
 } from '../types';
 import { BatchSizeAdapter } from './BatchSizeAdapter';
+import {
+    computeRetryDelay,
+    type ResolvedStreamingWriterSettings,
+    resolveStreamingWriterSettings,
+} from './streamingWriterSettings';
 import { WriteStats } from './WriteStats';
 
 /**
@@ -103,6 +108,11 @@ export class StreamingWriterError extends Error {
  *
  * Provides integrated buffering, adaptive batching, retry logic, and progress reporting
  * for high-volume document write operations.
+ *
+ * Batching, memory estimation and retry backoff are configurable through StreamingWriterSettings.
+ * Defaults start at 500 documents in fast mode, buffer up to 24 MB, and retry up to 10 times
+ * without progress using 100 ms exponential backoff (×2, capped at 5 s, ±30% jitter).
+ * Sequence diagrams and trace output below illustrate these defaults.
  *
  * ## Key Features
  *
@@ -268,13 +278,18 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
 
     private readonly logger: TaskLogger;
     private readonly strings: DataTransferStrings;
+    private readonly settings: ResolvedStreamingWriterSettings;
 
-    protected constructor(databaseName: string, collectionName: string, options?: DataTransferOptions) {
+    protected constructor(databaseName: string, collectionName: string, options?: StreamingWriterOptions) {
         this.databaseName = databaseName;
         this.collectionName = collectionName;
         this.logger = options?.logger ?? noopDataTransferLogger;
         this.strings = { ...defaultDataTransferStrings, ...options?.strings };
-        this.batchSizeAdapter = new BatchSizeAdapter(undefined, { logger: this.logger, strings: this.strings });
+        this.settings = resolveStreamingWriterSettings(options?.adapterDefaults, options?.settings);
+        this.batchSizeAdapter = new BatchSizeAdapter(this.settings.batching, {
+            logger: this.logger,
+            strings: this.strings,
+        });
     }
 
     // =================================
@@ -484,12 +499,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * Estimates document memory usage in bytes.
      */
     private estimateDocumentMemory(document: DocumentDetails): number {
-        try {
-            const jsonString = JSON.stringify(document.documentContent);
-            return jsonString.length * 2; // UTF-16 encoding
-        } catch {
-            return 1024; // 1KB fallback
-        }
+        return this.settings.estimateDocumentSize(document);
     }
 
     // =================================
@@ -631,7 +641,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     ): Promise<StrategyBatchResult<TDocumentId> | null> {
         let currentBatch = batch;
         let attempt = 0;
-        const maxAttempts = 10;
+        const maxAttempts = this.settings.retry.maxAttemptsWithoutProgress;
 
         // For Skip strategy: pre-filter conflicts ONCE before retry loop
         if (strategy === ConflictResolutionStrategy.Skip) {
@@ -755,20 +765,11 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     /**
      * Delays before retry with exponential backoff and jitter.
      *
-     * Uses ±30% jitter to prevent thundering herd when multiple clients
+     * Uses configurable jitter (±30% by default) to prevent thundering herd when multiple clients
      * are retrying simultaneously against the same server.
      */
     private async retryDelay(attempt: number, abortSignal?: AbortSignal): Promise<void> {
-        const baseDelay = 100; // ms
-        const maxDelay = 5000; // ms
-        const jitterRange = 0.3; // ±30% jitter
-
-        // Calculate base exponential delay
-        const exponentialDelay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-
-        // Apply jitter: multiply by random factor in range [1-jitter, 1+jitter]
-        const jitterFactor = 1 + (Math.random() * 2 - 1) * jitterRange;
-        const delay = Math.round(exponentialDelay * jitterFactor);
+        const delay = computeRetryDelay(attempt, this.settings.retry);
 
         await new Promise<void>((resolve) => {
             const timeout = setTimeout(resolve, delay);
