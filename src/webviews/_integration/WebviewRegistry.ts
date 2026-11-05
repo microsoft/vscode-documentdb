@@ -37,7 +37,7 @@ export const WebviewRegistry = {
         })),
     ),
     connectivityTroubleshooter: React.lazy(() =>
-        import('../documentdb/connectivityTroubleshooter/ConnectivityTroubleshooter').then((module) => ({
+        import('../documentdb/connectionDiagnostics/ConnectionDiagnostics').then((module) => ({
             default: module.ConnectivityTroubleshooter,
         })),
     ),

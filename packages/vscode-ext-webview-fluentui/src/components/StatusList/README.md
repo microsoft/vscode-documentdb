@@ -384,7 +384,7 @@ const TlsDetails = ({ host, protocol, issuer, warning }: TlsDetailsProps): JSX.E
 
 For a complete consumer (messages for findings, sections per host, facts with code values, value
 lists and secondary notes), see the DocumentDB extension's Diagnose connection panel,
-[`TroubleshooterRowDetails.tsx`](https://github.com/microsoft/vscode-documentdb/blob/main/src/webviews/documentdb/connectivityTroubleshooter/TroubleshooterRowDetails.tsx).
+[`DiagnosticsRowDetails.tsx`](https://github.com/microsoft/vscode-documentdb/blob/main/src/webviews/documentdb/connectionDiagnostics/DiagnosticsRowDetails.tsx).
 
 ## Accessibility
 

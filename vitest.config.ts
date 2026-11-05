@@ -142,8 +142,8 @@ export default defineConfig({
             },
             {
                 test: {
-                    name: 'documentdb-js-connectivity-troubleshooter',
-                    root: packageRoot('documentdb-js-connectivity-troubleshooter'),
+                    name: 'documentdb-js-connection-diagnostics',
+                    root: packageRoot('documentdb-js-connection-diagnostics'),
                     testTimeout,
                     pool,
                     isolate,

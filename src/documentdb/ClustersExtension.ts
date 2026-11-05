@@ -86,7 +86,7 @@ import { revealView } from '../commands/revealView/revealView';
 import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
 import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
 import { showWorkerStats } from '../commands/showWorkerStats/showWorkerStats';
-import { troubleshootConnection } from '../commands/troubleshootConnection/troubleshootConnection';
+import { troubleshootConnection } from '../commands/diagnoseConnection/diagnoseConnection';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';

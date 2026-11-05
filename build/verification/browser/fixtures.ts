@@ -13,8 +13,8 @@ import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegi
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
 import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
-import { type ConnectivityTroubleshooterConfiguration } from '../../../src/webviews/documentdb/connectivityTroubleshooter/connectivityTroubleshooterTypes';
-import { panelRowIds } from '../../../src/webviews/documentdb/connectivityTroubleshooter/panelTypes';
+import { type ConnectivityTroubleshooterConfiguration } from '../../../src/webviews/documentdb/connectionDiagnostics/connectionDiagnosticsTypes';
+import { panelRowIds } from '../../../src/webviews/documentdb/connectionDiagnostics/panelTypes';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
 import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';

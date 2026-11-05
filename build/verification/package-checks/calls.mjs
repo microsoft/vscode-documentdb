@@ -132,8 +132,8 @@ export const allChecks = {
         return 'rewriteSrvUri rewrote SRV and TXT records; resolver functions exported';
     },
 
-    '@documentdb-js/connectivity-troubleshooter': async (load) => {
-        const m = await load('@documentdb-js/connectivity-troubleshooter');
+    '@documentdb-js/connection-diagnostics': async (load) => {
+        const m = await load('@documentdb-js/connection-diagnostics');
         assert.ok(m.builtInFindingCodes.includes('tcp.refused'));
         assert.equal(m.isBuiltInFindingCode('auth.failed'), false);
         assert.equal(m.resolveTimeouts().runTimeoutMs, 300000);

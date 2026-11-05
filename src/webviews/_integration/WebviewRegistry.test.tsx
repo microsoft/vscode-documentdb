@@ -25,7 +25,7 @@ vi.mock('../documentdb/clusterDashboard/ClusterDashboard', moduleLoads.clusterDa
 vi.mock('../documentdb/collectionView/CollectionView', moduleLoads.collectionView);
 vi.mock('../documentdb/documentView/documentView', moduleLoads.documentView);
 vi.mock('../documentdb/localQuickStart/LocalQuickStart', moduleLoads.localQuickStart);
-vi.mock('../documentdb/connectivityTroubleshooter/ConnectivityTroubleshooter', moduleLoads.connectivityTroubleshooter);
+vi.mock('../documentdb/connectionDiagnostics/ConnectionDiagnostics', moduleLoads.connectivityTroubleshooter);
 vi.mock('../documentdb/atlasCredentials/AtlasCredentialsView', moduleLoads.atlasCredentials);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
