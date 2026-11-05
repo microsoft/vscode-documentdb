@@ -8,7 +8,7 @@ import { MongoServerError, type MongoClient } from 'mongodb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
-import { type TroubleshooterSetup } from '../input';
+import { type DiagnosticsSetup } from '../input';
 import { type FindingCode } from '../types';
 import { createServerFactsCheck } from './serverFacts';
 
@@ -37,7 +37,7 @@ function fixture(options: FixtureOptions = {}): {
     db: ReturnType<typeof vi.fn>;
 } {
     const input = { connectionString: options.uri ?? 'mongodb://private.example:27017/' };
-    const setup: TroubleshooterSetup = {
+    const setup: DiagnosticsSetup = {
         input,
         chosenAuthMethod: undefined,
         credentialState: 'available',
@@ -113,7 +113,7 @@ function fixture(options: FixtureOptions = {}): {
                 run: async (): Promise<CheckOutcome<FindingCode>> => ({ status: 'pass', facts: {}, findings: [] }),
             },
             createServerFactsCheck(
-                (): TroubleshooterSetup => setup,
+                (): DiagnosticsSetup => setup,
                 (): RunOwnedClient => holder,
             ),
         ],

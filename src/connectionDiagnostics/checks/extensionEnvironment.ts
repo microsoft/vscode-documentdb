@@ -14,9 +14,9 @@ import { ext } from '../../extensionVariables';
 import { detectDockerHostEnvironment } from '../../services/localQuickStart/DockerReadinessService';
 import { type FindingCode } from '../types';
 
-export type TroubleshooterRemoteKind = 'local' | 'wsl' | 'ssh' | 'devContainer' | 'codespaces' | 'otherRemote';
+export type DiagnosticsRemoteKind = 'local' | 'wsl' | 'ssh' | 'devContainer' | 'codespaces' | 'otherRemote';
 
-export function getTroubleshooterRemoteKind(): TroubleshooterRemoteKind {
+export function getDiagnosticsRemoteKind(): DiagnosticsRemoteKind {
     const environment = detectDockerHostEnvironment(process.platform, vscode.env.remoteName, process.env);
     switch (environment) {
         case 'wsl':
@@ -70,7 +70,7 @@ export function createExtensionEnvironmentCheck(): Check<RunContext, FindingCode
         id: 'extensionEnvironment',
         scope: 'run',
         async run(): Promise<CheckOutcome<FindingCode>> {
-            const remoteKind = getTroubleshooterRemoteKind();
+            const remoteKind = getDiagnosticsRemoteKind();
             const proxy = vscode.workspace.getConfiguration('http').get<unknown>('proxy');
             return {
                 status: 'pass',

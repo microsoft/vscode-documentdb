@@ -16,8 +16,8 @@ import { NoAuthHandler } from './NoAuthHandler';
 export { AuthInputUnavailableError, type AuthCallerPolicy, type AuthPhaseObserver } from './authCallerPolicy';
 
 /**
- * Builds the auth handler for a method. Ordinary connects pass `{ interactive: true }`; the
- * connectivity troubleshooter passes `{ interactive: false }` so no sign-in UI is ever opened.
+ * Builds the auth handler for a method. Ordinary connects pass `{ interactive: true }`; connection
+ * diagnostics pass `{ interactive: false }` so no sign-in UI is ever opened.
  */
 export function createAuthHandler(
     authMethod: AuthMethodId,

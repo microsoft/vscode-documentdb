@@ -15,19 +15,19 @@ import {
     type EphemeralClusterCredentials,
 } from '../../tree/documentdb/ClusterItemBase';
 import { type DiagnosticCredentialRead } from '../../tree/documentdb/diagnosticCredentialRead';
-import { type TroubleshooterEntryPoint, type TroubleshootTarget } from '../../connectionDiagnostics/types';
+import { type DiagnosticsEntryPoint, type DiagnosticsTarget } from '../../connectionDiagnostics/types';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import { pickTreeNode } from '../../utils/pickItem/pickTreeNode';
-import { openConnectivityTroubleshooter } from '../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';
+import { openConnectionDiagnostics } from '../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';
 
-export async function troubleshootConnection(
+export async function diagnoseConnection(
     context: IActionContext,
     node?: ClusterItemBase,
     _nodes?: ClusterItemBase[],
     entryPointHint?: unknown,
 ): Promise<void> {
     context.telemetry.maskEntireErrorMessage = true;
-    let entryPoint: TroubleshooterEntryPoint = node ? 'contextMenu' : 'commandPalette';
+    let entryPoint: DiagnosticsEntryPoint = node ? 'contextMenu' : 'commandPalette';
     if (node && entryPointHint === 'errorNode') {
         entryPoint = 'errorNode';
     }
@@ -67,7 +67,7 @@ export async function troubleshootConnection(
 
     const targetNode = node;
     trackJourneyCorrelationId(context, targetNode);
-    const target: TroubleshootTarget = {
+    const target: DiagnosticsTarget = {
         clusterId: targetNode.cluster.clusterId,
         displayName: targetNode.cluster.name,
         sourceView,
@@ -76,7 +76,7 @@ export async function troubleshootConnection(
             return targetNode.getCredentialsForDiagnostics(read);
         },
     };
-    const result = openConnectivityTroubleshooter({ target, entryPoint });
+    const result = openConnectionDiagnostics({ target, entryPoint });
     context.telemetry.properties.panelAction = result.panelAction;
     context.telemetry.properties.troubleshooterSessionId = result.troubleshooterSessionId;
 }

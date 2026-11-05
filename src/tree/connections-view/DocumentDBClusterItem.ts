@@ -81,7 +81,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         };
     }
 
-    /** Stored data only: the troubleshooter's `prepare` check owns endpoint preparation (design §4.3). */
+    /** Stored data only: the diagnostics `prepare` check owns endpoint preparation (design §4.3). */
     public override getCredentialsForDiagnostics(
         _read: DiagnosticCredentialRead,
     ): Promise<EphemeralClusterCredentials | undefined> {

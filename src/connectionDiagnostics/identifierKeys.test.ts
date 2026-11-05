@@ -5,7 +5,7 @@
 
 import { buildReport, renderJson, type DiagnosticsRun } from '@documentdb-js/connection-diagnostics';
 import { describe, expect, it } from 'vitest';
-import { troubleshooterIdentifierKeys } from './identifierKeys';
+import { diagnosticsIdentifierKeys } from './identifierKeys';
 
 function runWith(facts: readonly Readonly<Record<string, unknown>>[]): DiagnosticsRun<string> {
     return {
@@ -34,7 +34,7 @@ function runWith(facts: readonly Readonly<Record<string, unknown>>[]): Diagnosti
     };
 }
 
-describe('troubleshooterIdentifierKeys', () => {
+describe('diagnosticsIdentifierKeys', () => {
     it('redacts custom roles, their databases, the answering server, seed hosts and Entra identities', (): void => {
         const run = runWith([
             { roles: [{ role: 'billingAnalyst', db: 'contosoProd' }], databaseCount: 3 },
@@ -43,7 +43,7 @@ describe('troubleshooterIdentifierKeys', () => {
         ]);
         const report = buildReport(run, {
             connectionName: 'Prod cluster',
-            identifierKeys: troubleshooterIdentifierKeys,
+            identifierKeys: diagnosticsIdentifierKeys,
         });
 
         const redacted = renderJson(report, { redact: true });

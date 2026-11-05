@@ -54,7 +54,7 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
         );
     }
 
-    /** Same Azure Resource Manager read, without error UI; failures reach the troubleshooter typed. */
+    /** Same Azure Resource Manager read, without error UI; typed failures reach connection diagnostics. */
     public override getCredentialsForDiagnostics(
         read: DiagnosticCredentialRead,
     ): Promise<EphemeralClusterCredentials | undefined> {

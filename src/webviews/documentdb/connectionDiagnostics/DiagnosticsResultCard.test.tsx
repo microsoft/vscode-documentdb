@@ -12,7 +12,7 @@ import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line
 
 import { type ResultCardData } from './connectionDiagnosticsTypes';
 import { type PanelFindingDetail, type PanelRow } from './panelTypes';
-import { cardIssues, resultCardTitle, TroubleshooterResultCard, type RunResult } from './DiagnosticsResultCard';
+import { cardIssues, resultCardTitle, DiagnosticsResultCard, type RunResult } from './DiagnosticsResultCard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -60,7 +60,7 @@ async function render(result: RunResult, rows: readonly PanelRow[] = []): Promis
     const root = createRoot(host);
     mounted.push({ host, root });
     await act(async () => {
-        root.render(<TroubleshooterResultCard result={result} rows={rows} onRetry={vi.fn()} />);
+        root.render(<DiagnosticsResultCard result={result} rows={rows} onRetry={vi.fn()} />);
     });
     return host;
 }
@@ -96,7 +96,7 @@ afterEach(async () => {
     }
 });
 
-describe('TroubleshooterResultCard', () => {
+describe('DiagnosticsResultCard', () => {
     it('summarizes a clean successful connection in one sentence, without server facts or report actions', async () => {
         const host = await render(
             card('connected', {

@@ -24,8 +24,8 @@ import {
 } from '../../tree/documentdb/ClusterItemBase';
 import type * as TreeNodePicker from '../../utils/pickItem/pickTreeNode';
 import { pickTreeNode } from '../../utils/pickItem/pickTreeNode';
-import { openConnectivityTroubleshooter } from '../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';
-import { troubleshootConnection } from './diagnoseConnection';
+import { openConnectionDiagnostics } from '../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';
+import { diagnoseConnection } from './diagnoseConnection';
 
 const mockPickerContext = vi.hoisted(() => ({
     telemetry: { properties: {} as Record<string, string>, measurements: {} as Record<string, number> },
@@ -53,7 +53,7 @@ vi.mock('../../documentdb/ClustersClient', () => ({
 }));
 vi.mock('../../utils/pickItem/pickTreeNode', () => ({ pickTreeNode: vi.fn() }));
 vi.mock('../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController', () => ({
-    openConnectivityTroubleshooter: vi.fn(),
+    openConnectionDiagnostics: vi.fn(),
 }));
 
 class TestClusterItem extends ClusterItemBase {
@@ -94,14 +94,14 @@ function container(id: string, contextValue: string): TreeElement {
     } as TreeElement;
 }
 
-describe('troubleshootConnection', () => {
+describe('diagnoseConnection', () => {
     let node: TestClusterItem;
     let context: IActionContext;
 
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(pickTreeNode).mockReset();
-        vi.mocked(openConnectivityTroubleshooter).mockReturnValue({
+        vi.mocked(openConnectionDiagnostics).mockReturnValue({
             panelAction: 'created',
             troubleshooterSessionId: 'session-id',
         });
@@ -124,11 +124,11 @@ describe('troubleshootConnection', () => {
         ['errorNode', 'errorNode'],
         [[undefined], 'contextMenu'],
     ] as const)('builds a stable target for the node argument %j', async (hint, entryPoint) => {
-        await troubleshootConnection(context, ...unwrapArgs<ClusterItemBase>([node, undefined, hint]));
+        await diagnoseConnection(context, ...unwrapArgs<ClusterItemBase>([node, undefined, hint]));
 
         expect(pickTreeNode).not.toHaveBeenCalled();
-        expect(openConnectivityTroubleshooter).toHaveBeenCalledOnce();
-        const options = vi.mocked(openConnectivityTroubleshooter).mock.calls[0][0];
+        expect(openConnectionDiagnostics).toHaveBeenCalledOnce();
+        const options = vi.mocked(openConnectionDiagnostics).mock.calls[0][0];
         expect(options.entryPoint).toBe(entryPoint);
         expect(options.target).toMatchObject({
             clusterId: 'stable-id',
@@ -164,8 +164,8 @@ describe('troubleshootConnection', () => {
         vi.spyOn(ConnectionStorageService, 'get').mockResolvedValue(stored);
         vi.spyOn(ConnectionReachabilityService, 'ensureReachable').mockResolvedValue(undefined);
         const storedNode = new DocumentDBClusterItem({ ...node.cluster, storageId: 'stable-id' });
-        await troubleshootConnection(context, storedNode);
-        const { target } = vi.mocked(openConnectivityTroubleshooter).mock.calls[0][0];
+        await diagnoseConnection(context, storedNode);
+        const { target } = vi.mocked(openConnectionDiagnostics).mock.calls[0][0];
         expect(ConnectionStorageService.get).not.toHaveBeenCalled();
         await expect(target.getCredentials({ signal: new AbortController().signal })).resolves.toMatchObject({
             connectionString: stored.secrets.connectionString,
@@ -184,8 +184,8 @@ describe('troubleshootConnection', () => {
         expect(errorNode).toBeDefined();
         const command = (await errorNode?.getTreeItem())?.command;
         expect(command?.command).toBe('vscode-documentdb.command.diagnoseConnection');
-        await troubleshootConnection(context, ...unwrapArgs<ClusterItemBase>(command?.arguments));
-        expect(openConnectivityTroubleshooter).toHaveBeenCalledWith(
+        await diagnoseConnection(context, ...unwrapArgs<ClusterItemBase>(command?.arguments));
+        expect(openConnectionDiagnostics).toHaveBeenCalledWith(
             expect.objectContaining({ entryPoint: 'errorNode' }),
         );
         expect(context.telemetry.properties.entryPoint).toBe('errorNode');
@@ -194,7 +194,7 @@ describe('troubleshootConnection', () => {
     it.each([Views.ConnectionsView, Views.DiscoveryView, Views.AzureResourcesView, Views.AzureWorkspaceView])(
         'records the owning view %s',
         async (viewId) => {
-            await troubleshootConnection(context, new TestClusterItem(viewId));
+            await diagnoseConnection(context, new TestClusterItem(viewId));
             expect(context.telemetry.properties.sourceView).toBe(viewId);
         },
     );
@@ -202,16 +202,16 @@ describe('troubleshootConnection', () => {
     it('infers the view from the tree path for older nodes without viewId', async () => {
         node = new TestClusterItem(Views.DiscoveryView);
         Reflect.deleteProperty(node.cluster, 'viewId');
-        await troubleshootConnection(context, node);
+        await diagnoseConnection(context, node);
         expect(context.telemetry.properties.sourceView).toBe(Views.DiscoveryView);
     });
 
     it('records a focused panel and keeps its session ID', async () => {
-        vi.mocked(openConnectivityTroubleshooter).mockReturnValue({
+        vi.mocked(openConnectionDiagnostics).mockReturnValue({
             panelAction: 'focused',
             troubleshooterSessionId: 'existing-session',
         });
-        await troubleshootConnection(context, node);
+        await diagnoseConnection(context, node);
         expect(context.telemetry.properties.panelAction).toBe('focused');
         expect(context.telemetry.properties.troubleshooterSessionId).toBe('existing-session');
         expect(node.getCredentials).not.toHaveBeenCalled();
@@ -219,7 +219,7 @@ describe('troubleshootConnection', () => {
 
     it('uses the existing connection picker and records the palette entry point', async () => {
         vi.mocked(pickTreeNode).mockResolvedValue(node);
-        await troubleshootConnection(context, ...unwrapArgs<ClusterItemBase>([]));
+        await diagnoseConnection(context, ...unwrapArgs<ClusterItemBase>([]));
         expect(pickTreeNode).toHaveBeenCalledWith(
             expect.objectContaining({
                 leafContextValue: CLUSTER_ITEM_CONTEXT_VALUE,
@@ -227,7 +227,7 @@ describe('troubleshootConnection', () => {
                 placeHolder: 'Select a connection to diagnose',
             }),
         );
-        expect(openConnectivityTroubleshooter).toHaveBeenCalledWith({
+        expect(openConnectionDiagnostics).toHaveBeenCalledWith({
             target: expect.objectContaining({ clusterId: 'stable-id', sourceView: 'commandPalette' }),
             entryPoint: 'commandPalette',
         });
@@ -249,15 +249,15 @@ describe('troubleshootConnection', () => {
             });
             return undefined;
         });
-        await expect(troubleshootConnection(context)).rejects.toBeInstanceOf(UserCancelledError);
-        expect(openConnectivityTroubleshooter).not.toHaveBeenCalled();
+        await expect(diagnoseConnection(context)).rejects.toBeInstanceOf(UserCancelledError);
+        expect(openConnectionDiagnostics).not.toHaveBeenCalled();
     });
 
     it('preserves picker-thrown cancellation', async () => {
         const cancellation = new UserCancelledError();
         vi.mocked(pickTreeNode).mockRejectedValue(cancellation);
-        await expect(troubleshootConnection(context)).rejects.toBe(cancellation);
-        expect(openConnectivityTroubleshooter).not.toHaveBeenCalled();
+        await expect(diagnoseConnection(context)).rejects.toBe(cancellation);
+        expect(openConnectionDiagnostics).not.toHaveBeenCalled();
     });
 
     it('browses saved folders and connections without expanding a cluster or Quick Start instance', async () => {
@@ -278,13 +278,13 @@ describe('troubleshootConnection', () => {
             );
         const picker = await vi.importActual<typeof TreeNodePicker>('../../utils/pickItem/pickTreeNode');
         vi.mocked(pickTreeNode).mockImplementation(picker.pickTreeNode);
-        await troubleshootConnection(context, ...unwrapArgs<ClusterItemBase>([]));
+        await diagnoseConnection(context, ...unwrapArgs<ClusterItemBase>([]));
 
         expect(getChildren.mock.calls.map(([element]) => element)).toEqual([undefined, folder]);
         expect(quickStart.getChildren).not.toHaveBeenCalled();
         expect(instance.getChildren).not.toHaveBeenCalled();
         expect(node.getCredentials).not.toHaveBeenCalled();
-        expect(openConnectivityTroubleshooter).toHaveBeenCalledOnce();
+        expect(openConnectionDiagnostics).toHaveBeenCalledOnce();
     });
 });
 
@@ -312,7 +312,7 @@ function matchesWhen(when: string, view: string, viewItem: string): boolean {
     });
 }
 
-describe('troubleshootConnection manifest and activation', () => {
+describe('diagnoseConnection manifest and activation', () => {
     const command = 'vscode-documentdb.command.diagnoseConnection';
     const manifest = readJson<Manifest>('package.json');
     const menus = manifest.contributes.menus['view/item/context'].filter((entry) => entry.command === command);
@@ -347,7 +347,7 @@ describe('troubleshootConnection manifest and activation', () => {
     it('registers eagerly with tree unwrapping and command correlation', () => {
         const source = readFileSync(resolve(__dirname, '../../documentdb/ClustersExtension.ts'), 'utf8');
         expect(source).toMatch(
-            /registerCommandWithTreeNodeUnwrapping\(\s*'vscode-documentdb\.command\.diagnoseConnection',\s*withTreeNodeCommandCorrelation\(troubleshootConnection\)/,
+            /registerCommandWithTreeNodeUnwrapping\(\s*'vscode-documentdb\.command\.diagnoseConnection',\s*withTreeNodeCommandCorrelation\(diagnoseConnection\)/,
         );
     });
 });

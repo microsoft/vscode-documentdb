@@ -17,9 +17,9 @@ import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { getTroubleshooterRemoteKind } from '../../../connectionDiagnostics/checks/extensionEnvironment';
+import { getDiagnosticsRemoteKind } from '../../../connectionDiagnostics/checks/extensionEnvironment';
 import { describeFinding } from '../../../connectionDiagnostics/findingMessages';
-import { troubleshooterIdentifierKeys } from '../../../connectionDiagnostics/identifierKeys';
+import { diagnosticsIdentifierKeys } from '../../../connectionDiagnostics/identifierKeys';
 import { withRowDetails } from '../../../connectionDiagnostics/panelDetails';
 import { PanelRowProjector } from '../../../connectionDiagnostics/panelRows';
 import {
@@ -27,27 +27,27 @@ import {
     createExtensionReportText,
     renderExtensionReportFooter,
 } from '../../../connectionDiagnostics/reportText';
-import { deriveResult, type TroubleshooterResult } from '../../../connectionDiagnostics/result';
+import { deriveResult, type DiagnosticsResult } from '../../../connectionDiagnostics/result';
 import {
-    getPlannedTroubleshooterChecks,
-    runConnectivityTroubleshooter,
+    getPlannedDiagnosticsChecks,
+    runConnectionDiagnostics,
 } from '../../../connectionDiagnostics/runConnectionDiagnostics';
 import {
     type FindingCode,
-    type TroubleshooterEntryPoint,
-    type TroubleshootTarget,
+    type DiagnosticsEntryPoint,
+    type DiagnosticsTarget,
 } from '../../../connectionDiagnostics/types';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { type PanelEvent, type ResultCardData, type RunUpdate } from './connectionDiagnosticsTypes';
 import { type PanelRow } from './panelTypes';
-import { type TroubleshooterPanelSession } from './diagnosticsPanelSession';
+import { type DiagnosticsPanelSession } from './diagnosticsPanelSession';
 
 export type RouterContext = BaseRouterContext & {
-    target: TroubleshootTarget;
-    entryPoint: TroubleshooterEntryPoint;
-    session: TroubleshooterPanelSession;
+    target: DiagnosticsTarget;
+    entryPoint: DiagnosticsEntryPoint;
+    session: DiagnosticsPanelSession;
 };
 
 const reportInput = z.object({ runId: z.string(), hideIdentifiers: z.boolean() });
@@ -117,7 +117,7 @@ function markdown(report: DiagnosticsReport<FindingCode>, hideIdentifiers: boole
 }
 
 /** Refreshes in place without focusing the preview or reopening a closed tab (R11). */
-function refreshReport(session: TroubleshooterPanelSession): boolean {
+function refreshReport(session: DiagnosticsPanelSession): boolean {
     const preview = session.reportPreview;
     return (
         preview?.uri !== undefined &&
@@ -132,13 +132,13 @@ function executionLocation(run: DiagnosticsRun<FindingCode>): string {
     const recordedKind = run.results.find((result): boolean => result.checkId === 'extensionEnvironment')?.facts
         .remoteKind;
     // A whole-run timeout can skip the environment check; the same offline detector still knows the host.
-    const remoteKind = typeof recordedKind === 'string' ? recordedKind : getTroubleshooterRemoteKind();
+    const remoteKind = typeof recordedKind === 'string' ? recordedKind : getDiagnosticsRemoteKind();
     return remoteKind === 'local'
         ? vscode.l10n.t('Checks ran on this computer.')
         : vscode.l10n.t('Checks ran on the remote host ({0}), not this computer.', remoteKind);
 }
 
-function resultCardData(result: TroubleshooterResult): ResultCardData {
+function resultCardData(result: DiagnosticsResult): ResultCardData {
     const { headline, ...card } = result;
     if (!headline) {
         return card;
@@ -177,7 +177,7 @@ function topologyName(topology: unknown): string | undefined {
     }
 }
 
-function reportSummary(run: DiagnosticsRun<FindingCode>, result: TroubleshooterResult): ReportSummary {
+function reportSummary(run: DiagnosticsRun<FindingCode>, result: DiagnosticsResult): ReportSummary {
     const auth = run.results.find((check): boolean => check.checkId === 'authenticate');
     const configuration = auth?.steps?.find((step): boolean => step.stepId === 'auth.signInConfiguration')?.facts ?? {};
     const server = run.results.find((check): boolean => check.checkId === 'serverFacts')?.facts ?? {};
@@ -310,7 +310,7 @@ function defaultReportName(): string {
     return `connection-diagnostics-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.md`;
 }
 
-export const connectivityTroubleshooterRouter = router({
+export const connectionDiagnosticsRouter = router({
     run: publicProcedure
         .input(
             z.object({
@@ -325,7 +325,7 @@ export const connectivityTroubleshooterRouter = router({
             const active = session.startRun(randomUUID(), input.requestId);
             const { runId, abortController } = active;
             const startedAt = Date.now();
-            const projector = new PanelRowProjector(describeFinding, getPlannedTroubleshooterChecks());
+            const projector = new PanelRowProjector(describeFinding, getPlannedDiagnosticsChecks());
             const initialRows = projector.rows();
             // Every settled result so far: settled rows carry details built from them (WI-18 prototype).
             const results: CheckResult<FindingCode>[] = [];
@@ -360,7 +360,7 @@ export const connectivityTroubleshooterRouter = router({
 
             const execute = async (): Promise<void> => {
                 try {
-                    const run = await runConnectivityTroubleshooter({
+                    const run = await runConnectionDiagnostics({
                         target: myCtx.target,
                         entryPoint: myCtx.entryPoint,
                         runId,
@@ -395,7 +395,7 @@ export const connectivityTroubleshooterRouter = router({
                     const report = buildReport(run, {
                         summary: reportSummary(run, result),
                         connectionName: myCtx.target.displayName,
-                        identifierKeys: troubleshooterIdentifierKeys,
+                        identifierKeys: diagnosticsIdentifierKeys,
                     });
                     session.completedRun = { runId, report };
                     if (session.reportPreview) {

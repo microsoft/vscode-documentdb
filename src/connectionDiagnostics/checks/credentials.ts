@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Check, type CheckOutcome, type RunContext } from '@documentdb-js/connection-diagnostics';
-import { type TroubleshooterSetup } from '../input';
+import { type DiagnosticsSetup } from '../input';
 import { type FindingCode } from '../types';
 
-export function createCredentialsCheck(getSetup: () => TroubleshooterSetup): Check<RunContext, FindingCode> {
+export function createCredentialsCheck(getSetup: () => DiagnosticsSetup): Check<RunContext, FindingCode> {
     return {
         id: 'credentials',
         scope: 'run',

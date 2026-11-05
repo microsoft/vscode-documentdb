@@ -14,7 +14,7 @@ import {
 import { formatEvidence } from '../../webviews/documentdb/connectionDiagnostics/formatEvidence';
 import { describeFinding } from '../findingMessages';
 import { checkResult, fixtureRun, outputs } from '../test/fixtures';
-import { type FindingCode, type TroubleshootTarget } from '../types';
+import { type FindingCode, type DiagnosticsTarget } from '../types';
 import { classifyResolutionFailure, createResolveTargetCheck } from './resolveTarget';
 
 vi.mock('@vscode/l10n', () => ({
@@ -22,7 +22,7 @@ vi.mock('@vscode/l10n', () => ({
         args.reduce<string>((result, value, index): string => result.replace(`{${index}}`, String(value)), message),
 }));
 
-function target(getCredentials: TroubleshootTarget['getCredentials']): TroubleshootTarget {
+function target(getCredentials: DiagnosticsTarget['getCredentials']): DiagnosticsTarget {
     return { clusterId: 'stable-id', displayName: 'Fixture', sourceView: 'connections', getCredentials };
 }
 

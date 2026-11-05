@@ -41,9 +41,9 @@ import { getTokenResourceForCloud } from '../../documentdb/auth/entraScopes';
 import { CredentialCache, type CachedClusterCredentials } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { createRunOwnedClient, type RunOwnedClient } from '../auth/runOwnedClient';
-import { type TroubleshooterSetup } from '../input';
-import { TroubleshooterOutputTrace } from '../outputTrace';
-import { type FindingCode, type TroubleshootTarget } from '../types';
+import { type DiagnosticsSetup } from '../input';
+import { DiagnosticsOutputTrace } from '../outputTrace';
+import { type FindingCode, type DiagnosticsTarget } from '../types';
 import { createAuthenticateCheck, type AuthenticateCheckDeps } from './authenticate';
 
 const mocks = vi.hoisted(() => ({
@@ -104,7 +104,7 @@ const password = 'P@ss-SECRET-word:1';
 const errorSentinel = 'ERRMSG-SENTINEL-c0ffee';
 const claimSentinel = 'CLAIM-SENTINEL-beef';
 const vscodeClientId = 'aebc6443-996d-45c2-90f0-388ff96faa56';
-const target: TroubleshootTarget = {
+const target: DiagnosticsTarget = {
     clusterId,
     displayName: 'Fixture',
     sourceView: 'connections',
@@ -153,8 +153,8 @@ function setupFor(
     method: AuthMethodId | undefined,
     host: string,
     credentials: Partial<CachedClusterCredentials> = {},
-    credentialState: TroubleshooterSetup['credentialState'] = method === undefined ? 'noMethod' : 'available',
-): TroubleshooterSetup {
+    credentialState: DiagnosticsSetup['credentialState'] = method === undefined ? 'noMethod' : 'available',
+): DiagnosticsSetup {
     const connectionString = `mongodb://${host}:10260/`;
     return {
         input: { connectionString },
@@ -217,7 +217,7 @@ interface AuthRun {
 }
 
 async function runAuth(
-    setup: TroubleshooterSetup,
+    setup: DiagnosticsSetup,
     options: {
         readonly deps?: AuthenticateCheckDeps;
         readonly timeouts?: Partial<DiagnosticsTimeouts>;
@@ -228,7 +228,7 @@ async function runAuth(
     const holder = createRunOwnedClient();
     const telemetry: Record<string, string | undefined> = {};
     const events: DiagnosticsEvent<FindingCode>[] = [];
-    const trace = new TroubleshooterOutputTrace(runId);
+    const trace = new DiagnosticsOutputTrace(runId);
     const host = new URL(setup.input.connectionString).hostname;
     const stubs: Check<RunContext, FindingCode>[] = [
         {

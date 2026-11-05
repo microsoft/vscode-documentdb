@@ -18,7 +18,7 @@ import { getAzureHostSuffix, normalizeCustomHostnameSuffix } from '../../documen
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { settingsKeys } from '../../settingsKeys';
 import { type DnsMixedHostDomainsData } from '../findingData';
-import { type TroubleshooterSetup } from '../input';
+import { type DiagnosticsSetup } from '../input';
 import { type FindingCode } from '../types';
 
 const CLOUD_BY_SUFFIX: Readonly<Record<string, DocumentDBEntraCloud>> = {
@@ -110,7 +110,7 @@ function readCustomHostnameSuffix(): unknown {
  */
 export function withMixedHostDomainsWarning(
     dns: Check<RunContext, FindingCode>,
-    peekSetup: () => TroubleshooterSetup | undefined,
+    peekSetup: () => DiagnosticsSetup | undefined,
     getCustomHostnameSuffix: () => unknown = readCustomHostnameSuffix,
 ): Check<RunContext, FindingCode> {
     return {

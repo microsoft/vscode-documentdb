@@ -43,7 +43,7 @@ import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
 import './connectionDiagnostics.scss';
 import {
-    type ConnectivityTroubleshooterConfiguration,
+    type ConnectionDiagnosticsConfiguration,
     type PanelEvent,
     type RunUpdate,
     type TimeoutProfile,
@@ -57,14 +57,14 @@ import {
     toStatusListStatus,
 } from './formatEvidence';
 import { panelRowIds, type PanelRow, type PanelRowId } from './panelTypes';
-import { resultCardTitle, TroubleshooterResultCard } from './DiagnosticsResultCard';
-import { detailsDescription, TroubleshooterRowDetails } from './DiagnosticsRowDetails';
+import { resultCardTitle, DiagnosticsResultCard } from './DiagnosticsResultCard';
+import { detailsDescription, DiagnosticsRowDetails } from './DiagnosticsRowDetails';
 import {
     applyRunUpdate,
     cancelRun,
     failRun,
     startingState,
-    type TroubleshooterViewState,
+    type DiagnosticsViewState,
 } from './diagnosticsViewState';
 import { usePacedRunEvents } from './usePacedRunEvents';
 
@@ -113,7 +113,7 @@ function checkedText(finishedAt: number, now: number): string {
     return l10n.t('Checked on {0}', new Date(finishedAt).toLocaleString());
 }
 
-function runStatusText(view: TroubleshooterViewState, now: number): string {
+function runStatusText(view: DiagnosticsViewState, now: number): string {
     switch (view.phase) {
         case 'running':
             return l10n.t('Checking the connection…');
@@ -227,7 +227,7 @@ const CheckRow = ({ id, row, label, expanded, onExpandedChange, focusFallback }:
             disclosure={
                 details
                     ? {
-                          content: <TroubleshooterRowDetails details={details} />,
+                          content: <DiagnosticsRowDetails details={details} />,
                           toggleText: l10n.t('Details'),
                           toggleLabel: l10n.t('Details for {0}', label),
                           toggleDescription: detailsDescription(details),
@@ -242,14 +242,14 @@ const CheckRow = ({ id, row, label, expanded, onExpandedChange, focusFallback }:
     );
 };
 
-export const ConnectivityTroubleshooter = (): JSX.Element => {
+export const ConnectionDiagnostics = (): JSX.Element => {
     const trpcClient = useTrpcClient();
-    const configuration = useConfiguration<ConnectivityTroubleshooterConfiguration>();
+    const configuration = useConfiguration<ConnectionDiagnosticsConfiguration>();
     const styles = useStyles();
     const labels = useMemo(() => rowLabels(), []);
     const words = useMemo(() => statusWords(), []);
 
-    const [view, setView] = useState<TroubleshooterViewState>(() => startingState(0, Date.now()));
+    const [view, setView] = useState<DiagnosticsViewState>(() => startingState(0, Date.now()));
     const [now, setNow] = useState<number>(() => Date.now());
     const [hideIdentifiers, setHideIdentifiers] = useState(false);
     const [offerRerun, setOfferRerun] = useState(false);
@@ -573,7 +573,7 @@ export const ConnectivityTroubleshooter = (): JSX.Element => {
                                 {/* Unmounts with the card, before the collapse finishes, so a retry keeps focus. */}
                                 {view.result && (
                                     <div ref={cardFocusRef}>
-                                        <TroubleshooterResultCard
+                                        <DiagnosticsResultCard
                                             result={view.result}
                                             rows={view.rows}
                                             onRetry={startRun}

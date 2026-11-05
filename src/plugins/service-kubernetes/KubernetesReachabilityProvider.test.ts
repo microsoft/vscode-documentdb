@@ -54,7 +54,7 @@ describe('KubernetesReachabilityProvider', () => {
         );
     });
 
-    it('forwards the troubleshooter intent and reports the shared tunnel outcome', async () => {
+    it('forwards the diagnostics intent and reports the shared tunnel outcome', async () => {
         mockEnsureKubernetesPortForward.mockResolvedValue({ outcome: 'reused' });
         const intent = { interactive: false, signal: new AbortController().signal };
 

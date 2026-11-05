@@ -18,7 +18,7 @@ import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItem
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 
 /** Host-only, transient input. Never include this object in results, events or telemetry. */
-export interface TroubleshooterSetup {
+export interface DiagnosticsSetup {
     readonly input: DiagnosticsInput;
     readonly chosenAuthMethod: AuthMethodId | undefined;
     readonly credentialState: 'available' | 'noMethod' | 'passwordMissing';
@@ -43,7 +43,7 @@ export function detectAvailableCompressors(resolve: (moduleId: string) => string
 }
 
 /** The package input before the target is resolved; the `resolveTarget` check supplies the real one. */
-export function unresolvedTroubleshooterInput(): DiagnosticsInput {
+export function unresolvedDiagnosticsInput(): DiagnosticsInput {
     return {
         connectionString: '',
         availableCompressors: detectAvailableCompressors(),
@@ -52,14 +52,14 @@ export function unresolvedTroubleshooterInput(): DiagnosticsInput {
 }
 
 /** Builds the run's host-only setup from the target's resolved, non-empty connection details. */
-export function buildTroubleshooterSetup(
+export function buildDiagnosticsSetup(
     clusterId: string,
     credentials: EphemeralClusterCredentials,
-): TroubleshooterSetup {
+): DiagnosticsSetup {
     const cached = CredentialCache.getCredentials(clusterId);
     const chosenAuthMethod = credentials.selectedAuthMethod ?? cached?.authMechanism;
     const password = credentials.nativeAuthConfig?.connectionPassword ?? cached?.nativeAuthConfig?.connectionPassword;
-    let credentialState: TroubleshooterSetup['credentialState'] = 'available';
+    let credentialState: DiagnosticsSetup['credentialState'] = 'available';
     if (chosenAuthMethod === undefined) {
         credentialState = 'noMethod';
     } else if (chosenAuthMethod === AuthMethodId.NativeAuth && !password) {

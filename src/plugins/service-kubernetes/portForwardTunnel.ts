@@ -202,7 +202,7 @@ export class PortForwardTunnelManager implements vscode.Disposable {
      * - `externalAssumed`: The port was occupied by an external process
      *   (e.g., `kubectl port-forward`) and the user chose to use it as-is.
      *
-     * @param options `interactive: false` (the connectivity troubleshooter) never asks to use an
+     * @param options `interactive: false` (connection diagnostics) never asks to use an
      *        occupied port; it fails with {@link LocalPortInUseError} instead.
      * @throws Error if the port is occupied and the user declines to use it,
      *         or if binding fails for a reason other than EADDRINUSE.

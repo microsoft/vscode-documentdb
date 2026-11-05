@@ -9,7 +9,7 @@ import { type FindingMessage } from './findingMessages';
 import { rowForCheck } from './panelRows';
 import { type FindingCode } from './types';
 
-export interface TroubleshooterResult {
+export interface DiagnosticsResult {
     readonly outcome: 'connected' | 'failed' | 'notTested';
     readonly stoppedAtRow?: PanelRowId;
     readonly headline?: {
@@ -128,7 +128,7 @@ function isTransport(evidence: Evidence | undefined): boolean {
 export function deriveResult(
     results: readonly CheckResult<FindingCode>[],
     describe: (finding: Finding<FindingCode>) => FindingMessage,
-): TroubleshooterResult {
+): DiagnosticsResult {
     const authenticate = results.find((result): boolean => result.checkId === 'authenticate');
     const access = results.find((result): boolean => result.checkId === 'connectionAccess');
     const earlier = results
@@ -141,7 +141,7 @@ export function deriveResult(
                 panelRowIds.indexOf(rowForCheck(a.checkId) ?? 'setup') -
                 panelRowIds.indexOf(rowForCheck(b.checkId) ?? 'setup'),
         );
-    let outcome: TroubleshooterResult['outcome'] = 'notTested';
+    let outcome: DiagnosticsResult['outcome'] = 'notTested';
     let stoppedAtRow: PanelRowId | undefined;
     let headline: Evidence | undefined;
     let supporting: Evidence | undefined;

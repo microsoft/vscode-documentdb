@@ -13,7 +13,7 @@ import {
 } from '@documentdb-js/connection-diagnostics';
 import { ext } from '../extensionVariables';
 import { deriveResult } from './result';
-import { extensionFindingCodes, type FindingCode, type TroubleshooterEntryPoint } from './types';
+import { extensionFindingCodes, type FindingCode, type DiagnosticsEntryPoint } from './types';
 
 export type ConnectionOutcome = 'notTested' | 'failed' | 'connected';
 
@@ -49,14 +49,14 @@ export function safeErrorName(error: unknown): string {
     return error instanceof Error && knownErrorNames.has(error.name) ? error.name : 'unknown';
 }
 
-export class TroubleshooterOutputTrace {
+export class DiagnosticsOutputTrace {
     private readonly targets = new Map<string, number>();
     private ended = false;
 
     constructor(private readonly runId: string) {}
 
     public started(
-        entryPoint: TroubleshooterEntryPoint,
+        entryPoint: DiagnosticsEntryPoint,
         runTrigger: 'initial' | 'rerun',
         timeoutProfile: TimeoutProfile,
     ): void {

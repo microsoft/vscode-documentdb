@@ -38,7 +38,7 @@ export const WebviewRegistry = {
     ),
     connectivityTroubleshooter: React.lazy(() =>
         import('../documentdb/connectionDiagnostics/ConnectionDiagnostics').then((module) => ({
-            default: module.ConnectivityTroubleshooter,
+            default: module.ConnectionDiagnostics,
         })),
     ),
     collectionView: React.lazy(() =>

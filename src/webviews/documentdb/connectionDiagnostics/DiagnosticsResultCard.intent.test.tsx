@@ -11,7 +11,7 @@ import { act, type JSX, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 
 import { type ResultCardData } from './connectionDiagnosticsTypes';
-import { TroubleshooterResultCard, type RunResult } from './DiagnosticsResultCard';
+import { DiagnosticsResultCard, type RunResult } from './DiagnosticsResultCard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -53,7 +53,7 @@ async function intentOf(result: RunResult): Promise<string | null | undefined> {
     const root = createRoot(host);
     mounted.push({ host, root });
     await act(async () => {
-        root.render(<TroubleshooterResultCard result={result} rows={[]} onRetry={vi.fn()} />);
+        root.render(<DiagnosticsResultCard result={result} rows={[]} onRetry={vi.fn()} />);
     });
     return host.querySelector('[data-intent]')?.getAttribute('data-intent');
 }
@@ -65,7 +65,7 @@ afterEach(async () => {
     }
 });
 
-describe('TroubleshooterResultCard intent', () => {
+describe('DiagnosticsResultCard intent', () => {
     it('WI-27: a connection that needs sign-in is a warning, neither success nor failure (decision 0048)', async () => {
         const headline = {
             title: 'Sign-in required to use this connection',

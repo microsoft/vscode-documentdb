@@ -149,7 +149,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
         });
     }
 
-    /** The cached Atlas model, read without the "not connectable" warning; the troubleshooter explains it. */
+    /** The cached Atlas model, read without the "not connectable" warning; connection diagnostics explain it. */
     public override getCredentialsForDiagnostics(
         read: DiagnosticCredentialRead,
     ): Promise<EphemeralClusterCredentials | undefined> {

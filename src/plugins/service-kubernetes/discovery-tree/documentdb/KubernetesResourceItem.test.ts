@@ -784,7 +784,7 @@ describe('KubernetesResourceItem', () => {
     // -------------------------------------------------------------------------
     // nodeport-loadbalancer-safety – warning surfacing (issue 2)
     // -------------------------------------------------------------------------
-    describe('troubleshooter diagnostic read (review R1/R2, option A)', () => {
+    describe('connection diagnostics read (review R1/R2, option A)', () => {
         const mockKubeConfig = { name: 'mock-kc' };
         const mockCoreApi = { name: 'mock-api' };
         const read = (): { signal: AbortSignal } => ({ signal: new AbortController().signal });

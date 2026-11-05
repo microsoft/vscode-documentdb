@@ -40,18 +40,18 @@ import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItem
 import { readOnlyJsonDocumentProvider } from '../utils/readOnlyJsonDocumentProvider';
 import { createCallerFactory } from '../webviews/_integration/trpc';
 import {
-    connectivityTroubleshooterRouter,
+    connectionDiagnosticsRouter,
     type RouterContext,
 } from '../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsRouter';
 import { type RunUpdate } from '../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsTypes';
 import { formatEvidence } from '../webviews/documentdb/connectionDiagnostics/formatEvidence';
 import { type PanelRow } from '../webviews/documentdb/connectionDiagnostics/panelTypes';
-import { TroubleshooterPanelSession } from '../webviews/documentdb/connectionDiagnostics/diagnosticsPanelSession';
+import { DiagnosticsPanelSession } from '../webviews/documentdb/connectionDiagnostics/diagnosticsPanelSession';
 import { describeFinding } from './findingMessages';
 import { withRowDetails } from './panelDetails';
 import { createExtensionReportText, renderExtensionReportFooter } from './reportText';
-import type * as Troubleshooter from './runConnectionDiagnostics';
-import { getPlannedTroubleshooterChecks, type RunConnectivityTroubleshooterOptions } from './runConnectionDiagnostics';
+import type * as Diagnostics from './runConnectionDiagnostics';
+import { getPlannedDiagnosticsChecks, type RunConnectionDiagnosticsOptions } from './runConnectionDiagnostics';
 import { deferred, detailSentinel, gatewayReply, host, offlineIo, outputs, socketError } from './test/fixtures';
 import { extensionFindingCodes, type FindingCode } from './types';
 
@@ -114,7 +114,7 @@ vi.mock('../documentdb/auth/documentdbTokenResource', async (importOriginal) => 
         describeEntraSignInEnvironment: (): object => ({ configuredCloud: 'AzureCloud' }),
     };
 });
-// Same owned-driver fake as runTroubleshooter.test.ts; probes still execute the real package checks.
+// Same owned-driver fake as runConnectionDiagnostics.test.ts; probes still execute the real package checks.
 vi.mock('mongodb', async (importOriginal) => {
     const actual = await importOriginal<typeof MongoDB>();
     class FakeMongoClient {
@@ -145,15 +145,15 @@ vi.mock('mongodb', async (importOriginal) => {
     return { ...actual, MongoClient: FakeMongoClient };
 });
 vi.mock('./runConnectionDiagnostics', async (importOriginal) => {
-    const actual = await importOriginal<typeof Troubleshooter>();
+    const actual = await importOriginal<typeof Diagnostics>();
     return {
         ...actual,
-        runConnectivityTroubleshooter: async (
-            options: RunConnectivityTroubleshooterOptions,
+        runConnectionDiagnostics: async (
+            options: RunConnectionDiagnosticsOptions,
         ): Promise<DiagnosticsRun<FindingCode>> => {
             const events: DiagnosticsEvent<FindingCode>[] = [];
             bridge.events = events;
-            const run = await actual.runConnectivityTroubleshooter({
+            const run = await actual.runConnectionDiagnostics({
                 ...options,
                 io: bridge.io,
                 onEvent(event): void {
@@ -192,9 +192,9 @@ vi.mock('@vscode/l10n', () => ({
         args.reduce<string>((result, value, index): string => result.replace(`{${index}}`, String(value)), message),
 }));
 
-const createCaller = createCallerFactory(connectivityTroubleshooterRouter);
+const createCaller = createCallerFactory(connectionDiagnosticsRouter);
 let fixture: ReturnType<typeof offlineIo>;
-const sessions: TroubleshooterPanelSession[] = [];
+const sessions: DiagnosticsPanelSession[] = [];
 const firewall =
     'A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules.';
 
@@ -214,7 +214,7 @@ function context(
         nativeAuthConfig: { connectionUser: 'alice', connectionPassword: password },
         ...(method === AuthMethodId.ManagedIdentity ? { managedIdentityAuthConfig: {} } : {}),
     };
-    const session = new TroubleshooterPanelSession('acceptance-session');
+    const session = new DiagnosticsPanelSession('acceptance-session');
     sessions.push(session);
     return {
         dbExperience: API.DocumentDB,
@@ -429,7 +429,7 @@ describe('Acceptance (design §8.1)', (): void => {
         // The fake server answers the ping at once, which the panel formats as "< 1 ms" (decision 0050).
         expect(rowText(view, 'databaseAccess')).toMatch(/Ping (?:< )?\d+ ms · 1 database visible/);
         expect(view.run.results.map((item): string => item.checkId)).toEqual(
-            getPlannedTroubleshooterChecks().map((check): string => check.id),
+            getPlannedDiagnosticsChecks().map((check): string => check.id),
         );
         const snapshot = view.ctx.session.completedRun?.report;
         if (!snapshot) {

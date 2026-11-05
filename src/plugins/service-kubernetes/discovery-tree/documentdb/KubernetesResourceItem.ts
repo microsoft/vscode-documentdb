@@ -75,7 +75,7 @@ interface ResolvedConnectionDetails {
 
 interface ResolveConnectionOptions {
     readonly startPortForward: boolean;
-    /** Troubleshooter intent: no UI, no tunnel, typed failures; `prepare` starts or reuses the tunnel. */
+    /** Diagnostics intent: no UI, no tunnel, typed failures; `prepare` starts or reuses the tunnel. */
     readonly diagnostic?: DiagnosticCredentialRead;
 }
 
@@ -227,12 +227,12 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
     }
 
     /**
-     * Returns credentials for the connectivity troubleshooter (design §4.3).
+     * Returns credentials for connection diagnostics (design §4.3).
      *
      * Reads the same Kubernetes data as {@link getCredentials}, but shows no warning or prompt and starts
      * no tunnel. For a ClusterIP service it returns the localhost endpoint plus port-forward metadata:
      * the local port of a tunnel already running for this service, otherwise the port the configured
-     * local-port strategy suggests. The troubleshooter's `prepare` check then starts or reuses the
+     * local-port strategy suggests. The connection diagnostics `prepare` check then starts or reuses the
      * shared tunnel under its own timeout.
      */
     public override async getCredentialsForDiagnostics(
@@ -506,7 +506,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         switch (endpoint.kind) {
             case 'ready':
                 if (endpoint.warning) {
-                    // The troubleshooter probes the address itself, so a diagnostic read stays silent.
+                    // Connection diagnostics probe the address itself, so a diagnostic read stays silent.
                     if (!options.diagnostic) {
                         ext.outputChannel.appendLine(endpoint.warning);
                         void vscode.window.showWarningMessage(endpoint.warning);
@@ -598,7 +598,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
     }
 
     /**
-     * The local port for a troubleshooter run, chosen without asking: the port of a tunnel already
+     * The local port for a diagnostics run, chosen without asking: the port of a tunnel already
      * forwarding this service, otherwise the configured strategy's suggestion. Never an input box.
      */
     private async selectDiagnosticLocalPort(context: IActionContext): Promise<number> {

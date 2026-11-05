@@ -6,7 +6,7 @@
 import { type RunContext } from '@documentdb-js/connection-diagnostics';
 import { describe, expect, it } from 'vitest';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { type TroubleshooterSetup } from '../input';
+import { type DiagnosticsSetup } from '../input';
 import { createCredentialsCheck } from './credentials';
 
 describe('credentials check', (): void => {
@@ -18,14 +18,14 @@ describe('credentials check', (): void => {
     ] as const)(
         'always passes for %s (%s), recording only safe method and state',
         async (credentialState, chosenAuthMethod, missing): Promise<void> => {
-            const setup: TroubleshooterSetup = {
+            const setup: DiagnosticsSetup = {
                 input: { connectionString: 'mongodb://secret-user:secret-password@host/' },
                 credentialState,
                 chosenAuthMethod,
                 connectionProperties: undefined,
                 transientCredentials: undefined,
             };
-            const check = createCredentialsCheck((): TroubleshooterSetup => setup);
+            const check = createCredentialsCheck((): DiagnosticsSetup => setup);
             expect(check.id).toBe('credentials');
             expect(check.dependsOn).toEqual(['connectionString']);
             const result = await check.run({} as RunContext, new AbortController().signal);

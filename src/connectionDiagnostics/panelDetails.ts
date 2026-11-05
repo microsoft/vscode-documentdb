@@ -29,7 +29,7 @@ import {
 } from '../webviews/documentdb/connectionDiagnostics/panelTypes';
 import { authMechanismOf, knownAuthMethod } from './authMechanism';
 import { type FindingMessage } from './findingMessages';
-import { troubleshooterIdentifierKeys } from './identifierKeys';
+import { diagnosticsIdentifierKeys } from './identifierKeys';
 import { rowForCheck } from './panelRows';
 import { type FindingCode } from './types';
 
@@ -643,7 +643,7 @@ function partialReport(results: readonly CheckResult<FindingCode>[]): Diagnostic
                 retryWouldHelp: false,
             },
         },
-        { identifierKeys: troubleshooterIdentifierKeys },
+        { identifierKeys: diagnosticsIdentifierKeys },
     );
 }
 

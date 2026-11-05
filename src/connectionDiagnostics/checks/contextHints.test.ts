@@ -14,15 +14,15 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
-import { troubleshooterIdentifierKeys } from '../identifierKeys';
-import { type TroubleshooterSetup } from '../input';
+import { diagnosticsIdentifierKeys } from '../identifierKeys';
+import { type DiagnosticsSetup } from '../input';
 import { createExtensionReportText } from '../reportText';
-import { type TroubleshootTarget } from '../types';
+import { type DiagnosticsTarget } from '../types';
 import { createContextHintsCheck } from './contextHints';
 
 const password = 'P@ss-word:1';
 const uri = `mongodb://user:${encodeURIComponent(password)}@private.example:27017/`;
-const setup: TroubleshooterSetup = {
+const setup: DiagnosticsSetup = {
     input: { connectionString: uri },
     chosenAuthMethod: undefined,
     credentialState: 'available',
@@ -34,7 +34,7 @@ const setup: TroubleshooterSetup = {
         nativeAuthConfig: { connectionUser: 'user', connectionPassword: password },
     },
 };
-const target: TroubleshootTarget = {
+const target: DiagnosticsTarget = {
     clusterId: 'stable-id',
     displayName: 'Fixture',
     sourceView: 'connections',
@@ -81,7 +81,7 @@ describe('contextHints', (): void => {
             const explain = vi.spyOn(ErrorExplanationService, 'explain');
             const check = createContextHintsCheck(
                 target,
-                (): TroubleshooterSetup => setup,
+                (): DiagnosticsSetup => setup,
                 (): RunOwnedClient => ({}),
                 earlierChecks,
             );
@@ -133,7 +133,7 @@ describe('contextHints', (): void => {
             } as RunContext;
             const check = createContextHintsCheck(
                 target,
-                (): TroubleshooterSetup => setup,
+                (): DiagnosticsSetup => setup,
                 (): RunOwnedClient => ({}),
                 [
                     { id: 'dns', scope: 'host' },
@@ -304,7 +304,7 @@ describe('contextHints', (): void => {
         );
     });
 
-    it('passes the original authentication error and troubleshooter source with the stable identity', async (): Promise<void> => {
+    it('passes the original authentication error and diagnostics source with the stable identity', async (): Promise<void> => {
         const authError = new Error('Original secret-bearing driver error');
         const holder: RunOwnedClient = { authError };
         const explain = vi
@@ -312,7 +312,7 @@ describe('contextHints', (): void => {
             .mockResolvedValue({ providerId: 'fixture', message: 'Check private.example.' });
         const check = createContextHintsCheck(
             target,
-            (): TroubleshooterSetup => setup,
+            (): DiagnosticsSetup => setup,
             (): RunOwnedClient => holder,
             earlierChecks,
         );
@@ -333,7 +333,7 @@ describe('contextHints', (): void => {
         const explain = vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue(undefined);
         const check = createContextHintsCheck(
             target,
-            (): TroubleshooterSetup => setup,
+            (): DiagnosticsSetup => setup,
             (): RunOwnedClient => ({}),
             earlierChecks,
         );
@@ -350,7 +350,7 @@ describe('contextHints', (): void => {
         const explain = vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue(undefined);
         const check = createContextHintsCheck(
             target,
-            (): TroubleshooterSetup => setup,
+            (): DiagnosticsSetup => setup,
             (): RunOwnedClient => ({}),
             earlierChecks,
         );
@@ -363,7 +363,7 @@ describe('contextHints', (): void => {
         vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue({ providerId: 'fixture', message });
         const check = createContextHintsCheck(
             target,
-            (): TroubleshooterSetup => setup,
+            (): DiagnosticsSetup => setup,
             (): RunOwnedClient => ({}),
             earlierChecks,
         );
@@ -383,7 +383,7 @@ describe('contextHints', (): void => {
         });
         const check = createContextHintsCheck(
             target,
-            (): TroubleshooterSetup => uriSetup,
+            (): DiagnosticsSetup => uriSetup,
             (): RunOwnedClient => ({}),
             earlierChecks,
         );
@@ -400,7 +400,7 @@ describe('contextHints', (): void => {
         });
         const check = createContextHintsCheck(
             target,
-            (): TroubleshooterSetup => setup,
+            (): DiagnosticsSetup => setup,
             (): RunOwnedClient => ({}),
             earlierChecks,
         );
@@ -423,7 +423,7 @@ describe('contextHints', (): void => {
         });
         const check = createContextHintsCheck(
             target,
-            (): TroubleshooterSetup => setup,
+            (): DiagnosticsSetup => setup,
             (): RunOwnedClient => ({}),
             earlierChecks,
         );
@@ -451,7 +451,7 @@ describe('contextHints', (): void => {
                 },
             },
             {
-                identifierKeys: troubleshooterIdentifierKeys,
+                identifierKeys: diagnosticsIdentifierKeys,
                 summary: { outcome: 'failed', nextSteps: [explanation] },
             },
         );

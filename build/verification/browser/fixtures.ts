@@ -13,7 +13,7 @@ import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegi
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
 import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
-import { type ConnectivityTroubleshooterConfiguration } from '../../../src/webviews/documentdb/connectionDiagnostics/connectionDiagnosticsTypes';
+import { type ConnectionDiagnosticsConfiguration } from '../../../src/webviews/documentdb/connectionDiagnostics/connectionDiagnosticsTypes';
 import { panelRowIds } from '../../../src/webviews/documentdb/connectionDiagnostics/panelTypes';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
@@ -89,7 +89,7 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
-const troubleshooterConfig: ConnectivityTroubleshooterConfiguration = {
+const troubleshooterConfig: ConnectionDiagnosticsConfiguration = {
     connectionName: 'Stage 0 fixture connection',
     troubleshooterSessionId: 'stage0-troubleshooter-session',
     feedbackPermitted: true,

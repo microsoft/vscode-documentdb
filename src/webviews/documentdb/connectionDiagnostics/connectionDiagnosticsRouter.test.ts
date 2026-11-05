@@ -13,17 +13,17 @@ import { type initWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
-import type * as Troubleshooter from '../../../connectionDiagnostics/runConnectionDiagnostics';
+import type * as Diagnostics from '../../../connectionDiagnostics/runConnectionDiagnostics';
 import {
-    runConnectivityTroubleshooter,
-    type RunConnectivityTroubleshooterOptions,
+    runConnectionDiagnostics,
+    type RunConnectionDiagnosticsOptions,
 } from '../../../connectionDiagnostics/runConnectionDiagnostics';
 import { type FindingCode } from '../../../connectionDiagnostics/types';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { createCallerFactory } from '../../_integration/trpc';
-import { connectivityTroubleshooterRouter, type RouterContext } from './connectionDiagnosticsRouter';
+import { connectionDiagnosticsRouter, type RouterContext } from './connectionDiagnosticsRouter';
 import { type RunUpdate, type TimeoutProfile } from './connectionDiagnosticsTypes';
-import { TroubleshooterPanelSession } from './diagnosticsPanelSession';
+import { DiagnosticsPanelSession } from './diagnosticsPanelSession';
 
 const scopes = vi.hoisted(() => [] as { path: string; context: IActionContext }[]);
 
@@ -46,8 +46,8 @@ vi.mock('../../_integration/trpc', async () => {
     };
 });
 vi.mock('../../../connectionDiagnostics/runConnectionDiagnostics', async () => ({
-    ...(await vi.importActual<typeof Troubleshooter>('../../../connectionDiagnostics/runConnectionDiagnostics')),
-    runConnectivityTroubleshooter: vi.fn(),
+    ...(await vi.importActual<typeof Diagnostics>('../../../connectionDiagnostics/runConnectionDiagnostics')),
+    runConnectionDiagnostics: vi.fn(),
 }));
 vi.mock('../../../extensionVariables', () => ({
     ext: {
@@ -72,7 +72,7 @@ function context(signal?: AbortSignal): RouterContext {
             getCredentials: vi.fn(),
         },
         entryPoint: 'contextMenu',
-        session: new TroubleshooterPanelSession('session-id'),
+        session: new DiagnosticsPanelSession('session-id'),
         signal,
     };
 }
@@ -107,7 +107,7 @@ function completedRun(runId: string, remoteKind = 'local'): DiagnosticsRun<Findi
 }
 
 function emitRun(
-    options: RunConnectivityTroubleshooterOptions,
+    options: RunConnectionDiagnosticsOptions,
     run = completedRun(options.runId ?? 'missing'),
 ): DiagnosticsRun<FindingCode> {
     for (const item of run.results) {
@@ -136,7 +136,7 @@ async function collect(stream: AsyncIterable<RunUpdate>): Promise<RunUpdate[]> {
     return updates;
 }
 
-const createCaller = createCallerFactory(connectivityTroubleshooterRouter);
+const createCaller = createCallerFactory(connectionDiagnosticsRouter);
 
 let requestCount = 0;
 
@@ -174,8 +174,8 @@ function deferred<T>(): Deferred<T> {
     return { promise, resolve, reject };
 }
 
-function latestOptions(): RunConnectivityTroubleshooterOptions {
-    const call = vi.mocked(runConnectivityTroubleshooter).mock.calls.at(-1);
+function latestOptions(): RunConnectionDiagnosticsOptions {
+    const call = vi.mocked(runConnectionDiagnostics).mock.calls.at(-1);
     if (!call) {
         throw new Error('Expected a run');
     }
@@ -191,11 +191,11 @@ function latestTelemetry(): IActionContext['telemetry'] {
     return scope.context.telemetry;
 }
 
-describe('connectivityTroubleshooterRouter', (): void => {
+describe('connectionDiagnosticsRouter', (): void => {
     beforeEach((): void => {
         vi.clearAllMocks();
         scopes.length = 0;
-        vi.mocked(runConnectivityTroubleshooter).mockImplementation(
+        vi.mocked(runConnectionDiagnostics).mockImplementation(
             async (options): Promise<DiagnosticsRun<FindingCode>> => emitRun(options),
         );
         vi.spyOn(readOnlyJsonDocumentProvider, 'openMarkdownDocument').mockResolvedValue(
@@ -251,7 +251,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('cancels during preparation with the started run ID before any check event, without waiting for the runner', async (): Promise<void> => {
         const pending = deferred<DiagnosticsRun<FindingCode>>();
-        vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
+        vi.mocked(runConnectionDiagnostics).mockReturnValue(pending.promise);
         const ctx = context();
         const stream = iterator(await caller(ctx).run(runInput('default', 'initial', 'request-1')));
         const first = (await stream.next()).value;
@@ -278,7 +278,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     it('ignores a delayed Cancel from a replaced run instead of cancelling the replacement', async (): Promise<void> => {
         const oldRun = deferred<DiagnosticsRun<FindingCode>>();
         const newRun = deferred<DiagnosticsRun<FindingCode>>();
-        vi.mocked(runConnectivityTroubleshooter)
+        vi.mocked(runConnectionDiagnostics)
             .mockReturnValueOnce(oldRun.promise)
             .mockReturnValueOnce(newRun.promise);
         const ctx = context();
@@ -304,7 +304,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('cancels a run whose Cancel arrives before its subscription starts', async (): Promise<void> => {
         const pending = deferred<DiagnosticsRun<FindingCode>>();
-        vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
+        vi.mocked(runConnectionDiagnostics).mockReturnValue(pending.promise);
         const ctx = context();
 
         await caller(ctx).cancel({ requestId: 'request-early' });
@@ -321,7 +321,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('a second run aborts the first as rerun and drops late events and snapshots', async (): Promise<void> => {
         const old = deferred<DiagnosticsRun<FindingCode>>();
-        vi.mocked(runConnectivityTroubleshooter).mockReturnValueOnce(old.promise);
+        vi.mocked(runConnectionDiagnostics).mockReturnValueOnce(old.promise);
         const ctx = context();
         const first = iterator(await caller(ctx).run(runInput('default', 'initial')));
         const firstStarted = (await first.next()).value;
@@ -341,7 +341,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('closing the subscription aborts as subscriptionClosed and stops the stream', async (): Promise<void> => {
         const pending = deferred<DiagnosticsRun<FindingCode>>();
-        vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
+        vi.mocked(runConnectionDiagnostics).mockReturnValue(pending.promise);
         const subscription = new AbortController();
         const stream = iterator(await caller(context(subscription.signal)).run(runInput('default', 'initial')));
         const first = (await stream.next()).value;
@@ -355,7 +355,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
 
     it('returning the subscription iterator aborts its runner', async (): Promise<void> => {
         const pending = deferred<DiagnosticsRun<FindingCode>>();
-        vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
+        vi.mocked(runConnectionDiagnostics).mockReturnValue(pending.promise);
         const stream = iterator(await caller(context()).run(runInput('default', 'initial')));
         await stream.next();
         await stream.return();
@@ -367,7 +367,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     it('reports a bounded failure with the run ID, never the original message', async (): Promise<void> => {
         // An unreadable target is a finished run with a typed finding (review R2), never a failed run.
         const error = new Error('secret original error');
-        vi.mocked(runConnectivityTroubleshooter).mockRejectedValue(error);
+        vi.mocked(runConnectionDiagnostics).mockRejectedValue(error);
         const updates = await collect(await caller(context()).run(runInput('default', 'initial')));
         expect(updates).toHaveLength(2);
         expect(updates[1]).toEqual({ type: 'failed', runId: updates[0].runId, reason: 'unexpected' });
@@ -396,7 +396,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
             );
         }
         const pending = deferred<DiagnosticsRun<FindingCode>>();
-        vi.mocked(runConnectivityTroubleshooter).mockReturnValue(pending.promise);
+        vi.mocked(runConnectionDiagnostics).mockReturnValue(pending.promise);
         const stream = iterator(await actions.run(runInput('default', 'rerun', 'request-2')));
         await stream.next();
         await expect(actions.copyReport({ runId, hideIdentifiers: false })).rejects.toThrow(
@@ -408,7 +408,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('finishes with derived result-card data and a connected report with server rows', async (): Promise<void> => {
-        vi.mocked(runConnectivityTroubleshooter).mockImplementation(
+        vi.mocked(runConnectionDiagnostics).mockImplementation(
             async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
@@ -461,7 +461,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('reports the resolved managed-identity cloud, not the unrelated interactive sign-in setting', async (): Promise<void> => {
-        vi.mocked(runConnectivityTroubleshooter).mockImplementation(
+        vi.mocked(runConnectionDiagnostics).mockImplementation(
             async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
@@ -497,7 +497,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('reports the real failure, provider and firewall next steps without sending codes in result-card data', async (): Promise<void> => {
-        vi.mocked(runConnectivityTroubleshooter).mockImplementation(
+        vi.mocked(runConnectionDiagnostics).mockImplementation(
             async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing', 'ssh');
                 return emitRun(options, {
@@ -565,7 +565,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     ] as const)(
         'reports earlier-in-session and silent-lookup notes for %s without changing not tested',
         async (configuredCloud, cloudCategory, log): Promise<void> => {
-            vi.mocked(runConnectivityTroubleshooter).mockImplementation(
+            vi.mocked(runConnectionDiagnostics).mockImplementation(
                 async (options): Promise<DiagnosticsRun<FindingCode>> => {
                     const run = completedRun(options.runId ?? 'missing');
                     return emitRun(options, {
@@ -628,7 +628,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     );
 
     it('reports a whole-run timeout before an attempt without claiming an unreachable server', async (): Promise<void> => {
-        vi.mocked(runConnectivityTroubleshooter).mockImplementation(
+        vi.mocked(runConnectionDiagnostics).mockImplementation(
             async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
@@ -671,7 +671,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
         await actions.copyReport({ runId, hideIdentifiers: false });
         expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(shown[1]);
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('The report was copied to the clipboard.');
-        expect(runConnectivityTroubleshooter).toHaveBeenCalledTimes(1);
+        expect(runConnectionDiagnostics).toHaveBeenCalledTimes(1);
         expect(latestTelemetry().properties).toEqual({
             troubleshooterSessionId: 'session-id',
             troubleshooterRunCorrelationId: runId,
@@ -712,7 +712,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     );
 
     it('includes version attribution when environment checks were skipped', async (): Promise<void> => {
-        vi.mocked(runConnectivityTroubleshooter).mockImplementation(
+        vi.mocked(runConnectionDiagnostics).mockImplementation(
             async (options): Promise<DiagnosticsRun<FindingCode>> => {
                 const run = completedRun(options.runId ?? 'missing');
                 return emitRun(options, {
@@ -789,7 +789,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
         await actions.copyReport({ runId, hideIdentifiers: true });
         expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(shown[1]);
         expect(latestTelemetry().properties.reportRedacted).toBe('true');
-        expect(runConnectivityTroubleshooter).toHaveBeenCalledTimes(1);
+        expect(runConnectionDiagnostics).toHaveBeenCalledTimes(1);
     });
 
     describe('live report preview (WI-24)', () => {
@@ -893,7 +893,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
             await actions.showDiagnostics({ runId, hideIdentifiers: false });
             const uri = previewUri(ctx);
             const next = deferred<DiagnosticsRun<FindingCode>>();
-            vi.mocked(runConnectivityTroubleshooter).mockImplementationOnce(() => next.promise);
+            vi.mocked(runConnectionDiagnostics).mockImplementationOnce(() => next.promise);
             const stream = iterator(await actions.run(runInput('default', 'rerun')));
             const started = (await stream.next()).value;
             if (!started) throw new Error('Expected started');
@@ -923,7 +923,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
             await actions.showDiagnostics({ runId, hideIdentifiers: false });
             const uri = previewUri(ctx);
             const pending = deferred<DiagnosticsRun<FindingCode>>();
-            vi.mocked(runConnectivityTroubleshooter).mockReturnValueOnce(pending.promise);
+            vi.mocked(runConnectionDiagnostics).mockReturnValueOnce(pending.promise);
             const input = runInput('default', 'rerun');
             const stream = iterator(await actions.run(input));
             const started = (await stream.next()).value;
@@ -956,7 +956,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
     });
 
     it('derives the report execution location from the completed extensionEnvironment result', async (): Promise<void> => {
-        vi.mocked(runConnectivityTroubleshooter).mockImplementation(
+        vi.mocked(runConnectionDiagnostics).mockImplementation(
             async (options): Promise<DiagnosticsRun<FindingCode>> =>
                 emitRun(options, completedRun(options.runId ?? 'missing', 'ssh')),
         );
@@ -1002,7 +1002,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
         });
         expect(JSON.stringify(telemetry)).not.toContain(uri.path);
         expect(JSON.stringify(telemetry)).not.toContain(content);
-        expect(runConnectivityTroubleshooter).toHaveBeenCalledTimes(1);
+        expect(runConnectionDiagnostics).toHaveBeenCalledTimes(1);
         const dialog = vi.mocked(vscode.window.showSaveDialog).mock.calls[0][0];
         expect(Object.keys(dialog?.filters ?? {})).toEqual(['Markdown', 'JSON']);
         expect(dialog?.defaultUri?.path).toMatch(/connection-diagnostics-\d{8}-\d{4}\.md$/);
@@ -1020,7 +1020,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
             vi.mocked(readOnlyJsonDocumentProvider.openMarkdownDocument).mock.calls[0][1],
         );
         expect(latestTelemetry().properties.reportFormat).toBe('markdown');
-        expect(runConnectivityTroubleshooter).toHaveBeenCalledTimes(1);
+        expect(runConnectionDiagnostics).toHaveBeenCalledTimes(1);
     });
 
     it('a dismissed Save throws UserCancelledError and writes nothing', async (): Promise<void> => {
@@ -1030,7 +1030,7 @@ describe('connectivityTroubleshooterRouter', (): void => {
             cause: expect.any(UserCancelledError),
         });
         expect(vscode.workspace.fs.writeFile).not.toHaveBeenCalled();
-        expect(runConnectivityTroubleshooter).toHaveBeenCalledTimes(1);
+        expect(runConnectionDiagnostics).toHaveBeenCalledTimes(1);
         expect(latestTelemetry().properties.reportFormat).toBe('markdown');
     });
 });

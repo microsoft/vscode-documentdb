@@ -16,7 +16,7 @@ const moduleLoads = vi.hoisted(() => ({
     documentView: vi.fn(() => ({ DocumentView: (): string => 'documentView' })),
     localQuickStart: vi.fn(() => ({ LocalQuickStart: (): string => 'localQuickStart' })),
     connectivityTroubleshooter: vi.fn(() => ({
-        ConnectivityTroubleshooter: (): string => 'connectivityTroubleshooter',
+        ConnectionDiagnostics: (): string => 'connectivityTroubleshooter',
     })),
     atlasCredentials: vi.fn(() => ({ AtlasCredentialsView: (): string => 'atlasCredentials' })),
 }));

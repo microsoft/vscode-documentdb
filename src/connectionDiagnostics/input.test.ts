@@ -9,7 +9,7 @@ import { CredentialCache, type CachedClusterCredentials } from '../documentdb/Cr
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
-import { buildTroubleshooterSetup, detectAvailableCompressors } from './input';
+import { buildDiagnosticsSetup, detectAvailableCompressors } from './input';
 import { extensionFindingCodes } from './types';
 
 const clusterId = 'stable-id';
@@ -33,7 +33,7 @@ function cached(overrides: Partial<CachedClusterCredentials> = {}): CachedCluste
 
 const setters = ['setCredentials', 'setAuthCredentials', 'setFromConnectionItem'] as const;
 
-describe('buildTroubleshooterSetup', (): void => {
+describe('buildDiagnosticsSetup', (): void => {
     beforeEach((): void => {
         vi.spyOn(CredentialCache, 'getCredentials').mockReturnValue(undefined);
         for (const setter of setters) {
@@ -59,7 +59,7 @@ describe('buildTroubleshooterSetup', (): void => {
 
     it('honors the stored method before a cached method and never infers from available methods', async (): Promise<void> => {
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached());
-        const setup = buildTroubleshooterSetup(clusterId, credentials({ selectedAuthMethod: AuthMethodId.NoAuth }));
+        const setup = buildDiagnosticsSetup(clusterId, credentials({ selectedAuthMethod: AuthMethodId.NoAuth }));
         expect(setup.chosenAuthMethod).toBe(AuthMethodId.NoAuth);
         expect(setup.credentialState).toBe('available');
         expect(setup.input.connectionString).not.toContain(password);
@@ -70,7 +70,7 @@ describe('buildTroubleshooterSetup', (): void => {
     it('uses the session method and password by stable clusterId without modifying the cache', async (): Promise<void> => {
         const entry = Object.freeze(cached());
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(entry);
-        const setup = buildTroubleshooterSetup(clusterId, credentials());
+        const setup = buildDiagnosticsSetup(clusterId, credentials());
         expect(setup.chosenAuthMethod).toBe(AuthMethodId.NativeAuth);
         expect(setup.credentialState).toBe('available');
         expect(new DocumentDBConnectionString(setup.input.connectionString).password).toBe(password);
@@ -81,7 +81,7 @@ describe('buildTroubleshooterSetup', (): void => {
 
     it('uses stored native credentials before cached ones and excludes them from non-secret input fields', async (): Promise<void> => {
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached());
-        const setup = buildTroubleshooterSetup(
+        const setup = buildDiagnosticsSetup(
             clusterId,
             credentials({
                 selectedAuthMethod: AuthMethodId.NativeAuth,
@@ -99,7 +99,7 @@ describe('buildTroubleshooterSetup', (): void => {
 
     it('does not replace an explicitly empty stored password with a stale cached password', async (): Promise<void> => {
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached());
-        const setup = buildTroubleshooterSetup(
+        const setup = buildDiagnosticsSetup(
             clusterId,
             credentials({
                 selectedAuthMethod: AuthMethodId.NativeAuth,
@@ -112,7 +112,7 @@ describe('buildTroubleshooterSetup', (): void => {
     });
 
     it('keeps probing without a native password or an auth-handler layer', async (): Promise<void> => {
-        const setup = buildTroubleshooterSetup(
+        const setup = buildDiagnosticsSetup(
             clusterId,
             credentials({
                 selectedAuthMethod: AuthMethodId.NativeAuth,
@@ -126,7 +126,7 @@ describe('buildTroubleshooterSetup', (): void => {
     });
 
     it('does not choose an available method or infer one from credentials', async (): Promise<void> => {
-        const setup = buildTroubleshooterSetup(
+        const setup = buildDiagnosticsSetup(
             clusterId,
             credentials({ nativeAuthConfig: { connectionUser: user, connectionPassword: password } }),
         );
@@ -140,7 +140,7 @@ describe('buildTroubleshooterSetup', (): void => {
     it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
         'uses the real OIDC network policy for %s without credentials',
         async (method): Promise<void> => {
-            const setup = buildTroubleshooterSetup(
+            const setup = buildDiagnosticsSetup(
                 clusterId,
                 credentials({
                     selectedAuthMethod: method,
@@ -162,7 +162,7 @@ describe('buildTroubleshooterSetup', (): void => {
                 emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
             }),
         );
-        const setup = buildTroubleshooterSetup(
+        const setup = buildDiagnosticsSetup(
             clusterId,
             credentials({ connectionString: 'mongodb://127.0.0.1:27017/' }),
         );
@@ -179,7 +179,7 @@ describe('buildTroubleshooterSetup', (): void => {
                 emulatorConfiguration: { isEmulator: false, disableEmulatorSecurity: false },
             }),
         );
-        const setup = buildTroubleshooterSetup(
+        const setup = buildDiagnosticsSetup(
             clusterId,
             credentials({
                 connectionString: 'mongodb://127.0.0.1:27017/',
@@ -197,13 +197,13 @@ describe('buildTroubleshooterSetup', (): void => {
 
     it('uses the shared SRV fallback switches', async (): Promise<void> => {
         vi.stubEnv('DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK', '1');
-        expect(buildTroubleshooterSetup(clusterId, credentials()).input.srvFallbackMode).toBe('force');
+        expect(buildDiagnosticsSetup(clusterId, credentials()).input.srvFallbackMode).toBe('force');
         vi.stubEnv('DOCUMENTDB_DISABLE_SRV_FALLBACK', '1');
-        expect(buildTroubleshooterSetup(clusterId, credentials()).input.srvFallbackMode).toBe('off');
+        expect(buildDiagnosticsSetup(clusterId, credentials()).input.srvFallbackMode).toBe('off');
     });
 
     it('leaves malformed input for the connectionString check, not an input-building error', async (): Promise<void> => {
-        const setup = buildTroubleshooterSetup(
+        const setup = buildDiagnosticsSetup(
             clusterId,
             credentials({
                 connectionString: 'not-a-uri',

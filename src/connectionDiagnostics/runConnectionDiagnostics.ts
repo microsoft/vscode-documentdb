@@ -32,27 +32,27 @@ import { createAuthenticateCheck } from './checks/authenticate';
 import { createConnectionAccessCheck } from './checks/connectionAccess';
 import { createContextHintsCheck } from './checks/contextHints';
 import { createCredentialsCheck } from './checks/credentials';
-import { createExtensionEnvironmentCheck, getTroubleshooterRemoteKind } from './checks/extensionEnvironment';
+import { createExtensionEnvironmentCheck, getDiagnosticsRemoteKind } from './checks/extensionEnvironment';
 import { withMixedHostDomainsWarning } from './checks/hostDomains';
 import { createPrepareCheck } from './checks/prepare';
 import { createResolveTargetCheck } from './checks/resolveTarget';
 import { createServerFactsCheck } from './checks/serverFacts';
-import { buildTroubleshooterSetup, unresolvedTroubleshooterInput, type TroubleshooterSetup } from './input';
-import { connectionOutcome, TroubleshooterOutputTrace } from './outputTrace';
+import { buildDiagnosticsSetup, unresolvedDiagnosticsInput, type DiagnosticsSetup } from './input';
+import { connectionOutcome, DiagnosticsOutputTrace } from './outputTrace';
 import {
     applyCheckTelemetry,
     applyCompletedRunTelemetry,
     applyRunIdentity,
-    configureTroubleshooterTelemetry,
-    maskTroubleshooterInput,
+    configureDiagnosticsTelemetry,
+    maskDiagnosticsInput,
     reportRunStarted,
 } from './telemetry';
-import { type FindingCode, type TroubleshooterEntryPoint, type TroubleshootTarget } from './types';
+import { type FindingCode, type DiagnosticsEntryPoint, type DiagnosticsTarget } from './types';
 
-export interface RunConnectivityTroubleshooterOptions {
+export interface RunConnectionDiagnosticsOptions {
     readonly runId?: string;
-    readonly target: TroubleshootTarget;
-    readonly entryPoint: TroubleshooterEntryPoint;
+    readonly target: DiagnosticsTarget;
+    readonly entryPoint: DiagnosticsEntryPoint;
     readonly runTrigger: 'initial' | 'rerun';
     readonly runIndex: number;
     readonly troubleshooterSessionId: string;
@@ -65,10 +65,10 @@ export interface RunConnectivityTroubleshooterOptions {
     readonly cancelReason?: () => 'cancelButton' | 'panelClosed' | 'rerun' | 'subscriptionClosed';
 }
 
-interface TroubleshooterCheckInputs {
-    readonly target: TroubleshootTarget;
-    readonly getSetup: () => TroubleshooterSetup;
-    readonly peekSetup: () => TroubleshooterSetup | undefined;
+interface DiagnosticsCheckInputs {
+    readonly target: DiagnosticsTarget;
+    readonly getSetup: () => DiagnosticsSetup;
+    readonly peekSetup: () => DiagnosticsSetup | undefined;
     readonly onResolved: (credentials: EphemeralClusterCredentials) => void;
     readonly onResolutionFailed: (error: unknown) => void;
     readonly getResolutionError: () => unknown;
@@ -82,7 +82,7 @@ interface TroubleshooterCheckInputs {
  */
 function withResolvedInput(
     check: Check<RunContext, FindingCode>,
-    peekSetup: () => TroubleshooterSetup | undefined,
+    peekSetup: () => DiagnosticsSetup | undefined,
 ): Check<RunContext, FindingCode> {
     return {
         ...check,
@@ -95,7 +95,7 @@ function withResolvedInput(
     };
 }
 
-function buildTroubleshooterChecks(
+function buildDiagnosticsChecks(
     {
         target,
         getSetup,
@@ -105,7 +105,7 @@ function buildTroubleshooterChecks(
         getResolutionError,
         getTelemetryProperties,
         getRunOwnedClient,
-    }: TroubleshooterCheckInputs,
+    }: DiagnosticsCheckInputs,
     extraChecks: readonly Check<RunContext, FindingCode>[] = [],
 ): readonly Check<RunContext, FindingCode>[] {
     const checks: Check<RunContext, FindingCode>[] = [];
@@ -139,14 +139,14 @@ function buildTroubleshooterChecks(
     return checks.map((check): Check<RunContext, FindingCode> => withResolvedInput(check, peekSetup));
 }
 
-export function getPlannedTroubleshooterChecks(
+export function getPlannedDiagnosticsChecks(
     extraChecks?: readonly Check<RunContext, FindingCode>[],
 ): readonly { id: string; scope: 'run' | 'host' }[] {
     // Check factories are offline; planning never resolves credentials or executes a check.
     const unavailable = (): never => {
         throw new Error('Planned checks cannot be executed');
     };
-    const target: TroubleshootTarget = {
+    const target: DiagnosticsTarget = {
         get clusterId(): string {
             return unavailable();
         },
@@ -158,7 +158,7 @@ export function getPlannedTroubleshooterChecks(
         },
         getCredentials: unavailable,
     };
-    return buildTroubleshooterChecks(
+    return buildDiagnosticsChecks(
         {
             target,
             getSetup: unavailable,
@@ -173,27 +173,27 @@ export function getPlannedTroubleshooterChecks(
     ).map(({ id, scope }): { id: string; scope: 'run' | 'host' } => ({ id, scope }));
 }
 
-export async function runConnectivityTroubleshooter(
-    options: RunConnectivityTroubleshooterOptions,
+export async function runConnectionDiagnostics(
+    options: RunConnectionDiagnosticsOptions,
 ): Promise<DiagnosticsRun<FindingCode>> {
     const runId = options.runId ?? randomUUID();
     await reportRunStarted(options, runId);
-    const trace = new TroubleshooterOutputTrace(runId);
+    const trace = new DiagnosticsOutputTrace(runId);
     trace.started(options.entryPoint, options.runTrigger, options.timeoutProfile);
     const result = await callWithTelemetryAndErrorHandling(
         'connectivityTroubleshooter.run',
         async (context): Promise<DiagnosticsRun<FindingCode>> => {
-            configureTroubleshooterTelemetry(context);
+            configureDiagnosticsTelemetry(context);
             applyRunIdentity(context, options, runId);
             const activeChecks = new Map<string, string>();
             const completed: CheckResult<FindingCode>[] = [];
             const hosts = new Set<string>();
-            let setup: TroubleshooterSetup | null = null;
+            let setup: DiagnosticsSetup | null = null;
             let resolutionError: unknown;
             // Host-only, per run; dropped with the setup. The runner's cleanup closes its client.
             let runOwnedClient: RunOwnedClient | null = null;
             let terminal = false;
-            const getSetup = (): TroubleshooterSetup => {
+            const getSetup = (): DiagnosticsSetup => {
                 if (!setup) {
                     throw new Error('Diagnosis setup unavailable');
                 }
@@ -206,11 +206,11 @@ export async function runConnectivityTroubleshooter(
                 return runOwnedClient;
             };
             try {
-                context.telemetry.properties.remoteKind = getTroubleshooterRemoteKind();
+                context.telemetry.properties.remoteKind = getDiagnosticsRemoteKind();
                 if (options.signal.aborted) {
                     throw new UserCancelledError();
                 }
-                const target: TroubleshootTarget = {
+                const target: DiagnosticsTarget = {
                     clusterId: options.target.clusterId,
                     displayName: options.target.displayName,
                     sourceView: options.target.sourceView,
@@ -218,14 +218,14 @@ export async function runConnectivityTroubleshooter(
                         const credentials = await options.target.getCredentials(read);
                         const cached = CredentialCache.getCredentials(options.target.clusterId);
                         if (credentials) {
-                            maskTroubleshooterInput(
+                            maskDiagnosticsInput(
                                 context,
                                 credentials.connectionString,
                                 credentials.nativeAuthConfig?.connectionPassword,
                             );
                         }
                         if (cached) {
-                            maskTroubleshooterInput(
+                            maskDiagnosticsInput(
                                 context,
                                 cached.connectionString,
                                 cached.nativeAuthConfig?.connectionPassword,
@@ -236,18 +236,18 @@ export async function runConnectivityTroubleshooter(
                 };
                 context.telemetry.properties.authMethod = 'none';
                 runOwnedClient = createRunOwnedClient();
-                const checks = buildTroubleshooterChecks(
+                const checks = buildDiagnosticsChecks(
                     {
                         target,
                         getSetup,
-                        peekSetup: (): TroubleshooterSetup | undefined => setup ?? undefined,
+                        peekSetup: (): DiagnosticsSetup | undefined => setup ?? undefined,
                         onResolved(credentials): void {
                             // A read that settles after the run ended or was cancelled is discarded.
                             if (terminal || options.signal.aborted) {
                                 return;
                             }
-                            setup = buildTroubleshooterSetup(options.target.clusterId, credentials);
-                            maskTroubleshooterInput(
+                            setup = buildDiagnosticsSetup(options.target.clusterId, credentials);
+                            maskDiagnosticsInput(
                                 context,
                                 setup.input.connectionString,
                                 setup.transientCredentials?.nativeAuthConfig?.connectionPassword,
@@ -268,7 +268,7 @@ export async function runConnectivityTroubleshooter(
                 );
                 const run = await runDiagnostics<FindingCode>({
                     runId,
-                    input: unresolvedTroubleshooterInput(),
+                    input: unresolvedDiagnosticsInput(),
                     checks,
                     io: options.io,
                     timeoutProfile: options.timeoutProfile,
@@ -322,5 +322,5 @@ export async function runConnectivityTroubleshooter(
             }
         },
     );
-    return nonNullValue(result, 'run', 'runTroubleshooter.ts');
+    return nonNullValue(result, 'run', 'runConnectionDiagnostics.ts');
 }

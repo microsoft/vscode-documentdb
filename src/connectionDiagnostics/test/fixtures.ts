@@ -27,7 +27,7 @@ import {
     type WireRequest,
 } from '../../../packages/documentdb-js-connection-diagnostics/src/test/wireResponder';
 import { describeFinding } from '../findingMessages';
-import { troubleshooterIdentifierKeys } from '../identifierKeys';
+import { diagnosticsIdentifierKeys } from '../identifierKeys';
 import { PanelRowProjector } from '../panelRows';
 import { createExtensionReportText } from '../reportText';
 import { deriveResult } from '../result';
@@ -259,7 +259,7 @@ export function outputs(
     const projector = projectRun(run, events);
     const result = deriveResult(run.results, describeFinding);
     const report = buildReport(run, {
-        identifierKeys: troubleshooterIdentifierKeys,
+        identifierKeys: diagnosticsIdentifierKeys,
         summary: summary ?? { outcome: result.outcome, ...(result.headline ? { headline: result.headline } : {}) },
     });
     return {

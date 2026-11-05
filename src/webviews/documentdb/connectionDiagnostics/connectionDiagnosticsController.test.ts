@@ -5,16 +5,16 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { type TroubleshootTarget } from '../../../connectionDiagnostics/types';
+import { type DiagnosticsTarget } from '../../../connectionDiagnostics/types';
 import { isFeedbackPermitted } from '../../../utils/feedbackPermission';
 import {
     type AppWebviewController,
     type OpenAppWebviewOptions,
     openAppWebview,
 } from '../../_integration/openAppWebview';
-import { openConnectivityTroubleshooter } from './connectionDiagnosticsController';
+import { openConnectionDiagnostics } from './connectionDiagnosticsController';
 import { type RouterContext } from './connectionDiagnosticsRouter';
-import { type ConnectivityTroubleshooterConfiguration } from './connectionDiagnosticsTypes';
+import { type ConnectionDiagnosticsConfiguration } from './connectionDiagnosticsTypes';
 
 vi.mock('../../_integration/openAppWebview', () => ({ openAppWebview: vi.fn() }));
 vi.mock('../../../utils/feedbackPermission', () => ({ isFeedbackPermitted: vi.fn(() => true) }));
@@ -25,14 +25,14 @@ vi.mock('../../../extensionVariables', async () => {
 
 interface OpenedPanel {
     readonly context: RouterContext;
-    readonly config: ConnectivityTroubleshooterConfiguration;
+    readonly config: ConnectionDiagnosticsConfiguration;
     readonly reveal: ReturnType<typeof vi.fn>;
     dispose(): void;
 }
 
 const opened: OpenedPanel[] = [];
 
-function target(clusterId: string, treeId = clusterId): TroubleshootTarget & { readonly treeId: string } {
+function target(clusterId: string, treeId = clusterId): DiagnosticsTarget & { readonly treeId: string } {
     return {
         clusterId,
         treeId,
@@ -42,11 +42,11 @@ function target(clusterId: string, treeId = clusterId): TroubleshootTarget & { r
     };
 }
 
-function open(clusterId: string, treeId?: string): ReturnType<typeof openConnectivityTroubleshooter> {
-    return openConnectivityTroubleshooter({ target: target(clusterId, treeId), entryPoint: 'contextMenu' });
+function open(clusterId: string, treeId?: string): ReturnType<typeof openConnectionDiagnostics> {
+    return openConnectionDiagnostics({ target: target(clusterId, treeId), entryPoint: 'contextMenu' });
 }
 
-describe('openConnectivityTroubleshooter', (): void => {
+describe('openConnectionDiagnostics', (): void => {
     beforeEach((): void => {
         vi.clearAllMocks();
         opened.length = 0;
@@ -57,7 +57,7 @@ describe('openConnectivityTroubleshooter', (): void => {
                 let disposed = false;
                 const panel: OpenedPanel = {
                     context: options.context as RouterContext,
-                    config: options.config as ConnectivityTroubleshooterConfiguration,
+                    config: options.config as ConnectionDiagnosticsConfiguration,
                     reveal,
                     dispose(): void {
                         if (disposed) {

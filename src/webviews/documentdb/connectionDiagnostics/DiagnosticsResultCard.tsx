@@ -314,7 +314,7 @@ function issueList(issues: readonly CardIssue[], styles: Styles): JSX.Element {
     );
 }
 
-export interface TroubleshooterResultCardProps {
+export interface DiagnosticsResultCardProps {
     readonly result: RunResult;
     /** The settled rows; a successful connection's card names those that need attention. */
     readonly rows: readonly PanelRow[];
@@ -328,7 +328,7 @@ const UNBOUNDED_RETRY_NOTE_ID = 'connectivity-result-unbounded-retry-note';
  * the diagnosis, with the facts left to each row's Details. It renders only the host's
  * `ResultCardData` and the rows, and performs no I/O; codes, URIs and timings never reach it.
  */
-export function TroubleshooterResultCard({ result, rows, onRetry }: TroubleshooterResultCardProps): JSX.Element {
+export function DiagnosticsResultCard({ result, rows, onRetry }: DiagnosticsResultCardProps): JSX.Element {
     const styles = useStyles();
     const title = (
         // The card sits in the connection's section (h2), so its headline is the next level down.

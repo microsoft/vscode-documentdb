@@ -14,8 +14,8 @@ import { describe, expect, it } from 'vitest';
 import {
     applyCheckTelemetry,
     applyCompletedRunTelemetry,
-    configureTroubleshooterTelemetry,
-    maskTroubleshooterInput,
+    configureDiagnosticsTelemetry,
+    maskDiagnosticsInput,
 } from './telemetry';
 import { type FindingCode } from './types';
 
@@ -27,7 +27,7 @@ function context(): IActionContext {
     } as unknown as IActionContext;
 }
 
-describe('troubleshooter telemetry boundaries', (): void => {
+describe('diagnostics telemetry boundaries', (): void => {
     it('allowlists, deduplicates and sorts finding codes, without copying facts or finding data and detail', (): void => {
         const ctx = context();
         const result = {
@@ -74,9 +74,9 @@ describe('troubleshooter telemetry boundaries', (): void => {
 
     it('masks raw, parsed and encoded credentials without recording malformed parser errors', (): void => {
         const ctx = context();
-        configureTroubleshooterTelemetry(ctx);
-        maskTroubleshooterInput(ctx, 'mongodb://private-user:private-password@private.example/', 'private-password');
-        maskTroubleshooterInput(ctx, 'mongodb://unparseable-secret@', 'password:@');
+        configureDiagnosticsTelemetry(ctx);
+        maskDiagnosticsInput(ctx, 'mongodb://private-user:private-password@private.example/', 'private-password');
+        maskDiagnosticsInput(ctx, 'mongodb://unparseable-secret@', 'password:@');
         expect(ctx.telemetry.maskEntireErrorMessage).toBe(true);
         expect(ctx.valuesToMask).toEqual(
             expect.arrayContaining([

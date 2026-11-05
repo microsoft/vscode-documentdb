@@ -63,8 +63,8 @@ export async function promptForLocalPort(
 }
 
 /**
- * The local port {@link promptForLocalPort} would suggest, without asking. Used by the connectivity
- * troubleshooter, which never prompts; the bind-time conflict is still handled by the tunnel manager.
+ * The local port {@link promptForLocalPort} would suggest, without asking. Used by connection
+ * diagnostics, which never prompt; the bind-time conflict is still handled by the tunnel manager.
  */
 export async function suggestLocalPort(remotePort: number, context?: IActionContext): Promise<number> {
     const strategy = getLocalPortStrategy();

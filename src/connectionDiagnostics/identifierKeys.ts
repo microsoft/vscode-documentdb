@@ -9,7 +9,7 @@ import { type IdentifierKind } from '@documentdb-js/connection-diagnostics';
  * Identifier keys for facts the extension's checks add, on top of the package defaults, so
  * "Hide identifiers" covers them (design §6.3).
  */
-export const troubleshooterIdentifierKeys: Readonly<Record<string, IdentifierKind>> = Object.freeze({
+export const diagnosticsIdentifierKeys: Readonly<Record<string, IdentifierKind>> = Object.freeze({
     connectionName: 'connectionName',
     account: 'account',
     tenantId: 'tenant',

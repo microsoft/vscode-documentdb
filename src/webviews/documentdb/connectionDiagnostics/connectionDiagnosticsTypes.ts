@@ -67,7 +67,7 @@ export interface PanelEvent {
     readonly type: 'offerRerun';
 }
 
-export interface ConnectivityTroubleshooterConfiguration {
+export interface ConnectionDiagnosticsConfiguration {
     readonly connectionName: string;
     readonly troubleshooterSessionId: string;
     /** Read when the panel opens; the host checks again when Give Feedback is clicked. */

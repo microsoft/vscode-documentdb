@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as ConnectivityTroubleshooter from '@documentdb-js/connection-diagnostics';
+import type * as ConnectionDiagnostics from '@documentdb-js/connection-diagnostics';
 import {
     createBuiltInChecks,
     type BuiltInFindingCode,
@@ -24,7 +24,7 @@ import {
 } from '../webviews/documentdb/connectionDiagnostics/panelTypes';
 import { describeFinding } from './findingMessages';
 import { PanelRowProjector } from './panelRows';
-import { getPlannedTroubleshooterChecks, runConnectivityTroubleshooter } from './runConnectionDiagnostics';
+import { getPlannedDiagnosticsChecks, runConnectionDiagnostics } from './runConnectionDiagnostics';
 import { type FindingCode } from './types';
 
 vi.mock('@microsoft/vscode-azext-utils', async () => ({
@@ -40,7 +40,7 @@ vi.mock('@microsoft/vscode-azext-utils', async () => ({
         } as unknown as IActionContext),
 }));
 vi.mock('@documentdb-js/connection-diagnostics', async () => ({
-    ...(await vi.importActual<typeof ConnectivityTroubleshooter>('@documentdb-js/connection-diagnostics')),
+    ...(await vi.importActual<typeof ConnectionDiagnostics>('@documentdb-js/connection-diagnostics')),
     createBuiltInChecks: vi.fn(),
 }));
 vi.mock('../extensionVariables', () => ({
@@ -629,7 +629,7 @@ describe('PanelRowProjector', (): void => {
     });
 });
 
-describe('planned troubleshooter checks', (): void => {
+describe('planned diagnostics checks', (): void => {
     it.each([false, true])(
         'matches ordered IDs and scopes actually executed, with extra checks: %s',
         async (withExtra): Promise<void> => {
@@ -668,7 +668,7 @@ describe('planned troubleshooter checks', (): void => {
                       },
                   ]
                 : undefined;
-            const plan = getPlannedTroubleshooterChecks(extra);
+            const plan = getPlannedDiagnosticsChecks(extra);
             // Authentication is part of the default plan, so the Authentication row always has a check.
             expect(plan.slice(-(withExtra ? 5 : 4), withExtra ? -1 : undefined)).toEqual([
                 { id: 'authenticate', scope: 'run' },
@@ -681,7 +681,7 @@ describe('planned troubleshooter checks', (): void => {
             const foreign = new PanelRowProjector(describeFinding, plan);
             start(foreign, 'environment');
             const foreignSnapshot = foreign.rows();
-            const run = await runConnectivityTroubleshooter({
+            const run = await runConnectionDiagnostics({
                 target: {
                     clusterId: 'fixture',
                     displayName: 'fixture',

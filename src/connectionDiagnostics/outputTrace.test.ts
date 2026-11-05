@@ -6,17 +6,17 @@
 import { type CheckResult } from '@documentdb-js/connection-diagnostics';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ext } from '../extensionVariables';
-import { connectionOutcome, TroubleshooterOutputTrace } from './outputTrace';
+import { connectionOutcome, DiagnosticsOutputTrace } from './outputTrace';
 import { type FindingCode } from './types';
 
 vi.mock('../extensionVariables', () => ({ ext: { outputChannel: { info: vi.fn() } } }));
 
-describe('TroubleshooterOutputTrace', (): void => {
+describe('DiagnosticsOutputTrace', (): void => {
     beforeEach((): void => {
         vi.clearAllMocks();
     });
     it('writes one safe line per check and step, with stable numeric targets and dependency reasons', (): void => {
-        const trace = new TroubleshooterOutputTrace('run-id');
+        const trace = new DiagnosticsOutputTrace('run-id');
         trace.started('errorNode', 'initial', 'default');
         const result: CheckResult<FindingCode> = {
             checkId: 'hello',
@@ -67,7 +67,7 @@ describe('TroubleshooterOutputTrace', (): void => {
     });
 
     it('never writes error text or an arbitrary error name', (): void => {
-        const trace = new TroubleshooterOutputTrace('run-id');
+        const trace = new DiagnosticsOutputTrace('run-id');
         const error = new Error('secret-password');
         error.name = 'secret-user';
         trace.failed(error);
@@ -98,7 +98,7 @@ describe('derived Output outcome', (): void => {
             if (status === 'skipped') {
                 outcome = 'notTested';
             }
-            const trace = new TroubleshooterOutputTrace('derived-run');
+            const trace = new DiagnosticsOutputTrace('derived-run');
             trace.finished(connectionOutcome({ results: [result] }));
             expect(ext.outputChannel.info).toHaveBeenLastCalledWith(
                 `[Connection diagnosis] run=derived-run finished outcome=${outcome}`,

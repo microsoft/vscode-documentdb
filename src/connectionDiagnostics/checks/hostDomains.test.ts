@@ -18,8 +18,8 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { describeFinding } from '../findingMessages';
-import { troubleshooterIdentifierKeys } from '../identifierKeys';
-import { type TroubleshooterSetup } from '../input';
+import { diagnosticsIdentifierKeys } from '../identifierKeys';
+import { type DiagnosticsSetup } from '../input';
 import { buildRowDetails } from '../panelDetails';
 import { createExtensionReportText } from '../reportText';
 import { offlineIo } from '../test/fixtures';
@@ -35,8 +35,8 @@ const pub = 'b.mongocluster.cosmos.azure.com';
 const china = 'c.mongocluster.cosmos.azure.cn';
 const privateName = 'b.documentdb.private.example';
 
-function setup(chosenAuthMethod: AuthMethodId | undefined): () => TroubleshooterSetup {
-    return (): TroubleshooterSetup => ({ chosenAuthMethod }) as TroubleshooterSetup;
+function setup(chosenAuthMethod: AuthMethodId | undefined): () => DiagnosticsSetup {
+    return (): DiagnosticsSetup => ({ chosenAuthMethod }) as DiagnosticsSetup;
 }
 
 function target(host: string, port = 10260): ProbeTarget {
@@ -335,7 +335,7 @@ describe('dns.mixedHostDomains in the panel and the report', (): void => {
                     retryWouldHelp: false,
                 },
             },
-            { identifierKeys: troubleshooterIdentifierKeys },
+            { identifierKeys: diagnosticsIdentifierKeys },
         );
         const markdown = renderMarkdown(report, { text: createExtensionReportText(), redact: true });
         const nameResolution = markdown.slice(markdown.indexOf('## Name resolution'), markdown.indexOf('## Transport'));

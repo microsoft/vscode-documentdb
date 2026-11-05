@@ -7,23 +7,23 @@ import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { type TroubleshooterEntryPoint, type TroubleshootTarget } from '../../../connectionDiagnostics/types';
+import { type DiagnosticsEntryPoint, type DiagnosticsTarget } from '../../../connectionDiagnostics/types';
 import { isFeedbackPermitted } from '../../../utils/feedbackPermission';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './connectionDiagnosticsRouter';
-import { type ConnectivityTroubleshooterConfiguration } from './connectionDiagnosticsTypes';
-import { TroubleshooterPanelSession } from './diagnosticsPanelSession';
+import { type ConnectionDiagnosticsConfiguration } from './connectionDiagnosticsTypes';
+import { DiagnosticsPanelSession } from './diagnosticsPanelSession';
 
 interface PanelController {
-    readonly controller: AppWebviewController<ConnectivityTroubleshooterConfiguration>;
-    readonly session: TroubleshooterPanelSession;
+    readonly controller: AppWebviewController<ConnectionDiagnosticsConfiguration>;
+    readonly session: DiagnosticsPanelSession;
 }
 
 const panels = new Map<string, PanelController>();
 
-export function openConnectivityTroubleshooter(options: {
-    target: TroubleshootTarget;
-    entryPoint: TroubleshooterEntryPoint;
+export function openConnectionDiagnostics(options: {
+    target: DiagnosticsTarget;
+    entryPoint: DiagnosticsEntryPoint;
 }): { panelAction: 'created' | 'focused'; troubleshooterSessionId: string } {
     const { target, entryPoint } = options;
     const existing = panels.get(target.clusterId);
@@ -33,7 +33,7 @@ export function openConnectivityTroubleshooter(options: {
         return { panelAction: 'focused', troubleshooterSessionId: existing.session.troubleshooterSessionId };
     }
 
-    const session = new TroubleshooterPanelSession(randomUUID());
+    const session = new DiagnosticsPanelSession(randomUUID());
     const context: RouterContext = {
         dbExperience: API.DocumentDB,
         webviewName: 'connectivityTroubleshooter',
@@ -41,7 +41,7 @@ export function openConnectivityTroubleshooter(options: {
         entryPoint,
         session,
     };
-    const controller = openAppWebview<ConnectivityTroubleshooterConfiguration>({
+    const controller = openAppWebview<ConnectionDiagnosticsConfiguration>({
         title: vscode.l10n.t('Diagnose: {0}', target.displayName),
         webviewName: 'connectivityTroubleshooter',
         panelViewType: 'vscode-documentdb-connectivity-troubleshooter',

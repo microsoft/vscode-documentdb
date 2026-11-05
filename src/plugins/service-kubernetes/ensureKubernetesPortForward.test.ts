@@ -99,7 +99,7 @@ describe('ensureKubernetesPortForward', () => {
         );
     });
 
-    it('passes the troubleshooter intent to the tunnel manager as non-interactive', async () => {
+    it('passes the diagnostics intent to the tunnel manager as non-interactive', async () => {
         mockGetSource.mockResolvedValue({ id: 'src-uuid-1', label: 'team.yaml', kind: 'file' });
         mockLoadConfiguredKubeConfig.mockResolvedValue({});
         mockCreateCoreApi.mockResolvedValue({});

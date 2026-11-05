@@ -37,7 +37,7 @@ import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCred
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
-import { connectivityTroubleshooterRouter } from '../documentdb/connectionDiagnostics/connectionDiagnosticsRouter';
+import { connectionDiagnosticsRouter } from '../documentdb/connectionDiagnostics/connectionDiagnosticsRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
 import { confirmInput, showModalConfirmation, type ConfirmResult } from './commonDialogs';
@@ -296,7 +296,7 @@ export const appRouter = router({
         indexView: indexViewRouter,
     },
     localQuickStart: localQuickStartRouter,
-    connectivityTroubleshooter: connectivityTroubleshooterRouter,
+    connectivityTroubleshooter: connectionDiagnosticsRouter,
 });
 
 // Export type router type signature, this is used by the client.

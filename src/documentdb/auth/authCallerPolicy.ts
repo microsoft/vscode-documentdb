@@ -30,8 +30,8 @@ export interface AuthPhaseObserver {
 }
 
 /**
- * How the caller wants authentication to behave. Ordinary connects are interactive; the
- * connectivity troubleshooter is not, and never opens sign-in UI.
+ * How the caller wants authentication to behave. Ordinary connects are interactive; connection
+ * diagnostics are not, and never open sign-in UI.
  */
 export interface AuthCallerPolicy {
     readonly interactive: boolean;

@@ -15,9 +15,9 @@ import {
     type ConnectionReachabilityObserver,
     type ConnectionReachabilityResult,
 } from '../../services/connectionReachabilityService';
-import { type TroubleshooterSetup } from '../input';
+import { type DiagnosticsSetup } from '../input';
 import { safeErrorName } from '../outputTrace';
-import { type FindingCode, type TroubleshootTarget } from '../types';
+import { type FindingCode, type DiagnosticsTarget } from '../types';
 
 function localPortInUse(error: LocalPortInUseError): Finding<FindingCode> {
     return {
@@ -43,8 +43,8 @@ function sharedTunnel(outcome: NonNullable<ConnectionReachabilityResult['sharedT
  * ordinary connect would use; it is reported and stays open after the run (decision 0017).
  */
 export function createPrepareCheck(
-    target: TroubleshootTarget,
-    getSetup: () => TroubleshooterSetup,
+    target: DiagnosticsTarget,
+    getSetup: () => DiagnosticsSetup,
 ): Check<RunContext, FindingCode> {
     return {
         id: 'prepare',

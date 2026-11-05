@@ -56,7 +56,7 @@ export interface ConnectionReachabilityProvider {
 /** How a caller wants preparation to behave. Absent means an ordinary, interactive connect. */
 export interface ConnectionReachabilityIntent {
     /**
-     * `false` for the connectivity troubleshooter: a provider must not show a dialog or notification,
+     * `false` for connection diagnostics: a provider must not show a dialog or notification,
      * and fails with a typed error (such as {@link LocalPortInUseError}) where it would otherwise ask.
      */
     readonly interactive?: boolean;

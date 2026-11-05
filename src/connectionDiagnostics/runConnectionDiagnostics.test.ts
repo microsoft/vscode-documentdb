@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as ConnectivityTroubleshooter from '@documentdb-js/connection-diagnostics';
+import type * as ConnectionDiagnostics from '@documentdb-js/connection-diagnostics';
 import {
     createBuiltInChecks,
     type BuiltInFindingCode,
@@ -17,7 +17,7 @@ import type * as MongoDB from 'mongodb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { API, DocumentDBExperience } from '../DocumentDBExperiences';
-import { troubleshootConnection } from '../commands/diagnoseConnection/diagnoseConnection';
+import { diagnoseConnection } from '../commands/diagnoseConnection/diagnoseConnection';
 import { ClustersClient } from '../documentdb/ClustersClient';
 import { CredentialCache } from '../documentdb/CredentialCache';
 import { Views } from '../documentdb/Views';
@@ -31,8 +31,8 @@ import {
     ConnectionInputCancelledError,
     ConnectionSourceUnavailableError,
 } from '../tree/documentdb/diagnosticCredentialRead';
-import { openConnectivityTroubleshooter } from '../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';
-import { runConnectivityTroubleshooter, type RunConnectivityTroubleshooterOptions } from './runConnectionDiagnostics';
+import { openConnectionDiagnostics } from '../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';
+import { runConnectionDiagnostics, type RunConnectionDiagnosticsOptions } from './runConnectionDiagnostics';
 import { type FindingCode } from './types';
 
 interface RecordedEvent {
@@ -74,7 +74,7 @@ vi.mock('@microsoft/vscode-azext-utils', async () => {
     };
 });
 vi.mock('@documentdb-js/connection-diagnostics', async () => ({
-    ...(await vi.importActual<typeof ConnectivityTroubleshooter>('@documentdb-js/connection-diagnostics')),
+    ...(await vi.importActual<typeof ConnectionDiagnostics>('@documentdb-js/connection-diagnostics')),
     createBuiltInChecks: vi.fn(),
 }));
 vi.mock('../extensionVariables', () => ({
@@ -111,7 +111,7 @@ vi.mock('mongodb', async (importOriginal) => {
 });
 
 vi.mock('../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController', () => ({
-    openConnectivityTroubleshooter: vi.fn(),
+    openConnectionDiagnostics: vi.fn(),
 }));
 
 const host = 'fixture-private.example';
@@ -135,7 +135,7 @@ const orderedIds = [
     'contextHints',
 ];
 
-function options(overrides: Partial<RunConnectivityTroubleshooterOptions> = {}): RunConnectivityTroubleshooterOptions {
+function options(overrides: Partial<RunConnectionDiagnosticsOptions> = {}): RunConnectionDiagnosticsOptions {
     return {
         target: {
             clusterId: 'stable-id',
@@ -185,7 +185,7 @@ function terminalContext(): IActionContext {
     return event.context;
 }
 
-describe('runConnectivityTroubleshooter', (): void => {
+describe('runConnectionDiagnostics', (): void => {
     beforeEach((): void => {
         vi.clearAllMocks();
         events.length = 0;
@@ -213,7 +213,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             scope: 'run',
             run: async (): Promise<CheckOutcome<FindingCode>> => ({ status: 'pass', facts: {}, findings: [] }),
         };
-        const run = await runConnectivityTroubleshooter(
+        const run = await runConnectionDiagnostics(
             options({
                 extraChecks: [extra],
                 onEvent: (event): void => {
@@ -236,7 +236,7 @@ describe('runConnectivityTroubleshooter', (): void => {
     it('uses the supplied run ID in events, Output trace and telemetry', async (): Promise<void> => {
         const observed: DiagnosticsEvent<FindingCode>[] = [];
         const runId = 'caller-generated-run-id';
-        const run = await runConnectivityTroubleshooter(
+        const run = await runConnectionDiagnostics(
             options({
                 runId,
                 onEvent: (event): void => {
@@ -256,7 +256,7 @@ describe('runConnectivityTroubleshooter', (): void => {
     });
 
     it('sends accepted then terminal telemetry with bounded fields, counts and no connection-identifying values', async (): Promise<void> => {
-        const run = await runConnectivityTroubleshooter(
+        const run = await runConnectionDiagnostics(
             options({ runIndex: 2, runTrigger: 'rerun', timeoutProfile: 'longer' }),
         );
         expect(events.map((event): string => event.name)).toEqual([
@@ -335,7 +335,7 @@ describe('runConnectivityTroubleshooter', (): void => {
 
     it('authenticates with the chosen method on a run-owned client after hello and closes it when the run ends', async (): Promise<void> => {
         const getClient = vi.spyOn(ClustersClient, 'getClient');
-        const run = await runConnectivityTroubleshooter(options());
+        const run = await runConnectionDiagnostics(options());
         expect(run.results.find((result): boolean => result.checkId === 'authenticate')).toMatchObject({
             status: 'pass',
             facts: { authMethod: 'NativeAuth', userName: user, authenticated: true },
@@ -366,7 +366,7 @@ describe('runConnectivityTroubleshooter', (): void => {
         };
         vi.mocked(createBuiltInChecks).mockReturnValue(checks);
         const request = options();
-        const run = await runConnectivityTroubleshooter({
+        const run = await runConnectionDiagnostics({
             ...request,
             target: {
                 ...request.target,
@@ -414,9 +414,9 @@ describe('runConnectivityTroubleshooter', (): void => {
             expect(terminalContext().telemetry.maskEntireErrorMessage).toBe(true);
             return undefined;
         });
-        const run = await runConnectivityTroubleshooter({ ...request, target: { ...request.target, getCredentials } });
+        const run = await runConnectionDiagnostics({ ...request, target: { ...request.target, getCredentials } });
         expect(terminalContext().valuesToMask).toContain('cache-password');
-        // A deleted connection is a finished run with a typed finding, not a failed troubleshooter (R2).
+        // A deleted connection is a finished run with a typed finding, not a failed diagnosis run (R2).
         expect(run.results.find((result): boolean => result.checkId === 'resolveTarget')).toMatchObject({
             status: 'fail',
             findings: [expect.objectContaining({ code: 'target.notFound', data: { source: 'savedConnection' } })],
@@ -424,7 +424,7 @@ describe('runConnectivityTroubleshooter', (): void => {
         expect(outputLines().at(-1)).toBe(`[Connection diagnosis] run=${run.runId} finished outcome=failed`);
     });
 
-    it('reports a connection-string failure as a failed connection, not a failed troubleshooter', async (): Promise<void> => {
+    it('reports a connection-string failure as a failed connection, not a failed diagnosis run', async (): Promise<void> => {
         const checks = builtIns();
         const cs = checks.find((check): boolean => check.id === 'connectionString');
         if (!cs) {
@@ -442,7 +442,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             ],
         });
         vi.mocked(createBuiltInChecks).mockReturnValue(checks);
-        const run = await runConnectivityTroubleshooter(options());
+        const run = await runConnectionDiagnostics(options());
         expect(terminalContext().telemetry.properties).toMatchObject({
             result: 'Succeeded',
             connectionOutcome: 'failed',
@@ -490,7 +490,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             ],
         });
         vi.mocked(createBuiltInChecks).mockReturnValue(checks);
-        await runConnectivityTroubleshooter(options());
+        await runConnectionDiagnostics(options());
         expect(terminalContext().telemetry.properties.findingCodes).toBe('dns.resolversDisagree,tcp.refused');
         expect(terminalContext().telemetry.properties.firstBlockingCheck).toBe('tcp');
         expect(terminalContext().telemetry.measurements).toMatchObject({
@@ -507,7 +507,7 @@ describe('runConnectivityTroubleshooter', (): void => {
     });
 
     it('reports a saved connection provider failure in prepare, not as an unexpected run failure', async (): Promise<void> => {
-        const actual = await vi.importActual<typeof ConnectivityTroubleshooter>(
+        const actual = await vi.importActual<typeof ConnectionDiagnostics>(
             '@documentdb-js/connection-diagnostics',
         );
         const probes = actual.createBuiltInChecks();
@@ -529,7 +529,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             appliesTo: (): boolean => true,
             ensureReachable,
         });
-        vi.mocked(openConnectivityTroubleshooter).mockReturnValue({
+        vi.mocked(openConnectionDiagnostics).mockReturnValue({
             panelAction: 'created',
             troubleshooterSessionId: 'panel-session-id',
         });
@@ -545,10 +545,10 @@ describe('runConnectivityTroubleshooter', (): void => {
             telemetry: { properties: {}, measurements: {} },
             errorHandling: {},
         } as unknown as IActionContext;
-        await troubleshootConnection(context, node);
-        const { target } = vi.mocked(openConnectivityTroubleshooter).mock.calls[0][0];
+        await diagnoseConnection(context, node);
+        const { target } = vi.mocked(openConnectionDiagnostics).mock.calls[0][0];
         const observed: DiagnosticsEvent<FindingCode>[] = [];
-        const run = await runConnectivityTroubleshooter(
+        const run = await runConnectionDiagnostics(
             options({
                 target,
                 onEvent: (event): void => {
@@ -603,7 +603,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             availableAuthMethods: [],
             connectionProperties: { tunnel: true },
         });
-        const run = await runConnectivityTroubleshooter(request);
+        const run = await runConnectionDiagnostics(request);
         expect(run.results.find((result): boolean => result.checkId === 'prepare')?.status).toBe('fail');
         for (const id of ['srv', 'dns']) {
             expect(run.results.find((result): boolean => result.checkId === id)).toMatchObject({
@@ -632,7 +632,7 @@ describe('runConnectivityTroubleshooter', (): void => {
                         started();
                     }),
             };
-            const pending = runConnectivityTroubleshooter(
+            const pending = runConnectionDiagnostics(
                 options({
                     signal: controller.signal,
                     cancelReason: (): typeof cancelReason => cancelReason,
@@ -674,7 +674,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             });
             return undefined;
         });
-        const pending = runConnectivityTroubleshooter(request);
+        const pending = runConnectionDiagnostics(request);
         await resolving;
         controller.abort();
         await expect(pending).rejects.toBeInstanceOf(UserCancelledError);
@@ -691,7 +691,7 @@ describe('runConnectivityTroubleshooter', (): void => {
     });
 
     it('uses the real built-in connection-string diagnostic without a network operation for malformed input', async (): Promise<void> => {
-        const actual = await vi.importActual<typeof ConnectivityTroubleshooter>(
+        const actual = await vi.importActual<typeof ConnectionDiagnostics>(
             '@documentdb-js/connection-diagnostics',
         );
         vi.mocked(createBuiltInChecks).mockReturnValue(actual.createBuiltInChecks());
@@ -700,7 +700,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             connectionString: 'not-a-valid-uri',
             availableAuthMethods: [],
         });
-        const run = await runConnectivityTroubleshooter(request);
+        const run = await runConnectionDiagnostics(request);
         expect(run.results.find((result): boolean => result.checkId === 'connectionString')).toMatchObject({
             status: 'fail',
             findings: [expect.objectContaining({ code: 'cs.unparseable' })],
@@ -718,7 +718,7 @@ describe('runConnectivityTroubleshooter', (): void => {
                 ...(credentialState === 'passwordMissing' ? { selectedAuthMethod: AuthMethodId.NativeAuth } : {}),
             });
             Object.defineProperty(vscode.env, 'remoteName', { value: 'ssh-remote', configurable: true });
-            const run = await runConnectivityTroubleshooter(request);
+            const run = await runConnectionDiagnostics(request);
             expect(terminalContext().telemetry.properties).toMatchObject({
                 authSkipReason: credentialState === 'noMethod' ? 'method' : 'password',
                 remoteKind: 'ssh',
@@ -759,7 +759,7 @@ describe('runConnectivityTroubleshooter', (): void => {
                     started();
                 }),
         };
-        const pending = runConnectivityTroubleshooter(options({ extraChecks: [check] }));
+        const pending = runConnectionDiagnostics(options({ extraChecks: [check] }));
         await isStarted;
         await vi.advanceTimersByTimeAsync(5000);
         const run = await pending;
@@ -800,7 +800,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             return { status: 'pass', facts: {}, findings: [] };
         };
         vi.mocked(createBuiltInChecks).mockReturnValue(checks);
-        const pending = runConnectivityTroubleshooter(options({ signal: controller.signal }));
+        const pending = runConnectionDiagnostics(options({ signal: controller.signal }));
         await waiting;
         await Promise.resolve();
         await Promise.resolve();
@@ -818,7 +818,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             controller.abort();
             return undefined;
         });
-        await expect(runConnectivityTroubleshooter(request)).rejects.toBeInstanceOf(UserCancelledError);
+        await expect(runConnectionDiagnostics(request)).rejects.toBeInstanceOf(UserCancelledError);
         await Promise.resolve();
         expect(terminalContext().telemetry.properties.result).toBe('Canceled');
     });
@@ -827,13 +827,13 @@ describe('runConnectivityTroubleshooter', (): void => {
         const controller = new AbortController();
         controller.abort();
         const request = options({ signal: controller.signal });
-        await expect(runConnectivityTroubleshooter(request)).rejects.toBeInstanceOf(UserCancelledError);
+        await expect(runConnectionDiagnostics(request)).rejects.toBeInstanceOf(UserCancelledError);
         expect(request.target.getCredentials).not.toHaveBeenCalled();
         expect(terminalContext().telemetry.properties.activeChecks).toBe('');
     });
 
     it('ignores subscriber errors without losing a successful run', async (): Promise<void> => {
-        const run = await runConnectivityTroubleshooter(
+        const run = await runConnectionDiagnostics(
             options({
                 onEvent: (): never => {
                     throw new Error('Subscriber failed');
@@ -848,7 +848,7 @@ describe('runConnectivityTroubleshooter', (): void => {
         it('reads the target inside the run, after the clock starts, with the run signal', async (): Promise<void> => {
             const observed: DiagnosticsEvent<FindingCode>[] = [];
             const request = options({ onEvent: (event): void => void observed.push(event) });
-            const run = await runConnectivityTroubleshooter(request);
+            const run = await runConnectionDiagnostics(request);
             const started = observed.findIndex(
                 (event): boolean => event.type === 'checkStarted' && event.checkId === 'resolveTarget',
             );
@@ -865,7 +865,7 @@ describe('runConnectivityTroubleshooter', (): void => {
                 readSignal = read.signal;
                 return new Promise<undefined>((): void => {});
             });
-            const pending = runConnectivityTroubleshooter(request);
+            const pending = runConnectionDiagnostics(request);
             await vi.advanceTimersByTimeAsync(300_000);
             const run = await pending;
             expect(readSignal?.aborted).toBe(true);
@@ -914,7 +914,7 @@ describe('runConnectivityTroubleshooter', (): void => {
                     connectionProperties: { kubernetesPortForward: true },
                 };
             });
-            const pending = runConnectivityTroubleshooter(request);
+            const pending = runConnectionDiagnostics(request);
             await reading;
             controller.abort();
             await expect(pending).rejects.toBeInstanceOf(UserCancelledError);
@@ -955,7 +955,7 @@ describe('runConnectivityTroubleshooter', (): void => {
             async (error, code, data, outcome): Promise<void> => {
                 const request = options();
                 vi.mocked(request.target.getCredentials).mockRejectedValue(error);
-                const run = await runConnectivityTroubleshooter(request);
+                const run = await runConnectionDiagnostics(request);
                 expect(run.results.find((result): boolean => result.checkId === 'resolveTarget')).toMatchObject({
                     status: 'fail',
                     findings: [{ code, severity: 'error', data }],

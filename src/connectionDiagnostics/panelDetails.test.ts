@@ -17,7 +17,7 @@ import {
     type PanelRowStatus,
 } from '../webviews/documentdb/connectionDiagnostics/panelTypes';
 import { describeFinding } from './findingMessages';
-import { troubleshooterIdentifierKeys } from './identifierKeys';
+import { diagnosticsIdentifierKeys } from './identifierKeys';
 import { buildRowDetails, withRowDetails } from './panelDetails';
 import { type FindingCode } from './types';
 
@@ -183,7 +183,7 @@ function report(results: readonly CheckResult<FindingCode>[]): ReturnType<typeof
                 retryWouldHelp: false,
             },
         },
-        { connectionName: 'Stage 0 fixture connection', identifierKeys: troubleshooterIdentifierKeys },
+        { connectionName: 'Stage 0 fixture connection', identifierKeys: diagnosticsIdentifierKeys },
     );
 }
 

@@ -17,7 +17,7 @@ import {
     type ConnectionDetailsSource,
 } from '../../tree/documentdb/diagnosticCredentialRead';
 import { safeErrorName } from '../outputTrace';
-import { type FindingCode, type TroubleshootTarget } from '../types';
+import { type FindingCode, type DiagnosticsTarget } from '../types';
 
 /** Why a source that holds the connection details could not be read. Bounded; safe for reports. */
 export type SourceInaccessibleReason = 'signInRequired' | 'accessDenied' | 'unreachable' | 'notConnectable' | 'other';
@@ -139,7 +139,7 @@ export function classifyResolutionFailure(error: unknown): Finding<FindingCode> 
  * settlement is ignored and the node's read performs no side effect after its signal aborts.
  */
 export function createResolveTargetCheck(
-    target: TroubleshootTarget,
+    target: DiagnosticsTarget,
     onResolved: (credentials: EphemeralClusterCredentials) => void,
     onFailed: (error: unknown) => void,
 ): Check<RunContext, FindingCode> {

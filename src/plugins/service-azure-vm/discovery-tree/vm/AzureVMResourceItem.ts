@@ -140,7 +140,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
     }
 
     /**
-     * The troubleshooter's read (decision 0035, refined in WI-16): the VM's discovery data has no port, so
+     * The diagnostics read (decision 0035, refined in WI-16): the VM's discovery data has no port, so
      * a port the user already entered in this session is reused silently. Otherwise the existing port
      * prompt is shown, dismissed by the run's signal; closing it reports cancelled input.
      */

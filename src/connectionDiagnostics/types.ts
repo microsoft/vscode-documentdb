@@ -38,9 +38,9 @@ export const extensionFindingCodes = [
 
 export type ExtensionFindingCode = (typeof extensionFindingCodes)[number];
 export type FindingCode = BuiltInFindingCode | ExtensionFindingCode;
-export type TroubleshooterEntryPoint = 'errorNode' | 'contextMenu' | 'commandPalette';
+export type DiagnosticsEntryPoint = 'errorNode' | 'contextMenu' | 'commandPalette';
 
-export interface TroubleshootTarget {
+export interface DiagnosticsTarget {
     readonly clusterId: string;
     readonly displayName: string;
     readonly sourceView: string;

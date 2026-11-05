@@ -607,7 +607,7 @@ function FindingView({ finding }: { finding: PanelFindingDetail }): JSX.Element 
 }
 
 /** The content of one row's disclosure: findings first, by severity, then the evidence. */
-export const TroubleshooterRowDetails = ({ details }: { details: PanelRowDetails }): JSX.Element => {
+export const DiagnosticsRowDetails = ({ details }: { details: PanelRowDetails }): JSX.Element => {
     const styles = useStyles();
     return (
         <div className={styles.root}>

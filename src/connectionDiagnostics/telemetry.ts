@@ -13,18 +13,18 @@ import { entraErrorRules } from '../documentdb/auth/entraErrors/entraErrorRules'
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { maskSensitiveValuesInTelemetry } from '../documentdb/utils/connectionStringHelpers';
 import { deriveResult } from './result';
-import { type RunConnectivityTroubleshooterOptions } from './runConnectionDiagnostics';
+import { type RunConnectionDiagnosticsOptions } from './runConnectionDiagnostics';
 import { extensionFindingCodes, type FindingCode } from './types';
 
 const knownFindingCodes: ReadonlySet<string> = new Set([...builtInFindingCodes, ...extensionFindingCodes]);
 
-export function configureTroubleshooterTelemetry(context: IActionContext): void {
+export function configureDiagnosticsTelemetry(context: IActionContext): void {
     context.telemetry.maskEntireErrorMessage = true;
     context.errorHandling.suppressDisplay = true;
     context.errorHandling.rethrow = true;
 }
 
-export function maskTroubleshooterInput(context: IActionContext, connectionString: string, password?: string): void {
+export function maskDiagnosticsInput(context: IActionContext, connectionString: string, password?: string): void {
     context.valuesToMask.push(connectionString);
     if (password) {
         context.valuesToMask.push(password, encodeURIComponent(password));
@@ -38,7 +38,7 @@ export function maskTroubleshooterInput(context: IActionContext, connectionStrin
 
 export function applyRunIdentity(
     context: IActionContext,
-    options: RunConnectivityTroubleshooterOptions,
+    options: RunConnectionDiagnosticsOptions,
     runId: string,
 ): void {
     Object.assign(context.telemetry.properties, {
@@ -51,9 +51,9 @@ export function applyRunIdentity(
     context.telemetry.measurements.runIndex = options.runIndex;
 }
 
-export async function reportRunStarted(options: RunConnectivityTroubleshooterOptions, runId: string): Promise<void> {
+export async function reportRunStarted(options: RunConnectionDiagnosticsOptions, runId: string): Promise<void> {
     await callWithTelemetryAndErrorHandling('connectivityTroubleshooter.runStarted', async (context): Promise<void> => {
-        configureTroubleshooterTelemetry(context);
+        configureDiagnosticsTelemetry(context);
         applyRunIdentity(context, options, runId);
     });
 }

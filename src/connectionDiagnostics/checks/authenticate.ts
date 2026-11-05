@@ -41,8 +41,8 @@ import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBCon
 import { type AuthTraceContext } from '../../utils/authTrace';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
 import { summarizeTokenClaims, type TokenClaimSummary } from '../auth/tokenClaims';
-import { type TroubleshooterSetup } from '../input';
-import { type FindingCode, type TroubleshootTarget } from '../types';
+import { type DiagnosticsSetup } from '../input';
+import { type FindingCode, type DiagnosticsTarget } from '../types';
 
 export const AUTH_STEP_IDS = ['auth.signInConfiguration', 'auth.token', 'auth.serverAuthentication'] as const;
 type AuthStepId = (typeof AUTH_STEP_IDS)[number];
@@ -278,8 +278,8 @@ class AuthSteps {
  * owned by the run. Never prompts, never reuses `ClustersClient` and never writes `CredentialCache`.
  */
 export function createAuthenticateCheck(
-    target: TroubleshootTarget,
-    getSetup: () => TroubleshooterSetup,
+    target: DiagnosticsTarget,
+    getSetup: () => DiagnosticsSetup,
     getTelemetryProperties: () => ITelemetryContext['properties'],
     getRunOwnedClient: () => RunOwnedClient,
     deps: AuthenticateCheckDeps = defaultDeps,

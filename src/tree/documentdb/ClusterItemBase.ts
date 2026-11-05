@@ -182,7 +182,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     public abstract getCredentials(): Promise<EphemeralClusterCredentials | undefined>;
 
     /**
-     * Reads the connection details for the connectivity troubleshooter: no UI, no tunnels, typed
+     * Reads the connection details for connection diagnostics: no UI, no tunnels, typed
      * failures (see `diagnosticCredentialRead.ts`). `undefined` means the connection no longer exists.
      *
      * The default suits nodes whose {@link getCredentials} only reads stored data. Override it when

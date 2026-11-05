@@ -8,7 +8,7 @@ import { isSettled } from './formatEvidence';
 import { panelRowIds, type PanelRow, type PanelRowId } from './panelTypes';
 import { type RunResult } from './DiagnosticsResultCard';
 
-export interface TroubleshooterViewState {
+export interface DiagnosticsViewState {
     readonly phase: 'running' | 'finished' | 'cancelled' | 'failed';
     /** Increments with every run the view starts; keys per-run components such as announcers. */
     readonly sequence: number;
@@ -29,7 +29,7 @@ export function pendingRows(): readonly PanelRow[] {
     return panelRowIds.map((id): PanelRow => ({ id, status: 'pending', segments: [] }));
 }
 
-export function startingState(sequence: number, startedAt: number): TroubleshooterViewState {
+export function startingState(sequence: number, startedAt: number): DiagnosticsViewState {
     return { phase: 'running', sequence, runId: undefined, startedAt, rows: pendingRows(), announcedRows: [] };
 }
 
@@ -54,7 +54,7 @@ function stopRows(rows: readonly PanelRow[]): readonly PanelRow[] {
     );
 }
 
-export function applyRunUpdate(state: TroubleshooterViewState, update: RunUpdate): TroubleshooterViewState {
+export function applyRunUpdate(state: DiagnosticsViewState, update: RunUpdate): DiagnosticsViewState {
     // An ended run, including one the user cancelled here, takes no late updates.
     if (state.phase !== 'running') {
         return state;
@@ -98,14 +98,14 @@ export function applyRunUpdate(state: TroubleshooterViewState, update: RunUpdate
     }
 }
 
-export function cancelRun(state: TroubleshooterViewState): TroubleshooterViewState {
+export function cancelRun(state: DiagnosticsViewState): DiagnosticsViewState {
     if (state.phase !== 'running') {
         return state;
     }
     return { ...state, phase: 'cancelled', rows: stopRows(state.rows), result: { kind: 'cancelled' } };
 }
 
-export function failRun(state: TroubleshooterViewState): TroubleshooterViewState {
+export function failRun(state: DiagnosticsViewState): DiagnosticsViewState {
     if (state.phase !== 'running') {
         return state;
     }

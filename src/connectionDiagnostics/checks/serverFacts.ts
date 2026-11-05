@@ -14,13 +14,13 @@ import { getAzureCloudFromHosts } from '../../documentdb/auth/oidcAllowedHosts';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { getClusterVersions } from '../../utils/clusterVersions';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
-import { type TroubleshooterSetup } from '../input';
+import { type DiagnosticsSetup } from '../input';
 import { type FindingCode } from '../types';
 import { asRecord, observePostConnectCommand, type CommandFact } from './postConnectCommand';
 
 function platformFacts(
     context: RunContext,
-    setup: TroubleshooterSetup,
+    setup: DiagnosticsSetup,
     hosts: readonly string[],
 ): Record<string, unknown> {
     if (context.getResult('prepare')?.facts.providerId === 'kubernetes-port-forward') {
@@ -104,7 +104,7 @@ function helloFacts(reply: Record<string, unknown>, client: MongoClient): Record
 }
 
 export function createServerFactsCheck(
-    getSetup: () => TroubleshooterSetup,
+    getSetup: () => DiagnosticsSetup,
     getRunOwnedClient: () => RunOwnedClient,
 ): Check<RunContext, FindingCode> {
     return {

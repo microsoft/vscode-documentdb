@@ -11,7 +11,7 @@ import { SSRProvider } from '@fluentui/react-components';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 
-import { ConnectivityTroubleshooter } from './ConnectionDiagnostics';
+import { ConnectionDiagnostics } from './ConnectionDiagnostics';
 import { type PanelEvent, type RunUpdate, type TimeoutProfile } from './connectionDiagnosticsTypes';
 import { formatDuration } from './formatEvidence';
 import { panelRowIds, type PanelRow } from './panelTypes';
@@ -175,7 +175,7 @@ async function render(): Promise<void> {
     await act(async () => {
         root.render(
             <SSRProvider>
-                <ConnectivityTroubleshooter />
+                <ConnectionDiagnostics />
             </SSRProvider>,
         );
     });
@@ -266,7 +266,7 @@ function announcements(): string[] {
         .filter((text): boolean => text.length > 0);
 }
 
-describe('ConnectivityTroubleshooter', () => {
+describe('ConnectionDiagnostics', () => {
     beforeEach(() => {
         // jsdom has no native modal top layer; its selector engine recurses on Floating UI's check.
         const matches = Element.prototype.matches;

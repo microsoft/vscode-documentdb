@@ -6,19 +6,19 @@
 import { type RunContext } from '@documentdb-js/connection-diagnostics';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionReachabilityService, LocalPortInUseError } from '../../services/connectionReachabilityService';
-import { type TroubleshooterSetup } from '../input';
-import { type TroubleshootTarget } from '../types';
+import { type DiagnosticsSetup } from '../input';
+import { type DiagnosticsTarget } from '../types';
 import { createPrepareCheck } from './prepare';
 
 const properties = { provider: true };
-const setup: TroubleshooterSetup = {
+const setup: DiagnosticsSetup = {
     input: { connectionString: 'mongodb://private.example/' },
     chosenAuthMethod: undefined,
     credentialState: 'noMethod',
     connectionProperties: properties,
     transientCredentials: undefined,
 };
-const target: TroubleshootTarget = {
+const target: DiagnosticsTarget = {
     clusterId: 'stable-id',
     displayName: 'Fixture',
     sourceView: 'connections',
@@ -34,7 +34,7 @@ describe('prepare check', (): void => {
 
     it('uses an observer, stable clusterId and the preparation timeout', async (): Promise<void> => {
         const ensure = vi.spyOn(ConnectionReachabilityService, 'ensureReachable');
-        const check = createPrepareCheck(target, (): TroubleshooterSetup => setup);
+        const check = createPrepareCheck(target, (): DiagnosticsSetup => setup);
         const result = await check.run(context, new AbortController().signal);
         expect(check).toMatchObject({
             id: 'prepare',
@@ -67,7 +67,7 @@ describe('prepare check', (): void => {
             appliesTo: (): boolean => true,
             ensureReachable: ensure,
         });
-        const result = await createPrepareCheck(target, (): TroubleshooterSetup => setup).run(
+        const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
             context,
             new AbortController().signal,
         );
@@ -90,7 +90,7 @@ describe('prepare check', (): void => {
                 appliesTo: (): boolean => true,
                 ensureReachable: async () => ({ sharedTunnel: tunnel }),
             });
-            const result = await createPrepareCheck(target, (): TroubleshooterSetup => setup).run(
+            const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
                 context,
                 new AbortController().signal,
             );
@@ -115,7 +115,7 @@ describe('prepare check', (): void => {
                     throw new LocalPortInUseError(27017, holder, 'Port 27017 is already in use.');
                 },
             });
-            const result = await createPrepareCheck(target, (): TroubleshooterSetup => setup).run(
+            const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
                 context,
                 new AbortController().signal,
             );
@@ -147,7 +147,7 @@ describe('prepare check', (): void => {
         const controller = new AbortController();
         controller.abort();
         await expect(
-            createPrepareCheck(target, (): TroubleshooterSetup => setup).run(context, controller.signal),
+            createPrepareCheck(target, (): DiagnosticsSetup => setup).run(context, controller.signal),
         ).rejects.toThrow();
         expect(ensure).not.toHaveBeenCalled();
     });
@@ -160,7 +160,7 @@ describe('prepare check', (): void => {
                 throw new TypeError('secret-password on private.example');
             },
         });
-        const result = await createPrepareCheck(target, (): TroubleshooterSetup => setup).run(
+        const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
             context,
             new AbortController().signal,
         );
@@ -182,7 +182,7 @@ describe('prepare check', (): void => {
                 throw error;
             },
         });
-        const result = await createPrepareCheck(target, (): TroubleshooterSetup => setup).run(
+        const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
             context,
             new AbortController().signal,
         );
@@ -199,7 +199,7 @@ describe('prepare check', (): void => {
                 controller.abort();
             },
         });
-        await createPrepareCheck(target, (): TroubleshooterSetup => setup).run(
+        await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
             { addCleanup } as unknown as RunContext,
             controller.signal,
         );

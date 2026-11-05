@@ -7,7 +7,7 @@ import { type CheckResult, type CheckStepResult, type Finding } from '@documentd
 import { describe, expect, it } from 'vitest';
 import { describeFinding } from './findingMessages';
 import { rowForCheck } from './panelRows';
-import { deriveResult, type TroubleshooterResult } from './result';
+import { deriveResult, type DiagnosticsResult } from './result';
 import { type FindingCode } from './types';
 
 function finding(
@@ -35,7 +35,7 @@ function step(
     return { stepId, status: 'fail', durationMs: 1, facts: {}, findings: [finding(code, data)] };
 }
 
-function derive(results: readonly CheckResult<FindingCode>[]): TroubleshooterResult {
+function derive(results: readonly CheckResult<FindingCode>[]): DiagnosticsResult {
     return deriveResult(results, describeFinding);
 }
 

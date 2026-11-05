@@ -5,16 +5,16 @@
 
 import { type DiagnosticsReport } from '@documentdb-js/connection-diagnostics';
 import { type Uri } from 'vscode';
-import { type RunConnectivityTroubleshooterOptions } from '../../../connectionDiagnostics/runConnectionDiagnostics';
+import { type RunConnectionDiagnosticsOptions } from '../../../connectionDiagnostics/runConnectionDiagnostics';
 import { type FindingCode } from '../../../connectionDiagnostics/types';
 import { type PanelEvent } from './connectionDiagnosticsTypes';
 
-export type CancelReason = ReturnType<NonNullable<RunConnectivityTroubleshooterOptions['cancelReason']>>;
+export type CancelReason = ReturnType<NonNullable<RunConnectionDiagnosticsOptions['cancelReason']>>;
 
 /** Bounds the Cancel requests remembered for runs whose subscription has not started yet. */
 const MAX_EARLY_CANCELS = 32;
 
-export class TroubleshooterPanelRun {
+export class DiagnosticsPanelRun {
     public readonly abortController = new AbortController();
     public cancelReason: CancelReason = 'subscriptionClosed';
 
@@ -42,11 +42,11 @@ interface ReportPreview {
 
 let reportSequence = 0;
 
-export class TroubleshooterPanelSession {
+export class DiagnosticsPanelSession {
     /** Neutral, unique labels also let the provider distinguish preview-tab lifetimes. */
     public readonly reportNumber = ++reportSequence;
     public reportPreview: ReportPreview | undefined;
-    public currentRun: TroubleshooterPanelRun | undefined;
+    public currentRun: DiagnosticsPanelRun | undefined;
     public runId: string | undefined;
     public runIndex = 0;
     public completedRun: { readonly runId: string; readonly report: DiagnosticsReport<FindingCode> } | undefined;
@@ -57,11 +57,11 @@ export class TroubleshooterPanelSession {
 
     public constructor(public readonly troubleshooterSessionId: string) {}
 
-    public startRun(runId: string, requestId: string): TroubleshooterPanelRun {
+    public startRun(runId: string, requestId: string): DiagnosticsPanelRun {
         this.currentRun?.abort('rerun');
         this.completedRun = undefined;
         this.runId = runId;
-        const run = new TroubleshooterPanelRun(runId, ++this.runIndex, requestId);
+        const run = new DiagnosticsPanelRun(runId, ++this.runIndex, requestId);
         this.currentRun = run;
         if (this.disposed) {
             run.abort('panelClosed');
@@ -76,7 +76,7 @@ export class TroubleshooterPanelSession {
      * the current run: it is either stale (its run was already replaced) or arrived before its
      * subscription started, and is then applied when that run starts.
      */
-    public cancel(requestId: string): TroubleshooterPanelRun | undefined {
+    public cancel(requestId: string): DiagnosticsPanelRun | undefined {
         if (this.currentRun?.requestId === requestId) {
             this.currentRun.abort('cancelButton');
             return this.currentRun;

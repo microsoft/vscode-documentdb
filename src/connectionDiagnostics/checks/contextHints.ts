@@ -18,10 +18,10 @@ import {
     type ExplanationIdentifierKind,
 } from '../../services/errorExplanationService';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
-import { type TroubleshooterSetup } from '../input';
-import { type FindingCode, type TroubleshootTarget } from '../types';
+import { type DiagnosticsSetup } from '../input';
+import { type FindingCode, type DiagnosticsTarget } from '../types';
 
-function sanitizeExplanation(message: string, context: RunContext, setup: TroubleshooterSetup | undefined): string {
+function sanitizeExplanation(message: string, context: RunContext, setup: DiagnosticsSetup | undefined): string {
     const credentials = setup?.transientCredentials;
     const connectionStrings = [
         context.input.connectionString,
@@ -175,9 +175,9 @@ function privateAccessHint(context: RunContext, results: readonly CheckResult<st
 }
 
 export function createContextHintsCheck(
-    target: TroubleshootTarget,
+    target: DiagnosticsTarget,
     /** `undefined` when the target could not be resolved. */
-    getSetup: () => TroubleshooterSetup | undefined,
+    getSetup: () => DiagnosticsSetup | undefined,
     getRunOwnedClient: () => RunOwnedClient,
     earlierChecks: readonly Pick<Check<RunContext, FindingCode>, 'id' | 'scope'>[],
     /** The target read's failure, when resolution failed; providers translate it like a connect error. */
