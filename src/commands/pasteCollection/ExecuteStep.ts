@@ -9,6 +9,7 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/DocumentDbDocumentReader';
 import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
+import { getExtensionCopyCollectionStrings } from '../../services/taskService/extension/extensionCopyCollectionStrings';
 import { createExtensionTaskOptions } from '../../services/taskService/extension/extensionTaskOptions';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
 import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
@@ -79,7 +80,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
             writer,
             indexCopier,
             undefined,
-            createExtensionTaskOptions(),
+            { ...createExtensionTaskOptions(), copyCollectionStrings: getExtensionCopyCollectionStrings() },
         );
 
         // Register task with the task service

@@ -101,7 +101,9 @@ describe('CopyPasteCollectionTask index phase', () => {
         } as unknown as CollectionIndexCopier;
         const reader = { streamDocuments: vi.fn() } as unknown as DocumentReader;
         const writer = { streamDocuments: vi.fn() } as unknown as StreamingDocumentWriter;
-        const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
+        const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0, {
+            logger: ext.outputChannel,
+        });
         const context = createContext();
 
         await task.runWorkForTest(new AbortController().signal, context);
@@ -227,5 +229,42 @@ describe('CopyPasteCollectionTask index phase', () => {
 
         expect(indexCopier.copyIndexes).not.toHaveBeenCalled();
         expect(reader.streamDocuments).not.toHaveBeenCalled();
+    });
+});
+
+describe('CopyPasteCollectionTask injected strings', () => {
+    it('overrides the task name and a progress message with partial strings', async () => {
+        const indexCopier = {
+            copyIndexes: vi.fn().mockImplementation(async (options: CopyIndexesOptions) => {
+                options.onStart?.(20);
+                return {
+                    selectedIndexCount: 20,
+                    createdCount: 0,
+                    skippedCount: 20,
+                    renamedCount: 0,
+                    conflictingCount: 0,
+                    cancelled: false,
+                };
+            }),
+        } as unknown as CollectionIndexCopier;
+        const reader = { streamDocuments: vi.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: vi.fn() } as unknown as StreamingDocumentWriter;
+        const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0, {
+            copyCollectionStrings: {
+                taskName: (
+                    sourceCollection: string,
+                    sourceDatabase: string,
+                    targetDatabase: string,
+                    targetCollection: string,
+                ): string => `Transfer ${sourceDatabase}/${sourceCollection} to ${targetDatabase}/${targetCollection}`,
+                copyingIndexes: (total: string): string => `Preparing ${total} indexes`,
+            },
+        });
+
+        await task.runWorkForTest(new AbortController().signal, createContext());
+
+        expect(task.name).toBe('Transfer sourceDb/sourceCollection to targetDb/targetCollection');
+        expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Preparing 20 indexes' });
+        expect(task.progressUpdates).toContainEqual({ progress: 100, message: 'Source collection is empty.' });
     });
 });
