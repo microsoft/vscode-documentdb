@@ -21,7 +21,6 @@ import {
 } from '../auth/errors';
 import { listAwsProfiles, profileProvider } from '../auth/profiles';
 import { AwsCredentialStore, type AwsCredentialSecrets, type AwsKeySecrets } from '../credentials/awsCredentialStore';
-import { isAwsRegionId } from './regions';
 import {
     type AwsCluster,
     type AwsCredentialInput,
@@ -32,6 +31,7 @@ import {
     type AwsSsoPoll,
     type AwsSsoStart,
 } from '../types';
+import { isAwsRegionId } from './regions';
 
 export { AwsInteractionRequiredError } from '../auth/errors';
 
@@ -222,11 +222,7 @@ export class AwsDiscoveryService {
     public async retryCredentialDiscovery(credentialId: string): Promise<AwsDiscoverySnapshot> {
         this.refreshDiscovery();
         let snapshot = await this.listAll(false);
-        if (
-            snapshot.errors.some(
-                (error) => error.credentialId === credentialId && error.kind === 'auth',
-            )
-        ) {
+        if (snapshot.errors.some((error) => error.credentialId === credentialId && error.kind === 'auth')) {
             this.invalidate(credentialId);
             snapshot = await this.listAll(false);
         }

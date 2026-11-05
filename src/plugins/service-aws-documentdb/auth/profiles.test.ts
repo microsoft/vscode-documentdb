@@ -88,7 +88,8 @@ aws_secret_access_key = secret-value
 
     it('parses indented profile and SSO session assignments', async () => {
         readFileMock
-            .mockResolvedValueOnce(`
+            .mockResolvedValueOnce(
+                `
 [profile work]
   sso_session = company
   sso_account_id = 123456789012
@@ -96,7 +97,8 @@ aws_secret_access_key = secret-value
 [sso-session company]
   sso_start_url = https://example.awsapps.com/start
   sso_region = us-east-1
-`)
+`,
+            )
             .mockResolvedValueOnce('');
 
         await expect(listAwsProfiles()).resolves.toContainEqual({
