@@ -306,6 +306,25 @@ export type StrategyBatchResult<TDocumentId = unknown> =
     | GenerateNewIdsBatchResult<TDocumentId>;
 
 /**
+ * Result and retry information for one batch write attempt.
+ */
+export interface BatchAttemptOutcome<TDocumentId = unknown> {
+    result: StrategyBatchResult<TDocumentId>;
+    remaining?: DocumentDetails[];
+    errorType?: 'throttle' | 'network';
+    retryAfterMs?: number;
+}
+
+/**
+ * Type guard to distinguish an attempt outcome from a plain batch result.
+ */
+export function isBatchAttemptOutcome<T>(
+    value: StrategyBatchResult<T> | BatchAttemptOutcome<T>,
+): value is BatchAttemptOutcome<T> {
+    return 'result' in value;
+}
+
+/**
  * Type guard to check if result is from Skip strategy.
  */
 export function isSkipResult<T>(result: StrategyBatchResult<T>): result is SkipBatchResult<T> {
@@ -351,6 +370,8 @@ export function isGenerateNewIdsResult<T>(result: StrategyBatchResult<T>): resul
 export interface PartialProgress {
     /** Number of documents successfully processed before the error */
     processedCount: number;
+    /** Documents still to write; when omitted, the batch minus its first `processedCount` documents. */
+    remaining?: DocumentDetails[];
     /** Strategy-specific: number inserted (for Skip/Abort/GenerateNewIds) */
     insertedCount?: number;
     /** Strategy-specific: number skipped (for Skip) */

@@ -11,11 +11,13 @@ import {
 } from '../dataTransferHost';
 import {
     type AbortBatchResult,
+    type BatchAttemptOutcome,
     ConflictResolutionStrategy,
     type DocumentDetails,
     type EnsureTargetExistsResult,
     type ErrorType,
     type GenerateNewIdsBatchResult,
+    isBatchAttemptOutcome,
     isSkipResult,
     type OverwriteBatchResult,
     type PartialProgress,
@@ -126,9 +128,9 @@ export class StreamingWriterError extends Error {
  *
  * Subclasses implement 3 methods:
  *
- * 1. `writeBatch(documents, strategy)`: Write a batch with the specified strategy
+ * 1. `writeBatch(documents, strategy)`: Return a strategy result or a `BatchAttemptOutcome` with remaining documents
  * 2. `classifyError(error)`: Classify errors for retry decisions
- * 3. `extractPartialProgress(error)`: Extract progress from throttle/network errors
+ * 3. `extractPartialProgress(error)`: Extract progress and optional remaining documents from thrown throttle errors
  *
  * Plus `ensureTargetExists()` for collection setup.
  *
@@ -163,7 +165,8 @@ export class StreamingWriterError extends Error {
  * ### Throttle Recovery with Partial Progress
  *
  * When the database throttles a request but has already written some documents,
- * the partial progress is reported immediately and the batch is sliced for retry:
+ * partial progress is reported immediately, whether thrown or returned in a `BatchAttemptOutcome`.
+ * Retry uses explicit `remaining` documents, or drops the written prefix when only a count is reported:
  *
  * ```
  * flushBuffer              writeBatchWithRetry              writeBatch           BatchSizeAdapter
@@ -392,20 +395,21 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * **GenerateNewIds**: GenerateNewIdsBatchResult { insertedCount }
      * - Store original _id in backup field
      *
-     * IMPORTANT: Throw throttle/network errors for retry handling.
+     * For retry handling, throw throttle/network errors or return a BatchAttemptOutcome
+     * containing the result, remaining documents and error type.
      * Return conflicts in errors array (don't throw them).
      *
      * @param documents Batch of documents to write
      * @param strategy Conflict resolution strategy to use
      * @param actionContext Optional context for telemetry
-     * @returns Strategy-specific batch result with semantic field names
+     * @returns Strategy-specific batch result, or an outcome with retry information
      * @throws For throttle/network errors that should be retried
      */
     protected abstract writeBatch(
         documents: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
         actionContext?: TaskTelemetryContext,
-    ): Promise<StrategyBatchResult<TDocumentId>>;
+    ): Promise<StrategyBatchResult<TDocumentId> | BatchAttemptOutcome<TDocumentId>>;
 
     /**
      * Classifies an error into a specific type for retry handling.
@@ -426,7 +430,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     /**
      * Extracts partial progress from an error (for throttle recovery).
      *
-     * When a throttle or network error occurs, this method extracts how many
+     * When a throttle error is thrown, this method extracts how many
      * documents were successfully processed before the error. This allows
      * the retry logic to:
      * - Report accurate progress
@@ -624,7 +628,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      *
      * When a throttle error occurs with partial progress (some documents were
      * successfully inserted before the rate limit was hit), we accumulate the
-     * partial progress and slice the batch to skip already-processed documents.
+     * partial progress and retry the remaining documents. Progress may be thrown
+     * or returned; explicit remaining documents override the default prefix slicing.
      *
      * The onPartialProgress callback is called immediately when partial progress
      * is detected during throttle recovery, allowing real-time progress reporting.
@@ -668,51 +673,53 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                 return null;
             }
 
+            let outcome: BatchAttemptOutcome<TDocumentId>;
             try {
                 const result = await this.writeBatch(currentBatch, strategy, actionContext);
-                // Success - return the result (partial progress already reported via callback)
-                return result;
+                outcome = isBatchAttemptOutcome(result) ? result : { result };
             } catch (error) {
                 const errorType = this.classifyError(error, actionContext);
-
-                if (errorType === 'throttle') {
-                    const progress = this.extractPartialProgress(error, actionContext);
-                    const successfulCount = progress?.processedCount ?? 0;
-
-                    this.batchSizeAdapter.handleThrottle(successfulCount);
-
-                    if (successfulCount > 0) {
-                        const remainingCount = currentBatch.length - successfulCount;
-                        this.logger.debug(
-                            `[StreamingWriter] Throttle: wrote ${successfulCount} docs, ${remainingCount} remaining in batch`,
-                        );
-
-                        // Report partial progress immediately via callback
-                        if (progress) {
-                            const partialResult = this.progressToResult(progress, strategy);
-                            onPartialProgress(partialResult);
-                        }
-
-                        // Slice the batch to only contain remaining documents
-                        currentBatch = currentBatch.slice(successfulCount);
-                        attempt = 0; // Reset attempts when progress is made
-                    } else {
-                        attempt++;
-                    }
-
-                    await this.retryDelay(attempt, abortSignal);
-                    continue;
+                if (errorType !== 'throttle' && errorType !== 'network') {
+                    throw error;
                 }
 
-                if (errorType === 'network') {
-                    attempt++;
-                    await this.retryDelay(attempt, abortSignal);
-                    continue;
-                }
-
-                // For 'conflict', 'validator', and 'other' - don't retry
-                throw error;
+                const progress =
+                    errorType === 'throttle' ? this.extractPartialProgress(error, actionContext) : undefined;
+                outcome = {
+                    result: this.progressToResult(progress ?? { processedCount: 0 }, strategy),
+                    remaining: progress?.remaining ?? currentBatch.slice(progress?.processedCount ?? 0),
+                    errorType,
+                };
             }
+
+            if (!outcome.errorType && !outcome.remaining?.length) {
+                // Success - partial progress already reported via callback
+                return outcome.result;
+            }
+
+            const written = outcome.result.processedCount;
+            if (outcome.errorType === 'throttle') {
+                this.batchSizeAdapter.handleThrottle(written);
+            }
+
+            if (written > 0) {
+                const remainingCount = outcome.remaining?.length ?? 0;
+                this.logger.debug(
+                    `[StreamingWriter] Throttle: wrote ${written} docs, ${remainingCount} remaining in batch`,
+                );
+
+                onPartialProgress(outcome.result);
+                attempt = 0;
+            } else {
+                attempt++;
+            }
+
+            currentBatch = outcome.remaining ?? [];
+            if (currentBatch.length === 0) {
+                break;
+            }
+
+            await this.retryDelay(attempt, abortSignal);
         }
 
         if (currentBatch.length > 0) {
