@@ -50,7 +50,7 @@ treat `status: historical` or `status: superseded` as current.
 | [docs-site](./features/docs-site/README.md)                               | The GitHub Pages documentation site: Just the Docs theme, OS dark mode, local preview                    | draft #420                            |
 | [pre-release-polish](./features/pre-release-polish/README.md)             | Cross-feature visual and documentation refinements prepared for the 1.0 release                          | active                                |
 | [sovereign-clouds](./features/sovereign-clouds/README.md)                 | Entra sign-in in Azure Government and China: per-cloud token audience, Entra error classifier            | implemented; sovereign checks pending |
-| [deep-links](./features/deep-links/README.md)                             | `vscode://` links: action routing, `/connect`, `/local`, planned `/connect/azure` for Azure portal links | active; iteration 3 planned           |
+| [deep-links](./features/deep-links/README.md)                             | `vscode://` links: action routing, `/connect`, `/local`, `/connect/azure` for Azure portal links         | active; iteration 3 implemented       |
 
 Everything else is a single file at this root, such as:
 

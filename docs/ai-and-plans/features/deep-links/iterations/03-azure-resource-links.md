@@ -15,7 +15,7 @@ code:
 
 # Iteration 3 — Azure resource links (`/connect/azure`) and `open=`
 
-> **Status:** planned, not started. Decisions D0008–D0014 in [decisions.md](../decisions.md).
+> **Status:** implemented 2026-11-05 (WI1–WI11; WI12 is external). Release notes pending. Decisions D0008–D0014 in [decisions.md](../decisions.md).
 > Research on vscode-cosmosdb: [03-azure-resource-links-research.md](./03-azure-resource-links-research.md).
 
 ## Goal
@@ -94,6 +94,8 @@ Today `/connect` refuses any qualifier. Replace that with a hand-written allow-l
 `/connect/azure/x`, `/connect/../local`, legacy empty path still reaches the connection-string
 flow.
 
+> **Done (2026-11-05), commit `fe7e47e6`:** `CONNECT_SOURCES = ['azure']` and `parseConnectSource()` in `vscodeUriHandler.ts`; unknown sources and extra segments are refused with "Use /connect or /connect/azure" (stage `validateConnectPath`), never falling back to the connection-string flow. Records `deepLinkConnectSource`. The old "refuses any qualifier" test was updated to the new contract, not removed. Model: terra.
+
 ## WI2 — Arguments per variant, and `open`
 
 - Split `UriParams` into a connection-string shape and an Azure shape sharing `database`,
@@ -107,6 +109,8 @@ flow.
   `shell`), `mixedLocatorRefused`.
 
 **Tests:** every refusal above, `open` casing, masking contents.
+
+> **Done (2026-11-05), commit `9220dc53`:** `UriParams` split into shared, connection-string and Azure shapes; `parseOpenTarget()` allow-list; one shared `recordParamsInTelemetry()` masks `connectionString`, `resourceId`, `tenantId`, `database`, `collection` before any refusal and records `hasParam*`. Refusals for mixed locators (`mixedLocatorRefused`), `open` with `collection`, Azure collection without database, missing `resourceId`. Parsed subscription, group and name are masked in WI7. Model: terra.
 
 ## WI3 — Parse and classify the resource ID
 
@@ -125,6 +129,8 @@ strict checks stay ours.
 
 **Tests:** valid vCore and RU, mixed casing, trailing slash, child resource, wrong provider,
 non-GUID subscription and tenant, empty name.
+
+> **Done (2026-11-05), commit `867956c3`:** `src/deepLinks/azureResourceLink.ts`, hand-written parser (no azureutils dependency). Decision (orchestrator, 75%): a trailing slash is refused, because the plan says nothing after the name and the portal never emits one; it currently gets the "resource type" message rather than "invalid ID". 17 tests. Model: terra.
 
 ## WI4 — Azure sign-in and subscription resolution
 
@@ -150,6 +156,8 @@ non-GUID subscription and tenant, empty name.
 **Tests:** with a fake subscription provider: signed out → sign-in → found; tenant hint selects
 between duplicates; not found with and without hint.
 
+> **Done (2026-11-05), commit `c0bc26cb`:** `src/deepLinks/azureSubscription.ts` with the structural `AzureSubscriptionDiscoveryProvider` guard. Review fix: the "Manage Azure accounts" error button calls the provider's `configureCredentials(context)` directly, because the `discoveryView.manageCredentials` command throws "No node selected." without a tree node. 14 tests. Model: sol.
+
 ## WI5 — Read the resource from ARM
 
 - vCore: `getClusterInformationFromAzure(context, subscription, resourceGroup, name)`.
@@ -160,6 +168,8 @@ between duplicates; not found with and without hint.
   message. Check whether `ConnectionDiagnosticsService` should own this mapping (error-translation
   skill) before writing it inline.
 - Keep the returned name casing for display; it is what the tree shows.
+
+> **Done (2026-11-05), commit `e9193903`:** `src/deepLinks/azureResource.ts`. Open question 1 decided (orchestrator, 80%): the ARM error mapping stays local, because `ConnectionDiagnosticsService` explains connection failures keyed by `clusterId`, and this read happens before any cluster node or client exists. Note: `getClusterInformationFromAzure` also validates the connection string and auth config, so a vCore cluster without them is refused here, as the tree node would refuse it. 15 tests. Model: terra.
 
 ## WI6 — Visibility changes (D0011)
 
@@ -183,6 +193,8 @@ A pure `computeVisibilityChanges(providerId, subscription)` returning which of t
 **Tests:** each change alone and combined; empty selection untouched; existing entries preserved;
 nothing applied when the confirmation is cancelled.
 
+> **Done (2026-11-05), commit `14add1f4`:** `src/deepLinks/azureVisibility.ts`; reads the raw `tenantId/subscriptionId` entries with the existing globalState fallback, without syncing it while computing; never writes an empty selection. Small orchestrator fix: tolerate a malformed entry with no `/`. 11 tests. Model: sol.
+
 ## WI7 — Confirmation (D0012)
 
 When `showUrlHandlingConfirmations` is on, one modal:
@@ -197,6 +209,8 @@ When `showUrlHandlingConfirmations` is on, one modal:
 When the setting is off: no dialog; filter changes still apply (recorded in D0012 "Revisit if").
 
 No second or third confirmation as in `/connect`; those exist for the stored secret.
+
+> **Done (2026-11-05), commit `59e30fa5`:** `src/deepLinks/handleAzureResourceLink.ts` runs steps 1–8 in the table order with the listed `failureStage` values, one setting-gated confirmation listing every filter change (including the Azure Resources note), and `userCancelledAtStep = 'AzureConfirmation'`. The placeholder from WI1 is gone. 16 tests. Model: sol.
 
 ## WI8 — Reveal in the Discovery view
 
@@ -223,6 +237,8 @@ Wrap steps 2–6 in a notification progress "Opening <name>…" plus the view's 
 **Tests:** node match by resource ID with different casing; missing node after a refresh gives a
 clear error; database/collection missing.
 
+> **Done (2026-11-05), commit `32c670f4`:** `src/tree/discovery-view/discoveryViewHelpers.ts` with `waitForDiscoveryViewReady` (open question 2, orchestrator 75%: a readiness wait like the Connections View's) and `revealInDiscoveryView` (open question 3, orchestrator 80%: next to the tree, like `connectionsViewHelpers.ts`). Decision (orchestrator, 80%): instead of revealing with `expand: true` first, the helper reveals collapsed, runs `getChildren` on the cluster node once (the normal connect flow), returns if no client exists, then expands. This keeps a cancelled connect from being retried by the expansion, because the provider does not cache cancellations. 11 tests. Model: sol.
+
 ## WI9 — Open the target, on both variants (D0013, D0014)
 
 After the reveal, on both `/connect` and `/connect/azure`:
@@ -243,6 +259,8 @@ After the reveal, on both `/connect` and `/connect/azure`:
 **Tests:** dashboard opens with the setting off; dashboard with database targets the database node;
 shell receives only the node; `/connect` with `open=shell`.
 
+> **Done (2026-11-05), commit `87b309af`:** one `openTargetOnNode()` in `vscodeUriHandler.ts` for both variants; dashboard uses `activationSource: 'deepLink'` and never reads `showDashboardOnConnect`; the shell receives only the node. Azure opens the Collection View with the prefixed `clusterId` and the Discovery view; `/connect` adds an "Opens:" line to the open-connection confirmation and finds the node with `findNodeById`. Telemetry dashboards still need to count `deepLink` as a deliberate open (operator follow-up). 11 tests. Model: sol.
+
 ## WI10 — Telemetry summary
 
 Event stays `globalUriHandler` with the `failureStage` / `errorName` shape (issue #655). New
@@ -253,6 +271,8 @@ properties: `deepLinkConnectSource`, `azureResourceKind`, `hasParamResourceId`, 
 
 New properties are hidden until GDPR-classified; check them in `RawEventsVSCodeExtUnclassified`
 after the first build ships, not in the dashboards.
+
+> **Done (2026-11-05), no separate commit:** checked by the orchestrator. All twelve properties are set (`vscodeUriHandler.ts`, `deepLinks/azureSubscription.ts`, `deepLinks/handleAzureResourceLink.ts`); values are enums, booleans or counts; resource ID, tenant, subscription, group and name are masked.
 
 ## WI11 — Documentation
 
@@ -265,12 +285,16 @@ after the first build ships, not in the dashboards.
 - Release notes for the version that ships it.
 - `npm run l10n` for the new strings.
 
+> **Done (2026-11-05), commits `a8caebb0` (user manual, luna), `4a21c127` (l10n) and this docs commit (feature README).** Not done: release notes, because the shipping version is not decided yet (operator question).
+
 ## WI12 — Azure portal coordination (outside this repository)
 
 - Share the contract with the portal team: they send `resourceId` and `tenantId` (the portal knows
   the directory the user is in, which is what fixes the wrong-tenant case).
 - Agree whether the portal also offers `open=shell` / `open=dashboard` buttons.
 - Not a blocker for merging; the link works for anyone who builds it.
+
+> **Not done:** outside this repository; for the operator.
 
 ---
 
@@ -324,4 +348,7 @@ Manual, against a real subscription, for both a vCore cluster and an RU account:
 
 # Outcome
 
-_Not started._
+Implemented with the `/orchestrate` workflow, one commit per work item (done notes above).
+Automated: focused Vitest suites for every new module and the handler (209 tests) and `npm run build`.
+The manual verification table above has not been run yet. Open: release notes version, the
+telemetry dashboards counting `activationSource: 'deepLink'`, and WI12 with the portal team.

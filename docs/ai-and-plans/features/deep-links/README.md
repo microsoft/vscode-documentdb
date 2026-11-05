@@ -6,13 +6,15 @@ prs: [898]
 created: 2026-08-24
 code:
     - src/vscodeUriHandler.ts
+    - src/deepLinks/**
+    - src/tree/discovery-view/discoveryViewHelpers.ts
 ---
 
 # Deep Links
 
 **Status:** in progress — the action switch is new; `local` is its first non-`connect` action.
-Iteration 3 ([plan](./iterations/03-azure-resource-links.md)) adds `/connect/azure` for Azure
-portal links and an `open=` argument; planned, not started.
+Iteration 3 ([plan](./iterations/03-azure-resource-links.md)) added `/connect/azure` for Azure
+portal links and an `open=` argument; implemented, not yet manually verified or released.
 
 > How a URL from outside VS Code reaches this extension, and why the vocabulary looks the way it
 > does.
@@ -24,7 +26,7 @@ vscode://ms-azuretools.vscode-documentdb/connect?connectionString=…&database=�
 vscode://ms-azuretools.vscode-documentdb/local
 vscode://ms-azuretools.vscode-documentdb/local/documentdb
 vscode://ms-azuretools.vscode-documentdb?connectionString=…            ← legacy, means /connect
-vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=…&tenantId=…&open=shell   ← planned (iteration 3)
+vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=…&tenantId=…&open=shell
 ```
 
 ## Why this exists
@@ -39,8 +41,12 @@ Local" link has no connection string by definition, because the container does n
 
 ## Code map
 
-- `src/vscodeUriHandler.ts` — the whole handler: route parsing, the action allow-list, and the
-  `connect` implementation
+- `src/vscodeUriHandler.ts` — route parsing, the action and source allow-lists, argument
+  validation, the `connect` implementation, and opening the `open=` surface for both variants
+- `src/deepLinks/` — the `/connect/azure` flow: resource ID parsing, sign-in and subscription
+  resolution, the ARM read, visibility changes, and `handleAzureResourceLink.ts` tying them together
+- `src/tree/discovery-view/discoveryViewHelpers.ts` — `revealInDiscoveryView`, which finds the
+  cluster by `azureResourceId` and connects it once before expanding
 - `src/extension.ts` — registers it via `vscode.window.registerUriHandler`
 
 ## User docs
@@ -73,7 +79,7 @@ Local" link has no connection string by definition, because the container does n
 - **Telemetry keeps the `failureStage` / `errorName` shape.** It exists because of issue #655
   ("URL handler error rate at 100%"), and every new branch fills it in.
 
-### Planned in iteration 3
+### Added in iteration 3
 
 - **`/connect/<source>` names how the cluster is located.** `/connect` is a connection string;
   `/connect/azure` is an ARM resource ID, for portal links that cannot carry a connection string.
@@ -100,6 +106,7 @@ Local" link has no connection string by definition, because the container does n
 | 2026-08-24 | Action switch added in the path; `local` opens the DocumentDB Local wizard    |
 | 2026-09-01 | `local` gained a validated resource type and one setting-gated confirmation   |
 | 2026-11-05 | Iteration 3 planned: `/connect/azure` for portal links, `open=` (D0008–D0014) |
+| 2026-11-05 | Iteration 3 implemented (WI1–WI11); manual verification and release pending   |
 
 ## Open gaps
 
@@ -107,8 +114,11 @@ Local" link has no connection string by definition, because the container does n
   "other modes … will be handled by our discoverability plugins", and five discovery plugins exist
   (`service-atlas-mongodb`, `service-azure-mongo-ru`, `service-azure-mongo-vcore`,
   `service-azure-vm`, `service-kubernetes`). The `/discovery/<provider>` shape once reserved for
-  them was dropped: sources are qualifiers of `/connect` instead (D0008). Iteration 3 plans
-  `/connect/azure` for the two Azure Mongo plugins; the other plugins have no link yet.
+  them was dropped: sources are qualifiers of `/connect` instead (D0008). `/connect/azure` covers
+  the two Azure Mongo plugins; the other plugins have no link yet.
+- **`/connect/azure` is not manually verified.** The manual table in the
+  [iteration 3 plan](./iterations/03-azure-resource-links.md#verification) needs a real
+  subscription with a vCore cluster and an RU account. The portal button (WI12) is not agreed yet.
 - **`connect` still depends on the legacy emulator branch.** `isLegacyEmulatorMigrationComplete()`
   and `ConnectionType.Emulators` are removed by issue
   [#870](https://github.com/microsoft/vscode-documentdb/issues/870), milestone 0.11.0. That work and
