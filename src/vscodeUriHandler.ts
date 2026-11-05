@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openLocalQuickStart } from './commands/localQuickStart/openLocalQuickStart';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
+import { handleAzureResourceLinkRequest } from './deepLinks/handleAzureResourceLink';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { isLoopbackHost } from './documentdb/utils/hostClassification';
 import { stripTlsBypassParams } from './documentdb/utils/tlsException';
@@ -170,7 +171,10 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
                         context.telemetry.properties.failureStage = 'extractParams';
                         const params = extractAndValidateAzureParams(context, uri.query);
                         context.telemetry.properties.failureStage = 'handleAzureRequest';
-                        await handleAzureResourceLinkRequest(context, params);
+                        await handleAzureResourceLinkRequest(context, {
+                            ...params,
+                            resourceId: nonNullValue(params.resourceId, 'resourceId', 'vscodeUriHandler.ts'),
+                        });
                         break;
                     }
 
@@ -311,11 +315,6 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
             await openLocalQuickStart(context, undefined, { activationSource: 'deepLink' });
             break;
     }
-}
-
-// Placeholder until WI7
-async function handleAzureResourceLinkRequest(_context: IActionContext, _params: AzureUriParams): Promise<void> {
-    throw new Error('Azure resource links are not implemented yet.');
 }
 
 /**

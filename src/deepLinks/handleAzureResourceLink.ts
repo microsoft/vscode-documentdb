@@ -1,0 +1,143 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as vscode from 'vscode';
+import { settingsKeys } from '../settingsKeys';
+import { revealInDiscoveryView, type DiscoveryRevealResult } from '../tree/discovery-view/discoveryViewHelpers';
+import { readAzureResource } from './azureResource';
+import { parseAzureResourceLink } from './azureResourceLink';
+import { resolveAzureSubscription } from './azureSubscription';
+import { applyVisibilityChanges, computeVisibilityChanges, hasVisibilityChanges } from './azureVisibility';
+
+export interface AzureResourceLinkRequest {
+    readonly resourceId: string;
+    readonly tenantId?: string;
+    readonly database?: string;
+    readonly collection?: string;
+    readonly open?: 'dashboard' | 'shell';
+}
+
+/** Returns the reveal result for the caller to open a surface, or undefined when the flow stopped (cancelled or not connected). */
+export async function handleAzureResourceLinkRequest(
+    context: IActionContext,
+    request: AzureResourceLinkRequest,
+): Promise<DiscoveryRevealResult | undefined> {
+    context.telemetry.properties.failureStage = 'parseResourceId';
+    const link = parseAzureResourceLink(request.resourceId, request.tenantId);
+    context.valuesToMask.push(link.subscriptionId, link.resourceGroup, link.name);
+    context.telemetry.properties.azureResourceKind = link.kind;
+
+    const subscription = await resolveAzureSubscription(context, {
+        providerId: link.providerId,
+        subscriptionId: link.subscriptionId,
+        tenantId: link.tenantId,
+        resourceName: link.name,
+    });
+    if (!subscription) {
+        return undefined;
+    }
+
+    context.telemetry.properties.failureStage = 'readAzureResource';
+    const { name: displayName } = await readAzureResource(context, subscription, {
+        kind: link.kind,
+        resourceGroup: link.resourceGroup,
+        name: link.name,
+    });
+
+    context.telemetry.properties.failureStage = 'computeVisibility';
+    const changes = await computeVisibilityChanges(link.providerId, subscription);
+    context.telemetry.properties.visibilityProviderShown = changes.showProvider ? 'true' : 'false';
+    context.telemetry.properties.visibilityTenantUnfiltered = changes.unfilterTenant ? 'true' : 'false';
+    context.telemetry.properties.visibilitySubscriptionAdded = changes.addSubscription ? 'true' : 'false';
+    const visibilityChangesNeeded = hasVisibilityChanges(changes);
+
+    context.telemetry.properties.failureStage = 'confirm';
+    const showUrlHandlingConfirmations = vscode.workspace
+        .getConfiguration()
+        .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true);
+
+    if (showUrlHandlingConfirmations) {
+        const kindLabel =
+            link.kind === 'vcore'
+                ? vscode.l10n.t('Azure DocumentDB')
+                : vscode.l10n.t('Azure Cosmos DB for MongoDB (RU)');
+        const detail = [
+            vscode.l10n.t('Resource: {0} ({1})', displayName, kindLabel),
+            vscode.l10n.t('Resource group: {0}', link.resourceGroup),
+            vscode.l10n.t('Subscription: {0}', subscription.name),
+        ];
+        if (request.database) {
+            detail.push(vscode.l10n.t('Database: {0}', request.database));
+        }
+        if (request.collection) {
+            detail.push(vscode.l10n.t('Collection: {0}', request.collection));
+        }
+
+        let surface: string | undefined;
+        if (request.collection) {
+            surface = vscode.l10n.t('Collection View');
+        } else if (request.open === 'dashboard') {
+            surface = vscode.l10n.t('Cluster Dashboard');
+        } else if (request.open === 'shell') {
+            surface = vscode.l10n.t('Shell');
+        }
+        if (surface) {
+            detail.push(vscode.l10n.t('Opens: {0}', surface));
+        }
+
+        if (visibilityChangesNeeded) {
+            detail.push('', vscode.l10n.t('To show this resource, these filters will change:'));
+            if (changes.showProvider) {
+                detail.push(
+                    vscode.l10n.t('• The {0} discovery provider will be shown in the Discovery view.', kindLabel),
+                );
+            }
+            if (changes.unfilterTenant) {
+                detail.push(
+                    vscode.l10n.t('• Tenant {0} will no longer be hidden by your tenant filter.', subscription.tenantId),
+                );
+            }
+            if (changes.addSubscription) {
+                detail.push(
+                    vscode.l10n.t(
+                        '• Subscription {0} will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
+                        subscription.name,
+                    ),
+                );
+            }
+        }
+        detail.push(
+            '',
+            vscode.l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+        );
+
+        const openButton = vscode.l10n.t('Open');
+        const choice = await vscode.window.showInformationMessage(
+            vscode.l10n.t('You clicked a link that wants to open an Azure resource in VS Code.'),
+            { modal: true, detail: detail.join('\n') },
+            openButton,
+        );
+        if (choice !== openButton) {
+            context.telemetry.properties.userCancelledAtStep = 'AzureConfirmation';
+            return undefined;
+        }
+    }
+
+    context.telemetry.properties.failureStage = 'applyVisibility';
+    if (visibilityChangesNeeded) {
+        await applyVisibilityChanges(link.providerId, subscription, changes);
+    }
+
+    context.telemetry.properties.failureStage = 'revealCluster';
+    return revealInDiscoveryView(context, {
+        providerId: link.providerId,
+        subscriptionId: link.subscriptionId,
+        azureResourceId: link.resourceId,
+        displayName,
+        database: request.database,
+        collection: request.collection,
+    });
+}

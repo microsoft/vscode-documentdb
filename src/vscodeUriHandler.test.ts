@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as vscode from 'vscode';
+import { handleAzureResourceLinkRequest } from './deepLinks/handleAzureResourceLink';
 import { AuthMethodId } from './documentdb/auth/AuthMethod';
 import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
 import { type EmulatorConfiguration } from './utils/emulatorConfiguration';
@@ -42,6 +43,10 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
 const mockOpenLocalQuickStart = vi.fn().mockResolvedValue(undefined);
 vi.mock('./commands/localQuickStart/openLocalQuickStart', () => ({
     openLocalQuickStart: (...args: unknown[]) => mockOpenLocalQuickStart(...args),
+}));
+
+vi.mock('./deepLinks/handleAzureResourceLink', (): typeof import('./deepLinks/handleAzureResourceLink') => ({
+    handleAzureResourceLinkRequest: vi.fn().mockResolvedValue(undefined),
 }));
 
 // The connect path pulls in storage, the tree, and the collection view. None of it is reached by
@@ -129,10 +134,14 @@ describe('globalUriHandler — route parsing', () => {
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
 
-    it.each(['/connect/azure', '/CONNECT/Azure'])('routes %s to the Azure placeholder', async (path) => {
+    it.each(['/connect/azure', '/CONNECT/Azure'])('routes %s to the Azure resource handler', async (path): Promise<void> => {
         const error = await runHandler(path, 'resourceId=example');
 
-        expect(error?.message).toBe('Azure resource links are not implemented yet.');
+        expect(error).toBeUndefined();
+        expect(handleAzureResourceLinkRequest).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
+            { resourceId: 'example', tenantId: undefined, database: undefined, collection: undefined, open: undefined },
+        );
         expect(lastTelemetry.deepLinkConnectSource).toBe('azure');
         expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
@@ -275,7 +284,7 @@ describe('globalUriHandler — connect parameter validation', () => {
         ['/connect', connectionQuery, 'DASHBOARD', 'dashboard'],
         ['/connect/azure', azureQuery, 'Shell', 'shell'],
         ['/connect/azure', azureQuery, 'DASHBOARD', 'dashboard'],
-    ])('accepts and records an open target on %s', async (path, query, open, expected) => {
+    ])('accepts and records an open target on %s', async (path, query, open, expected): Promise<void> => {
         (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
         const error = await runHandler(path, `${query}&open=${open}`);
 
@@ -283,7 +292,17 @@ describe('globalUriHandler — connect parameter validation', () => {
         expect(lastTelemetry.uriParamCount).toBe('2');
         expect(lastTelemetry.uriUnknownParamCount).toBe('0');
         if (path === '/connect/azure') {
-            expect(error?.message).toBe('Azure resource links are not implemented yet.');
+            expect(error).toBeUndefined();
+            expect(handleAzureResourceLinkRequest).toHaveBeenCalledExactlyOnceWith(
+                expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
+                {
+                    resourceId: '/subscriptions/sub/resourceGroups/rg',
+                    tenantId: undefined,
+                    database: undefined,
+                    collection: undefined,
+                    open: expected,
+                },
+            );
             expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
         } else {
             expect(error).toBeUndefined();
@@ -320,13 +339,23 @@ describe('globalUriHandler — connect parameter validation', () => {
         expect(lastTelemetry.openTarget).toBe('none');
     });
 
-    it('records and masks Azure parameters before reaching the placeholder', async () => {
+    it('records and masks Azure parameters before calling the Azure resource handler', async (): Promise<void> => {
         const error = await runHandler(
             '/connect/azure',
             `${azureQuery}&tenantId=tenant&database=sales&collection=orders&unknown=value`,
         );
 
-        expect(error?.message).toBe('Azure resource links are not implemented yet.');
+        expect(error).toBeUndefined();
+        expect(handleAzureResourceLinkRequest).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
+            {
+                resourceId: '/subscriptions/sub/resourceGroups/rg',
+                tenantId: 'tenant',
+                database: 'sales',
+                collection: 'orders',
+                open: undefined,
+            },
+        );
         expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
         expect(lastTelemetry.hasParamResourceId).toBe('true');
         expect(lastTelemetry.hasParamTenantId).toBe('true');
