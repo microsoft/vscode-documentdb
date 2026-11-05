@@ -211,20 +211,58 @@ Add `BatchAttemptOutcome`, the return route from `writeBatch`, the optional `rem
 `PartialProgress`, and rewrite the retry loop to retry `remaining` (decision 0009). Prefix slicing
 stays the default when only a count is reported.
 
+> **Done (2026-11-05), commit `74fde43c`:** `BatchAttemptOutcome` and `isBatchAttemptOutcome`
+> are public, `PartialProgress.remaining` is optional, and `writeBatch` may return either a result
+> or an outcome. `writeBatchWithRetry` turns both routes into one outcome. The throwing route keeps
+> its order of side effects and prefix slicing when only a count is reported.
+>
+> Decisions made by the orchestrator:
+>
+> - **`writeBatch` returns `StrategyBatchResult | BatchAttemptOutcome`**, told apart by the
+>   `result` property (75%). The documented outcome shape stays as designed until the NoSQL
+>   review.
+> - **An outcome with remaining documents but no `errorType` is retried like a network error**
+>   (70%): no batch shrink, attempt counted unless something was written.
+>
+> One timing-only difference: when a throttle error reports the whole batch written, the loop now
+> returns without one extra backoff wait. Tests: `StreamingDocumentWriter.outcome.test.ts`
+> (scattered `remaining` on both routes, count-only prefix slicing, throttle adaptation from the
+> return route, attempt exhaustion, network). Model: sol.
+
 ### 2.3 Server-suggested wait as a floor
 
 Add `getRetryAfterMs(error)` (default `undefined`) and `retryAfterMs` on the return route. Wait
 `max(backoff, retryAfterMs)`, abortable, with a trace line (decision 0011).
+
+> **Done (2026-11-05), commit `d0a1df09`:** the wait is `max(computeRetryDelay(...),
+> retryAfterMs)`, with no cap. Values that are not finite or are negative are ignored, and a
+> trace line is written when the server value wins. The DocumentDB adapter is unchanged (reading
+> `RetryAfterMs` from 16500 errors stays a follow-up). The orchestrator added an early return
+> when the signal is already aborted, plus a test. Before this, a Stop pressed during an
+> in-flight write let the uncapped wait run in full, because the `abort` event had already
+> fired. Tests: `StreamingDocumentWriter.retryAfter.test.ts`. Model: sol.
 
 ### 2.4 Strategy capabilities
 
 Add `supportedConflictStrategies` to writers; the DocumentDB writer declares all four. The paste
 wizard filters its picker by it.
 
+> **Done (2026-11-05), commit `485524ca`:** the base writer defaults to all four strategies. The
+> property is not abstract, so existing test subclasses compile unchanged (orchestrator decision,
+> 70%); a new adapter that forgets to override it claims all four. `DocumentDbStreamingWriter`
+> declares `documentDbSupportedConflictStrategies`. The conflict picker filters by that constant,
+> because the writer is only built after the picker runs. Item ids are now the enum values, which
+> equal the previous literals, so the selection and its telemetry are unchanged. Tests:
+> `PromptConflictResolutionStep.test.ts`, `supportedConflictStrategies.test.ts`. Model: terra.
+
 ### 2.5 Tests
 
 New tests for scattered `remaining` documents, the return route, the suggested wait as a floor,
 settings layering and `computeRetryDelay`. The existing writer suite passes untouched.
+
+> **Done (2026-11-05), no separate commit:** these tests landed with 2.1 to 2.3. The original
+> `StreamingDocumentWriter.test.ts` has changed only in its import lines (1.6), and it passes,
+> as do the reader and keep-alive suites, which are unchanged.
 
 ---
 
@@ -318,4 +356,19 @@ today.
 
 # Outcome
 
-Not started.
+**In progress (2026-11-05).** Phases 0, 1 and 2 landed in place on `dev/tnaum/npm-task-engine`,
+except 1.5, which is deferred pending an operator decision (see its note). All steps are
+behaviour-neutral for the DocumentDB path. After this round, the code that will move imports
+`vscode` or `ext` only in `UI/**` and `resourceUsageHelper.ts`, as planned. Phase 3 (open
+questions), Phase 4 (the NoSQL team's review) and Phase 5 (extraction, which waits for Phase 4)
+have not started.
+
+Found while working, not changed:
+
+- `callWithTelemetryAndErrorHandling` swallows errors thrown by `onInitialize`, so a task whose
+  initialization fails (for example with `SourceValidationError`) shows the error and then still
+  moves to Running and runs `doWork`. This happens today and is unchanged.
+- `TaskProgressReportingService.detach()` destructures task-ID strings and uses only their first
+  character.
+- `UI/**` and `resourceUsageHelper.ts` still call `vscode.l10n.t` and use `ext`. Under decision
+  0006 they need injected strings before they move to `./vscode` in step 5.2.
