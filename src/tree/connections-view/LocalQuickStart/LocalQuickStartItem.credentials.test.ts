@@ -60,8 +60,8 @@ vi.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
-vi.mock('../../../services/connectionDiagnosticsService', () => ({
-    ConnectionDiagnosticsService: { explain: vi.fn().mockResolvedValue(undefined) },
+vi.mock('../../../services/errorExplanationService', () => ({
+    ErrorExplanationService: { explain: vi.fn().mockResolvedValue(undefined) },
 }));
 
 vi.mock('../../../extensionVariables', () => ({

@@ -8,25 +8,25 @@
  *
  * TRANSLATION ONLY. This provider must never show UI, change an Atlas project, or retry the failed
  * operation; it returns text so a transport-level rejection is not mistaken for bad credentials.
- * See `src/services/connectionDiagnosticsService.ts` and
+ * See `src/services/errorExplanationService.ts` and
  * `.github/skills/error-translation/SKILL.md`.
  */
 
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { getHostsFromConnectionString, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import {
-    type ConnectionDiagnosticsProvider,
-    type ConnectionDiagnosticsRequest,
-} from '../../services/connectionDiagnosticsService';
+    type ErrorExplanationProvider,
+    type ErrorExplanationRequest,
+} from '../../services/errorExplanationService';
 import { isAtlasTlsHandshakeRejection, summarizeAtlasTlsHandshakeRejection } from './atlasConnectionErrors';
 
 /** Atlas clusters are addressed under this suffix, which makes them identifiable without any registration. */
 const ATLAS_HOST_SUFFIX = 'mongodb.net';
 
-export class AtlasDiagnosticsProvider implements ConnectionDiagnosticsProvider {
+export class AtlasErrorExplainer implements ErrorExplanationProvider {
     public readonly id = 'atlas';
 
-    public async explain({ clusterId, error }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
+    public async explain({ clusterId, error }: ErrorExplanationRequest): Promise<string | undefined> {
         // Cheapest check first: the vast majority of failures are not TLS handshake rejections.
         if (!isAtlasTlsHandshakeRejection(error)) {
             return undefined;

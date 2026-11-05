@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { Links } from '../../constants';
-import { SrvDnsDiagnosticsProvider } from './SrvDnsDiagnosticsProvider';
+import { SrvDnsErrorExplainer } from './SrvDnsErrorExplainer';
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(),
@@ -20,8 +20,8 @@ function nodeError(code: string, syscall = 'querySrv', message = `querySrv ${cod
     return Object.assign(new Error(message), { code, syscall });
 }
 
-describe('SrvDnsDiagnosticsProvider', () => {
-    const provider = new SrvDnsDiagnosticsProvider();
+describe('SrvDnsErrorExplainer', () => {
+    const provider = new SrvDnsErrorExplainer();
 
     it.each([
         ['Node-style EBADRESP', nodeError('EBADRESP'), 'the DNS reply could not be read'],

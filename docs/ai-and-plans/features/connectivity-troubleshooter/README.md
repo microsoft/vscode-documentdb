@@ -235,7 +235,7 @@ The router shares `result.ts` with telemetry and the Output outcome, adds locali
 content, and sends a host-independent `ResultCardData` snapshot.
 
 Changed existing code: `ClustersClient` (auth-handler factory with a non-interactive policy),
-`ConnectionReachabilityService` (optional observer), `ConnectionDiagnosticsService` (optional
+`ConnectionReachabilityService` (optional observer), `ErrorExplanationService` (optional
 `source`), `readOnlyJsonDocumentProvider` (Markdown documents), the dashboard's version helpers
 (moved to a shared module), `documentdbTokenResource.ts` (exported offline details helper).
 
@@ -256,7 +256,7 @@ Changed existing code: `ClustersClient` (auth-handler factory with a non-interac
 - [query-insights](../query-insights/README.md): the read-only document pattern behind Show
   report (called Show diagnostics until WI-19).
 - [error-translation skill](../../../../.github/skills/error-translation/SKILL.md): the
-  `ConnectionDiagnosticsService` providers the context hints check consults.
+  `ErrorExplanationService` providers the context hints check consults.
 
 ## Decisions
 

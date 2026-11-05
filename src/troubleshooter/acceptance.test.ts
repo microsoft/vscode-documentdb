@@ -34,7 +34,7 @@ import {
 import { resetEntraTokenFailuresForTests } from '../documentdb/auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../documentdb/CredentialCache';
 import { API } from '../DocumentDBExperiences';
-import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
 import { readOnlyJsonDocumentProvider } from '../utils/readOnlyJsonDocumentProvider';
@@ -389,7 +389,7 @@ beforeEach((): void => {
         expiresOnTimestamp: Date.now() + 600000,
     });
     vi.spyOn(CredentialCache, 'getCredentials').mockReturnValue(undefined);
-    vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue(undefined);
+    vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue(undefined);
     vi.spyOn(readOnlyJsonDocumentProvider, 'openMarkdownDocument').mockResolvedValue(
         vscode.Uri.parse('documentdb-readonly-json:/report.md'),
     );

@@ -5,13 +5,13 @@ status: active
 code:
   - src/documentdb/auth/entraScopes.ts
   - src/documentdb/auth/documentdbTokenResource.ts
-  - src/documentdb/auth/entraErrors/EntraDiagnosticsProvider.ts
+  - src/documentdb/auth/entraErrors/EntraErrorExplainer.ts
   - src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts
   - src/documentdb/auth/ManagedIdentityAuthHandler.ts
   - src/documentdb/auth/managedIdentityConnectionString.ts
   - src/documentdb/auth/oidcAllowedHosts.ts
   - src/documentdb/playground/playgroundWorker.ts
-  - src/services/connectionDiagnosticsService.ts
+  - src/services/errorExplanationService.ts
 ---
 
 # Sovereign Clouds (Azure Government, Azure China)
@@ -76,8 +76,8 @@ readable without a support round trip.
   DocumentDB hosts in New Connection and Update Credentials, making managed identity available
   for public, Government, China, and configured service domains without matching lookalikes.
 - [entraErrors/](../../../../src/documentdb/auth/entraErrors/): the single classifier table,
-  pure text classifier, recent token-failure registry, and Entra diagnostics provider.
-- [connectionDiagnosticsService.ts](../../../../src/services/connectionDiagnosticsService.ts): the
+  pure text classifier, recent token-failure registry, and Entra error explainer.
+- [errorExplanationService.ts](../../../../src/services/errorExplanationService.ts): the
   provider registry that routes Entra explanations to existing foreground error surfaces.
 
 Azure management (subscription listing, ARM clients) already follows the selected cloud through
@@ -99,7 +99,7 @@ Local resolution traces retain an IMDS `azEnvironment` only when it matches
 and this local evidence is excluded from startup telemetry.
 
 The existing Entra diagnostics rule table also recognizes the driver's precise OIDC
-`ALLOWED_HOSTS` host-rejection message. Through `ConnectionDiagnosticsService`, it returns a
+`ALLOWED_HOSTS` host-rejection message. Through `ErrorExplanationService`, it returns a
 text-only explanation naming `documentDB.customEnvironment.hostnameSuffix` in user
 settings, without echoing the host, changing the error, or requiring a recent token failure.
 

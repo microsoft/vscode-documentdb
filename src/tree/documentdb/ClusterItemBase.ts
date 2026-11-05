@@ -24,7 +24,7 @@ import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { settingsKeys } from '../../settingsKeys';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { withDelayedProgress } from '../../utils/withProgress';
@@ -314,7 +314,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 // the connection without forcing the user to re-enter credentials (the failure may
                 // be transient).
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                const diagnosis = await ConnectionDiagnosticsService.explain({
+                const explanation = await ErrorExplanationService.explain({
                     clusterId: this.cluster.clusterId,
                     error,
                 });
@@ -325,7 +325,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     telemetryContext.telemetry.properties.source = 'treeExpansion';
                     telemetryContext.telemetry.properties.experience = this.experience.api;
                     telemetryContext.telemetry.properties.failurePhase = 'cachedClientConnect';
-                    telemetryContext.telemetry.properties.diagnosisProviderId = diagnosis?.providerId ?? 'none';
+                    telemetryContext.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
                     throw error;
                 });
 
@@ -337,7 +337,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 );
 
                 void vscode.window.showErrorMessage(
-                    diagnosis?.message ?? vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name),
+                    explanation?.message ?? vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name),
                     {
                         modal: true,
                         detail: errorMessage,
@@ -371,7 +371,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             databases = await clustersClient.listDatabases();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            const diagnosis = await ConnectionDiagnosticsService.explain({
+            const explanation = await ErrorExplanationService.explain({
                 clusterId: this.cluster.clusterId,
                 error,
             });
@@ -387,7 +387,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 telemetryContext.telemetry.properties.source = 'treeExpansion';
                 telemetryContext.telemetry.properties.experience = this.experience.api;
                 telemetryContext.telemetry.properties.failurePhase = 'listDatabases';
-                telemetryContext.telemetry.properties.diagnosisProviderId = diagnosis?.providerId ?? 'none';
+                telemetryContext.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
                 throw error;
             });
 
@@ -399,7 +399,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             );
 
             void vscode.window.showErrorMessage(
-                diagnosis?.message ?? vscode.l10n.t('Failed to load databases for "{0}"', this.cluster.name),
+                explanation?.message ?? vscode.l10n.t('Failed to load databases for "{0}"', this.cluster.name),
                 { modal: true, detail: errorMessage },
             );
 

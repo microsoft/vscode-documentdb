@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { maskSecrets } from '../../services/localQuickStart/outputMasking';
 import { recordSurveyActivity } from '../../services/survey/SurveyService';
 import { settingsKeys } from '../../settingsKeys';
@@ -606,12 +606,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // Written as a separate line rather than merged into the message above, so the raw text
             // stays intact for extractErrorCode and the SettingsHintError check below.
-            const diagnosis = await ConnectionDiagnosticsService.explain({
+            const explanation = await ErrorExplanationService.explain({
                 clusterId: this._connectionInfo.clusterId,
                 error,
             });
-            if (diagnosis) {
-                this.writeLine(this._outputFormatter.formatError(diagnosis.message));
+            if (explanation) {
+                this.writeLine(this._outputFormatter.formatError(explanation.message));
             }
 
             // Logged so the failure survives in an output channel a user can share with us. Driver
@@ -619,7 +619,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             ext.outputChannel.error(
                 maskSecrets(
                     `[Shell] Failed to connect to "${this._connectionInfo.clusterDisplayName}": ${rawMessage}` +
-                        (diagnosis ? ` (${diagnosis.providerId}: ${diagnosis.message})` : ''),
+                        (explanation ? ` (${explanation.providerId}: ${explanation.message})` : ''),
                     this.credentialSecrets(),
                 ),
             );
@@ -632,7 +632,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // A notification as well: the terminal may be in the background, or closed by the user
             // before they read it.
             void vscode.window.showErrorMessage(
-                diagnosis?.message ??
+                explanation?.message ??
                     l10n.t('Failed to connect to "{cluster}": {error}', {
                         cluster: this._connectionInfo.clusterDisplayName,
                         error: errorMessage,
@@ -798,12 +798,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // talks to gets stopped, a port-forward drops — and the next command is where they find
         // out. Written as a separate line so the raw text above stays intact for extractErrorCode
         // and the checks below.
-        const diagnosis = await ConnectionDiagnosticsService.explain({
+        const explanation = await ErrorExplanationService.explain({
             clusterId: this._connectionInfo.clusterId,
             error,
         });
-        if (diagnosis) {
-            this.writeLine(this._outputFormatter.formatError(diagnosis.message));
+        if (explanation) {
+            this.writeLine(this._outputFormatter.formatError(explanation.message));
         }
 
         // Show a hint line and clickable settings link for errors that reference a VS Code setting

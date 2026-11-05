@@ -32,7 +32,7 @@ import { AuthInputUnavailableError, type AuthPhaseObserver } from './authCallerP
 import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
-import { EntraDiagnosticsProvider } from './entraErrors/EntraDiagnosticsProvider';
+import { EntraErrorExplainer } from './entraErrors/EntraErrorExplainer';
 import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { MicrosoftEntraIDAuthHandler } from './MicrosoftEntraIDAuthHandler';
 
@@ -254,7 +254,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         ).rejects.toBe(error);
         const failure = getRecentEntraTokenFailure('cluster-1');
         expect(failure).toMatchObject({ cloudCategory: 'usgov', authMethod: 'interactive' });
-        const diagnostics = new EntraDiagnosticsProvider();
+        const diagnostics = new EntraErrorExplainer();
         expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain(
             'Sign-in failed in Azure US Government',
         );

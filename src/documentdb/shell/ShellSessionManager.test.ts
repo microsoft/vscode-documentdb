@@ -14,7 +14,7 @@ import {
     resolveManagedIdentityTokenResource,
     TokenResourceResolutionError,
 } from '../auth/documentdbTokenResource';
-import { EntraDiagnosticsProvider } from '../auth/entraErrors/EntraDiagnosticsProvider';
+import { EntraErrorExplainer } from '../auth/entraErrors/EntraErrorExplainer';
 import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from '../auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../CredentialCache';
 import { PlaygroundEvaluator } from '../playground/PlaygroundEvaluator';
@@ -467,7 +467,7 @@ describe('ShellSessionManager', () => {
                 cloudCategory: 'china',
                 authMethod: source === 'vscode' ? 'interactive' : 'managedIdentity',
             });
-            const diagnostics = new EntraDiagnosticsProvider();
+            const diagnostics = new EntraErrorExplainer();
             expect(await diagnostics.explain({ clusterId, error })).toContain('Sign-in failed in Azure China');
 
             provider.mockImplementationOnce(async () => {

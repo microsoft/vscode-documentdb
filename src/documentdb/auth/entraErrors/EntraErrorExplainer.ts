@@ -5,9 +5,9 @@
 
 import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import {
-    type ConnectionDiagnosticsProvider,
-    type ConnectionDiagnosticsRequest,
-} from '../../../services/connectionDiagnosticsService';
+    type ErrorExplanationProvider,
+    type ErrorExplanationRequest,
+} from '../../../services/errorExplanationService';
 import { traceAuthFlow } from '../../../utils/authTrace';
 import { CredentialCache } from '../../CredentialCache';
 import { AuthMethodId } from '../AuthMethod';
@@ -15,10 +15,10 @@ import { classifyEntraError } from './classifyEntraError';
 import { entraErrorRules } from './entraErrorRules';
 import { getRecentEntraTokenFailure } from './entraTokenFailures';
 
-export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
+export class EntraErrorExplainer implements ErrorExplanationProvider {
     public readonly id = 'entra-sign-in';
 
-    public async explain({ clusterId, error, source }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
+    public async explain({ clusterId, error, source }: ErrorExplanationRequest): Promise<string | undefined> {
         if (error instanceof UserCancelledError) {
             return undefined;
         }
@@ -58,7 +58,7 @@ export class EntraDiagnosticsProvider implements ConnectionDiagnosticsProvider {
         void callWithTelemetryAndErrorHandling('entraSignIn.classified', async (context): Promise<void> => {
             context.errorHandling.suppressDisplay = true;
             context.errorHandling.suppressReportIssue = true;
-            context.telemetry.properties.diagnosisSource = source ?? 'connect';
+            context.telemetry.properties.explanationSource = source ?? 'connect';
             context.telemetry.properties.ruleId = classification.ruleId;
             context.telemetry.properties.aadstsCode = classification.code ?? '';
             context.telemetry.properties.cloudCategory = failure?.cloudCategory ?? 'unknown';

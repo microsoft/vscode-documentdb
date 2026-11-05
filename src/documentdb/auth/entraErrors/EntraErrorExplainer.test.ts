@@ -6,10 +6,10 @@
 import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Links } from '../../../constants';
-import { ConnectionDiagnosticsService } from '../../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../../services/errorExplanationService';
 import { CredentialCache } from '../../CredentialCache';
 import { AuthMethodId } from '../AuthMethod';
-import { EntraDiagnosticsProvider } from './EntraDiagnosticsProvider';
+import { EntraErrorExplainer } from './EntraErrorExplainer';
 import {
     getRecentEntraTokenFailure,
     recordEntraTokenFailure,
@@ -37,10 +37,10 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
 }));
 
 const broker = 'platform_broker_error: See https://aka.ms/msal.js.errors#platform_broker_error for details';
-const provider = new EntraDiagnosticsProvider();
+const provider = new EntraErrorExplainer();
 const clusterId = '00000000-0000-0000-0000-000000000001';
 
-describe('EntraDiagnosticsProvider', () => {
+describe('EntraErrorExplainer', () => {
     beforeEach((): void => {
         vi.clearAllMocks();
         resetEntraTokenFailuresForTests();
@@ -56,7 +56,7 @@ describe('EntraDiagnosticsProvider', () => {
         vi.useRealTimers();
     });
 
-    it('has the stable diagnostics id', (): void => {
+    it('has the stable explainer id', (): void => {
         expect(provider.id).toBe('entra-sign-in');
     });
 
@@ -72,20 +72,20 @@ describe('EntraDiagnosticsProvider', () => {
                 }),
             );
             const descriptors = Object.getOwnPropertyDescriptors(error);
-            ConnectionDiagnosticsService.resetForTests();
-            ConnectionDiagnosticsService.registerProvider(provider);
+            ErrorExplanationService.resetForTests();
+            ErrorExplanationService.registerProvider(provider);
             try {
                 expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
-                const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error });
-                expect(diagnosis?.providerId).toBe('entra-sign-in');
-                expect(diagnosis?.message).toContain('documentDB.customEnvironment.hostnameSuffix');
-                expect(diagnosis?.message).toContain('user settings');
-                expect(diagnosis?.message).not.toMatch(/private-cluster|example.com|10255|azure.com/);
+                const explanation = await ErrorExplanationService.explain({ clusterId, error });
+                expect(explanation?.providerId).toBe('entra-sign-in');
+                expect(explanation?.message).toContain('documentDB.customEnvironment.hostnameSuffix');
+                expect(explanation?.message).toContain('user settings');
+                expect(explanation?.message).not.toMatch(/private-cluster|example.com|10255|azure.com/);
                 expect(Object.getOwnPropertyDescriptors(error)).toEqual(descriptors);
                 expect(telemetryContext.telemetry.properties.ruleId).toBe('oidcHostNotAllowed');
                 expect(JSON.stringify(telemetryContext.telemetry.properties)).not.toContain('private-cluster');
             } finally {
-                ConnectionDiagnosticsService.resetForTests();
+                ErrorExplanationService.resetForTests();
             }
         },
     );
@@ -283,7 +283,7 @@ describe('EntraDiagnosticsProvider', () => {
             cloudCategory: 'usgov',
             brokered: 'false',
             authMethod: 'managedIdentity',
-            diagnosisSource: 'connect',
+            explanationSource: 'connect',
         });
         expect(telemetryContext.errorHandling).toEqual({ suppressDisplay: true, suppressReportIssue: true });
         expect(JSON.stringify(telemetryContext.telemetry.properties)).not.toMatch(
@@ -302,7 +302,7 @@ describe('EntraDiagnosticsProvider', () => {
                 'entraSignIn.classified',
                 expect.any(Function),
             );
-            expect(telemetryContext.telemetry.properties.diagnosisSource).toBe(source ?? 'connect');
+            expect(telemetryContext.telemetry.properties.explanationSource).toBe(source ?? 'connect');
             expect(mockOutputChannel.info).toHaveBeenCalledOnce();
             const trace = String(mockOutputChannel.info.mock.calls[0][0]);
             const details = JSON.stringify({
@@ -328,7 +328,7 @@ describe('EntraDiagnosticsProvider', () => {
             cloudCategory: 'unknown',
             brokered: 'true',
             authMethod: 'unknown',
-            diagnosisSource: 'connect',
+            explanationSource: 'connect',
         });
     });
 

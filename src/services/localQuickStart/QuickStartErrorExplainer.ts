@@ -8,18 +8,18 @@
  *
  * TRANSLATION ONLY. This provider must never show UI, start or stop the container, or retry the
  * failed operation; it returns text so the user can tell a Docker problem from a database problem.
- * See `src/services/connectionDiagnosticsService.ts` and
+ * See `src/services/errorExplanationService.ts` and
  * `.github/skills/error-translation/SKILL.md`.
  */
 
 import * as l10n from '@vscode/l10n';
-import { type ConnectionDiagnosticsProvider, type ConnectionDiagnosticsRequest } from '../connectionDiagnosticsService';
+import { type ErrorExplanationProvider, type ErrorExplanationRequest } from '../errorExplanationService';
 import { QuickStartService } from './QuickStartService';
 
-export class QuickStartDiagnosticsProvider implements ConnectionDiagnosticsProvider {
+export class QuickStartErrorExplainer implements ErrorExplanationProvider {
     public readonly id = 'localQuickStart';
 
-    public async explain({ clusterId }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
+    public async explain({ clusterId }: ErrorExplanationRequest): Promise<string | undefined> {
         // In-memory lookup, so this costs nothing for the clusters that are not Quick Start ones.
         const alias = QuickStartService.listStatuses().find(
             (status) => status.metadata?.clusterId === clusterId,

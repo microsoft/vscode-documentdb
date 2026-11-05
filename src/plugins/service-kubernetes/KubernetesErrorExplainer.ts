@@ -9,17 +9,17 @@
  *
  * TRANSLATION ONLY. This provider must never show UI, restart a tunnel, or retry the failed
  * operation; it returns text so the user can tell a dead tunnel from a database problem.
- * See `src/services/connectionDiagnosticsService.ts` and
+ * See `src/services/errorExplanationService.ts` and
  * `.github/skills/error-translation/SKILL.md`.
  */
 
 import * as l10n from '@vscode/l10n';
 import {
-    type ConnectionDiagnosticsProvider,
-    type ConnectionDiagnosticsRequest,
+    type ErrorExplanationProvider,
+    type ErrorExplanationRequest,
     type ConnectionExplanation,
-    type DiagnosisIdentifier,
-} from '../../services/connectionDiagnosticsService';
+    type ExplanationIdentifier,
+} from '../../services/errorExplanationService';
 import { type KubernetesPortForwardMetadata } from './portForwardMetadata';
 
 /**
@@ -53,19 +53,19 @@ export function resetKubernetesClustersForTests(): void {
     knownClusters.clear();
 }
 
-export class KubernetesDiagnosticsProvider implements ConnectionDiagnosticsProvider {
+export class KubernetesErrorExplainer implements ErrorExplanationProvider {
     public readonly id = 'kubernetes-port-forward';
 
     public async explain({
         clusterId,
         error,
-    }: ConnectionDiagnosticsRequest): Promise<ConnectionExplanation | undefined> {
+    }: ErrorExplanationRequest): Promise<ConnectionExplanation | undefined> {
         const metadata = knownClusters.get(clusterId);
         if (!metadata) {
             return undefined;
         }
         // The text names the service and namespace; listing them lets a shared report hide them.
-        const identifiers: DiagnosisIdentifier[] = [
+        const identifiers: ExplanationIdentifier[] = [
             { kind: 'service', value: metadata.serviceName },
             { kind: 'namespace', value: metadata.namespace },
         ];

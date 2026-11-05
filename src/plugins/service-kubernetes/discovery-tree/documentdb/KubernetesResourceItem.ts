@@ -41,7 +41,7 @@ import {
     type KubeServiceEndpoint,
     type KubeServiceInfo,
 } from '../../kubernetesClient';
-import { rememberKubernetesCluster } from '../../KubernetesDiagnosticsProvider';
+import { rememberKubernetesCluster } from '../../KubernetesErrorExplainer';
 import {
     KUBERNETES_PORT_FORWARD_METADATA_PROPERTY,
     createKubernetesPortForwardMetadata,
@@ -490,7 +490,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         );
 
         // This view reaches ensureKubernetesPortForward directly rather than through
-        // ConnectionReachabilityService, so the mapping the diagnostics provider needs is recorded here.
+        // ConnectionReachabilityService, so the mapping the error explainer needs is recorded here.
         rememberKubernetesCluster(this.cluster.clusterId, metadata);
 
         await ensureKubernetesPortForward(metadata);

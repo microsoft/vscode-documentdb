@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { QuickStartDiagnosticsProvider } from './QuickStartDiagnosticsProvider';
+import { QuickStartErrorExplainer } from './QuickStartErrorExplainer';
 import { QuickStartService } from './QuickStartService';
 import { InstanceState, type InstanceStatus } from './quickStartTypes';
 
@@ -20,7 +20,7 @@ function status(clusterId: string, alias = 'default'): InstanceStatus {
     };
 }
 
-describe('QuickStartDiagnosticsProvider', () => {
+describe('QuickStartErrorExplainer', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
@@ -29,7 +29,7 @@ describe('QuickStartDiagnosticsProvider', () => {
         vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
         const preflight = vi.spyOn(QuickStartService, 'inspectManagedInstance');
 
-        const result = await new QuickStartDiagnosticsProvider().explain({
+        const result = await new QuickStartErrorExplainer().explain({
             clusterId: 'some-other-cluster',
             error: new Error('boom'),
         });
@@ -48,7 +48,7 @@ describe('QuickStartDiagnosticsProvider', () => {
         vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
         vi.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue(verdict);
 
-        const result = await new QuickStartDiagnosticsProvider().explain({
+        const result = await new QuickStartErrorExplainer().explain({
             clusterId: 'quickstart-cluster',
             error: new Error('boom'),
         });
@@ -61,7 +61,7 @@ describe('QuickStartDiagnosticsProvider', () => {
         vi.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue(verdict);
 
         await expect(
-            new QuickStartDiagnosticsProvider().explain({
+            new QuickStartErrorExplainer().explain({
                 clusterId: 'quickstart-cluster',
                 error: new Error('boom'),
             }),
@@ -73,7 +73,7 @@ describe('QuickStartDiagnosticsProvider', () => {
         const readOnly = vi.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue('foreign');
         const preflight = vi.spyOn(QuickStartService, 'prepareForConnection');
 
-        await new QuickStartDiagnosticsProvider().explain({ clusterId: 'quickstart-cluster', error: new Error('x') });
+        await new QuickStartErrorExplainer().explain({ clusterId: 'quickstart-cluster', error: new Error('x') });
 
         expect(readOnly).toHaveBeenCalledWith('default');
         expect(preflight).not.toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe('QuickStartDiagnosticsProvider', () => {
             .spyOn(QuickStartService, 'inspectManagedInstance')
             .mockResolvedValueOnce('stopped')
             .mockResolvedValueOnce('ready');
-        const provider = new QuickStartDiagnosticsProvider();
+        const provider = new QuickStartErrorExplainer();
 
         const first = await provider.explain({ clusterId: 'quickstart-cluster', error: new Error('boom') });
         const second = await provider.explain({ clusterId: 'quickstart-cluster', error: new Error('boom') });

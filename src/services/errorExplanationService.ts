@@ -31,7 +31,7 @@
  *
  * ## The error is never touched
  *
- * {@link ConnectionDiagnosticsServiceImpl.explain} returns text and nothing more. It never mutates
+ * {@link ErrorExplanationServiceImpl.explain} returns text and nothing more. It never mutates
  * the error, never replaces it, and never attaches properties to it. That is deliberate: a lot of
  * code in this repository inspects errors by IDENTITY rather than by text, and all of it would
  * break in ways that are hard to notice.
@@ -63,7 +63,7 @@
 import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ext } from '../extensionVariables';
 
-export interface ConnectionDiagnosticsRequest {
+export interface ErrorExplanationRequest {
     /**
      * The stable cluster identifier, never a `treeId`. This is the only identity that reaches
      * every call site (tree items, webviews, the shell, the playground), which is why it is the
@@ -85,18 +85,18 @@ export interface ConnectionDiagnosticsRequest {
 }
 
 /** Kinds of infrastructure identifiers a provider can name in its explanation. */
-export type DiagnosisIdentifierKind = 'service' | 'namespace';
+export type ExplanationIdentifierKind = 'service' | 'namespace';
 
 /** An identifier the explanation text contains, so a shared report can hide it. */
-export interface DiagnosisIdentifier {
-    readonly kind: DiagnosisIdentifierKind;
+export interface ExplanationIdentifier {
+    readonly kind: ExplanationIdentifierKind;
     readonly value: string;
 }
 
 /** An explanation that names infrastructure identifiers, returned instead of a plain string. */
 export interface ConnectionExplanation {
     readonly message: string;
-    readonly identifiers: readonly DiagnosisIdentifier[];
+    readonly identifiers: readonly ExplanationIdentifier[];
 }
 
 /**
@@ -105,7 +105,7 @@ export interface ConnectionExplanation {
  * Implementations MUST NOT show UI, recover, or retry. See the file header: this interface exists
  * only to translate errors so users understand what went wrong.
  */
-export interface ConnectionDiagnosticsProvider {
+export interface ErrorExplanationProvider {
     /** Stable identifier. Internal only; used for telemetry and de-duplicated registration. */
     readonly id: string;
 
@@ -120,41 +120,41 @@ export interface ConnectionDiagnosticsProvider {
      * A provider whose text names infrastructure identifiers (not hosts from the connection string)
      * returns a {@link ConnectionExplanation} that lists them, so "Hide identifiers" can replace them.
      */
-    explain(request: ConnectionDiagnosticsRequest): Promise<string | ConnectionExplanation | undefined>;
+    explain(request: ErrorExplanationRequest): Promise<string | ConnectionExplanation | undefined>;
 }
 
-export interface ConnectionDiagnosis {
+export interface ErrorExplanationResult {
     readonly providerId: string;
     readonly message: string;
     /** Identifiers the message names; absent when the provider returned plain text. */
-    readonly identifiers?: readonly DiagnosisIdentifier[];
+    readonly identifiers?: readonly ExplanationIdentifier[];
 }
 
 /**
- * Budget for one {@link ConnectionDiagnosticsServiceImpl.explain} call, not per provider: the user
+ * Budget for one {@link ErrorExplanationServiceImpl.explain} call, not per provider: the user
  * is already waiting for an error, so the wait must not grow with the number of registered sources.
  * On expiry we fall back to the original error, which is always a valid outcome.
  */
 const EXPLAIN_DEADLINE_MS = 5_000;
 
 /**
- * Registry of {@link ConnectionDiagnosticsProvider}s.
+ * Registry of {@link ErrorExplanationProvider}s.
  *
  * Mirrors the singleton-registry pattern used by `ConnectionReachabilityService`, `DiscoveryService`
  * and `MigrationService`: providers are registered once at activation, and call sites simply ask
  * "can anyone explain this failure?" without knowing which sources exist.
  *
- * This class cannot be instantiated directly; use the exported {@link ConnectionDiagnosticsService}
+ * This class cannot be instantiated directly; use the exported {@link ErrorExplanationService}
  * singleton instead.
  */
-class ConnectionDiagnosticsServiceImpl {
-    private readonly providers: ConnectionDiagnosticsProvider[] = [];
+class ErrorExplanationServiceImpl {
+    private readonly providers: ErrorExplanationProvider[] = [];
 
     /**
-     * Registers a diagnostics provider. A provider with an id that is already registered replaces
+     * Registers an error explainer. A provider with an id that is already registered replaces
      * the existing one (last registration wins), which keeps re-activation idempotent.
      */
-    public registerProvider(provider: ConnectionDiagnosticsProvider): void {
+    public registerProvider(provider: ErrorExplanationProvider): void {
         const existingIndex = this.providers.findIndex((candidate) => candidate.id === provider.id);
         if (existingIndex >= 0) {
             this.providers[existingIndex] = provider;
@@ -171,7 +171,7 @@ class ConnectionDiagnosticsServiceImpl {
      * paths; background work (tree count badges, prefetches) shows nothing, so translating there
      * would cost I/O for no user-visible benefit.
      */
-    public async explain(request: ConnectionDiagnosticsRequest): Promise<ConnectionDiagnosis | undefined> {
+    public async explain(request: ErrorExplanationRequest): Promise<ErrorExplanationResult | undefined> {
         // Guarded centrally rather than per provider: a provider is allowed to answer without
         // inspecting the error at all, so without this a cancelled wizard on a stopped container
         // would be reported as an infrastructure failure.
@@ -196,9 +196,9 @@ class ConnectionDiagnosticsServiceImpl {
     }
 
     private async askProviders(
-        request: ConnectionDiagnosticsRequest,
+        request: ErrorExplanationRequest,
         expired: AbortSignal,
-    ): Promise<ConnectionDiagnosis | undefined> {
+    ): Promise<ErrorExplanationResult | undefined> {
         for (const provider of this.providers) {
             if (expired.aborted) {
                 return undefined;
@@ -222,9 +222,9 @@ class ConnectionDiagnosticsServiceImpl {
 
             const message = typeof answer === 'string' ? answer : answer?.message;
             if (message) {
-                void callWithTelemetryAndErrorHandling('connectionDiagnostics.explained', (context) => {
-                    context.telemetry.properties.diagnosisProviderId = provider.id;
-                    context.telemetry.properties.diagnosisSource = request.source ?? 'connect';
+                void callWithTelemetryAndErrorHandling('errorExplanation.explained', (context) => {
+                    context.telemetry.properties.explanationProviderId = provider.id;
+                    context.telemetry.properties.explanationSource = request.source ?? 'connect';
                 });
                 return typeof answer === 'string' || answer === undefined
                     ? { providerId: provider.id, message }
@@ -243,4 +243,4 @@ class ConnectionDiagnosticsServiceImpl {
     }
 }
 
-export const ConnectionDiagnosticsService = new ConnectionDiagnosticsServiceImpl();
+export const ErrorExplanationService = new ErrorExplanationServiceImpl();

@@ -14,7 +14,7 @@ import { type AuthPhaseObserver } from './authCallerPolicy';
 import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import * as tokenResources from './documentdbTokenResource';
-import { EntraDiagnosticsProvider } from './entraErrors/EntraDiagnosticsProvider';
+import { EntraErrorExplainer } from './entraErrors/EntraErrorExplainer';
 import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
@@ -310,7 +310,7 @@ describe('ManagedIdentityAuthHandler', () => {
         await expect(invokeOidcCallback(failed.options)).rejects.toBe(error);
         const failure = getRecentEntraTokenFailure('cluster-1');
         expect(failure).toMatchObject({ cloudCategory: 'usgov', authMethod: 'managedIdentity' });
-        const diagnostics = new EntraDiagnosticsProvider();
+        const diagnostics = new EntraErrorExplainer();
         expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toContain(
             'Sign-in failed in Azure US Government',
         );

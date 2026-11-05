@@ -7,14 +7,14 @@ import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { Links } from '../../constants';
 import {
-    type ConnectionDiagnosticsProvider,
-    type ConnectionDiagnosticsRequest,
-} from '../../services/connectionDiagnosticsService';
+    type ErrorExplanationProvider,
+    type ErrorExplanationRequest,
+} from '../../services/errorExplanationService';
 
-export class SrvDnsDiagnosticsProvider implements ConnectionDiagnosticsProvider {
+export class SrvDnsErrorExplainer implements ErrorExplanationProvider {
     public readonly id = 'srv-dns';
 
-    public async explain({ error }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
+    public async explain({ error }: ErrorExplanationRequest): Promise<string | undefined> {
         const message = typeof error === 'string' ? error : error instanceof Error ? error.message : undefined;
         if (!message || error instanceof UserCancelledError) {
             return undefined;

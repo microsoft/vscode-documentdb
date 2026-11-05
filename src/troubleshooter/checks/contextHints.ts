@@ -13,10 +13,10 @@ import {
 import * as vscode from 'vscode';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import {
-    ConnectionDiagnosticsService,
-    type DiagnosisIdentifier,
-    type DiagnosisIdentifierKind,
-} from '../../services/connectionDiagnosticsService';
+    ErrorExplanationService,
+    type ExplanationIdentifier,
+    type ExplanationIdentifierKind,
+} from '../../services/errorExplanationService';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
 import { type TroubleshooterSetup } from '../input';
 import { type FindingCode, type TroubleshootTarget } from '../types';
@@ -77,10 +77,10 @@ function sanitizeExplanation(message: string, context: RunContext, setup: Troubl
  * Identifiers the provider's explanation names, as classified facts, so "Hide identifiers" collects
  * them and replaces them consistently in the explanation and any summary text that repeats it.
  */
-function providerIdentifierFacts(identifiers: readonly DiagnosisIdentifier[] | undefined): {
-    providerIdentifiers?: Partial<Record<DiagnosisIdentifierKind, string[]>>;
+function providerIdentifierFacts(identifiers: readonly ExplanationIdentifier[] | undefined): {
+    providerIdentifiers?: Partial<Record<ExplanationIdentifierKind, string[]>>;
 } {
-    const grouped: Partial<Record<DiagnosisIdentifierKind, string[]>> = {};
+    const grouped: Partial<Record<ExplanationIdentifierKind, string[]>> = {};
     for (const { kind, value } of identifiers ?? []) {
         if (value.length > 0 && !grouped[kind]?.includes(value)) {
             (grouped[kind] ??= []).push(value);
@@ -202,7 +202,7 @@ export function createContextHintsCheck(
                 return { status: 'skipped', skippedBecause: { reason: 'notApplicable' }, facts: {}, findings: [] };
             }
             signal.throwIfAborted();
-            const diagnosis = await ConnectionDiagnosticsService.explain({
+            const providerExplanation = await ErrorExplanationService.explain({
                 clusterId: target.clusterId,
                 error:
                     getResolutionError() ??
@@ -212,7 +212,7 @@ export function createContextHintsCheck(
             });
             signal.throwIfAborted();
             const explanation = [
-                diagnosis ? sanitizeExplanation(diagnosis.message, context, getSetup()) : undefined,
+                providerExplanation ? sanitizeExplanation(providerExplanation.message, context, getSetup()) : undefined,
                 privateAccessHint(context, earlierResults),
             ]
                 .filter((message): message is string => message !== undefined)
@@ -220,11 +220,11 @@ export function createContextHintsCheck(
             return {
                 status: 'pass',
                 findings: [],
-                facts: diagnosis
+                facts: providerExplanation
                     ? {
-                          providerId: diagnosis.providerId,
+                          providerId: providerExplanation.providerId,
                           explanation,
-                          ...providerIdentifierFacts(diagnosis.identifiers),
+                          ...providerIdentifierFacts(providerExplanation.identifiers),
                       }
                     : { providerId: null, ...(explanation ? { explanation } : {}) },
             };

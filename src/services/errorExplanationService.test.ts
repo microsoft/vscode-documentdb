@@ -7,10 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import {
-    ConnectionDiagnosticsService,
-    type ConnectionDiagnosticsProvider,
-    type ConnectionDiagnosticsRequest,
-} from './connectionDiagnosticsService';
+    ErrorExplanationService,
+    type ErrorExplanationProvider,
+    type ErrorExplanationRequest,
+} from './errorExplanationService';
 
 const telemetryContext = vi.hoisted(() => ({
     telemetry: { properties: {} as Record<string, string> },
@@ -25,59 +25,59 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-function provider(id: string, explain: ConnectionDiagnosticsProvider['explain']): ConnectionDiagnosticsProvider {
+function provider(id: string, explain: ErrorExplanationProvider['explain']): ErrorExplanationProvider {
     return { id, explain };
 }
 
-describe('ConnectionDiagnosticsService', () => {
+describe('ErrorExplanationService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         telemetryContext.telemetry.properties = {};
-        ConnectionDiagnosticsService.resetForTests();
+        ErrorExplanationService.resetForTests();
     });
 
     afterEach(() => {
-        ConnectionDiagnosticsService.resetForTests();
+        ErrorExplanationService.resetForTests();
         vi.useRealTimers();
     });
 
     it('returns undefined when no provider is registered', async () => {
         await expect(
-            ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') }),
+            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
         ).resolves.toBeUndefined();
     });
 
     it('returns the first non-undefined explanation and stops asking', async () => {
         const second = vi.fn().mockResolvedValue('second');
-        ConnectionDiagnosticsService.registerProvider(provider('a', () => Promise.resolve(undefined)));
-        ConnectionDiagnosticsService.registerProvider(provider('b', () => Promise.resolve('from b')));
-        ConnectionDiagnosticsService.registerProvider(provider('c', second));
+        ErrorExplanationService.registerProvider(provider('a', () => Promise.resolve(undefined)));
+        ErrorExplanationService.registerProvider(provider('b', () => Promise.resolve('from b')));
+        ErrorExplanationService.registerProvider(provider('c', second));
 
         await expect(
-            ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') }),
+            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
         ).resolves.toEqual({ providerId: 'b', message: 'from b' });
         expect(second).not.toHaveBeenCalled();
     });
 
     it('passes through the identifiers a structured explanation names (R4)', async () => {
         const identifiers = [{ kind: 'service', value: 'payments-db-svc' }] as const;
-        ConnectionDiagnosticsService.registerProvider(
+        ErrorExplanationService.registerProvider(
             provider('k', () => Promise.resolve({ message: 'from k', identifiers })),
         );
 
         await expect(
-            ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') }),
+            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
         ).resolves.toEqual({ providerId: 'k', message: 'from k', identifiers });
     });
 
     it.each([undefined, 'troubleshooter'] as const)(
-        'records the diagnosis source and passes it unchanged to providers (source=%s)',
+        'records the explanation source and passes it unchanged to providers (source=%s)',
         async (source): Promise<void> => {
             const explain = vi.fn().mockResolvedValue('explained');
-            ConnectionDiagnosticsService.registerProvider(provider('a', explain));
-            const request: ConnectionDiagnosticsRequest = { clusterId: 'c1', error: new Error('boom'), source };
+            ErrorExplanationService.registerProvider(provider('a', explain));
+            const request: ErrorExplanationRequest = { clusterId: 'c1', error: new Error('boom'), source };
 
-            await expect(ConnectionDiagnosticsService.explain(request)).resolves.toEqual({
+            await expect(ErrorExplanationService.explain(request)).resolves.toEqual({
                 providerId: 'a',
                 message: 'explained',
             });
@@ -85,30 +85,30 @@ describe('ConnectionDiagnosticsService', () => {
             expect(explain).toHaveBeenCalledExactlyOnceWith(request);
             expect(explain.mock.calls[0][0]).toBe(request);
             expect(callWithTelemetryAndErrorHandling).toHaveBeenCalledExactlyOnceWith(
-                'connectionDiagnostics.explained',
+                'errorExplanation.explained',
                 expect.any(Function),
             );
             expect(telemetryContext.telemetry.properties).toEqual({
-                diagnosisProviderId: 'a',
-                diagnosisSource: source ?? 'connect',
+                explanationProviderId: 'a',
+                explanationSource: source ?? 'connect',
             });
         },
     );
 
     it('skips a throwing provider instead of failing the caller', async () => {
-        ConnectionDiagnosticsService.registerProvider(provider('a', () => Promise.reject(new Error('provider bug'))));
-        ConnectionDiagnosticsService.registerProvider(provider('b', () => Promise.resolve('from b')));
+        ErrorExplanationService.registerProvider(provider('a', () => Promise.reject(new Error('provider bug'))));
+        ErrorExplanationService.registerProvider(provider('b', () => Promise.resolve('from b')));
 
         await expect(
-            ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') }),
+            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
         ).resolves.toEqual({ providerId: 'b', message: 'from b' });
     });
 
     it('gives up on a provider that never settles so the original error can still be reported', async () => {
         vi.useFakeTimers();
-        ConnectionDiagnosticsService.registerProvider(provider('slow', () => new Promise<string>(() => {})));
+        ErrorExplanationService.registerProvider(provider('slow', () => new Promise<string>(() => {})));
 
-        const pending = ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') });
+        const pending = ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') });
         await vi.advanceTimersByTimeAsync(5_000);
 
         await expect(pending).resolves.toBeUndefined();
@@ -117,11 +117,11 @@ describe('ConnectionDiagnosticsService', () => {
     it('spends one deadline in total, not one per provider', async () => {
         vi.useFakeTimers();
         const stall = (): Promise<string> => new Promise<string>(() => {});
-        ConnectionDiagnosticsService.registerProvider(provider('a', stall));
-        ConnectionDiagnosticsService.registerProvider(provider('b', stall));
-        ConnectionDiagnosticsService.registerProvider(provider('c', stall));
+        ErrorExplanationService.registerProvider(provider('a', stall));
+        ErrorExplanationService.registerProvider(provider('b', stall));
+        ErrorExplanationService.registerProvider(provider('c', stall));
 
-        const pending = ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') });
+        const pending = ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') });
         await vi.advanceTimersByTimeAsync(5_000);
 
         await expect(pending).resolves.toBeUndefined();
@@ -140,10 +140,10 @@ describe('ConnectionDiagnosticsService', () => {
                 }),
         );
         const second = vi.fn().mockResolvedValue('second');
-        ConnectionDiagnosticsService.registerProvider(provider('first', first));
-        ConnectionDiagnosticsService.registerProvider(provider('second', second));
+        ErrorExplanationService.registerProvider(provider('first', first));
+        ErrorExplanationService.registerProvider(provider('second', second));
 
-        const pending = ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') });
+        const pending = ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') });
         await vi.advanceTimersByTimeAsync(5_000);
         await expect(pending).resolves.toBeUndefined();
 
@@ -157,16 +157,16 @@ describe('ConnectionDiagnosticsService', () => {
     });
 
     it('replaces a provider registered twice under the same id', async () => {
-        ConnectionDiagnosticsService.registerProvider(provider('a', () => Promise.resolve('first')));
-        ConnectionDiagnosticsService.registerProvider(provider('a', () => Promise.resolve('second')));
+        ErrorExplanationService.registerProvider(provider('a', () => Promise.resolve('first')));
+        ErrorExplanationService.registerProvider(provider('a', () => Promise.resolve('second')));
 
         await expect(
-            ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') }),
+            ErrorExplanationService.explain({ clusterId: 'c1', error: new Error('boom') }),
         ).resolves.toEqual({ providerId: 'a', message: 'second' });
     });
 
     it('never modifies the error it was given', async () => {
-        ConnectionDiagnosticsService.registerProvider(provider('a', () => Promise.resolve('explained')));
+        ErrorExplanationService.registerProvider(provider('a', () => Promise.resolve('explained')));
 
         class CustomError extends Error {
             public readonly code = 'ECONNREFUSED';
@@ -174,7 +174,7 @@ describe('ConnectionDiagnosticsService', () => {
         const error = new CustomError('raw driver text');
         const originalMessage = error.message;
 
-        await ConnectionDiagnosticsService.explain({ clusterId: 'c1', error });
+        await ErrorExplanationService.explain({ clusterId: 'c1', error });
 
         expect(error.message).toBe(originalMessage);
         expect(error).toBeInstanceOf(CustomError);
@@ -184,10 +184,10 @@ describe('ConnectionDiagnosticsService', () => {
 
     it('stays silent for a cancellation, without consulting any provider', async () => {
         const explain = vi.fn().mockResolvedValue('should not be used');
-        ConnectionDiagnosticsService.registerProvider(provider('a', explain));
+        ErrorExplanationService.registerProvider(provider('a', explain));
 
         await expect(
-            ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new UserCancelledError() }),
+            ErrorExplanationService.explain({ clusterId: 'c1', error: new UserCancelledError() }),
         ).resolves.toBeUndefined();
         expect(explain).not.toHaveBeenCalled();
     });

@@ -6,10 +6,10 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import {
-    KubernetesDiagnosticsProvider,
+    KubernetesErrorExplainer,
     rememberKubernetesCluster,
     resetKubernetesClustersForTests,
-} from './KubernetesDiagnosticsProvider';
+} from './KubernetesErrorExplainer';
 import { type KubernetesPortForwardMetadata } from './portForwardMetadata';
 
 const hasTunnel = vi.fn();
@@ -30,14 +30,14 @@ const metadata: KubernetesPortForwardMetadata = {
     localPort: 51234,
 };
 
-describe('KubernetesDiagnosticsProvider', () => {
+describe('KubernetesErrorExplainer', () => {
     beforeEach(() => {
         resetKubernetesClustersForTests();
         hasTunnel.mockReset();
     });
 
     it('stays silent for a cluster that was never prepared by the reachability provider', async () => {
-        const result = await new KubernetesDiagnosticsProvider().explain({
+        const result = await new KubernetesErrorExplainer().explain({
             clusterId: 'unknown-cluster',
             error: new Error('connect ECONNREFUSED 127.0.0.1:51234'),
         });
@@ -50,7 +50,7 @@ describe('KubernetesDiagnosticsProvider', () => {
         rememberKubernetesCluster('k8s-cluster', metadata);
         hasTunnel.mockReturnValue(false);
 
-        const result = await new KubernetesDiagnosticsProvider().explain({
+        const result = await new KubernetesErrorExplainer().explain({
             clusterId: 'k8s-cluster',
             error: new Error('connect ECONNREFUSED 127.0.0.1:51234'),
         });
@@ -70,7 +70,7 @@ describe('KubernetesDiagnosticsProvider', () => {
         rememberKubernetesCluster('k8s-cluster', metadata);
         hasTunnel.mockReturnValue(true);
 
-        const result = await new KubernetesDiagnosticsProvider().explain({
+        const result = await new KubernetesErrorExplainer().explain({
             clusterId: 'k8s-cluster',
             error: new Error('connect ECONNREFUSED 127.0.0.1:51234'),
         });
@@ -87,7 +87,7 @@ describe('KubernetesDiagnosticsProvider', () => {
         hasTunnel.mockReturnValue(true);
 
         await expect(
-            new KubernetesDiagnosticsProvider().explain({
+            new KubernetesErrorExplainer().explain({
                 clusterId: 'k8s-cluster',
                 error: new Error('bad auth : Authentication failed.'),
             }),

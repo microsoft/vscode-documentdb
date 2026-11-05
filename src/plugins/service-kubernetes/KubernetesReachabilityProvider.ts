@@ -8,7 +8,7 @@ import {
     type ConnectionReachabilityProvider,
     type ConnectionReachabilityResult,
 } from '../../services/connectionReachabilityService';
-import { rememberKubernetesCluster } from './KubernetesDiagnosticsProvider';
+import { rememberKubernetesCluster } from './KubernetesErrorExplainer';
 import { getKubernetesPortForwardMetadata } from './portForwardMetadata';
 
 /**
@@ -41,7 +41,7 @@ export class KubernetesReachabilityProvider implements ConnectionReachabilityPro
         }
 
         // The only moment where both the clusterId and this connection's port-forward metadata are
-        // known; recording the pair lets KubernetesDiagnosticsProvider explain later failures.
+        // known; recording the pair lets KubernetesErrorExplainer explain later failures.
         if (clusterId) {
             rememberKubernetesCluster(clusterId, metadata);
         }

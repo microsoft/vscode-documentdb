@@ -72,7 +72,7 @@ whether they are reachable. The only way to start over is to reload VS Code or c
    if FW-1 B or D is built), `previousResolution`, `newResolution`, and `hostsChanged`. This shows
    whether stale-client problems are real and whether reconnect fixes them.
 5. **Error translation.** A topology failure can point to "Reconnect" as the action through
-   `ConnectionDiagnosticsService`. The rule there stays the same: the provider returns text and
+   `ErrorExplanationService`. The rule there stays the same: the provider returns text and
    never reconnects by itself.
 
 ### Open questions for later

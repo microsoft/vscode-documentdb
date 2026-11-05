@@ -12,7 +12,7 @@ import {
     type RunContext,
 } from '@documentdb-js/connectivity-troubleshooter';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
 import { troubleshooterIdentifierKeys } from '../identifierKeys';
 import { type TroubleshooterSetup } from '../input';
@@ -78,7 +78,7 @@ describe('contextHints', (): void => {
     it.each(['pass', 'warning', 'skipped'] as const)(
         'is not applicable without a failure, including %s outcomes',
         async (status): Promise<void> => {
-            const explain = vi.spyOn(ConnectionDiagnosticsService, 'explain');
+            const explain = vi.spyOn(ErrorExplanationService, 'explain');
             const check = createContextHintsCheck(
                 target,
                 (): TroubleshooterSetup => setup,
@@ -118,7 +118,7 @@ describe('contextHints', (): void => {
             multiple = false,
             provider?: string,
         ): Promise<Readonly<Record<string, unknown>>> {
-            vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue(
+            vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue(
                 provider ? { providerId: 'fixture', message: provider } : undefined,
             );
             const ctx = {
@@ -308,7 +308,7 @@ describe('contextHints', (): void => {
         const authError = new Error('Original secret-bearing driver error');
         const holder: RunOwnedClient = { authError };
         const explain = vi
-            .spyOn(ConnectionDiagnosticsService, 'explain')
+            .spyOn(ErrorExplanationService, 'explain')
             .mockResolvedValue({ providerId: 'fixture', message: 'Check private.example.' });
         const check = createContextHintsCheck(
             target,
@@ -330,7 +330,7 @@ describe('contextHints', (): void => {
     });
 
     it('uses the first failing check code, not its raw detail or hostname, as a fallback error', async (): Promise<void> => {
-        const explain = vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue(undefined);
+        const explain = vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue(undefined);
         const check = createContextHintsCheck(
             target,
             (): TroubleshooterSetup => setup,
@@ -347,7 +347,7 @@ describe('contextHints', (): void => {
     });
 
     it('provides a minimal fallback even when the failing check has no finding', async (): Promise<void> => {
-        const explain = vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue(undefined);
+        const explain = vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue(undefined);
         const check = createContextHintsCheck(
             target,
             (): TroubleshooterSetup => setup,
@@ -360,7 +360,7 @@ describe('contextHints', (): void => {
 
     it('excludes raw connection strings, passwords and URI userinfo but keeps hostnames', async (): Promise<void> => {
         const message = `Check private.example and ${uri}. Password ${password}, encoded ${encodeURIComponent(password)}. Proxy https://other:other-secret@proxy.example:8080/path. Alternate mongodb://a:b@another.example/`;
-        vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue({ providerId: 'fixture', message });
+        vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue({ providerId: 'fixture', message });
         const check = createContextHintsCheck(
             target,
             (): TroubleshooterSetup => setup,
@@ -377,7 +377,7 @@ describe('contextHints', (): void => {
 
     it('also sanitizes passwords supplied only by URI userinfo', async (): Promise<void> => {
         const uriSetup = { ...setup, transientCredentials: undefined };
-        vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue({
+        vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue({
             providerId: 'fixture',
             message: `${password} ${encodeURIComponent(password)} on private.example`,
         });
@@ -394,7 +394,7 @@ describe('contextHints', (): void => {
     });
 
     it('caps explanations at 8 KiB including multibyte characters', async (): Promise<void> => {
-        vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue({
+        vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue({
             providerId: 'fixture',
             message: '€'.repeat(9000),
         });
@@ -413,7 +413,7 @@ describe('contextHints', (): void => {
     it('R4: Hide identifiers replaces provider-named Kubernetes service and namespace everywhere', async (): Promise<void> => {
         const explanation =
             'The port-forward tunnel to "payments-db-svc" in namespace "acme-prod" looks active, but the service did not answer.';
-        vi.spyOn(ConnectionDiagnosticsService, 'explain').mockResolvedValue({
+        vi.spyOn(ErrorExplanationService, 'explain').mockResolvedValue({
             providerId: 'kubernetes-port-forward',
             message: explanation,
             identifiers: [

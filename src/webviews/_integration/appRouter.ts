@@ -28,7 +28,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { getSurveyService } from '../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { isFeedbackPermitted, showFeedbackDisabledMessage } from '../../utils/feedbackPermission';
@@ -190,8 +190,8 @@ const commonRouter = router({
             return null;
         }
 
-        const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error: input.message });
-        return diagnosis?.message ?? null;
+        const explanation = await ErrorExplanationService.explain({ clusterId, error: input.message });
+        return explanation?.message ?? null;
     }),
     displayErrorMessage: publicProcedure
         .input(

@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { AtlasDiagnosticsProvider } from './AtlasDiagnosticsProvider';
+import { AtlasErrorExplainer } from './AtlasErrorExplainer';
 
 const TLS_REJECTION = new Error(
     '80B7A3E8B77F0000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:../deps/openssl/openssl/ssl/record/rec_layer_s3.c:1590:SSL alert number 80',
@@ -18,7 +18,7 @@ function mockConnectionString(connectionString: string | undefined): void {
     );
 }
 
-describe('AtlasDiagnosticsProvider', () => {
+describe('AtlasErrorExplainer', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
@@ -26,11 +26,11 @@ describe('AtlasDiagnosticsProvider', () => {
     it('explains a TLS handshake rejection on an Atlas host', async () => {
         mockConnectionString('mongodb+srv://cluster0.abcde.mongodb.net/');
 
-        const result = await new AtlasDiagnosticsProvider().explain({ clusterId: 'c1', error: TLS_REJECTION });
+        const result = await new AtlasErrorExplainer().explain({ clusterId: 'c1', error: TLS_REJECTION });
 
         expect(result).toContain('MongoDB Atlas closed the TLS connection');
         expect(result).toContain('IP access list');
-        // The diagnosis becomes a modal heading, so it must stay a single paragraph.
+        // The explanation becomes a modal heading, so it must stay a single paragraph.
         expect(result).not.toContain('\n');
     });
 
@@ -38,7 +38,7 @@ describe('AtlasDiagnosticsProvider', () => {
         mockConnectionString('mongodb://self-hosted.example.com:27017/');
 
         await expect(
-            new AtlasDiagnosticsProvider().explain({ clusterId: 'c1', error: TLS_REJECTION }),
+            new AtlasErrorExplainer().explain({ clusterId: 'c1', error: TLS_REJECTION }),
         ).resolves.toBeUndefined();
     });
 
@@ -46,7 +46,7 @@ describe('AtlasDiagnosticsProvider', () => {
         const getCredentials = vi.spyOn(CredentialCache, 'getCredentials');
 
         await expect(
-            new AtlasDiagnosticsProvider().explain({
+            new AtlasErrorExplainer().explain({
                 clusterId: 'c1',
                 error: new Error('bad auth : Authentication failed.'),
             }),
@@ -59,7 +59,7 @@ describe('AtlasDiagnosticsProvider', () => {
         mockConnectionString(undefined);
 
         await expect(
-            new AtlasDiagnosticsProvider().explain({ clusterId: 'c1', error: TLS_REJECTION }),
+            new AtlasErrorExplainer().explain({ clusterId: 'c1', error: TLS_REJECTION }),
         ).resolves.toBeUndefined();
     });
 });

@@ -41,7 +41,7 @@ export interface ConnectionReachabilityProvider {
      * @param clusterId The stable cluster identifier, when the caller knows it. Providers may use
      * this to record a `clusterId` to source-metadata mapping, so that a later failure against the
      * same cluster can be attributed back to this source by a
-     * {@link import('./connectionDiagnosticsService').ConnectionDiagnosticsProvider}. The stored
+     * {@link import('./errorExplanationService').ErrorExplanationProvider}. The stored
      * connection properties are not available on those later paths.
      * @param intent How the caller wants preparation to behave; absent for an ordinary connect.
      * @returns What the provider observed, when it can tell; nothing otherwise.
