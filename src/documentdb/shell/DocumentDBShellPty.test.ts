@@ -970,6 +970,21 @@ describe('DocumentDBShellPty', () => {
             expect(written).not.toContain(`${GHOST_STYLE}p me`);
         });
 
+        it('counts a shown completion as offered by the shell', async () => {
+            (accumulateTelemetry as Mock).mockClear();
+
+            pty.handleInput('hel');
+            await afterGhostDebounce();
+
+            const offered = (accumulateTelemetry as Mock).mock.calls.find(
+                ([eventName]) => eventName === 'completion.offered',
+            );
+            expect(offered).toBeDefined();
+            const sample = { measurements: {} as Record<string, number> };
+            (offered?.[1] as (s: typeof sample) => void)(sample);
+            expect(sample.measurements).toEqual({ src_shell: 1 });
+        });
+
         it('yields to the description of a fully typed candidate', async () => {
             pty.handleInput('db.restaurants.find()');
             pty.handleInput('\r');

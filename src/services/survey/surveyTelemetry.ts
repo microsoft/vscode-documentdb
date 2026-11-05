@@ -60,6 +60,11 @@ export const SurveyEventName = {
     PresentationDeferred: 'survey.presentationDeferred',
     /** The invitation is rendered and visible. Once per invitation. */
     InvitationShown: 'survey.invitationShown',
+    /**
+     * A shown invitation stopped being visible while still live, without a choice. Not an
+     * outcome. Once per invitation; never after it was resolved.
+     */
+    InvitationHidden: 'survey.invitationHidden',
     FeedbackActivated: 'survey.feedbackActivated',
     /** One attempt to open the external form. Only the first `MAX_OPEN_FORM_TELEMETRY_ATTEMPTS` are reported. */
     OpenForm: 'survey.openForm',
@@ -152,6 +157,7 @@ export class SurveyTelemetry {
     private lastSentEligibilitySignature: string | undefined;
     private lastSentDeferralReason: SurveyDeferralReason | undefined;
     private readonly shownInvitationIds = new Set<string>();
+    private readonly hiddenInvitationIds = new Set<string>();
     private readonly activatedIds = new Set<string>();
     private readonly resolvedInvitationIds = new Set<string>();
 
@@ -257,6 +263,30 @@ export class SurveyTelemetry {
         if (sent) {
             this.shownInvitationIds.add(invitationSessionId);
             this.lastSentDeferralReason = undefined;
+        }
+        return sent;
+    }
+
+    /**
+     * Once per `invitationSessionId`, only after `survey.invitationShown` was sent for it and
+     * never after `survey.invitationResolved`.
+     */
+    public reportInvitationHidden(invitationSessionId: string): boolean {
+        if (
+            !isInvitationSessionId(invitationSessionId) ||
+            !this.shownInvitationIds.has(invitationSessionId) ||
+            this.hiddenInvitationIds.has(invitationSessionId) ||
+            this.resolvedInvitationIds.has(invitationSessionId)
+        ) {
+            return false;
+        }
+        const sent = this.send(
+            SurveyEventName.InvitationHidden,
+            { [SurveyTelemetryProperty.InvitationSessionId]: invitationSessionId },
+            {},
+        );
+        if (sent) {
+            this.hiddenInvitationIds.add(invitationSessionId);
         }
         return sent;
     }

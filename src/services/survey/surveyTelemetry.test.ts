@@ -461,6 +461,51 @@ describe('SurveyTelemetry', (): void => {
         expect(sink).toHaveBeenCalledTimes(4);
     });
 
+    it('reports invitation hidden once per shown id with only the invitation id and common properties', (): void => {
+        expect(telemetry.reportInvitationShown(INVITATION_ID, false)).toBe(true);
+        sink.mockClear();
+        expect(telemetry.reportInvitationHidden(INVITATION_ID)).toBe(true);
+        expect(sink).toHaveBeenCalledTimes(1);
+        expect(sink.mock.calls[0][0]).toEqual({
+            name: 'survey.invitationHidden',
+            properties: { ...COMMON_PROPERTIES, invitationSessionId: INVITATION_ID },
+            measurements: {},
+        });
+        expect(telemetry.reportInvitationHidden(INVITATION_ID)).toBe(false);
+        expect(telemetry.reportInvitationResolved(INVITATION_ID, 'askLater', true)).toBe(true);
+        expect(sink).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not report invitation hidden before shown, after resolution, or for invalid ids', (): void => {
+        expect(telemetry.reportInvitationHidden(INVITATION_ID)).toBe(false);
+        expect(telemetry.reportInvitationShown(INVITATION_ID, false)).toBe(true);
+        expect(telemetry.reportInvitationResolved(INVITATION_ID, 'dismissed', true)).toBe(true);
+        expect(telemetry.reportInvitationHidden(INVITATION_ID)).toBe(false);
+        for (const id of ['https://aka.ms/DocumentDBSurvey', '3', '', `${OTHER_INVITATION_ID}\n`]) {
+            expect(telemetry.reportInvitationHidden(id)).toBe(false);
+        }
+        expect(sink).toHaveBeenCalledTimes(2);
+    });
+
+    it('withholds invitation hidden without permission and does not spend its bound', (): void => {
+        expect(telemetry.reportInvitationShown(INVITATION_ID, false)).toBe(true);
+        permitted = false;
+        expect(telemetry.reportInvitationHidden(INVITATION_ID)).toBe(false);
+        expect(sink).toHaveBeenCalledTimes(1);
+        permitted = true;
+        expect(telemetry.reportInvitationHidden(INVITATION_ID)).toBe(true);
+        expect(telemetry.reportInvitationHidden(INVITATION_ID)).toBe(false);
+        expect(sink).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not report invitation hidden when the shown event was withheld', (): void => {
+        permitted = false;
+        expect(telemetry.reportInvitationShown(INVITATION_ID, false)).toBe(false);
+        permitted = true;
+        expect(telemetry.reportInvitationHidden(INVITATION_ID)).toBe(false);
+        expect(sink).not.toHaveBeenCalled();
+    });
+
     it('accepts uppercase UUID strings', (): void => {
         const id = INVITATION_ID.toUpperCase();
         expect(telemetry.reportInvitationShown(id, true)).toBe(true);

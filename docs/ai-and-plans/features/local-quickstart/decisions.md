@@ -18,6 +18,7 @@ verified: 2026-08-14
 | 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred             | 2026-09-29 | #979  |
 | 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added          | 2026-09-29 | #979  |
 | 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                      | 2026-10-15 | #1018 |
+| 0008 | Setup outcome, guide and instance connection telemetry | Accepted            | `customPort` replaced by `portChanged`    | 2026-11-04 | —     |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -442,3 +443,66 @@ that choice rather than ask again.
 - Images before rc2 ignore the variable.
 - The Configure step says so in its footer note, after what Start does, linking the image's
   [privacy statement](https://github.com/documentdb/documentdb/blob/main/documentdb-local/PRIVACY.md).
+
+## 0008 - Setup outcome, guide and instance connection telemetry
+
+**Status:** Accepted · **Date:** 2026-11-04 · **Release:** 1.1.0 · **PR:** — · **Raised by:** the
+operator while building the Local Quick Start dashboard page from 28 days of telemetry
+**Evidence:** `QuickStartService.ts` (`provision`, `runProvisionStage`, `classifyProvisionFailure`),
+`ContainerRuntime.ts` (`classifyImagePullOutput`), `localQuickStartRouter.ts` (`openGuide`),
+`ClustersClient.ts` (`initClient`), `CredentialCache.ts`; [design.md](./design.md) §14
+
+### Question
+
+The dashboard could not answer five questions: whether people without Docker clicked the install
+guide (the panel opened it through `common.openUrl`, which sends no telemetry), whether Docker was
+ready when they clicked the setup button, why each setup run failed (only by parsing the free-text
+`errormessagev2` of `documentDB.quickstart.provision.stage`), whether the image had to be
+downloaded, and whether a connection went to the managed instance. Two existing properties of
+`documentDB.quickstart.provision` were also useless: `customPort` was always `true`, because the
+panel always sends the port it suggested, and `dockerFailureKind` was `none` on all 261 runs,
+including runs that stopped because Docker was missing.
+
+### Decision
+
+1. **Guide clicks go through the host.** The panel calls the `localQuickStart.openGuide` mutation
+   with a guide key (`documentDB.rpc.mutation.localQuickStart.openGuide`). The host resolves the URL
+   from a fixed table and opens it, so the panel cannot open arbitrary addresses through it. The
+   event carries `guide`, `wizardStep`, `quickStartSessionId` and, when the host's last readiness
+   found a problem, `dockerFailureKind`. The privacy and Learn more links stay on `common.openUrl`.
+2. **`documentDB.quickstart.provision` gains `dockerReadinessAtStart`, `failedStage`, `failureCode`,
+   `imagePulled` and `portChanged`.** `failureCode` is a closed set derived from the service's typed
+   errors (`DockerNotReadyError`, `ReadinessTimeoutError`, `ReadinessFailedError`), the readiness
+   classification. Docker's text is matched only by the existing port-allocation check and for a full
+   disk. The
+   failing stage's `documentDB.quickstart.provision.stage` event carries the same `failureCode`.
+3. **`customPort` is replaced by `portChanged`**, which compares the port sent with the one the host
+   last suggested for the Configure step (or the default when none was suggested).
+4. **`dockerFailureKind` is fixed, not removed.** It was set only from the follow-up check after a
+   pull or create failure, never from the run's own `checking` stage, where Docker failures are
+   actually caught. It now also reports the `checking` result. It is not redundant with
+   `failureCode`: the code folds every daemon problem into `dockerDaemonUnreachable`, while the kind
+   keeps `daemonUnavailable`, `daemonStarting`, `contextUnavailable`, `probeTimedOut` and the rest.
+5. **`connect.startup`, `connect.staticmetadata` and `connect.getmetadata` carry
+   `localQuickStartInstance`.** Quick Start marks its cached credentials when it fills the cache
+   (tree connect and setup); the client reads the mark, never the connection string or host.
+
+### Alternatives considered
+
+- **Instrument `common.openUrl` for every webview.** Rejected: it accepts any URL from any panel,
+  and the dashboard needs the guide, not the address.
+- **Have the panel send `portChanged`.** Not chosen: the host already knows the port it suggested.
+- **Inspect the image before pulling to decide `imagePulled`.** Not chosen: a present tag can still
+  be updated by the pull. `docker pull` ends with `Status: Downloaded newer image` or
+  `Status: Image is up to date`; anything else is reported as `unknown`.
+- **Recognize the managed instance by its cluster id prefix.** Not chosen: an explicit mark set where
+  Quick Start fills the cache does not depend on the id format.
+
+### Consequences
+
+- A failed pull or create is classified after a follow-up Docker check, which now runs inside the
+  failing stage's event, so that stage's duration includes the check.
+- Runs that stop at `checking` without throwing still report `failedStage=checking`: a busy port as
+  `portInUse`, and data that cannot be opened (`refusedCredentialsUnavailable`) as `other`.
+- `customPort` disappears from 1.1.0 onwards; queries spanning older versions must treat it as
+  unknown rather than `true`.

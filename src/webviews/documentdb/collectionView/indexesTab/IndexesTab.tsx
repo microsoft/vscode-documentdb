@@ -8,8 +8,9 @@ import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { Announcer } from '../../../components/accessibility';
+import { useFilterUsageReporter } from '../../../components/useFilterUsageReporter';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
-import { IndexList } from './components/indexList';
+import { IndexList, type IndexListState } from './components/indexList';
 import { IndexManagementToolbar } from './components/IndexManagementToolbar';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
 import './indexesTab.scss';
@@ -137,6 +138,35 @@ type ModalState = { kind: 'none' } | { kind: 'create' };
  */
 export const IndexesTab = (): JSX.Element => {
     const trpcClient = useTrpcClient();
+
+    // Whether the index list's filter box and Hidden / Unused toggles are used, and on how many indexes.
+    const [listState, setListState] = useState<IndexListState | undefined>(undefined);
+    const textFilter = (listState?.filterText.trim().length ?? 0) > 0;
+    const hiddenFilter = listState?.quickFilters.hidden === true;
+    const unusedFilter = listState?.quickFilters.unused === true;
+    useFilterUsageReporter(
+        {
+            active: textFilter || hiddenFilter || unusedFilter,
+            scope: 'indexes',
+            properties: {
+                textFilter: textFilter ? 'true' : 'false',
+                hiddenFilter: hiddenFilter ? 'true' : 'false',
+                unusedFilter: unusedFilter ? 'true' : 'false',
+            },
+            measurements: {
+                totalIndexes: listState?.totalCount ?? 0,
+                shownIndexes: listState?.shownCount ?? 0,
+                filterLength: listState?.filterText.trim().length ?? 0,
+            },
+        },
+        (properties, measurements) => {
+            trpcClient.common.reportEvent
+                .mutate({ eventName: 'indexFilter', properties, measurements })
+                .catch((error: unknown) => {
+                    console.debug('Failed to report an event:', error);
+                });
+        },
+    );
 
     // Index list, loading state, and the unified dialog state. We distinguish
     // the *first* load (which shows skeletons) from later refreshes/mutations
@@ -604,6 +634,7 @@ export const IndexesTab = (): JSX.Element => {
                 scrollToName={scrollToName}
                 onDelete={(idx) => void handleDelete(idx)}
                 onToggleHidden={(idx) => void handleToggleHidden(idx)}
+                onStateChange={setListState}
             />
 
             <CreateIndexDrawer

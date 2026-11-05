@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
+import { useFilterUsageReporter } from '../../../components/useFilterUsageReporter';
 import { isShowCollectionsMessage } from '../clusterDashboardContextMenu';
 import { useDashboardReporter } from '../useDashboardReporter';
 import { DashboardBreadcrumb } from './DashboardBreadcrumb';
@@ -228,6 +229,21 @@ export const InventoryPanel = ({
 
     const rows = useMemo(() => arrangeRows(allRows, filterText, sort), [allRows, filterText, sort]);
 
+    // Whether anyone filters the inventory at all, on how long a list, and whether it finds a match.
+    useFilterUsageReporter(
+        {
+            active: filterText.trim().length > 0,
+            scope: currentDatabase === null ? 'databases' : `collections/${currentDatabase}`,
+            properties: { level: currentDatabase === null ? 'databases' : 'collections' },
+            measurements: {
+                totalRows: allRows.length,
+                matchingRows: rows.length,
+                filterLength: filterText.trim().length,
+            },
+        },
+        (properties, measurements) => report('inventoryFilter', properties, measurements),
+    );
+
     /** Everything the level holds, before the filter — the denominator of the footer count. */
     const lastUpdatedAt = currentDatabase === null ? storageLastUpdatedAt : collections.lastUpdatedAt;
     const inventoryIsLoading = isLoading || (storageStats === null && storageError === null);
@@ -281,9 +297,14 @@ export const InventoryPanel = ({
     }, [lastUpdatedAt, now]);
 
     const openCollection = useCallback(
-        (databaseName: string, collectionName: string, activationSource: 'rowClick' | 'rowActionButton'): void => {
+        (
+            databaseName: string,
+            collectionName: string,
+            activationSource: 'rowClick' | 'rowActionButton',
+            isFiltered: boolean,
+        ): void => {
             void trpcClient.clusterDashboard.openCollectionView
-                .mutate({ databaseName, collectionName, activationSource })
+                .mutate({ databaseName, collectionName, activationSource, isFiltered })
                 .catch((error: unknown) => {
                     void trpcClient.common.displayErrorMessage.mutate({
                         message: l10n.t('Failed to open the collection view.'),
@@ -320,7 +341,7 @@ export const InventoryPanel = ({
             });
             onViewStateChange((current) => ({ ...current, currentDatabase: row.name, filterText: '' }));
         } else {
-            openCollection(currentDatabase, row.name, control);
+            openCollection(currentDatabase, row.name, control, filterText.length > 0);
         }
     };
 

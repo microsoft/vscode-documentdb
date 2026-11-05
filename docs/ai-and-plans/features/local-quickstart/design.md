@@ -778,6 +778,27 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
   clear it. Existing generic tree failure diagnostics remain separate from this managed-instance
   connection event.
 
+**Setup outcome, guides and instance connections, as implemented (1.1.0).** See
+[decision 0008](./decisions.md#0008---setup-outcome-guide-and-instance-connection-telemetry).
+
+- `documentDB.quickstart.provision`, one per setup run: `provisionResult`
+  (`success`, `cancelled`, `timeout`, `error`), `provisionCorrelationId`, `reused`, `portTaken`,
+  `portChanged` (the port differs from the one suggested; replaces `customPort`), `customCreds`,
+  `customImage`, `sampleData`, `priorState`, `startFresh`, `refusedCredentialsUnavailable`,
+  `dockerFailureKind` (the readiness `failureKind` when Docker stopped the run, else `none`),
+  `dockerReadinessAtStart` (`ready`, `diagnosed`, `indeterminate`, `notChecked`: the host's last
+  readiness before the run's own check), `failedStage` (`none`, `checking`, `pulling`, `creating`,
+  `starting`, `waiting`), `failureCode` (`none`, `dockerCliMissing`, `dockerDaemonUnreachable`,
+  `dockerPermissionDenied`, `portInUse`, `diskFull`, `imagePullFailed`, `readinessTimeout`,
+  `containerExited`, `cancelled`, `other`), `imagePulled` (`true`, `false`, `unknown`); measurement
+  `provisionMs`.
+- `documentDB.quickstart.provision.stage`, one per stage: `stage`, `provisionCorrelationId`, and
+  `failureCode` when the stage failed.
+- `documentDB.rpc.mutation.localQuickStart.openGuide`, one per Docker guide link: `guide` (the guide
+  key), `wizardStep`, `quickStartSessionId`, and `dockerFailureKind` when the last readiness found one.
+- `connect.startup`, `connect.staticmetadata`, `connect.getmetadata`: `localQuickStartInstance`
+  (`true` for the managed instance).
+
 ---
 
 ## 15. Scope split

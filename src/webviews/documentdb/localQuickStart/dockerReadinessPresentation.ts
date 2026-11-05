@@ -53,17 +53,38 @@ export type DockerGuidanceKey =
 
 export type DockerRecoveryNoteKey = 'groupMembershipNewSession' | 'restartWslDistribution' | 'runsDockerService';
 
-export type DockerGuideKey =
-    | 'install'
-    | 'installWindowsDesktop'
-    | 'installMacDesktop'
-    | 'linuxPostInstall'
-    | 'dockerTroubleshooting'
-    | 'dockerContexts'
-    | 'wslIntegration'
-    | 'remoteDocker'
-    | 'linuxContainers'
-    | 'learnMore';
+/** Every Docker guide the Quick Start panel can link to. */
+export const DOCKER_GUIDE_KEYS = [
+    'install',
+    'installWindowsDesktop',
+    'installMacDesktop',
+    'linuxPostInstall',
+    'dockerTroubleshooting',
+    'dockerContexts',
+    'wslIntegration',
+    'remoteDocker',
+    'linuxContainers',
+    'learnMore',
+] as const;
+
+export type DockerGuideKey = (typeof DOCKER_GUIDE_KEYS)[number];
+
+/**
+ * Where each guide points. The extension host opens these by key, so the panel never hands it a URL
+ * and every click is counted against the guide it opened.
+ */
+export const DOCKER_GUIDE_URLS: Readonly<Record<DockerGuideKey, string>> = {
+    install: 'https://docs.docker.com/engine/install/',
+    installWindowsDesktop: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+    installMacDesktop: 'https://docs.docker.com/desktop/setup/install/mac-install/',
+    linuxPostInstall: 'https://docs.docker.com/engine/install/linux-postinstall/',
+    dockerTroubleshooting: 'https://docs.docker.com/engine/daemon/troubleshoot/',
+    dockerContexts: 'https://docs.docker.com/engine/manage-resources/contexts/',
+    wslIntegration: 'https://docs.docker.com/desktop/features/wsl/',
+    remoteDocker: 'https://docs.docker.com/engine/security/protect-access/',
+    linuxContainers: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+    learnMore: 'https://docs.docker.com/engine/install/',
+};
 
 export type DockerStartLabelKey = 'startDockerDesktop' | 'startDocker';
 

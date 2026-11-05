@@ -46,6 +46,7 @@ created: 2026-10-07
 | 0031 | Only Collection View and the Dashboard show the invitation   | Accepted            | Other milestones only count active days; eligibility is evaluated only where the invitation can appear                         | 2026-10-15 | #1016 |
 | 0032 | Feedback permission follows `telemetry.feedback.enabled`     | Accepted            | Replaces the `telemetryLevel === 'all'` gate of D0002/D0030; aligns with the `EnableFeedback` policy                           | 2026-10-15 | #1016 |
 | 0033 | Give Feedback opens the feedback sidebar                     | Accepted            | Replaces the direct browser opening of D0015/D0030                                                                             | 2026-10-15 | #1016 |
+| 0034 | Report a hidden invitation without a new outcome             | Accepted            | New signal; no outcome, state or cooldown change; only `invitationSessionId`                                                   | 2026-11-03 | -     |
 
 > Entries are semantically immutable: append new entries rather than rewriting old ones, and record
 > reversals as a new entry plus a status change above.
@@ -518,3 +519,28 @@ user can pick an optional rating before continuing to the survey.
 
 **Supersedes:** the direct browser opening of D0015 and the "explicit direct browser request"
 exception kept in D0030. `survey.feedbackActivated` is now always tied to a visible sidebar.
+
+## 0034: Report a hidden invitation without a new outcome
+
+**Decision:** send `survey.invitationHidden` once per automatic invitation, the first time an
+invitation that was already reported visible (`survey.invitationShown`) stops being visible while
+it is still open: the user hid the Secondary Sidebar or switched to another view in it. It is
+not an outcome. The invitation stays open, no state, cooldown or invitation history changes, and
+a later `survey.invitationResolved` remains possible and correct. It is not sent during the
+reveal, while a choice or browser opening is in progress, after the invitation ended or was
+resolved, on view removal (already `dismissed`), without permission, or for manually opened
+feedback. Its only survey-owned property is `invitationSessionId`, plus the common
+`surveyCampaignId` and `surveyPolicyVersion`.
+
+**Reasoning:** VS Code fires the view's dispose only when the user removes the view itself.
+Hiding the sidebar, switching views, or quitting VS Code sends nothing, so about 80% of
+invitations shown since 30 October 2026 had no recorded choice, and an invitation the user hid
+could not be told apart from one left open until the session ended. Recording a hidden
+invitation as `dismissed` would invent a choice and start a cooldown the user never asked for,
+so the signal is kept separate from outcomes. Reusing only properties already classified on
+`survey.invitationShown`, with no measurements, durations or timestamps, keeps the
+data-protection classification unchanged.
+
+**Accepted consequence:** quitting VS Code with the invitation visible is still indistinguishable
+from leaving it open; an invitation shown with neither `invitationHidden` nor
+`invitationResolved` covers both.

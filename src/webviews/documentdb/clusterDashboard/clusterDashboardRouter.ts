@@ -381,6 +381,8 @@ export const clusterDashboardRouter = router({
                 collectionName: z.string().min(1),
                 initialTab: z.enum(['tab_result', 'tab_indexes', 'tab_queryInsights']).optional(),
                 activationSource: DASHBOARD_CONTROL.optional(),
+                /** Whether the row was picked from a filtered list. */
+                isFiltered: z.boolean().optional(),
             }),
         )
         .mutation(async ({ input, ctx }): Promise<void> => {
@@ -389,6 +391,9 @@ export const clusterDashboardRouter = router({
                 input.activationSource,
             );
             myCtx.actionContext.telemetry.properties.initialTab = input.initialTab ?? 'tab_result';
+            if (input.isFiltered !== undefined) {
+                myCtx.actionContext.telemetry.properties.isFiltered = input.isFiltered ? 'true' : 'false';
+            }
 
             await openCollectionViewInternal(myCtx.actionContext, {
                 clusterId: myCtx.clusterId,

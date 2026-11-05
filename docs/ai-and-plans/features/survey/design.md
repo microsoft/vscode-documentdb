@@ -251,6 +251,11 @@ timed outcomes keep the later cooldown end, so a later dismissal or Ask me later
 an opened-form cooldown. A failed open does not set the 180-day acceptance cooldown; the
 visibility cooldown remains and the invitation stays open so the user can try again. An ignored invitation
 is `invitationShown` without `invitationResolved`, never an invented `dismissed` outcome.
+Hiding the Secondary Sidebar or switching to another view in it, without a choice, sends
+`invitationHidden` once per invitation (D0034). It is a signal, not an outcome: the invitation
+stays open, no state, cooldown or history changes, and a later `invitationResolved` is still
+possible. So `invitationShown` with `invitationHidden` and no `invitationResolved` means the user
+hid the invitation without choosing; with neither, it stayed open until the session ended.
 If saving the opt-out fails, it still applies in memory for the session and a modal error says
 saving failed (D0027). There is no Retry; after a restart the user may be invited again.
 
@@ -322,11 +327,11 @@ and any `invitationSessionId` that is not a UUID.
 
 ### Common Properties
 
-| Property              | Value                                 | On                                                                                |
-| --------------------- | ------------------------------------- | --------------------------------------------------------------------------------- |
-| `surveyCampaignId`    | `documentdb-satisfaction-1` (D0009)   | Every event                                                                       |
-| `surveyPolicyVersion` | `1`; bumped when a gate value changes | Every event                                                                       |
-| `invitationSessionId` | Random UUID per invitation            | `invitationShown`, `invitationResolved`, and `openForm` with trigger `invitation` |
+| Property              | Value                                 | On                                                                                                    |
+| --------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `surveyCampaignId`    | `documentdb-satisfaction-1` (D0009)   | Every event                                                                                           |
+| `surveyPolicyVersion` | `1`; bumped when a gate value changes | Every event                                                                                           |
+| `invitationSessionId` | Random UUID per invitation            | `invitationShown`, `invitationHidden`, `invitationResolved`, and `openForm` with trigger `invitation` |
 
 The framework adds machine/session identifiers, extension metadata, `result`, and measurement
 `duration`. The queries below use the README's `VSCodeMachineId` and `VSCodeSessionId` warehouse
@@ -345,6 +350,7 @@ Cohort queries use the machine ID for installations and the machine and session 
 |                               | `trigger`                                                                      | `sessionStart`, `newActiveDay`, `stateChange`                                                                                                                                                                                                                                                       |                                                                                      |
 | `survey.presentationDeferred` | `reason`                                                                       | `presenterUnavailable`, `presentationFailed`                                                                                                                                                                                                                                                        | Once per changed reason; reset when an invitation is shown                           |
 | `survey.invitationShown`      | `isReminder`                                                                   | `true`, `false`                                                                                                                                                                                                                                                                                     | Once per invitation, only when rendered and visible                                  |
+| `survey.invitationHidden`     | None beyond `invitationSessionId`                                              | -                                                                                                                                                                                                                                                                                                   | Once per invitation, first visible-to-hidden transition while live                   |
 | `survey.feedbackActivated`    | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | `automaticInvitation`, `clusterDashboard`, `collectionView`, `atlasCredentials`, `localQuickStart`, `helpAndFeedbackView`, `giveFeedbackCommand`; tabs `documents`, `indexes`, `queryInsights`; kinds `first`, `returning`, `unknown`; reasons `opened`, `askLater`, `dismissed`, `none`, `unknown` | Once per visible sidebar                                                             |
 | `survey.openForm`             | `trigger`                                                                      | `invitation`, `command`                                                                                                                                                                                                                                                                             | Once per attempt, at most 3 attempts per invitation or command call                  |
 |                               | `activationSource`; optional `collectionTab`, `invitationKind`, `returnReason` | Same closed values as `survey.feedbackActivated`                                                                                                                                                                                                                                                    | Present on service-originated openings                                               |
@@ -353,6 +359,15 @@ Cohort queries use the machine ID for installations and the machine and session 
 |                               | measurement `selectedRating`                                                   | Optional integer 1-5 on sidebar openings (invitation or manual), omitted without selection                                                                                                                                                                                                          | Same three-attempt event budget; selection itself emits nothing                      |
 | `survey.invitationResolved`   | `outcome`                                                                      | `opened`, `askLater`, `neverAgain`, `dismissed`                                                                                                                                                                                                                                                     | Once per invitation; never after permission withdrawal                               |
 |                               | `wasVisible`                                                                   | `true`, `false`                                                                                                                                                                                                                                                                                     |                                                                                      |
+
+`survey.invitationHidden` is sent for an automatic invitation the first time it goes from
+visible (after `invitationShown` was sent) to not visible while it is still open: the user hid
+the Secondary Sidebar or switched to another view in it. It is not sent before the invitation
+was visible, for visibility changes during the reveal, while a choice or browser opening is in
+progress, after the invitation ended (choice, form opened, cancellation, permission withdrawal,
+extension disposal), after `invitationResolved`, on view removal (that is `dismissed`), or for
+manually opened feedback. It changes no state and carries no extra properties, measurements,
+durations or timestamps.
 
 `openResult` is not named `result` because the framework sets `result` on every event.
 The invitation kind and return reason come from local persisted invitation visibility and
@@ -665,6 +680,7 @@ An operator request to implement collection is not a claim of independent privac
 | `survey.eligibility`          | `gate_sampling`, `gate_activeDays`, `gate_cooldown`, `gate_sessionSuppression`: each `passed`, `blocked`, `notEvaluated`; `overall`: `eligible`, `blocked`; `firstBlockingGate`: `sampling`, `activeDays`, `cooldown`, `sessionSuppression`, `none`; `trigger`: `sessionStart`, `newActiveDay`, `stateChange`                                                                                                        | None                                                                                                                                         |
 | `survey.presentationDeferred` | `reason`: `presenterUnavailable`, `presentationFailed`                                                                                                                                                                                                                                                                                                                                                               | None                                                                                                                                         |
 | `survey.invitationShown`      | `invitationSessionId`: random UUID per invitation, not a closed category; `isReminder`: `true`, `false`                                                                                                                                                                                                                                                                                                              | None                                                                                                                                         |
+| `survey.invitationHidden`     | `invitationSessionId`: same invitation UUID; no other survey-owned property                                                                                                                                                                                                                                                                                                                                          | None                                                                                                                                         |
 | `survey.feedbackActivated`    | `activationSource`: `automaticInvitation`, `clusterDashboard`, `collectionView`, `atlasCredentials`, `localQuickStart`, `helpAndFeedbackView`, `giveFeedbackCommand`; `collectionTab`: only for Collection View (`documents`, `indexes`, `queryInsights`); `invitationKind`: `first`, `returning`, `unknown` and `returnReason`: `opened`, `askLater`, `dismissed`, `none`, `unknown` only for automatic invitations | None                                                                                                                                         |
 | `survey.openForm`             | `trigger`: `invitation`, `command`; `openResult`: `success`, `failure`; `invitationSessionId`: UUID only for `invitation`, absent for `command`; the same closed activation fields as above for service-originated opens                                                                                                                                                                                             | `attempt`: integer 1, 2 or 3; optional `selectedRating`: integer 1-5 on sidebar openings with a chosen rating. Both are numeric measurements |
 | `survey.invitationResolved`   | `invitationSessionId`: same invitation UUID; `outcome`: `opened`, `askLater`, `dismissed`, `neverAgain`; `wasVisible`: `true`, `false`                                                                                                                                                                                                                                                                               | None                                                                                                                                         |
@@ -672,6 +688,8 @@ An operator request to implement collection is not a claim of independent privac
 `openResult=failure` normally has framework `result=Succeeded`: the wrapper emits an already
 classified outcome rather than throwing a browser error. `opened` means the browser API returned
 success, never that the user answered or submitted. Visibility alone records no outcome (D0019).
+`survey.invitationHidden` (D0034) reuses only properties already classified on
+`survey.invitationShown`; it adds no new field, measurement or timestamp.
 
 ### Framework and Transport Fields
 

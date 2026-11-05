@@ -360,6 +360,9 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
                 connectionString,
                 { connectionUser: parsed.username, connectionPassword: parsed.password },
                 this.cluster.emulatorConfiguration,
+                undefined,
+                undefined,
+                { localQuickStartInstance: true },
             );
 
             // Retain authentication error handling; client acquisition reports the connection once.

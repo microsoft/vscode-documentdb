@@ -11,7 +11,7 @@ import {
     type ShellStreamCommandRunnerOptions,
 } from '@microsoft/vscode-container-client';
 import * as vscode from 'vscode';
-import { ContainerRuntime, disposeQuickStartOutputChannel } from './ContainerRuntime';
+import { classifyImagePullOutput, ContainerRuntime, disposeQuickStartOutputChannel } from './ContainerRuntime';
 import type * as DockerCommand from './dockerCommand';
 import { runDockerCommand, type DockerCommandOptions } from './dockerCommand';
 
@@ -80,5 +80,24 @@ describe('ContainerRuntime output channel', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(lines).toContain('c1');
+    });
+    it.each([
+        ['Status: Downloaded newer image for mcr.microsoft.com/documentdb/documentdb-local:latest', 'downloaded'],
+        ['Status: Image is up to date for mcr.microsoft.com/documentdb/documentdb-local:latest', 'upToDate'],
+    ] as const)('reports what the pull did from its status line (%s)', async (statusLine, expected) => {
+        vi.mocked(runDockerCommand).mockImplementation(async (command) => {
+            const response = await command;
+            const parse = 'parse' in response ? response.parse : undefined;
+            return parse?.(`latest: Pulling from documentdb/documentdb-local\n${statusLine}\n`, false);
+        });
+
+        await expect(ContainerRuntime.pullImage('mcr.microsoft.com/documentdb/documentdb-local:latest')).resolves.toBe(
+            expected,
+        );
+    });
+
+    it('reports an unknown pull outcome when Docker printed no status line', async () => {
+        await expect(ContainerRuntime.pullImage('image:tag')).resolves.toBe('unknown');
+        expect(classifyImagePullOutput('Pull complete')).toBe('unknown');
     });
 });

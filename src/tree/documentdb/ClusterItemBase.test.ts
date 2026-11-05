@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
@@ -221,6 +221,10 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
             null,
             { activationSource: 'autoOpenOnConnect' },
         );
+        expect(callWithTelemetryAndErrorHandling).not.toHaveBeenCalledWith(
+            'clusterDashboard.autoOpenSkipped',
+            expect.anything(),
+        );
     });
 
     it('opens the dashboard by default when the setting is unavailable', async () => {
@@ -282,6 +286,18 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
             null,
             { activationSource: 'autoOpenOnConnect' },
         );
+        // Reports that automatic opening was skipped, so people who turned it off are countable.
+        const skipped = (callWithTelemetryAndErrorHandling as Mock).mock.calls.find(
+            ([eventName]) => eventName === 'clusterDashboard.autoOpenSkipped',
+        );
+        expect(skipped).toBeDefined();
+        const context = {
+            telemetry: { properties: {} as Record<string, string>, measurements: {} },
+            errorHandling: {},
+        };
+        await (skipped?.[1] as (ctx: typeof context) => unknown)(context);
+        expect(context.telemetry.properties).toMatchObject({ reason: 'settingDisabled' });
+        expect(mockTelemetryEvents).toHaveLength(0);
     });
 
     it('returns the "Create Database…" node when the cluster has no databases', async () => {
