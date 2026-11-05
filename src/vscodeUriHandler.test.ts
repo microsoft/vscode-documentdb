@@ -6,9 +6,17 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as vscode from 'vscode';
+import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { handleAzureResourceLinkRequest } from './deepLinks/handleAzureResourceLink';
 import { AuthMethodId } from './documentdb/auth/AuthMethod';
 import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
+import { Views } from './documentdb/Views';
+import { ext } from './extensionVariables';
+import {
+    buildConnectionsViewTreePath,
+    revealInConnectionsView,
+} from './tree/connections-view/connectionsViewHelpers';
+import { type DiscoveryRevealResult } from './tree/discovery-view/discoveryViewHelpers';
 import { type EmulatorConfiguration } from './utils/emulatorConfiguration';
 import { globalUriHandler } from './vscodeUriHandler';
 
@@ -49,9 +57,7 @@ vi.mock('./deepLinks/handleAzureResourceLink', (): typeof import('./deepLinks/ha
     handleAzureResourceLinkRequest: vi.fn().mockResolvedValue(undefined),
 }));
 
-// The connect path pulls in storage, the tree, and the collection view. None of it is reached by
-// these tests — `connect` is asserted by the point at which it refuses, which is parameter
-// validation — but the imports still have to resolve.
+// Keep storage, tree navigation, and webview creation isolated from the URI handler.
 vi.mock('./commands/openCollectionView/openCollectionView', () => ({ openCollectionViewInternal: vi.fn() }));
 vi.mock('./services/connectionStorageService', () => ({
     ConnectionStorageService: {
@@ -66,12 +72,12 @@ vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
     buildConnectionsViewTreePath: vi.fn(),
     revealInConnectionsView: vi.fn(),
     waitForConnectionsViewReady: vi.fn(),
-    withConnectionsViewProgress: vi.fn(),
+    withConnectionsViewProgress: vi.fn(async (callback: () => Promise<unknown>): Promise<unknown> => callback()),
 }));
 vi.mock('./extensionVariables', () => ({
     ext: {
         settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' },
-        connectionsBranchDataProvider: { refresh: vi.fn() },
+        connectionsBranchDataProvider: { refresh: vi.fn(), findNodeById: vi.fn() },
     },
 }));
 
@@ -96,6 +102,12 @@ beforeEach(() => {
     showUrlHandlingConfirmations = true;
     mockGetAllConnections.mockResolvedValue([]);
     mockSaveConnection.mockResolvedValue(undefined);
+    vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(undefined);
+    vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(undefined);
+    vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+    vi.spyOn(vscode.window, 'withProgress').mockImplementation(async (_options, task): Promise<unknown> =>
+        task({ report: vi.fn() }, new vscode.CancellationTokenSource().token),
+    );
     (vscode.workspace.getConfiguration as Mock).mockReturnValue({
         get: vi.fn(() => showUrlHandlingConfirmations),
     });
@@ -396,6 +408,184 @@ describe('globalUriHandler — connect parameter validation', () => {
                 'orders',
             ]),
         );
+    });
+});
+
+describe('globalUriHandler — Azure open target', () => {
+    const clusterNode = {
+        id: 'discoveryView/cluster',
+        cluster: { name: 'Production' },
+    } as DiscoveryRevealResult['clusterNode'];
+    const databaseNode = { id: 'discoveryView/cluster/db' } as NonNullable<DiscoveryRevealResult['databaseNode']>;
+    const result: DiscoveryRevealResult = { clusterNode, clusterId: 'stable-cluster-id' };
+
+    it('opens the dashboard on the cluster even when automatic dashboard opening is disabled', async (): Promise<void> => {
+        vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(result);
+        const getSetting = vi.fn().mockReturnValue(false);
+        (vscode.workspace.getConfiguration as Mock).mockReturnValue({ get: getSetting });
+
+        const error = await runHandler('/connect/azure', 'resourceId=example&open=dashboard');
+
+        expect(error).toBeUndefined();
+        expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
+            'vscode-documentdb.command.clusterDashboard.open',
+            clusterNode,
+            null,
+            { activationSource: 'deepLink' },
+        );
+        expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
+        expect(getSetting).not.toHaveBeenCalled();
+        expect(lastTelemetry.failureStage).toBe('openTarget');
+    });
+
+    it('opens the dashboard on the requested database node', async (): Promise<void> => {
+        vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue({ ...result, databaseNode });
+
+        const error = await runHandler('/connect/azure', 'resourceId=example&open=dashboard&database=db');
+
+        expect(error).toBeUndefined();
+        expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
+            'vscode-documentdb.command.clusterDashboard.open',
+            databaseNode,
+            null,
+            { activationSource: 'deepLink' },
+        );
+    });
+
+    it('opens the shell with only the node as its argument', async (): Promise<void> => {
+        vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(result);
+
+        const error = await runHandler('/connect/azure', 'resourceId=example&open=shell');
+
+        expect(error).toBeUndefined();
+        expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
+            'vscode-documentdb.command.shell.open',
+            clusterNode,
+        );
+        expect(lastTelemetry.failureStage).toBe('openTarget');
+    });
+
+    it('opens Collection View using the revealed cluster identity and Discovery view', async (): Promise<void> => {
+        vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue({ ...result, databaseNode });
+
+        const error = await runHandler('/connect/azure', 'resourceId=example&database=db&collection=items');
+
+        expect(error).toBeUndefined();
+        expect(openCollectionViewInternal).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
+            {
+                clusterId: 'stable-cluster-id',
+                clusterDisplayName: 'Production',
+                viewId: Views.DiscoveryView,
+                databaseName: 'db',
+                collectionName: 'items',
+            },
+        );
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(lastTelemetry.failureStage).toBe('openTarget');
+    });
+
+    it.each(['open=dashboard', 'open=shell', 'database=db&collection=items'])(
+        'opens nothing for %s when the Azure handler returns no result',
+        async (target): Promise<void> => {
+            const error = await runHandler('/connect/azure', `resourceId=example&${target}`);
+
+            expect(error).toBeUndefined();
+            expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+            expect(openCollectionViewInternal).not.toHaveBeenCalled();
+            expect(lastTelemetry.failureStage).toBe('handleAzureRequest');
+        },
+    );
+
+    it('only reveals when no open target or collection is requested', async (): Promise<void> => {
+        vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(result);
+
+        const error = await runHandler('/connect/azure', 'resourceId=example');
+
+        expect(error).toBeUndefined();
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        expect(openCollectionViewInternal).not.toHaveBeenCalled();
+    });
+});
+
+describe('globalUriHandler — saved connection open target', () => {
+    const connectionString = 'mongodb://alpha.example:27017';
+
+    beforeEach((): void => {
+        mockGetAllConnections.mockResolvedValue([
+            { id: 'existing-id', name: 'Production', secrets: { connectionString } },
+        ]);
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Yes, open connection');
+    });
+
+    it.each([undefined, 'db'])(
+        'names the Shell in the confirmation and opens the revealed node with database %s',
+        async (database): Promise<void> => {
+            const node = {
+                id: 'connectionsView/existing-id',
+                getTreeItem: (): vscode.TreeItem => ({ label: 'Production' }),
+            };
+            const treePath = database ? 'connectionsView/existing-id/db' : 'connectionsView/existing-id';
+            vi.mocked(buildConnectionsViewTreePath).mockReturnValue(treePath);
+            vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
+
+            const error = await runHandler(
+                '/connect',
+                `connectionString=${encodeURIComponent(connectionString)}&open=shell${database ? '&database=db' : ''}`,
+            );
+
+            expect(error).toBeUndefined();
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
+                'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+                {
+                    modal: true,
+                    detail:
+                        `Connection: Production\n${database ? 'Database: db\n' : ''}Opens: Shell\n\n` +
+                        'You might be asked for credentials to establish the connection.\n' +
+                        'Do you want to continue?\n\n' +
+                        'Note: You can disable these URL handling confirmations in the extension settings.',
+                },
+                'Yes, open connection',
+            );
+            expect(revealInConnectionsView).toHaveBeenCalledExactlyOnceWith(
+                expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
+                'existing-id',
+                false,
+                database,
+                undefined,
+            );
+            expect(buildConnectionsViewTreePath).toHaveBeenCalledExactlyOnceWith('existing-id', false, database);
+            expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(treePath, false);
+            expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith('vscode-documentdb.command.shell.open', node);
+            expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
+            expect(openCollectionViewInternal).not.toHaveBeenCalled();
+            expect(lastTelemetry.failureStage).toBe('openTarget');
+        },
+    );
+
+    it('aborts a dashboard request when its node cannot be found', async (): Promise<void> => {
+        vi.mocked(buildConnectionsViewTreePath).mockReturnValue('connectionsView/existing-id');
+
+        const error = await runHandler(
+            '/connect',
+            `connectionString=${encodeURIComponent(connectionString)}&open=dashboard`,
+        );
+
+        expect(error?.message).toBe(
+            'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+        );
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({ detail: expect.stringContaining('Opens: Cluster Dashboard') }),
+            'Yes, open connection',
+        );
+        expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(
+            'connectionsView/existing-id',
+            false,
+        );
+        expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('connectionsView.focus');
+        expect(lastTelemetry.failureStage).toBe('openTarget');
     });
 });
 

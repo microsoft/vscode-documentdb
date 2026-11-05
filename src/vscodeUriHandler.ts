@@ -29,6 +29,7 @@ import {
     waitForConnectionsViewReady,
     withConnectionsViewProgress,
 } from './tree/connections-view/connectionsViewHelpers';
+import { type TreeElement } from './tree/TreeElement';
 import { nonNullValue } from './utils/nonNull';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 
@@ -171,10 +172,24 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
                         context.telemetry.properties.failureStage = 'extractParams';
                         const params = extractAndValidateAzureParams(context, uri.query);
                         context.telemetry.properties.failureStage = 'handleAzureRequest';
-                        await handleAzureResourceLinkRequest(context, {
+                        const result = await handleAzureResourceLinkRequest(context, {
                             ...params,
                             resourceId: nonNullValue(params.resourceId, 'resourceId', 'vscodeUriHandler.ts'),
                         });
+                        if (result) {
+                            context.telemetry.properties.failureStage = 'openTarget';
+                            if (params.database && params.collection) {
+                                await openCollectionViewInternal(context, {
+                                    clusterId: result.clusterId,
+                                    clusterDisplayName: result.clusterNode.cluster.name,
+                                    viewId: Views.DiscoveryView,
+                                    databaseName: params.database,
+                                    collectionName: params.collection,
+                                });
+                            } else if (params.open) {
+                                await openTargetOnNode(params.open, result.databaseNode ?? result.clusterNode);
+                            }
+                        }
                         break;
                     }
 
@@ -207,6 +222,19 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             throw error;
         }
     });
+}
+
+async function openTargetOnNode(target: OpenTarget, node: TreeElement): Promise<void> {
+    switch (target) {
+        case 'dashboard':
+            await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', node, null, {
+                activationSource: 'deepLink',
+            });
+            break;
+        case 'shell':
+            await vscode.commands.executeCommand('vscode-documentdb.command.shell.open', node);
+            break;
+    }
 }
 
 /**
@@ -504,12 +532,17 @@ async function handleConnectionStringRequest(
 
     // Second confirmation: Ask user about revealing the connection (if enabled)
     if (showUrlHandlingConfirmations) {
+        const targetDetails = formatConnectionTargetDetails(
+            existingDuplicateConnection?.name ?? newConnectionLabel,
+            selectedDatabase,
+            params.collection,
+        );
+        if (params.open) {
+            const surface = params.open === 'dashboard' ? l10n.t('Cluster Dashboard') : l10n.t('Shell');
+            targetDetails.push(l10n.t('Opens: {0}', surface));
+        }
         const detail = [
-            ...formatConnectionTargetDetails(
-                existingDuplicateConnection?.name ?? newConnectionLabel,
-                selectedDatabase,
-                params.collection,
-            ),
+            ...targetDetails,
             '',
             l10n.t('You might be asked for credentials to establish the connection.'),
             l10n.t('Do you want to continue?'),
@@ -569,6 +602,20 @@ async function handleConnectionStringRequest(
             });
         },
     );
+
+    if (params.open) {
+        context.telemetry.properties.failureStage = 'openTarget';
+        const treePath = buildConnectionsViewTreePath(storageId, isInEmulatorZone, selectedDatabase);
+        const node = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
+        if (!node) {
+            throw new Error(
+                l10n.t(
+                    'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+                ),
+            );
+        }
+        await openTargetOnNode(params.open, node);
+    }
 
     // Third confirmation: Ask user about opening collection view (if applicable and enabled)
     if (selectedDatabase && params.collection) {
