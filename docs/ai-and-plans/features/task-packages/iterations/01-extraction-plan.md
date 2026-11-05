@@ -174,6 +174,20 @@ calling `ClustersClient.getClient(clusterId)`.
 > `SourceValidationError` and the clipboard clearing (decision 0008). The behaviour-neutral option
 > is a lazy client provider (`() => Promise<ClustersClient>`), which deviates from the wording
 > "receives a client instance". The reader stays in the extension either way.
+>
+> Options the orchestrator analysed:
+>
+> - **A. Eager instance, as worded:** undoes the stale-clipboard handling from PR #490 (message,
+>   clipboard clearing, telemetry), so it breaks 0008.
+> - **B. Lazy client provider:** no behaviour change, testable; the reader and writer then take
+>   different things, which needs a comment to keep the difference.
+> - **C. Drop or defer:** no risk; nothing in Phases 2 to 5 depends on it, because the reader stays
+>   in the extension and 1.4 already removed `ClustersClient` from the copy task.
+> - **D. First fix the swallowed-initialization bug (see Outcome), then A:** cleanest end state,
+>   but a deliberate behaviour change for its own PR.
+>
+> Orchestrator recommendation: C now, plus a separate PR for the initialization bug; B if 1.5
+> should land in this round. Awaiting the operator's choice.
 
 ### 1.6 Publish the writer's subclass contract
 
