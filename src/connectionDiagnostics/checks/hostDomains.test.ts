@@ -341,7 +341,7 @@ describe('dns.mixedHostDomains in the panel and the report', (): void => {
         const nameResolution = markdown.slice(markdown.indexOf('## Name resolution'), markdown.indexOf('## Transport'));
         expect(nameResolution).toContain('Warning');
         expect(markdown).toContain('Host names outside the Azure domains');
-        for (const name of [gov, privateName, gov.replace(/[.\-]/g, '\\$&')]) {
+        for (const name of [gov, privateName, gov.replace(/[.-]/g, '\\$&')]) {
             expect(markdown).not.toContain(name);
         }
     });
