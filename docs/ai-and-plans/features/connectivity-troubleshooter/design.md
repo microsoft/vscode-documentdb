@@ -9,8 +9,11 @@ updated: 2026-11-04
 # Diagnose connection: design
 
 > Called the **connectivity troubleshooter** until WI-17 (2026-11-02). Older decisions and
-> iteration notes retain that name. Source paths and implementation names stay; the command ID changes
-> ([0038](./decisions.md#0038--the-feature-is-called-diagnose-connection)).
+> iteration notes retain that name. The command ID changed in
+> [0038](./decisions.md#0038--the-feature-is-called-diagnose-connection). Internal names (package,
+> source paths, symbols, telemetry) were renamed from *troubleshooter* to *connection diagnostics*
+> in RN-1…RN-5 ([0051](./decisions.md#0051--internal-names-follow-the-feature-connection-diagnostics));
+> this docs folder keeps its name.
 
 > The complete proposal, ready for evaluation before implementation. Nothing here is implemented;
 > once code exists, the code is authoritative for behavior. No question is left open: every
@@ -34,16 +37,16 @@ configuration validator or a cluster health scanner ([0018](./decisions.md#0018-
 ## 2. Architecture
 
 ```
-packages/documentdb-js-connectivity-troubleshooter      @documentdb-js/connectivity-troubleshooter
+packages/documentdb-js-connection-diagnostics      @documentdb-js/connection-diagnostics
 │   no vscode, no l10n, no UI, no telemetry
 ├── runner        ordered checks, dependencies, timeouts, AbortSignal, streamed events
 ├── checks/       environment (Node facts), connectionString, srv, dns, tcp, tls, hello
 ├── report        report snapshot; identifier redaction; Markdown and JSON renderers with an
 │                 injectable message function; English finding details for convenience
-└── types         CheckStatus, CheckResult, CheckStepResult, Finding, TroubleshooterEvent
+└── types         CheckStatus, CheckResult, CheckStepResult, Finding, DiagnosticsEvent
 
 src/ (extension)
-├── troubleshooter/
+├── connectionDiagnostics/
 │   ├── checks/                     extension checks on the same Check interface: environment
 │   │                               (VS Code facts), prepare, authenticate, connectionAccess,
 │   │                               serverFacts, contextHints
@@ -52,10 +55,10 @@ src/ (extension)
 │   ├── findingMessages.ts          FindingCode → l10n.t() title, explanation, next step
 │   ├── outputTrace.ts              the run's Output channel lines (6.4)
 │   ├── telemetry.ts                allowlisted usage/outcome mapping through existing helpers
-│   └── runTroubleshooter.ts        resolves the cluster, builds input, runs, records telemetry
-├── commands/troubleshootConnection/
+│   └── runConnectionDiagnostics.ts resolves the cluster, builds input, runs, records telemetry
+├── commands/diagnoseConnection/
 ├── utils/readOnlyJsonDocumentProvider   gains Markdown documents (6.1); JSON path unchanged
-└── webviews/documentdb/connectivityTroubleshooter/
+└── webviews/documentdb/connectionDiagnostics/
     ├── router (tRPC)               run (subscription), cancel, showDiagnostics, copyReport, saveReport
     └── React                       Container + StatusList (8 fixed rows), result card
 ```
@@ -118,7 +121,7 @@ interface Check<TContext, TCode extends string> {
     run(context: TContext, signal: AbortSignal): Promise<Omit<CheckResult<TCode>, 'checkId' | 'durationMs'>>;
 }
 
-interface TroubleshooterTimeouts {
+interface DiagnosticsTimeouts {
     readonly runTimeoutMs: number | null;
     readonly preparationTimeoutMs: number | null;
     readonly srvTimeoutMs: number | null;
@@ -127,18 +130,18 @@ interface TroubleshooterTimeouts {
     readonly postConnectTimeoutMs: number | null;
 }
 
-function runTroubleshooter<TCode extends string>(options: {
-    input: TroubleshooterInput;                          // connection string, effective network options
+function runDiagnostics<TCode extends string>(options: {
+    input: DiagnosticsInput;                          // connection string, effective network options
     checks: readonly Check<RunContext, TCode>[];         // built-ins plus consumer checks, in order
-    timeouts?: Partial<TroubleshooterTimeouts>;          // omitted: defaults; null: no diagnostic timeout
+    timeouts?: Partial<DiagnosticsTimeouts>;          // omitted: defaults; null: no diagnostic timeout
     signal?: AbortSignal;
-    onEvent?: (event: TroubleshooterEvent<TCode>) => void;
+    onEvent?: (event: DiagnosticsEvent<TCode>) => void;
     // checkStarted, checkFinished, runFinished
-}): Promise<TroubleshooterRun<TCode>>;
+}): Promise<DiagnosticsRun<TCode>>;
 
-function buildReport<TCode extends string>(run: TroubleshooterRun<TCode>): TroubleshooterReport<TCode>;
-function renderMarkdown<TCode extends string>(report: TroubleshooterReport<TCode>, options: RenderOptions<TCode>): string;
-function renderJson<TCode extends string>(report: TroubleshooterReport<TCode>, options: { redact: boolean; generatedBy?: Readonly<Record<string, string>> }): string;
+function buildReport<TCode extends string>(run: DiagnosticsRun<TCode>): DiagnosticsReport<TCode>;
+function renderMarkdown<TCode extends string>(report: DiagnosticsReport<TCode>, options: RenderOptions<TCode>): string;
+function renderJson<TCode extends string>(report: DiagnosticsReport<TCode>, options: { redact: boolean; generatedBy?: Readonly<Record<string, string>> }): string;
 ```
 
 Rules the API is built around:
@@ -156,7 +159,7 @@ Rules the API is built around:
   messages, never parses or displays the English detail as a localization fallback. `renderMarkdown`
   still takes the consumer's message function for all report prose. An unknown code is an explicit
   contract error, not a silent fallback to English.
-  The [package README](../../../../packages/documentdb-js-connectivity-troubleshooter/README.md#finding-codes)
+  The [package README](../../../../packages/documentdb-js-connection-diagnostics/README.md#finding-codes)
   lists every public finding code, its meaning and concrete structured data fields, along with this
   convenience-only English contract.
 - **Consumers add checks.** The extension's authentication check plugs into the same runner as
@@ -185,11 +188,11 @@ Rules the API is built around:
 - **Conventions follow `@documentdb-js/srv-resolver`**: ESM-only, its own `tsconfig.test.json`,
   covered by `npm run typecheck:tests`.
 
-> **Implemented** (WI-01) in `a67110b6`: `packages/documentdb-js-connectivity-troubleshooter` with
+> **Implemented** (WI-01) in `a67110b6`: `packages/documentdb-js-connection-diagnostics` with
 > `src/types.ts` (the types above, `CheckOutcome` as the `run` return type) and `src/findingCodes.ts`
 > (the closed `builtInFindingCodes`/`BuiltInFindingCode` of package-owned codes, `skipReasons`,
 > `isBuiltInFindingCode`); tests in `src/findingCodes.test.ts`. WI-02 added `ProbeTarget`,
-> `TroubleshooterInput`, `RunContext`, `TroubleshooterEvent` and `TroubleshooterRun`.
+> `DiagnosticsInput`, `RunContext`, `DiagnosticsEvent` and `DiagnosticsRun`.
 
 ### 3.1 Order and dependencies
 
@@ -316,12 +319,12 @@ results, so late work cannot update a newer run. Cancel names the run subscripti
 a delayed Cancel for a replaced run is ignored, and one that arrives before its run starts cancels
 that run as it starts.
 
-> **Implemented** (WI-02) in `85ff17cf`: `src/runner.ts` (`runTroubleshooter`, `createTimeoutFinding`,
+> **Implemented** (WI-02) in `85ff17cf`: `src/runner.ts` (`runDiagnostics`, `createTimeoutFinding`,
 > `formatTarget`), `src/timeouts.ts` (`DEFAULT_TIMEOUTS`, `timeoutsForProfile`, `resolveTimeouts`,
 > `SAFETY_LIMITS`) and `src/errors.ts`. Checks declare an optional `timeout` kind; the runner applies
 > the least of check, remaining run and connection-configured timeouts, and checks use
 > `RunContext.effectiveTimeout` for inner operations. A run-scope check publishes probe targets with
-> `setTargets` (deduplicated, capped at 16). `TroubleshooterRun.coverage` records timed-out operations,
+> `setTargets` (deduplicated, capped at 16). `DiagnosticsRun.coverage` records timed-out operations,
 > unstarted checks, omitted targets and whether a diagnostic-timeout retry could help. Tests:
 > `src/runner.test.ts`, `src/timeouts.test.ts`.
 
@@ -368,7 +371,7 @@ Findings: `env.proxyConfigured` (info: VS Code's proxy setting does not apply to
 > `src/checks/environment.test.ts`.
 
 > **Implemented** (WI-08a) in `a5a47fe0`: the extension's facts come from a separate run check,
-> `src/troubleshooter/checks/extensionEnvironment.ts`, shown on the same "Diagnosis setup" row.
+> `src/connectionDiagnostics/checks/extensionEnvironment.ts`, shown on the same "Diagnosis setup" row.
 > `cs.credentialsMissing` comes from the `credentials` check (`checks/credentials.ts`).
 
 ### 4.2 Connection string
@@ -434,7 +437,7 @@ shared tunnel an ordinary connect would set up; cancellation never closes it.
 > **Implemented** (WI-07a) in `2656cd33`: `ConnectionReachabilityService.ensureReachable` takes an optional
 > `ConnectionReachabilityObserver`. The prepare check itself comes in WI-08.
 
-> **Implemented** (WI-08a) in `a5a47fe0`: `src/troubleshooter/checks/prepare.ts`. The SRV and DNS checks
+> **Implemented** (WI-08a) in `a5a47fe0`: `src/connectionDiagnostics/checks/prepare.ts`. The SRV and DNS checks
 > depend on `prepare`, which is `notApplicable` when no provider claims the connection.
 
 > **Implemented** (WI-16, pre-review R1/R2 option A,
@@ -451,7 +454,7 @@ shared tunnel an ordinary connect would set up; cancellation never closes it.
 > **Changed** (WI-16): providers may now report what they observed, so the report does say whether
 > the shared tunnel was `started` or `reused` (`prepare.sharedTunnel`, info, also in the Output trace's
 > codes). It still stays open after the run. Tests: `checks/prepare.test.ts`,
-> `checks/resolveTarget.test.ts`, `runTroubleshooter.test.ts`, `KubernetesResourceItem.test.ts`,
+> `checks/resolveTarget.test.ts`, `runConnectionDiagnostics.test.ts`, `KubernetesResourceItem.test.ts`,
 > `portForwardTunnel.test.ts`, `src/tree/documentdb/diagnosticCredentialRead.test.ts`.
 
 ### 4.4 SRV and TXT
@@ -510,7 +513,7 @@ No separate "is this machine online" step, and no lookup of an unrelated public 
 
 > **Implemented (WI-29):** `dns.mixedHostDomains` (warning, extension), because of #1050 review
 > finding [E2](../sovereign-clouds/iterations/02-copilot-feedback-and-edge-case-review.md#e2-unclassified-seeds-erase-known-cloud-evidence).
-> For Microsoft Entra ID and managed identity only, `src/troubleshooter/checks/hostDomains.ts` wraps the
+> For Microsoft Entra ID and managed identity only, `src/connectionDiagnostics/checks/hostDomains.ts` wraps the
 > package DNS check. It classifies the hosts the driver contacts (the seeds, which for `mongodb+srv://`
 > is the SRV name, and the resolved targets) with `getAzureHostSuffix` and the trusted
 > `documentDB.customEnvironment.hostnameSuffix` (`normalizeCustomHostnameSuffix`); IP literals and
@@ -659,8 +662,8 @@ Findings: `auth.failed` (server code 18), `auth.mechanismMismatch`, `auth.creden
 which name the actual cause), and the Entra ID findings in 4.9.2.
 
 > **Implemented** (WI-11, WI-12) in `d533f779` and `212e8c7e`: `src/documentdb/auth/createAuthHandler.ts`
-> (caller policy, phase observers) and `src/troubleshooter/checks/authenticate.ts` with a run-owned client
-> (`src/troubleshooter/auth/runOwnedClient.ts`).
+> (caller policy, phase observers) and `src/connectionDiagnostics/checks/authenticate.ts` with a run-owned client
+> (`src/connectionDiagnostics/auth/runOwnedClient.ts`).
 
 #### 4.9.1 Skipped or failed
 
@@ -775,7 +778,7 @@ policy for each:
 - `traceContext.startupProperties.errorKind` and the cloud fields from `recordCloudResolution`: pass
   the run's telemetry properties here, never a real connection's.
 - `[Authentication]` output lines: pass `AuthTraceContext { startupCorrelationId: <runId>,
-surface: 'troubleshooter' }`, so the lines the handlers already write identify the run (6.4).
+surface: 'connectionDiagnostics' }`, so the lines the handlers already write identify the run (6.4).
 
 #### 4.9.5 Scope
 
@@ -783,7 +786,7 @@ The run tests the extension's own connection. Since #1050, the shell and playgro
 token resource on the main thread with the same resolver, so a passing Sign-in configuration phase
 covers them too. Their worker processes are not tested.
 
-> **Implemented** (WI-12) in `212e8c7e`: `src/troubleshooter/auth/tokenClaims.ts`; steps
+> **Implemented** (WI-12) in `212e8c7e`: `src/connectionDiagnostics/auth/tokenClaims.ts`; steps
 > `auth.signInConfiguration`, `auth.token`, `auth.serverAuthentication`. Recorded token failures keep the
 > classifier rule since `6b7b0540`.
 
@@ -803,7 +806,7 @@ Findings: `access.listDatabasesDenied` (warning), `access.noDatabasesVisible` (i
 kept as facts; inheritance and effective privileges are not computed. No write probes. An
 unsupported or denied `connectionStatus` only limits the facts.
 
-> **Implemented** (WI-13a) in `9126e815`: `src/troubleshooter/checks/connectionAccess.ts`.
+> **Implemented** (WI-13a) in `9126e815`: `src/connectionDiagnostics/checks/connectionAccess.ts`.
 
 > **Implemented (WI-27)** ([0048](./decisions.md#0048--no-authentication-that-the-server-will-not-serve-needs-sign-in)):
 > each command error is classified in `postConnectCommand.ts`. A refusal (13 `Unauthorized`,
@@ -851,7 +854,7 @@ A command timeout produces `check.timeout` and warning status, with the next com
 > dashboard deleted its reply parsing (cluster-dashboard 0017) and reports raw replies; what it
 > still has is the version helper above, which is what this reuses.
 
-> **Implemented** (WI-13a) in `9126e815`: `src/troubleshooter/checks/serverFacts.ts`.
+> **Implemented** (WI-13a) in `9126e815`: `src/connectionDiagnostics/checks/serverFacts.ts`.
 
 ### 4.12 Context hints (extension)
 
@@ -866,14 +869,14 @@ configuration helpers are planned for the next iteration (9).
 
 `explain` has telemetry side effects: the service sends `errorExplanation.explained`, and the
 Entra provider sends `entraSignIn.classified` and writes an `[Authentication]` line. Add an optional
-`source` field to `ErrorExplanationRequest` that both events record (`troubleshooter`), so runs
+`source` field to `ErrorExplanationRequest` that both events record (`connectionDiagnostics`), so runs
 are not counted as real connect failures. Providers stay text-only: no UI, retry or repair.
 
-> **Implemented** (WI-07a) in `2656cd33`: `ErrorExplanationRequest.source` (`'troubleshooter'`) is
+> **Implemented** (WI-07a) in `2656cd33`: `ErrorExplanationRequest.source` (`'connectionDiagnostics'`) is
 > recorded as `explanationSource` on `errorExplanation.explained` and `entraSignIn.classified`, and as a
 > `source` field in the provider's `[Authentication]` line. The context hints check comes in WI-13.
 
-> **Implemented** (WI-13a) in `9126e815`: `src/troubleshooter/checks/contextHints.ts`.
+> **Implemented** (WI-13a) in `9126e815`: `src/connectionDiagnostics/checks/contextHints.ts`.
 
 ### 4.13 Result card (derived, below the list)
 
@@ -925,8 +928,8 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
 > the status list." The list is now only the checks, and the outcome and next steps are one card.
 > It appears below the list, so nothing above it moves.
 
-> **Implemented** (WI-13b, WI-13c) in `6b7b0540` and `a2a2d3a4`: `src/troubleshooter/result.ts`
-> derives the outcome and card data; `TroubleshooterResultCard.tsx` renders it. A failed first command
+> **Implemented** (WI-13b, WI-13c) in `6b7b0540` and `a2a2d3a4`: `src/connectionDiagnostics/result.ts`
+> derives the outcome and card data; `DiagnosticsResultCard.tsx` renders it. A failed first command
 > caused by an unavailable compressor is "Connection failed at Database access" with
 > `hello.compressorUnavailable` as the headline.
 
@@ -934,7 +937,7 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
 > details scale ([StatusList README, "Details content"](../../../../packages/vscode-ext-webview-fluentui/src/components/StatusList/README.md#details-content)).
 > `StatusListItem` owns the frame (toggle, region, rule, indent, spacing, motion) and the base type
 > (`fontSizeBase200`, `lineHeightBase200`, `code` in `fontFamilyMonospace`);
-> `TroubleshooterRowDetails.tsx` supplies only content, built from `StatusListDetailsMessage`
+> `DiagnosticsRowDetails.tsx` supplies only content, built from `StatusListDetailsMessage`
 > (findings), `StatusListDetailsSection` (per host) and `StatusListDetailsFacts` (evidence), with
 > code-like values in `<code>`. No behaviour or wording changed.
 
@@ -996,7 +999,7 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
   ([0015](./decisions.md#0015--the-context-menu-item-is-on-cluster-nodes-only-not-on-quick-start-instance-nodes)).
 - **Command palette.** The same command with a connection picker.
 
-> **Implemented** (WI-09) in `0c7afda9`: `src/commands/troubleshootConnection/troubleshootConnection.ts`;
+> **Implemented** (WI-09) in `0c7afda9`: `src/commands/diagnoseConnection/diagnoseConnection.ts`;
 > the error node is added in `ClusterItemBase.createErrorRecoveryChildren`; the palette path reuses the
 > stored-connection tree picker.
 
@@ -1080,12 +1083,12 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
 > connection string and preparation are one "Connection settings" row (Kubernetes port forwarding no
 > longer gets a row that is skipped for everyone else), and SRV joins DNS.
 
-> **Implemented** (WI-10) in `4bb1580b` and `0d52730a`: `src/troubleshooter/panelRows.ts` projects run
+> **Implemented** (WI-10) in `4bb1580b` and `0d52730a`: `src/connectionDiagnostics/panelRows.ts` projects run
 > events onto the eight rows from the planned check list and a `hostPhaseStarted` runner event. The
-> view (`ConnectivityTroubleshooter.tsx`, `formatEvidence.ts`) localizes semantic segments; finding
+> view (`ConnectionDiagnostics.tsx`, `formatEvidence.ts`) localizes semantic segments; finding
 > segments carry the host-localized title from the exhaustive message table rather than a second
 > webview-side table, so the panel still never depends on the package's English detail. Router and
-> controller: `connectivityTroubleshooterRouter.ts`, `connectivityTroubleshooterController.ts`. The result
+> controller: `connectionDiagnosticsRouter.ts`, `connectionDiagnosticsController.ts`. The result
 > card shows the outcome and retry actions; report actions live only in the footer. Its headline, next steps and server line
 > come in WI-13. L2-dev scenarios: `build/verification/browser/scenarios.ts`.
 
@@ -1093,7 +1096,7 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
 > the header uses the same `ContainerHeader` building blocks as the DocumentDB Local and MongoDB Atlas
 > wizards: a `NetworkCheckRegular` media icon, the title "Connection Diagnostics", the static subtitle
 > "Check a connection step by step and review the results.", and **Give Feedback** when `feedbackPermitted` was true
-> at open time (`common.openFeedback`, activation source `connectivityTroubleshooter`). Content is capped
+> at open time (`common.openFeedback`, activation source `connectionDiagnostics`). Content is capped
 > at `contentMaxWidth="760px"` like both wizards; the header and the footer span the panel. There is
 > no step indicator and no `Wizard`: the panel is one screen, so `ContainerBody` drops its `nav` row.
 > The header scrolls with the body, as a wizard header does; the footer stays pinned. The content uses
@@ -1131,8 +1134,8 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
 
 - **What a row shows when expanded.** Findings first (error, warning, information), each as the
   host-localized title, explanation and next step from `describeFinding`, with the hosts it concerns;
-  then evidence, built host-side in `src/troubleshooter/panelDetails.ts` and localized by the view
-  (`TroubleshooterRowDetails.tsx`):
+  then evidence, built host-side in `src/connectionDiagnostics/panelDetails.ts` and localized by the view
+  (`DiagnosticsRowDetails.tsx`):
 
   | Row                      | Evidence                                                                                                                                                                      | Offered when          |
   | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
@@ -1173,7 +1176,7 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
   the result card still show identifiers with Hide identifiers on, as before.
 - **Data flow.** The router keeps every `checkFinished` result and sends rows with `details` on
   every `rows`, `cancelled` and `finished` update. Everything above is wired for real.
-- **L2-dev routes.** `/connectivityTroubleshooter/<scenario>/<theme>`: `private-endpoint-public`
+- **L2-dev routes.** `/connectionDiagnostics/<scenario>/<theme>`: `private-endpoint-public`
   (the reported case), `private-endpoint-identifiers-hidden`, `several-findings`, `dns-failure`,
   `running` and `default`.
 
@@ -1452,7 +1455,7 @@ Each run writes a short trace to the extension's existing output channel, in the
 `[Authentication]` lines: one `[Connection diagnosis] run=<runId> started` line with the entry point,
 one line per finished check and phase (ID, status, duration, finding codes), and one `finished`
 or `cancelled` line with the outcome. The `[Authentication]` lines the handlers already write join
-it through `startup=<runId> surface=troubleshooter` (4.9.4).
+it through `startup=<runId> surface=connectionDiagnostics` (4.9.4).
 
 The diagnosis trace lines hold only IDs, statuses, codes, durations and allowlisted
 categories: never host names, addresses, user names, tenant or account IDs, facts or error text.
@@ -1462,7 +1465,7 @@ patterns, which can include a custom suffix.) The toggle does not apply to the c
 This covers the user who closed the panel without saving a report: support can ask for the Output
 channel and match it by run ID.
 
-> **Implemented** (WI-08a) in `a5a47fe0`: `src/troubleshooter/outputTrace.ts`. Targets appear as a 1-based
+> **Implemented** (WI-08a) in `a5a47fe0`: `src/connectionDiagnostics/outputTrace.ts`. Targets appear as a 1-based
 > index, never a host name.
 
 ## 7. Telemetry ([0020](./decisions.md#0020--collect-usage-and-diagnostic-telemetry-through-existing-helpers))
@@ -1472,8 +1475,8 @@ where they cancel, how often authentication is skipped, what prevents connecting
 open, copy or save diagnostics. One run lifecycle and the existing command/RPC events, not an event
 per host, row, sub-step or progress update.
 
-> **Implemented** (WI-08a, WI-10) in `a5a47fe0` and `0d52730a`: `src/troubleshooter/telemetry.ts` and
-> `runTroubleshooter.ts` (runStarted, the run scope with masking), router report-action and cancel events.
+> **Implemented** (WI-08a, WI-10) in `a5a47fe0` and `0d52730a`: `src/connectionDiagnostics/telemetry.ts` and
+> `runConnectionDiagnostics.ts` (runStarted, the run scope with masking), router report-action and cancel events.
 
 ### 7.1 Ownership and prior art
 
@@ -1502,12 +1505,12 @@ Event names are logical; the framework adds the extension's namespace.
 | Action                             | Instrumentation                                                      | Fields / question                                                                                                                                                                                                                                                     |
 | ---------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Open or focus the panel            | Enrich the diagnose command's existing event                         | `entryPoint` (`errorNode`, `contextMenu`, `commandPalette`), `sourceView`, `panelAction` (`created`, `focused`): where is it found and reused?                                                                                                                        |
-| Start a run                        | `connectivityTroubleshooter.runStarted` when the host accepts a run  | `runTrigger` (`initial`, `rerun`), `runIndex`, `timeoutProfile` (`default`, `longer`, `noDiagnosticTimeouts`): how many runs start, including explicit timeout retries and those that never finish                                                                    |
-| Finish, cancel or fail a run       | One `connectivityTroubleshooter.run` scope around the runner promise | outcome, check counts, auth skip reason, cancel reason and active checks: what happened and where did users stop?                                                                                                                                                     |
+| Start a run                        | `diagnoseConnection.runStarted` when the host accepts a run  | `runTrigger` (`initial`, `rerun`), `runIndex`, `timeoutProfile` (`default`, `longer`, `noDiagnosticTimeouts`): how many runs start, including explicit timeout retries and those that never finish                                                                    |
+| Finish, cancel or fail a run       | One `diagnoseConnection.run` scope around the runner promise | outcome, check counts, auth skip reason, cancel reason and active checks: what happened and where did users stop?                                                                                                                                                     |
 | Show report, copy or save a report | Enrich the `showDiagnostics`, `copyReport`, `saveReport` RPC events  | `reportFormat` (`markdown`, `json`), `reportRedacted`, result; on Copy and Save also `shareWarning` (`shown`, `notShown`) and `shareWarningOutcome` (`continued`, `cancelled`; a cancel is `Canceled`, not `Failed`): which outputs are used? Never content or a path |
 | Request cancellation               | The cancel RPC's event                                               | Separate from the run's terminal result, so a cancelled run is not counted twice                                                                                                                                                                                      |
 
-A random `troubleshooterSessionId` per panel and a fresh `troubleshooterRunCorrelationId` per run
+A random `diagnosticsSessionId` per panel and a fresh `diagnosticsRunCorrelationId` per run
 (the run ID used in 6.4) are carried through the command, run and report actions. Existing
 `journeyCorrelationId` and `connectionCorrelationId` are preserved when present. No ID is derived
 from a host, connection name, `clusterId` or `treeId`.
@@ -1576,7 +1579,7 @@ backend. Existing `TDD:` contracts are respected.
 | Entra ID and sovereign clouds       | Injected resolver dependencies (pattern of `documentdbTokenResource.test.ts`) for public, US Government, China and custom clouds. Each row of 4.9.1 lands in the documented result: cloud mismatch fails before any token request; invalid override, unreadable custom definition, `customCloudUnresolved`, `managedIdentityCloudUnknown` and a host outside the allowlist fail with their `kind`; no silent session skips without calling `recordEntraTokenFailure`; a recent recorded failure appears as "Earlier in this session" and does not change the outcome. Managed identity completes Token during Server authentication. AADSTS65002, the opaque broker error and an OIDC host rejection use the existing classifier. Token success followed by server rejection, or by a network timeout, never claims acceptance |
 | Token claim summary                 | Matching, different and not-comparable audiences; known sovereign issuers; tenant match and mismatch; expired; malformed, opaque and oversized tokens give "unavailable"; the token and unlisted claim values are absent everywhere                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Server facts and summary            | All commands on the same owned client; dashboard version-helper tests keep passing after the move; several engine versions in order; "Server version" label without DocumentDB metadata; `.azure.us` and `.azure.cn` classified with their cloud; cached data never fills a missing fact; a denied command leaves "Connected"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Diagnostics side effects            | `ErrorExplanationService` events carry `source=troubleshooter`; `[Authentication]` lines carry `surface=troubleshooter` and the run ID; run telemetry receives #1050's cloud fields                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Diagnostics side effects            | `ErrorExplanationService` events carry `source=connectionDiagnostics`; `[Authentication]` lines carry `surface=connectionDiagnostics` and the run ID; run telemetry receives #1050's cloud fields                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Secrets and redaction               | Raw and encoded URI, proxy, option and token secrets absent from facts, findings, events, Output channel, Markdown and JSON with the toggle on and off; every identifier in 6.3 replaced consistently when on; text that cannot be made safe is omitted with a reason; Markdown, HTML, link and fence injection fixtures; truncation markers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Report outputs                      | Markdown sections and tables from 6.2; Show diagnostics, Copy and Save render the same snapshot; Save as JSON carries the same facts; an open document is unchanged by a re-run or toggle; export performs no network I/O, token request or credential read; failed copy, write or preview is reported; a cancelled run produces no report                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Output channel                      | A run's lines carry its ID, statuses, codes and durations only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |

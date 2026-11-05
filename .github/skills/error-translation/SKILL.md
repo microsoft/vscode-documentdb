@@ -54,7 +54,7 @@ export class MyErrorExplainer implements ErrorExplanationProvider {
 
 If the text names an infrastructure identifier that is not in the connection string (for example a
 Kubernetes service or namespace), return `{ message, identifiers }` instead of a plain string and list
-each one with its kind. The troubleshooter's "Hide identifiers" can only replace names it was told
+each one with its kind. Connection diagnostics' "Hide identifiers" can only replace names it was told
 about.
 
 A provider may answer without inspecting the error at all. Cancellations are therefore filtered

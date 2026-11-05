@@ -5,17 +5,20 @@ status: active
 created: 2026-10-27
 updated: 2026-11-04
 code:
-  - packages/documentdb-js-connectivity-troubleshooter/**
-  - src/troubleshooter/**
-  - src/commands/troubleshootConnection/**
-  - src/webviews/documentdb/connectivityTroubleshooter/**
+  - packages/documentdb-js-connection-diagnostics/**
+  - src/connectionDiagnostics/**
+  - src/commands/diagnoseConnection/**
+  - src/webviews/documentdb/connectionDiagnostics/**
 ---
 
 # Diagnose connection
 
 > Called the **connectivity troubleshooter** until WI-17 (2026-11-02). Older decisions and
-> iteration notes retain that name. Source paths and implementation names stay; the command ID changes
-> ([0038](./decisions.md#0038--the-feature-is-called-diagnose-connection)).
+> iteration notes retain that name. The command ID changed in
+> [0038](./decisions.md#0038--the-feature-is-called-diagnose-connection). Internal names (package,
+> source paths, symbols, telemetry) were renamed from *troubleshooter* to *connection diagnostics*
+> in RN-1…RN-5 ([0051](./decisions.md#0051--internal-names-follow-the-feature-connection-diagnostics));
+> this docs folder keeps its name.
 
 **Status:** implemented; ready for operator review (work items in [the implementation log](./iterations/02-implementation-log.md)) ·
 **Issue:** [#100](https://github.com/microsoft/vscode-documentdb/issues/100) ·
@@ -34,7 +37,7 @@ not a configuration or permissions audit.
 
 ## Intent (code is authoritative for behavior once it exists)
 
-- **A package and a surface.** The checks live in `@documentdb-js/connectivity-troubleshooter`, a
+- **A package and a surface.** The checks live in `@documentdb-js/connection-diagnostics`, a
   VS Code-independent workspace package that returns stable codes, structured facts and
   language-tagged English details for convenience. The extension uses codes and structured data
   only to produce its own localized messages; it never parses or uses the English detail as a
@@ -202,34 +205,34 @@ Keep that catalogue in sync with the public code unions as part of implementatio
 ### Finding code catalogue
 
 The exported finding codes, their `data` fields and the skip reasons are documented in the
-[package README](../../../../packages/documentdb-js-connectivity-troubleshooter/README.md#finding-codes),
+[package README](../../../../packages/documentdb-js-connection-diagnostics/README.md#finding-codes),
 which tests keep in sync with the public code unions.
 
 ## Code map
 
 Main code:
 
-- `packages/documentdb-js-connectivity-troubleshooter/src/types.ts`, `findingCodes.ts`: public types,
+- `packages/documentdb-js-connection-diagnostics/src/types.ts`, `findingCodes.ts`: public types,
   `BuiltInFindingCode`, `SkipReason`
-- `packages/documentdb-js-connectivity-troubleshooter/src/runner.ts`, `timeouts.ts`, `errors.ts`: the
+- `packages/documentdb-js-connection-diagnostics/src/runner.ts`, `timeouts.ts`, `errors.ts`: the
   runner, timeout profiles and safety limits
-- `packages/documentdb-js-connectivity-troubleshooter/src/checks/`: environment, connectionString, srv,
+- `packages/documentdb-js-connection-diagnostics/src/checks/`: environment, connectionString, srv,
   dns, tcp, tls, hello; `createBuiltInChecks()` in `index.ts`
-- `packages/documentdb-js-connectivity-troubleshooter/src/networkOptions.ts`: effective network options
+- `packages/documentdb-js-connection-diagnostics/src/networkOptions.ts`: effective network options
   and their origins
-- `packages/documentdb-js-connectivity-troubleshooter/src/report/`: snapshot, sanitization, identifier
+- `packages/documentdb-js-connection-diagnostics/src/report/`: snapshot, sanitization, identifier
   redaction, JSON and Markdown renderers, `englishReportText`
-- `packages/documentdb-js-connectivity-troubleshooter/README.md`: the package contract and finding-code
+- `packages/documentdb-js-connection-diagnostics/README.md`: the package contract and finding-code
   catalogue
 - `packages/vscode-ext-webview-fluentui/src/components/StatusList/**`: the `skipped` status
 - `src/documentdb/auth/authConnectionTarget.ts`: token-free connection string and network options per auth
   method
 - `src/utils/clusterVersions.ts`: version helpers shared by the dashboard and connection diagnosis
-- `src/troubleshooter/`: input building, extension checks (extensionEnvironment, credentials, prepare,
+- `src/connectionDiagnostics/`: input building, extension checks (extensionEnvironment, credentials, prepare,
   authenticate, connectionAccess, serverFacts, contextHints), the DNS host-domain warning (`hostDomains`, WI-29),
-  `runConnectivityTroubleshooter`, pure `result.ts` derivation, Output trace, telemetry, finding messages, report text, panel rows
-- `src/commands/troubleshootConnection/`: the command and its entry points
-- `src/webviews/documentdb/connectivityTroubleshooter/`: router, controller, panel session and React view
+  `runConnectionDiagnostics`, pure `result.ts` derivation, Output trace, telemetry, finding messages, report text, panel rows
+- `src/commands/diagnoseConnection/`: the command and its entry points
+- `src/webviews/documentdb/connectionDiagnostics/`: router, controller, panel session and React view
 
 The router shares `result.ts` with telemetry and the Output outcome, adds localized report-summary
 content, and sends a host-independent `ResultCardData` snapshot.
