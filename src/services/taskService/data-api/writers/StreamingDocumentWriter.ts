@@ -13,7 +13,6 @@ import {
     type StreamWriteResult,
 } from '../types';
 import { BatchSizeAdapter } from './BatchSizeAdapter';
-import { RetryOrchestrator } from './RetryOrchestrator';
 import {
     type AbortBatchResult,
     type ErrorType,
@@ -106,7 +105,7 @@ export class StreamingWriterError extends Error {
  * ## Key Features
  *
  * 1. **Buffer Management**: Single-level buffering with adaptive flush triggers
- * 2. **Integrated Retry Logic**: Uses RetryOrchestrator for transient failure handling
+ * 2. **Integrated Retry Logic**: Uses an inline retry loop in `writeBatchWithRetry` for transient failures
  * 3. **Adaptive Batching**: Uses BatchSizeAdapter for dual-mode (fast/RU-limited) operation
  * 4. **Statistics Aggregation**: Uses WriteStats for progress tracking
  * 5. **Immediate Progress Reporting**: Partial progress reported during throttle recovery
@@ -193,23 +192,24 @@ export class StreamingWriterError extends Error {
  * Network errors trigger exponential backoff retries without slicing:
  *
  * ```
- * writeBatchWithRetry              writeBatch                  RetryOrchestrator
- *      │                             │                               │
- *      │ writeBatch()                │                               │
- *      │────────────────────────────>│                               │
- *      │                             │                               │
- *      │<── NETWORK ERROR            │                               │
- *      │                             │                               │
- *      │ classifyError() → 'network' │                               │
- *      │                             │                               │
- *      │ attempt++                   │                               │
- *      │ retryDelay(attempt)         │ (exponential backoff + jitter)│
- *      │                             │                               │
- *      │ writeBatch() (same batch)   │                               │
- *      │────────────────────────────>│                               │
- *      │                             │                               │
- *      │<── SUCCESS                  │                               │
- *      │                             │                               │
+ * writeBatchWithRetry              writeBatch
+ *      │                             │
+ *      │ writeBatch()                │
+ *      │────────────────────────────>│
+ *      │                             │
+ *      │<── NETWORK ERROR            │
+ *      │                             │
+ *      │ classifyError() → 'network' │
+ *      │                             │
+ *      │ attempt++                   │
+ *      │ retryDelay(attempt)         │
+ *      │ (backoff + jitter)          │
+ *      │                             │
+ *      │ writeBatch() (same batch)   │
+ *      │────────────────────────────>│
+ *      │                             │
+ *      │<── SUCCESS                  │
+ *      │                             │
  * ```
  *
  * ## Trace Output Example
@@ -252,9 +252,6 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     /** Batch size adapter for adaptive batching */
     protected readonly batchSizeAdapter: BatchSizeAdapter;
 
-    /** Retry orchestrator for transient failure handling */
-    protected readonly retryOrchestrator: RetryOrchestrator;
-
     /** Target database name */
     protected readonly databaseName: string;
 
@@ -271,7 +268,6 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         this.databaseName = databaseName;
         this.collectionName = collectionName;
         this.batchSizeAdapter = new BatchSizeAdapter();
-        this.retryOrchestrator = new RetryOrchestrator();
     }
 
     // =================================
