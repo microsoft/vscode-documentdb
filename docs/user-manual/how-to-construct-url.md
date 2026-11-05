@@ -31,15 +31,17 @@ vscode://ms-azuretools.vscode-documentdb/<action>?<parameters>
 
 ### Supported Actions
 
-| Action             | What it does                                                   | Parameters                                   |
-| ------------------ | -------------------------------------------------------------- | -------------------------------------------- |
-| `connect`          | Opens a connection to a cluster, optionally navigating into it | `connectionString`, `database`, `collection` |
-| `local`            | Opens the **DocumentDB Local** setup wizard                    | none                                         |
-| `local/documentdb` | Opens the **DocumentDB Local** setup wizard                    | none                                         |
+| Action             | What it does                                                                                       | Parameters                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `connect`          | Opens a connection to a cluster, optionally navigating into it                                    | `connectionString`, `database`, `collection`, `open`             |
+| `connect/azure`    | Opens an Azure DocumentDB or Azure Cosmos DB for MongoDB (RU) resource by its Azure resource ID    | `resourceId`, `tenantId`, `database`, `collection`, `open`        |
+| `local`            | Opens the **DocumentDB Local** setup wizard                                                       | none                                                             |
+| `local/documentdb` | Opens the **DocumentDB Local** setup wizard                                                       | none                                                             |
 
 Only the actions in this table are recognized. A link naming anything else is refused with an
 explanatory message — the extension never treats the path as a command name, so a link cannot
-reach extension functionality that is not listed here.
+reach extension functionality that is not listed here. In `/connect/azure`, `azure` is case-insensitive;
+other sources (`/connect/<other>`) and extra path segments are refused.
 
 > **Links written before actions existed keep working.** A URL with no action, such as
 > `vscode://ms-azuretools.vscode-documentdb?connectionString=...`, means `connect`. You do not
@@ -52,25 +54,31 @@ different setup experience.
 
 ### Supported Parameters
 
-These apply to the `connect` action.
+`connect` and `connect/azure` use different locator parameters. Parameters that belong to the other
+variant are refused, including links that mix the two variants' locators. Other unknown parameters
+are ignored.
 
-The following table lists all supported URL parameters:
-
-| Parameter          | Required | Description                                                   | Example Value               |
-| ------------------ | -------- | ------------------------------------------------------------- | --------------------------- |
-| `connectionString` | Yes      | The MongoDB/DocumentDB connection string (double URL-encoded) | `mongodb%253A%252F%252F...` |
-| `database`         | No       | Name of the database to open after connection                 | `myDatabase`                |
-| `collection`       | No       | Collection to open (requires a database parameter or path)    | `myCollection`              |
+| Parameter          | `/connect`                                                | `/connect/azure`                              | Description                                                                                              |
+| ------------------ | --------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `connectionString` | Required (double-encoded, unchanged)                      | Refused                                        | Connection string; for example, `mongodb%253A%252F%252F...`                                              |
+| `resourceId`       | Refused                                                   | Required                                       | Azure resource ID; raw, encoded once, or encoded twice (encoding once is recommended)                    |
+| `tenantId`         | Refused                                                   | Optional                                       | GUID for the Microsoft Entra tenant that owns the subscription                                           |
+| `database`         | Optional                                                  | Optional                                       | Name of the database to open                                                                             |
+| `collection`       | Optional; requires a database parameter or connection-string path | Optional; requires the `database` parameter | Collection to open                                                                                       |
+| `open`             | Optional                                                  | Optional                                       | `dashboard` or `shell` (case-insensitive); cannot be combined with `collection`                          |
 
 ### Parameter Details
 
-- **`connectionString`**: The core parameter that defines the database connection. Must be a valid DocumentDB or MongoDB connection string that has been double URL-encoded (see encoding section below). Note: While it's possible to include a database name in the connection string, it's recommended to use the separate `database` parameter instead to keep the API simple and consistent.
+- **`connectionString`**: The core parameter that defines the database connection for `/connect`. It must be a valid DocumentDB or MongoDB API connection string that has been double URL-encoded (see encoding section below). Note: While it's possible to include a database name in the connection string, it's recommended to use the separate `database` parameter instead to keep the API simple and consistent.
+- **`resourceId`**: For `/connect/azure`, the Azure resource ID must have the form `/subscriptions/<subscription-guid>/resourceGroups/<group>/providers/Microsoft.DocumentDB/{mongoClusters|databaseAccounts}/<name>`, with nothing after the name. The provider and resource type are case-insensitive. `mongoClusters` identifies an Azure DocumentDB cluster; `databaseAccounts` identifies an Azure Cosmos DB for MongoDB (RU) account using the MongoDB API. The value can be raw or encoded once or twice; encoding once is recommended.
+- **`tenantId`**: An optional GUID for the Microsoft Entra tenant (directory) that owns the subscription. It lets the extension choose the right account and offer to sign in to that tenant.
 - **`database`**: When provided, the extension will automatically navigate to the specified database after establishing the connection.
-- **`collection`**: The extension opens the Collection View for this collection. A database must be supplied either through the `database` parameter or in the connection-string path; otherwise the link is rejected before a connection is added or opened.
+- **`collection`**: The extension opens the Collection View for this collection. For `/connect`, a database must be supplied either through the `database` parameter or in the connection-string path. For `/connect/azure`, the `database` parameter is required. Otherwise the link is rejected before connecting.
+- **`open`**: `dashboard` opens the Cluster Dashboard, scoped to `database` when provided, even if opening the dashboard automatically on connect is turned off. If it already opened automatically, the same panel is reused. `shell` opens the interactive shell, scoped to `database` when provided. The parameter is case-insensitive and cannot be combined with `collection`; a link never carries a shell script, query, or command.
 
 ## Double Encoding
 
-The `connectionString` parameter must be encoded twice to ensure proper parsing. This is because the connection string itself contains special characters that need to be preserved through the URL parsing process.
+The `connectionString` parameter must be encoded twice to ensure proper parsing. This is because the connection string itself contains special characters that need to be preserved through the URL parsing process. This applies to `connectionString`; `resourceId` survives one or two decodes and is best encoded once.
 
 ### Encoding Process
 
@@ -98,7 +106,7 @@ This double encoding ensures that the URL is correctly parsed by both the operat
 
 ## Examples
 
-Here are practical examples of URLs with their decoded connection strings for clarity:
+Here are practical examples of URLs with their decoded values for clarity:
 
 ### Example 1: Basic Connection
 
@@ -156,6 +164,52 @@ vscode://ms-azuretools.vscode-documentdb/local/documentdb
 When URL handling confirmations are enabled in the extension settings, either form shows one
 confirmation before opening the setup wizard.
 
+### Example 5: Open an Azure DocumentDB cluster by resource ID
+
+The resource ID is encoded once in the URL:
+
+```
+vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=%2Fsubscriptions%2F00000000-0000-0000-0000-000000000000%2FresourceGroups%2Fmy-group%2Fproviders%2FMicrosoft.DocumentDB%2FmongoClusters%2Fmy-cluster
+```
+
+| Parameter    | Decoded Value                                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `resourceId` | `/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/my-group/providers/Microsoft.DocumentDB/mongoClusters/my-cluster` |
+
+### Example 6: Open an Azure Cosmos DB for MongoDB (RU) account
+
+```
+vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=%2Fsubscriptions%2F00000000-0000-0000-0000-000000000000%2FresourceGroups%2Fmy-group%2Fproviders%2FMicrosoft.DocumentDB%2FdatabaseAccounts%2Fmy-account&tenantId=11111111-1111-1111-1111-111111111111
+```
+
+| Parameter    | Decoded Value                                                                                                                |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `resourceId` | `/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/my-group/providers/Microsoft.DocumentDB/databaseAccounts/my-account` |
+| `tenantId`   | `11111111-1111-1111-1111-111111111111`                                                                                        |
+
+### Example 7: Open the shell for an Azure DocumentDB database
+
+```
+vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=%2Fsubscriptions%2F00000000-0000-0000-0000-000000000000%2FresourceGroups%2Fmy-group%2Fproviders%2FMicrosoft.DocumentDB%2FmongoClusters%2Fmy-cluster&database=analytics&open=shell
+```
+
+| Parameter    | Decoded Value                                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `resourceId` | `/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/my-group/providers/Microsoft.DocumentDB/mongoClusters/my-cluster` |
+| `database`   | `analytics`                                                                                                                  |
+| `open`       | `shell`                                                                                                                      |
+
+### Example 8: Open the Cluster Dashboard for a connection
+
+```
+vscode://ms-azuretools.vscode-documentdb/connect?connectionString=mongodb%253A%252F%252Fusername%253Apassword%2540localhost%253A27017&open=dashboard
+```
+
+| Parameter          | Decoded Value                    |
+| ------------------ | -------------------------------- |
+| `connectionString` | `******localhost:27017`          |
+| `open`             | `dashboard`                      |
+
 ## How It Works
 
 When you click a URL for the extension, the following process occurs:
@@ -168,11 +222,24 @@ When you click a URL for the extension, the following process occurs:
    - The extension parses the `connectionString` parameter and creates a new connection in the Connections View.
    - If a connection with the same host and username already exists, the existing connection will be selected instead of creating a duplicate.
    - Before a new connection is added, the extension shows its target (user, hosts, database, and collection) and asks you to confirm. This confirmation is always shown, even when URL handling confirmations are disabled in the extension settings; that setting only skips the follow-up prompts and links to connections you have already saved.
+   - If `open` is provided and URL handling confirmations are enabled, the “open connection” confirmation names what will open.
    - TLS options that turn off certificate validation (such as `tlsAllowInvalidCertificates`) are removed from the connection string. A link can ask to turn off certificate validation only for a target on your own machine (`localhost`, `127.0.0.1`, or `::1`), and the extension always asks you first. For any other target, certificate validation stays on; you can change it later in the connection settings.
 
-4. **Navigation** (if additional parameters are provided):
+4. **Azure resources** (for `connect/azure`):
+   1. If you are not signed in to Azure, the extension asks you to sign in.
+   2. It looks for the subscription among all your signed-in accounts. If none has it and the link includes `tenantId`, it offers to sign in to that tenant. Otherwise, it shows an error with a **Manage Azure accounts** action.
+   3. It reads the resource from Azure using your identity. A missing resource, a resource you cannot read, or a Cosmos DB account that does not use the MongoDB API is reported before anything changes.
+   4. When URL handling confirmations are enabled, one confirmation names the resource, resource group, subscription, database, collection, what will open, and any filter changes.
+   5. If the resource is hidden, the extension permanently changes the filters as it would if you changed them by hand: it shows the hidden Azure discovery provider in the Discovery view, stops hiding the tenant in the tenant filter, and adds the subscription to the Azure subscription filter when you have a selection. The subscription filter is the `azureResourceGroups.selectedSubscriptions` setting shared with the Azure Resources extension, so the subscription also appears in the Azure Resources view. When confirmations are disabled, the same changes are applied without a dialog.
+   6. The extension reveals the cluster in the **Discovery** view and connects as when you expand it, using Microsoft Entra ID or prompting for credentials. Nothing is saved to the Connections View.
+   7. It navigates to the database or collection and opens the Collection View, Cluster Dashboard, or shell as requested.
+
+   A link carries no cloud hint, so this works only when you are signed in to the Azure cloud that owns the resource.
+
+5. **Navigation** (if additional parameters are provided):
    - If the `database` parameter is provided, the extension navigates to that database.
    - If both `database` and `collection` parameters are provided, the extension opens the Collection View for the specified collection.
+   - If `open=dashboard` is provided, the extension opens the Cluster Dashboard; if `open=shell` is provided, it opens the interactive shell. Either can be scoped to the `database` parameter.
 
 ## Additional Notes
 
