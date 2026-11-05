@@ -3,9 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
-import { ext } from '../../../../extensionVariables';
-import { type TaskTelemetryContext } from '../../taskHost';
+import { type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
+import {
+    type DataTransferOptions,
+    type DataTransferStrings,
+    defaultDataTransferStrings,
+    noopDataTransferLogger,
+} from '../dataTransferHost';
 import {
     ConflictResolutionStrategy,
     type DocumentDetails,
@@ -264,10 +268,15 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     /** Estimated memory usage of buffer in bytes */
     private bufferMemoryEstimate: number = 0;
 
-    protected constructor(databaseName: string, collectionName: string) {
+    private readonly logger: TaskLogger;
+    private readonly strings: DataTransferStrings;
+
+    protected constructor(databaseName: string, collectionName: string, options?: DataTransferOptions) {
         this.databaseName = databaseName;
         this.collectionName = collectionName;
-        this.batchSizeAdapter = new BatchSizeAdapter();
+        this.logger = options?.logger ?? noopDataTransferLogger;
+        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
+        this.batchSizeAdapter = new BatchSizeAdapter(undefined, { logger: this.logger, strings: this.strings });
     }
 
     // =================================
@@ -291,22 +300,19 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         // Reset state for this operation
         this.buffer = [];
         this.bufferMemoryEstimate = 0;
-        const stats = new WriteStats();
+        const stats = new WriteStats({ logger: this.logger, strings: this.strings });
         const abortSignal = options?.abortSignal;
 
-        ext.outputChannel.trace(
-            vscode.l10n.t(
-                '[StreamingWriter] Starting document streaming with {0} strategy',
-                config.conflictResolutionStrategy,
-            ),
+        this.logger.trace(
+            `[StreamingWriter] Starting document streaming with ${config.conflictResolutionStrategy} strategy`,
         );
 
-        ext.outputChannel.trace(vscode.l10n.t('[StreamingWriter] Reading documents from source...'));
+        this.logger.trace('[StreamingWriter] Reading documents from source...');
 
         // Stream documents and buffer them
         for await (const document of documentStream) {
             if (abortSignal?.aborted) {
-                ext.outputChannel.trace(vscode.l10n.t('[StreamingWriter] Abort signal received during streaming'));
+                this.logger.trace('[StreamingWriter] Abort signal received during streaming');
                 break;
             }
 
@@ -504,11 +510,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
             return;
         }
 
-        ext.outputChannel.trace(
-            vscode.l10n.t(
-                '[StreamingWriter] Writing {0} documents to target (may take a moment)...',
-                this.buffer.length.toString(),
-            ),
+        this.logger.trace(
+            `[StreamingWriter] Writing ${this.buffer.length} documents to target (may take a moment)...`,
         );
 
         let pendingDocs = [...this.buffer];
@@ -594,11 +597,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         // Record flush
         stats.recordFlush();
 
-        ext.outputChannel.trace(
-            vscode.l10n.t(
-                '[StreamingWriter] Buffer flush complete ({0} total processed so far)',
-                stats.getTotalProcessed().toString(),
-            ),
+        this.logger.trace(
+            `[StreamingWriter] Buffer flush complete (${stats.getTotalProcessed()} total processed so far)`,
         );
 
         // Clear buffer
@@ -675,12 +675,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
 
                     if (successfulCount > 0) {
                         const remainingCount = currentBatch.length - successfulCount;
-                        ext.outputChannel.debug(
-                            vscode.l10n.t(
-                                '[StreamingWriter] Throttle: wrote {0} docs, {1} remaining in batch',
-                                successfulCount.toString(),
-                                remainingCount.toString(),
-                            ),
+                        this.logger.debug(
+                            `[StreamingWriter] Throttle: wrote ${successfulCount} docs, ${remainingCount} remaining in batch`,
                         );
 
                         // Report partial progress immediately via callback
@@ -712,7 +708,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         }
 
         if (currentBatch.length > 0) {
-            throw new Error(vscode.l10n.t('Failed to complete operation after {0} attempts', maxAttempts.toString()));
+            throw new Error(this.strings.failedAfterAttempts(maxAttempts.toString()));
         }
 
         // All documents processed via partial progress - return empty result
@@ -807,21 +803,17 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         const firstError = errors[0];
         const currentStats = stats.getFinalStats();
 
-        ext.outputChannel.error(
-            vscode.l10n.t(
-                '[StreamingWriter] Fatal error ({0}): {1}',
-                strategy,
-                firstError?.error?.message ?? 'Unknown error',
-            ),
+        this.logger.error(
+            `[StreamingWriter] Fatal error (${strategy}): ${firstError?.error?.message ?? 'Unknown error'}`,
         );
 
         const statsError = new StreamingWriterError(
-            vscode.l10n.t('Write operation failed: {0}', firstError?.error?.message ?? 'Unknown error'),
+            this.strings.writeOperationFailed(firstError?.error?.message ?? this.strings.unknownError),
             currentStats,
             firstError?.error,
         );
 
-        ext.outputChannel.error(vscode.l10n.t('[StreamingWriter] Partial progress: {0}', statsError.getStatsString()));
+        this.logger.error(`[StreamingWriter] Partial progress: ${statsError.getStatsString()}`);
 
         throw statsError;
     }

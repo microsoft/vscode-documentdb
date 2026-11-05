@@ -3,9 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { l10n } from 'vscode';
-import { ext } from '../../../../extensionVariables';
-import { type TaskTelemetryContext } from '../../taskHost';
+import { type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
+import {
+    type DataTransferOptions,
+    type DataTransferStrings,
+    defaultDataTransferStrings,
+    noopDataTransferLogger,
+} from '../dataTransferHost';
 import { type DocumentDetails, type DocumentReader, type DocumentReaderOptions } from '../types';
 import { KeepAliveOrchestrator } from './KeepAliveOrchestrator';
 
@@ -32,9 +36,14 @@ export abstract class BaseDocumentReader implements DocumentReader {
     /** Source collection name */
     protected readonly collectionName: string;
 
-    protected constructor(databaseName: string, collectionName: string) {
+    private readonly logger: TaskLogger;
+    private readonly strings: DataTransferStrings;
+
+    protected constructor(databaseName: string, collectionName: string, options?: DataTransferOptions) {
         this.databaseName = databaseName;
         this.collectionName = collectionName;
+        this.logger = options?.logger ?? noopDataTransferLogger;
+        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
     }
 
     /**
@@ -132,10 +141,13 @@ export abstract class BaseDocumentReader implements DocumentReader {
         }
 
         // Keep-alive enabled: use orchestrator for buffer management
-        const orchestrator = new KeepAliveOrchestrator({
-            intervalMs: options.keepAliveIntervalMs,
-            timeoutMs: options.keepAliveTimeoutMs,
-        });
+        const orchestrator = new KeepAliveOrchestrator(
+            {
+                intervalMs: options.keepAliveIntervalMs,
+                timeoutMs: options.keepAliveTimeoutMs,
+            },
+            { logger: this.logger, strings: this.strings },
+        );
 
         try {
             // Start database stream with orchestrator
@@ -182,13 +194,11 @@ export abstract class BaseDocumentReader implements DocumentReader {
      * console.log(`Total documents: ${count}`);
      */
     public async countDocuments(signal?: AbortSignal, actionContext?: TaskTelemetryContext): Promise<number> {
-        ext.outputChannel.trace(
-            l10n.t('[Reader] Counting documents in {0}.{1}', this.databaseName, this.collectionName),
-        );
+        this.logger.trace(`[Reader] Counting documents in ${this.databaseName}.${this.collectionName}`);
 
         const count = await this.countDocumentsInDatabase(signal, actionContext);
 
-        ext.outputChannel.trace(l10n.t('[Reader] Document count result: {0} documents', count.toString()));
+        this.logger.trace(`[Reader] Document count result: ${count} documents`);
 
         return count;
     }

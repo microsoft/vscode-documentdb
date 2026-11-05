@@ -5,6 +5,7 @@
 
 import { type Document, type WithId } from 'mongodb';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
 import { type TaskTelemetryContext } from '../../taskHost';
 import { type DocumentDetails } from '../types';
 import { BaseDocumentReader } from './BaseDocumentReader';
@@ -40,7 +41,7 @@ export class DocumentDbDocumentReader extends BaseDocumentReader {
      * @param collectionName - The name of the collection to read from.
      */
     constructor(clusterId: string, databaseName: string, collectionName: string) {
-        super(databaseName, collectionName);
+        super(databaseName, collectionName, createExtensionDataTransferOptions());
         this.clusterId = clusterId;
     }
 

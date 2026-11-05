@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { l10n } from 'vscode';
-import { ext } from '../../../../extensionVariables';
+import { type TaskLogger } from '../../taskHost';
+import { type DataTransferOptions, noopDataTransferLogger } from '../dataTransferHost';
 import { FAST_MODE, type OptimizationModeConfig, RU_LIMITED_MODE } from './writerTypes.internal';
 
 /**
@@ -58,7 +58,10 @@ export class BatchSizeAdapter {
     /** Current batch size (adaptive, changes based on success/throttle) */
     private currentBatchSize: number;
 
-    constructor(config?: BatchSizeAdapterConfig) {
+    private readonly logger: TaskLogger;
+
+    constructor(config?: BatchSizeAdapterConfig, options?: DataTransferOptions) {
+        this.logger = options?.logger ?? noopDataTransferLogger;
         this.config = { ...DEFAULT_CONFIG, ...config };
         this.currentMode = FAST_MODE;
         this.currentBatchSize = FAST_MODE.initialBatchSize;
@@ -109,14 +112,8 @@ export class BatchSizeAdapter {
 
         this.currentBatchSize = Math.min(this.currentMode.maxBatchSize, Math.max(percentageIncrease, minimalIncrease));
 
-        ext.outputChannel.trace(
-            l10n.t(
-                '[BatchSizeAdapter] Success: Growing batch size {0} → {1} (mode: {2}, growth: {3}%)',
-                previousBatchSize.toString(),
-                this.currentBatchSize.toString(),
-                this.currentMode.mode,
-                ((growthFactor - 1) * 100).toFixed(1),
-            ),
+        this.logger.trace(
+            `[BatchSizeAdapter] Success: Growing batch size ${previousBatchSize} → ${this.currentBatchSize} (mode: ${this.currentMode.mode}, growth: ${((growthFactor - 1) * 100).toFixed(1)}%)`,
         );
     }
 
@@ -132,13 +129,8 @@ export class BatchSizeAdapter {
         const previousBatchSize = this.currentBatchSize;
         this.currentBatchSize = Math.max(this.config.minBatchSize, successfulCount);
 
-        ext.outputChannel.trace(
-            l10n.t(
-                '[BatchSizeAdapter] Throttle: Adjusting batch size {0} → {1} (proven capacity: {2})',
-                previousBatchSize.toString(),
-                this.currentBatchSize.toString(),
-                successfulCount.toString(),
-            ),
+        this.logger.trace(
+            `[BatchSizeAdapter] Throttle: Adjusting batch size ${previousBatchSize} → ${this.currentBatchSize} (proven capacity: ${successfulCount})`,
         );
     }
 
@@ -151,12 +143,8 @@ export class BatchSizeAdapter {
         const previousBatchSize = this.currentBatchSize;
         this.currentBatchSize = Math.max(this.config.minBatchSize, Math.floor(this.currentBatchSize / 2) || 1);
 
-        ext.outputChannel.trace(
-            l10n.t(
-                '[BatchSizeAdapter] Throttle with no progress: Halving batch size {0} → {1}',
-                previousBatchSize.toString(),
-                this.currentBatchSize.toString(),
-            ),
+        this.logger.trace(
+            `[BatchSizeAdapter] Throttle with no progress: Halving batch size ${previousBatchSize} → ${this.currentBatchSize}`,
         );
     }
 
@@ -207,17 +195,9 @@ export class BatchSizeAdapter {
             this.currentBatchSize = Math.min(successfulCount, RU_LIMITED_MODE.maxBatchSize);
         }
 
-        ext.outputChannel.info(
-            l10n.t(
-                '[BatchSizeAdapter] Switched from {0} mode to {1} mode after throttle. ' +
-                    'Batch size: {2} → {3}, Max: {4} → {5}',
-                previousMode,
-                this.currentMode.mode,
-                previousBatchSize.toString(),
-                this.currentBatchSize.toString(),
-                previousMaxBatchSize.toString(),
-                this.currentMode.maxBatchSize.toString(),
-            ),
+        this.logger.info(
+            `[BatchSizeAdapter] Switched from ${previousMode} mode to ${this.currentMode.mode} mode after throttle. ` +
+                `Batch size: ${previousBatchSize} → ${this.currentBatchSize}, Max: ${previousMaxBatchSize} → ${this.currentMode.maxBatchSize}`,
         );
     }
 

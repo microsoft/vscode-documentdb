@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { l10n } from 'vscode';
+import { type DataTransferOptions, type DataTransferStrings, defaultDataTransferStrings } from '../dataTransferHost';
 import { ConflictResolutionStrategy, type StreamWriteResult } from '../types';
 import {
     isAbortResult,
@@ -51,6 +51,12 @@ export class WriteStats {
     private totalCreated: number = 0; // Overwrite
 
     private flushCount: number = 0;
+
+    private readonly strings: DataTransferStrings;
+
+    constructor(options?: DataTransferOptions) {
+        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
+    }
 
     /**
      * Adds batch results to the cumulative statistics.
@@ -147,25 +153,25 @@ export class WriteStats {
             case ConflictResolutionStrategy.Abort:
             case ConflictResolutionStrategy.GenerateNewIds:
                 if (this.totalInserted > 0) {
-                    parts.push(l10n.t('{0} inserted', this.totalInserted.toLocaleString()));
+                    parts.push(this.strings.inserted(this.totalInserted.toLocaleString()));
                 }
                 break;
 
             case ConflictResolutionStrategy.Skip:
                 if (this.totalInserted > 0) {
-                    parts.push(l10n.t('{0} inserted', this.totalInserted.toLocaleString()));
+                    parts.push(this.strings.inserted(this.totalInserted.toLocaleString()));
                 }
                 if (this.totalSkipped > 0) {
-                    parts.push(l10n.t('{0} skipped', this.totalSkipped.toLocaleString()));
+                    parts.push(this.strings.skipped(this.totalSkipped.toLocaleString()));
                 }
                 break;
 
             case ConflictResolutionStrategy.Overwrite:
                 if (this.totalReplaced > 0) {
-                    parts.push(l10n.t('{0} replaced', this.totalReplaced.toLocaleString()));
+                    parts.push(this.strings.replaced(this.totalReplaced.toLocaleString()));
                 }
                 if (this.totalCreated > 0) {
-                    parts.push(l10n.t('{0} created', this.totalCreated.toLocaleString()));
+                    parts.push(this.strings.created(this.totalCreated.toLocaleString()));
                 }
                 break;
         }

@@ -7,6 +7,7 @@ import { type Document, type WithId, type WriteError } from 'mongodb';
 import { l10n } from 'vscode';
 import { isBulkWriteError, type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
+import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
 import { type TaskTelemetryContext } from '../../taskHost';
 import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
 import { StreamingDocumentWriter } from './StreamingDocumentWriter';
@@ -62,7 +63,7 @@ export class DocumentDbStreamingWriter extends StreamingDocumentWriter<string> {
         databaseName: string,
         collectionName: string,
     ) {
-        super(databaseName, collectionName);
+        super(databaseName, collectionName, createExtensionDataTransferOptions());
     }
 
     // =================================
