@@ -46,7 +46,7 @@ Local" link has no connection string by definition, because the container does n
 - `src/deepLinks/` — the `/connect/azure` flow: resource ID parsing, sign-in and subscription
   resolution, the ARM read, visibility changes, and `handleAzureResourceLink.ts` tying them together
 - `src/tree/discovery-view/discoveryViewHelpers.ts` — `revealInDiscoveryView`, which finds the
-  cluster by `azureResourceId` and connects it once before expanding
+  cluster by `azureResourceId` and expands it, which connects it once (D0015)
 - `src/extension.ts` — registers it via `vscode.window.registerUriHandler`
 
 ## User docs
@@ -97,6 +97,9 @@ Local" link has no connection string by definition, because the container does n
 - **`open=dashboard|shell` on every `/connect` variant**; `dashboard` opens even when the automatic
   dashboard is turned off ([0013](./decisions.md#0013--open-names-the-surface-dashboard-always-opens),
   [0014](./decisions.md#0014--open-applies-to-connect-as-well)).
+- **The cluster node is always expanded**; the expansion is the connect, so authentication runs
+  once and the node shows the outcome
+  ([0015](./decisions.md#0015--an-azure-link-always-expands-the-cluster-node)).
 
 ## Timeline
 

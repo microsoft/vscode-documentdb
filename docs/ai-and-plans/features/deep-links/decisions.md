@@ -26,6 +26,7 @@ created: 2026-08-24
 | 0012 | Azure links confirm like `/local`                   | Accepted            | Accepted as proposed                          | 2026-11-05 | —    |
 | 0013 | `open=` names the surface; `dashboard` always opens | Accepted            | Override of the setting added by maintainer   | 2026-11-05 | —    |
 | 0014 | `open=` applies to `/connect` as well               | Accepted            | Accepted as proposed                          | 2026-11-05 | —    |
+| 0015 | An Azure link always expands the cluster node       | Accepted            | Orchestrator's collapsed variant reversed     | 2026-11-05 | —    |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -537,3 +538,41 @@ the same thing on every `/connect` variant.
 
 Both variants end at the same cluster node, so the surface they can open does not depend on how
 the cluster was located. One vocabulary is simpler to document and to build links for.
+
+---
+
+## 0015 — An Azure link always expands the cluster node
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** implementation of WI8, corrected by maintainer
+
+### Question
+
+`/connect/azure` reveals the cluster node in the Discovery view, and expanding that node runs its
+normal connect flow, including the authentication quick pick. Should the link expand the node in
+every case, or only once the connection is known to have worked?
+
+### Decision
+
+Reveal the cluster node once with `expand: true` in every case. That expansion is the only thing
+that connects. Afterwards, if no client exists for the cluster's `clusterId`, stop: the node has
+already shown what went wrong, and it stays expanded with whatever the tree shows (recovery actions
+after a failure, nothing after a cancel). Database and collection nodes are then found with
+`findNodeById` under the real node ids, without fetching the cluster's children again.
+
+### Reasoning
+
+The maintainer expects the node to be expanded in every scenario, and the authentication prompt
+that the expansion shows is expected, because the user has to choose how to connect.
+
+This needs no second connect path: in VS Code, `TreeView.reveal(…, { expand: true })` waits for the
+expansion, which waits for the node's children request to the extension host
+(`MainThreadTreeViews.reveal` → `TreeView.expand` → `AsyncDataTree.expand` awaits the node's
+refresh). When `reveal` resolves, the connect attempt has finished, so checking for a client is
+reliable.
+
+### Rejected alternatives
+
+- **Reveal collapsed, run `getChildren` from the link handler, expand only on success.** The first
+  implementation did this to keep a cancelled connect from being retried by a later expansion.
+  Rejected because it leaves the node collapsed after a failure or cancel, and because it rested on
+  the assumption that `reveal` does not wait for the expansion, which is wrong.

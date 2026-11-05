@@ -238,6 +238,8 @@ Wrap steps 2–6 in a notification progress "Opening <name>…" plus the view's 
 clear error; database/collection missing.
 
 > **Done (2026-11-05), commit `32c670f4`:** `src/tree/discovery-view/discoveryViewHelpers.ts` with `waitForDiscoveryViewReady` (open question 2, orchestrator 75%: a readiness wait like the Connections View's) and `revealInDiscoveryView` (open question 3, orchestrator 80%: next to the tree, like `connectionsViewHelpers.ts`). Decision (orchestrator, 80%): instead of revealing with `expand: true` first, the helper reveals collapsed, runs `getChildren` on the cluster node once (the normal connect flow), returns if no client exists, then expands. This keeps a cancelled connect from being retried by the expansion, because the provider does not cache cancellations. 11 tests. Model: sol.
+>
+> **Revised (2026-11-05), commit `886b4b0a`:** the maintainer expects the node expanded in every case (D0015). VS Code's `reveal` with `expand` awaits the node's children, so the helper now reveals once with `expand: true` (the only connect), stops if no client exists, and finds database and collection nodes with `findNodeById` under the real node ids. The collapsed-then-expand variant is recorded as rejected in D0015. Encoding tests: commit `bf6a7a87`.
 
 ## WI9 — Open the target, on both variants (D0013, D0014)
 
