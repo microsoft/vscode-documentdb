@@ -625,6 +625,53 @@ describe('globalUriHandler — local confirmation', () => {
     });
 });
 
+describe('globalUriHandler — parameter encoding', () => {
+    it.each([
+        [
+            'decodes double-encoded spaces, ampersands, and plus signs',
+            'database=sales%20%26%20marketing&collection=orders%2B2024',
+            'Database: sales & marketing\nCollection: orders+2024\n',
+        ],
+        [
+            'shows why values must be double-encoded',
+            'database=sales & marketing&collection=orders+2024',
+            'Database: sales \nCollection: orders 2024\n',
+        ],
+        [
+            'decodes Unicode and preserves safe characters',
+            'database=caf%C3%A9&collection=a.b-c_d',
+            'Database: café\nCollection: a.b-c_d\n',
+        ],
+        ['decodes a percent sign', 'database=100%25', 'Database: 100%\n'],
+    ])('%s', async (_name, query, expectedDetail) => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+
+        const error = await runHandler('/connect', `connectionString=mongodb%3A%2F%2Fhost&${query}`);
+
+        expect(error).toBeUndefined();
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
+        const options = (vscode.window.showInformationMessage as Mock).mock.calls[0][1] as { detail: string };
+        expect(options.detail).toContain(expectedDetail);
+        expect(mockSaveConnection).not.toHaveBeenCalled();
+    });
+
+    const resourceId =
+        '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/my-group/providers/Microsoft.DocumentDB/mongoClusters/my-cluster';
+
+    it.each([resourceId, resourceId.replaceAll('/', '%2F')])(
+        'passes the same Azure resource ID after decoding %s',
+        async (queryResourceId) => {
+            const error = await runHandler('/connect/azure', `resourceId=${queryResourceId}`);
+
+            expect(error).toBeUndefined();
+            expect(handleAzureResourceLinkRequest).toHaveBeenCalledExactlyOnceWith(
+                expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
+                { resourceId, tenantId: undefined, database: undefined, collection: undefined, open: undefined },
+            );
+        },
+    );
+});
+
 describe('globalUriHandler — connection confirmation', () => {
     it('identifies a new target using separate lines without exposing its password', async () => {
         (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
