@@ -597,7 +597,7 @@ try {
 
 When a task transitions to `Failed`, the framework handles failure reporting centrally:
 
-1. **Error logging**: The `Task` base class automatically logs the error to the output channel via `ext.outputChannel.error()` — task authors do NOT need to do this manually.
+1. **Error logging**: The lifecycle log observer, attached during extension activation, logs registered task failures via `ext.outputChannel.error()` — task authors do NOT need to do this manually. The `Task` base class does not write lifecycle lines.
 2. **User notification**: The `TaskProgressReportingService` automatically shows an error notification with a **"Show Output"** button, allowing the user to view error details on demand.
 3. **No auto-show**: The output channel is NOT opened automatically — this avoids disrupting the user's workflow. The user can choose to view it via the button.
 

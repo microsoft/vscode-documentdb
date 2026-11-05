@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { recordSurveyActivity } from '../survey/SurveyService';
 import { Emitter, type Disposable, type Event } from './events';
 import {
     defaultTaskStrings,
@@ -234,22 +233,6 @@ export abstract class Task {
                 newState: state,
                 taskId: this.id,
             });
-
-            // Centralized logging for final state transitions
-            if (state === TaskState.Completed) {
-                const msg = this._status.message ?? '';
-                this.logger.appendLine(`✓ Task '${this.name}' completed successfully. ${msg}`);
-            } else if (state === TaskState.Stopped) {
-                const msg = this._status.message ?? '';
-                this.logger.appendLine(`■ Task '${this.name}' was stopped. ${msg}`);
-            } else if (state === TaskState.Failed) {
-                const msg = this._status.message ?? '';
-                const err = this._status.error instanceof Error ? this._status.error.message : '';
-                // Include error details if available
-                const detail = err ? ` Error: ${err}` : '';
-                // Use .error() to ensure task failure is always visible regardless of log level
-                this.logger.error(`! Task '${this.name}' failed. ${`${msg}${detail}`.trim()}`);
-            }
         }
     }
 
@@ -282,8 +265,6 @@ export abstract class Task {
             throw new Error(this.strings.cannotStartInState(this._status.state));
         }
 
-        this.logger.appendLine(`○ Task '${this.name}' initializing...`);
-
         this.updateStatus(TaskState.Initializing, this.strings.initializingTask, 0);
 
         try {
@@ -312,7 +293,6 @@ export abstract class Task {
             }
 
             this.updateStatus(TaskState.Running, this.strings.taskRunning, 0);
-            this.logger.appendLine(`► Task '${this.name}' starting...`);
 
             // Start the actual work asynchronously
             void this.runWork().catch((error) => {
@@ -351,9 +331,6 @@ export abstract class Task {
                 } else {
                     context.telemetry.properties.task_final_state = 'completed';
                     this.updateStatus(TaskState.Completed, this.strings.taskCompletedSuccessfully, 100);
-                    if (this.type === 'copy-paste-collection' || this.type === 'copy-paste-indexes') {
-                        recordSurveyActivity('dataManagement');
-                    }
                 }
             } catch (error) {
                 // Add error information to telemetry

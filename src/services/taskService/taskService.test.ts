@@ -416,39 +416,13 @@ describe('Task host options', () => {
         };
     }
 
-    it('writes initialization, execution and completion lifecycle lines to the injected logger', async () => {
+    it('does not write lifecycle lines to the injected logger', async () => {
         const logger = createLogger();
-        const task = new HostTestTask({ logger });
-
-        await task.start();
-        await waitForTaskCompletion(task);
-
-        expect(logger.appendLine).toHaveBeenNthCalledWith(1, "○ Task 'Host Task' initializing...");
-        expect(logger.appendLine).toHaveBeenNthCalledWith(2, "► Task 'Host Task' starting...");
-        expect(logger.appendLine).toHaveBeenNthCalledWith(
-            3,
-            "✓ Task 'Host Task' completed successfully. Task completed successfully",
-        );
-        expect(logger.error).not.toHaveBeenCalled();
-    });
-
-    it('writes the failure lifecycle line through the injected logger error method', async () => {
-        const logger = createLogger();
-        const task = new HostTestTask({ logger }, async (): Promise<void> => {
+        const completedTask = new HostTestTask({ logger });
+        const failedTask = new HostTestTask({ logger }, async (): Promise<void> => {
             throw new Error('expected failure');
         });
-
-        await task.start();
-        await waitForTaskCompletion(task);
-
-        expect(logger.error).toHaveBeenCalledExactlyOnceWith(
-            "! Task 'Host Task' failed. Task failed Error: expected failure",
-        );
-    });
-
-    it('writes the stopped lifecycle line to the injected logger', async () => {
-        const logger = createLogger();
-        const task = new HostTestTask(
+        const stoppedTask = new HostTestTask(
             { logger },
             (signal: AbortSignal): Promise<void> =>
                 new Promise((resolve) => {
@@ -456,13 +430,16 @@ describe('Task host options', () => {
                 }),
         );
 
-        await task.start();
-        task.stop();
-        await waitForTaskCompletion(task);
+        await completedTask.start();
+        await waitForTaskCompletion(completedTask);
+        await failedTask.start();
+        await waitForTaskCompletion(failedTask);
+        await stoppedTask.start();
+        stoppedTask.stop();
+        await waitForTaskCompletion(stoppedTask);
 
-        expect(logger.appendLine).toHaveBeenLastCalledWith(
-            "■ Task 'Host Task' was stopped. Task stopped. Stopping task...",
-        );
+        expect(logger.appendLine).not.toHaveBeenCalled();
+        expect(logger.error).not.toHaveBeenCalled();
     });
 
     it('uses the injected runner and populates its contexts with the unchanged task telemetry properties', async () => {

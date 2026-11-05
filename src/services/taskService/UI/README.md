@@ -10,6 +10,15 @@ Displays VS Code notification progress dialogs for running tasks. Automatically 
 
 **Activation:** Automatically attached during extension initialization.
 
+### Task lifecycle log observer
+
+`attachTaskLifecycleLogger(service, logger)` writes initialization, start, completion, stop, and
+failure lines for registered tasks. Failures use `logger.error`; other lifecycle lines use
+`logger.appendLine`. It has no VS Code or extension-global dependencies.
+
+**Activation:** Attached alongside the progress reporter, with the returned subscription registered
+in the extension context for disposal. `Task` itself does not write lifecycle lines.
+
 ## Design Principles
 
 1. **Separation from TaskService** - These services consume TaskService events but don't modify its core behavior
