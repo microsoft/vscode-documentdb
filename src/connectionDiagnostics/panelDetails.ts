@@ -180,13 +180,13 @@ function fallbackFinding(status: 'warning' | 'error'): PanelFindingDetail {
               severity: 'error',
               title: vscode.l10n.t('This check did not succeed'),
               explanation: vscode.l10n.t('No further explanation is available here.'),
-              nextStep: vscode.l10n.t('Choose Show report for the technical details of this check.'),
+              nextStep: vscode.l10n.t('Run the diagnosis to the end, then choose Show report for the technical details.'),
           }
         : {
               severity: 'warning',
               title: vscode.l10n.t('This check reported a warning'),
               explanation: vscode.l10n.t('No further explanation is available here.'),
-              nextStep: vscode.l10n.t('Choose Show report for the technical details of this check.'),
+              nextStep: vscode.l10n.t('Run the diagnosis to the end, then choose Show report for the technical details.'),
           };
 }
 

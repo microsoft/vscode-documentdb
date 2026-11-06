@@ -1828,7 +1828,7 @@ const diagnosticsScenarios = {
                         'error',
                         'This check did not succeed',
                         'No further explanation is available here.',
-                        'Choose Show report for the technical details of this check.',
+                        'Run the diagnosis to the end, then choose Show report for the technical details.',
                     ),
                 ]),
             },

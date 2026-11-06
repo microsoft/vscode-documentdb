@@ -469,7 +469,9 @@ describe('panel row details (WI-18 prototype)', () => {
             const built = buildRowDetails(id, status, results, describeFinding);
 
             expect(built?.findings[0]).toMatchObject({ severity: status });
-            expect(built?.findings[0].nextStep).toContain('Show report');
+            expect(built?.findings[0].nextStep).toBe(
+                'Run the diagnosis to the end, then choose Show report for the technical details.',
+            );
         });
 
         it('a failed TCP probe with an unrecognised error code still explains the error', (): void => {
