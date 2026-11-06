@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { openLocalQuickStart } from './commands/localQuickStart/openLocalQuickStart';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { handleAzureResourceLinkRequest } from './deepLinks/handleAzureResourceLink';
+import { ClustersClient } from './documentdb/ClustersClient';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { isLoopbackHost } from './documentdb/utils/hostClassification';
 import { stripTlsBypassParams } from './documentdb/utils/tlsException';
@@ -677,6 +678,11 @@ async function handleConnectionStringRequest(
 
     if (params.open) {
         context.telemetry.properties.failureStage = 'openTarget';
+        if (!ClustersClient.exists(storageId)) {
+            ext.outputChannel.trace('[DeepLink] Cluster not connected; not opening the target');
+            context.telemetry.properties.openTargetResult = 'skippedNotConnected';
+            return;
+        }
         const treePath = buildConnectionsViewTreePath(storageId, isInEmulatorZone, selectedDatabase);
         const node = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
         if (!node) {

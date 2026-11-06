@@ -10,6 +10,7 @@ import { openCollectionViewInternal } from './commands/openCollectionView/openCo
 import { handleAzureResourceLinkRequest } from './deepLinks/handleAzureResourceLink';
 import { AuthMethodId } from './documentdb/auth/AuthMethod';
 import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
+import { ClustersClient } from './documentdb/ClustersClient';
 import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
 import { buildConnectionsViewTreePath, revealInConnectionsView } from './tree/connections-view/connectionsViewHelpers';
@@ -53,6 +54,8 @@ vi.mock('./commands/localQuickStart/openLocalQuickStart', () => ({
 vi.mock('./deepLinks/handleAzureResourceLink', (): typeof import('./deepLinks/handleAzureResourceLink') => ({
     handleAzureResourceLinkRequest: vi.fn().mockResolvedValue(undefined),
 }));
+
+vi.mock('./documentdb/ClustersClient', () => ({ ClustersClient: { exists: vi.fn() } }));
 
 // Keep storage, tree navigation, and webview creation isolated from the URI handler.
 vi.mock('./commands/openCollectionView/openCollectionView', () => ({ openCollectionViewInternal: vi.fn() }));
@@ -108,6 +111,7 @@ beforeEach(() => {
     mockGetAllConnections.mockResolvedValue([]);
     mockSaveConnection.mockResolvedValue(undefined);
     vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(undefined);
+    vi.mocked(ClustersClient.exists).mockReturnValue(true);
     vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(undefined);
     vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
     vi.spyOn(vscode.window, 'withProgress').mockImplementation(
@@ -703,6 +707,71 @@ describe('globalUriHandler — saved connection open target', () => {
             expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
             expect(openCollectionViewInternal).not.toHaveBeenCalled();
             expect(lastTelemetry.failureStage).toBe('openTarget');
+        },
+    );
+
+    it.each(['shell', 'dashboard'])(
+        'skips %s when the revealed connection has no client',
+        async (target): Promise<void> => {
+            vi.mocked(ClustersClient.exists).mockReturnValue(false);
+            vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue({
+                id: 'connectionsView/existing-id',
+                getTreeItem: (): vscode.TreeItem => ({ label: 'Production' }),
+            });
+
+            const error = await runHandler(
+                '/connect',
+                `connectionString=${encodeURIComponent(connectionString)}&open=${target}`,
+            );
+
+            expect(error).toBeUndefined();
+            expect(ClustersClient.exists).toHaveBeenCalledExactlyOnceWith('existing-id');
+            expect(vi.mocked(revealInConnectionsView).mock.invocationCallOrder[0]).toBeLessThan(
+                vi.mocked(ClustersClient.exists).mock.invocationCallOrder[0],
+            );
+            expect(buildConnectionsViewTreePath).not.toHaveBeenCalled();
+            expect(ext.connectionsBranchDataProvider.findNodeById).not.toHaveBeenCalled();
+            expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('connectionsView.focus');
+            expect(ext.outputChannel.trace).toHaveBeenCalledWith(
+                '[DeepLink] Cluster not connected; not opening the target',
+            );
+            expect(lastTelemetry.openTargetResult).toBe('skippedNotConnected');
+            expect(lastTelemetry.failureStage).toBe('openTarget');
+        },
+    );
+
+    it.each(['shell', 'dashboard'])(
+        'opens %s when the revealed connection has a client',
+        async (target): Promise<void> => {
+            const node = {
+                id: 'connectionsView/existing-id',
+                getTreeItem: (): vscode.TreeItem => ({ label: 'Production' }),
+            };
+            vi.mocked(buildConnectionsViewTreePath).mockReturnValue(node.id);
+            vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
+
+            const error = await runHandler(
+                '/connect',
+                `connectionString=${encodeURIComponent(connectionString)}&open=${target}`,
+            );
+
+            expect(error).toBeUndefined();
+            expect(ClustersClient.exists).toHaveBeenCalledExactlyOnceWith('existing-id');
+            expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(node.id, false);
+            if (target === 'shell') {
+                expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith(
+                    'vscode-documentdb.command.shell.open',
+                    node,
+                );
+            } else {
+                expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith(
+                    'vscode-documentdb.command.clusterDashboard.open',
+                    node,
+                    null,
+                    { activationSource: 'deepLink' },
+                );
+            }
+            expect(lastTelemetry.openTargetResult).toBeUndefined();
         },
     );
 

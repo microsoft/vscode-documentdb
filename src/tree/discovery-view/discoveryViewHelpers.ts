@@ -150,6 +150,7 @@ export async function revealInDiscoveryView(
             const connected = ClustersClient.exists(clusterId);
             ext.outputChannel.trace(`[DeepLink] Cluster ${connected ? 'connected' : 'not connected'}`);
             if (!connected) {
+                context.telemetry.properties.openTargetResult = 'skippedNotConnected';
                 return undefined;
             }
 

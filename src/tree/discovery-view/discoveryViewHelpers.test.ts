@@ -338,6 +338,14 @@ describe('Discovery view helpers', () => {
         expect(exists).not.toHaveBeenCalled();
     });
 
+    it('records a skipped target when the cluster has no client', async (): Promise<void> => {
+        exists.mockReturnValue(false);
+
+        expect(await revealInDiscoveryView(context, request)).toBeUndefined();
+        expect(exists).toHaveBeenCalledExactlyOnceWith(clusterNode.cluster.clusterId);
+        expect(context.telemetry.properties.openTargetResult).toBe('skippedNotConnected');
+    });
+
     it('returns undefined with the cluster expanded and no database lookup when no client exists', async () => {
         exists.mockReturnValue(false);
 
