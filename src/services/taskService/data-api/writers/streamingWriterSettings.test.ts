@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { type DocumentDetails, type StreamingWriterSettings } from '../types';
+import { BatchSizeAdapter } from './BatchSizeAdapter';
 import { computeRetryDelay, resolveStreamingWriterSettings } from './streamingWriterSettings';
 
 describe('resolveStreamingWriterSettings', () => {
@@ -77,6 +78,83 @@ describe('resolveStreamingWriterSettings', () => {
         expect(adapterSettings.batching.startMode).toBe('ru-limited');
         expect(adapterSettings.estimateDocumentSize).toBe(adapterEstimator);
         expect(resolveStreamingWriterSettings(adapterDefaults, { retry: {} }).estimateDocumentSize).toBe(adapterEstimator);
+    });
+
+    const undefinedSettings: StreamingWriterSettings = {
+        batching: {
+            startMode: undefined,
+            fast: { initialBatchSize: undefined, maxBatchSize: undefined, growthFactor: undefined },
+            ruLimited: { initialBatchSize: undefined, maxBatchSize: undefined, growthFactor: undefined },
+            minBatchSize: undefined,
+            bufferMemoryLimitMB: undefined,
+        },
+        retry: {
+            maxAttemptsWithoutProgress: undefined,
+            baseDelayMs: undefined,
+            multiplier: undefined,
+            maxDelayMs: undefined,
+            jitterFraction: undefined,
+        },
+    };
+
+    it('inherits package defaults for undefined adapter settings', () => {
+        expect(resolveStreamingWriterSettings(undefinedSettings)).toEqual(resolveStreamingWriterSettings());
+    });
+
+    it('inherits adapter defaults for undefined caller settings', () => {
+        const adapterDefaults: StreamingWriterSettings = {
+            batching: {
+                startMode: 'ru-limited',
+                fast: { initialBatchSize: 12, maxBatchSize: 20, growthFactor: 1.4 },
+                ruLimited: { initialBatchSize: 4, maxBatchSize: 8, growthFactor: 1.5 },
+                minBatchSize: 2,
+                bufferMemoryLimitMB: 16,
+            },
+            retry: { maxAttemptsWithoutProgress: 3, baseDelayMs: 20, multiplier: 4, maxDelayMs: 200, jitterFraction: 0.2 },
+        };
+        expect(resolveStreamingWriterSettings(adapterDefaults, undefinedSettings)).toEqual(
+            resolveStreamingWriterSettings(adapterDefaults),
+        );
+    });
+
+    it('inherits whole undefined batching, mode and retry objects', () => {
+        const adapterDefaults: StreamingWriterSettings = { batching: { fast: { initialBatchSize: 12 } }, retry: { baseDelayMs: 20 } };
+        expect(resolveStreamingWriterSettings(adapterDefaults, { batching: undefined, retry: undefined })).toEqual(
+            resolveStreamingWriterSettings(adapterDefaults),
+        );
+        expect(resolveStreamingWriterSettings(adapterDefaults, { batching: { fast: undefined, ruLimited: undefined } })).toEqual(
+            resolveStreamingWriterSettings(adapterDefaults),
+        );
+        expect(resolveStreamingWriterSettings({ batching: undefined, retry: undefined })).toEqual(resolveStreamingWriterSettings());
+    });
+
+    const integerSettings: Array<[string, (value: number) => StreamingWriterSettings]> = [
+        ['batching.fast.initialBatchSize', (value) => ({ batching: { fast: { initialBatchSize: value } } })],
+        ['batching.fast.maxBatchSize', (value) => ({ batching: { fast: { maxBatchSize: value } } })],
+        ['batching.ruLimited.initialBatchSize', (value) => ({ batching: { ruLimited: { initialBatchSize: value } } })],
+        ['batching.ruLimited.maxBatchSize', (value) => ({ batching: { ruLimited: { maxBatchSize: value } } })],
+        ['batching.minBatchSize', (value) => ({ batching: { minBatchSize: value } })],
+        ['retry.maxAttemptsWithoutProgress', (value) => ({ retry: { maxAttemptsWithoutProgress: value } })],
+    ];
+    it.each(integerSettings.flatMap(([path, makeSettings]) =>
+        [0, 1.5, NaN, -1, Infinity].map((value) => ({ path, value, overrides: makeSettings(value) })),
+    ))('rejects invalid $path value $value', ({ path, value, overrides }) => {
+        expect(() => resolveStreamingWriterSettings(undefined, overrides)).toThrow(
+            `Invalid streaming writer setting ${path}: ${String(value)} (expected an integer of at least 1).`,
+        );
+    });
+
+    it('rejects an unknown start mode', () => {
+        const startMode = 'unknown' as NonNullable<StreamingWriterSettings['batching']>['startMode'];
+        expect(() => resolveStreamingWriterSettings(undefined, { batching: { startMode } })).toThrow(
+            'Invalid streaming writer setting batching.startMode: unknown (expected fast or ru-limited).',
+        );
+    });
+
+    it('rejects invalid batch size while constructing the adapter, before any write', () => {
+        expect(() => new BatchSizeAdapter({ fast: { initialBatchSize: 0 } })).toThrow(
+            'Invalid streaming writer setting batching.fast.initialBatchSize: 0 (expected an integer of at least 1).',
+        );
     });
 });
 
