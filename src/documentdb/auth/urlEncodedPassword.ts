@@ -5,7 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
+import { showClusterConnectFailure } from '../showClusterConnectFailure';
 
 /**
  * Helpers for detecting and recovering from URL-encoded passwords.
@@ -60,6 +60,8 @@ export const UrlEncodedPasswordTelemetry = {
 } as const;
 
 export interface ShowConnectionFailedOptions {
+    /** Stable cluster ID used by diagnostics providers. */
+    readonly clusterId: string;
     /** Display name of the cluster shown in the error dialog. */
     readonly clusterName: string;
     /** The password that was used for the failed connection attempt (may be undefined for non-password auth). */
@@ -88,7 +90,7 @@ export interface ShowConnectionFailedResult {
 export async function showConnectionFailedAndMaybeOfferDecodedRetry(
     options: ShowConnectionFailedOptions,
 ): Promise<ShowConnectionFailedResult> {
-    const { clusterName, password, isNativeAuth, originalError, context } = options;
+    const { clusterId, clusterName, password, isNativeAuth, originalError, context } = options;
 
     const decodedPassword = isNativeAuth ? tryDecodeUrlEncodedPassword(password) : undefined;
     const canOfferRetry = decodedPassword !== undefined;
@@ -96,30 +98,22 @@ export async function showConnectionFailedAndMaybeOfferDecodedRetry(
     context.telemetry.properties[UrlEncodedPasswordTelemetry.Detected] = canOfferRetry ? 'true' : 'false';
     context.telemetry.properties[UrlEncodedPasswordTelemetry.Offered] = canOfferRetry ? 'true' : 'false';
 
-    const errorMessage = originalError instanceof Error ? originalError.message : String(originalError);
+    const retryButton = l10n.t('Try with decoded password');
+    const extraDetail = canOfferRetry
+        ? l10n.t(
+              '💡 Your password appears to contain URL-encoded characters (e.g. %40 instead of @). This often happens when copying a password from a connection string URL. Would you like to retry with the decoded version?',
+          )
+        : undefined;
+    const buttons = canOfferRetry ? [retryButton] : undefined;
 
-    let detail =
-        l10n.t('Revisit connection details and try again.') +
-        '\n\n' +
-        l10n.t('Error: {error}', { error: errorMessage });
-
-    const retryButton = l10n.t('Try with Decoded Password');
-    const buttons: string[] = [];
-
-    if (canOfferRetry) {
-        detail +=
-            '\n\n' +
-            l10n.t(
-                '💡 Your password appears to contain URL-encoded characters (e.g. %40 instead of @). This often happens when copying a password from a connection string URL. Would you like to retry with the decoded version?',
-            );
-        buttons.push(retryButton);
-    }
-
-    const selected = await vscode.window.showErrorMessage(
-        l10n.t('Failed to connect to "{cluster}"', { cluster: clusterName }),
-        { modal: true, detail },
-        ...buttons,
-    );
+    const selected = await showClusterConnectFailure({
+        clusterId,
+        clusterName,
+        error: originalError,
+        context,
+        extraDetail,
+        buttons,
+    });
 
     const accepted = canOfferRetry && selected === retryButton;
     context.telemetry.properties[UrlEncodedPasswordTelemetry.Accepted] = accepted ? 'true' : 'false';

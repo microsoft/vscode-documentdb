@@ -12,10 +12,10 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../../../documentdb/showClusterConnectFailure';
 import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
@@ -118,6 +118,9 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
             // Prompt for credentials
             const credentialsProvided = await this.promptForCredentials(wizardContext);
             if (!credentialsProvided) {
+                this.lastConnectionOutcome = 'canceled';
+                context.telemetry.properties.result = 'Canceled';
+                context.telemetry.properties.connectionResult = 'cancelled';
                 return null;
             }
 
@@ -194,16 +197,12 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                void vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
-                );
+                await showClusterConnectFailure({
+                    clusterId: this.cluster.clusterId,
+                    clusterName: this.cluster.name,
+                    error,
+                    context,
+                });
 
                 // Clean up failed connection
                 await ClustersClient.deleteClient(this.cluster.clusterId);
@@ -237,7 +236,7 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
                 new ProvideUserNameStep(),
                 new ProvidePasswordStep(),
             ],
-            title: l10n.t('Authenticate to Connect with Your DocumentDB Cluster'),
+            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             showLoadingPrompt: true,
         });
 

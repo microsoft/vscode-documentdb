@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { readDeepLinkTelemetry } from '../../deepLinks/deepLinkTelemetry';
 
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
@@ -37,7 +38,7 @@ export async function openCollectionView(context: IActionContext, node: Collecti
 }
 
 export async function openCollectionViewInternal(
-    _context: IActionContext,
+    context: IActionContext,
     props: {
         clusterId: string;
         clusterDisplayName: string;
@@ -64,18 +65,22 @@ export async function openCollectionViewInternal(
      * A session can cache data, handle paging, and convert data.
      */
     const sessionId = await ClusterSession.initNewSession(props.clusterId);
+    context.telemetry.properties.collectionSessionId = sessionId;
 
-    const view = openCollectionWebview({
-        sessionId: sessionId,
-        clusterId: props.clusterId,
-        clusterDisplayName: props.clusterDisplayName,
-        viewId: props.viewId,
-        databaseName: props.databaseName,
-        collectionName: props.collectionName,
-        feedbackPermitted: isFeedbackPermitted(),
-        initialQuery: props.initialQuery,
-        initialTab: props.initialTab,
-    });
+    const view = openCollectionWebview(
+        {
+            sessionId: sessionId,
+            clusterId: props.clusterId,
+            clusterDisplayName: props.clusterDisplayName,
+            viewId: props.viewId,
+            databaseName: props.databaseName,
+            collectionName: props.collectionName,
+            feedbackPermitted: isFeedbackPermitted(),
+            initialQuery: props.initialQuery,
+            initialTab: props.initialTab,
+        },
+        readDeepLinkTelemetry(context.telemetry.properties),
+    );
 
     // Clean up the ClusterSession when the tab is closed
     view.onDisposed(() => {

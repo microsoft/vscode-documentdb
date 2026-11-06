@@ -2,7 +2,7 @@
 feature: deep-links
 kind: decisions
 status: active
-prs: [898]
+prs: [898, 1067]
 created: 2026-08-24
 ---
 
@@ -10,15 +10,25 @@ created: 2026-08-24
 
 > The decisions that shaped the deep-link vocabulary, and what was rejected on the way.
 
-| #    | Decision                                            | Status              | Changed from the proposal?                   | Date       | PR   |
-| ---- | --------------------------------------------------- | ------------------- | -------------------------------------------- | ---------- | ---- |
-| 0001 | The action goes in the path, not the query          | Accepted            | Accepted as proposed                         | 2026-08-24 | #898 |
-| 0002 | An empty path means `connect`, forever              | Accepted            | Accepted as proposed                         | 2026-08-24 | #898 |
-| 0003 | The action list is hand-written, never the registry | Accepted            | Raised from an implementation note to a rule | 2026-08-24 | #898 |
-| 0004 | `local` names the product, not the internal command | Accepted            | Retained during maintainer review            | 2026-08-24 | #898 |
-| 0005 | `local` opens the wizard without a confirmation     | Superseded by D0007 | Reversed after maintainer review             | 2026-08-24 | #898 |
-| 0006 | Local links model the resource type                 | Accepted            | Added during maintainer review               | 2026-09-01 | #898 |
-| 0007 | Local links show one lightweight confirmation       | Accepted            | Reversed 0005 during maintainer review       | 2026-09-01 | #898 |
+| #    | Decision                                            | Status              | Changed from the proposal?                    | Date       | PR    |
+| ---- | --------------------------------------------------- | ------------------- | --------------------------------------------- | ---------- | ----- |
+| 0001 | The action goes in the path, not the query          | Accepted            | Accepted as proposed                          | 2026-08-24 | #898  |
+| 0002 | An empty path means `connect`, forever              | Accepted            | Accepted as proposed                          | 2026-08-24 | #898  |
+| 0003 | The action list is hand-written, never the registry | Accepted            | Raised from an implementation note to a rule  | 2026-08-24 | #898  |
+| 0004 | `local` names the product, not the internal command | Accepted            | Retained during maintainer review             | 2026-08-24 | #898  |
+| 0005 | `local` opens the wizard without a confirmation     | Superseded by D0007 | Reversed after maintainer review              | 2026-08-24 | #898  |
+| 0006 | Local links model the resource type                 | Accepted            | Added during maintainer review                | 2026-09-01 | #898  |
+| 0007 | Local links show one lightweight confirmation       | Accepted            | Reversed 0005 during maintainer review        | 2026-09-01 | #898  |
+| 0008 | Azure resource links use `/connect/azure`           | Accepted            | Renamed from `/discovery/azure` by maintainer | 2026-11-05 | #1067 |
+| 0009 | Azure links resolve through our Discovery tree      | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0010 | The resource ID selects vCore or RU; we handle both | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0011 | Azure links change visibility filters permanently   | Accepted            | Changed from a session-only proposal          | 2026-11-05 | #1067 |
+| 0012 | Azure links confirm like `/local`                   | Accepted (modified) | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0013 | `open=` names the surface; `dashboard` always opens | Accepted            | Override of the setting added by maintainer   | 2026-11-05 | #1067 |
+| 0014 | `open=` applies to `/connect` as well               | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
+| 0015 | An Azure link always expands the cluster node       | Accepted            | Orchestrator's collapsed variant reversed     | 2026-11-05 | #1067 |
+| 0016 | The Azure confirmation comes before the lookup      | Accepted            | Requested by maintainer after testing         | 2026-11-05 | #1067 |
+| 0017 | A `/connect` link asks once per target              | Accepted            | Requested by maintainer                       | 2026-11-05 | #1067 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -260,3 +270,422 @@ multiple-step confirmation sequence.
 
 User testing shows that the confirmation adds friction without helping users understand or control
 the transition into VS Code.
+
+---
+
+## 0008 — Azure resource links use `/connect/azure`
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** Azure portal "Open in VS Code" scenario
+
+### Question
+
+The Azure portal can identify an Azure DocumentDB or Azure Cosmos DB for MongoDB (RU) resource by
+its ARM resource ID, but often cannot hand over a connection string. A link has to name an action
+that takes a resource ID. Which path does it use?
+
+### Decision
+
+`vscode://ms-azuretools.vscode-documentdb/connect/azure?resourceId=…`.
+
+The first qualifier of `/connect` names **how the target is located**. `/connect` with no qualifier
+keeps meaning "connect with a connection string" (D0002). `azure` is matched case-insensitively,
+like the local resource type (D0006).
+
+Each variant accepts its own locator only:
+
+| Path             | Locator                           | Shared arguments                 |
+| ---------------- | --------------------------------- | -------------------------------- |
+| `/connect`       | `connectionString`                | `database`, `collection`, `open` |
+| `/connect/azure` | `resourceId`, optional `tenantId` | `database`, `collection`, `open` |
+
+A link that mixes them, such as a `connectionString` on `/connect/azure` or a `resourceId` on
+`/connect`, is refused.
+
+### Reasoning
+
+Both variants do the same thing for the user: connect, then optionally navigate. The user does not
+care that the Azure variant goes through service discovery; that is how we find the cluster, not
+what the link asks for. D0004 already says public vocabulary names the user's intent rather than
+an internal mechanism.
+
+The shape repeats `/local` and `/local/documentdb`: an action plus a qualifier that narrows it. It
+also leaves room for other sources (`/connect/kubernetes`, `/connect/atlas`) without another
+top-level action.
+
+It breaks nothing. `/connect` currently refuses any qualifier ("Use /connect"), so no published
+link has one.
+
+Refusing mixed locators avoids the ambiguity vscode-cosmosdb has, where `resourceId` silently wins
+when both it and `cs` are supplied.
+
+### Rejected alternatives
+
+- **`/discovery/azure`** — the first proposal, filling the namespace the README reserved for
+  discovery plugins. Rejected by the maintainer because the link connects, and "discovery" names
+  the mechanism rather than the outcome.
+- **`/discovery/<provider-id>`** (`azure-mongo-vcore-discovery`) — exposes internal ids that get
+  refactored, against D0004.
+- **Explicit `/connect/azure-documentdb` and `/connect/azure-mongo-ru`** — the resource ID already
+  says which one it is (D0010), so the path would repeat it and need a mismatch check.
+- **`?resourceId=` on `/connect`, as vscode-cosmosdb does** — puts the "how to locate" choice in
+  the query, which D0001 rejected for the verb for the same reason, and makes the precedence
+  between two locators a hidden rule.
+
+---
+
+## 0009 — Azure links resolve through our Discovery tree
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** comparison with vscode-cosmosdb
+
+### Question
+
+Once a link names an Azure resource, how do we get from the ARM ID to an open connection?
+
+### Decision
+
+Through the Azure service discovery plugins and the Discovery view: find the subscription, make
+the resource visible, reveal its cluster node in the Discovery view, and let that node connect as
+it does when the user expands it. Nothing is saved to the Connections View.
+
+### Reasoning
+
+We own every part of that path: the subscription provider, the tenant filter, provider visibility,
+the tree and its node identity. The cluster node already handles Entra ID and native credentials,
+error translation and the dashboard. A deep link then behaves exactly like the user browsing to the
+cluster.
+
+The Collection View and credentials look clusters up through a tree data provider
+(`findClusterNodeByClusterId`), so a tree node has to exist anyway.
+
+### Rejected alternatives
+
+- **Reveal through the Azure Resources view (`rgApiV2.resources.revealAzureResource`), as
+  vscode-cosmosdb does.** Their implementation reads the current selection afterwards, which can
+  be stale; fails on hidden subscriptions and on the wrong tenant
+  ([microsoft/vscode-cosmosdb#2686](https://github.com/microsoft/vscode-cosmosdb/issues/2686), open);
+  and its fix depends on an unreleased Azure Resources API
+  ([microsoft/vscode-cosmosdb#3460](https://github.com/microsoft/vscode-cosmosdb/pull/3460),
+  [microsoft/vscode-azureresourcegroups#1991](https://github.com/microsoft/vscode-azureresourcegroups/pull/1991)).
+  Our Azure Resources integration is also behind a rollout check and would add a second extension
+  to the critical path.
+- **Fetch the cluster from ARM and connect without a tree node.** Every downstream surface
+  resolves the cluster through a tree provider, so this would need a parallel identity path.
+- **Save a Connections View entry.** Azure resources are reached through Azure identity; storing a
+  copy duplicates the discovery entry and goes stale when the resource changes.
+
+---
+
+## 0010 — The resource ID selects vCore or RU; we handle both
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer
+
+### Question
+
+Two discovery plugins cover Azure: Azure DocumentDB (`Microsoft.DocumentDB/mongoClusters`) and
+Azure Cosmos DB for MongoDB RU (`Microsoft.DocumentDB/databaseAccounts`, kind `MongoDB`). Which do
+Azure links cover, and how does a link pick one?
+
+### Decision
+
+Both. The provider and resource type in the resource ID select the plugin. `databaseAccounts` is
+accepted only after ARM confirms the account's kind is `MongoDB`. Any other resource type is
+refused.
+
+### Reasoning
+
+vscode-cosmosdb's URI handler accepts only `databaseAccounts`, routes them to the NoSQL experience,
+and has no handoff to this extension, so a portal link for a MongoDB RU account has nowhere useful
+to go today. We already discover RU accounts, so handling them is a matter of routing.
+
+Deriving the plugin from the resource ID means the portal sends one value it always has, and a link
+cannot name a plugin that disagrees with the resource.
+
+### Rejected alternatives
+
+- **vCore only.** Leaves RU portal users without a working link.
+- **Leave RU to vscode-cosmosdb.** It does not handle Mongo RU.
+
+---
+
+## 0011 — Azure links change visibility filters permanently
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer
+
+### Question
+
+The requested resource may be hidden: its discovery provider hidden, its tenant filtered, or its
+subscription not selected. Should the link unhide it only for this session, or change the filter?
+
+### Decision
+
+Change the filter permanently, the same change the user would make by hand:
+
+- show the hidden discovery provider (`showDiscoveryProvider`)
+- remove the tenant from the unselected tenants (`removeUnselectedTenant`)
+- add `tenantId/subscriptionId` to the selected subscriptions, but only when a selection exists;
+  an empty selection already means "all subscriptions"
+
+The confirmation (D0012) lists each change before it happens.
+
+### Reasoning
+
+The user followed a link to a resource they work with. Showing it in their tree is the expected
+result, and a session-only state would make it disappear on the next window, which looks like a
+bug.
+
+A permanent change uses the existing filter code, so there is no second visibility model to keep
+consistent.
+
+### Consequence
+
+The subscription filter is the Azure Resources setting `azureResourceGroups.selectedSubscriptions`.
+Adding a subscription also makes it appear in the Azure Resources view. The confirmation must say
+so. The tenant filter and provider visibility are stored by this extension and affect only it.
+
+### Rejected alternatives
+
+- **Session-only visibility**, as proposed for vscode-cosmosdb in
+  [microsoft/vscode-cosmosdb#3460](https://github.com/microsoft/vscode-cosmosdb/pull/3460). It
+  avoids touching a shared setting, but needs an in-memory overlay across three filters and makes
+  the resource vanish on reload.
+- **Refuse and ask the user to change filters.** Turns a one-click portal link into a manual
+  configuration task.
+
+---
+
+## 0012 — Azure links confirm like `/local`
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer
+
+### Question
+
+`/connect` always confirms before adding a connection, regardless of the setting. Does
+`/connect/azure` need the same?
+
+### Decision
+
+One confirmation, shown when `documentDB.confirmations.showUrlHandlingConfirmations` is enabled,
+like `/local` (D0007). It names the resource, resource group, subscription, database, collection,
+the surface that will open, and any filter changes (D0011).
+
+### Reasoning
+
+The `/connect` confirmation is unconditional because that link carries a secret and stores it
+before the user sees any UI. An Azure link carries no secret: it names a resource the user can
+reach only with their own Azure identity, and it saves no connection.
+
+### Revisit if
+
+Users are surprised by filter changes made while confirmations are disabled. The alternative is
+to always confirm when a filter will change.
+
+---
+
+## 0013 — `open=` names the surface; `dashboard` always opens
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer ("open the shell" deep-link idea)
+
+### Question
+
+A link may want something other than the tree or the Collection View, such as the shell. How does
+it ask, and how does that interact with the Cluster Dashboard, which already opens on its own?
+
+### Decision
+
+An optional `open` argument with a hand-written allow-list: `dashboard` and `shell`. Without it,
+behavior is unchanged: reveal the target and open the Collection View when a collection is given.
+
+- `open=dashboard` opens the Cluster Dashboard, scoped to `database` when given, **even when
+  `documentDB.userInterface.showDashboardOnConnect` is off**. The link's open is recorded as
+  `activationSource: 'deepLink'`.
+- `open=shell` opens the interactive shell, scoped to `database` when given.
+- `collection` together with `open` is refused, because only the Collection View has a
+  collection scope.
+- A link never carries a script, query or command for the shell or any other surface.
+
+### Reasoning
+
+The dashboard already opens automatically the first time a cluster node connects
+(`ClusterItemBase`, `autoOpenOnConnect`, default on), and revealing a cluster with `expand: true`
+triggers it. An explicit request must not depend on that setting, or the link does nothing for
+users who turned it off. When the setting is on, the explicit open reuses the existing panel
+(`panelReused`), so nothing opens twice.
+
+> **Amended 2026-11-06 (UX review 03, F07; the operator asked for all review items to be fixed
+> in #1067):** the last sentence held only without `database`. Dashboard panels are keyed by
+> cluster **and** database, so `open=dashboard&database=app` opened the automatic cluster-wide
+> dashboard and the requested database-scoped one. A link with `open=dashboard` now suppresses
+> the automatic dashboard for its own expansion (`autoOpenDashboardSuppression.ts`), so only the
+> requested dashboard opens. Shell, collection and bare links keep the automatic dashboard; the
+> rejected alternative below still applies to them.
+
+A distinct activation source keeps link-driven opens apart from automatic ones, which the
+dashboards count as exposure rather than a deliberate open.
+
+The allow-list follows D0003: a value names a surface the extension decided is safe to open from
+someone else's web page.
+
+### Rejected alternatives
+
+- **Respect `showDashboardOnConnect` for `open=dashboard`.** The link would silently do nothing.
+- **Suppress the automatic dashboard when a link asks for something else.** Possible later; it
+  needs a per-connection flag into the reveal, and today `/connect` already shows the dashboard
+  before the Collection View.
+- **`open=collection`.** Redundant: a `collection` argument already means it.
+
+---
+
+## 0014 — `open=` applies to `/connect` as well
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer
+
+### Decision
+
+`/connect?connectionString=…&open=shell` and `open=dashboard` work as in D0013. The argument means
+the same thing on every `/connect` variant.
+
+### Reasoning
+
+Both variants end at the same cluster node, so the surface they can open does not depend on how
+the cluster was located. One vocabulary is simpler to document and to build links for.
+
+---
+
+## 0015 — An Azure link always expands the cluster node
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** implementation of WI8, corrected by maintainer
+
+### Question
+
+`/connect/azure` reveals the cluster node in the Discovery view, and expanding that node runs its
+normal connect flow, including the authentication quick pick. Should the link expand the node in
+every case, or only once the connection is known to have worked?
+
+### Decision
+
+Reveal the cluster node once with `expand: true` in every case. That expansion is the only thing
+that connects. Afterwards, if no client exists for the cluster's `clusterId`, stop: the node has
+already shown what went wrong, and it stays expanded with whatever the tree shows (recovery actions
+after a failure, nothing after a cancel). Database and collection nodes are then found with
+`findNodeById` under the real node ids, without fetching the cluster's children again.
+
+### Reasoning
+
+The maintainer expects the node to be expanded in every scenario, and the authentication prompt
+that the expansion shows is expected, because the user has to choose how to connect.
+
+This needs no second connect path: in VS Code, `TreeView.reveal(…, { expand: true })` waits for the
+expansion, which waits for the node's children request to the extension host
+(`MainThreadTreeViews.reveal` → `TreeView.expand` → `AsyncDataTree.expand` awaits the node's
+refresh). When `reveal` resolves, the connect attempt has finished, so checking for a client is
+reliable.
+
+### Rejected alternatives
+
+- **Reveal collapsed, run `getChildren` from the link handler, expand only on success.** The first
+  implementation did this to keep a cancelled connect from being retried by a later expansion.
+  Rejected because it leaves the node collapsed after a failure or cancel, and because it rested on
+  the assumption that `reveal` does not wait for the expansion, which is wrong.
+
+### Amendment (2026-11-05)
+
+Testing with an RU account showed `Connecting…` in the progress notification while the cluster was
+not yet visible. VS Code's single `reveal(…, { expand: true })` first resolves and expands the
+parent nodes, which re-lists subscriptions and accounts, and only then shows and expands the
+cluster. The helper now reveals the cluster without expanding it first, then reports
+`Connecting…`, then reveals it with `expand: true`. The cluster is still always expanded, and the
+expansion is still the only connect. Made by the orchestrator while the maintainer was unavailable;
+the remaining double listing (the helper walks the data provider, VS Code walks its own cache) is
+left until trace timestamps show it matters.
+
+### Amendment (2026-11-06)
+
+The [#1067 review](iterations/03-azure-resource-links-review.md) (F1) found that a cluster already
+connected and expanded keeps its database and collection nodes in VS Code but not in the provider's
+parent cache, so `findNodeById` alone missed them. Database and collection nodes are still looked up
+in the cache first; on a miss, the helper now lists the children of the connected cluster or database
+node (`findChildById`) and requires an exact name match. This runs only after a client exists, and it
+reuses that client, so it is not a second connect. Accepted by the maintainer with the review's
+proposals.
+
+---
+
+## 0016 — The Azure confirmation comes before the lookup
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer, after trying the first build
+
+### Question
+
+D0012 put one confirmation after the subscription lookup and the ARM read, so it could name the
+subscription and list every filter change. In practice the dialog appeared long after the click,
+because it waited for the Azure sign-in check, the subscription listing across all accounts and
+tenants, and the ARM read. How should the confirmation be ordered?
+
+### Decision
+
+When URL handling confirmations are enabled:
+
+1. The first confirmation appears right after the link is parsed, before any sign-in prompt or
+   network call. It shows what the link names: the resource name and kind, the resource group, the
+   subscription **ID**, the database, the collection, and what will open. Dismissing it stops
+   everything.
+2. After the lookup, a second confirmation appears **only when a filter has to change**. It lists
+   each change (D0011) before it is applied, including the note that adding a subscription also
+   shows it in the Azure Resources view.
+
+When confirmations are disabled, neither dialog appears, as before.
+
+### Reasoning
+
+The maintainer asked for the first confirmation to come quickly, even with limited details. The
+first dialog no longer verifies the resource, but it changes nothing, and the steps after it only
+read (sign-in is the user's own choice in its own prompt).
+
+Filter changes are persistent and one of them writes a setting shared with another extension, so
+D0011's requirement that the user sees each change before it happens is kept with a second dialog.
+That dialog appears only when something is hidden, which is the uncommon case.
+
+This modifies D0012 ("one confirmation"): the confirmation is still gated by the setting, but there
+can be two.
+
+### Rejected alternatives
+
+- **One early dialog with a generic note that filters may change.** Faster, but the user would
+  consent to a change to a shared setting without seeing which subscription or tenant it affects.
+- **Keep the single late dialog and show progress while looking up.** The user still waits for the
+  slow steps before deciding whether they wanted the link at all.
+
+---
+
+## 0017 — A `/connect` link asks once per target
+
+**Status:** Accepted · **Date:** 2026-11-05 · **Raised by:** maintainer, after comparing the modal counts
+
+### Question
+
+A new `/connect` link with a collection asked three modal questions about the same target: add the
+connection, open it, and open the Collection View. A saved connection asked two. Each one showed
+details the previous one had already shown. How many questions should a link ask?
+
+### Decision
+
+One per target:
+
+- **New connection:** one modal, `Add and open connection?`, always shown (even with URL handling
+  confirmations off), naming the target and what will open (`Opens: Collection View`, `Cluster
+Dashboard` or `Shell`). The TLS question stays separate and always shown when a localhost link
+  requests it.
+- **Saved connection:** one modal, `Open connection?`, with the same details, skipped when URL
+  handling confirmations are off.
+- No separate question before the Collection View, dashboard or shell.
+
+### Reasoning
+
+The later questions added no information and no new risk: the target and the surface are known when
+the first question is asked, and opening a view is not a separate trust decision. The two questions
+that do protect the user stay: adding a connection from a link (it stores a secret) and relaxing
+certificate validation.
+
+### Rejected alternatives
+
+- **Keep the three questions.** Every one after the first repeated what the user had just accepted.

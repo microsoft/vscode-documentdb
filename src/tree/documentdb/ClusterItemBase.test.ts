@@ -12,6 +12,7 @@ import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
+import { suppressAutoOpenDashboard } from './autoOpenDashboardSuppression';
 import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItemBase';
 
 // Captures telemetry events emitted via callWithTelemetryAndErrorHandling when its callback throws.
@@ -216,6 +217,27 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
         expect(mockGetSetting).toHaveBeenCalledWith('documentDB.userInterface.showDashboardOnConnect');
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.clusterDashboard.open',
+            item,
+            null,
+            { activationSource: 'autoOpenOnConnect' },
+        );
+    });
+
+    it('does not auto-open the dashboard while the stable cluster id is suppressed', async (): Promise<void> => {
+        mockGetSetting.mockReturnValue(true);
+        const cluster = { ...makeCluster(), treeId: 'connectionsView/folder/cluster-1' };
+        const item = new TestClusterItem(cluster, makeClient(vi.fn().mockResolvedValue([{ name: 'database' }])));
+        const release = suppressAutoOpenDashboard(cluster.clusterId);
+        try {
+            await item.getChildren();
+            expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        } finally {
+            release();
+        }
+
+        await item.getChildren();
+        expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
             'vscode-documentdb.command.clusterDashboard.open',
             item,
             null,
@@ -464,7 +486,11 @@ describe('ClusterItemBase.connect', () => {
         // Keying either lookup on the tree position opens a second, duplicate connection.
         expect(mockHasCredentials).toHaveBeenCalledWith(cluster.clusterId);
         expect(mockHasCredentials).not.toHaveBeenCalledWith(cluster.treeId);
-        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(cluster.clusterId, expect.anything());
+        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(
+            cluster.clusterId,
+            expect.anything(),
+            expect.any(Function),
+        );
     });
 
     it('authenticates when no credentials are cached, without preparing a cached client', async () => {

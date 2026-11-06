@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../../../documentdb/showClusterConnectFailure';
 import { maskSensitiveValuesInTelemetry } from '../../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
@@ -248,16 +249,13 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
                 ext.outputChannel.appendLine(
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
-                void vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
-                );
+                await showClusterConnectFailure({
+                    clusterId: this.cluster.clusterId,
+                    clusterName: this.cluster.name,
+                    fallbackHeading: l10n.t('Failed to connect to VM "{vmName}"', { vmName: this.cluster.name }),
+                    error,
+                    context,
+                });
                 await ClustersClient.deleteClient(this.cluster.clusterId);
                 CredentialCache.deleteCredentials(this.cluster.clusterId);
                 return null;

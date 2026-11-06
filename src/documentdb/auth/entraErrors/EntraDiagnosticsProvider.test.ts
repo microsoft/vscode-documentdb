@@ -106,7 +106,7 @@ describe('EntraDiagnosticsProvider', () => {
             const message = await provider.explain({ clusterId, error });
             expect(message).toContain('Only Microsoft can change this');
             expect(message).toContain('not you or your tenant administrator');
-            expect(message).toContain('native DocumentDB authentication');
+            expect(message).toContain('Username and Password authentication');
             expect(message).toContain('managed identity on an Azure VM');
             expect(message).toContain('GitHub');
             expect(message).toContain(Links.SovereignClouds);
@@ -237,7 +237,7 @@ describe('EntraDiagnosticsProvider', () => {
             expect(message).toContain(`Sign-in failed in ${cloud}. If the sign-in window showed AADSTS65002`);
             expect(message).toContain('must be configured via preauthorization');
             expect(message).toContain('Only Microsoft can change this');
-            expect(message).toContain('native DocumentDB authentication or managed identity on an Azure VM');
+            expect(message).toContain('Username and Password authentication or managed identity on an Azure VM');
             expect(message).not.toContain('msal-no-broker');
         },
     );

@@ -28,7 +28,7 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         aadsts: ['65002'],
         explain: (): string =>
             l10n.t(
-                'Microsoft Entra ID sign-in for Azure DocumentDB appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this, not you or your tenant administrator. Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}',
+                'Microsoft Entra ID sign-in for Azure DocumentDB appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this, not you or your tenant administrator. Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}',
                 { link: Links.SovereignClouds },
             ),
     },
@@ -117,7 +117,7 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         explain: (context): string => {
             if (context.recentTokenFailure && context.cloudCategory && context.cloudCategory !== 'public') {
                 return l10n.t(
-                    'Sign-in failed in {cloud}. If the sign-in window showed AADSTS65002 ("must be configured via preauthorization"), Microsoft Entra ID sign-in for Azure DocumentDB is not enabled yet for VS Code in this cloud. Only Microsoft can change this, not you or your tenant administrator. Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}',
+                    'Sign-in failed in {cloud}. If the sign-in window showed AADSTS65002 ("must be configured via preauthorization"), Microsoft Entra ID sign-in for Azure DocumentDB is not enabled yet for VS Code in this cloud. Only Microsoft can change this, not you or your tenant administrator. Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub. See {link}',
                     { cloud: cloudDisplayName(context.cloudCategory), link: Links.SovereignClouds },
                 );
             }

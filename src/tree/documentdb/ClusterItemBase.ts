@@ -37,6 +37,7 @@ import { containsRetryNode, createRetryNode } from '../api/retryNode';
 import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { DatabaseItem } from './DatabaseItem';
+import { isAutoOpenDashboardSuppressed } from './autoOpenDashboardSuppression';
 
 /**
  * Full connection details for a DocumentDB cluster used at runtime during service discovery.
@@ -96,6 +97,8 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * It tracks the user's journey through the discovery flow.
      */
     public journeyCorrelationId?: string;
+    public lastConnectionOutcome?: 'connected' | 'canceled' | 'failed';
+    public lastConnectionCorrelationId?: string;
 
     protected descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
@@ -190,21 +193,30 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      */
     protected async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
         const abortController = new AbortController();
-        const clientPromise = ClustersClient.getClient(clusterId, abortController.signal);
-        return withDelayedProgress(
-            clientPromise,
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: l10n.t('Connecting to "{cluster}"…', { cluster: this.cluster.name }),
-                cancellable: true,
-            },
-            () => {
-                ext.outputChannel.debug(
-                    `User cancelled connection attempt for "${this.cluster.name}" via progress notification.`,
-                );
-                abortController.abort();
-            },
-        );
+        const clientPromise = ClustersClient.getClient(clusterId, abortController.signal, (id) => {
+            this.lastConnectionCorrelationId = id;
+        });
+        try {
+            const client = await withDelayedProgress(
+                clientPromise,
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: l10n.t('Connecting to "{cluster}"…', { cluster: this.cluster.name }),
+                    cancellable: true,
+                },
+                () => {
+                    ext.outputChannel.debug(
+                        `User cancelled connection attempt for "${this.cluster.name}" via progress notification.`,
+                    );
+                    abortController.abort();
+                },
+            );
+            this.lastConnectionOutcome = 'connected';
+            return client;
+        } catch (error) {
+            this.lastConnectionOutcome = error instanceof UserCancelledError ? 'canceled' : 'failed';
+            throw error;
+        }
     }
 
     /**
@@ -258,6 +270,8 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         ext.outputChannel.appendLine(l10n.t('Loading cluster details for "{cluster}"', { cluster: this.cluster.name }));
 
         const wasConnected = ClustersClient.exists(this.cluster.clusterId);
+        this.lastConnectionOutcome = undefined;
+        this.lastConnectionCorrelationId = undefined;
         let clustersClient: ClustersClient | null;
 
         // Check if credentials are cached, and return the cached client if available
@@ -273,6 +287,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
             } catch (error) {
                 if (error instanceof UserCancelledError) {
+                    this.lastConnectionOutcome = 'canceled';
                     ext.outputChannel.appendLine(
                         l10n.t('Connection to "{cluster}" was cancelled.', { cluster: this.cluster.name }),
                     );
@@ -335,6 +350,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
 
         // If authentication failed or cancelled, return the error element
         if (!clustersClient) {
+            this.lastConnectionOutcome ??= 'failed';
             ext.outputChannel.appendLine(l10n.t('Could not connect to "{cluster}".', { cluster: this.cluster.name }));
             return this.createErrorRecoveryChildren(false);
         }
@@ -388,7 +404,11 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             return this.createErrorRecoveryChildren(true);
         }
 
-        if (!wasConnected && (SettingsService.getSetting<boolean>(settingsKeys.showDashboardOnConnect) ?? true)) {
+        if (
+            !wasConnected &&
+            (SettingsService.getSetting<boolean>(settingsKeys.showDashboardOnConnect) ?? true) &&
+            !isAutoOpenDashboardSuppressed(this.cluster.clusterId)
+        ) {
             await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
                 activationSource: 'autoOpenOnConnect',
             });
