@@ -26,6 +26,10 @@ the scope, the tests, and the suggested model. **Wait for the operator's go-ahea
 Keep the list to what was asked. Do not add optional items, refactors or hardening. List anything
 you noticed but left out under "Not in scope".
 
+If the source offers competing options for an item (for example the reviewer's fix and a
+verification note's fix), state which option you treat as accepted for each item, in one message,
+before coding. If the operator cannot be asked, write that list at the top of the source document.
+
 If the source document is uncommitted, commit only that document first as a docs-only commit so
 done notes have a base. Leave other uncommitted changes alone and mention them.
 
@@ -55,11 +59,22 @@ eager: give each one a precise, bounded task.
 For items that add or change types or APIs, put the exact interfaces in the prompt. When interfaces
 span items, define them all before starting the first.
 
-Run items in parallel in the shared tree only when their files do not overlap. Run items that touch
-the same files one after another, never in parallel. Name in each prompt the files the agent owns
-and the files it must not touch. Use a separate worktree per agent only for large or loosely scoped
-items. Set it up once per round (install and package build), have the agent commit there, and review
-with `git show` before cherry-picking.
+**Owned files come from a search, not from memory.** When an item changes a user-facing string,
+search the whole repository for the old text (`git grep -F "<old text>"`) and list every hit as an
+owned file: tests, scenarios and user documentation pin strings far from the code. When an item
+changes a type or interface, search for the places that produce and consume it.
+
+Run items in parallel in the shared tree only when their files do not overlap. Shared pin files
+(test fixtures, scenario files, documentation that quotes strings) and a workspace package that
+another item tests against count as overlap. Run items that touch the same files one after
+another, never in parallel. A chain of small items on the same files may go to one agent, one
+item per turn, with your commit between turns; keep a chain to about eight items. Name in each
+prompt the files the agent owns and the files it must not touch. Use a separate worktree per agent
+only for large or loosely scoped items. Set it up once per round (install and package build), have
+the agent commit there, and review with `git show` before cherry-picking.
+
+If a review of the same text or code is already queued, offer to run it first, so that items are
+not changed twice.
 
 You may split a large item into lettered sub-items (1.1a, 1.1b), each with its own commit. Order
 items so each commit builds; a short-lived placeholder is fine if a later item removes it. A tightly
@@ -67,15 +82,18 @@ coupled follow-up on the same files may go to the same agent; it still gets its 
 
 ## Subagent prompts
 
-Use one subagent per work item, except for the coupled follow-ups above. Each prompt must be
+Use one subagent per work item, except for coupled follow-ups and chains (above). Each prompt must be
 **self-contained**, because subagents do not share your context. Put these sections in order:
 
 1. Context and files to read.
 2. Decision text.
 3. Task with exact interfaces.
-4. Files owned and files not to touch.
+4. Files owned and files not to touch, including any uncommitted files that already exist and
+   that the agent must ignore.
 5. Acceptance criteria.
-6. Tests to add and commands to run.
+6. Tests to add and the exact commands to run. Confirm the focused test commands before the first
+   prompt (some suites need their own config). If the item changes `packages/*/src`, rebuild that
+   package before running root tests; root tests can import the package's built output.
 7. The fixed block below, copied **verbatim**.
 
 > - Keep the change as simple and easy to understand as possible. Use the smallest design that
@@ -94,13 +112,15 @@ Use one subagent per work item, except for the coupled follow-ups above. Each pr
 > - Unless the item explicitly requires a different step, run only focused tests
 >   (`npx vitest run <paths>`) and, if needed, `npx tsc --noEmit -p .`. Do not run build, lint,
 >   l10n, prettier, or package unless the item explicitly requires it.
+> - Other agents may be working in the same tree. If a test outside your item fails, report it; do
+>   not fix it.
 > - Report only to the leader; never message other agents.
 > - Fill every field in this report; write "none" instead of omitting a field. No narrative; under
 >   250 words:
 >
 >   ```text
->   Files changed: <list>   Outside the item: none | <file — why>
->   Existing tests changed: none | <file — why>
+>   Files changed: <list>   Outside the item: none | <file: why>
+>   Existing tests changed: none | <file: why>
 >   Behaviour differences (results, messages, order, timing): none | <list>
 >   Deviations from the prompt: none | <list>
 >   Invariant checks: <command> → <result>
@@ -118,12 +138,14 @@ Use one subagent per work item, except for the coupled follow-ups above. Each pr
 - **Always ask the operator, whatever your confidence,** when a choice:
   - changes user-visible behaviour or wording beyond what was specified;
   - changes behaviour that an accepted work item specifies;
-  - would implement an accepted work item that conflicts with a recorded decision — park the item
+  - would implement an accepted work item that conflicts with a recorded decision: park the item
     with the options you see; do not implement either reading;
   - touches a security or trust boundary (authentication, allowlists, secrets, permissions);
-  - changes persisted data, settings schemas or a public API;
+  - changes persisted data, settings schemas, a public API, or an exported format (saved reports,
+    JSON output, anything with a schema version);
   - deviates from a recorded decision in a feature's `decisions.md`;
-  - weakens or removes a test that pins behaviour (and always for `TDD:` tests);
+  - weakens or removes a test that pins behaviour (and always for `TDD:` tests). Updating a test
+    to wording or behaviour the operator approved is not weakening it;
   - requires pushing, rewriting history, or editing a PR, an issue or another external system.
 - Ask as one concise question with the options and your recommendation. When a confidence figure
   is close to a threshold, state what would change your mind. Do not round up.
