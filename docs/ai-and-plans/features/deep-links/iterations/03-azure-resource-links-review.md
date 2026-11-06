@@ -162,6 +162,8 @@ root-read or cache-lifetime ownership in this PR.
 
 **Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
+> **Done (2026-11-06), commit `a3626119`:** database and collection lookups fall back to `findChildById` from the connected cluster/database node when the parent cache misses; the collection result now needs an exact `collectionInfo.name` match. Model: sol (tree cache lifecycle). Decision: none beyond the accepted proposal. Tests: 3 added in `discoveryViewHelpers.test.ts` (database fallback, collection fallback, differently-cased collection rejected), and existing tests now assert no fallback on a cache hit or without a connected client.
+
 ## F2 - med - Recovery leaves a provider-root retry cache in place
 
 **Origin:** RD2 and CR2, independently reported by both reviewers.
@@ -218,6 +220,8 @@ failure caches survive.
 
 **Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
+> **Done (2026-11-06), commit `5abf77a7`:** when the target provider root has a cached error state, the helper resets that root only, refreshes it **before** revealing it, and then reloads its subscriptions directly instead of trusting the cached list. Model: sol. Leader check (95%): `refresh(element)` clears the parent cache after a single cache-lookup microtask, so it cannot wipe the later direct reload. Tests: 2 added in `discoveryViewHelpers.test.ts` (reset → refresh → reveal order, root-only reset; healthy root unchanged).
+
 ## F3 - low - Account-identity handoff needs manual evidence
 
 **Origin:** RD3; not independently reported by code-review.
@@ -269,6 +273,8 @@ A live multi-account Azure check remains necessary; no live reproduction is clai
 
 **Author decision and rationale:** Accepted as won't fix (operator, 2026-11-06). Operator guidance: "a wont-fix is an accetable solution." and "these are mostly edge cases. I just don't want things to break completely."
 
+> **Done (2026-11-06), won't fix:** no code change. No issue opened; open one only if a multi-account user reports a wrong-principal failure.
+
 ## F4 - med - Query-key diagnostics can log credential material
 
 **Origin:** RD4; not independently reported by code-review.
@@ -312,6 +318,8 @@ sentinels are absent from every captured log.
   sentinel is absent from the log and `unknown=1` is present.
 
 **Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
+
+> **Done (2026-11-06), commit `a7a69785`:** the `Handling link` log lists only allow-listed parameter names, plus `unknown=<n>`. The allow-list is a module constant `KNOWN_QUERY_PARAMS`, also used by the `uriUnknownParamCount` telemetry, which is unchanged. Model: sol (secrets in logs). Tests: 2 added in `vscodeUriHandler.test.ts` with a password sentinel in a key; the sentinel is absent from all captured log calls.
 
 ## F5 - low - A failed/cancelled connection still opens the requested surface
 
@@ -372,6 +380,8 @@ after failure/cancellation, no duplicate prompt, and no success-shaped telemetry
 
 **Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
+> **Done (2026-11-06), commit `0e57e5e8`:** connection-string links with `open=` now return before dispatch when `ClustersClient.exists(storageId)` is false (`storageId` is the Connections View `clusterId`), with a trace line and `openTargetResult = 'skippedNotConnected'`. The Azure path sets the same property where it already returns `undefined` for "not connected". The accepted residual risk stands: an old client that survives a failed reconnect still dispatches. Model: terra. Decision (90%): on the Azure path the property is set whenever the cluster is not connected, even for links without `open=`, because the link stopped for the same reason. Tests: 5 added across `vscodeUriHandler.test.ts` and `discoveryViewHelpers.test.ts`.
+
 ## F6 - low - Cancel during navigation does not stop target opening
 
 **Origin:** CR4; not independently reported by rubber-duck.
@@ -418,6 +428,8 @@ dispatch. Assert no later navigation/surface command runs and cancellation is re
 
 **Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
+> **Done (2026-11-06), commit `6540c168`:** after `revealInDiscoveryView` returns, a cancelled progress token now records `userCancelledAtStep = 'AzureProgress'` and returns `undefined`, so no Collection View, dashboard or shell opens. Model: terra. Tests: the existing test "does not check progress cancellation after reveal has started" pinned the old behaviour this item changes; it was replaced with "stops when progress is cancelled during reveal", plus a test that an uncancelled run returns the reveal result (not a `TDD:` test).
+
 ## F7 - low - Subscription display name is missing from error masking
 
 **Origin:** CR5; not independently reported by rubber-duck.
@@ -459,6 +471,8 @@ the ARM error; assert it remains in the user-facing explanation but not captured
   enough here.
 
 **Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
+
+> **Done (2026-11-06), commit `78d1a65a`:** `subscription.name` is pushed to `context.valuesToMask` right after the subscription resolves, before the ARM read. Model: luna. Tests: 1 added in `handleAzureResourceLink.test.ts` asserting the name is masked when `readAzureResource` runs.
 
 ## F8 - low - Visibility prediction differs from the SDK's casing rules
 
@@ -509,6 +523,8 @@ and subscription entries. After repair, `getSubscriptions(true)` must include th
 
 **Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
+> **Done (2026-11-06), commit `4e5a8bee`:** `computeVisibilityChanges` compares subscription IDs exactly, as the SDK filter does. Model: luna. Tests: the existing casing test was inverted as the item specified. A differently-cased entry now yields `addSubscription: true`, and the repair appends the canonical `tenantId/subscriptionId` entry.
+
 ## Validation and limitations
 
 - Code-review ran the following against the reviewed head, before the report was added:
@@ -531,6 +547,10 @@ and subscription entries. After repair, `getSubscriptions(true)` must include th
 - This PR remains a **draft: Case 1**, not a ready-for-review handoff. The full Case 2 checks,
   including `prettier-fix`, are deferred until ready for review. This review does not claim
   those checks passed.
+- **Stage 3 (2026-11-06):** fixes for F1, F2 and F4–F8 were implemented in one commit per finding,
+  using the `/lead` workflow from #1060; F3 is won't fix. Case 1 checks after the last fix:
+  `npm run build` passed; the focused run of the command above passed 8 files and 223 tests.
+  No `vscode.l10n.t` strings were added or removed. Case 2 has not run, and nothing was pushed.
 
 ## Outcome
 
