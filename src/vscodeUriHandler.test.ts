@@ -51,7 +51,7 @@ vi.mock('./commands/localQuickStart/openLocalQuickStart', () => ({
     openLocalQuickStart: (...args: unknown[]) => mockOpenLocalQuickStart(...args),
 }));
 
-vi.mock('./deepLinks/handleAzureResourceLink', (): typeof import('./deepLinks/handleAzureResourceLink') => ({
+vi.mock('./deepLinks/handleAzureResourceLink', () => ({
     handleAzureResourceLinkRequest: vi.fn().mockResolvedValue(undefined),
 }));
 

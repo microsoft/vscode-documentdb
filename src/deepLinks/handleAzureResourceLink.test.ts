@@ -34,26 +34,23 @@ vi.mock('../extensionVariables', () => ({
     },
 }));
 
-vi.mock('./azureResourceLink', (): typeof import('./azureResourceLink') => ({
+vi.mock('./azureResourceLink', () => ({
     parseAzureResourceLink: vi.fn(),
 }));
-vi.mock('./azureSubscription', (): typeof import('./azureSubscription') => ({
+vi.mock('./azureSubscription', () => ({
     resolveAzureSubscription: vi.fn(),
 }));
-vi.mock('./azureResource', (): typeof import('./azureResource') => ({
+vi.mock('./azureResource', () => ({
     readAzureResource: vi.fn(),
 }));
-vi.mock('./azureVisibility', (): typeof import('./azureVisibility') => ({
+vi.mock('./azureVisibility', () => ({
     computeVisibilityChanges: vi.fn(),
     hasVisibilityChanges: vi.fn(),
     applyVisibilityChanges: vi.fn(),
 }));
-vi.mock(
-    '../tree/discovery-view/discoveryViewHelpers',
-    (): Pick<typeof import('../tree/discovery-view/discoveryViewHelpers'), 'revealInDiscoveryView'> => ({
-        revealInDiscoveryView: vi.fn(),
-    }),
-);
+vi.mock('../tree/discovery-view/discoveryViewHelpers', () => ({
+    revealInDiscoveryView: vi.fn(),
+}));
 
 const link: AzureResourceLink = {
     resourceId:
@@ -449,7 +446,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
         async (target, opensLine): Promise<void> => {
             await handleAzureResourceLinkRequest(context, { resourceId: link.resourceId, ...target });
 
-            const options = vi.mocked(vscode.window.showInformationMessage).mock.calls[0][1] as vscode.MessageOptions;
+            const options = vi.mocked(vscode.window.showInformationMessage).mock.calls[0][1];
             const surfaceLines = options.detail?.split('\n').filter((line): boolean => line.startsWith('Opens:'));
             expect(surfaceLines).toEqual(opensLine === undefined ? [] : [opensLine]);
         },
