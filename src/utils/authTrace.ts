@@ -99,7 +99,8 @@ function recordCloudResolution(details: AuthTraceDetails, properties: ITelemetry
         ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud', 'conflicting', 'none'].includes(details.hostCloud)
             ? details.hostCloud
             : 'unknown';
-    properties.errorKind =
+    // Not named `error…`: whole-error masking would redact this allowlisted category.
+    properties.entraFailureKind =
         typeof details.errorKind === 'string' &&
         [
             'customCloudUnresolved',

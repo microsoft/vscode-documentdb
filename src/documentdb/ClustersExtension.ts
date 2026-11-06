@@ -36,6 +36,7 @@ import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
 import { createMongoDocument } from '../commands/createDocument/createDocument';
 import { deleteCollection } from '../commands/deleteCollection/deleteCollection';
 import { deleteAzureDatabase } from '../commands/deleteDatabase/deleteDatabase';
+import { diagnoseConnection } from '../commands/diagnoseConnection/diagnoseConnection';
 import { filterProviderContent } from '../commands/discoveryService.filterProviderContent/filterProviderContent';
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
@@ -90,8 +91,8 @@ import { updateConnectionString } from '../commands/updateConnectionString/updat
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
-import { AtlasDiagnosticsProvider } from '../plugins/service-atlas-mongodb/AtlasDiagnosticsProvider';
 import { AtlasDiscoveryProvider } from '../plugins/service-atlas-mongodb/AtlasDiscoveryProvider';
+import { AtlasErrorExplainer } from '../plugins/service-atlas-mongodb/AtlasErrorExplainer';
 import {
     OPEN_ATLAS_CLUSTER_COMMAND_ID,
     openAtlasCluster,
@@ -100,15 +101,15 @@ import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongod
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
-import { KubernetesDiagnosticsProvider } from '../plugins/service-kubernetes/KubernetesDiagnosticsProvider';
 import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/KubernetesDiscoveryProvider';
+import { KubernetesErrorExplainer } from '../plugins/service-kubernetes/KubernetesErrorExplainer';
 import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
-import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 import { migrateLegacyEmulatorConnections } from '../services/legacyEmulatorMigration';
 import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
-import { QuickStartDiagnosticsProvider } from '../services/localQuickStart/QuickStartDiagnosticsProvider';
+import { QuickStartErrorExplainer } from '../services/localQuickStart/QuickStartErrorExplainer';
 import { QuickStartService, sweepStaleQuickStartEnvFiles } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
@@ -141,7 +142,7 @@ import {
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
 import { registerClusterDashboardContextMenuCommands } from '../webviews/documentdb/clusterDashboard/clusterDashboardController';
-import { EntraDiagnosticsProvider } from './auth/entraErrors/EntraDiagnosticsProvider';
+import { EntraErrorExplainer } from './auth/entraErrors/EntraErrorExplainer';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
@@ -153,7 +154,7 @@ import { PlaygroundHoverProvider } from './query-language/playground-completions
 import { PlaygroundSnippetSessionManager } from './query-language/playground-completions/PlaygroundSnippetSessionManager';
 import { ShellCommandIds } from './shell/constants';
 import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
-import { SrvDnsDiagnosticsProvider } from './srv/SrvDnsDiagnosticsProvider';
+import { SrvDnsErrorExplainer } from './srv/SrvDnsErrorExplainer';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -181,12 +182,12 @@ export class ClustersExtension implements vscode.Disposable {
         // Error-translation providers: they turn an infrastructure-caused database failure into an
         // explanation the user can act on. They must never show UI or attempt recovery.
         // See .github/skills/error-translation/SKILL.md
-        ConnectionDiagnosticsService.registerProvider(new QuickStartDiagnosticsProvider());
-        ConnectionDiagnosticsService.registerProvider(new KubernetesDiagnosticsProvider());
-        ConnectionDiagnosticsService.registerProvider(new AtlasDiagnosticsProvider());
-        // First explanation wins, so source-specific diagnostics take priority over generic SRV failures.
-        ConnectionDiagnosticsService.registerProvider(new SrvDnsDiagnosticsProvider());
-        ConnectionDiagnosticsService.registerProvider(new EntraDiagnosticsProvider());
+        ErrorExplanationService.registerProvider(new QuickStartErrorExplainer());
+        ErrorExplanationService.registerProvider(new KubernetesErrorExplainer());
+        ErrorExplanationService.registerProvider(new AtlasErrorExplainer());
+        // First explanation wins, so source-specific explanations take priority over generic SRV failures.
+        ErrorExplanationService.registerProvider(new SrvDnsErrorExplainer());
+        ErrorExplanationService.registerProvider(new EntraErrorExplainer());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
@@ -636,6 +637,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.copyConnectionString',
                     withTreeNodeCommandCorrelation(copyAzureConnectionString),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.diagnoseConnection',
+                    withTreeNodeCommandCorrelation(diagnoseConnection),
                 );
 
                 //// Connections View Commands:

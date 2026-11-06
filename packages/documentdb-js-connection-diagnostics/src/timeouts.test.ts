@@ -1,0 +1,94 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { describe, expect, it } from 'vitest';
+
+import {
+    DEFAULT_TIMEOUTS,
+    DiagnosticsConfigurationError,
+    MAX_TIMEOUT_MS,
+    resolveTimeouts,
+    SAFETY_LIMITS,
+    timeoutsForProfile,
+} from './index.js';
+
+import { type DiagnosticsTimeouts, type TimeoutProfile } from './index.js';
+
+const profiles: readonly TimeoutProfile[] = ['default', 'longer', 'noDiagnosticTimeouts'];
+const fields = Object.keys(DEFAULT_TIMEOUTS) as (keyof DiagnosticsTimeouts)[];
+
+describe('timeout profiles', (): void => {
+    it('uses the specified defaults', (): void => {
+        expect(timeoutsForProfile('default')).toEqual({
+            runTimeoutMs: 300_000,
+            preparationTimeoutMs: 15_000,
+            srvTimeoutMs: 10_000,
+            probeTimeoutMs: 10_000,
+            authenticationTimeoutMs: 45_000,
+            postConnectTimeoutMs: 5_000,
+        });
+    });
+
+    it('doubles every timeout for longer runs', (): void => {
+        const longer = timeoutsForProfile('longer');
+        for (const field of fields) {
+            expect(longer[field]).toBe(Number(DEFAULT_TIMEOUTS[field]) * 2);
+        }
+    });
+
+    it('removes all six diagnostic timeouts', (): void => {
+        expect(Object.values(timeoutsForProfile('noDiagnosticTimeouts'))).toEqual(Array(6).fill(null));
+    });
+
+    it.each(profiles)('applies overrides on top of %s without changing defaults', (profile): void => {
+        const original = timeoutsForProfile(profile);
+        expect(resolveTimeouts(profile)).toEqual(original);
+        expect(resolveTimeouts(profile, { probeTimeoutMs: 123, runTimeoutMs: null })).toEqual({
+            ...original,
+            probeTimeoutMs: 123,
+            runTimeoutMs: null,
+        });
+        expect(timeoutsForProfile(profile)).toEqual(original);
+    });
+
+    it('does not copy unknown override fields into resolved timeouts', (): void => {
+        const overrides = { probeTimeoutMs: 10, extra: 'private-value' };
+        expect(resolveTimeouts('default', overrides)).toEqual({ ...DEFAULT_TIMEOUTS, probeTimeoutMs: 10 });
+    });
+
+    it.each(profiles)('never changes safety limits for %s', (profile): void => {
+        resolveTimeouts(profile, { runTimeoutMs: null });
+        expect(SAFETY_LIMITS).toEqual({
+            maxTargets: 16,
+            maxAddressesPerHost: 8,
+            maxParallelHostChains: 4,
+            maxWireReplyBytes: 1_048_576,
+        });
+    });
+
+    it.each(fields)('rejects invalid overrides naming %s', (field): void => {
+        for (const value of [0, -1, NaN, Infinity, '100', undefined, false, MAX_TIMEOUT_MS + 1, 3_000_000_000]) {
+            const overrides = { [field]: value } as Partial<DiagnosticsTimeouts>;
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(
+                DiagnosticsConfigurationError,
+            );
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(field);
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(String(MAX_TIMEOUT_MS));
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(
+                'null to disable this diagnostic timeout',
+            );
+        }
+        expect(resolveTimeouts('default', { [field]: null })[field]).toBeNull();
+        expect(resolveTimeouts('default', { [field]: 0.5 })[field]).toBe(0.5);
+    });
+
+    it.each(profiles)('accepts the timer limit, fractions and null for every field under %s', (profile): void => {
+        for (const field of fields) {
+            for (const value of [MAX_TIMEOUT_MS, 0.5, null]) {
+                expect(resolveTimeouts(profile, { [field]: value })[field]).toBe(value);
+            }
+        }
+    });
+});

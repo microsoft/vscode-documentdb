@@ -95,6 +95,36 @@ describe('ensureKubernetesPortForward', () => {
                 servicePort: 27017,
                 localPort: 27017,
             }),
+            { interactive: true },
         );
+    });
+
+    it('passes the diagnostics intent to the tunnel manager as non-interactive', async () => {
+        mockGetSource.mockResolvedValue({ id: 'src-uuid-1', label: 'team.yaml', kind: 'file' });
+        mockLoadConfiguredKubeConfig.mockResolvedValue({});
+        mockCreateCoreApi.mockResolvedValue({});
+        mockStartTunnel.mockResolvedValue({ outcome: 'reused' });
+
+        await ensureKubernetesPortForward(makeMetadata(), {
+            interactive: false,
+            signal: new AbortController().signal,
+        });
+
+        expect(mockStartTunnel).toHaveBeenCalledWith(expect.anything(), { interactive: false });
+    });
+
+    it('starts no tunnel when the caller gave up while the kubeconfig loaded', async () => {
+        const controller = new AbortController();
+        mockGetSource.mockResolvedValue({ id: 'src-uuid-1', label: 'team.yaml', kind: 'file' });
+        mockLoadConfiguredKubeConfig.mockImplementation(async () => {
+            controller.abort();
+            return {};
+        });
+        mockCreateCoreApi.mockResolvedValue({});
+
+        await expect(
+            ensureKubernetesPortForward(makeMetadata(), { interactive: false, signal: controller.signal }),
+        ).rejects.toThrow();
+        expect(mockStartTunnel).not.toHaveBeenCalled();
     });
 });

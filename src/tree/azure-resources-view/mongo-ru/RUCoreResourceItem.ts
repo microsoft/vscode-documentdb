@@ -22,6 +22,11 @@ import { createCosmosDBManagementClient } from '../../../utils/azureClients';
 import { nonNullValue } from '../../../utils/nonNull';
 import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
+import {
+    ConnectionEndpointUnavailableError,
+    type DiagnosticCredentialRead,
+} from '../../documentdb/diagnosticCredentialRead';
+import { readCredentialsForDiagnostics } from '../../documentdb/readCredentialsForDiagnostics';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 
 export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
@@ -44,19 +49,32 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.AzureResourcesView;
-            context.telemetry.properties.branch = 'ru';
+        return callWithTelemetryAndErrorHandling('getCredentials', (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            const credentials = await this.getRUClusterCredentialsFromAzure(
-                context,
-                this.subscription,
-                this.cluster.resourceGroup!,
-                this.cluster.name,
-            );
+    /** Same Azure Resource Manager read, without error UI; typed failures reach connection diagnostics. */
+    public override getCredentialsForDiagnostics(
+        read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return readCredentialsForDiagnostics('getCredentials', 'azure', read, (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            return credentials;
-        });
+    private async readCredentials(context: IActionContext): Promise<EphemeralClusterCredentials> {
+        context.telemetry.properties.view = Views.AzureResourcesView;
+        context.telemetry.properties.branch = 'ru';
+
+        const credentials = await this.getRUClusterCredentialsFromAzure(
+            context,
+            this.subscription,
+            this.cluster.resourceGroup!,
+            this.cluster.name,
+        );
+
+        return credentials;
     }
 
     /**
@@ -188,7 +206,9 @@ export class RUResourceItem extends ClusterItemBase<AzureClusterModel> {
         // Validate connection string's presence
         if (!primaryConnectionString) {
             context.telemetry.properties.error = 'missing-connection-string';
-            throw new Error(
+            throw new ConnectionEndpointUnavailableError(
+                'azure',
+                'notProvided',
                 l10n.t('Authentication data (primary connection string) is missing for "{cluster}".', {
                     cluster: clusterName,
                 }),

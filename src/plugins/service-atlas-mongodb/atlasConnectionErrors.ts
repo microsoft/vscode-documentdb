@@ -57,7 +57,7 @@ export function describeAtlasTlsHandshakeRejection(): string {
 
 /**
  * Single-paragraph form of {@link describeAtlasTlsHandshakeRejection}, for the error-translation
- * provider: a diagnosis becomes the heading of a modal, where a bulleted block renders as several
+ * provider: an explanation becomes the heading of a modal, where a bulleted block renders as several
  * lines of bold text.
  */
 export function summarizeAtlasTlsHandshakeRejection(): string {

@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { type CachedClusterCredentials } from '../CredentialCache';
+import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import { NoAuthHandler } from './NoAuthHandler';
 
@@ -147,4 +148,31 @@ describe('NoAuthHandler', () => {
 
         expect(options).toEqual({});
     });
+
+    it.each([
+        { connectionString: 'mongodb://anon-host:27017/?ssl=false', emulatorConfiguration: undefined },
+        {
+            connectionString: 'mongodb://127.0.0.1:10260/?tls=true',
+            emulatorConfiguration: { isEmulator: false, disableEmulatorSecurity: true },
+        },
+        {
+            connectionString: 'mongodb://db.example.com:27017/',
+            emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
+        },
+    ])(
+        'returns the connection string and network options of buildAuthConnectionTarget ($connectionString)',
+        async ({ connectionString, emulatorConfiguration }) => {
+            const credentials = buildCredentials({
+                connectionString,
+                connectionStringWithPassword: connectionString,
+                emulatorConfiguration,
+            });
+            const target = buildAuthConnectionTarget(AuthMethodId.NoAuth, credentials);
+
+            const result = await new NoAuthHandler(credentials).configureAuth();
+
+            expect(result.connectionString).toBe(target.connectionString);
+            expect(result.options).toMatchObject(target.networkOptions);
+        },
+    );
 });

@@ -22,6 +22,11 @@ import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/a
 import { DocumentDBExperience } from '../../../../DocumentDBExperiences';
 import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import {
+    ConnectionEndpointUnavailableError,
+    type DiagnosticCredentialRead,
+} from '../../../../tree/documentdb/diagnosticCredentialRead';
+import { readCredentialsForDiagnostics } from '../../../../tree/documentdb/readCredentialsForDiagnostics';
 import { type BaseClusterModel, type TreeCluster } from '../../../../tree/models/BaseClusterModel';
 import { getResourcesPath } from '../../../../utils/icons';
 import { DISCOVERY_PROVIDER_ID } from '../../config';
@@ -36,13 +41,13 @@ import {
     type KubeServiceEndpoint,
     type KubeServiceInfo,
 } from '../../kubernetesClient';
-import { rememberKubernetesCluster } from '../../KubernetesDiagnosticsProvider';
+import { rememberKubernetesCluster } from '../../KubernetesErrorExplainer';
 import {
     KUBERNETES_PORT_FORWARD_METADATA_PROPERTY,
     createKubernetesPortForwardMetadata,
 } from '../../portForwardMetadata';
 import { PortForwardTunnelManager } from '../../portForwardTunnel';
-import { promptForLocalPort } from '../../promptForLocalPort';
+import { promptForLocalPort, suggestLocalPort } from '../../promptForLocalPort';
 import { getSource } from '../../sources/sourceStore';
 
 /**
@@ -70,6 +75,8 @@ interface ResolvedConnectionDetails {
 
 interface ResolveConnectionOptions {
     readonly startPortForward: boolean;
+    /** Diagnostics intent: no UI, no tunnel, typed failures; `prepare` starts or reuses the tunnel. */
+    readonly diagnostic?: DiagnosticCredentialRead;
 }
 
 interface ReachabilityInfo {
@@ -220,6 +227,29 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
     }
 
     /**
+     * Returns credentials for connection diagnostics (design §4.3).
+     *
+     * Reads the same Kubernetes data as {@link getCredentials}, but shows no warning or prompt and starts
+     * no tunnel. For a ClusterIP service it returns the localhost endpoint plus port-forward metadata:
+     * the local port of a tunnel already running for this service, otherwise the port the configured
+     * local-port strategy suggests. The connection diagnostics `prepare` check then starts or reuses the
+     * shared tunnel under its own timeout.
+     */
+    public override async getCredentialsForDiagnostics(
+        read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return readCredentialsForDiagnostics(
+            'getCredentials.diagnostic',
+            'kubernetes',
+            read,
+            async (context: IActionContext) => {
+                this.populateTelemetry(context);
+                return await this.resolveClusterCredentials(context, { startPortForward: false, diagnostic: read });
+            },
+        );
+    }
+
+    /**
      * Authenticates and connects so expanding the discovery node shows databases and collections.
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
@@ -364,9 +394,11 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         context: IActionContext,
         options: ResolveConnectionOptions,
     ): Promise<EphemeralClusterCredentials | undefined> {
+        const signal = options.diagnostic?.signal;
         const kubeConfig = await loadConfiguredKubeConfig(this.sourceId);
         const coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
         const endpoint = await resolveServiceEndpoint(this.serviceInfo, coreApi);
+        signal?.throwIfAborted();
         const resolvedConnectionDetails = await this.resolveConnectionDetails(
             context,
             endpoint,
@@ -378,6 +410,8 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         if (!resolvedConnectionDetails) {
             return undefined;
         }
+
+        signal?.throwIfAborted();
 
         // DKO services resolve credentials via DocumentDB CR secrets.
         let resolvedUsername: string | undefined;
@@ -456,7 +490,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         );
 
         // This view reaches ensureKubernetesPortForward directly rather than through
-        // ConnectionReachabilityService, so the mapping the diagnostics provider needs is recorded here.
+        // ConnectionReachabilityService, so the mapping the error explainer needs is recorded here.
         rememberKubernetesCluster(this.cluster.clusterId, metadata);
 
         await ensureKubernetesPortForward(metadata);
@@ -472,15 +506,23 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         switch (endpoint.kind) {
             case 'ready':
                 if (endpoint.warning) {
-                    ext.outputChannel.appendLine(endpoint.warning);
-                    void vscode.window.showWarningMessage(endpoint.warning);
+                    // Connection diagnostics probe the address itself, so a diagnostic read stays silent.
+                    if (!options.diagnostic) {
+                        ext.outputChannel.appendLine(endpoint.warning);
+                        void vscode.window.showWarningMessage(endpoint.warning);
+                    }
                     context.telemetry.properties.endpointWarning = 'internalIpMayBeUnreachable';
                 }
                 return { connectionString: endpoint.connectionString };
             case 'needsPortForward': {
-                const localPort = options.startPortForward
-                    ? await promptForLocalPort(this.serviceInfo, context)
-                    : endpoint.suggestedLocalPort;
+                let localPort: number | undefined;
+                if (options.diagnostic) {
+                    localPort = await this.selectDiagnosticLocalPort(context);
+                } else {
+                    localPort = options.startPortForward
+                        ? await promptForLocalPort(this.serviceInfo, context)
+                        : endpoint.suggestedLocalPort;
+                }
                 if (localPort === undefined) {
                     context.telemetry.properties.connectionResult = 'cancelled';
                     return undefined;
@@ -515,7 +557,9 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
                         );
                     }
                 } else {
-                    context.telemetry.properties.portForwardOutcome = 'notStartedForCopy';
+                    context.telemetry.properties.portForwardOutcome = options.diagnostic
+                        ? 'deferredToPrepare'
+                        : 'notStartedForCopy';
                 }
 
                 // Capture the source label so future reconnects can produce a friendlier
@@ -538,6 +582,11 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
             }
             case 'pending':
             case 'unreachable':
+                if (options.diagnostic) {
+                    context.telemetry.properties.connectionResult = endpoint.kind;
+                    context.telemetry.properties.unreachableReason = this.serviceInfo.type;
+                    throw new ConnectionEndpointUnavailableError('kubernetes', endpoint.kind);
+                }
                 void vscode.window.showWarningMessage(
                     l10n.t('Cannot connect to "{service}"', { service: this.serviceInfo.displayName }),
                     { modal: true, detail: endpoint.reason },
@@ -546,6 +595,25 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
                 context.telemetry.properties.unreachableReason = this.serviceInfo.type;
                 return undefined;
         }
+    }
+
+    /**
+     * The local port for a diagnostics run, chosen without asking: the port of a tunnel already
+     * forwarding this service, otherwise the configured strategy's suggestion. Never an input box.
+     */
+    private async selectDiagnosticLocalPort(context: IActionContext): Promise<number> {
+        const running = PortForwardTunnelManager.getInstance()
+            .listTunnels()
+            .find(
+                (tunnel) =>
+                    tunnel.sourceId === this.sourceId &&
+                    tunnel.contextName === this.contextInfo.name &&
+                    tunnel.namespace === this.serviceInfo.namespace &&
+                    tunnel.serviceName === this.serviceInfo.serviceName &&
+                    tunnel.remotePort === this.serviceInfo.port,
+            );
+        context.telemetry.properties.portSelectionResult = running ? 'existingTunnel' : 'suggested';
+        return running?.localPort ?? (await suggestLocalPort(this.serviceInfo.port, context));
     }
 
     private buildDescription(): string {

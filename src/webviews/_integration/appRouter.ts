@@ -28,7 +28,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { getSurveyService } from '../../services/survey/SurveyService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { isFeedbackPermitted, showFeedbackDisabledMessage } from '../../utils/feedbackPermission';
@@ -37,8 +37,10 @@ import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCred
 import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
+import { connectionDiagnosticsRouter } from '../documentdb/connectionDiagnostics/connectionDiagnosticsRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
+import { confirmInput, showModalConfirmation, type ConfirmResult } from './commonDialogs';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
@@ -99,7 +101,8 @@ const commonRouter = router({
                 (viewName !== 'collectionView' &&
                     viewName !== 'clusterDashboard' &&
                     viewName !== 'atlasCredentials' &&
-                    viewName !== 'localQuickStart') ||
+                    viewName !== 'localQuickStart' &&
+                    viewName !== 'connectionDiagnostics') ||
                 (viewName === 'collectionView') !== (input.collectionTab !== undefined)
             ) {
                 throw new Error('Invalid feedback source');
@@ -187,8 +190,8 @@ const commonRouter = router({
             return null;
         }
 
-        const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error: input.message });
-        return diagnosis?.message ?? null;
+        const explanation = await ErrorExplanationService.explain({ clusterId, error: input.message });
+        return explanation?.message ?? null;
     }),
     displayErrorMessage: publicProcedure
         .input(
@@ -221,6 +224,15 @@ const commonRouter = router({
             );
             return { action };
         }),
+    /**
+     * A modal "continue or cancel" dialog: `message`, an optional `detail`, one `confirmLabel` button
+     * and VS Code's own Cancel. Returns `{ confirmed }`; Cancel, Escape and closing the dialog all
+     * return `false`. The caller localizes every string. Not for destructive actions, which follow
+     * the confirmation-style setting through `getConfirmationAsInSettings`.
+     */
+    confirm: publicProcedure
+        .input(confirmInput)
+        .mutation(({ input }): Promise<ConfirmResult> => showModalConfirmation(input)),
     /**
      * Unconditional information toast. Use for messages the user must always
      * see; completion notices belong in `displayOperationSummary` instead.
@@ -284,6 +296,7 @@ export const appRouter = router({
         indexView: indexViewRouter,
     },
     localQuickStart: localQuickStartRouter,
+    connectionDiagnostics: connectionDiagnosticsRouter,
 });
 
 // Export type router type signature, this is used by the client.
