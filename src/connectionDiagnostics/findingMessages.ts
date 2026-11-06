@@ -57,7 +57,7 @@ function missingCredentialsMessage(data: FindingData): FindingMessage {
     switch (stringField(data, 'missing')) {
         case 'method':
             return {
-                title: vscode.l10n.t('Choose an authentication method'),
+                title: vscode.l10n.t('No authentication method chosen'),
                 explanation: vscode.l10n.t('No authentication method has been chosen. Network checks can still run.'),
                 nextStep: vscode.l10n.t(
                     'Connect to the cluster and choose an authentication method, then run the diagnosis again.',
@@ -527,7 +527,7 @@ export const findingMessages: {
     'cs.authSourceUnusual': (data): FindingMessage => {
         const authSource = stringField(data, 'authSource');
         return {
-            title: vscode.l10n.t('Check the authentication database'),
+            title: vscode.l10n.t('Uncommon authentication database'),
             explanation:
                 authSource === undefined
                     ? vscode.l10n.t(
@@ -1042,7 +1042,7 @@ export const findingMessages: {
     }),
     'auth.entraTokenFailed': (data): FindingMessage => tokenFailureMessage(data),
     'auth.entraAudienceMismatch': (): FindingMessage => ({
-        title: vscode.l10n.t('Sign-in token targets another resource'),
+        title: vscode.l10n.t('Sign-in token may target another resource'),
         explanation: vscode.l10n.t(
             'The token audience differs from the requested sign-in resource. This is an unverified hint from the token claims.',
         ),
@@ -1051,7 +1051,7 @@ export const findingMessages: {
         ),
     }),
     'auth.entraTenantMismatch': (): FindingMessage => ({
-        title: vscode.l10n.t('Sign-in token belongs to another tenant'),
+        title: vscode.l10n.t('Sign-in token may belong to another tenant'),
         explanation: vscode.l10n.t(
             'The token tenant differs from the tenant configured for the connection. This is an unverified hint from the token claims.',
         ),
