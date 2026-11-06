@@ -13,7 +13,7 @@ import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
 import { ClustersClient } from './documentdb/ClustersClient';
 import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
-import { buildConnectionsViewTreePath, revealInConnectionsView } from './tree/connections-view/connectionsViewHelpers';
+import { buildConnectionsViewTargetPath, revealInConnectionsView } from './tree/connections-view/connectionsViewHelpers';
 import { type DiscoveryRevealResult } from './tree/discovery-view/discoveryViewHelpers';
 import { type EmulatorConfiguration } from './utils/emulatorConfiguration';
 import { globalUriHandler } from './vscodeUriHandler';
@@ -69,7 +69,7 @@ vi.mock('./services/connectionStorageService', () => ({
 }));
 vi.mock('./services/legacyEmulatorMigration', () => ({ isLegacyEmulatorMigrationComplete: () => true }));
 vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
-    buildConnectionsViewTreePath: vi.fn(),
+    buildConnectionsViewTargetPath: vi.fn(),
     revealInConnectionsView: vi.fn(),
     waitForConnectionsViewReady: vi.fn(),
     withConnectionsViewProgress: vi.fn(async (callback: () => Promise<unknown>): Promise<unknown> => callback()),
@@ -85,7 +85,11 @@ vi.mock('./extensionVariables', () => ({
             appendLine: vi.fn(),
         },
         settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' },
-        connectionsBranchDataProvider: { refresh: vi.fn(), findNodeById: vi.fn() },
+        connectionsBranchDataProvider: {
+            refresh: vi.fn(),
+            findNodeById: vi.fn(),
+            hasNodeErrorState: vi.fn(),
+        },
     },
 }));
 
@@ -113,6 +117,19 @@ beforeEach(() => {
     vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(undefined);
     vi.mocked(ClustersClient.exists).mockReturnValue(true);
     vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(undefined);
+    vi.mocked(ext.connectionsBranchDataProvider.hasNodeErrorState).mockReturnValue(false);
+    vi.mocked(buildConnectionsViewTargetPath).mockImplementation(
+        async (storageId, isEmulator, database, collection): Promise<string> => {
+            let path = `connectionsView/${isEmulator ? 'localEmulators/' : ''}${storageId}`;
+            if (database) {
+                path += `/${database}`;
+                if (collection) {
+                    path += `/${collection}`;
+                }
+            }
+            return path;
+        },
+    );
     vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
     vi.spyOn(vscode.window, 'withProgress').mockImplementation(
         async (_options, task): Promise<unknown> =>
@@ -670,7 +687,7 @@ describe('globalUriHandler — saved connection open target', () => {
                 getTreeItem: (): vscode.TreeItem => ({ label: 'Production' }),
             };
             const treePath = database ? 'connectionsView/existing-id/db' : 'connectionsView/existing-id';
-            vi.mocked(buildConnectionsViewTreePath).mockReturnValue(treePath);
+            vi.mocked(buildConnectionsViewTargetPath).mockResolvedValue(treePath);
             vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
 
             const error = await runHandler(
@@ -698,7 +715,9 @@ describe('globalUriHandler — saved connection open target', () => {
                 database,
                 undefined,
             );
-            expect(buildConnectionsViewTreePath).toHaveBeenCalledExactlyOnceWith('existing-id', false, database);
+            expect(buildConnectionsViewTargetPath).toHaveBeenCalledTimes(2);
+            expect(buildConnectionsViewTargetPath).toHaveBeenNthCalledWith(1, 'existing-id', false);
+            expect(buildConnectionsViewTargetPath).toHaveBeenNthCalledWith(2, 'existing-id', false, database);
             expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(treePath, false);
             expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith(
                 'vscode-documentdb.command.shell.open',
@@ -729,7 +748,7 @@ describe('globalUriHandler — saved connection open target', () => {
             expect(vi.mocked(revealInConnectionsView).mock.invocationCallOrder[0]).toBeLessThan(
                 vi.mocked(ClustersClient.exists).mock.invocationCallOrder[0],
             );
-            expect(buildConnectionsViewTreePath).not.toHaveBeenCalled();
+            expect(buildConnectionsViewTargetPath).toHaveBeenCalledExactlyOnceWith('existing-id', false);
             expect(ext.connectionsBranchDataProvider.findNodeById).not.toHaveBeenCalled();
             expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('connectionsView.focus');
             expect(ext.outputChannel.trace).toHaveBeenCalledWith(
@@ -747,7 +766,7 @@ describe('globalUriHandler — saved connection open target', () => {
                 id: 'connectionsView/existing-id',
                 getTreeItem: (): vscode.TreeItem => ({ label: 'Production' }),
             };
-            vi.mocked(buildConnectionsViewTreePath).mockReturnValue(node.id);
+            vi.mocked(buildConnectionsViewTargetPath).mockResolvedValue(node.id);
             vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
 
             const error = await runHandler(
@@ -775,8 +794,141 @@ describe('globalUriHandler — saved connection open target', () => {
         },
     );
 
+    it.each([
+        { query: 'open=dashboard', database: undefined, collection: undefined },
+        { query: 'open=shell&database=db', database: 'db', collection: undefined },
+        { query: 'database=db&collection=items', database: 'db', collection: 'items' },
+    ])('looks up a nested connection target for $query', async ({ query, database, collection }): Promise<void> => {
+        const clusterPath = 'connectionsView/outer-folder/inner-folder/existing-id';
+        vi.mocked(buildConnectionsViewTargetPath).mockImplementation(
+            async (_storageId, _isEmulator, databaseName, collectionName): Promise<string> =>
+                [clusterPath, databaseName, collectionName].filter(Boolean).join('/'),
+        );
+        const treePath = [clusterPath, database, collection].filter(Boolean).join('/');
+        const node = { id: treePath, getTreeItem: (): vscode.TreeItem => ({ label: 'Target' }) };
+        vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
+
+        const error = await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}&${query}`);
+
+        expect(error).toBeUndefined();
+        expect(revealInConnectionsView).toHaveBeenCalledExactlyOnceWith(
+            expect.anything(),
+            'existing-id',
+            false,
+            database,
+            collection,
+        );
+        expect(ext.connectionsBranchDataProvider.hasNodeErrorState).toHaveBeenCalledExactlyOnceWith(clusterPath);
+        expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(treePath, false);
+        expect(ClustersClient.exists).toHaveBeenCalledExactlyOnceWith('existing-id');
+        if (collection) {
+            expect(openCollectionViewInternal).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.objectContaining({ clusterId: 'existing-id', databaseName: database, collectionName: collection }),
+            );
+        } else {
+            expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+                query.startsWith('open=dashboard')
+                    ? 'vscode-documentdb.command.clusterDashboard.open'
+                    : 'vscode-documentdb.command.shell.open',
+                node,
+                ...(query.startsWith('open=dashboard') ? [null, { activationSource: 'deepLink' }] : []),
+            );
+        }
+    });
+
+    it.each(['open=shell', 'open=dashboard', 'database=db&collection=items', ''])(
+        'stops quietly after a node-reported cluster expansion failure for %s',
+        async (query): Promise<void> => {
+            vi.mocked(ext.connectionsBranchDataProvider.hasNodeErrorState).mockReturnValue(true);
+
+            const error = await runHandler(
+                '/connect',
+                `connectionString=${encodeURIComponent(connectionString)}&${query}`,
+            );
+
+            expect(error).toBeUndefined();
+            expect(ext.connectionsBranchDataProvider.hasNodeErrorState).toHaveBeenCalledExactlyOnceWith(
+                'connectionsView/existing-id',
+            );
+            expect(vi.mocked(revealInConnectionsView).mock.invocationCallOrder[0]).toBeLessThan(
+                vi.mocked(ext.connectionsBranchDataProvider.hasNodeErrorState).mock.invocationCallOrder[0],
+            );
+            expect(ClustersClient.exists).not.toHaveBeenCalled();
+            expect(ext.connectionsBranchDataProvider.findNodeById).not.toHaveBeenCalled();
+            expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('connectionsView.focus');
+            expect(openCollectionViewInternal).not.toHaveBeenCalled();
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+            expect(ext.outputChannel.trace).toHaveBeenCalledWith(
+                '[DeepLink] Cluster expansion failed; the node already explained why',
+            );
+            expect(lastTelemetry.openTargetResult).toBe('skippedClusterError');
+        },
+    );
+
+    it('skips Collection View quietly when the revealed connection has no client', async (): Promise<void> => {
+        vi.mocked(ClustersClient.exists).mockReturnValue(false);
+
+        const error = await runHandler(
+            '/connect',
+            `connectionString=${encodeURIComponent(connectionString)}&database=db&collection=items`,
+        );
+
+        expect(error).toBeUndefined();
+        expect(ClustersClient.exists).toHaveBeenCalledExactlyOnceWith('existing-id');
+        expect(vi.mocked(revealInConnectionsView).mock.invocationCallOrder[0]).toBeLessThan(
+            vi.mocked(ClustersClient.exists).mock.invocationCallOrder[0],
+        );
+        expect(ext.connectionsBranchDataProvider.findNodeById).not.toHaveBeenCalled();
+        expect(openCollectionViewInternal).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+        expect(lastTelemetry.openTargetResult).toBe('skippedNotConnected');
+    });
+
+    it.each(['shell', 'dashboard'])(
+        'names the missing database for an open=%s request',
+        async (target): Promise<void> => {
+            const error = await runHandler(
+                '/connect',
+                `connectionString=${encodeURIComponent(connectionString)}&database=db&open=${target}`,
+            );
+
+            expect(error?.message).toBe(
+                'Could not find database "db" on Production. Check the name and your access, then open the link again.',
+            );
+            expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(
+                'connectionsView/existing-id/db',
+                false,
+            );
+            expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('connectionsView.focus');
+        },
+    );
+
+    it('names the missing collection when its database exists', async (): Promise<void> => {
+        vi.mocked(ext.connectionsBranchDataProvider.findNodeById)
+            .mockResolvedValueOnce(undefined)
+            .mockResolvedValueOnce({
+                id: 'connectionsView/existing-id/db',
+                getTreeItem: (): vscode.TreeItem => ({ label: 'db' }),
+            });
+
+        const error = await runHandler(
+            '/connect',
+            `connectionString=${encodeURIComponent(connectionString)}&database=db&collection=items`,
+        );
+
+        expect(error?.message).toBe(
+            'Could not find collection "items" in database "db". Check the name and your access, then open the link again.',
+        );
+        expect(vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mock.calls).toEqual([
+            ['connectionsView/existing-id/db/items', false],
+            ['connectionsView/existing-id/db', false],
+        ]);
+        expect(openCollectionViewInternal).not.toHaveBeenCalled();
+    });
+
     it('aborts a dashboard request when its node cannot be found', async (): Promise<void> => {
-        vi.mocked(buildConnectionsViewTreePath).mockReturnValue('connectionsView/existing-id');
+        vi.mocked(buildConnectionsViewTargetPath).mockResolvedValue('connectionsView/existing-id');
 
         const error = await runHandler(
             '/connect',
@@ -784,7 +936,7 @@ describe('globalUriHandler — saved connection open target', () => {
         );
 
         expect(error?.message).toBe(
-            'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+            'Could not find Production in the Connections view.',
         );
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
             expect.any(String),
@@ -961,7 +1113,7 @@ describe('globalUriHandler — connection confirmation', () => {
             (vscode.window.showInformationMessage as Mock).mockResolvedValue(
                 saved ? 'Open' : 'Add and open',
             );
-            vi.mocked(buildConnectionsViewTreePath).mockReturnValue('collection-path');
+            vi.mocked(buildConnectionsViewTargetPath).mockResolvedValue('collection-path');
             vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue({
                 id: 'collection-node',
                 getTreeItem: (): vscode.TreeItem => ({ label: 'orders' }),
@@ -983,7 +1135,9 @@ describe('globalUriHandler — connection confirmation', () => {
                 );
             }
             const storageId = saved ? 'existing-id' : (mockSaveConnection.mock.calls[0][1] as { id: string }).id;
-            expect(buildConnectionsViewTreePath).toHaveBeenCalledExactlyOnceWith(storageId, false, 'sales', 'orders');
+            expect(buildConnectionsViewTargetPath).toHaveBeenCalledTimes(2);
+            expect(buildConnectionsViewTargetPath).toHaveBeenNthCalledWith(1, storageId, false);
+            expect(buildConnectionsViewTargetPath).toHaveBeenNthCalledWith(2, storageId, false, 'sales', 'orders');
             expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(
                 'collection-path',
                 false,
@@ -1013,7 +1167,7 @@ describe('globalUriHandler — connection confirmation', () => {
         async ({ target, surface, command }): Promise<void> => {
             (vscode.window.showInformationMessage as Mock).mockResolvedValue('Add and open');
             const node = { id: 'connection-node', getTreeItem: (): vscode.TreeItem => ({ label: 'host' }) };
-            vi.mocked(buildConnectionsViewTreePath).mockReturnValue('connection-path');
+            vi.mocked(buildConnectionsViewTargetPath).mockResolvedValue('connection-path');
             vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
 
             const error = await runHandler('/connect', `connectionString=mongodb%3A%2F%2Fhost&open=${target}`);
@@ -1053,26 +1207,24 @@ describe('globalUriHandler — connection confirmation', () => {
         expect(openCollectionViewInternal).not.toHaveBeenCalled();
     });
 
-    it('aborts when the requested collection cannot be found', async (): Promise<void> => {
+    it('reports a missing database when its requested collection cannot be found', async (): Promise<void> => {
         const connectionString = 'mongodb://alpha.example:27017/sales';
         mockGetAllConnections.mockResolvedValue([
             { id: 'existing-id', name: 'Production', secrets: { connectionString } },
         ]);
         (vscode.window.showInformationMessage as Mock).mockResolvedValue('Open');
-        vi.mocked(buildConnectionsViewTreePath).mockReturnValue('collection-path');
-
         const error = await runHandler(
             '/connect',
             `connectionString=${encodeURIComponent(connectionString)}&collection=orders`,
         );
 
         expect(error?.message).toBe(
-            'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+            'Could not find database "sales" on Production. Check the name and your access, then open the link again.',
         );
-        expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(
-            'collection-path',
-            false,
-        );
+        expect(vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mock.calls).toEqual([
+            ['connectionsView/existing-id/sales/orders', false],
+            ['connectionsView/existing-id/sales', false],
+        ]);
         expect(openCollectionViewInternal).not.toHaveBeenCalled();
     });
 });

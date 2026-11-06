@@ -25,7 +25,7 @@ import {
 import { isLegacyEmulatorMigrationComplete } from './services/legacyEmulatorMigration';
 import { settingsKeys } from './settingsKeys';
 import {
-    buildConnectionsViewTreePath,
+    buildConnectionsViewTargetPath,
     revealInConnectionsView,
     waitForConnectionsViewReady,
     withConnectionsViewProgress,
@@ -649,14 +649,6 @@ async function handleConnectionStringRequest(
     // For future code maintainers:
     // This is a little trick: the first withProgress shows the notification with a user-friendly message,
     // while the second withProgress (via withConnectionsViewProgress) is used to show the 'loading animation' in the Connections View.
-    //
-    // Known limitation (pre-existing, follow-up): `revealInConnectionsView` /
-    // `buildConnectionsViewTreePath` build a FLAT path (`connectionsView/<id>`), which is
-    // correct for a root-level connection but not for one nested in a folder. A deep-link that
-    // de-dups onto a connection inside a folder (e.g. a connection migrated into "Local
-    // Connections (Legacy)") therefore may not auto-reveal. The connection is still found and
-    // navigable manually. A folder-aware reveal (via `buildFullTreePath(storageId, zone)` plus
-    // recursive `findNodeById`) is tracked as a follow-up.
     ext.outputChannel.trace('[DeepLink] Revealing in the Connections View');
     await vscode.window.withProgress(
         {
@@ -677,6 +669,14 @@ async function handleConnectionStringRequest(
         },
     );
 
+    const clusterPath = await buildConnectionsViewTargetPath(storageId, isInEmulatorZone);
+    if (ext.connectionsBranchDataProvider.hasNodeErrorState(clusterPath)) {
+        ext.outputChannel.trace('[DeepLink] Cluster expansion failed; the node already explained why');
+        context.telemetry.properties.openTargetResult = 'skippedClusterError';
+        return;
+    }
+    const connectionName = existingDuplicateConnection?.name ?? newConnectionLabel;
+
     if (params.open) {
         context.telemetry.properties.failureStage = 'openTarget';
         if (!ClustersClient.exists(storageId)) {
@@ -684,30 +684,54 @@ async function handleConnectionStringRequest(
             context.telemetry.properties.openTargetResult = 'skippedNotConnected';
             return;
         }
-        const treePath = buildConnectionsViewTreePath(storageId, isInEmulatorZone, selectedDatabase);
+        const treePath = await buildConnectionsViewTargetPath(storageId, isInEmulatorZone, selectedDatabase);
         const node = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
         if (!node) {
-            throw new Error(
-                l10n.t(
-                    'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
-                ),
-            );
+            if (selectedDatabase) {
+                throw new Error(
+                    l10n.t(
+                        'Could not find database "{0}" on {1}. Check the name and your access, then open the link again.',
+                        selectedDatabase,
+                        connectionName,
+                    ),
+                );
+            }
+            throw new Error(l10n.t('Could not find {0} in the Connections view.', connectionName));
         }
         await openTargetOnNode(params.open, node);
     }
 
     if (selectedDatabase && params.collection) {
-        // Verify that the connection, database, and collection exist in the tree
-        // This is an easy way to verify that the connection is valid
-        // and that the database and collection exist.
-        const treePath = buildConnectionsViewTreePath(storageId, isInEmulatorZone, selectedDatabase, params.collection);
+        if (!ClustersClient.exists(storageId)) {
+            ext.outputChannel.trace('[DeepLink] Cluster not connected; not opening the target');
+            context.telemetry.properties.openTargetResult = 'skippedNotConnected';
+            return;
+        }
+        const treePath = await buildConnectionsViewTargetPath(
+            storageId,
+            isInEmulatorZone,
+            selectedDatabase,
+            params.collection,
+        );
         const collectionNode = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
 
         if (!collectionNode) {
-            // Connection verification failed
+            const databasePath = await buildConnectionsViewTargetPath(storageId, isInEmulatorZone, selectedDatabase);
+            const databaseNode = await ext.connectionsBranchDataProvider.findNodeById(databasePath, false);
+            if (!databaseNode) {
+                throw new Error(
+                    l10n.t(
+                        'Could not find database "{0}" on {1}. Check the name and your access, then open the link again.',
+                        selectedDatabase,
+                        connectionName,
+                    ),
+                );
+            }
             throw new Error(
                 l10n.t(
-                    'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+                    'Could not find collection "{0}" in database "{1}". Check the name and your access, then open the link again.',
+                    params.collection,
+                    selectedDatabase,
                 ),
             );
         }
