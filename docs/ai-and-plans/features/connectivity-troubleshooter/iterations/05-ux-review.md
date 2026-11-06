@@ -240,7 +240,7 @@ Government.” Preserve the actual sign-in state as unknown.
 | **Mine: “Sign-in set to Azure” in the panel and connect error** | Names what the setting controls (the sign-in cloud). Pairs with “Cluster in …”. One term across modal, panel and the finding's own “selected for sign-in” | Touches one more string in a shared auth file (`documentdbTokenResource.ts`), with its tests |
 | **Omit the second segment, keep only “Cluster in …”** | Shortest; nothing can be wrong | The user then has to open Details or read the finding to learn which cloud is selected; the mismatch is less visible at a glance |
 
-> **Done (2026-11-06), commit `b65d52d5`:** the collapsed evidence reads “Sign-in set to {cloud}”, and the connect-path error says “… but VS Code sign-in is set to {cloud}”; the user manual quotes were updated. Leader decision (95%): same wording on both surfaces, per the verification note. The custom-cloud error “VS Code is signed in to a custom cloud …” was not in scope and is unchanged. Tests: existing wording tests updated. Model: terra.
+> **Done (2026-11-06), commits `b65d52d5`, `77acde3c`:** the collapsed evidence reads “Sign-in set to {cloud}”, and the connect-path error says “… but VS Code sign-in is set to {cloud}”; the user manual quotes were updated. Leader decision (95%): same wording on both surfaces, per the verification note. The custom-cloud error “VS Code is signed in to a custom cloud …” was not in scope and is unchanged. Tests: existing wording tests updated; `77acde3c` fixes a sovereign-auth integration assertion that Case 1 found. Model: terra.
 
 ### UX-2. Managed identity receives interactive-cloud advice ⚠️
 
