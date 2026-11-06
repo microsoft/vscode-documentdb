@@ -713,6 +713,10 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                 };
             }
 
+            if (strategy === ConflictResolutionStrategy.Abort && outcome.result.errors?.length) {
+                return outcome.result;
+            }
+
             if (!outcome.errorType && !outcome.remaining?.length) {
                 // Success - partial progress already reported via callback
                 return outcome.result;

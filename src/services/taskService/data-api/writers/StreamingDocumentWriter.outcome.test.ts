@@ -14,7 +14,7 @@ import {
     type StrategyBatchResult,
     type StreamingWriterSettings,
 } from '../types';
-import { StreamingDocumentWriter } from './StreamingDocumentWriter';
+import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
 
 class OutcomeStreamingWriter extends StreamingDocumentWriter {
     constructor(settings?: StreamingWriterSettings) {
@@ -83,6 +83,74 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
         expect(onProgress.mock.calls.map(([count]) => count)).toEqual([7, 3]);
         expect(writer.classifyError).not.toHaveBeenCalled();
         expect(writer.extractPartialProgress).not.toHaveBeenCalled();
+    });
+
+    it('stops on an Abort conflict in a returned partial throttle outcome', async () => {
+        const writer = new OutcomeStreamingWriter();
+        const documents = createDocuments(3);
+        const duplicateError = new Error('Duplicate document');
+        const onProgress = vi.fn();
+        writer.writeBatch.mockResolvedValueOnce({
+            result: {
+                processedCount: 2,
+                insertedCount: 1,
+                abortedCount: 1,
+                errors: [{ documentId: documents[1].id, error: duplicateError }],
+            },
+            remaining: documents.slice(2),
+            errorType: 'throttle',
+        });
+
+        const write = writer.streamDocuments(
+            createDocumentStream(documents),
+            { conflictResolutionStrategy: ConflictResolutionStrategy.Abort },
+            { onProgress },
+        );
+
+        await expect(write).rejects.toBeInstanceOf(StreamingWriterError);
+        await expect(write).rejects.toMatchObject({
+            cause: duplicateError,
+            partialStats: { totalProcessed: 2, insertedCount: 1, abortedCount: 1 },
+        });
+        expect(writer.writeBatch).toHaveBeenCalledTimes(1);
+        expect(onProgress.mock.calls.map(([count]) => count)).toEqual([2]);
+    });
+
+    it('preserves earlier partial progress when an Abort conflict stops a later throttle outcome', async () => {
+        const writer = new OutcomeStreamingWriter();
+        const documents = createDocuments(4);
+        const duplicateError = new Error('Duplicate document');
+        const onProgress = vi.fn();
+        writer.writeBatch.mockResolvedValueOnce({
+            result: { processedCount: 1, insertedCount: 1, abortedCount: 0 },
+            remaining: documents.slice(1),
+            errorType: 'throttle',
+        });
+        writer.writeBatch.mockResolvedValueOnce({
+            result: {
+                processedCount: 2,
+                insertedCount: 1,
+                abortedCount: 1,
+                errors: [{ documentId: documents[2].id, error: duplicateError }],
+            },
+            remaining: documents.slice(3),
+            errorType: 'throttle',
+        });
+
+        const write = writer.streamDocuments(
+            createDocumentStream(documents),
+            { conflictResolutionStrategy: ConflictResolutionStrategy.Abort },
+            { onProgress },
+        );
+
+        await expect(write).rejects.toBeInstanceOf(StreamingWriterError);
+        await expect(write).rejects.toMatchObject({
+            cause: duplicateError,
+            partialStats: { totalProcessed: 3, insertedCount: 2, abortedCount: 1 },
+        });
+        expect(writer.writeBatch).toHaveBeenCalledTimes(2);
+        expect(writer.writeBatch.mock.calls[1][0]).toEqual(documents.slice(1));
+        expect(onProgress.mock.calls.map(([count]) => count)).toEqual([1, 2]);
     });
 
     it.each([
