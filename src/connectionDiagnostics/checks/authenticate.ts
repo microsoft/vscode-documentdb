@@ -355,7 +355,7 @@ export function createAuthenticateCheck(
                     'auth.token',
                     'fail',
                     { ...errorFacts(error), ruleId, ...(aadstsCode === undefined ? {} : { aadstsCode }) },
-                    [entraTokenFailedFinding(ruleId, aadstsCode)],
+                    [entraTokenFailedFinding(ruleId, aadstsCode, method)],
                 );
             },
         };
@@ -821,11 +821,19 @@ function resolutionFinding(error: TokenResourceResolutionError): Finding<Finding
     );
 }
 
-function entraTokenFailedFinding(ruleId: string, aadstsCode: string | undefined): Finding<FindingCode> {
+function entraTokenFailedFinding(
+    ruleId: string,
+    aadstsCode: string | undefined,
+    method: AuthMethodId | undefined,
+): Finding<FindingCode> {
     return makeFinding(
         'auth.entraTokenFailed',
         'error',
-        { ruleId, ...(aadstsCode === undefined ? {} : { aadstsCode }) },
+        {
+            ruleId,
+            ...(aadstsCode === undefined ? {} : { aadstsCode }),
+            ...(method === undefined ? {} : { authMethod: method }),
+        },
         aadstsCode === undefined
             ? `The sign-in token request failed (classifier rule ${ruleId}).`
             : `The sign-in token request failed with AADSTS${aadstsCode} (classifier rule ${ruleId}).`,

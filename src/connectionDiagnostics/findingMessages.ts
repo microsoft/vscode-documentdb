@@ -5,6 +5,7 @@
 
 import { type Finding } from '@documentdb-js/connection-diagnostics';
 import * as vscode from 'vscode';
+import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { getCloudDisplayName } from '../documentdb/auth/documentdbTokenResource';
 import { type DocumentDBEntraCloud } from '../documentdb/auth/entraScopes';
 import { type FindingCode } from './types';
@@ -87,8 +88,15 @@ function missingCredentialsMessage(data: FindingData): FindingMessage {
 
 function tokenFailureMessage(data: FindingData): FindingMessage {
     const title = vscode.l10n.t('Microsoft Entra ID sign-in failed');
+    const method = stringField(data, 'authMethod');
+    const ruleId = stringField(data, 'ruleId');
     // Use the classifier's stable rule ID, never classify or display its raw error again.
-    switch (stringField(data, 'ruleId')) {
+    switch (
+        method === AuthMethodId.ManagedIdentity &&
+        (ruleId === 'applicationNotInDirectory' || ruleId === 'tenantNotFound' || ruleId === 'accountNotInTenant')
+            ? undefined
+            : ruleId
+    ) {
         case 'firstPartyPreauthorization':
             return {
                 title,
@@ -100,6 +108,17 @@ function tokenFailureMessage(data: FindingData): FindingMessage {
                 ),
             };
         case 'resourceNotInTenant':
+            if (method === AuthMethodId.ManagedIdentity) {
+                return {
+                    title,
+                    explanation: vscode.l10n.t(
+                        'The managed identity token may target a different Azure cloud than the cluster.',
+                    ),
+                    nextStep: vscode.l10n.t(
+                        'If documentDB.customEnvironment.ossrdbmsEndpoint is set, check or clear it. Then check that the virtual machine and the cluster are in the same Azure cloud.',
+                    ),
+                };
+            }
             return {
                 title,
                 explanation: vscode.l10n.t(

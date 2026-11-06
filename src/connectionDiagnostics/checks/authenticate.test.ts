@@ -633,7 +633,11 @@ describe('createAuthenticateCheck', (): void => {
                 expect(token.findings).toEqual([
                     expect.objectContaining({
                         code: 'auth.entraTokenFailed',
-                        data: { ruleId, ...(aadstsCode === undefined ? {} : { aadstsCode }) },
+                        data: {
+                            ruleId,
+                            ...(aadstsCode === undefined ? {} : { aadstsCode }),
+                            authMethod: AuthMethodId.MicrosoftEntraID,
+                        },
                     }),
                 ]);
                 expect(step(result, 'auth.serverAuthentication')).toMatchObject({
@@ -994,6 +998,35 @@ describe('createAuthenticateCheck', (): void => {
             expect(token.facts.claims).toMatchObject({ clientCategory: 'managedIdentity', tenantMatch: 'match' });
             expect(JSON.stringify(result)).not.toContain('mi-client-id');
         });
+
+        it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+            'records the chosen authentication method for a %s token failure',
+            async (method): Promise<void> => {
+                const error = new Error('AADSTS500011: resource not found');
+                mocks.getSessionFromVSCode.mockRejectedValue(error);
+                mocks.getManagedIdentityAccessToken.mockRejectedValue(error);
+                connectBehavior = async (client): Promise<void> => {
+                    const callback = client.options.authMechanismProperties?.OIDC_CALLBACK;
+                    if (!callback) {
+                        throw new Error('Missing OIDC callback');
+                    }
+                    await callback({ version: 1 } as unknown as OIDCCallbackParams);
+                };
+                const { result } = await runAuth(
+                    setupFor(
+                        method,
+                        publicHost,
+                        method === AuthMethodId.ManagedIdentity ? { managedIdentityConfig: {} } : {},
+                    ),
+                );
+                expect(step(result, 'auth.token').findings).toEqual([
+                    expect.objectContaining({
+                        code: 'auth.entraTokenFailed',
+                        data: { ruleId: 'resourceNotInTenant', aadstsCode: '500011', authMethod: method },
+                    }),
+                ]);
+            },
+        );
 
         it('fails a managed identity token failure inside the driver callback in the token phase', async (): Promise<void> => {
             mocks.getManagedIdentityAccessToken.mockRejectedValue(

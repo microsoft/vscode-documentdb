@@ -5,6 +5,7 @@
 
 import { builtInFindingCodes, type Finding } from '@documentdb-js/connection-diagnostics';
 import { describe, expect, it, vi } from 'vitest';
+import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { describeFinding, findingMessages, hasSpecificTimeoutWording, type FindingMessage } from './findingMessages';
 import { extensionFindingCodes, type FindingCode } from './types';
 
@@ -328,6 +329,74 @@ describe('localized finding messages', () => {
         }
         expect(findingMessages['auth.failed']({ authMethod: 'NativeAuth' }).nextStep).toContain(
             'Check the user name and password',
+        );
+    });
+
+    it('recommends managed identity cloud checks for a resource not in the tenant', () => {
+        expect(
+            findingMessages['auth.entraTokenFailed']({
+                ruleId: 'resourceNotInTenant',
+                authMethod: AuthMethodId.ManagedIdentity,
+            }),
+        ).toEqual({
+            title: 'Microsoft Entra ID sign-in failed',
+            explanation: 'The managed identity token may target a different Azure cloud than the cluster.',
+            nextStep:
+                'If documentDB.customEnvironment.ossrdbmsEndpoint is set, check or clear it. Then check that the virtual machine and the cluster are in the same Azure cloud.',
+        });
+    });
+
+    it.each(['applicationNotInDirectory', 'tenantNotFound', 'accountNotInTenant'])(
+        'uses the default sign-in message for managed identity and %s',
+        (ruleId) => {
+            expect(
+                findingMessages['auth.entraTokenFailed']({ ruleId, authMethod: AuthMethodId.ManagedIdentity }),
+            ).toEqual({
+                title: 'Microsoft Entra ID sign-in failed',
+                explanation: 'Microsoft Entra ID could not provide a sign-in token.',
+                nextStep:
+                    'Review the sign-in details in the diagnostic report with your tenant administrator or IT help desk.',
+            });
+        },
+    );
+
+    it('keeps interactive cloud guidance for a resource not in the tenant', () => {
+        expect(
+            findingMessages['auth.entraTokenFailed']({
+                ruleId: 'resourceNotInTenant',
+                authMethod: AuthMethodId.MicrosoftEntraID,
+            }),
+        ).toEqual({
+            title: 'Microsoft Entra ID sign-in failed',
+            explanation:
+                'The selected Azure cloud may not match the cluster, or the sign-in resource may be unavailable in this tenant.',
+            nextStep:
+                'Check microsoft-sovereign-cloud.environment. If it matches the cluster, ask your tenant administrator to check resource availability.',
+        });
+    });
+
+    it.each(['applicationNotInDirectory', 'tenantNotFound', 'accountNotInTenant'])(
+        'keeps interactive guidance unchanged for %s',
+        (ruleId) => {
+            expect(
+                findingMessages['auth.entraTokenFailed']({ ruleId, authMethod: AuthMethodId.MicrosoftEntraID }),
+            ).toEqual(findingMessages['auth.entraTokenFailed']({ ruleId }));
+        },
+    );
+
+    it.each([
+        'firstPartyPreauthorization',
+        'invalidResource',
+        'crossCloudNotAllowed',
+        'conditionalAccess',
+        'additionalVerification',
+        'brokerOpaque',
+        'oidcHostNotAllowed',
+        'unknownAadsts',
+        'futureRule',
+    ])('keeps other token failure messages unchanged for managed identity: %s', (ruleId) => {
+        expect(findingMessages['auth.entraTokenFailed']({ ruleId, authMethod: AuthMethodId.ManagedIdentity })).toEqual(
+            findingMessages['auth.entraTokenFailed']({ ruleId }),
         );
     });
 
