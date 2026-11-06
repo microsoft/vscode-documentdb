@@ -298,5 +298,7 @@ None in the design. Known limits:
 3. [decisions.md](./decisions.md) for the reasoning behind any one choice.
 4. [UX review pack for #1066](./iterations/05-ux-review.md) for summary-message combinations,
    expanded Details, hard-to-reproduce cloud/SRV scenarios, and inline language suggestions.
-5. History only when needed: [iterations/](./iterations/) (the implementation review and the
+5. [GitHub Copilot feedback assessment](./iterations/06-copilot-review.md) for the four comments
+   posted on 2026-11-06, their severity, evidence, and recommended solutions with alternatives.
+6. History only when needed: [iterations/](./iterations/) (the implementation review and the
    work-item log).
