@@ -100,7 +100,7 @@ describe('localized connectivity report text', () => {
         ['findings', '{0} more findings not shown'],
         ['serverRows', '{0} more server rows not shown'],
     ] as const)('localizes %s omissions with their count', (kind, template): void => {
-        const localize = vi.spyOn(vscode.l10n, 't').mockImplementation((message, ...args): string => {
+        const localize = vi.spyOn(vscode.l10n, 't').mockImplementation((message, ...args: unknown[]): string => {
             const value = typeof message === 'string' ? message : message.message;
             return `Localized: ${value.replace('{0}', String(args[0]))}`;
         });
