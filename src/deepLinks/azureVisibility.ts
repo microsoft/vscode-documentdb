@@ -32,7 +32,7 @@ export async function computeVisibilityChanges(
         addSubscription:
             selectedSubscriptions.length > 0 &&
             !selectedSubscriptions.some(
-                (id): boolean => id.split('/')[1]?.toLowerCase() === subscription.subscriptionId.toLowerCase(),
+                (id): boolean => id.split('/')[1] === subscription.subscriptionId,
             ),
     };
     ext.outputChannel.trace(

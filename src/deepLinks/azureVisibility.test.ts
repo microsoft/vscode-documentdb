@@ -160,15 +160,15 @@ describe('Azure deep-link visibility', (): void => {
         expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith();
     });
 
-    it('recognizes an already selected subscription regardless of casing', async (): Promise<void> => {
-        configurationGet.mockReturnValue([`different-tenant/${subscription.subscriptionId.toUpperCase()}`]);
+    it('adds the canonical entry when only a differently-cased subscription entry is selected', async (): Promise<void> => {
+        const existingEntry = `different-tenant/${subscription.subscriptionId.toUpperCase()}`;
+        configurationGet.mockReturnValue([existingEntry]);
 
         const changes = await computeVisibilityChanges(providerId, subscription);
-        expect(changes).toEqual(noChanges);
+        expect(changes.addSubscription).toBe(true);
         await applyVisibilityChanges(providerId, subscription, changes);
 
-        expect(setSelectedSubscriptionIds).not.toHaveBeenCalled();
-        expect(ext.discoveryBranchDataProvider.refresh).not.toHaveBeenCalled();
+        expect(setSelectedSubscriptionIds).toHaveBeenCalledExactlyOnceWith([existingEntry, targetEntry]);
     });
 
     it('does nothing and does not refresh when there are no changes', async (): Promise<void> => {
