@@ -129,6 +129,35 @@ describe('localized connectivity report text', () => {
         expect(markdown).toContain('The DocumentDB output channel lines for this run carry run ID fixture\\-run\\.');
     });
 
+    it('reports the connection timeout setting rather than Retry buttons when retries cannot help', () => {
+        const run = fixtureRun({
+            retryWouldHelp: false,
+            omittedTargetCount: 0,
+            timedOut: [{ checkId: 'tcp', source: 'connection', timeoutMs: 10000 }],
+        });
+        const connectionRun: DiagnosticsRun<FindingCode> = {
+            ...run,
+            results: run.results.map((result): CheckResult<FindingCode> =>
+                result.checkId === 'tcp'
+                    ? {
+                          ...result,
+                          findings: result.findings.map((finding) => ({
+                              ...finding,
+                              data: { ...finding.data, source: 'connection' },
+                          })),
+                      }
+                    : result,
+            ),
+        };
+        const markdown = fixtureMarkdown(connectionRun).replace(/\\/g, '');
+        expect(markdown).toContain('Network connection timed out');
+        expect(markdown).toContain('The TCP connection attempt timed out without connecting.');
+        expect(markdown).toContain('Increase the timeout configured on this connection, then run the diagnosis again.');
+        expect(markdown).toContain('A firewall or IP allowlist may be blocking this connection.');
+        expect(markdown).not.toContain('Choose Retry with longer timeouts');
+        expect(markdown).not.toContain('Retry without diagnostic timeouts');
+    });
+
     it('localizes sections for extension checks when the renderer groups them there', () => {
         const sections: Readonly<Record<string, ReportSectionId>> = {
             prepare: 'preparation',

@@ -395,9 +395,19 @@ export const findingMessages: {
 } = {
     'check.timeout': (data): FindingMessage => {
         const operation = stringField(data, 'operation');
-        const nextStep = vscode.l10n.t(
-            'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled. If a connection timeout limited this step, change that connection setting first.',
-        );
+        const source = stringField(data, 'source');
+        let nextStep: string;
+        if (source === 'connection') {
+            nextStep = vscode.l10n.t('Increase the timeout configured on this connection, then run the diagnosis again.');
+        } else if (source === 'check' || source === 'run') {
+            nextStep = vscode.l10n.t(
+                'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled.',
+            );
+        } else {
+            nextStep = vscode.l10n.t(
+                'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled. If a connection timeout limited this step, change that connection setting first.',
+            );
+        }
         const generic: FindingMessage = {
             title: vscode.l10n.t('Step timed out'),
             explanation: vscode.l10n.t(
@@ -413,7 +423,7 @@ export const findingMessages: {
         }
         const specific = findingMessages[timeoutWordingByCheck[operation]]({});
         // A connection's own timeout keeps the advice to change that setting.
-        return stringField(data, 'source') === 'connection' ? { ...specific, nextStep: generic.nextStep } : specific;
+        return source === 'connection' ? { ...specific, nextStep: generic.nextStep } : specific;
     },
     'env.proxyConfigured': (): FindingMessage => ({
         title: vscode.l10n.t('Proxy settings detected'),

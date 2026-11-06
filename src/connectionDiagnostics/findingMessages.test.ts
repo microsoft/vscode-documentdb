@@ -209,23 +209,60 @@ describe('localized finding messages', () => {
     );
 
     it.each([
+        ['connection', 'Increase the timeout configured on this connection, then run the diagnosis again.'],
+        [
+            'check',
+            'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled.',
+        ],
+        [
+            'run',
+            'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled.',
+        ],
+        [
+            undefined,
+            'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled. If a connection timeout limited this step, change that connection setting first.',
+        ],
+        [
+            'future',
+            'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled. If a connection timeout limited this step, change that connection setting first.',
+        ],
+    ] as const)('uses the next step for timeout source %s', (source, nextStep) => {
+        expect(findingMessages['check.timeout']({ operation: 'prepare', source }).nextStep).toBe(nextStep);
+        if (source === undefined) {
+            expect(findingMessages['check.timeout']({}).nextStep).toBe(nextStep);
+        }
+        for (const operation of ['srv', 'dns', 'tls', 'authenticate']) {
+            expect(findingMessages['check.timeout']({ operation, source }).nextStep).toBe(`${nextStep} ${firewall}`);
+        }
+        for (const operation of ['tcp', 'hello']) {
+            const code = operation === 'tcp' ? 'tcp.timeout' : 'hello.noReply';
+            const expected = source === 'connection' || source === 'run'
+                ? `${nextStep} ${firewall}`
+                : findingMessages[code]({}).nextStep;
+            expect(findingMessages['check.timeout']({ operation, source }).nextStep).toBe(expected);
+        }
+    });
+
+    it.each([
         ['tcp', 'tcp.timeout'],
         ['hello', 'hello.noReply'],
-    ] as const)('WI-27: a timed-out %s check reads as %s', (operation, code) => {
-        for (const source of ['check', undefined]) {
-            expect(findingMessages['check.timeout']({ operation, timeoutMs: 10000, source })).toEqual(
-                findingMessages[code]({}),
-            );
+    ] as const)('WI-27: a timed-out %s check keeps the %s title and explanation', (operation, code) => {
+        const specific = findingMessages[code]({});
+        for (const source of ['connection', 'check', undefined, 'future']) {
+            const message = findingMessages['check.timeout']({ operation, timeoutMs: 10000, source });
+            expect(message.title).toBe(specific.title);
+            expect(message.explanation).toBe(specific.explanation);
+            if (source !== 'connection') {
+                expect(message.nextStep).toBe(specific.nextStep);
+            }
+            expect(hasSpecificTimeoutWording({ code: 'check.timeout', data: { operation, source } })).toBe(true);
         }
-        expect(hasSpecificTimeoutWording({ code: 'check.timeout', data: { operation, source: 'check' } })).toBe(true);
-        // A connection's own timeout keeps the advice to change that setting.
-        const connection = findingMessages['check.timeout']({ operation, timeoutMs: 10000, source: 'connection' });
-        expect(connection.title).toBe(findingMessages[code]({}).title);
-        expect(connection.nextStep).toContain('change that connection setting');
-        expect(connection.nextStep).toContain(firewall);
         // The whole-run limit ended the step, not the probe: generic wording.
         const run = findingMessages['check.timeout']({ operation, timeoutMs: 10000, source: 'run' });
         expect(run.title).toBe('Step timed out');
+        expect(run.explanation).toBe(
+            findingMessages['check.timeout']({ operation: 'prepare', source: 'run' }).explanation,
+        );
         expect(hasSpecificTimeoutWording({ code: 'check.timeout', data: { operation, source: 'run' } })).toBe(false);
     });
 
