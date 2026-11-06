@@ -104,7 +104,7 @@ Local" link has no connection string by definition, because the container does n
   ([0012](./decisions.md#0012--azure-links-confirm-like-local),
   [0016](./decisions.md#0016--the-azure-confirmation-comes-before-the-lookup)).
 - **`open=dashboard|shell` on every `/connect` variant**; `dashboard` opens even when the automatic
-  dashboard is turned off ([0013](./decisions.md#0013--open-names-the-surface-dashboard-always-opens),
+  dashboard is turned off, and replaces the automatic one for that link ([0013](./decisions.md#0013--open-names-the-surface-dashboard-always-opens),
   [0014](./decisions.md#0014--open-applies-to-connect-as-well)).
 - **The cluster node is always expanded**; the expansion is the connect, so authentication runs
   once and the node shows the outcome

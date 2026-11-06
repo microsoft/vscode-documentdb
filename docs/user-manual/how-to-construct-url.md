@@ -74,7 +74,7 @@ are ignored.
 - **`tenantId`**: An optional GUID for the Microsoft Entra tenant (directory) that owns the subscription. It lets the extension choose the right account and offer to sign in to that tenant.
 - **`database`**: When provided, the extension will automatically navigate to the specified database after establishing the connection. Names with spaces or special characters must be double-encoded (see [Encoding Parameter Values](#encoding-parameter-values)).
 - **`collection`**: The extension opens the Collection View for this collection. For `/connect`, a database must be supplied either through the `database` parameter or in the connection-string path. For `/connect/azure`, the `database` parameter is required. Otherwise the link is rejected before connecting. Names with spaces or special characters must be double-encoded (see [Encoding Parameter Values](#encoding-parameter-values)).
-- **`open`**: `dashboard` opens the Cluster Dashboard, scoped to `database` when provided, even if opening the dashboard automatically on connect is turned off. If it already opened automatically, the same panel is reused. `shell` opens the interactive shell, scoped to `database` when provided. The parameter is case-insensitive and cannot be combined with `collection`; a link never carries a shell script, query, or command.
+- **`open`**: `dashboard` opens the Cluster Dashboard, scoped to `database` when provided, even if opening the dashboard automatically on connect is turned off. It replaces the automatic dashboard for that link, so only the requested dashboard opens. `shell` opens the interactive shell, scoped to `database` when provided. The parameter is case-insensitive and cannot be combined with `collection`; a link never carries a shell script, query, or command.
 
 ## Encoding Parameter Values
 
@@ -281,7 +281,7 @@ When you click a URL for the extension, the following process occurs:
 
 3. **Connection Handling** (for `connect`):
    - The extension parses the `connectionString` parameter and creates a new connection in the Connections View.
-   - If a connection with the same host and username already exists, the existing connection will be selected instead of creating a duplicate.
+   - If a connection with the same host and username already exists, the existing connection will be selected instead of creating a duplicate, including when it is inside a folder.
    - For a new connection, one confirmation shows its target (user, hosts, database, and collection) and what will open, and asks you to add and open it. This confirmation is always shown, even when URL handling confirmations are disabled in the extension settings, because the link adds a connection.
    - For a connection you have already saved, one confirmation shows the same details before opening it. Disabling URL handling confirmations skips it.
    - There is no separate question before the Collection View, Cluster Dashboard, or shell opens: the confirmation already names it.
@@ -292,8 +292,8 @@ When you click a URL for the extension, the following process occurs:
    2. If you are not signed in to Azure, the extension asks you to sign in.
    3. It looks for the subscription among all your signed-in accounts. If none has it and the link includes `tenantId`, it offers to sign in to that tenant. Otherwise, it shows an error with a **Manage Azure accounts** action.
    4. It reads the resource from Azure using your identity. A missing resource, a resource you cannot read, or a Cosmos DB account that does not use the MongoDB API is reported before anything changes.
-   5. If the resource is hidden, the extension permanently changes the filters as it would if you changed them by hand: it shows the hidden Azure discovery provider in the Discovery view, stops hiding the tenant in the tenant filter, and adds the subscription to the Azure subscription filter when you have a selection. The subscription filter is the `azureResourceGroups.selectedSubscriptions` setting shared with the Azure Resources extension, so the subscription also appears in the Azure Resources view. When confirmations are enabled, a second confirmation lists these changes before they are made; it appears only when a filter has to change. When confirmations are disabled, the same changes are applied without a dialog.
-   6. The extension reveals the cluster in the **Discovery** view and connects as when you expand it, using Microsoft Entra ID or prompting for credentials. Nothing is saved to the Connections View.
+   5. If the resource is hidden, the extension permanently changes the filters as it would if you changed them by hand: it shows the hidden Azure discovery provider in the Discovery view, stops hiding the tenant in the tenant filter, and adds the subscription to the Azure subscription filter when you have a selection. The subscription filter is the `azureResourceGroups.selectedSubscriptions` setting shared with the Azure Resources extension, so the subscription also appears in the Azure Resources view. When confirmations are enabled, a second confirmation lists these changes before they are made; it appears only when a filter has to change. When confirmations are disabled, the same changes are applied without a dialog. The changes stay even if the connection later fails or you cancel; to undo them, use **Filter Entries…** or **Hide Provider** on the provider in the Discovery view.
+   6. The extension reveals the cluster in the **Discovery** view and connects as when you expand it, using Microsoft Entra ID or prompting for credentials. Nothing is saved to the Connections View. From this point, cancel the connection from its own **Connecting to …** notification.
    7. It navigates to the database or collection and opens the Collection View, Cluster Dashboard, or shell as requested.
 
    A link carries no cloud hint, so this works only when you are signed in to the Azure cloud that owns the resource.
@@ -302,6 +302,9 @@ When you click a URL for the extension, the following process occurs:
    - If the `database` parameter is provided, the extension navigates to that database.
    - If both `database` and `collection` parameters are provided, the extension opens the Collection View for the specified collection.
    - If `open=dashboard` is provided, the extension opens the Cluster Dashboard; if `open=shell` is provided, it opens the interactive shell. Either can be scoped to the `database` parameter.
+   - Without `open=dashboard`, the Cluster Dashboard can still open on its own when a cluster connects for the first time, if opening the dashboard automatically on connect is turned on.
+   - If the connection fails, the connection error explains why and the link stops there. If the database or collection cannot be found, the error names it.
+   - Opening a link again retries a connection that failed earlier; you do not need to click **Retry** in the tree first.
 
 ## Additional Notes
 
