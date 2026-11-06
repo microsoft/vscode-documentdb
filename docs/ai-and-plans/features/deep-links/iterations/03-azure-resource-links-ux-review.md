@@ -171,18 +171,30 @@ to Government/China or manufacturing every DNS failure.
 a claim that runtime testing found no blockers. Shared/pre-existing gaps are identified
 so they do not silently become requirements for this PR.
 
-| ID | Priority | Item | Origin | Status |
-| --- | --- | --- | --- | --- |
-| F01 | **P1** | First-connect paths bypass readable SRV/Entra diagnostics | Shared/pre-existing, newly reached by Azure links | 🟠 Open |
-| F02 | **P1** | Missing target message suggests a connection failure even after connecting | New Azure path reuses inherited text | 🟠 Open |
-| F03 | **P1** | Blocking failures alternate between modal, toast, and silent stop | Mixed new/shared | 🟠 Open |
-| F04 | **P2** | Action labels, titles, and surface names drift | Mixed new/shared | 🟠 Open |
-| F05 | **P2** | Filter prompt omits persistence and no-rollback consequences | New presentation, intentional persistent design | 🟠 Open |
-| F06 | **P2** | Progress cancellation waits for operations; some waits have no status | Mixed new/shared | 🟠 Open |
-| F07 | **P2** | "Opens: Shell/Collection View" omits automatic dashboard | Shared behavior exposed by new destinations | 🟠 Open |
-| F08 | **P2** | Some failures lack a next step or overstate what was established | New messages plus inherited validation wording | 🟠 Open |
-| F09 | **P2** | Long diagnostic headings, jargon, and literal formatting reduce readability | Shared/pre-existing | 🟠 Open |
-| F10 | **P2** | Saved connection in a folder can silently fail to reveal | Explicitly acknowledged pre-existing limitation | 🟠 Open |
+| ID | Priority | Verified | Item | Origin | Status |
+| --- | --- | --- | --- | --- | --- |
+| F01 | **P1** | ✅ **P1**, wider (9 sites) | First-connect paths bypass readable SRV/Entra diagnostics | Shared/pre-existing, newly reached by Azure links | 🟠 Open |
+| F02 | **P1** | ✅ **P2**, + double toast | Missing target message suggests a connection failure even after connecting | New Azure path reuses inherited text | 🟠 Open |
+| F03 | **P1** | ◐ **P3**, fold into F01/F10 | Blocking failures alternate between modal, toast, and silent stop | Mixed new/shared | 🟠 Open |
+| F04 | **P2** | ✅ **P3** | Action labels, titles, and surface names drift | Mixed new/shared | 🟠 Open |
+| F05 | **P2** | ✅ **P2** | Filter prompt omits persistence and no-rollback consequences | New presentation, intentional persistent design | 🟠 Open |
+| F06 | **P2** | ✅ **P3**, reframed | Progress cancellation waits for operations; some waits have no status | Mixed new/shared | 🟠 Open |
+| F07 | **P2** | ✅ **P2**, + D0013 drift | "Opens: Shell/Collection View" omits automatic dashboard | Shared behavior exposed by new destinations | 🟠 Open |
+| F08 | **P2** | ✅ **P2** | Some failures lack a next step or overstate what was established | New messages plus inherited validation wording | 🟠 Open |
+| F09 | **P2** | ◐ **P3**, convention | Long diagnostic headings, jargon, and literal formatting reduce readability | Shared/pre-existing | 🟠 Open |
+| F10 | **P2** | ✅ **P2**, worse with `open=` | Saved connection in a folder can silently fail to reveal | Explicitly acknowledged pre-existing limitation | 🟠 Open |
+| F11 | — | 🆕 **P2** | Link does not retry a cluster whose last expansion failed | New Azure path (and pre-existing Connections path) | 🟠 Open |
+
+> **🔎 Verification pass (2026-11-06, source `05901fe1`).** Each finding was rechecked against the
+> code; the verdict and any priority override sit in a `🔎 Verification` block directly under the
+> finding. ✅ confirmed, ◐ partly valid, 🆕 found during verification. Priorities in the
+> **Priority** column are the review's; **Verified** is the override. Code reading only: nothing
+> was exercised in a workbench. Options tables mark who proposed each option (**Review** or
+> **Verification**).
+>
+> **Net effect:** 1 × P1 (F01, pre-existing, own PR), 5 × P2, 4 × P3, 1 new P2 (F11). Cheap,
+> in-scope fixes for #1067: F02, F04 (new strings only), F05, F08, F11. Separate PR: F01. Decide:
+> F07, F10.
 
 ## P0 - Blocking (the user gets stuck)
 
@@ -210,6 +222,46 @@ Having a saved connection is not the same as having cached credentials.
 💡 **Suggestion:** Reuse the diagnostics service at those rendering sites, retaining raw
 detail and the decoded-password retry. No provider should show UI or mutate the error.
 
+> **🔎 Verification** · ✅ **Confirmed, wider than stated** · Priority **P1 kept** · Pre-existing,
+> **not a #1067 blocker**; recommend its own PR.
+>
+> - Every first-connect catch renders the same generic modal with no `explain()` call. The
+>   review names 3 sites, but there are **9**: the 3 named, plus the decoded-password retry
+>   failure ([DocumentDBClusterItem.ts#L290](../../../../../src/tree/connections-view/DocumentDBClusterItem.ts#L290)),
+>   the Azure Resources view vCore and RU items
+>   ([VCoreResourceItem.ts#L185](../../../../../src/tree/azure-resources-view/documentdb/VCoreResourceItem.ts#L185),
+>   [RUCoreResourceItem.ts#L129](../../../../../src/tree/azure-resources-view/mongo-ru/RUCoreResourceItem.ts#L129)),
+>   [Atlas](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L285),
+>   [Kubernetes](../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L336)
+>   and [Azure VM](../../../../../src/plugins/service-azure-vm/discovery-tree/vm/AzureVMResourceItem.ts#L256).
+>   Find them all with `grep -rn "Revisit connection details" src`.
+> - None of these files is changed by #1067. The PR only makes the vCore/RU first connect the
+>   default landing for Azure links. That is the path a Government/China user with Entra hits first.
+> - **Ordering trap the review missed:** the Entra and Atlas providers read
+>   `CredentialCache.getCredentials(clusterId)`
+>   ([Entra#L37](../../../../../src/documentdb/auth/entraErrors/EntraDiagnosticsProvider.ts#L37),
+>   [Atlas#L35](../../../../../src/plugins/service-atlas-mongodb/AtlasDiagnosticsProvider.ts#L35)),
+>   and the vCore/RU catches evict that entry right after the modal
+>   ([vCore#L210](../../../../../src/plugins/service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem.ts#L210),
+>   [RU#L153](../../../../../src/plugins/service-azure-mongo-ru/discovery-tree/documentdb/MongoRUResourceItem.ts#L153)).
+>   `explain()` must run **before** `deleteCredentials`, or the Entra rule loses its auth
+>   method and Atlas returns nothing.
+> - The [error-translation skill](../../../../../.github/skills/error-translation/SKILL.md)
+>   lists `ClusterItemBase` as covering "Cluster connect". That is only true for the cached path,
+>   so the skill table should say so once this is fixed.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Add `explain()` inline at each site, diagnosis as heading | Review | Matches the documented call-site pattern; each change is tiny | 9 copies of the same block; the ordering trap above must be fixed 9 times; easy to drift again |
+> | **One shared `showClusterConnectFailure({ clusterId, clusterName, error, extraDetail?, buttons? })`** that calls `explain()`, records `diagnosisProviderId`, renders the existing pattern and returns the chosen button; the decoded-password helper delegates to it | Verification | One place for copy and ordering; the decoded-password retry keeps working through `extraDetail`/`buttons`; unit-testable once; the next plugin gets it for free | Touches 9 files in several plugins (one review); the helper needs a "caller evicts after" contract in its doc comment |
+> | Make `authenticateAndConnect()` throw and let `ClusterItemBase` render | Verification (rejected) | Single render site in theory | Changes a contract every plugin implements; the decoded-password flow and plugin-specific cleanup do not fit; far larger diff |
+>
+> **Recommendation:** the shared helper, in a separate PR. Keep "Revisit connection details and
+> try again." only as the fallback when no provider matches. Add one test per provider family
+> showing that the first-connect path shows the diagnosis.
+
+<a id="f02"></a>
+
 ### F02. Missing target is reported as an uncertain connection failure ⚠️
 
 **Priority:** P1 · **Status:** 🟠 Open
@@ -224,6 +276,34 @@ checks for a connected client first, but then uses the same ambiguous text as th
 💡 **Suggestion:** Name the database or collection that could not be found and the parent
 where it was sought. Say "could not find", not "does not exist", when permissions or a
 failed child listing could also explain absence.
+
+> **🔎 Verification** · ✅ **Confirmed** · Priority **P1 → P2** · In scope for #1067: the Azure
+> lookup is new code that copied the old string.
+>
+> - On the Azure path, `ClustersClient.exists(clusterId)` is checked
+>   ([discoveryViewHelpers.ts#L150](../../../../../src/tree/discovery-view/discoveryViewHelpers.ts#L150))
+>   before the database lookup, so the "Connection was unsuccessful" half can never apply there.
+> - **Why P2, not P1:** the sentence is an "A **or** B" and never asserts the wrong cause. It is
+>   vague and machinery-flavoured ("URL handling aborted"), not false. The user still learns the
+>   target was not reached.
+> - **Missed by the review, and a real double surface:** if the connection succeeds but
+>   `listDatabases` fails, `ClusterItemBase` shows its modal and returns retry children. The
+>   client still exists, so the Azure flow continues, misses the database, and adds the A13 toast
+>   **on top of** the modal. The node is already in error state
+>   (`provider.hasNodeErrorState(clusterNode.id)`), so the flow can detect this.
+> - On the connection-string path
+>   ([vscodeUriHandler.ts#L686](../../../../../src/vscodeUriHandler.ts#L686)) the collection check
+>   has no client check in front of it, so there the "connection unsuccessful" half **can** be
+>   true. The string is less wrong there, and the two paths should not share one fix blindly.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Name the missing database/collection and its parent; say "could not find" | Review | Specific and honest; cheap (new strings) | On its own it still fires after a `listDatabases` modal, so the user gets two messages for one failure |
+> | **Review option + stop quietly when the cluster node is in error state** (return `undefined`, set `openTargetResult = 'skippedClusterError'`), same "node already explained" contract as the not-connected branch | Verification | Removes the double surface; the remaining toast only fires when listing succeeded and the name is really absent; mirrors an existing branch | One more branch and test; Connections path needs the same check against its own provider |
+>
+> **Recommendation:** both, Azure path first. Suggested copy:
+> `Could not find database "app" on review-cluster. Check the name and your access, then open the link again.`
+> and `Could not find collection "orders" in database "app". …`. Drop "URL handling aborted".
 
 ### F03. Failure surface depends on implementation layer ⚠️
 
@@ -241,6 +321,31 @@ are [swallowed](../../../../../src/tree/api/revealConnectionsViewElement.ts#L13)
 detail/output, with tree children reserved for recovery actions. Treat deliberate
 cancellation and background work separately. The shell's terminal-plus-toast is a useful
 surface-specific exception, not necessarily something to turn into a modal.
+
+> **🔎 Verification** · ◐ **Facts correct, conclusion overstated** · Priority **P1 → P3**;
+> fold the actionable parts into F01 and F10 and close F03 as a standalone item.
+>
+> - Each observation checks out: the SDK path is non-modal and turns multiline messages into
+>   "An error has occurred. Check output window…" (`@microsoft/vscode-azext-utils`
+>   `callWithTelemetryAndErrorHandling.js`, `message.includes('\n')`); the base-provider
+>   descendant path appends the cause in parentheses
+>   ([BaseExtendedTreeDataProvider.ts#L618](../../../../../src/tree/BaseExtendedTreeDataProvider.ts#L618));
+>   and `revealConnectionsViewElement` swallows errors into telemetry.
+> - **But different surfaces are not a defect here.** Link validation (A11) fails *before* the
+>   user has committed to anything; a toast plus output is the standard VS Code answer and
+>   matches every other command in this extension. The repository rule is narrower: a failed
+>   **tree expansion** explains itself in a modal and leaves only actions as children. That
+>   rule is already followed.
+> - What remains is either F01 (first-connect explanation quality) or F10/F11 (silent stop).
+>   Neither needs a new cross-surface "rule" to fix.
+> - The multiline fallback is reachable only for upstream ARM/auth errors (A12, last row); every
+>   message this PR writes is a single line. The descendant-toast format is shared and
+>   pre-existing, owned by the error-translation feature.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Agree a surface rule for user-blocking URL journeys (modal + detail) | Review | One mental model | Would turn malformed-link toasts into modals that block the window for a link the user may not care about; touches the SDK error path; large for little gain |
+> | **Close F03; track the silent stops under F10/F11 and explanation quality under F01** | Verification | No speculative policy; each concrete gap keeps an owner | The A18 comparison table loses its headline item (it stays useful as reference) |
 
 ## P2 - Polish, expectation, or feature gap
 
@@ -261,6 +366,23 @@ case. Sources are linked beside those presentations.
 shared destination vocabulary (`Cluster Dashboard`, `Collection View`, `Interactive
 Shell`). Preserve official Azure product names.
 
+> **🔎 Verification** · ✅ **Confirmed** · Priority **P2 → P3** (cosmetic, no task is blocked).
+>
+> - `Shell` is **new in #1067** (both
+>   [handleAzureResourceLink.ts#L64](../../../../../src/deepLinks/handleAzureResourceLink.ts#L64)
+>   and [vscodeUriHandler.ts#L484](../../../../../src/vscodeUriHandler.ts#L484)); the command
+>   title is `Open Interactive Shell`. `Yes, open connection`, `Open setup`,
+>   `Connections View` and the Local title-as-sentence are all pre-existing on `main`.
+> - Note `Yes, open connection` is built three times and compared by string
+>   ([vscodeUriHandler.ts#L626-L632](../../../../../src/vscodeUriHandler.ts#L626)); hoist it to one
+>   constant if it changes.
+> - The A11 "Unknown action" string has an em dash, which the error-writing rules forbid.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Full vocabulary pass now (all buttons, auth-wizard case, Local title) | Review | One consistent pass | Rewrites pre-existing strings and the shared auth wizard inside a deep-link PR; l10n churn; reviewers must check unrelated flows |
+> | **Fix only what #1067 introduces or rewrites:** `Shell` → `Interactive Shell`; `Yes, open connection` → `Open` (that dialog's detail was rewritten in this PR anyway); drop the em dash | Verification | Small diff tied to the PR; A1 and A3 then match | Auth wizard and Local dialog stay inconsistent until a later copy pass |
+
 ### F05. Permanent filter changes sound like temporary navigation ⚠️
 
 **Priority:** P2 · **Status:** 🟠 Open
@@ -274,6 +396,23 @@ later connection fails or progress is cancelled.
 💡 **Suggestion:** State that changes remain until changed back, and where to undo them.
 Keep the accepted persistent-filter design; this is a disclosure recommendation, not a
 proposal to silently change that design.
+
+> **🔎 Verification** · ✅ **Confirmed** · Priority **P2 kept** · In scope (new string).
+>
+> - [azureVisibility.ts](../../../../../src/deepLinks/azureVisibility.ts#L46) writes the provider
+>   visibility, the local tenant filter and the shared `azureResourceGroups.selectedSubscriptions`
+>   setting; nothing records or restores the previous values.
+> - The undo locations exist and can be named precisely: the **Filter Entries…** (filter icon)
+>   action on the Azure provider node in the Discovery view, and **Hide Provider**. The
+>   subscription change also affects the Azure Resources extension's own filter.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Add a persistence sentence plus the undo location | Review | Honest; one line; keeps the accepted design | Dialog grows by one line |
+> | Snapshot and auto-restore filters on cancel/failure | Verification (rejected) | Cancel would "really" cancel | Contradicts the accepted persistent design; restoring a setting shared with another extension can clobber changes the user made meanwhile |
+>
+> **Recommendation:** the review's option. Suggested line:
+> `These changes stay after the link opens. To undo them, use Filter Entries… on the provider in the Discovery view.`
 
 ### F06. Cancel is checkpoint-based, not an immediate abort ⚠️
 
@@ -289,6 +428,26 @@ cancel mechanism. Readiness waits can also occur before the next stage message.
 💡 **Suggestion:** Verify the latency with a slow request. Propagate cancellation where
 supported; otherwise make waiting/stopping states honest. Do not promise rollback of
 completed filter changes.
+
+> **🔎 Verification** · ✅ **Confirmed** · Priority **P2 → P3**, and reframed.
+>
+> - The token is only checked between phases
+>   ([handleAzureResourceLink.ts#L94-L224](../../../../../src/deepLinks/handleAzureResourceLink.ts#L94));
+>   none of `resolveAzureSubscription`, `readAzureResource` or `revealInDiscoveryView` takes it.
+> - **Why P3:** a late cancel does not cause harm. Filter writes are persistent by design (F05),
+>   ARM calls have their own timeouts, and the explicit target is still skipped.
+> - **The sharper problem is the connect phase.** While `revealInDiscoveryView` expands the
+>   cluster, two cancellable notifications can be visible together: the outer
+>   `Opening from Azure` and the inner `Connecting to "…"`
+>   ([ClusterItemBase.ts#L191](../../../../../src/tree/documentdb/ClusterItemBase.ts#L191)).
+>   Only the inner one aborts the connection. Cancelling the outer one lets the connection
+>   finish (and the automatic dashboard open), then silently skips the requested target.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Propagate the token into every phase | Review | Cancel is immediate | Most underlying Azure/auth APIs take no token; large plumbing for seconds of latency |
+> | **End the outer progress before reveal/connect.** It then covers only the management-plane steps where a checkpoint cancel is meaningful; the tree's view progress and the inner, really-cancellable `Connecting…` notification take over | Verification | Only one Cancel on screen at a time, and it does what it says; no plumbing | The outer `Loading subscriptions…` / `Loading clusters…` / `Connecting…` stage text goes away (the view spinner stays). Needs a real-workbench check that the hand-off does not look like an early finish |
+> | Keep outer progress but make it non-cancellable from reveal onward | Verification | Keeps the stage text | VS Code cannot toggle `cancellable` mid-flight; would need two sequential progress calls anyway |
 
 <a id="f07"></a>
 
@@ -308,6 +467,33 @@ destinations should suppress it. The latter is a behavior/design decision, not a
 Check keyboard focus and the selected database scope, including whether the automatic
 cluster-wide and requested database-scoped dashboard coexist.
 
+> **🔎 Verification** · ✅ **Confirmed, and the open question is answered: they coexist** ·
+> Priority **P2 kept** · Design decision, not copy.
+>
+> - Dashboard panels are keyed by `clusterId` **and** `selectedDatabaseName`
+>   ([clusterDashboardController.ts#L173](../../../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController.ts#L173)).
+>   With auto-open on, `open=dashboard&database=app` therefore opens **two** panels: the
+>   automatic cluster-wide one and the requested database-scoped one. A cluster-level
+>   `open=dashboard` reuses one panel, as intended.
+> - **Doc/code conflict:** [D0013](../decisions.md) reasons "the explicit open reuses the
+>   existing panel (`panelReused`), so nothing opens twice". That holds only without
+>   `database`. The code wins for behavior; D0013's reasoning should be corrected whichever
+>   option is chosen.
+> - `open=shell` and collection links: dashboard in the editor plus the terminal or Collection
+>   View. The last opened surface takes focus, so this is noise rather than a misdirected user.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Keep both and disclose ("Also opens: Cluster Dashboard" when the setting is on) | Review (O1) | No behavior change; honest | Longer consent; still two panels for a database-scoped dashboard link |
+> | Suppress auto-open for any explicit destination | Review (O1) | One predictable surface | Needs a per-connection "skip auto-open once" hint into `ClusterItemBase` (the D0013 rejected-alternative cost); changes the preference's meaning in this one context |
+> | **Suppress auto-open only when the link asks for a dashboard** (`open=dashboard`): the explicit one replaces it | Verification | Fixes the only real duplicate (two dashboards), keeps the bare/shell/collection behavior users already see from `/connect`; the cost is the same one-shot hint | Shell and collection links still show a dashboard first; still needs the hint plumbing |
+>
+> **Recommendation:** fix D0013's wording now (doc-only). Choose between the two suppress
+> options after one workbench run with the setting on; the dashboard-only option is the
+> minimal fix for the double panel.
+
+<a id="f08"></a>
+
 ### F08. Error wording is unevenly actionable and certain ⚠️
 
 **Priority:** P2 · **Status:** 🟠 Open
@@ -324,6 +510,30 @@ test of every account's access in every cloud.
 💡 **Suggestion:** Use "Could not find this subscription among your signed-in accounts"
 and mention account, tenant, and selected Azure cloud. Add one concrete repair action
 to bare validation/resource errors.
+
+> **🔎 Verification** · ✅ **Confirmed** · Priority **P2 kept** · In scope (strings are new in #1067).
+>
+> - The subscription check is "no `getSubscriptions(false)` entry matched"
+>   ([azureSubscription.ts#L82-L95](../../../../../src/deepLinks/azureSubscription.ts#L82)).
+>   That is absence from the list, not an access test. A tenant that is not signed in yet, or the
+>   wrong cloud, gives the same result.
+> - **Sharper than the review states:** the *tenant prompt*
+>   ([#L108](../../../../../src/deepLinks/azureSubscription.ts#L108)) says no account "can access"
+>   the subscription, then asks the user to sign in to the tenant. The reason for that prompt is
+>   that an account may well have access once it is signed in to that tenant. The two sentences
+>   contradict each other. This is the copy fix with the most value.
+> - `Azure discovery is not available.` is effectively unreachable: both providers are
+>   registered at activation. Do not spend copy effort there.
+> - Resource-ID and tenant-ID validation are for link authors. Naming the expected shape is
+>   cheap and enough.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | "Could not find this subscription among your signed-in accounts" + account/tenant/cloud hints | Review | Accurate; actionable | Three hints in one toast is long |
+> | **Same wording, but context-specific hints:** tenant prompt → `We could not find subscription {0} with your current sign-in. The link names tenant {1}; signing in to it may give access.`; final error → keep `Manage Azure accounts` and add "Check that VS Code is signed in to the right Azure cloud." | Verification | Each message says only what applies at that point; no contradiction | Two strings instead of one shared string |
+>
+> Validation: `This DocumentDB link has an invalid Azure resource ID. Expected /subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.DocumentDB/<mongoClusters|databaseAccounts>/<name>.`
+> and `… invalid Azure tenant ID. Expected a GUID.` ARM not-found/forbidden: add "Check the link, or ask the resource owner for read access."
 
 ### F09. Diagnostic content is useful but too heavy for a modal headline ⚠️
 
@@ -343,6 +553,26 @@ such as "Username and Password".
 authentication names with the picker. Consider a separate structured presentation later;
 do not truncate away the cause or invent unverified cloud advice.
 
+> **🔎 Verification** · ◐ **Observations correct; the layout is a documented convention** ·
+> Priority **P2 → P3** for #1067 · Owned by the error-translation, SRV and sovereign-cloud
+> features, not by deep links.
+>
+> - "Diagnosis as the modal heading, raw error as detail" is the documented pattern on every
+>   surface ([error-translation skill](../../../../../.github/skills/error-translation/SKILL.md),
+>   "Adding a call site" and "Writing the message"). It is used the same way by the playground,
+>   commands and webviews, so it is not a deep-link inconsistency. The skill already caps messages
+>   at one paragraph for this reason.
+> - Literal backticks in the two SRV strings
+>   ([SrvDnsDiagnosticsProvider.ts#L41](../../../../../src/documentdb/srv/SrvDnsDiagnosticsProvider.ts#L41))
+>   are real but cosmetic: replace `` `mongodb://` `` with "mongodb://" quotes in a copy pass.
+> - "native DocumentDB authentication" versus the picker's `Username and Password` is a valid,
+>   cheap alignment for the Entra rules owner.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Short heading + diagnosis + raw detail everywhere | Review (O2 option 2) | Easier to scan | Reverses a documented convention across 6 surfaces; webview `displayErrorMessage` has the same shape; not a deep-link change |
+> | **Leave the layout; do the small copy fixes (backticks, auth-method name) with the providers' owners** | Verification | Keeps one convention; tiny diffs | Long Government/broker headings stay long |
+
 ### F10. A saved connection in a folder can look like nothing happened ⚠️
 
 **Priority:** P2 · **Status:** 🟠 Open
@@ -358,6 +588,53 @@ lookup/reveal failures and records telemetry without user feedback. A subsequent
 
 💡 **Suggestion:** Keep this explicitly separate as a pre-existing follow-up. At minimum,
 confirm the destination was not reached rather than reporting successful navigation.
+
+> **🔎 Verification** · ✅ **Confirmed, and #1067 makes it easier to hit** · Priority **P2 kept**.
+>
+> - `revealInConnectionsView` and both target checks build the flat path
+>   (`buildConnectionsViewTreePath`), and `revealConnectionsViewElement` swallows the miss.
+> - With the new `open=` on a connection inside a folder: never connected → silent return
+>   ([vscodeUriHandler.ts#L681](../../../../../src/vscodeUriHandler.ts#L681)); connected earlier
+>   in the session → the flat `findNodeById` misses and A13 says the connection may have failed,
+>   which is **wrong** in that case.
+> - **The fix is cheaper than "follow-up" suggests:** a folder-aware
+>   [`buildFullTreePath(storageId, zone)`](../../../../../src/tree/connections-view/connectionsViewHelpers.ts#L95)
+>   already exists and already adds `localEmulators`. Database and collection segments append to
+>   it as they do now.
+>
+> | Option | Proposed by | Pros | Cons |
+> | --- | --- | --- | --- |
+> | Keep as a follow-up; at minimum report "not reached" | Review | No risk to #1067 | Still needs a new message; the wrong-cause A13 stays; folder users are exactly the "Local Connections (Legacy)" migrants this feature targets |
+> | **Use `buildFullTreePath` in `revealInConnectionsView` and both target checks** | Verification | Removes the cause rather than reporting it; ~20 lines; existing helper | Recursive `findNodeById` across folders needs a test with a nested connection; adds one storage read per link |
+>
+> **Recommendation:** fix with `buildFullTreePath`, in #1067 if the operator accepts the
+> scope, otherwise as the very next PR. Remove the "Known limitation" comment with it.
+
+<a id="f11"></a>
+
+### F11. A link does not retry a cluster whose last expansion failed 🆕
+
+**Priority:** P2 (added by verification) · **Status:** 🟠 Open
+
+**Finding:** A failed cluster expansion is cached in `failedChildrenCache` until the user
+clicks Retry ([BaseExtendedTreeDataProvider.ts#L528](../../../../../src/tree/BaseExtendedTreeDataProvider.ts#L528)).
+The Azure reveal resets that state for the **provider root** only
+([discoveryViewHelpers.ts#L83-L88](../../../../../src/tree/discovery-view/discoveryViewHelpers.ts#L83)),
+and a unit test pins "resets only the failed provider root". Opening the same link again after
+a failed connect, for example after fixing a firewall rule, makes no new attempt: the expansion
+returns the cached `Click here to retry`, no client exists, and the flow returns quietly
+([#L150-L154](../../../../../src/tree/discovery-view/discoveryViewHelpers.ts#L150)). The user sees
+the old retry row and no message. The Connections path has the same gap (pre-existing).
+Source-derived, not exercised.
+
+| Option | Proposed by | Pros | Cons |
+| --- | --- | --- | --- |
+| **Reset the cluster node's error state before expanding**, as for the provider root | Verification | Opening a link is an explicit "try again"; one call plus updating the existing test | One more auth attempt per click (user-initiated, so no lockout concern beyond clicking Retry); may re-prompt the auth wizard |
+| Leave it, but show "review-cluster could not connect last time. Use Retry in the Discovery view." | Verification | No new connection attempt | Adds a message to work around state the link could simply clear |
+
+**Recommendation:** reset, in #1067 for the Azure path. Mirror it on the Connections path in
+the F10 change. The test name `resets only the failed provider root…` is not a `TDD:` contract,
+but it records an intent, so confirm before changing it.
 
 ## P3 - Nice-to-have / cosmetic / acknowledged
 
@@ -379,6 +656,15 @@ No UX fixes made by this pass. Production strings and behavior are unchanged.
 | Live visual, keyboard, screen-reader, and sovereign-cloud checks | Not performed |
 | Follow-on fixes | Await operator choices; record reasons before changing behavior |
 
+### Verification pass
+
+| Work | Outcome |
+| --- | --- |
+| Each finding rechecked against source `05901fe1` | Inline `🔎 Verification` blocks under F01-F10; priorities overridden where warranted |
+| New finding | F11, cluster error state not reset by the link |
+| Doc/code conflict | D0013 "nothing opens twice" is false for database-scoped dashboard links (F07) |
+| Runtime checks | Still none; everything remains source-derived |
+
 ## Open ideas - options, pros & cons
 
 ### O1. Explicit destination versus automatic dashboard (F07)
@@ -391,6 +677,9 @@ No UX fixes made by this pass. Production strings and behavior are unchanged.
 💡 **Suggested:** Decide after exercising shell and Collection View with the setting on.
 No accepted decision is changed by this preparation.
 
+> **🔎 Verification:** a third option (suppress auto-open only for `open=dashboard`) and the
+> two-panel evidence are in [F07](#f07).
+
 ### O2. Rich diagnosis versus generic connection heading (F01, F09)
 
 | Option | Pros | Cons |
@@ -400,6 +689,10 @@ No accepted decision is changed by this preparation.
 
 💡 **Suggested:** First close the missing-diagnosis gap using existing mechanisms; assess
 layout separately in the real workbench.
+
+> **🔎 Verification:** agree with the order. Option 1 is the documented convention
+> (error-translation skill), so option 2 is a cross-feature change, not a deep-link one. See the
+> shared-helper proposal in F01 and the scope note in F09.
 
 ## Appendix A - presentation walkthrough
 
@@ -572,6 +865,9 @@ was returned", especially with a wrong selected cloud or stale sign-in.
 `Sign in to Azure` would be a more informative first title than `Sign in`.
 Explain tenant as "organization (tenant)" on first use if the audience includes newcomers.
 
+> **🔎 Verification:** the tenant prompt's two sentences contradict each other ("cannot access",
+> then "sign in to continue"). Proposed replacement in [F08](#f08).
+
 ### A6 - Filter-change consent
 
 **Trigger:** provider hidden **OR** tenant hidden **OR** subscription excluded. A single
@@ -730,6 +1026,11 @@ opening is already clear; add feedback where the requested destination was not r
 "the link did nothing". This is an inherited gap, not evidence that the new Azure path
 has the same folder problem.
 
+> **🔎 Verification:** two rows above need correcting. (1) "Explicit dashboard for an already open
+> matching … scope": with auto-open on, a database-scoped `open=dashboard` opens a **second**
+> panel next to the automatic cluster-wide one ([F07](#f07)). (2) The Azure path has its own
+> quiet return: a cluster whose previous expansion failed is not retried ([F11](#f11)).
+
 ### A11 - Invalid-link messages (bundled)
 
 **Current:** non-modal error notification through the SDK; output records the error.
@@ -826,6 +1127,10 @@ the database lookup failed. This is proposed copy, **not current output**.
 ⚠️ **Evaluation, F08:** The cluster message appropriately says "may", but should give an
 action such as refreshing Discovery or checking visibility. A failed resource list could
 also precede this message; confirm whether two notifications appear in that live journey.
+
+> **🔎 Verification:** answered from source. Yes, for the database/collection message: a
+> `listDatabases` failure shows the cluster modal, leaves the client in place, and the flow then
+> adds this toast. Fix in [F02](#f02).
 
 ### A14 - Connection-error shells and recovery
 
