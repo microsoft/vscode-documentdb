@@ -981,6 +981,9 @@ describe('runConnectionDiagnostics', (): void => {
                     connectionOutcome: outcome,
                     firstBlockingCheck: 'resolveTarget',
                     findingCodes: code,
+                    targetSource: 'source' in data ? data.source : 'none',
+                    targetFailureReason: 'reason' in data ? data.reason : 'none',
+                    targetHttpStatus: 'statusCode' in data ? String(data.statusCode) : 'none',
                 });
                 expect(JSON.stringify(run)).not.toContain('secret');
                 expect(events.every((event): boolean => event.error === undefined)).toBe(true);

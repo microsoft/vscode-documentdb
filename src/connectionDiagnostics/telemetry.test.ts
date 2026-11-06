@@ -132,6 +132,10 @@ describe('completed connection telemetry', (): void => {
         applyCompletedRunTelemetry(ctx, run);
         expect(JSON.stringify(ctx.telemetry)).not.toMatch(/secret-host|secret-user|secret-message/);
         expect(ctx.telemetry.measurements).not.toHaveProperty('retryWouldHelp');
+        // Whole-error masking redacts any property named like an error, whatever its value.
+        expect(Object.keys(ctx.telemetry.properties).filter((key): boolean => /(error|exception)/i.test(key))).toEqual(
+            [],
+        );
         return ctx.telemetry;
     }
 
@@ -274,5 +278,53 @@ describe('completed connection telemetry', (): void => {
                 }),
             ]).properties,
         ).toMatchObject({ connectionOutcome: 'failed', firstBlockingCheck: 'prepare', firstBlockingPhase: 'none' });
+    });
+
+    it('reports no target-resolution categories when the target resolved', (): void => {
+        expect(telemetry([check('resolveTarget'), check('authenticate')]).properties).toMatchObject({
+            targetSource: 'none',
+            targetFailureReason: 'none',
+            targetHttpStatus: 'none',
+        });
+    });
+
+    it.each([
+        ['target.sourceInaccessible', { source: 'azure', reason: 'accessDenied', statusCode: 403 }, '403'],
+        ['target.sourceInaccessible', { source: 'kubernetes', reason: 'unreachable' }, 'none'],
+        ['target.sourceInaccessible', { source: 'atlas', reason: 'signInRequired', statusCode: 401 }, '401'],
+        ['target.endpointMissing', { source: 'kubernetes', reason: 'pending' }, 'none'],
+        ['target.notFound', { source: 'azure', statusCode: 404 }, '404'],
+    ] as const)('distinguishes %s from %j', (code, data, httpStatus): void => {
+        const properties = telemetry([
+            check('resolveTarget', { status: 'fail', findings: [finding(code, { ...data, errorName: 'RestError' })] }),
+            check('authenticate', {
+                status: 'skipped',
+                skippedBecause: { reason: 'dependencyFailed', checkId: 'resolveTarget' },
+            }),
+        ]).properties;
+        expect(properties).toMatchObject({
+            firstBlockingCheck: 'resolveTarget',
+            findingCodes: code,
+            targetSource: data.source,
+            targetFailureReason: 'reason' in data ? data.reason : 'none',
+            targetHttpStatus: httpStatus,
+        });
+    });
+
+    it('never sends unrecognized target-resolution values', (): void => {
+        expect(
+            telemetry([
+                check('resolveTarget', {
+                    status: 'fail',
+                    findings: [
+                        finding('target.sourceInaccessible', {
+                            source: 'secret-host',
+                            reason: 'secret-message',
+                            statusCode: 'secret-user',
+                        }),
+                    ],
+                }),
+            ]).properties,
+        ).toMatchObject({ targetSource: 'none', targetFailureReason: 'none', targetHttpStatus: 'none' });
     });
 });

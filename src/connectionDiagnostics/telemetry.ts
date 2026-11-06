@@ -13,6 +13,17 @@ import { type RunConnectionDiagnosticsOptions } from './runConnectionDiagnostics
 import { extensionFindingCodes, type DiagnosticsCorrelation, type FindingCode } from './types';
 
 const knownFindingCodes: ReadonlySet<string> = new Set([...builtInFindingCodes, ...extensionFindingCodes]);
+const targetSources: ReadonlySet<unknown> = new Set(['savedConnection', 'azure', 'kubernetes', 'atlas', 'other']);
+// Source-read reasons (`SourceInaccessibleReason`) and endpoint reasons from `resolveTarget`.
+const targetFailureReasons: ReadonlySet<unknown> = new Set([
+    'signInRequired',
+    'accessDenied',
+    'unreachable',
+    'notConnectable',
+    'other',
+    'notProvided',
+    'pending',
+]);
 
 export function configureDiagnosticsTelemetry(context: IActionContext): void {
     context.telemetry.maskEntireErrorMessage = true;
@@ -139,4 +150,22 @@ export function applyCompletedRunTelemetry(context: IActionContext, run: Diagnos
             ? aadstsCode
             : 'none';
     context.telemetry.properties.coverageLimited = run.coverage.limited ? 'true' : 'false';
+    applyTargetResolutionTelemetry(context, run.results);
+}
+
+/** Which source failed to supply the connection details, and why. Bounded categories only. */
+function applyTargetResolutionTelemetry(context: IActionContext, results: readonly CheckResult<FindingCode>[]): void {
+    const properties = context.telemetry.properties;
+    const resolveTarget = results.find((check): boolean => check.checkId === 'resolveTarget');
+    const data =
+        resolveTarget?.status === 'fail'
+            ? resolveTarget.findings.find((finding): boolean => finding.code.startsWith('target.'))?.data
+            : undefined;
+    properties.targetSource = targetSources.has(data?.source) ? String(data?.source) : 'none';
+    properties.targetFailureReason = targetFailureReasons.has(data?.reason) ? String(data?.reason) : 'none';
+    const status = data?.statusCode;
+    properties.targetHttpStatus =
+        typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599
+            ? String(status)
+            : 'none';
 }
