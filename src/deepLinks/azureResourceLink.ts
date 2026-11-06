@@ -43,7 +43,9 @@ export function parseAzureResourceLink(resourceId: string, tenantId?: string): A
         segments[6]?.toLowerCase() !== 'microsoft.documentdb' ||
         (resourceType !== 'mongoclusters' && resourceType !== 'databaseaccounts')
     ) {
-        throw new Error(vscode.l10n.t('This link points to an Azure resource type the DocumentDB extension cannot open.'));
+        throw new Error(
+            vscode.l10n.t('This link points to an Azure resource type the DocumentDB extension cannot open.'),
+        );
     }
 
     if (tenantId !== undefined && !guid.test(tenantId)) {

@@ -31,9 +31,7 @@ export async function computeVisibilityChanges(
         unfilterTenant: isTenantFilteredOut(subscription.tenantId, subscription.account.id),
         addSubscription:
             selectedSubscriptions.length > 0 &&
-            !selectedSubscriptions.some(
-                (id): boolean => id.split('/')[1] === subscription.subscriptionId,
-            ),
+            !selectedSubscriptions.some((id): boolean => id.split('/')[1] === subscription.subscriptionId),
     };
     ext.outputChannel.trace(
         `[DeepLink] Visibility changes: showProvider=${changes.showProvider} unfilterTenant=${changes.unfilterTenant} addSubscription=${changes.addSubscription}`,

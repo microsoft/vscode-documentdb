@@ -159,8 +159,7 @@ export async function revealInDiscoveryView(
                 report?.(vscode.l10n.t('Opening the database…'));
                 ext.outputChannel.trace(`[DeepLink] Looking up database ${request.database}`);
                 const dbId = `${clusterNode.id}/${request.database}`;
-                const node =
-                    (await provider.findNodeById(dbId)) ?? (await provider.findChildById(clusterNode, dbId));
+                const node = (await provider.findNodeById(dbId)) ?? (await provider.findChildById(clusterNode, dbId));
                 if (
                     !node ||
                     !('databaseInfo' in node) ||

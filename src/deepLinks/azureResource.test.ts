@@ -14,7 +14,16 @@ import { createCosmosDBManagementClient } from '../utils/azureClients';
 import { readAzureResource, type AzureResourceReadRequest } from './azureResource';
 
 vi.mock('../extensionVariables', () => ({
-    ext: { outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() }, },
+    ext: {
+        outputChannel: {
+            info: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            appendLine: vi.fn(),
+        },
+    },
 }));
 
 vi.mock('../plugins/service-azure-mongo-vcore/utils/clusterHelpers', () => ({

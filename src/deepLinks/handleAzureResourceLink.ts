@@ -38,9 +38,7 @@ export async function handleAzureResourceLinkRequest(
         .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true);
 
     const kindLabel =
-        link.kind === 'vcore'
-            ? vscode.l10n.t('Azure DocumentDB')
-            : vscode.l10n.t('Azure Cosmos DB for MongoDB (RU)');
+        link.kind === 'vcore' ? vscode.l10n.t('Azure DocumentDB') : vscode.l10n.t('Azure Cosmos DB for MongoDB (RU)');
 
     if (showUrlHandlingConfirmations) {
         const detail = [
@@ -153,7 +151,10 @@ export async function handleAzureResourceLinkRequest(
                 }
                 if (changes.unfilterTenant) {
                     detail.push(
-                        vscode.l10n.t('• Tenant {0} will no longer be hidden by your tenant filter.', subscription.tenantId),
+                        vscode.l10n.t(
+                            '• Tenant {0} will no longer be hidden by your tenant filter.',
+                            subscription.tenantId,
+                        ),
                     );
                 }
                 if (changes.addSubscription) {

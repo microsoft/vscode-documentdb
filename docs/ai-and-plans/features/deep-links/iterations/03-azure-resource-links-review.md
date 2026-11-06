@@ -56,16 +56,16 @@ regression. Both reviewers reassessed all eight candidates against the code.
 means one found it and the other subsequently validated it. Agreement on a defect does not
 necessarily mean agreement on the safest fix.
 
-| ID | Final severity, both reviewers | Finding | Origin | Agreement and disposition |
-| --- | --- | --- | --- | --- |
-| F1 | med | Repeated database/collection links lose warm-tree targets | RD1 / CR1 | **Both, independently; confirmed** |
-| F2 | med | Sign-in/filter recovery retains a provider-root retry cache | RD2 / CR2 | **Both, independently; confirmed** |
-| F3 | low | Discovery navigation drops the resolved Azure account identity | RD3 | **Both after gate: manual evidence needed**, not a confirmed new regression |
-| F4 | med | Raw query-key logging can expose credential material | RD4 | **Both after gate; confirmed** |
-| F5 | low | Connection-string links open a target after a failed/cancelled connection | CR3 | **Both after gate; confirmed**, impact narrowed |
-| F6 | low | Cancellation during Discovery navigation does not prevent opening the target | CR4 | **Both after gate; confirmed** |
-| F7 | low | A subscription display name is not explicitly masked in error telemetry | CR5 | **Both after gate; confirmed** |
-| F8 | low | Visibility checks disagree with the SDK's case-sensitive subscription filter | RD5 | **Both after gate; confirmed**, rare settings edge case |
+| ID  | Final severity, both reviewers | Finding                                                                      | Origin    | Agreement and disposition                                                   |
+| --- | ------------------------------ | ---------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------- |
+| F1  | med                            | Repeated database/collection links lose warm-tree targets                    | RD1 / CR1 | **Both, independently; confirmed**                                          |
+| F2  | med                            | Sign-in/filter recovery retains a provider-root retry cache                  | RD2 / CR2 | **Both, independently; confirmed**                                          |
+| F3  | low                            | Discovery navigation drops the resolved Azure account identity               | RD3       | **Both after gate: manual evidence needed**, not a confirmed new regression |
+| F4  | med                            | Raw query-key logging can expose credential material                         | RD4       | **Both after gate; confirmed**                                              |
+| F5  | low                            | Connection-string links open a target after a failed/cancelled connection    | CR3       | **Both after gate; confirmed**, impact narrowed                             |
+| F6  | low                            | Cancellation during Discovery navigation does not prevent opening the target | CR4       | **Both after gate; confirmed**                                              |
+| F7  | low                            | A subscription display name is not explicitly masked in error telemetry      | CR5       | **Both after gate; confirmed**                                              |
+| F8  | low                            | Visibility checks disagree with the SDK's case-sensitive subscription filter | RD5       | **Both after gate; confirmed**, rare settings edge case                     |
 
 **Suggested priority:** F4 (credential logging), F1 and F2 (broken navigation/recovery),
 then F5–F8. Investigate F3 separately before choosing an architectural fix. These are review
@@ -79,16 +79,16 @@ change that removes a hard failure, reusing patterns the code already has. Archi
 from the review tables are deliberately not taken. Each finding's section below gives the
 proposal in full.
 
-| ID | Proposal | Size |
-| --- | --- | --- |
-| F1 | **Fix:** on a cache miss, fall back to `findChildById` from the connected cluster/database node; add an exact collection-name check | ~10 lines |
-| F2 | **Fix:** in the reveal helper, reset the provider root's cached error state and reload it before looking for the subscription | ~8 lines |
-| F3 | **Won't fix** in this PR; existing multi-account behavior; open an issue only if reproduced | none |
-| F4 | **Fix:** log allow-listed parameter names plus `unknown=<n>` | ~6 lines |
-| F5 | **Fix:** skip `open=` dispatch when `ClustersClient.exists(storageId)` is false, matching the Azure path | ~6 lines |
-| F6 | **Fix:** one cancellation check after the Discovery reveal returns, before any surface opens | ~5 lines |
-| F7 | **Fix:** add the subscription display name to `context.valuesToMask` | 1 line |
-| F8 | **Fix:** compare subscription IDs exactly, as the SDK does; invert the one existing test | 1 line + test |
+| ID  | Proposal                                                                                                                            | Size          |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| F1  | **Fix:** on a cache miss, fall back to `findChildById` from the connected cluster/database node; add an exact collection-name check | ~10 lines     |
+| F2  | **Fix:** in the reveal helper, reset the provider root's cached error state and reload it before looking for the subscription       | ~8 lines      |
+| F3  | **Won't fix** in this PR; existing multi-account behavior; open an issue only if reproduced                                         | none          |
+| F4  | **Fix:** log allow-listed parameter names plus `unknown=<n>`                                                                        | ~6 lines      |
+| F5  | **Fix:** skip `open=` dispatch when `ClustersClient.exists(storageId)` is false, matching the Azure path                            | ~6 lines      |
+| F6  | **Fix:** one cancellation check after the Discovery reveal returns, before any surface opens                                        | ~5 lines      |
+| F7  | **Fix:** add the subscription display name to `context.valuesToMask`                                                                | 1 line        |
+| F8  | **Fix:** compare subscription IDs exactly, as the SDK does; invert the one existing test                                            | 1 line + test |
 
 ## F1 - med - Repeated links lose warm-tree database/collection targets
 
@@ -113,10 +113,10 @@ shell links share this path.
 descendant navigation. The intended contract is reliable navigation with expansion as the
 connect mechanism, not reconnecting or requiring the user to collapse the tree first.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Avoid destructive root reads; synchronize actual refreshes with workbench loading | Addresses cache lifetime and node-instance consistency; preserves unrelated expanded nodes | Requires explicit root/readiness ownership and refresh-ordering tests |
-| Use a guarded scoped child fetch when the database/collection cache misses | Smaller targeted change; can reuse scoped lookup machinery | Adds a listing request; can re-enter connection handling; existing helper compares IDs case-insensitively |
+| Option                                                                            | Pros                                                                                       | Cons                                                                                                      |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Avoid destructive root reads; synchronize actual refreshes with workbench loading | Addresses cache lifetime and node-instance consistency; preserves unrelated expanded nodes | Requires explicit root/readiness ownership and refresh-ordering tests                                     |
+| Use a guarded scoped child fetch when the database/collection cache misses        | Smaller targeted change; can reuse scoped lookup machinery                                 | Adds a listing request; can re-enter connection handling; existing helper compares IDs case-insensitively |
 
 **Recommendation:** Prefer non-destructive root/readiness access and synchronization with
 the workbench's loading generation after genuine refreshes. A scoped fallback may supplement
@@ -185,10 +185,10 @@ subsequent successful sign-in does not invalidate it.
 **Why introduced:** The failure cache predates the PR, but the new recovery flow changes
 the conditions that caused the failure without invalidating the affected provider root.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Reset the affected provider-root error state before refreshing/navigating | Targeted; reuses existing recovery API; preserves unrelated cluster authentication failures | Must identify the correct root and order invalidation before child loading |
-| Introduce a provider recovery operation that resets and refreshes together | Centralizes the required ordering for future callers | Larger API change for this PR |
+| Option                                                                     | Pros                                                                                        | Cons                                                                       |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Reset the affected provider-root error state before refreshing/navigating  | Targeted; reuses existing recovery API; preserves unrelated cluster authentication failures | Must identify the correct root and order invalidation before child loading |
+| Introduce a provider recovery operation that resets and refreshes together | Centralizes the required ordering for future callers                                        | Larger API change for this PR                                              |
 
 **Recommendation:** After subscription resolution succeeds, reset the affected provider-root
 error state and refresh that root before navigation. Coordinate the reload with the workbench:
@@ -245,11 +245,11 @@ duplicates before the hypothesized account switch matters. With tenant filtering
 visible and selected accounts may already agree. Both reviewers therefore withdrew the
 stronger characterization as a confirmed new regression.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Reproduce with two accounts and track the identity problem as a follow-up | Avoids an unproven architectural fix in this PR; separates existing duplicate-ID behavior from a new regression | Leaves a possible multi-account link limitation unresolved until tested |
-| Carry tenant/account identity into navigation and distinguish subscription ancestor nodes by principal | Preserves the resolved identity end to end; can retain stable resource-based cluster IDs | Changes tree paths; requires compatibility and multi-account tests |
-| Deduplicate subscription nodes using the resolver's account-selection policy | Smaller hierarchy change; one consistent selection policy | Hides alternative principals; must also honor tenant hints and permission differences |
+| Option                                                                                                 | Pros                                                                                                            | Cons                                                                                  |
+| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Reproduce with two accounts and track the identity problem as a follow-up                              | Avoids an unproven architectural fix in this PR; separates existing duplicate-ID behavior from a new regression | Leaves a possible multi-account link limitation unresolved until tested               |
+| Carry tenant/account identity into navigation and distinguish subscription ancestor nodes by principal | Preserves the resolved identity end to end; can retain stable resource-based cluster IDs                        | Changes tree paths; requires compatibility and multi-account tests                    |
+| Deduplicate subscription nodes using the resolver's account-selection policy                           | Smaller hierarchy change; one consistent selection policy                                                       | Hides alternative principals; must also honor tenant hints and permission differences |
 
 **Recommendation:** Obtain a live multi-account reproduction and track the underlying
 duplicate-ID/account-selection problem as a follow-up before changing tree identity.
@@ -291,10 +291,10 @@ therefore leave credential material in the information log.
 **Why introduced:** This raw-key logging is new. Logging parameter names is only safe when
 those names come from a trusted vocabulary, not arbitrary external input.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Log allow-listed parameter names plus an unknown-key count | Retains useful diagnostics; excludes attacker-controlled key text | Cannot show literal misspelled parameter names |
-| Log parameter counts only | Simplest privacy boundary | Less useful for diagnosing which supported arguments were supplied |
+| Option                                                     | Pros                                                              | Cons                                                               |
+| ---------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Log allow-listed parameter names plus an unknown-key count | Retains useful diagnostics; excludes attacker-controlled key text | Cannot show literal misspelled parameter names                     |
+| Log parameter counts only                                  | Simplest privacy boundary                                         | Less useful for diagnosing which supported arguments were supplied |
 
 **Recommendation:** Allow-listed names and an unknown-key count. Do not rely on masking
 parameter values to sanitize output-channel messages.
@@ -340,10 +340,10 @@ connect again; the shell can report missing authentication or open a failing ter
 **Why introduced:** `open=` on connection-string links is new. The Azure and connection-string
 paths should not disagree about whether a failed connection permits target dispatch.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Gate target dispatch on the established connection outcome | Avoids repeated prompts and failed target opens; aligns link variants | Must distinguish a client object from an actually successful connection |
-| Make target commands consume an explicit prior connection/cancellation result | Makes retries intentional and reusable | Broader command/API change |
+| Option                                                                        | Pros                                                                  | Cons                                                                    |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Gate target dispatch on the established connection outcome                    | Avoids repeated prompts and failed target opens; aligns link variants | Must distinguish a client object from an actually successful connection |
+| Make target commands consume an explicit prior connection/cancellation result | Makes retries intentional and reusable                                | Broader command/API change                                              |
 
 **Recommendation:** Prefer propagating an explicit expansion/connection outcome and dispatch
 only after success, with recognized cancellation handling and existing failure UI/telemetry.
@@ -399,10 +399,10 @@ open a collection, dashboard, or shell after cancellation.
 **Why introduced:** The new progress notification is cancellable, but the latter stages of
 the new flow do not observe cancellation.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
+| Option                                                                               | Pros                                                                | Cons                                                                                   |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | Pass the token through navigation; check between awaits and before opening a surface | Honors cancellation for subsequent steps; preserves useful progress | Cannot interrupt an already-running driver/auth operation without separate API support |
-| Make the non-interruptible phase explicitly non-cancellable | Avoids a misleading Cancel action | Removes cancellation during the slowest part and requires a distinct progress phase |
+| Make the non-interruptible phase explicitly non-cancellable                          | Avoids a misleading Cancel action                                   | Removes cancellation during the slowest part and requires a distinct progress phase    |
 
 **Recommendation:** Cooperative cancellation between navigation steps and immediately before
 surface dispatch, using recognized cancellation handling and the existing telemetry convention.
@@ -446,10 +446,10 @@ This is distinct from F4: a telemetry error message, not raw query-key output lo
 
 **Why introduced:** The error message and its subscription-name interpolation are new.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
+| Option                                                                            | Pros                                                     | Cons                                                                     |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Add the resolved subscription display name to the mask values before the ARM read | Narrow change; preserves the helpful user-facing message | Needs an end-to-end masking assertion, not only an array-membership test |
-| Use an already-masked identifier or omit the display name from the error | Reduces customer-defined data in the message | Less friendly diagnostics |
+| Use an already-masked identifier or omit the display name from the error          | Reduces customer-defined data in the message             | Less friendly diagnostics                                                |
 
 **Recommendation:** Add the resolved display name to `context.valuesToMask` before the ARM
 read and test the resulting telemetry error text without changing the user-facing explanation.
@@ -493,10 +493,10 @@ out. No repair is proposed, and Discovery cannot find the target.
 **Why introduced:** The SDK comparison predates the PR. The new recovery computation
 predicts visibility with different semantics from the API it needs to repair.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
+| Option                                                                                | Pros                                                 | Cons                                                |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------- |
 | Ensure the SDK-accepted canonical selection entry exists, preserving existing entries | Narrow fix; approved repair makes the target visible | May retain equivalent entries with different casing |
-| Normalize comparisons throughout the subscription provider | Consistent GUID semantics for all callers | Broader change outside the link flow |
+| Normalize comparisons throughout the subscription provider                            | Consistent GUID semantics for all callers            | Broader change outside the link flow                |
 
 **Recommendation:** Ensure the canonical entry is accepted by the actual filtering path,
 rather than changing the SDK or claiming the existing mixed-case entry is effective.
@@ -536,6 +536,7 @@ and subscription entries. After repair, `getSubscriptions(true)` must include th
   **Result:** 8 test files passed; **209 tests passed**. Existing mocks do not reproduce
   the cache and already-expanded workbench behaviors described above. Passing these tests
   is not evidence that the reported defects cannot occur.
+
 - Rubber-duck exercised production source in in-memory probes with mocked Azure/workbench
   boundaries for cache invalidation, retry-state persistence, account collisions, logging,
   and casing. These are review probes, not committed regression tests or live Azure checks.

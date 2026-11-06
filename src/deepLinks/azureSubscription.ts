@@ -60,7 +60,9 @@ export async function resolveAzureSubscription(
             { modal: true, detail: vscode.l10n.t('Sign in to Azure to open {0}.', request.resourceName) },
             signInButton,
         );
-        ext.outputChannel.trace(`[DeepLink] Azure sign-in confirmation: ${choice === signInButton ? 'accepted' : 'dismissed'}`);
+        ext.outputChannel.trace(
+            `[DeepLink] Azure sign-in confirmation: ${choice === signInButton ? 'accepted' : 'dismissed'}`,
+        );
         if (choice !== signInButton || !(await azureSubscriptionProvider.signIn())) {
             ext.outputChannel.trace('[DeepLink] Azure sign-in stopped');
             context.telemetry.properties.userCancelledAtStep = 'AzureSignIn';
@@ -78,12 +80,14 @@ export async function resolveAzureSubscription(
         const candidates = subscriptions.filter(
             (subscription) =>
                 subscription.subscriptionId.toLowerCase() === request.subscriptionId.toLowerCase() &&
-                (request.tenantId === undefined || subscription.tenantId.toLowerCase() === request.tenantId.toLowerCase()),
+                (request.tenantId === undefined ||
+                    subscription.tenantId.toLowerCase() === request.tenantId.toLowerCase()),
         );
         ext.outputChannel.trace(`[DeepLink] ${candidates.length} matching subscription(s) found`);
         context.telemetry.properties.subscriptionAccountCount = String(candidates.length);
         const subscription =
-            candidates.find((candidate) => !isTenantFilteredOut(candidate.tenantId, candidate.account.id)) ?? candidates[0];
+            candidates.find((candidate) => !isTenantFilteredOut(candidate.tenantId, candidate.account.id)) ??
+            candidates[0];
         if (subscription) {
             return subscription;
         }
@@ -123,9 +127,12 @@ export async function resolveAzureSubscription(
         {
             title: vscode.l10n.t('Manage Azure accounts'),
             callback: async (): Promise<void> => {
-                await callWithTelemetryAndErrorHandling('globalUriHandler.manageAzureAccounts', async (ctx): Promise<void> => {
-                    await provider.configureCredentials?.(ctx);
-                });
+                await callWithTelemetryAndErrorHandling(
+                    'globalUriHandler.manageAzureAccounts',
+                    async (ctx): Promise<void> => {
+                        await provider.configureCredentials?.(ctx);
+                    },
+                );
             },
         },
     ];

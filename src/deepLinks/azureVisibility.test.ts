@@ -31,7 +31,14 @@ vi.mock('../plugins/api-shared/azure/subscriptionFiltering/subscriptionFiltering
 }));
 vi.mock('../extensionVariables', (): object => ({
     ext: {
-        outputChannel: { info: vi.fn(), trace: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
+        outputChannel: {
+            info: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            appendLine: vi.fn(),
+        },
         context: { globalState: { get: vi.fn(), update: vi.fn() } },
         discoveryBranchDataProvider: { refresh: vi.fn() },
     },
@@ -140,7 +147,11 @@ describe('Azure deep-link visibility', (): void => {
         expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('azureResourceGroups');
         expect(configurationGet).toHaveBeenCalledWith('selectedSubscriptions');
         expect(setSelectedSubscriptionIds).toHaveBeenCalledExactlyOnceWith([...existingEntries, targetEntry]);
-        expect(existingEntries).toEqual(['Tenant-Z/Subscription-Z', 'tenant-a/subscription-a', 'Tenant-Z/Subscription-Z']);
+        expect(existingEntries).toEqual([
+            'Tenant-Z/Subscription-Z',
+            'tenant-a/subscription-a',
+            'Tenant-Z/Subscription-Z',
+        ]);
         expect(ext.context.globalState.get).not.toHaveBeenCalled();
         expect(ext.context.globalState.update).not.toHaveBeenCalled();
     });
