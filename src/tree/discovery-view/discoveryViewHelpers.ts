@@ -63,7 +63,7 @@ export async function waitForDiscoveryViewReady(context: IActionContext, maxAtte
     ext.outputChannel.trace(`[DeepLink] Discovery view timed out: attempts=${maxAttempts}`);
 }
 
-/** Returns undefined when the cluster did not connect (the node already explained why). */
+/** Returns undefined when the cluster expansion failed or did not connect (the node already explained why). */
 export async function revealInDiscoveryView(
     context: IActionContext,
     request: DiscoveryRevealRequest,
@@ -135,6 +135,12 @@ export async function revealInDiscoveryView(
                 );
             }
 
+            if (provider.hasNodeErrorState(clusterNode.id)) {
+                ext.outputChannel.trace('[DeepLink] Resetting the cluster error state');
+                provider.resetNodeErrorState(clusterNode.id);
+                provider.refresh(clusterNode);
+            }
+
             // Show the cluster first, then expand it. Reveal with expand awaits the node's children,
             // so expansion is the only connect.
             ext.outputChannel.trace('[DeepLink] Showing the cluster in the Discovery view');
@@ -146,6 +152,11 @@ export async function revealInDiscoveryView(
                 focus: !request.database,
                 expand: true,
             });
+            if (provider.hasNodeErrorState(clusterNode.id)) {
+                ext.outputChannel.trace('[DeepLink] Cluster expansion failed; the node already explained why');
+                context.telemetry.properties.openTargetResult = 'skippedClusterError';
+                return undefined;
+            }
             const clusterId = clusterNode.cluster.clusterId;
             const connected = ClustersClient.exists(clusterId);
             ext.outputChannel.trace(`[DeepLink] Cluster ${connected ? 'connected' : 'not connected'}`);
@@ -171,7 +182,9 @@ export async function revealInDiscoveryView(
                     ext.outputChannel.trace('[DeepLink] Database not found');
                     throw new Error(
                         vscode.l10n.t(
-                            'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+                            'Could not find database "{0}" on {1}. Check the name and your access, then open the link again.',
+                            request.database,
+                            request.displayName,
                         ),
                     );
                 }
@@ -201,7 +214,9 @@ export async function revealInDiscoveryView(
                         ext.outputChannel.trace('[DeepLink] Collection not found');
                         throw new Error(
                             vscode.l10n.t(
-                                'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.',
+                                'Could not find collection "{0}" in database "{1}". Check the name and your access, then open the link again.',
+                                request.collection,
+                                request.database,
                             ),
                         );
                     }

@@ -46,8 +46,6 @@ interface FakeClusterNode extends TreeElement {
     readonly cluster: TreeCluster<AzureClusterModel>;
 }
 
-const missingTargetMessage =
-    'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.';
 const getChildren = vi.mocked(ext.discoveryBranchDataProvider.getChildren);
 const getCachedChildren = vi.mocked(ext.discoveryBranchDataProvider.getCachedChildren);
 const hasNodeErrorState = vi.mocked(ext.discoveryBranchDataProvider.hasNodeErrorState);
@@ -221,14 +219,14 @@ describe('Discovery view helpers', () => {
     );
 
     it('resets only the failed provider root before revealing it and reloads stale retry children', async (): Promise<void> => {
-        hasNodeErrorState.mockReturnValue(true);
+        hasNodeErrorState.mockImplementation((id: string): boolean => id === rootNode.id);
         getCachedChildren.mockImplementation((node: TreeElement): TreeElement[] =>
             node === rootNode ? [createNode(`${rootNode.id}/retry`)] : (children.get(node) ?? []),
         );
 
         expect(await revealInDiscoveryView(context, request)).toMatchObject({ clusterNode });
 
-        expect(hasNodeErrorState).toHaveBeenCalledExactlyOnceWith(rootNode.id);
+        expect(hasNodeErrorState).toHaveBeenNthCalledWith(1, rootNode.id);
         expect(resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(rootNode.id);
         expect(refresh).toHaveBeenCalledExactlyOnceWith(rootNode);
         expect(resetNodeErrorState.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
@@ -245,13 +243,56 @@ describe('Discovery view helpers', () => {
     it('preserves cached subscription navigation without resetting or refreshing a healthy provider root', async (): Promise<void> => {
         expect(await revealInDiscoveryView(context, request)).toMatchObject({ clusterNode });
 
-        expect(hasNodeErrorState).toHaveBeenCalledExactlyOnceWith(rootNode.id);
+        expect(hasNodeErrorState).toHaveBeenNthCalledWith(1, rootNode.id);
         expect(resetNodeErrorState).not.toHaveBeenCalled();
         expect(refresh).not.toHaveBeenCalled();
         expect(getChildren.mock.calls).toEqual([[undefined], [undefined]]);
         expect(getCachedChildren.mock.calls).toEqual([[rootNode], [subscriptionNode]]);
         expect(reveal).toHaveBeenNthCalledWith(1, rootNode, { select: false, focus: false, expand: true });
         expect(reveal).toHaveBeenNthCalledWith(2, subscriptionNode, { select: false, focus: false, expand: true });
+    });
+
+    it('resets a failed cluster before revealing and expanding it', async (): Promise<void> => {
+        hasNodeErrorState.mockImplementation(
+            (id: string): boolean => id === clusterNode.id && resetNodeErrorState.mock.calls.length === 0,
+        );
+
+        expect(await revealInDiscoveryView(context, request)).toMatchObject({ clusterNode });
+
+        expect(resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(clusterNode.id);
+        expect(refresh).toHaveBeenCalledExactlyOnceWith(clusterNode);
+        expect(resetNodeErrorState.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
+        expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(reveal.mock.invocationCallOrder[2]);
+        expect(reveal).toHaveBeenNthCalledWith(4, clusterNode, { select: true, focus: true, expand: true });
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Resetting the cluster error state');
+    });
+
+    it('does not reset or refresh a healthy cluster', async (): Promise<void> => {
+        expect(await revealInDiscoveryView(context, request)).toMatchObject({ clusterNode });
+
+        expect(hasNodeErrorState.mock.calls).toEqual([[rootNode.id], [clusterNode.id], [clusterNode.id]]);
+        expect(resetNodeErrorState).not.toHaveBeenCalled();
+        expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it('stops without looking up the database when cluster expansion fails', async (): Promise<void> => {
+        let clusterExpansionFailed = false;
+        hasNodeErrorState.mockImplementation((id: string): boolean => id === clusterNode.id && clusterExpansionFailed);
+        reveal.mockImplementation(async (node, options): Promise<void> => {
+            if (node === clusterNode && options?.expand) {
+                clusterExpansionFailed = true;
+            }
+        });
+
+        expect(await revealInDiscoveryView(context, { ...request, database: 'db' })).toBeUndefined();
+
+        expect(context.telemetry.properties.openTargetResult).toBe('skippedClusterError');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith(
+            '[DeepLink] Cluster expansion failed; the node already explained why',
+        );
+        expect(exists).not.toHaveBeenCalled();
+        expect(findNodeById).not.toHaveBeenCalled();
+        expect(findChildById).not.toHaveBeenCalled();
     });
 
     it('waits for cluster expansion before checking the client', async () => {
@@ -407,7 +448,7 @@ describe('Discovery view helpers', () => {
 
     it('reports the existing URL error when the requested database is missing', async () => {
         await expect(revealInDiscoveryView(context, { ...request, database: 'missing-database' })).rejects.toThrow(
-            missingTargetMessage,
+            'Could not find database "missing-database" on example. Check the name and your access, then open the link again.',
         );
         expect(findNodeById).toHaveBeenCalledExactlyOnceWith(`${clusterNode.id}/missing-database`);
         expect(reveal.mock.calls).toEqual([
@@ -482,7 +523,9 @@ describe('Discovery view helpers', () => {
 
         await expect(
             revealInDiscoveryView(context, { ...request, database: 'db', collection: 'products' }),
-        ).rejects.toThrow(missingTargetMessage);
+        ).rejects.toThrow(
+            'Could not find collection "products" in database "db". Check the name and your access, then open the link again.',
+        );
 
         expect(findChildById).toHaveBeenCalledExactlyOnceWith(databaseNode, `${databaseNode.id}/products`);
         expect(reveal).not.toHaveBeenCalledWith(collectionNode, expect.anything());
@@ -491,7 +534,9 @@ describe('Discovery view helpers', () => {
     it('reports the existing URL error when the requested collection is missing', async () => {
         await expect(
             revealInDiscoveryView(context, { ...request, database: 'db', collection: 'missing-collection' }),
-        ).rejects.toThrow(missingTargetMessage);
+        ).rejects.toThrow(
+            'Could not find collection "missing-collection" in database "db". Check the name and your access, then open the link again.',
+        );
         expect(findNodeById.mock.calls).toEqual([[`${clusterNode.id}/db`], [`${databaseNode.id}/missing-collection`]]);
         expect(reveal.mock.calls).toEqual([
             [rootNode, { select: false, focus: false, expand: true }],
