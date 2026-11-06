@@ -205,7 +205,7 @@ export async function handleAzureResourceLinkRequest(
 
             context.telemetry.properties.failureStage = 'revealCluster';
             ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
-            return revealInDiscoveryView(
+            const result = await revealInDiscoveryView(
                 context,
                 {
                     providerId: link.providerId,
@@ -217,6 +217,12 @@ export async function handleAzureResourceLinkRequest(
                 },
                 report,
             );
+            if (token.isCancellationRequested) {
+                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
+                return undefined;
+            }
+            return result;
         },
     );
 }

@@ -224,15 +224,22 @@ describe('handleAzureResourceLinkRequest', (): void => {
         },
     );
 
-    it('does not check progress cancellation after reveal has started', async (): Promise<void> => {
+    it('returns the reveal result when progress is not cancelled', async (): Promise<void> => {
+        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
+
+        expect(context.telemetry.properties.userCancelledAtStep).toBeUndefined();
+    });
+
+    it('stops when progress is cancelled during reveal', async (): Promise<void> => {
         vi.mocked(revealInDiscoveryView).mockImplementation(async (): Promise<DiscoveryRevealResult> => {
             token.isCancellationRequested = true;
             return revealResult;
         });
 
-        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
+        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBeUndefined();
 
-        expect(context.telemetry.properties.userCancelledAtStep).toBeUndefined();
+        expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureProgress');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Cancelled from the progress notification');
     });
 
     it('logs the parsed link and confirmation without Azure identifiers', async (): Promise<void> => {
