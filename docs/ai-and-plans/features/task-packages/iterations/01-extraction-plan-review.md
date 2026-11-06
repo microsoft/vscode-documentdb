@@ -141,7 +141,12 @@ regression checks above (mixed outcome, and the same after an earlier partial at
 **Author decision and reasoning:** accepted the proposed resolution above (operator, 2026-11-06:
 "perform the work as now noted in the review file"). No further rationale was given.
 
-**Implementation/progress:** not started; this review does not authorize a fix.
+**Done (2026-11-06), commit `a63ad13e`:** `writeBatchWithRetry` now returns a returned outcome
+straight away when the strategy is Abort and `result.errors` is nonempty, before partial-progress
+or remaining handling. `flushBuffer` records the counts once and fails with `StreamingWriterError`.
+Model: sol (retry-loop logic). No decisions beyond the accepted resolution. Tests: 2 added in
+`StreamingDocumentWriter.outcome.test.ts` (mixed conflict/throttle outcome; the same after an
+earlier partial attempt), both failing before the fix.
 
 ## F2 - Explicit `undefined` settings overwrite defaults
 
@@ -209,7 +214,15 @@ layer, plus one invalid-value case that throws before any write.
 **Author decision and reasoning:** accepted the proposed resolution above (operator, 2026-11-06:
 "perform the work as now noted in the review file"). No further rationale was given.
 
-**Implementation/progress:** not started.
+**Done (2026-11-06), commit `60d88cc5`:** `resolveStreamingWriterSettings` drops `undefined` leaves
+from each layer before merging (`definedOnly` helper), then requires the batch sizes, the minimum
+batch size and `maxAttemptsWithoutProgress` to be integers of at least 1, and `startMode` to be
+`fast` or `ru-limited`. Because `BatchSizeAdapter` resolves through the same function, both
+construction paths are covered. Model: terra (self-contained). Leader decision, 90%: the
+validation errors are plain English `Error`s, not injected strings. They signal a programming
+error, and injecting them would widen the public options API. Tests: 35 cases added in
+`streamingWriterSettings.test.ts` (undefined inheritance per layer, invalid values, adapter
+construction).
 
 ## F3 - Missing `remaining` bypasses retry controls
 
@@ -278,7 +291,13 @@ rewrite that prefix.
 **Author decision and reasoning:** accepted the proposed resolution above (operator, 2026-11-06:
 "perform the work as now noted in the review file"). No further rationale was given.
 
-**Implementation/progress:** not started.
+**Done (2026-11-06), commit `224b63c6`:** the returned-outcome route now sets
+`currentBatch = outcome.remaining ?? currentBatch.slice(outcome.result.processedCount)`, and
+`BatchAttemptOutcome.remaining` documents that default and that unordered adapters must supply it.
+Model: terra (one line plus tests). No decisions beyond the accepted resolution. Tests: 2 added in
+`StreamingDocumentWriter.outcome.test.ts` (omitted remaining exhausts the retry limit with waits;
+an omitted remaining after a partial prefix retries only the suffix). Noticed, not changed: the
+throttle debug line logs 0 remaining when `remaining` is omitted; it is cosmetic.
 
 ## F4 - Default telemetry runner corrupts terminal task state
 
@@ -331,7 +350,12 @@ initialization-swallowing behavior to its separately tracked item.
 **Author decision and reasoning:** accepted the proposed resolution above (operator, 2026-11-06:
 "perform the work as now noted in the review file"). No further rationale was given.
 
-**Implementation/progress:** not started.
+**Done (2026-11-06), commit `dfc896c0`:** both `runWork().catch` handlers in `start()` now set
+Failed only when the task is not already final. The `runWork` rethrow and the initialization path
+are unchanged. Model: sol (task lifecycle). No decisions beyond the accepted resolution. Tests: 4
+added in `taskService.test.ts` with the default runner (Stop then reject stays Stopped with one
+terminal notification; ordinary failure emits Failed once with the original error; runner failures
+still fail the task), three of them failing before the fix.
 
 ## F5 - An uncapped server delay can overflow Node's timer
 
@@ -380,7 +404,9 @@ a real source of such hints.
 **Author decision and reasoning:** accepted the proposed resolution above (operator, 2026-11-06:
 "perform the work as now noted in the review file"). No further rationale was given.
 
-**Implementation/progress:** not started.
+**Done (2026-11-06), commit `8272dd9b`:** won't fix. Design §5.3 now lists the timer maximum as a
+known limitation, with a link back to this finding. Written by the leader (docs only). No code or
+tests changed.
 
 ## Draft readiness observations - separate from runtime findings
 
@@ -412,13 +438,24 @@ not replace addressing or explicitly deciding on F1-F5.
 **Author decision and reasoning:** accepted the proposed resolution above (operator, 2026-11-06:
 "perform the work as now noted in the review file"). No further rationale was given.
 
-**Implementation/progress:** not started.
+**Done (2026-11-06), commit `ec046c0a`:** lint item only. `PromptConflictResolutionStep` now
+checks the picked ID against `documentDbSupportedConflictStrategies` and assigns it directly,
+removing the four `no-unsafe-enum-comparison` errors. The existing localized error string is
+unchanged. Model: luna (mechanical). Tests: existing picker tests pass unchanged. l10n and
+Prettier remain deferred to Case 2.
 
 ## Outcome
 
 **Review status:** independent review, feedback lookup, consolidation and the scoped
-cross-vendor validation gate are complete. Author decisions and implementation remain
-pending; no author rationale or approval is inferred.
+cross-vendor validation gate are complete. Author decisions are recorded under each item
+(2026-11-06: all proposals accepted).
+
+**Implementation (2026-11-06, `/lead`):** F1-F4 and the lint item are fixed in one commit each, and
+F5 is closed as won't-fix with a design note; see the done notes above. After the batch, Case 1
+passed: `npm run build`, plus `npx vitest run src/services/taskService src/commands/pasteCollection`
+(22 files, 298 tests). The PR is still a draft; Case 2 (including `l10n` and `prettier-fix`) is
+deferred until ready-for-review. No `vscode.l10n.t` strings were added or removed. The sections below
+describe the original review passes.
 
 ### Verified
 
