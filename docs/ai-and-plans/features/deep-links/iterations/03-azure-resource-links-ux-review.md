@@ -179,7 +179,7 @@ so they do not silently become requirements for this PR.
 | F03 | **P1**   | ◐ **P3**, fold into F01/F10   | Blocking failures alternate between modal, toast, and silent stop           | Mixed new/shared                                   | 🚫 Closed      |
 | F04 | **P2**   | ✅ **P3**                     | Action labels, titles, and surface names drift                              | Mixed new/shared                                   | ✅ Implemented |
 | F05 | **P2**   | ✅ **P2**                     | Filter prompt omits persistence and no-rollback consequences                | New presentation, intentional persistent design    | ✅ Implemented |
-| F06 | **P2**   | ✅ **P3**, reframed           | Progress cancellation waits for operations; some waits have no status       | Mixed new/shared                                   | ✅ Implemented |
+| F06 | **P2**   | ✅ **P3**, reframed           | Progress cancellation waits for operations; some waits have no status       | Mixed new/shared                                   | ↩️ Reverted (operator) |
 | F07 | **P2**   | ✅ **P2**, + D0013 drift      | "Opens: Shell/Collection View" omits automatic dashboard                    | Shared behavior exposed by new destinations        | ✅ Implemented |
 | F08 | **P2**   | ✅ **P2**                     | Some failures lack a next step or overstate what was established            | New messages plus inherited validation wording     | ✅ Implemented |
 | F09 | **P2**   | ◐ **P3**, convention          | Long diagnostic headings, jargon, and literal formatting reduce readability | Shared/pre-existing                                | ✅ Implemented |
@@ -427,7 +427,7 @@ proposal to silently change that design.
 
 ### F06. Cancel is checkpoint-based, not an immediate abort ⚠️
 
-**Priority:** P2 · **Status:** ✅ Implemented
+**Priority:** P2 · **Status:** ↩️ Reverted by operator decision (see notes below)
 
 **Observation:** [A7](#a7---progress-and-cancel) has a cancellable Azure notification.
 
@@ -461,6 +461,8 @@ completed filter changes.
 > | Keep outer progress but make it non-cancellable from reveal onward                                                                                                                                                                        | Verification | Keeps the stage text                                                       | VS Code cannot toggle `cancellable` mid-flight; would need two sequential progress calls anyway                                                                                                           |
 
 > **Done (2026-11-06), commit `05f1d9fd` (terra):** the "Opening from Azure" notification now ends after the filter step. `revealInDiscoveryView` runs afterwards, with only the view spinner and the cancellable "Connecting to …" notification. Removed the `report` parameter and its five stage strings. The test that pinned those stage texts was removed, as required by the accepted option. A new test asserts reveal runs after the progress callback completes.
+>
+> **Reverted (2026-11-06), commit `4ce49e36`, operator decision:** in a real workbench the outer notification closed before the Discovery tree had expanded, so the link looked finished too early. The single cancellable notification with its stage messages is back, running through reveal and connect, and accepting two Cancel buttons during the connect. The F07 dashboard suppression is kept.
 
 <a id="f07"></a>
 
@@ -666,10 +668,10 @@ screen rather than inflating the priority ledger.
 
 ## Implemented
 
-All of F01-F11 were fixed in #1067 on 2026-11-06 (F03 closed without code). Each finding's
-**Done** note lists its commit, model, decisions and tests. Runtime checks in a real workbench
-are still open, notably F11's refresh-and-reveal on an already expanded node and F06's progress
-hand-off.
+All of F01-F11 were fixed in #1067 on 2026-11-06 (F03 closed without code). F06 was reverted
+after a workbench check (`4ce49e36`) because the progress ended before the tree expanded. Each
+finding's **Done** note lists its commit, model, decisions and tests. A real-workbench check is
+still open for F11's refresh-and-reveal on an already expanded node.
 
 ## Iteration log
 
@@ -784,8 +786,8 @@ choice; shortening or lengthening them adds churn without helping the decision.
 
 | Where                                           | Current                                                                                                          | Proposed                                                                                                                                                            | Why                                                                                         | Status                   |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------ |
-| A7, progress stage text in `Opening from Azure` | `Loading subscriptions…`, `Loading clusters…`, `Connecting…`, `Opening the database…`, `Opening the collection…` | Removed: the notification ends before the Discovery reveal and connect. The view spinner and the cancellable `Connecting to "review-cluster"…` notification remain. | One Cancel on screen at a time, and it does what it says (F06).                             | Implemented (F06)        |
-| A7, progress title                              | `Opening from Azure`                                                                                             | `Opening Azure resource…`                                                                                                                                           | Names what is opened, in the same form as `Opening DocumentDB connection…` (A7 evaluation). | Implemented (`d397035f`) |
+| A7, progress stage text in `Opening from Azure` | `Loading subscriptions…`, `Loading clusters…`, `Connecting…`, `Opening the database…`, `Opening the collection…` | Removed: the notification ends before the Discovery reveal and connect. The view spinner and the cancellable `Connecting to "review-cluster"…` notification remain. | One Cancel on screen at a time, and it does what it says (F06).                             | Reverted (`4ce49e36`): stages kept |
+| A7, progress title                              | `Opening from Azure`                                                                                             | `Opening Azure resource` (no ellipsis: VS Code renders `title: message`)                                                                                                                                           | Names what is opened, in the same form as `Opening DocumentDB connection…` (A7 evaluation). | Implemented (`d397035f`) |
 
 ### A8 changes
 
@@ -908,7 +910,7 @@ No change proposed. A18 compares surfaces and has no user-visible text of its ow
 
 > **Done (2026-11-06):** the operator accepted every remaining proposal. Commits:
 > **M1** `d397035f` (luna): A1 `Opens: Discovery view` for bare links, A5 `Sign in to Azure`
-> title (button stays `Sign in`), A6 quoted subscription name, A7 `Opening Azure resource…`, A12
+> title (button stays `Sign in`), A6 quoted subscription name, A7 `Opening Azure resource` (ellipsis dropped in `4ce49e36`), A12
 > reload hint, A13 filter hint. **M2** `49511f61` (luna): A2 `Connections view`, A9 question title
 > with the sentence moved to the detail, the four A11 validation messages. **M3** `da9e104c`
 > (luna): A8 sentence-case wizard title (Azure DocumentDB only), A14 sentence-case
