@@ -369,10 +369,14 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
         const openSetup = l10n.t('Open setup');
         ext.outputChannel.trace('[DeepLink] Showing local setup confirmation');
         const confirmation = await vscode.window.showInformationMessage(
-            l10n.t('This link wants to open the DocumentDB Local setup in VS Code.'),
+            l10n.t('Open DocumentDB Local setup?'),
             {
                 modal: true,
-                detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+                detail: [
+                    l10n.t('A link wants to open the DocumentDB Local setup in VS Code.'),
+                    '',
+                    l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+                ].join('\n'),
             },
             openSetup,
         );
@@ -508,7 +512,7 @@ async function handleConnectionStringRequest(
                   ]
                 : []),
             '',
-            l10n.t('A new connection will be added to your Connections View.'),
+            l10n.t('A new connection will be added to your Connections view.'),
             l10n.t('You might be asked for credentials to establish the connection.'),
         ].join('\n');
         ext.outputChannel.trace('[DeepLink] Showing add-and-open confirmation');
@@ -761,7 +765,7 @@ function validateConnectionString(connectionString: string | undefined): void {
 
     if (!connectionString.startsWith('mongodb://') && !connectionString.startsWith('mongodb+srv://')) {
         throw new Error(
-            l10n.t('Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://"'),
+            l10n.t('Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://".'),
         );
     }
 }
@@ -908,7 +912,7 @@ function refuseMixedLocators(context: IActionContext): never {
     context.telemetry.properties.mixedLocatorRefused = 'true';
     throw new Error(
         l10n.t(
-            'This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId and tenantId with /connect/azure.',
+            'This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId (and optionally tenantId) with /connect/azure.',
         ),
     );
 }
@@ -926,7 +930,7 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
     if (!params.connectionString) {
         throw new Error(
             l10n.t(
-                'A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.',
+                'This DocumentDB link is missing a connection string. Add a connectionString query parameter to the link.',
             ),
         );
     }
@@ -955,7 +959,7 @@ function extractAndValidateAzureParams(context: IActionContext, queryFragment: s
     if (!params.resourceId) {
         throw new Error(
             l10n.t(
-                'A DocumentDB Azure link was opened without a resource ID. Ensure the link includes a resourceId query parameter.',
+                'This DocumentDB link is missing a resource ID. Add a resourceId query parameter to the link.',
             ),
         );
     }

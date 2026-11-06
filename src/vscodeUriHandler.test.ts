@@ -391,7 +391,7 @@ describe('globalUriHandler — connect parameter validation', () => {
     const connectionQuery = 'connectionString=mongodb%3A%2F%2Fhost';
     const azureQuery = 'resourceId=%2Fsubscriptions%2Fsub%2FresourceGroups%2Frg';
     const mixedError =
-        'This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId and tenantId with /connect/azure.';
+        'This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId (and optionally tenantId) with /connect/azure.';
 
     it.each([
         ['/connect', `${connectionQuery}&resourceId=resource`],
@@ -438,18 +438,26 @@ describe('globalUriHandler — connect parameter validation', () => {
         const error = await runHandler('/connect/azure', 'tenantId=tenant');
 
         expect(error?.message).toBe(
-            'A DocumentDB Azure link was opened without a resource ID. Ensure the link includes a resourceId query parameter.',
+            'This DocumentDB link is missing a resource ID. Add a resourceId query parameter to the link.',
         );
         expect(lastTelemetry.failureStage).toBe('extractParams');
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
         expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
     });
 
+    it('refuses a connection string with an unsupported scheme', async () => {
+        const error = await runHandler('/connect', 'connectionString=https%3A%2F%2Fhost');
+
+        expect(error?.message).toBe(
+            'Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://".',
+        );
+    });
+
     it('keeps the existing missing connection string refusal', async () => {
         const error = await runHandler('/connect', 'database=db');
 
         expect(error?.message).toBe(
-            'A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.',
+            'This DocumentDB link is missing a connection string. Add a connectionString query parameter to the link.',
         );
         expect(lastTelemetry.failureStage).toBe('extractParams');
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
@@ -1019,10 +1027,12 @@ describe('globalUriHandler — local confirmation', () => {
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'This link wants to open the DocumentDB Local setup in VS Code.',
+            'Open DocumentDB Local setup?',
             {
                 modal: true,
-                detail: 'Note: You can disable these URL handling confirmations in the extension settings.',
+                detail:
+                    'A link wants to open the DocumentDB Local setup in VS Code.\n\n' +
+                    'Note: You can disable these URL handling confirmations in the extension settings.',
             },
             'Open setup',
         );
@@ -1113,7 +1123,7 @@ describe('globalUriHandler — connection confirmation', () => {
                     'Database: sales\n' +
                     'Collection: orders\n' +
                     'Opens: Collection View\n\n' +
-                    'A new connection will be added to your Connections View.\n' +
+                    'A new connection will be added to your Connections view.\n' +
                     'You might be asked for credentials to establish the connection.',
             },
             'Add and open',
