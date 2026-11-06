@@ -615,9 +615,7 @@ describe('connectionDiagnosticsRouter', (): void => {
             expect(markdown).toContain(
                 'cannot distinguish not being signed in from a consent or preauthorization failure',
             );
-            expect(markdown).toContain(
-                "Connect to the cluster once, then run the diagnosis again.",
-            );
+            expect(markdown).toContain('Connect to the cluster once, then run the diagnosis again.');
         },
     );
 

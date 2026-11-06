@@ -72,10 +72,10 @@ function missingCredentialsMessage(data: FindingData): FindingMessage {
         case 'entraSession':
             return {
                 title: vscode.l10n.t('Sign-in needed'),
-                explanation: vscode.l10n.t('No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.'),
-                nextStep: vscode.l10n.t(
-                    "Connect to the cluster once, then run the diagnosis again.",
+                explanation: vscode.l10n.t(
+                    'No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.',
                 ),
+                nextStep: vscode.l10n.t('Connect to the cluster once, then run the diagnosis again.'),
             };
         default:
             return {
@@ -254,9 +254,7 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
                     explanation: vscode.l10n.t(
                         'The connection details could not be read from Azure because the Azure sign-in is missing or expired. Connection diagnosis does not open sign-in.',
                     ),
-                    nextStep: vscode.l10n.t(
-                        "Sign in to Azure in VS Code, then run the diagnosis again.",
-                    ),
+                    nextStep: vscode.l10n.t('Sign in to Azure in VS Code, then run the diagnosis again.'),
                 };
             case 'accessDenied':
                 return {
@@ -338,12 +336,16 @@ function endpointMissingMessage(data: FindingData): FindingMessage {
             return {
                 title: vscode.l10n.t('Service address pending'),
                 explanation: vscode.l10n.t('Kubernetes has not assigned an external address to this service yet.'),
-                nextStep: vscode.l10n.t('Wait until the service has an external address, then run the diagnosis again.'),
+                nextStep: vscode.l10n.t(
+                    'Wait until the service has an external address, then run the diagnosis again.',
+                ),
             };
         case 'unreachable':
             return {
                 title: vscode.l10n.t('No reachable service address'),
-                explanation: vscode.l10n.t('This service type has no address that can be reached from the host running these checks.'),
+                explanation: vscode.l10n.t(
+                    'This service type has no address that can be reached from the host running these checks.',
+                ),
                 nextStep: vscode.l10n.t(
                     'Expose the service with a load balancer or node port, or use a ClusterIP service, which the extension reaches through port forwarding.',
                 ),
@@ -398,7 +400,9 @@ export const findingMessages: {
         const source = stringField(data, 'source');
         let nextStep: string;
         if (source === 'connection') {
-            nextStep = vscode.l10n.t('Increase the timeout configured on this connection, then run the diagnosis again.');
+            nextStep = vscode.l10n.t(
+                'Increase the timeout configured on this connection, then run the diagnosis again.',
+            );
         } else if (source === 'check' || source === 'run') {
             nextStep = vscode.l10n.t(
                 'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled.',
@@ -624,7 +628,9 @@ export const findingMessages: {
         explanation: vscode.l10n.t(
             "The name goes through Azure's private-link alias and resolves to a private address. This does not prove how the cluster is configured.",
         ),
-        nextStep: vscode.l10n.t('Make sure the host running these checks can reach the private network or VPN used by the endpoint.'),
+        nextStep: vscode.l10n.t(
+            'Make sure the host running these checks can reach the private network or VPN used by the endpoint.',
+        ),
     }),
     'dns.privateEndpointPublicAddress': (): FindingMessage => ({
         title: vscode.l10n.t('Public address for this Azure host name'),

@@ -1630,7 +1630,7 @@ const diagnosticsScenarios = {
             ...authenticationHeadline(
                 'Sign-in needed',
                 'No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.',
-                "Connect to the cluster once, then run the diagnosis again.",
+                'Connect to the cluster once, then run the diagnosis again.',
             ),
             earlierSignInFailure: true,
         }),
@@ -1638,7 +1638,7 @@ const diagnosticsScenarios = {
         [
             'Connection not tested',
             'No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.',
-            "Next: Connect to the cluster once, then run the diagnosis again.",
+            'Next: Connect to the cluster once, then run the diagnosis again.',
             'A sign-in for this connection failed earlier. Show report has the details.',
             supportLine,
         ],

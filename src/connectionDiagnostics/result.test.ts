@@ -434,7 +434,9 @@ describe('deriveResult', (): void => {
             'replaces %s guidance for %s with its documentation, retaining any private-access hint',
             (providerId, code, topic, url): void => {
                 for (const hint of [undefined, privateAccessHint]) {
-                    const hints = check('contextHints', { facts: { providerId, explanation, privateAccessHint: hint } });
+                    const hints = check('contextHints', {
+                        facts: { providerId, explanation, privateAccessHint: hint },
+                    });
                     const result = derive([
                         check('authenticate', { status: 'fail', findings: [finding(code)] }),
                         hints,
@@ -465,18 +467,15 @@ describe('deriveResult', (): void => {
             }
         });
 
-        it.each(['entra-sign-in', 'srv-dns'])(
-            'keeps %s guidance when there is no headline',
-            (providerId): void => {
-                const result = derive([
-                    connected,
-                    check('contextHints', { facts: { providerId, explanation, privateAccessHint } }),
-                ]);
-                expect(result.headline).toBeUndefined();
-                expect(result.providerHint).toBe(`${explanation} ${privateAccessHint}`);
-                expect(result.learnMore).toBeUndefined();
-            },
-        );
+        it.each(['entra-sign-in', 'srv-dns'])('keeps %s guidance when there is no headline', (providerId): void => {
+            const result = derive([
+                connected,
+                check('contextHints', { facts: { providerId, explanation, privateAccessHint } }),
+            ]);
+            expect(result.headline).toBeUndefined();
+            expect(result.providerHint).toBe(`${explanation} ${privateAccessHint}`);
+            expect(result.learnMore).toBeUndefined();
+        });
 
         it.each([undefined, ''])(
             'keeps a private-access hint without a non-empty provider explanation (%s)',

@@ -163,11 +163,7 @@ function supportLines(): JSX.Element[] {
 }
 
 /** What failed, why, and what to do next, for a run that did not connect (design 4.13). */
-function notConnectedLines(
-    card: ResultCardData,
-    styles: Styles,
-    onOpenUrl?: (url: string) => void,
-): JSX.Element[] {
+function notConnectedLines(card: ResultCardData, styles: Styles, onOpenUrl?: (url: string) => void): JSX.Element[] {
     const lines: JSX.Element[] = [];
     const { headline, supporting, learnMore } = card;
     if (headline) {
@@ -352,12 +348,7 @@ const UNBOUNDED_RETRY_NOTE_ID = 'connectivity-result-unbounded-retry-note';
  * the diagnosis, with the facts left to each row's Details. It renders only the host's
  * `ResultCardData` and the rows, and performs no I/O; finding codes and timings never reach it.
  */
-export function DiagnosticsResultCard({
-    result,
-    rows,
-    onRetry,
-    onOpenUrl,
-}: DiagnosticsResultCardProps): JSX.Element {
+export function DiagnosticsResultCard({ result, rows, onRetry, onOpenUrl }: DiagnosticsResultCardProps): JSX.Element {
     const styles = useStyles();
     const title = (
         // The card sits in the connection's section (h2), so its headline is the next level down.

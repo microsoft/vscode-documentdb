@@ -137,16 +137,17 @@ describe('localized connectivity report text', () => {
         });
         const connectionRun: DiagnosticsRun<FindingCode> = {
             ...run,
-            results: run.results.map((result): CheckResult<FindingCode> =>
-                result.checkId === 'tcp'
-                    ? {
-                          ...result,
-                          findings: result.findings.map((finding) => ({
-                              ...finding,
-                              data: { ...finding.data, source: 'connection' },
-                          })),
-                      }
-                    : result,
+            results: run.results.map(
+                (result): CheckResult<FindingCode> =>
+                    result.checkId === 'tcp'
+                        ? {
+                              ...result,
+                              findings: result.findings.map((finding) => ({
+                                  ...finding,
+                                  data: { ...finding.data, source: 'connection' },
+                              })),
+                          }
+                        : result,
             ),
         };
         const markdown = fixtureMarkdown(connectionRun).replace(/\\/g, '');

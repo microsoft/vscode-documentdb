@@ -180,13 +180,17 @@ function fallbackFinding(status: 'warning' | 'error'): PanelFindingDetail {
               severity: 'error',
               title: vscode.l10n.t('This check did not succeed'),
               explanation: vscode.l10n.t('No further explanation is available here.'),
-              nextStep: vscode.l10n.t('Run the diagnosis to the end, then choose Show report for the technical details.'),
+              nextStep: vscode.l10n.t(
+                  'Run the diagnosis to the end, then choose Show report for the technical details.',
+              ),
           }
         : {
               severity: 'warning',
               title: vscode.l10n.t('This check reported a warning'),
               explanation: vscode.l10n.t('No further explanation is available here.'),
-              nextStep: vscode.l10n.t('Run the diagnosis to the end, then choose Show report for the technical details.'),
+              nextStep: vscode.l10n.t(
+                  'Run the diagnosis to the end, then choose Show report for the technical details.',
+              ),
           };
 }
 
@@ -481,9 +485,14 @@ function authEvidence(
     const authSource =
         known === 'native' && parsed ? authSourceOf(parsed, connectionOptions(parsed, context)) : undefined;
     const stages = known === 'none' ? [] : authStages(result, known);
-    const configuration = result.steps?.find((step): boolean => step.stepId === 'auth.signInConfiguration')?.facts ?? {};
+    const configuration =
+        result.steps?.find((step): boolean => step.stepId === 'auth.signInConfiguration')?.facts ?? {};
     const mismatch = allFindings(result).find((finding): boolean => finding.code === 'auth.cloudMismatch')?.data ?? {};
-    const azureClouds: readonly Exclude<PanelCloud, 'custom'>[] = ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud'];
+    const azureClouds: readonly Exclude<PanelCloud, 'custom'>[] = [
+        'AzureCloud',
+        'AzureUSGovernment',
+        'AzureChinaCloud',
+    ];
     const clusterCloud =
         known === 'entraId' || known === 'managedIdentity'
             ? azureClouds.find((cloud): boolean => cloud === (configuration.hostCloud ?? mismatch.hostCloud))
@@ -494,12 +503,14 @@ function authEvidence(
     if (known === 'entraId') {
         signInCloud = [...azureClouds, 'custom' as const].find((cloud): boolean => cloud === configuredCloud);
     } else if (known === 'managedIdentity') {
-        signInCloud = ([
-            ['public', 'AzureCloud'],
-            ['usgov', 'AzureUSGovernment'],
-            ['china', 'AzureChinaCloud'],
-            ['custom', 'custom'],
-        ] as const).find(([category]): boolean => category === cloudCategory)?.[1];
+        signInCloud = (
+            [
+                ['public', 'AzureCloud'],
+                ['usgov', 'AzureUSGovernment'],
+                ['china', 'AzureChinaCloud'],
+                ['custom', 'custom'],
+            ] as const
+        ).find(([category]): boolean => category === cloudCategory)?.[1];
     }
     if (!known && !mechanism && !user) {
         return [];

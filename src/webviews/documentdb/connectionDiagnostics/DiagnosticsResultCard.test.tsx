@@ -264,11 +264,7 @@ describe('DiagnosticsResultCard', () => {
             [],
             vi.fn(),
         );
-        expect(lines(host)).toEqual([
-            'Connection failed',
-            'Troubleshoot SRV DNS Lookups (querySrv EBADRESP)',
-            SUPPORT,
-        ]);
+        expect(lines(host)).toEqual(['Connection failed', 'Troubleshoot SRV DNS Lookups (querySrv EBADRESP)', SUPPORT]);
     });
 
     it('WI-8: omits the documentation link without an open-URL callback', async () => {
@@ -355,9 +351,9 @@ describe('DiagnosticsResultCard', () => {
             stoppedAtRow: 'authentication',
             headline: {
                 title: 'Sign-in needed',
-                explanation: 'No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.',
-                nextStep:
-                    "Connect to the cluster once, then run the diagnosis again.",
+                explanation:
+                    'No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.',
+                nextStep: 'Connect to the cluster once, then run the diagnosis again.',
             },
             earlierSignInFailure: true,
         });
@@ -367,7 +363,7 @@ describe('DiagnosticsResultCard', () => {
             'Connection not tested',
             'Sign-in needed',
             'No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.',
-            "Next: Connect to the cluster once, then run the diagnosis again.",
+            'Next: Connect to the cluster once, then run the diagnosis again.',
             'A sign-in for this connection failed earlier. Show report has the details.',
             SUPPORT,
         ]);

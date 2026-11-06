@@ -178,7 +178,11 @@ describe('contextHints', (): void => {
 
         it('keeps the sanitized provider explanation separate from the private-access hint', async (): Promise<void> => {
             expect(
-                await run([alias, { ...result('tcp'), target: alias.target }], false, `Check access from WSL. ${password}`),
+                await run(
+                    [alias, { ...result('tcp'), target: alias.target }],
+                    false,
+                    `Check access from WSL. ${password}`,
+                ),
             ).toMatchObject({
                 providerId: 'fixture',
                 explanation: 'Check access from WSL. [secret omitted]',

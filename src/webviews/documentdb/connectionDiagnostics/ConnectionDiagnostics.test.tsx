@@ -1028,7 +1028,9 @@ describe('ConnectionDiagnostics', () => {
         expect(host.textContent).not.toContain('Connection Diagnostics is already open for this connection.');
         await finish('run-1');
         await act(async () => client.panelHandlers[0].onData({ type: 'offerRerun' }));
-        expect(host.textContent).toContain('Connection Diagnostics is already open for this connection. Run the diagnosis again?');
+        expect(host.textContent).toContain(
+            'Connection Diagnostics is already open for this connection. Run the diagnosis again?',
+        );
         const offer = buttons('Re-run').find((button) => button.closest('.fui-MessageBar'));
         if (!offer) throw new Error('Missing offer Re-run');
         await click(offer);
@@ -1243,16 +1245,32 @@ describe('ConnectionDiagnostics', () => {
             await render();
             await send({ type: 'started', runId: 'run-1', startedAt: 1, rows: pending });
             await send({
-                type: 'finished', runId: 'run-1', finishedAt: 2,
-                rows: rowsWith(connected, [{
-                    id: 'authentication', status: 'done', segments: [{ kind: 'authMethod', method: 'entraId' }],
-                    details: { findings: [], evidence: [{
-                        kind: 'auth', method: 'entraId', user: 'user@example.com',
-                        signInCloud: cloud, clusterCloud: 'AzureChinaCloud',
-                        stages: [{ stage: 'getToken', outcome: 'done' }],
-                    }] },
-                }]),
-                outcome: 'connected', result: cardResult('connected'), coverage,
+                type: 'finished',
+                runId: 'run-1',
+                finishedAt: 2,
+                rows: rowsWith(connected, [
+                    {
+                        id: 'authentication',
+                        status: 'done',
+                        segments: [{ kind: 'authMethod', method: 'entraId' }],
+                        details: {
+                            findings: [],
+                            evidence: [
+                                {
+                                    kind: 'auth',
+                                    method: 'entraId',
+                                    user: 'user@example.com',
+                                    signInCloud: cloud,
+                                    clusterCloud: 'AzureChinaCloud',
+                                    stages: [{ stage: 'getToken', outcome: 'done' }],
+                                },
+                            ],
+                        },
+                    },
+                ]),
+                outcome: 'connected',
+                result: cardResult('connected'),
+                coverage,
             });
             const toggle = toggles().find(
                 (button): boolean => button.getAttribute('aria-label') === 'Details for Authentication',

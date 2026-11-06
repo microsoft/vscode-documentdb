@@ -155,7 +155,7 @@ const authOutcomes: readonly AuthOutcome[] = [
         segments: [{ kind: 'authMethod', method: 'entraId' }, { kind: 'noSilentSignIn' }],
         evidence: 'Microsoft Entra ID · No sign-in available without a prompt',
         outcome: 'notTested',
-        fix: "Connect to the cluster once, then run the diagnosis again.",
+        fix: 'Connect to the cluster once, then run the diagnosis again.',
     },
     {
         name: 'token request failed',

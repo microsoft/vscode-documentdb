@@ -662,46 +662,74 @@ describe('panel row details (WI-18 prototype)', () => {
         it('shows recorded sign-in and cluster clouds for a successful government-cloud sign-in', (): void => {
             const auth = result('authenticate', {
                 facts: { authMethod: 'MicrosoftEntraID' },
-                steps: [{
-                    stepId: 'auth.signInConfiguration', status: 'pass', durationMs: 1,
-                    facts: { configuredCloud: 'AzureUSGovernment', hostCloud: 'AzureUSGovernment' }, findings: [],
-                }],
+                steps: [
+                    {
+                        stepId: 'auth.signInConfiguration',
+                        status: 'pass',
+                        durationMs: 1,
+                        facts: { configuredCloud: 'AzureUSGovernment', hostCloud: 'AzureUSGovernment' },
+                        findings: [],
+                    },
+                ],
             });
             expect(buildRowDetails('authentication', 'done', [auth], describeFinding)?.evidence[0]).toMatchObject({
-                signInCloud: 'AzureUSGovernment', clusterCloud: 'AzureUSGovernment',
+                signInCloud: 'AzureUSGovernment',
+                clusterCloud: 'AzureUSGovernment',
             });
         });
 
-        it.each(['result', 'step'] as const)('uses the %s mismatch finding when configuration facts are absent', (location): void => {
-            const mismatch = finding('auth.cloudMismatch', 'error', {
-                configuredCloud: 'AzureCloud', hostCloud: 'AzureUSGovernment',
-            });
-            const auth = result('authenticate', {
-                status: 'fail',
-                facts: { authMethod: 'MicrosoftEntraID' },
-                findings: location === 'result' ? [mismatch] : [],
-                steps: [{
-                    stepId: 'auth.signInConfiguration', status: 'fail', durationMs: 1,
-                    facts: { errorKind: 'cloudMismatch' }, findings: location === 'step' ? [mismatch] : [],
-                }],
-            });
-            expect(buildRowDetails('authentication', 'error', [auth], describeFinding)?.evidence[0]).toMatchObject({
-                signInCloud: 'AzureCloud', clusterCloud: 'AzureUSGovernment',
-            });
-        });
+        it.each(['result', 'step'] as const)(
+            'uses the %s mismatch finding when configuration facts are absent',
+            (location): void => {
+                const mismatch = finding('auth.cloudMismatch', 'error', {
+                    configuredCloud: 'AzureCloud',
+                    hostCloud: 'AzureUSGovernment',
+                });
+                const auth = result('authenticate', {
+                    status: 'fail',
+                    facts: { authMethod: 'MicrosoftEntraID' },
+                    findings: location === 'result' ? [mismatch] : [],
+                    steps: [
+                        {
+                            stepId: 'auth.signInConfiguration',
+                            status: 'fail',
+                            durationMs: 1,
+                            facts: { errorKind: 'cloudMismatch' },
+                            findings: location === 'step' ? [mismatch] : [],
+                        },
+                    ],
+                });
+                expect(buildRowDetails('authentication', 'error', [auth], describeFinding)?.evidence[0]).toMatchObject({
+                    signInCloud: 'AzureCloud',
+                    clusterCloud: 'AzureUSGovernment',
+                });
+            },
+        );
 
         it('keeps recorded configuration clouds on token failure', (): void => {
             const auth = result('authenticate', {
-                status: 'fail', facts: { authMethod: 'MicrosoftEntraID' },
+                status: 'fail',
+                facts: { authMethod: 'MicrosoftEntraID' },
                 steps: [
-                    { stepId: 'auth.signInConfiguration', status: 'pass', durationMs: 1,
-                        facts: { configuredCloud: 'AzureChinaCloud', hostCloud: 'AzureChinaCloud' }, findings: [] },
-                    { stepId: 'auth.token', status: 'fail', durationMs: 1, facts: {},
-                        findings: [finding('auth.entraTokenFailed', 'error', { ruleId: 'other' })] },
+                    {
+                        stepId: 'auth.signInConfiguration',
+                        status: 'pass',
+                        durationMs: 1,
+                        facts: { configuredCloud: 'AzureChinaCloud', hostCloud: 'AzureChinaCloud' },
+                        findings: [],
+                    },
+                    {
+                        stepId: 'auth.token',
+                        status: 'fail',
+                        durationMs: 1,
+                        facts: {},
+                        findings: [finding('auth.entraTokenFailed', 'error', { ruleId: 'other' })],
+                    },
                 ],
             });
             expect(buildRowDetails('authentication', 'error', [auth], describeFinding)?.evidence[0]).toMatchObject({
-                signInCloud: 'AzureChinaCloud', clusterCloud: 'AzureChinaCloud',
+                signInCloud: 'AzureChinaCloud',
+                clusterCloud: 'AzureChinaCloud',
             });
         });
 
@@ -709,16 +737,25 @@ describe('panel row details (WI-18 prototype)', () => {
             const auth = result('authenticate', {
                 status: 'fail',
                 facts: { authMethod: 'MicrosoftEntraID' },
-                findings: [finding('auth.cloudMismatch', 'error', {
-                    configuredCloud: 'AzureCloud', hostCloud: 'AzureUSGovernment',
-                })],
-                steps: [{
-                    stepId: 'auth.signInConfiguration', status: 'fail', durationMs: 1,
-                    facts: { configuredCloud: 'custom' }, findings: [],
-                }],
+                findings: [
+                    finding('auth.cloudMismatch', 'error', {
+                        configuredCloud: 'AzureCloud',
+                        hostCloud: 'AzureUSGovernment',
+                    }),
+                ],
+                steps: [
+                    {
+                        stepId: 'auth.signInConfiguration',
+                        status: 'fail',
+                        durationMs: 1,
+                        facts: { configuredCloud: 'custom' },
+                        findings: [],
+                    },
+                ],
             });
             expect(buildRowDetails('authentication', 'error', [auth], describeFinding)?.evidence[0]).toMatchObject({
-                signInCloud: 'custom', clusterCloud: 'AzureUSGovernment',
+                signInCloud: 'custom',
+                clusterCloud: 'AzureUSGovernment',
             });
         });
 
@@ -730,24 +767,38 @@ describe('panel row details (WI-18 prototype)', () => {
         ])('uses the managed identity token resource category %s as %s', (category, cloud): void => {
             const auth = result('authenticate', {
                 facts: { authMethod: 'ManagedIdentity' },
-                steps: [{
-                    stepId: 'auth.signInConfiguration', status: 'pass', durationMs: 1,
-                    facts: { configuredCloud: 'AzureCloud', cloudCategory: category, hostCloud: 'AzureUSGovernment' },
-                    findings: [],
-                }],
+                steps: [
+                    {
+                        stepId: 'auth.signInConfiguration',
+                        status: 'pass',
+                        durationMs: 1,
+                        facts: {
+                            configuredCloud: 'AzureCloud',
+                            cloudCategory: category,
+                            hostCloud: 'AzureUSGovernment',
+                        },
+                        findings: [],
+                    },
+                ],
             });
             expect(buildRowDetails('authentication', 'done', [auth], describeFinding)?.evidence[0]).toMatchObject({
-                signInCloud: cloud, clusterCloud: 'AzureUSGovernment',
+                signInCloud: cloud,
+                clusterCloud: 'AzureUSGovernment',
             });
         });
 
         it.each(['NativeAuth', 'NoAuth'])('does not show cloud facts for %s', (method): void => {
             const auth = result('authenticate', {
                 facts: { authMethod: method },
-                steps: [{
-                    stepId: 'auth.signInConfiguration', status: 'pass', durationMs: 1,
-                    facts: { configuredCloud: 'AzureCloud', hostCloud: 'AzureCloud', cloudCategory: 'public' }, findings: [],
-                }],
+                steps: [
+                    {
+                        stepId: 'auth.signInConfiguration',
+                        status: 'pass',
+                        durationMs: 1,
+                        facts: { configuredCloud: 'AzureCloud', hostCloud: 'AzureCloud', cloudCategory: 'public' },
+                        findings: [],
+                    },
+                ],
             });
             const evidence = buildRowDetails('authentication', 'done', [auth], describeFinding)?.evidence[0];
             expect(evidence).not.toHaveProperty('signInCloud');

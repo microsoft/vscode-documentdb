@@ -2034,4 +2034,3 @@ Implemented in commit `1047d7a1` ([review 05, UX-6 done note](./iterations/05-ux
   cannot sign in.
 - **C. Mirror the whole report.** No context switch, but overwhelming, and it exposes internal keys.
 - **B on the collapsed line.** Not chosen: the operator placed the facts in Details.
-

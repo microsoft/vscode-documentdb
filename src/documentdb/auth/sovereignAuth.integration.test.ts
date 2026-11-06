@@ -383,7 +383,9 @@ describe('sovereign authentication with real audience resolvers', () => {
             expect(postedMessages).toContainEqual({
                 type: 'tokenError',
                 requestId: 'failed-resolution',
-                error: expect.stringContaining(authMethod === AuthMethodId.ManagedIdentity ? 'HTTPS' : 'sign-in is set to'),
+                error: expect.stringContaining(
+                    authMethod === AuthMethodId.ManagedIdentity ? 'HTTPS' : 'sign-in is set to',
+                ),
             });
             expect(provider).not.toHaveBeenCalled();
             expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();

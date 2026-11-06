@@ -527,7 +527,9 @@ export const ConnectionDiagnostics = (): JSX.Element => {
                     {offerRerun && !running && (
                         <MessageBar intent="info" ref={offerFocusRef}>
                             <MessageBarBody>
-                                {l10n.t('Connection Diagnostics is already open for this connection. Run the diagnosis again?')}
+                                {l10n.t(
+                                    'Connection Diagnostics is already open for this connection. Run the diagnosis again?',
+                                )}
                             </MessageBarBody>
                             <MessageBarActions
                                 containerAction={

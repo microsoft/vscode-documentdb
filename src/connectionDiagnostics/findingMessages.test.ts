@@ -236,9 +236,10 @@ describe('localized finding messages', () => {
         }
         for (const operation of ['tcp', 'hello']) {
             const code = operation === 'tcp' ? 'tcp.timeout' : 'hello.noReply';
-            const expected = source === 'connection' || source === 'run'
-                ? `${nextStep} ${firewall}`
-                : findingMessages[code]({}).nextStep;
+            const expected =
+                source === 'connection' || source === 'run'
+                    ? `${nextStep} ${firewall}`
+                    : findingMessages[code]({}).nextStep;
             expect(findingMessages['check.timeout']({ operation, source }).nextStep).toBe(expected);
         }
     });
@@ -341,7 +342,7 @@ describe('localized finding messages', () => {
 
     it('explains unavailable credentials without opening sign-in', () => {
         expect(findingMessages['auth.credentialsUnavailable']({ missing: 'entraSession' }).nextStep).toBe(
-            "Connect to the cluster once, then run the diagnosis again.",
+            'Connect to the cluster once, then run the diagnosis again.',
         );
         for (const missing of ['method', 'password']) {
             expect(findingMessages['cs.credentialsMissing']({ missing })).toEqual(
