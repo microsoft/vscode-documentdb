@@ -30,8 +30,8 @@ import {
     waitForConnectionsViewReady,
     withConnectionsViewProgress,
 } from './tree/connections-view/connectionsViewHelpers';
-import { type TreeElement } from './tree/TreeElement';
 import { suppressAutoOpenDashboard } from './tree/documentdb/autoOpenDashboardSuppression';
+import { type TreeElement } from './tree/TreeElement';
 import { nonNullValue } from './utils/nonNull';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 

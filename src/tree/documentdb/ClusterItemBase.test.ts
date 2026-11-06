@@ -12,8 +12,8 @@ import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
-import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItemBase';
 import { suppressAutoOpenDashboard } from './autoOpenDashboardSuppression';
+import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItemBase';
 
 // Captures telemetry events emitted via callWithTelemetryAndErrorHandling when its callback throws.
 const mockTelemetryEvents: Array<{ eventName: string; properties: Record<string, string>; suppressDisplay?: boolean }> =

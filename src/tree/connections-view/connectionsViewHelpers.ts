@@ -118,10 +118,7 @@ export async function buildConnectionsViewTargetPath(
     database?: string,
     collection?: string,
 ): Promise<string> {
-    let treePath = await buildFullTreePath(
-        storageId,
-        isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
-    );
+    let treePath = await buildFullTreePath(storageId, isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
     if (database) {
         treePath += `/${database}`;
         if (collection) {

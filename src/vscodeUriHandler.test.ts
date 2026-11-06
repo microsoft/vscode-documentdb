@@ -13,7 +13,10 @@ import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
 import { ClustersClient } from './documentdb/ClustersClient';
 import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
-import { buildConnectionsViewTargetPath, revealInConnectionsView } from './tree/connections-view/connectionsViewHelpers';
+import {
+    buildConnectionsViewTargetPath,
+    revealInConnectionsView,
+} from './tree/connections-view/connectionsViewHelpers';
 import { type DiscoveryRevealResult } from './tree/discovery-view/discoveryViewHelpers';
 import * as dashboardSuppression from './tree/documentdb/autoOpenDashboardSuppression';
 import { type EmulatorConfiguration } from './utils/emulatorConfiguration';
@@ -880,7 +883,11 @@ describe('globalUriHandler — saved connection open target', () => {
         if (collection) {
             expect(openCollectionViewInternal).toHaveBeenCalledWith(
                 expect.anything(),
-                expect.objectContaining({ clusterId: 'existing-id', databaseName: database, collectionName: collection }),
+                expect.objectContaining({
+                    clusterId: 'existing-id',
+                    databaseName: database,
+                    collectionName: collection,
+                }),
             );
         } else {
             expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
@@ -991,9 +998,7 @@ describe('globalUriHandler — saved connection open target', () => {
             `connectionString=${encodeURIComponent(connectionString)}&open=dashboard`,
         );
 
-        expect(error?.message).toBe(
-            'Could not find Production in the Connections view.',
-        );
+        expect(error?.message).toBe('Could not find Production in the Connections view.');
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
             expect.any(String),
             expect.objectContaining({ detail: expect.stringContaining('Opens: Cluster Dashboard') }),
@@ -1166,9 +1171,7 @@ describe('globalUriHandler — connection confirmation', () => {
                     { id: 'existing-id', name: 'Production', secrets: { connectionString } },
                 ]);
             }
-            (vscode.window.showInformationMessage as Mock).mockResolvedValue(
-                saved ? 'Open' : 'Add and open',
-            );
+            (vscode.window.showInformationMessage as Mock).mockResolvedValue(saved ? 'Open' : 'Add and open');
             vi.mocked(buildConnectionsViewTargetPath).mockResolvedValue('collection-path');
             vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue({
                 id: 'collection-node',

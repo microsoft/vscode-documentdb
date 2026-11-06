@@ -105,7 +105,9 @@ describe('buildConnectionsViewTargetPath', () => {
     );
 
     it('extends a connection path by its database', async (): Promise<void> => {
-        expect(await buildConnectionsViewTargetPath(connection.id, false, 'db')).toBe('connectionsView/connection-id/db');
+        expect(await buildConnectionsViewTargetPath(connection.id, false, 'db')).toBe(
+            'connectionsView/connection-id/db',
+        );
     });
 
     it('does not append a collection without a database', async (): Promise<void> => {
@@ -154,9 +156,9 @@ describe('revealInConnectionsView', () => {
         expect(ext.connectionsBranchDataProvider.hasNodeErrorState).toHaveBeenCalledExactlyOnceWith(node.id);
         expect(ext.connectionsBranchDataProvider.resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(node.id);
         expect(ext.connectionsBranchDataProvider.refresh).toHaveBeenCalledExactlyOnceWith(node);
-        expect(vi.mocked(ext.connectionsBranchDataProvider.resetNodeErrorState).mock.invocationCallOrder[0]).toBeLessThan(
-            vi.mocked(ext.connectionsBranchDataProvider.refresh).mock.invocationCallOrder[0],
-        );
+        expect(
+            vi.mocked(ext.connectionsBranchDataProvider.resetNodeErrorState).mock.invocationCallOrder[0],
+        ).toBeLessThan(vi.mocked(ext.connectionsBranchDataProvider.refresh).mock.invocationCallOrder[0]);
         expect(vi.mocked(ext.connectionsBranchDataProvider.refresh).mock.invocationCallOrder[0]).toBeLessThan(
             vi.mocked(revealConnectionsViewElement).mock.invocationCallOrder[0],
         );

@@ -236,8 +236,7 @@ describe('resolveAzureSubscription', (): void => {
             'Sign in to tenant',
             {
                 modal: true,
-                detail:
-                    'We could not find subscription Subscription-ID with your current sign-in. The link names tenant TENANT-ID; signing in to that tenant may give access.',
+                detail: 'We could not find subscription Subscription-ID with your current sign-in. The link names tenant TENANT-ID; signing in to that tenant may give access.',
             },
             'Sign in to tenant',
         );

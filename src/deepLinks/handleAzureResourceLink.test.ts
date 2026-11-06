@@ -301,18 +301,15 @@ describe('handleAzureResourceLinkRequest', (): void => {
         expect(computeVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription);
         expect(hasVisibilityChanges).toHaveBeenCalledWith(changes);
         expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes);
-        expect(revealInDiscoveryView).toHaveBeenCalledExactlyOnceWith(
-            context,
-            {
-                providerId: link.providerId,
-                subscriptionId: link.subscriptionId,
-                azureResourceId: link.resourceId,
-                displayName: 'My-Resource',
-                database: 'sales',
-                collection: 'orders',
-                suppressAutoOpenDashboard: false,
-            },
-        );
+        expect(revealInDiscoveryView).toHaveBeenCalledExactlyOnceWith(context, {
+            providerId: link.providerId,
+            subscriptionId: link.subscriptionId,
+            azureResourceId: link.resourceId,
+            displayName: 'My-Resource',
+            database: 'sales',
+            collection: 'orders',
+            suppressAutoOpenDashboard: false,
+        });
         const callOrder = [
             vi.mocked(parseAzureResourceLink).mock.invocationCallOrder[0],
             vi.mocked(vscode.window.showInformationMessage).mock.invocationCallOrder[0],

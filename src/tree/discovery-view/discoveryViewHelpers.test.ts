@@ -12,8 +12,8 @@ import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../TreeElement';
 import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
-import { type TreeCluster } from '../models/BaseClusterModel';
 import * as dashboardSuppression from '../documentdb/autoOpenDashboardSuppression';
+import { type TreeCluster } from '../models/BaseClusterModel';
 import { type DiscoveryRevealRequest, revealInDiscoveryView, waitForDiscoveryViewReady } from './discoveryViewHelpers';
 
 vi.mock('../../extensionVariables', () => ({
@@ -164,9 +164,9 @@ describe('Discovery view helpers', () => {
             }
         });
 
-        await expect(
-            revealInDiscoveryView(context, { ...request, suppressAutoOpenDashboard: true }),
-        ).rejects.toBe(error);
+        await expect(revealInDiscoveryView(context, { ...request, suppressAutoOpenDashboard: true })).rejects.toBe(
+            error,
+        );
 
         expect(suppressDashboard).toHaveBeenCalledExactlyOnceWith(clusterNode.cluster.clusterId);
         expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.cluster.clusterId)).toBe(false);

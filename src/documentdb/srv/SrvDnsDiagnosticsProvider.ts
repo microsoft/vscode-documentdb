@@ -43,7 +43,7 @@ export class SrvDnsDiagnosticsProvider implements ConnectionDiagnosticsProvider 
                 );
             case 'ECONNREFUSED':
                 return l10n.t(
-                    "The SRV record for this connection could not be resolved: the DNS server refused the query. Check your network's DNS settings, or use a non-SRV \"mongodb://\" connection string. See {link} for troubleshooting.",
+                    'The SRV record for this connection could not be resolved: the DNS server refused the query. Check your network\'s DNS settings, or use a non-SRV "mongodb://" connection string. See {link} for troubleshooting.',
                     { link: Links.SrvDnsTroubleshooting },
                 );
             default:
