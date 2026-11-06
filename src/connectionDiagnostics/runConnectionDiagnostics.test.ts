@@ -255,6 +255,23 @@ describe('runConnectionDiagnostics', (): void => {
         }
     });
 
+    it('carries the correlation IDs present when the panel opened on accepted and terminal events', async (): Promise<void> => {
+        const correlation = {
+            journeyCorrelationId: 'journey-id',
+            connectionCorrelationId: 'connection-id',
+            failedStartupCorrelationId: 'failed-startup-id',
+        };
+        const request = options();
+        await runConnectionDiagnostics({ ...request, target: { ...request.target, correlation } });
+        expect(events.map((event): string => event.name)).toEqual([
+            'diagnoseConnection.runStarted',
+            'diagnoseConnection.run',
+        ]);
+        for (const event of events) {
+            expect(event.context.telemetry.properties).toMatchObject(correlation);
+        }
+    });
+
     it('sends accepted then terminal telemetry with bounded fields, counts and no connection-identifying values', async (): Promise<void> => {
         const run = await runConnectionDiagnostics(
             options({ runIndex: 2, runTrigger: 'rerun', timeoutProfile: 'longer' }),

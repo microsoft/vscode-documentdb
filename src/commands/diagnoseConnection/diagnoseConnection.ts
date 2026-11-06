@@ -5,7 +5,13 @@
 
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { type DiagnosticsEntryPoint, type DiagnosticsTarget } from '../../connectionDiagnostics/types';
+import { applyCorrelation } from '../../connectionDiagnostics/telemetry';
+import {
+    type DiagnosticsCorrelation,
+    type DiagnosticsEntryPoint,
+    type DiagnosticsTarget,
+} from '../../connectionDiagnostics/types';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
@@ -16,7 +22,6 @@ import {
     type EphemeralClusterCredentials,
 } from '../../tree/documentdb/ClusterItemBase';
 import { type DiagnosticCredentialRead } from '../../tree/documentdb/diagnosticCredentialRead';
-import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import { pickTreeNode } from '../../utils/pickItem/pickTreeNode';
 import { openConnectionDiagnostics } from '../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';
 
@@ -66,11 +71,17 @@ export async function diagnoseConnection(
     }
 
     const targetNode = node;
-    trackJourneyCorrelationId(context, targetNode);
+    const correlation: DiagnosticsCorrelation = {
+        journeyCorrelationId: targetNode.journeyCorrelationId,
+        connectionCorrelationId: ClustersClient.getExistingClient(targetNode.cluster.clusterId)?.connectionCorrelationId,
+        failedStartupCorrelationId: ClustersClient.getLastFailedStartupCorrelationId(targetNode.cluster.clusterId),
+    };
+    applyCorrelation(context, correlation);
     const target: DiagnosticsTarget = {
         clusterId: targetNode.cluster.clusterId,
         displayName: targetNode.cluster.name,
         sourceView,
+        correlation,
         // Each node's diagnostic read: silent, no tunnel, typed failures (design §4.3, §5.3).
         getCredentials(read: DiagnosticCredentialRead): Promise<EphemeralClusterCredentials | undefined> {
             return targetNode.getCredentialsForDiagnostics(read);

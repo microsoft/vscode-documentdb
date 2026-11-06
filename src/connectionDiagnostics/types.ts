@@ -40,10 +40,23 @@ export type ExtensionFindingCode = (typeof extensionFindingCodes)[number];
 export type FindingCode = BuiltInFindingCode | ExtensionFindingCode;
 export type DiagnosticsEntryPoint = 'errorNode' | 'contextMenu' | 'commandPalette';
 
+/**
+ * Existing telemetry IDs present when the panel opened, carried on every run event so a diagnosis
+ * can be joined to the journey, the connected client, or the failed connection it follows up on.
+ */
+export interface DiagnosticsCorrelation {
+    readonly journeyCorrelationId?: string;
+    /** The connected extension client's ID (`connect.startup`, `connect.getmetadata`). */
+    readonly connectionCorrelationId?: string;
+    /** The `startupCorrelationId` of this cluster's last failed `connect.startup`. */
+    readonly failedStartupCorrelationId?: string;
+}
+
 export interface DiagnosticsTarget {
     readonly clusterId: string;
     readonly displayName: string;
     readonly sourceView: string;
+    readonly correlation?: DiagnosticsCorrelation;
     /**
      * The node's diagnostic read: silent, no tunnel, typed failures. Runs inside the `resolveTarget`
      * check, under the whole-run timeout and the run's cancellation. `undefined` means the connection

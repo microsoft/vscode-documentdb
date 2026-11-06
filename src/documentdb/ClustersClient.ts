@@ -210,6 +210,17 @@ export class ClustersClient {
     public connectionCorrelationId?: string;
 
     /**
+     * Per cluster, the `startupCorrelationId` of the last startup that failed and was not yet
+     * followed by a successful one. Lets recovery actions (connection diagnosis, the next retry)
+     * name the failure they follow up on. Random IDs only; cleared when a startup succeeds.
+     */
+    static readonly _lastFailedStartups = new Map<string, string>();
+
+    public static getLastFailedStartupCorrelationId(clusterId: string): string | undefined {
+        return ClustersClient._lastFailedStartups.get(clusterId);
+    }
+
+    /**
      * Private constructor - use getClient() instead.
      * Connections/Clients are being cached and reused.
      *
@@ -260,6 +271,10 @@ export class ClustersClient {
                 context.telemetry.properties.connectionCorrelationId = startupId;
                 context.telemetry.properties.startupCorrelationId = startupId;
                 context.telemetry.properties.surface = 'extension';
+                const previousFailedStartupId = ClustersClient._lastFailedStartups.get(this.clusterId);
+                if (previousFailedStartupId) {
+                    context.telemetry.properties.previousFailedStartupCorrelationId = previousFailedStartupId;
+                }
                 const startedAt = Date.now();
                 const startup: ClientStartup = {
                     id: startupId,
@@ -564,7 +579,11 @@ export class ClustersClient {
             // Cluster metadata is set in initClient
             await client.initClient(abortSignal);
             ClustersClient._clients.set(clusterId, client);
+            ClustersClient._lastFailedStartups.delete(clusterId);
         } catch (error) {
+            if (!(error instanceof UserCancelledError) && !abortSignal?.aborted && client.connectionCorrelationId) {
+                ClustersClient._lastFailedStartups.set(clusterId, client.connectionCorrelationId);
+            }
             // On failure (including abort), clean up the partially-created client
             void client._mongoClient?.close().catch(() => {
                 // Ignore close errors during cleanup

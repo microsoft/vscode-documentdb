@@ -49,7 +49,12 @@ vi.mock('../../documentdb/CredentialCache', () => ({
     CredentialCache: { hasCredentials: vi.fn(), setCredentials: vi.fn(), setAuthCredentials: vi.fn() },
 }));
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: vi.fn(), exists: vi.fn().mockReturnValue(false) },
+    ClustersClient: {
+        getClient: vi.fn(),
+        exists: vi.fn().mockReturnValue(false),
+        getExistingClient: vi.fn(),
+        getLastFailedStartupCorrelationId: vi.fn(),
+    },
 }));
 vi.mock('../../utils/pickItem/pickTreeNode', () => ({ pickTreeNode: vi.fn() }));
 vi.mock('../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController', () => ({
@@ -202,6 +207,27 @@ describe('diagnoseConnection', () => {
         Reflect.deleteProperty(node.cluster, 'viewId');
         await diagnoseConnection(context, node);
         expect(context.telemetry.properties.sourceView).toBe(Views.DiscoveryView);
+    });
+
+    it('links the diagnosis to the failed startup and connected client it follows up on', async () => {
+        vi.mocked(ClustersClient.getLastFailedStartupCorrelationId).mockReturnValueOnce('failed-startup-id');
+        vi.mocked(ClustersClient.getExistingClient).mockReturnValueOnce({
+            connectionCorrelationId: 'connection-id',
+        } as ClustersClient);
+        await diagnoseConnection(context, node, undefined, 'errorNode');
+        expect(ClustersClient.getLastFailedStartupCorrelationId).toHaveBeenCalledWith('stable-id');
+        expect(ClustersClient.getExistingClient).toHaveBeenCalledWith('stable-id');
+        expect(context.telemetry.properties).toMatchObject({
+            journeyCorrelationId: 'journey-id',
+            connectionCorrelationId: 'connection-id',
+            failedStartupCorrelationId: 'failed-startup-id',
+        });
+        // Carried on the target, so every run event of this panel can be joined too.
+        expect(vi.mocked(openConnectionDiagnostics).mock.calls[0][0].target.correlation).toEqual({
+            journeyCorrelationId: 'journey-id',
+            connectionCorrelationId: 'connection-id',
+            failedStartupCorrelationId: 'failed-startup-id',
+        });
     });
 
     it('records a focused panel and keeps its session ID', async () => {

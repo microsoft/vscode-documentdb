@@ -116,6 +116,7 @@ describe('regular connection startup diagnostics', () => {
         vi.useFakeTimers();
         mockTelemetryEvents.length = 0;
         ClustersClient._clients.clear();
+        ClustersClient._lastFailedStartups.clear();
         vi.mocked(prepareDriverConnectionString)
             .mockReset()
             .mockImplementation(async (input) => {
@@ -148,6 +149,7 @@ describe('regular connection startup diagnostics', () => {
     afterEach(() => {
         CredentialCache.deleteCredentials(clusterId);
         ClustersClient._clients.clear();
+        ClustersClient._lastFailedStartups.clear();
         vi.restoreAllMocks();
         vi.useRealTimers();
     });
@@ -294,6 +296,33 @@ describe('regular connection startup diagnostics', () => {
             surface: 'extension',
             startupProperties: startupEvent().telemetry.properties,
         });
+    });
+
+    it('links a retry to the failed startup it follows, and forgets it once a startup succeeds', async () => {
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockRejectedValueOnce(
+            new Error('private-failure'),
+        );
+        await expect(ClustersClient.getClient(clusterId)).rejects.toThrow('private-failure');
+        const failedId = startupEvent().telemetry.properties.startupCorrelationId;
+        expect(failedId).toEqual(expect.any(String));
+        expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBe(failedId);
+
+        const client = await ClustersClient.getClient(clusterId);
+        const events = mockTelemetryEvents.filter((event) => event.eventName === 'connect.startup');
+        expect(events[0].telemetry.properties.previousFailedStartupCorrelationId).toBeUndefined();
+        expect(events[1].telemetry.properties).toMatchObject({
+            startupCorrelationId: client.connectionCorrelationId,
+            previousFailedStartupCorrelationId: failedId,
+        });
+        expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBeUndefined();
+    });
+
+    it('does not record a cancelled startup as a failure to follow up on', async () => {
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockRejectedValueOnce(
+            new UserCancelledError(),
+        );
+        await expect(ClustersClient.getClient(clusterId)).rejects.toBeInstanceOf(UserCancelledError);
+        expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBeUndefined();
     });
 
     it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(

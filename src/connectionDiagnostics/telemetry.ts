@@ -10,7 +10,7 @@ import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnec
 import { maskSensitiveValuesInTelemetry } from '../documentdb/utils/connectionStringHelpers';
 import { deriveResult } from './result';
 import { type RunConnectionDiagnosticsOptions } from './runConnectionDiagnostics';
-import { extensionFindingCodes, type FindingCode } from './types';
+import { extensionFindingCodes, type DiagnosticsCorrelation, type FindingCode } from './types';
 
 const knownFindingCodes: ReadonlySet<string> = new Set([...builtInFindingCodes, ...extensionFindingCodes]);
 
@@ -45,6 +45,16 @@ export function applyRunIdentity(
         timeoutProfile: options.timeoutProfile,
     });
     context.telemetry.measurements.runIndex = options.runIndex;
+    applyCorrelation(context, options.target.correlation);
+}
+
+export function applyCorrelation(context: IActionContext, correlation: DiagnosticsCorrelation | undefined): void {
+    for (const key of ['journeyCorrelationId', 'connectionCorrelationId', 'failedStartupCorrelationId'] as const) {
+        const value = correlation?.[key];
+        if (value) {
+            context.telemetry.properties[key] = value;
+        }
+    }
 }
 
 export async function reportRunStarted(options: RunConnectionDiagnosticsOptions, runId: string): Promise<void> {
