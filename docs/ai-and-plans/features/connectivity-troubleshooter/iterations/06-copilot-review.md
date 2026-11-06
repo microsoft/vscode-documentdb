@@ -564,8 +564,9 @@ These are not claimed as live-verified; the corresponding host and React regress
 
 `l10n`, `prettier-fix`, `l10n:check`, `lint`, `typecheck:tests`, the full runtime suite and
 `package` were **not run**. All Case 2 checks remain required before review handoff; in
-particular, the three new localized omission templates still need generation. No PR state,
-GitHub thread, issue or remote branch was changed.
+particular, the three new localized omission templates still need generation. The implementation
+phase did not change PR state, GitHub threads, issues or remote branches. The subsequently
+requested thread replies are recorded below.
 
 ### Decisions and advisor record
 
@@ -584,6 +585,23 @@ No accepted technical solution was changed, and no operator question remains par
 Last host-log checkpoint: **leader 118.2 AIU; subagents 454.2 AIU; total 572.4 AIU**.
 These are the statistics helper's reported figures, not estimates; subsequent documentation
 and handoff activity is outside that checkpoint.
+
+### Copilot thread replies (2026-11-06)
+
+The operator requested that each fixed Copilot issue be recorded both here and in its original
+review thread, explaining what changed, how it addresses the issue and the fix commit.
+Replies were posted and read back for all four items:
+
+| Item | Reply | Fix reference |
+| --- | --- | --- |
+| C1 | [Typed report truncation](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234530) | `ff55f27e`, test correction `0ca8c110` |
+| C2 | [Timer-safe timeout validation](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234438) | `290cb77b` |
+| C3 | [Diagnostic credential telemetry masking](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234481) | `174a5d4f` |
+| C4 | [Refreshed panel target and run snapshots](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234546) | `289312cb` |
+
+Each reply includes the full commit hash, implementation rationale and relevant validation,
+and explicitly states that the commits are local and not yet pushed. The threads remain open;
+no push or thread resolution was performed.
 
 ## Assessment verification record and handoff (before implementation)
 
