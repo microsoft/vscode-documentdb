@@ -52,23 +52,11 @@ export class PromptConflictResolutionStep extends AzureWizardPromptStep<PasteCol
             suppressPersistence: true,
         });
 
-        // Map selected item to actual strategy
-        switch (selectedItem.id) {
-            case 'abort':
-                context.conflictResolutionStrategy = ConflictResolutionStrategy.Abort;
-                break;
-            case 'skip':
-                context.conflictResolutionStrategy = ConflictResolutionStrategy.Skip;
-                break;
-            case 'overwrite':
-                context.conflictResolutionStrategy = ConflictResolutionStrategy.Overwrite;
-                break;
-            case 'generateNewIds':
-                context.conflictResolutionStrategy = ConflictResolutionStrategy.GenerateNewIds;
-                break;
-            default:
-                throw new Error(l10n.t('Invalid conflict resolution strategy selected.'));
+        if (!documentDbSupportedConflictStrategies.includes(selectedItem.id)) {
+            throw new Error(l10n.t('Invalid conflict resolution strategy selected.'));
         }
+
+        context.conflictResolutionStrategy = selectedItem.id;
     }
 
     public shouldPrompt(): boolean {
