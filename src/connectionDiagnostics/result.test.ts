@@ -242,7 +242,7 @@ describe('deriveResult', (): void => {
             headline: { checkId: 'hello', code: 'hello.compressorUnavailable' },
             firewallHint: false,
         });
-        expect(result.headline?.nextStep).toMatch(/remove it.*zlib first/);
+        expect(result.headline?.nextStep).toBe('Remove snappy from the compressors option, or put zlib first.');
     });
 
     it('acceptance 11: DocumentDB ignores snappy and stays connected with only the settings warning', (): void => {

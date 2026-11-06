@@ -313,7 +313,7 @@ describe('DiagnosticsResultCard', () => {
             explanation:
                 'The server answered, but it requires sign-in to list or read databases. This connection is set to No authentication.',
             nextStep:
-                'Choose an authentication method for this connection (Update Credentials…), then run the diagnosis again.',
+                'Use Update Credentials to choose an authentication method for this connection, then run the diagnosis again.',
         };
         const result = card('connected', { authenticated: false, signInRequired: true, headline: signIn });
         const access = row('databaseAccess', 'warning', [finding('warning', signIn.title)]);
@@ -355,9 +355,9 @@ describe('DiagnosticsResultCard', () => {
             stoppedAtRow: 'authentication',
             headline: {
                 title: 'Sign-in needed',
-                explanation: 'No Microsoft Entra ID sign-in is available without a prompt.',
+                explanation: 'No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.',
                 nextStep:
-                    "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
+                    "Connect to the cluster once, then run the diagnosis again.",
             },
             earlierSignInFailure: true,
         });
@@ -366,8 +366,8 @@ describe('DiagnosticsResultCard', () => {
         expect(lines(host)).toEqual([
             'Connection not tested',
             'Sign-in needed',
-            'No Microsoft Entra ID sign-in is available without a prompt.',
-            "Next: Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
+            'No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.',
+            "Next: Connect to the cluster once, then run the diagnosis again.",
             'A sign-in for this connection failed earlier. Show report has the details.',
             SUPPORT,
         ]);

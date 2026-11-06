@@ -49,7 +49,7 @@ function compressorMessage(data: FindingData, negotiated: boolean): FindingMessa
         nextStep:
             compressor === undefined
                 ? vscode.l10n.t('Remove the unavailable compressor from the compressors option, or put zlib first.')
-                : vscode.l10n.t('For {0}, remove it from the compressors option, or put zlib first.', compressor),
+                : vscode.l10n.t('Remove {0} from the compressors option, or put zlib first.', compressor),
     };
 }
 
@@ -72,9 +72,9 @@ function missingCredentialsMessage(data: FindingData): FindingMessage {
         case 'entraSession':
             return {
                 title: vscode.l10n.t('Sign-in needed'),
-                explanation: vscode.l10n.t('No Microsoft Entra ID sign-in is available without a prompt.'),
+                explanation: vscode.l10n.t('No Microsoft Entra ID sign-in is available without a prompt, and connection diagnosis does not open one.'),
                 nextStep: vscode.l10n.t(
-                    "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
+                    "Connect to the cluster once, then run the diagnosis again.",
                 ),
             };
         default:
@@ -101,10 +101,10 @@ function tokenFailureMessage(data: FindingData): FindingMessage {
             return {
                 title,
                 explanation: vscode.l10n.t(
-                    'Microsoft Entra ID sign-in appears to require Microsoft to preauthorize VS Code.',
+                    'Microsoft Entra ID sign-in appears to require Microsoft to preauthorize VS Code. Only Microsoft can change this.',
                 ),
                 nextStep: vscode.l10n.t(
-                    'Only Microsoft can change this. Use native DocumentDB authentication or managed identity on an Azure VM, and report this on GitHub.',
+                    'Use native DocumentDB authentication or managed identity on an Azure VM, and report this on GitHub.',
                 ),
             };
         case 'resourceNotInTenant':
@@ -252,10 +252,10 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
                 return {
                     title: vscode.l10n.t('Azure sign-in needed'),
                     explanation: vscode.l10n.t(
-                        'The connection details could not be read from Azure because the Azure sign-in is missing or expired.',
+                        'The connection details could not be read from Azure because the Azure sign-in is missing or expired. Connection diagnosis does not open sign-in.',
                     ),
                     nextStep: vscode.l10n.t(
-                        "Connection diagnosis doesn't open sign-in. Sign in to Azure in VS Code, then run the diagnosis again.",
+                        "Sign in to Azure in VS Code, then run the diagnosis again.",
                     ),
                 };
             case 'accessDenied':
@@ -1073,7 +1073,7 @@ export const findingMessages: {
             'The server answered, but it requires sign-in to list or read databases. This connection is set to No authentication.',
         ),
         nextStep: vscode.l10n.t(
-            'Choose an authentication method for this connection (Update Credentials…), then run the diagnosis again.',
+            'Use Update Credentials to choose an authentication method for this connection, then run the diagnosis again.',
         ),
     }),
     'access.noDatabasesVisible': (): FindingMessage => ({

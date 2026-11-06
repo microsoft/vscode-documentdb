@@ -971,7 +971,7 @@ describe('Acceptance (design §8.1)', (): void => {
                         explanation:
                             'The server answered, but it requires sign-in to list or read databases. This connection is set to No authentication.',
                         nextStep:
-                            'Choose an authentication method for this connection (Update Credentials…), then run the diagnosis again.',
+                            'Use Update Credentials to choose an authentication method for this connection, then run the diagnosis again.',
                     },
                 });
                 const access = view.finished.rows.find((row): boolean => row.id === 'databaseAccess');
@@ -997,7 +997,7 @@ describe('Acceptance (design §8.1)', (): void => {
                 expect(view.json).toContain(codeName);
                 expect(view.markdown).not.toContain('not authenticated yet');
                 expect(view.ctx.session.completedRun?.report.summary?.nextSteps).toContain(
-                    'Choose an authentication method for this connection (Update Credentials…), then run the diagnosis again.',
+                    'Use Update Credentials to choose an authentication method for this connection, then run the diagnosis again.',
                 );
             },
         );

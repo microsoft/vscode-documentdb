@@ -616,7 +616,7 @@ describe('connectionDiagnosticsRouter', (): void => {
                 'cannot distinguish not being signed in from a consent or preauthorization failure',
             );
             expect(markdown).toContain(
-                "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
+                "Connect to the cluster once, then run the diagnosis again.",
             );
         },
     );

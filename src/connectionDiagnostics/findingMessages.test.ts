@@ -279,7 +279,7 @@ describe('localized finding messages', () => {
             explanation:
                 'The server answered, but it requires sign-in to list or read databases. This connection is set to No authentication.',
             nextStep:
-                'Choose an authentication method for this connection (Update Credentials…), then run the diagnosis again.',
+                'Use Update Credentials to choose an authentication method for this connection, then run the diagnosis again.',
         });
     });
 
@@ -313,7 +313,7 @@ describe('localized finding messages', () => {
         (code) => {
             const message = findingMessages[code]({ compressor: 'snappy' });
             expect(message.explanation).toContain('snappy');
-            expect(message.nextStep).toContain('remove it from the compressors option, or put zlib first');
+            expect(message.nextStep).toBe('Remove snappy from the compressors option, or put zlib first.');
             expect(findingMessages[code]({ compressor: 123 }).explanation).not.toContain('123');
         },
     );
@@ -341,7 +341,7 @@ describe('localized finding messages', () => {
 
     it('explains unavailable credentials without opening sign-in', () => {
         expect(findingMessages['auth.credentialsUnavailable']({ missing: 'entraSession' }).nextStep).toBe(
-            "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
+            "Connect to the cluster once, then run the diagnosis again.",
         );
         for (const missing of ['method', 'password']) {
             expect(findingMessages['cs.credentialsMissing']({ missing })).toEqual(
