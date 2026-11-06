@@ -84,7 +84,7 @@ Azure management (subscription listing, ARM clients) already follows the selecte
 `AzureSubscription.environment`; nothing is planned there.
 
 Entra and managed identity attempts attach only `cloudCategory`, `tokenResourceReason`,
-`configuredCloud`, `hostCloud`, and `errorKind` closed enums to existing `connect.startup` and
+`configuredCloud`, `hostCloud`, and `entraFailureKind` closed enums to existing `connect.startup` and
 `worker.startup` telemetry. The attempt's trace context owns these properties; raw resolution
 details (including resources and local IMDS evidence) are never spread into telemetry.
 See [telemetry correlation IDs](../../telemetry-correlation-ids.md#entra-cloud-resolution).

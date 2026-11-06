@@ -1513,9 +1513,15 @@ Event names are logical; the framework adds the extension's namespace.
 | Request cancellation               | The cancel RPC's event                                              | Separate from the run's terminal result, so a cancelled run is not counted twice                                                                                                                                                                                      |
 
 A random `diagnosticsSessionId` per panel and a fresh `diagnosticsRunCorrelationId` per run
-(the run ID used in 6.4) are carried through the command, run and report actions. Existing
-`journeyCorrelationId` and `connectionCorrelationId` are preserved when present. No ID is derived
-from a host, connection name, `clusterId` or `treeId`.
+(the run ID used in 6.4) are carried through the command, run and report actions. The IDs present
+when the panel opens are carried on the command and on every `runStarted`/`run` event:
+`journeyCorrelationId` (discovery lineage), `connectionCorrelationId` (the connected extension
+client, if any) and `failedStartupCorrelationId`, the `startupCorrelationId` of the cluster's last
+failed `connect.startup`. `ClustersClient` keeps that last failed startup per cluster until a
+startup succeeds, and the next `connect.startup` carries it as `previousFailedStartupCorrelationId`,
+so failed connect → diagnosis → retry is one join. A panel that is focused, not created, keeps the
+IDs of its first opening; the focusing command still records its own with the session ID. No ID is
+derived from a host, connection name, `clusterId` or `treeId`.
 
 The run scope measures the runner, not subscription setup. On cancel it closes promptly with a
 bounded `cancelReason` (`cancelButton`, `panelClosed`, `rerun`, `subscriptionClosed`) and the active
@@ -1528,17 +1534,27 @@ check IDs; late completions send nothing.
   `connected`, `failed` or `notTested`. Cancellation uses the framework's cancelled result and has no
   outcome; telemetry must not turn a `UserCancelledError` into a successful return.
 - **Properties:** the IDs and usage fields above, `authMethod`, `authSkipReason`, platform, remote
-  kind, first blocking check and phase, and deduplicated known finding codes. For Entra ID, reuse
+  kind, first blocking check and phase, and deduplicated known finding codes. When the connection
+  details cannot be read (`resolveTarget` fails), `targetSource` (`savedConnection`, `azure`,
+  `kubernetes`, `atlas`, `other`), `targetFailureReason` (`signInRequired`, `accessDenied`,
+  `unreachable`, `notConnectable`, `notProvided`, `pending`, `other`) and `targetHttpStatus`
+  (100–599); each is `none` otherwise. For Entra ID, reuse
   #1050's allowlisted fields: passing the run's properties as `AuthTraceContext.startupProperties`
-  fills `cloudCategory`, `tokenResourceReason`, `configuredCloud`, `hostCloud` and `errorKind`
+  fills `cloudCategory`, `tokenResourceReason`, `configuredCloud`, `hostCloud` and `entraFailureKind`
   (`recordCloudResolution` in [authTrace.ts](../../../../src/utils/authTrace.ts)); add the classifier
   rule ID and AADSTS code as `entraSignIn.classified` does.
+- **No property name contains `error` or `exception`.** Whole-error masking (7.4) replaces every
+  such property with `redacted:action`, whatever its value, so a bounded category under such a name
+  is never received. `entraFailureKind` was `errorKind` until 2026-11-06, and was redacted on
+  `connect.startup`, `worker.startup` and this feature's `run` until then.
 - **Measurements:** run index, host count, counts per status, and per-check aggregates such as
   `dnsFailCount` and `dnsMaxDurationMs`. The wrapper already measures the total duration.
 - **Bounded schema:** field names come from check and action IDs, never from URI options, server
   replies or role names. Finding codes are allowlisted. Never send the report, facts, finding data,
   token claim summary, English convenience detail or per-host results.
-- An action succeeds only when it finished: a dismissed save dialog is cancellation.
+- An action succeeds only when it finished: a dismissed save dialog is cancellation. The shared
+  RPC telemetry runner records a procedure that throws `UserCancelledError` as `Canceled`, without
+  error fields.
 
 ### 7.4 Masking
 
