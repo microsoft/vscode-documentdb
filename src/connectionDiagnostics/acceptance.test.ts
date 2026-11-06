@@ -890,7 +890,7 @@ describe('Acceptance (design §8.1)', (): void => {
             expect(JSON.stringify(view.finished.rows)).not.toContain('Did not finish in time');
             expect(JSON.stringify(view.finished.result)).not.toContain('Step timed out');
             // The report keeps both codes and leads with the probe.
-            expect(view.markdown.replace(/\\/g, '')).toContain('Connection failed** — Network connection (TCP)');
+            expect(view.markdown.replace(/\\/g, '')).toContain('Connection failed** · Network connection (TCP)');
             expect(view.markdown.replace(/\\/g, '')).toContain('auth.serverSelectionTimeout');
         });
 

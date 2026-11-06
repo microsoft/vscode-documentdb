@@ -61,7 +61,7 @@ function flattenFacts(
         if (Array.isArray(value)) {
             const entries = value as readonly unknown[];
             if (entries.length === 0) {
-                rows.push([path, '—']);
+                rows.push([path, '(none)']);
             } else if (entries.every((entry): boolean => entry === null || typeof entry !== 'object')) {
                 rows.push([path, entries.map((entry): string => formatValue(entry, key)).join(', ')]);
             } else {
@@ -70,7 +70,7 @@ function flattenFacts(
         } else if (value !== null && typeof value === 'object') {
             const entries = Object.entries(value);
             if (entries.length === 0) {
-                rows.push([path, '—']);
+                rows.push([path, '(none)']);
             }
             for (const [key, child] of entries) {
                 visit(child, path ? `${path}.${key}` : key, key);
@@ -146,7 +146,7 @@ export function renderMarkdown<TCode extends string>(
     }
     function renderResult(result: CheckResult<TCode>): void {
         blocks.push(
-            `### ${checkName(result.checkId)}${result.target === undefined ? '' : ` — ${escapeText(result.target)}`}`,
+            `### ${checkName(result.checkId)}${result.target === undefined ? '' : ` (${escapeText(result.target)})`}`,
         );
         blocks.push(statusLine(result));
         factsTable(result.facts);
@@ -199,7 +199,7 @@ export function renderMarkdown<TCode extends string>(
                 }
             }
         }
-        blocks.push(parts.join(' — '));
+        blocks.push(parts.join(' · '));
         if (summary.location !== undefined) {
             blocks.push(`${label('location')}: ${escapeText(summary.location)}`);
         }
@@ -241,7 +241,7 @@ export function renderMarkdown<TCode extends string>(
             [label('check'), label('target'), label('timeout'), label('source')],
             snapshot.coverage.timedOut.map((operation): string[] => [
                 checkName(operation.checkId),
-                escapeText(operation.target ?? '—'),
+                escapeText(operation.target ?? '(none)'),
                 duration(operation.timeoutMs),
                 label(`${operation.source}TimeoutSource`),
             ]),
@@ -275,12 +275,12 @@ export function renderMarkdown<TCode extends string>(
                 const description = text.describeFinding(finding, result);
                 return [
                     checkName(result.checkId),
-                    escapeText(result.target ?? '—'),
+                    escapeText(result.target ?? '(none)'),
                     codeSpan(finding.code),
                     label(finding.severity),
                     escapeText(description.title),
-                    escapeText(description.explanation ?? '—'),
-                    escapeText(description.nextStep ?? '—'),
+                    escapeText(description.explanation ?? '(none)'),
+                    escapeText(description.nextStep ?? '(none)'),
                 ];
             },
         ),
@@ -306,13 +306,13 @@ export function renderMarkdown<TCode extends string>(
             snapshot.results.flatMap((result): string[][] => [
                 [
                     checkName(result.checkId),
-                    escapeText(result.target ?? '—'),
+                    escapeText(result.target ?? '(none)'),
                     escapeText(text.statusLabel(result.status)),
                     duration(result.durationMs),
                 ],
                 ...(result.steps ?? []).map((step): string[] => [
                     `${checkName(result.checkId)} / ${checkName(step.stepId)}`,
-                    escapeText(result.target ?? '—'),
+                    escapeText(result.target ?? '(none)'),
                     escapeText(text.statusLabel(step.status)),
                     duration(step.durationMs),
                 ]),

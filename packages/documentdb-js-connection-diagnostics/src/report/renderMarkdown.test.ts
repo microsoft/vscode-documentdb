@@ -164,7 +164,7 @@ describe('renderMarkdown', (): void => {
                 'trace',
             ].map((section): string => `## Section ${section}`),
         ]);
-        expect(markdown).toContain('**Connected** — Environment — Title consumer\\.observed');
+        expect(markdown).toContain('**Connected** · Environment · Title consumer\\.observed');
         expect(markdown).toContain('Location: This computer');
         expect(markdown).toContain('Run ID: markdown\\-run');
         expect(markdown).toContain('Started at: 1970\\-01\\-01T00:00:00\\.000Z');
@@ -351,7 +351,8 @@ describe('renderMarkdown', (): void => {
                 redact: false,
             },
         );
-        expect(markdown).toContain('**Failed** — TLS — Headline finding');
+        expect(markdown).toContain('**Failed** · TLS · Headline finding');
+        expect(markdown.replace(/\\/g, '')).toContain('### TLS (`tls`) (first.test:27017)');
     });
 
     it('uses consumer section overrides before built-in mappings and defaults unknown checks', (): void => {
@@ -403,7 +404,7 @@ describe('renderMarkdown', (): void => {
         expect(markdown).toContain('Status: Skipped · Duration: 0 ms · Reason: Dependency failed (TCP (`tcp`))');
         expect(markdown).toContain('#### tls\\.inspect (`tls\\.inspect`)');
         expect(markdown).toContain('Reason: Dependency skipped (tls\\.verify (`tls\\.verify`))');
-        expect(markdown).toContain('| TLS (`tls`) / tls\\.inspect (`tls\\.inspect`) | — | Skipped | 0 ms |');
+        expect(markdown).toContain('| TLS (`tls`) / tls\\.inspect (`tls\\.inspect`) | \\(none\\) | Skipped | 0 ms |');
     });
 
     it('renders step sub-headings, findings codes and flattened facts', (): void => {
@@ -432,8 +433,8 @@ describe('renderMarkdown', (): void => {
         );
         expect(markdown).toContain('| attempts\\[0\\]\\.address | 127\\.0\\.0\\.1 |');
         expect(markdown).toContain('| attempts\\[0\\]\\.outcomes | connected, observed |');
-        expect(markdown).toContain('| emptyList | — |');
-        expect(markdown).toContain('| emptyObject | — |');
+        expect(markdown).toContain('| emptyList | \\(none\\) |');
+        expect(markdown).toContain('| emptyObject | \\(none\\) |');
         expect(markdown).toContain('| nested\\.ok | true |');
         expect(markdown).toContain('| missing | null |');
         expect(markdown).toContain(
@@ -459,7 +460,7 @@ describe('renderMarkdown', (): void => {
         expect(markdown).toContain('Timeout profile: No diagnostic timeouts');
         expect(markdown).toContain('| Whole run | None |');
         expect(markdown).toContain('change that connection setting before a longer retry can help');
-        expect(markdown).toContain('| TCP (`tcp`) | — | 20 ms | Connection |');
+        expect(markdown).toContain('| TCP (`tcp`) | \\(none\\) | 20 ms | Connection |');
     });
 
     it('redacts identifiers before the consumer describes findings, and keeps originals otherwise', (): void => {
@@ -611,7 +612,7 @@ describe('renderMarkdown', (): void => {
         expect(rendered).not.toContain(secretSentinel);
         expect(describeFinding).toHaveBeenCalledTimes(2);
         expect(describeFinding).toHaveBeenCalledWith(value, owner);
-        expect(rendered).toContain('**Failed** — custom — Translated title');
+        expect(rendered).toContain('**Failed** · custom · Translated title');
     });
 
     it('returns identical output for repeated calls without mutating the snapshot', (): void => {
