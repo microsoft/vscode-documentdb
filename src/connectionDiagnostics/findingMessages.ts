@@ -270,7 +270,7 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
                 return {
                     title: vscode.l10n.t('Azure unreachable'),
                     explanation: vscode.l10n.t(
-                        'The connection details could not be read because Azure Resource Manager could not be reached from this host.',
+                        'The connection details could not be read because Azure Resource Manager could not be reached from the host running these checks.',
                     ),
                     nextStep: vscode.l10n.t(
                         'Check the network connection and proxy settings, then run the diagnosis again.',
@@ -343,7 +343,7 @@ function endpointMissingMessage(data: FindingData): FindingMessage {
         case 'unreachable':
             return {
                 title: vscode.l10n.t('No reachable service address'),
-                explanation: vscode.l10n.t('This service type has no address that can be reached from this host.'),
+                explanation: vscode.l10n.t('This service type has no address that can be reached from the host running these checks.'),
                 nextStep: vscode.l10n.t(
                     'Expose the service with a load balancer or node port, or use a ClusterIP service, which the extension reaches through port forwarding.',
                 ),
@@ -624,7 +624,7 @@ export const findingMessages: {
         explanation: vscode.l10n.t(
             "The name goes through Azure's private-link alias and resolves to a private address. This does not prove how the cluster is configured.",
         ),
-        nextStep: vscode.l10n.t('Make sure this host has access to the private network or VPN used by the endpoint.'),
+        nextStep: vscode.l10n.t('Make sure the host running these checks can reach the private network or VPN used by the endpoint.'),
     }),
     'dns.privateEndpointPublicAddress': (): FindingMessage => ({
         title: vscode.l10n.t('Public address for this Azure host name'),
@@ -918,7 +918,7 @@ export const findingMessages: {
                       ),
             nextStep: firewallAdvice(
                 vscode.l10n.t(
-                    'Check that advertised member addresses are reachable from this host. For a local single-node setup only, directConnection=true can avoid discovery but changes failover behavior.',
+                    'Check that advertised member addresses are reachable from the host running these checks. For a local single-node setup only, directConnection=true can avoid discovery but changes failover behavior.',
                 ),
             ),
         };
