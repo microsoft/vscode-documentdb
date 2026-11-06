@@ -347,6 +347,8 @@ Prompt guidance for the coding agent:
 - Post the same comment on GitHub in the PR, one comment per pushed commit.
 - If a fix addresses a comment from the Copilot reviewer, post the comment as a reply in the thread of that review.
 
+**Faster with the [`lead`](.github/skills/lead/SKILL.md) skill.** Once the review file records a selected approach for each item, type `/lead` with the advisor model and the review file, for example `/lead advisor: opus docs/ai-and-plans/features/<feature>/iterations/05-review.md`. The session's model becomes the leader: it hands each item to a coding subagent on a cost-appropriate model, runs items that touch different files in parallel, and asks the advisor model for technical judgment. It commits each item separately, records a done note under the item in the review file, and posts a progress checkpoint after every agent return. It asks you before any choice the review file did not settle, and it does not push or comment on GitHub unless you ask. A cost-effective model such as Sol works well as leader, with a stronger model as advisor.
+
 ### 6.4 Stage 4: Author final review
 
 - The author reviews the changes. Looking at individual commits is easier, and the review file makes the changes visible.

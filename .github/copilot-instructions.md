@@ -322,4 +322,4 @@ For detailed patterns, see:
 - [skills/backport/SKILL.md](skills/backport/SKILL.md) - Cherry-picking a merged fix onto a `release/*` branch and opening the backport PR
 - [skills/flagging-fresh-dependencies/SKILL.md](skills/flagging-fresh-dependencies/SKILL.md) - Scanning lockfiles for npm versions published in the last N days and tracing the adding PR and its approver
 - [skills/documentation-screenshots/SKILL.md](skills/documentation-screenshots/SKILL.md) - Framing and annotating screenshots for release notes, documentation and blog posts in one shared visual style
-- [skills/lead/SKILL.md](skills/lead/SKILL.md) - **Operator-invoked only (`/lead`); do not load otherwise.** The leader runs a multi-item task with delegated coding subagents, separate commits per item, and progress recorded in the source document
+- [skills/lead/SKILL.md](skills/lead/SKILL.md) - **Operator-invoked only (`/lead`); do not load otherwise.** The leader runs a multi-item task with delegated coding subagents, an operator-named advisor model for technical judgment, separate commits per item, a progress checkpoint after every agent return, and progress recorded in the source document
