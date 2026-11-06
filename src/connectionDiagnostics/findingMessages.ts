@@ -734,14 +734,14 @@ export const findingMessages: {
         title: vscode.l10n.t('Certificate host name mismatch'),
         explanation: vscode.l10n.t('The certificate does not match the host name used for the connection.'),
         nextStep: vscode.l10n.t(
-            'Use the host name covered by the certificate, or ask the administrator to correct the certificate.',
+            'Use the host name covered by the certificate, or ask your administrator to correct the certificate.',
         ),
     }),
     'tls.expired': (): FindingMessage => ({
         title: vscode.l10n.t('Certificate expired'),
         explanation: vscode.l10n.t('A certificate in the server certificate chain has expired.'),
         nextStep: vscode.l10n.t(
-            'Check the clock on the host running these checks and ask the administrator to renew the expired certificate.',
+            'Check the clock on the host running these checks and ask your administrator to renew the expired certificate.',
         ),
     }),
     'tls.notYetValid': (): FindingMessage => ({
