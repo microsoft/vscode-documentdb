@@ -150,7 +150,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
         expect(showErrorMessage).toHaveBeenCalledWith(
             expect.stringContaining('test-cluster'),
             expect.objectContaining({ modal: true }),
-            expect.stringContaining('Decoded Password'),
+            expect.stringContaining('decoded password'),
         );
     });
 
@@ -223,7 +223,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
             providerId: 'test-provider',
             message: 'Infrastructure explanation',
         });
-        showErrorMessage.mockResolvedValueOnce('Try with Decoded Password');
+        showErrorMessage.mockResolvedValueOnce('Try with decoded password');
 
         const result = await showConnectionFailedAndMaybeOfferDecodedRetry({
             clusterId: 'stable-cluster-id',
@@ -246,7 +246,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
                     'auth failed\n\n' +
                     '💡 Your password appears to contain URL-encoded characters (e.g. %40 instead of @). This often happens when copying a password from a connection string URL. Would you like to retry with the decoded version?',
             },
-            'Try with Decoded Password',
+            'Try with decoded password',
         );
         expect(context.telemetry.properties.diagnosisProviderId).toBe('test-provider');
         expect(result.decodedPassword).toBe('p@ss');

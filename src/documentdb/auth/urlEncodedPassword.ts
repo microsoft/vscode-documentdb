@@ -98,7 +98,7 @@ export async function showConnectionFailedAndMaybeOfferDecodedRetry(
     context.telemetry.properties[UrlEncodedPasswordTelemetry.Detected] = canOfferRetry ? 'true' : 'false';
     context.telemetry.properties[UrlEncodedPasswordTelemetry.Offered] = canOfferRetry ? 'true' : 'false';
 
-    const retryButton = l10n.t('Try with Decoded Password');
+    const retryButton = l10n.t('Try with decoded password');
     const extraDetail = canOfferRetry
         ? l10n.t(
               '💡 Your password appears to contain URL-encoded characters (e.g. %40 instead of @). This often happens when copying a password from a connection string URL. Would you like to retry with the decoded version?',

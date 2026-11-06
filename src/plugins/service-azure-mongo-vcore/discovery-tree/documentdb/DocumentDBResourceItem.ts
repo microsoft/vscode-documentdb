@@ -233,7 +233,7 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
                 new ProvideUserNameStep(),
                 new ProvidePasswordStep(),
             ],
-            title: l10n.t('Authenticate to Connect with Your DocumentDB Cluster'),
+            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             showLoadingPrompt: true,
         });
 

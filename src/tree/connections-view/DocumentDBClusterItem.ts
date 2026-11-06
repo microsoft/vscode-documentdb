@@ -306,7 +306,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         context.telemetry.properties.urlDecodePasswordResult = 'succeeded';
 
                         // Offer to persist the corrected password so the user does not have to retry next time.
-                        const updateButton = l10n.t('Update Saved Password');
+                        const updateButton = l10n.t('Update saved password');
                         const saveChoice = await vscode.window.showInformationMessage(
                             l10n.t(
                                 'Connected to "{cluster}" using the decoded password. Would you like to update your saved credentials?',
