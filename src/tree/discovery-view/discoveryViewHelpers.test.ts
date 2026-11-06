@@ -25,7 +25,12 @@ vi.mock('../../extensionVariables', () => ({
             error: vi.fn(),
             appendLine: vi.fn(),
         },
-        discoveryBranchDataProvider: { getChildren: vi.fn(), getCachedChildren: vi.fn(), findNodeById: vi.fn() },
+        discoveryBranchDataProvider: {
+            getChildren: vi.fn(),
+            getCachedChildren: vi.fn(),
+            findNodeById: vi.fn(),
+            findChildById: vi.fn(),
+        },
         discoveryTreeView: { reveal: vi.fn() },
     },
 }));
@@ -43,6 +48,7 @@ const missingTargetMessage =
 const getChildren = vi.mocked(ext.discoveryBranchDataProvider.getChildren);
 const getCachedChildren = vi.mocked(ext.discoveryBranchDataProvider.getCachedChildren);
 const findNodeById = vi.mocked(ext.discoveryBranchDataProvider.findNodeById);
+const findChildById = vi.mocked(ext.discoveryBranchDataProvider.findChildById);
 const reveal = vi.mocked(ext.discoveryTreeView.reveal);
 const exists = vi.mocked(ClustersClient.exists);
 
@@ -100,6 +106,7 @@ describe('Discovery view helpers', () => {
             async (id: string): Promise<TreeElement | undefined> =>
                 [databaseNode, collectionNode].find((node): boolean => node.id === id),
         );
+        findChildById.mockResolvedValue(undefined);
         reveal.mockResolvedValue(undefined);
         exists.mockReturnValue(true);
         vi.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
@@ -305,6 +312,7 @@ describe('Discovery view helpers', () => {
         ]);
         expect(getChildren).not.toHaveBeenCalledWith(databaseNode);
         expect(findNodeById).not.toHaveBeenCalled();
+        expect(findChildById).not.toHaveBeenCalled();
         expect(exists).toHaveBeenCalledWith(clusterNode.cluster.clusterId);
     });
 
@@ -322,6 +330,7 @@ describe('Discovery view helpers', () => {
 
         expect(result).toEqual({ clusterNode, clusterId: clusterNode.cluster.clusterId, databaseNode });
         expect(findNodeById).toHaveBeenCalledExactlyOnceWith(`${clusterNode.id}/db`);
+        expect(findChildById).not.toHaveBeenCalled();
         expect(reveal.mock.calls).toEqual([
             [rootNode, { select: false, focus: false, expand: true }],
             [subscriptionNode, { select: false, focus: false, expand: true }],
@@ -331,6 +340,20 @@ describe('Discovery view helpers', () => {
         ]);
         expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
         expect(getChildren).not.toHaveBeenCalledWith(databaseNode);
+    });
+
+    it('finds a database beneath the cluster when its cache lookup misses', async (): Promise<void> => {
+        findNodeById.mockResolvedValueOnce(undefined);
+        findChildById.mockResolvedValue(databaseNode);
+
+        const result = await revealInDiscoveryView(context, { ...request, database: 'db' });
+
+        expect(result).toEqual({ clusterNode, clusterId: clusterNode.cluster.clusterId, databaseNode });
+        expect(findNodeById).toHaveBeenCalledExactlyOnceWith(databaseNode.id);
+        expect(findChildById).toHaveBeenCalledExactlyOnceWith(clusterNode, databaseNode.id);
+        expect(exists.mock.invocationCallOrder[0]).toBeLessThan(findChildById.mock.invocationCallOrder[0]);
+        expect(findNodeById.mock.invocationCallOrder[0]).toBeLessThan(findChildById.mock.invocationCallOrder[0]);
+        expect(reveal).toHaveBeenLastCalledWith(databaseNode, { select: true, focus: true, expand: true });
     });
 
     it('reports the existing URL error when the requested database is missing', async () => {
@@ -377,6 +400,7 @@ describe('Discovery view helpers', () => {
         expect(report.mock.invocationCallOrder[4]).toBeLessThan(findNodeById.mock.invocationCallOrder[1]);
         expect(result?.databaseNode).toBe(databaseNode);
         expect(findNodeById.mock.calls).toEqual([[`${clusterNode.id}/db`], [`${databaseNode.id}/products`]]);
+        expect(findChildById).not.toHaveBeenCalled();
         expect(reveal.mock.calls).toEqual([
             [rootNode, { select: false, focus: false, expand: true }],
             [subscriptionNode, { select: false, focus: false, expand: true }],
@@ -387,6 +411,32 @@ describe('Discovery view helpers', () => {
         ]);
         expect(getChildren).not.toHaveBeenCalledWith(clusterNode);
         expect(getChildren).not.toHaveBeenCalledWith(databaseNode);
+    });
+
+    it('finds a collection beneath the database when its cache lookup misses', async (): Promise<void> => {
+        findNodeById.mockResolvedValueOnce(databaseNode).mockResolvedValueOnce(undefined);
+        findChildById.mockResolvedValue(collectionNode);
+
+        const result = await revealInDiscoveryView(context, { ...request, database: 'db', collection: 'products' });
+
+        expect(result?.databaseNode).toBe(databaseNode);
+        expect(findNodeById.mock.calls).toEqual([[databaseNode.id], [collectionNode.id]]);
+        expect(findChildById).toHaveBeenCalledExactlyOnceWith(databaseNode, collectionNode.id);
+        expect(findNodeById.mock.invocationCallOrder[1]).toBeLessThan(findChildById.mock.invocationCallOrder[0]);
+        expect(reveal).toHaveBeenLastCalledWith(collectionNode, { select: true, focus: true, expand: true });
+    });
+
+    it('rejects a differently-cased collection returned by the fallback', async (): Promise<void> => {
+        collectionNode = { ...createNode(`${databaseNode.id}/Products`), collectionInfo: { name: 'Products' } };
+        findNodeById.mockResolvedValueOnce(databaseNode).mockResolvedValueOnce(undefined);
+        findChildById.mockResolvedValue(collectionNode);
+
+        await expect(
+            revealInDiscoveryView(context, { ...request, database: 'db', collection: 'products' }),
+        ).rejects.toThrow(missingTargetMessage);
+
+        expect(findChildById).toHaveBeenCalledExactlyOnceWith(databaseNode, `${databaseNode.id}/products`);
+        expect(reveal).not.toHaveBeenCalledWith(collectionNode, expect.anything());
     });
 
     it('reports the existing URL error when the requested collection is missing', async () => {

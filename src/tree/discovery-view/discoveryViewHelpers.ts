@@ -151,7 +151,9 @@ export async function revealInDiscoveryView(
             if (request.database) {
                 report?.(vscode.l10n.t('Opening the database…'));
                 ext.outputChannel.trace(`[DeepLink] Looking up database ${request.database}`);
-                const node = await provider.findNodeById(`${clusterNode.id}/${request.database}`);
+                const dbId = `${clusterNode.id}/${request.database}`;
+                const node =
+                    (await provider.findNodeById(dbId)) ?? (await provider.findChildById(clusterNode, dbId));
                 if (
                     !node ||
                     !('databaseInfo' in node) ||
@@ -179,8 +181,17 @@ export async function revealInDiscoveryView(
                 if (request.collection) {
                     report?.(vscode.l10n.t('Opening the collection…'));
                     ext.outputChannel.trace(`[DeepLink] Looking up collection ${request.collection}`);
-                    const collectionNode = await provider.findNodeById(`${databaseNode.id}/${request.collection}`);
-                    if (!collectionNode) {
+                    const collId = `${databaseNode.id}/${request.collection}`;
+                    const collectionNode =
+                        (await provider.findNodeById(collId)) ?? (await provider.findChildById(databaseNode, collId));
+                    if (
+                        !collectionNode ||
+                        !('collectionInfo' in collectionNode) ||
+                        typeof collectionNode.collectionInfo !== 'object' ||
+                        collectionNode.collectionInfo === null ||
+                        !('name' in collectionNode.collectionInfo) ||
+                        collectionNode.collectionInfo.name !== request.collection
+                    ) {
                         ext.outputChannel.trace('[DeepLink] Collection not found');
                         throw new Error(
                             vscode.l10n.t(
