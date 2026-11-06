@@ -13,6 +13,7 @@ created: 2026-11-06
 > Government/China and SRV variants are bundled with **OR**, rather than a mock for every
 > combination. Evaluation notes sit **beside each presentation**, with a cross-cutting pass
 > [at the end](#appendix-b---language-and-consistency-evaluation).
+> All proposed wording is collected in [proposed message changes](#proposed-message-changes).
 
 - **PR / branch:** [#1067](https://github.com/microsoft/vscode-documentdb/pull/1067) /
   `dev/tnaum/url-handler-improvmements`.
@@ -693,6 +694,205 @@ layout separately in the real workbench.
 > **🔎 Verification:** agree with the order. Option 1 is the documented convention
 > (error-translation skill), so option 2 is a cross-feature change, not a deep-link one. See the
 > shared-helper proposal in F01 and the scope note in F09.
+
+## Proposed message changes
+
+This chapter collects every wording change proposed for the messages in
+[Appendix A](#appendix-a---presentation-walkthrough), one table per walkthrough section, so the
+operator can review them in one place. Proposals are suggestions until the operator accepts them.
+**Status:** "Being implemented (Fxx)" means #1067 is changing that text under the named finding;
+"Proposal only" means nobody is implementing it yet. Example values match Appendix A.
+
+### A1 changes
+
+[A1 - Azure resource consent](#a1---azure-resource-consent)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A1, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Matches the `Open Interactive Shell` command title (F04). | Being implemented (F04) |
+| A1, modal detail, bare cluster or database link | No `Opens:` line | `Opens: Discovery view` | Says what `Open` does when no panel is requested (A1 evaluation). | Proposal only |
+
+### A2 changes
+
+[A2 - New connection consent](#a2---new-connection-consent-always-shown)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A2, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Same destination name as A1 (F04). | Being implemented (F04) |
+| A2, modal detail | `A new connection will be added to your Connections View.` | `A new connection will be added to your Connections view.` | Same case as "Discovery view" elsewhere (F04). | Proposal only |
+
+### A3 changes
+
+[A3 - Existing connection consent](#a3---existing-connection-consent)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A3, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Same destination name as A1 (F04). | Being implemented (F04) |
+| A3, button | `Yes, open connection` | `Open` | Same action, same button as A1 (F04). | Being implemented (F04) |
+
+### A4 changes
+
+No change proposed. The title already names certificate validation, and both buttons state the
+choice; shortening or lengthening them adds churn without helping the decision.
+
+### A5 changes
+
+[A5 - Azure account and tenant sign-in](#a5---azure-account-and-tenant-sign-in)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A5, modal title, signed out | `Sign in` | `Sign in to Azure` | Says which sign-in, separate from database authentication in A8 (A5 evaluation). | Proposal only |
+| A5, modal detail, tenant prompt | `None of your signed-in Azure accounts can access subscription 11111111-1111-1111-1111-111111111111.` then `The link names tenant 22222222-2222-2222-2222-222222222222. Sign in to that tenant to continue.` | `We could not find subscription 11111111-1111-1111-1111-111111111111 with your current sign-in. The link names tenant 22222222-2222-2222-2222-222222222222; signing in to that tenant may give access.` | The two current lines contradict each other (F08). | Being implemented (F08) |
+
+### A6 changes
+
+[A6 - Filter-change consent](#a6---filter-change-consent)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A6, modal detail, new line before `Note:` | No line | `These changes stay after the link opens. To undo them, use Filter Entries… or Hide Provider on the provider in the Discovery view.` | Discloses that filter changes persist, and where to undo them (F05). Alternative: `These changes stay even if the link does not open.` as the first sentence, which also covers cancel and failure. | Being implemented (F05) |
+| A6, modal detail | `• Subscription Review subscription will be added to your Azure subscription filter. This also shows it in the Azure Resources view.` | `• Subscription "Review subscription" will be added to your Azure subscription filter. This also shows it in the Azure Resources view.` | Quotes set the subscription name apart from the sentence (A6 evaluation). | Proposal only |
+
+### A7 changes
+
+[A7 - Progress and Cancel](#a7---progress-and-cancel)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A7, progress stage text in `Opening from Azure` | `Loading subscriptions…`, `Loading clusters…`, `Connecting…`, `Opening the database…`, `Opening the collection…` | Removed: the notification ends before the Discovery reveal and connect. The view spinner and the cancellable `Connecting to "review-cluster"…` notification remain. | One Cancel on screen at a time, and it does what it says (F06). | Being implemented (F06) |
+| A7, progress title | `Opening from Azure` | `Opening Azure resource…` | Names what is opened, in the same form as `Opening DocumentDB connection…` (A7 evaluation). | Proposal only |
+
+### A8 changes
+
+[A8 - Database authentication prompts](#a8---database-authentication-prompts)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A8, wizard title | `Authenticate to Connect with Your DocumentDB Cluster` | `Authenticate to connect with your DocumentDB cluster` | Same sentence case as the prompt title in the same flow (F04). | Proposal only |
+
+### A9 changes
+
+[A9 - Local-link regression control](#a9---local-link-regression-control)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A9, modal title | `This link wants to open the DocumentDB Local setup in VS Code.` | `Open DocumentDB Local setup?` | Same question title as A1 to A4 (F04). | Proposal only |
+| A9, modal detail | `Note: You can disable these URL handling confirmations in the extension settings.` | `A link wants to open the DocumentDB Local setup in VS Code.`, blank line, then the unchanged `Note:` line | The sentence moves from the title to the detail, as in A1 to A3. | Proposal only |
+
+### A10 changes
+
+[A10 - Success and cancellation end states](#a10---success-and-cancellation-end-states)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A10, end state for `open=dashboard`, auto-open on | Behavior: the automatic cluster-wide Cluster Dashboard also opens; with `database=app` that makes two panels | Only the requested Cluster Dashboard opens | The link names one destination, so one panel opens (F07). | Being implemented (F07) |
+
+No new text for F10 or F11; both are behavior fixes.
+
+### A11 changes
+
+[A11 - Invalid-link messages](#a11---invalid-link-messages-bundled)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A11, toast, unknown action | `This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.` | `This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version. Check for an update, or verify the link.` | Removes the em dash (F04). | Being implemented (F04) |
+| A11, toast, invalid resource ID | `This DocumentDB link has an invalid Azure resource ID.` | `This DocumentDB link has an invalid Azure resource ID. Expected /subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.DocumentDB/mongoClusters/<name> or databaseAccounts/<name>.` | Names the expected shape for link authors (F08). | Being implemented (F08) |
+| A11, toast, unsupported resource type | `This link points to an Azure resource type the DocumentDB extension cannot open.` | `This link points to an Azure resource type the DocumentDB extension cannot open. Supported: Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts.` | Names what is supported (F08). | Being implemented (F08) |
+| A11, toast, invalid tenant | `This DocumentDB link has an invalid Azure tenant ID.` | `This DocumentDB link has an invalid Azure tenant ID. Expected a GUID.` | Names the expected format (F08). | Being implemented (F08) |
+| A11, toast, missing connection string | `A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.` | `This DocumentDB link is missing a connection string. Add a connectionString query parameter to the link.` | "Link", not "deep-link", like its siblings; a direct repair (F04, F09). | Proposal only |
+| A11, toast, missing resource ID | `A DocumentDB Azure link was opened without a resource ID. Ensure the link includes a resourceId query parameter.` | `This DocumentDB link is missing a resource ID. Add a resourceId query parameter to the link.` | Same shape as the connection-string message. | Proposal only |
+| A11, toast, wrong scheme | `Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://"` | `Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://".` | Final period, like its siblings (F04). | Proposal only |
+| A11, toast, mixed arguments | `This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId and tenantId with /connect/azure.` | `This DocumentDB link combines arguments for different link types. Use connectionString with /connect, or resourceId (and optionally tenantId) with /connect/azure.` | "and" reads as if tenantId were required (A11 evaluation). | Proposal only |
+
+No change to the other A11 messages, which already name a repair, or to the SDK's
+`An error has occurred. Check output window for more details.`, which is dependency-owned.
+
+### A12 changes
+
+[A12 - Azure lookup and access failures](#a12---azure-lookup-and-access-failures)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A12, toast, subscription not returned (button `Manage Azure accounts` unchanged) | `None of your signed-in Azure accounts can access subscription 11111111-1111-1111-1111-111111111111.` | `We could not find subscription 11111111-1111-1111-1111-111111111111 among your signed-in Azure accounts. Check that you are signed in with the right account and to the right Azure cloud.` | Absence from the list is not an access test; adds account and cloud checks (F08). | Being implemented (F08) |
+| A12, toast, resource not found | `The Azure resource review-cluster was not found in subscription Review subscription.` | `The Azure resource review-cluster was not found in subscription Review subscription. Check the link, and whether the resource still exists.` | Adds a next step (F08). | Being implemented (F08) |
+| A12, toast, authorization failed | `Your Azure account cannot read the Azure resource review-cluster.` | `Your Azure account cannot read the Azure resource review-cluster. Ask the resource owner for read access, or sign in with a different account.` | Adds a next step (F08). | Being implemented (F08) |
+| A12, toast, RU account with another API | `This Azure Cosmos DB account does not use the MongoDB API.` | `This Azure Cosmos DB account does not use the MongoDB API. Only accounts that use the MongoDB API can be opened.` | Says what can be opened (F08). | Being implemented (F08) |
+| A12, toast, provider unavailable | `Azure discovery is not available.` | `Azure discovery is not available. Reload the window, then open the link again.` | Adds a next step; low value, because both providers register at activation (F08 verification). | Proposal only |
+
+No change for other ARM or authentication failures: that text is upstream.
+
+### A13 changes
+
+[A13 - Missing database or collection](#a13---missing-database-or-collection)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A13, toast, database not found | `URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.` | `Could not find database "app" on review-cluster. Check the name and your access, then open the link again.` | Names what is missing and where; drops "URL handling aborted" (F02). | Being implemented (F02) |
+| A13, toast, collection not found | `URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.` | `Could not find collection "orders" in database "app". Check the name and your access, then open the link again.` | Names what is missing and where (F02). | Being implemented (F02) |
+| A13, toast after the cluster node already showed a connection failure | Behavior: the toast above appears on top of the A14 modal | No toast; the cluster modal and its retry row already explain the failure | One failure, one message (F02). | Being implemented (F02) |
+| A13, toast, cluster not in Discovery | `Could not find review-cluster in the Discovery view. It may have been deleted, or a filter may still hide it.` | `Could not find review-cluster in the Discovery view. It may have been deleted, or a filter may still hide it. Check the filters on the provider in the Discovery view, then open the link again.` | Adds a next step and where (F08). | Proposal only |
+
+### A14 changes
+
+[A14 - Connection-error shells and recovery](#a14---connection-error-shells-and-recovery)
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A14, first-connection modal title and detail | Title `Failed to connect to "review-cluster"`; detail `Revisit connection details and try again.`, blank line, `Error: <raw error.message>` | Title: the matching A15 or A16 diagnosis; detail: `<raw error.message>`, the same layout as the cached-connection modal. The current title and detail stay only when no diagnosis applies. | A first connection gets the same explanation as a cached one (F01). | Being implemented (F01) |
+| A14, modal button, decoded-password retry | `Try with Decoded Password` | `Try with decoded password` | Sentence case, like newer buttons (F04). | Proposal only |
+| A14, toast button, after decoded retry succeeds | `Update Saved Password` | `Update saved password` | Sentence case, like newer buttons (F04). | Proposal only |
+
+No change to the cached-connection and database-list modals, which already use the diagnosis
+layout, or to the shared `Click here to …` retry rows.
+
+### A15 changes
+
+[A15 - SRV DNS failures](#a15---srv-dns-failures-fully-expanded). Owned by the SRV DNS fallback
+feature; only the small F09 fix is listed. The same text also appears in the A17 terminal and toast.
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A15, modal title, EBADRESP or EFORMERR diagnosis (sentence shown) | ``Use a non-SRV `mongodb://` connection string, or a different DNS server.`` | `Use a non-SRV "mongodb://" connection string, or a different DNS server.` | Backticks show literally in a plain message (F09). | Being implemented (F09) |
+| A15, modal title, ECONNREFUSED diagnosis (sentence shown) | ``Check your network's DNS settings, or use a non-SRV `mongodb://` connection string.`` | `Check your network's DNS settings, or use a non-SRV "mongodb://" connection string.` | Backticks show literally in a plain message (F09). | Being implemented (F09) |
+
+No other change proposed. The resolver's fallback validation errors are technical but owned by
+the SRV feature.
+
+### A16 changes
+
+[A16 - Government, China, and other Entra failures](#a16---government-china-and-other-entra-failures-fully-expanded).
+Owned by the sovereign-clouds feature; only the small F09 fix is listed.
+
+| Where | Current | Proposed | Why | Status |
+| --- | --- | --- | --- | --- |
+| A16, modal title, preauthorization diagnosis (sentence shown) | `Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | `Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | Matches the A8 picker label (F09). | Being implemented (F09) |
+| A16, modal title, opaque broker failure with non-public-cloud context (sentence shown) | `Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | `Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | Matches the A8 picker label (F09). | Being implemented (F09) |
+
+No other change proposed. The A16 inline notes are style suggestions for that feature, not errors.
+
+### A17 changes
+
+No change proposed. The terminal and toast reuse the A15 and A16 diagnosis text, so they pick up
+the F09 fixes, and the retry line already names the next step.
+
+### A18 changes
+
+No change proposed. A18 compares surfaces and has no user-visible text of its own.
+
+### Consistency rules applied
+
+- **Button grammar:** a short verb phrase for the action, with no "Yes," prefix: `Open`,
+  `Add and open`, `Open setup`, `Sign in`, `Turn off validation`.
+- **Sentence case:** titles, buttons, and prompts use sentence case. Title case stays only for
+  product names and named panels.
+- **Surface names:** panels use their command names (`Cluster Dashboard`, `Collection View`,
+  `Interactive Shell`); tree views are "Connections view", "Discovery view", and "Azure Resources
+  view", with a lowercase "view".
+- **Punctuation:** every sentence ends with a period, progress text ends with "…", quoted values
+  use straight double quotes rather than backticks, and there are no em or en dashes.
+- **Certainty:** say "could not find" or "may" when absence does not prove the cause; each error
+  gives one next step and where to take it. "We" is fine. "DocumentDB" names the product and
+  "MongoDB API" the protocol; official Azure product names are unchanged.
 
 ## Appendix A - presentation walkthrough
 
