@@ -1164,6 +1164,17 @@ judgment; the prompt otherwise behaves as before).
 **Commits:** `f0ea55e6` (diagnostic reads), `d032c9f0` (non-interactive preparation), `1ac3714d`
 (resolution inside the run, typed outcomes).
 
+**Amendment (2026-11-06), operator accepted review finding F4**
+([04-parallel-pr-review.md](./iterations/04-parallel-pr-review.md#f4---kubernetes-single-flight-startup-shares-caller-specific-prompt-policy)):
+"I also accept F4. and adding that TDD test." A non-interactive (diagnostic) start that joins a
+pending interactive start never inherits `externalAssumed`. It fails with `LocalPortInUseError`, so
+diagnosis never uses another program's occupied port, even through the single-flight join. The test
+`TDD: concurrent tunnel starts keep the non-interactive port policy` pins this. Accepted races, not
+fixed: a diagnosis may wait for an ordinary connect's **Use existing** prompt until the `prepare`
+timeout or Cancel ends it. An ordinary connect that joins a diagnostic start inherits the accurate
+"port in use" error and misses the **Use existing** offer for that one attempt. The status of point 3
+as a whole is unchanged (Proposed). Commit: `ef7de528`.
+
 ## 0037 — The panel borrows the wizard chrome but has no steps
 
 **Status:** Proposed · **Date:** 2026-10-30 · **Raised by:** operator request

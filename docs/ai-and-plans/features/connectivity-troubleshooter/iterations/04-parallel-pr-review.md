@@ -58,16 +58,16 @@ not a new blocker.
 
 | ID | Severity | Finding | Independent origin | Agreement after validation | Proposed resolution (2026-11-06) | Author decision |
 |---|---|---|---|---|---|---|
-| F1 | med | Discovery defaults replace the identity used by the working connection | RD1 | **Both agree: med** | Fix: identity follows the method's source (shared with F3) | Pending |
-| F2 | med | Hidden reports retain private certificate identities in self-signed issuer chains | RD2 | **Both agree: med** | Fix: one-line redaction change, accept over-redaction | Pending |
-| F3 | med | Unsaved session passwords cannot be diagnosed; remediation advice loops | CR1 | **Both agree: med** | Fix with F1: complete same-method session pair as fallback | Pending |
-| F4 | low | Concurrent Kubernetes tunnel starts inherit another caller's interactive policy | CR2 | **Both agree: low** | Partial: guard diagnosis from `externalAssumed`; won't fix the rest | Pending |
+| F1 | med | Discovery defaults replace the identity used by the working connection | RD1 | **Both agree: med** | Fix: identity follows the method's source (shared with F3) | **Accepted; done `d74501b3`** |
+| F2 | med | Hidden reports retain private certificate identities in self-signed issuer chains | RD2 | **Both agree: med** | Fix: one-line redaction change, accept over-redaction | **Accepted; done `0895ed18`** |
+| F3 | med | Unsaved session passwords cannot be diagnosed; remediation advice loops | CR1 | **Both agree: med** | Fix with F1: complete same-method session pair as fallback | **Accepted; done `d74501b3`** |
+| F4 | low | Concurrent Kubernetes tunnel starts inherit another caller's interactive policy | CR2 | **Both agree: low** | Partial: guard diagnosis from `externalAssumed`; won't fix the rest | **Accepted; done `ef7de528`** |
 | K1 | low | Internal hello deadlines suppress longer/no-timeout retries | RD3; historical S3 | **Both agree: low, already deferred** | Won't fix in this PR; keep the S3 deferral | Existing deferral; no new decision |
 
 ### Proposed resolutions: guiding rule
 
-Proposals added 2026-11-06 at the operator's request. They are proposals, not decisions: each
-**Author decision** stays *Pending* until the operator chooses.
+Proposals added 2026-11-06 at the operator's request. The operator accepted all of them on
+2026-11-06; each finding's **Author decision** and **Done** note record the outcome.
 
 The operator set the rule they follow: "the diagnostics should not show incorrect answers,
 something not showing a detail is better than showing an incorrect one", and "a wont-fix is an
@@ -165,7 +165,16 @@ cases from **Regression validation** above. Assert `transientCredentials` (what 
 `{ tenantId, clientId }` despite target `{ tenantId }`. Keep "honors the stored method before a
 cached method" and "uses stored native credentials before cached ones" unchanged; both still hold.
 
-**Author decision:** Pending. **Rationale:** Pending. **Implementation:** Not started.
+**Author decision:** Accepted, option A as proposed (with F3). **Rationale:** Operator, 2026-11-06: "perform the work as now noted in the review file."
+Guiding rule: no wrong answers.
+
+> **Done (2026-11-06), commit `d74501b3`:** `buildDiagnosticsSetup` selects one identity source next
+> to the method (`target` when `selectedAuthMethod` is set, otherwise `cache`) and reads the native
+> pair, Entra and managed-identity configuration only from it. Discovery defaults no longer fill
+> identity fields. Leader decision (95%): the subagent first also skipped when the selected *user*
+> was empty; sent back, because it changed behaviour beyond the item and the "Stored password
+> unavailable" message would be inaccurate. The skip stays password-only, as before. Tests: cached
+> native, managed-identity and Entra identities beat discovery defaults (3 tests). Model: sol.
 
 ### F2 - Hide identifiers preserves a private self-signed certificate identity
 
@@ -247,7 +256,14 @@ split the misleading fixture into (a) a self-signed case, where subject and issu
 `renderJson` or `renderMarkdown` with `redact`. (b) a public-CA case with an unrelated issuer, and
 assert the issuer stays readable.
 
-**Author decision:** Pending. **Rationale:** Pending. **Implementation:** Not started.
+**Author decision:** Accepted, option A as proposed. **Rationale:** Operator, 2026-11-06: "perform the work as now noted in the review file."
+Over-redaction is acceptable; leaking hidden identifiers is not.
+
+> **Done (2026-11-06), commit `0895ed18`:** `replace()` in `redact.ts` no longer preserves
+> `issuerChain`; `collect()` still skips it, so issuer names create no placeholders. Tests: the
+> misleading fixture now uses an unrelated public CA and asserts it stays readable; a new self-signed
+> test asserts the private CN and O are absent from redacted `renderJson` and `renderMarkdown`
+> output. It failed before the fix. Model: sol.
 
 ### F3 - A connected session with an unsaved password still cannot be diagnosed
 
@@ -336,7 +352,16 @@ cached pair (user and password both from the cache). Add these cases:
 - cached pair with an empty password: still `passwordMissing`;
 - complete stored pair plus a different cached pair: the stored pair wins (existing test).
 
-**Author decision:** Pending. **Rationale:** Pending. **Implementation:** Not started.
+**Author decision:** Accepted, option A as proposed, inside the F1 rule. **Rationale:** Operator, 2026-11-06: "perform the work as now noted in the review file."
+The existing empty-password test may be revised (it is not a `TDD:` contract).
+
+> **Done (2026-11-06), commit `d74501b3`** (shared with F1): when the stored method is native and
+> the stored pair has an empty user or password, a cached pair is used only if the cached method
+> is native and both cached values are non-empty, and then as a whole. `findingMessages.ts` wording is
+> unchanged (the optional precision was not taken). Tests: the empty-password test now expects
+> the cached pair; added a different cached user (whole pair), a non-native cached method and an
+> empty cached password (both `passwordMissing`), plus parameterized variants. 24 tests in
+> `input.test.ts` pass. Model: sol.
 
 ### F4 - Kubernetes single-flight startup shares caller-specific prompt policy
 
@@ -413,7 +438,17 @@ Decision to record if accepted: [0036](../decisions.md#0036--the-troubleshooter-
 point 3 is still **Proposed**. Accepting this resolution is a good moment to have the operator
 confirm that policy, and note there the accepted race.
 
-**Author decision:** Pending. **Rationale:** Pending. **Implementation:** Not started.
+**Author decision:** Accepted (partial fix as proposed, with a `TDD:` contract test).
+**Rationale:** Operator, 2026-11-06: "I also accept F4. and adding that TDD test." The remaining
+race is recorded in decision 0036.
+
+> **Done (2026-11-06), commit `ef7de528`:** in the join branch of `startTunnel`, a caller with
+> `interactive: false` that joins a start resolving `externalAssumed` now throws the existing
+> `LocalPortInUseError` (`otherProgram`, same localized message, so no new l10n string). Test:
+> `TDD: concurrent tunnel starts keep the non-interactive port policy`. An interactive start holds
+> the **Use existing** prompt, a non-interactive join waits, the prompt is accepted, and then the
+> interactive caller gets `externalAssumed` while the join rejects. The prompt is shown once. The test
+> failed before the fix. Model: sol.
 
 ### K1 - Known/deferred: hello reply deadlines do not enable timeout retries
 
@@ -509,3 +544,8 @@ Before handing over, record the author's decision **and reasoning inline under e
 implement approved fixes with their validation and commit references, check in the review, merge
 any subsequently posted Copilot comments, complete operator acceptance, and run every required
 Case 2 command. The existence of this review alone is not readiness approval.
+
+**Follow-up (2026-11-06):** the operator accepted F1–F4 and kept K1 deferred. Fixes landed with the
+`/lead` workflow in `ef7de528` (F4), `0895ed18` (F2) and `d74501b3` (F1, F3), each written by a
+`gpt-6.1-sol` subagent and reviewed by the leader. Case 1 ran after the batch: `npm run build` passed; focused Vitest (51 files, 1,283 tests) passed.
+Case 2 has not run.
