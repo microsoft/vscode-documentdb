@@ -73,7 +73,8 @@ export async function diagnoseConnection(
     const targetNode = node;
     const correlation: DiagnosticsCorrelation = {
         journeyCorrelationId: targetNode.journeyCorrelationId,
-        connectionCorrelationId: ClustersClient.getExistingClient(targetNode.cluster.clusterId)?.connectionCorrelationId,
+        connectionCorrelationId: ClustersClient.getExistingClient(targetNode.cluster.clusterId)
+            ?.connectionCorrelationId,
         failedStartupCorrelationId: ClustersClient.getLastFailedStartupCorrelationId(targetNode.cluster.clusterId),
     };
     applyCorrelation(context, correlation);

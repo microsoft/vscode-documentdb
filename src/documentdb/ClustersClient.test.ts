@@ -318,9 +318,7 @@ describe('regular connection startup diagnostics', () => {
     });
 
     it('does not record a cancelled startup as a failure to follow up on', async () => {
-        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockRejectedValueOnce(
-            new UserCancelledError(),
-        );
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockRejectedValueOnce(new UserCancelledError());
         await expect(ClustersClient.getClient(clusterId)).rejects.toBeInstanceOf(UserCancelledError);
         expect(ClustersClient.getLastFailedStartupCorrelationId(clusterId)).toBeUndefined();
     });
