@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: decisions
 status: active
 created: 2026-10-27
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 # Connectivity troubleshooter: decisions
@@ -64,6 +64,7 @@ updated: 2026-11-05
 | 0049 | Server greeting (hello), one Authentication layout, and the shell on every tree failure     | Accepted                  | Operator approved the proposals                                    | 2026-11-03 | —   |
 | 0050 | Each row shows its duration in a squared badge; the list shades the row under the pointer   | Accepted                  | Operator chose the layout from mocks                               | 2026-11-04 | —   |
 | 0051 | Internal names follow the feature: connection diagnostics                                   | Accepted                  | Operator: full rename now; vocabulary and explanation-layer rename | 2026-11-05 | —   |
+| 0052 | Authentication Details show the sign-in and cluster clouds                                  | Accepted                  | Operator chose O1.B, in Details (review 05)                        | 2026-11-06 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -2002,3 +2003,35 @@ Implemented in iteration 03 ([plan and done notes](./iterations/03-rename-to-con
 - **Keep the old internal names** (0038).
 - **Keep the shipped `connectionDiagnostics.explained` telemetry.** Rejected: the operator has not
   evaluated that data yet.
+
+## 0052 — Authentication Details show the sign-in and cluster clouds
+
+**Status:** Accepted · **Date:** 2026-11-06 · **Raised by:** UX review 05 (UX-6, option O1)
+
+**Context:** the report kept the safe cloud facts (`configuredCloud`, `hostCloud`, `cloudCategory`,
+`tokenResourceReason`), but the panel did not. The gap mattered most on a Microsoft Entra ID token
+failure: the finding says the selected Azure cloud may not match the cluster, while the panel
+showed neither cloud ([review 05, UX-6](./iterations/05-ux-review.md#ux-6-government-cloud-details-is-thinner-than-the-report-)).
+The review offered three options: A, keep the facts in the report and point to it; B, show a small
+selected set in the panel; C, mirror the whole report.
+
+**Decision:** option B, in the expanded Details only. Operator: "Include O1.B, but in the 'Details'
+expanded section."
+
+- For Microsoft Entra ID and managed identity, the expanded Authentication row shows **Sign-in
+  cloud** and **Cluster cloud**, each only when it was recorded. Sign-in cloud is the configured
+  cloud for interactive sign-in and the token resource's cloud for managed identity. Cluster cloud is
+  the cloud recognized from the cluster host names. The cloud-mismatch finding is the fallback
+  source when the configuration step recorded no facts.
+- The collapsed evidence line is unchanged.
+- The selection reason, token resources and host-trust details stay in the report only.
+
+Implemented in commit `1047d7a1` ([review 05, UX-6 done note](./iterations/05-ux-review.md#ux-6-government-cloud-details-is-thinner-than-the-report-)).
+
+**Alternatives** (from the review; the operator gave no further reasons):
+
+- **A. Report only, with a pointer.** Smallest surface, but an extra step exactly when the user
+  cannot sign in.
+- **C. Mirror the whole report.** No context switch, but overwhelming, and it exposes internal keys.
+- **B on the collapsed line.** Not chosen: the operator placed the facts in Details.
+
