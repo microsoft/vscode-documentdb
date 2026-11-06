@@ -115,6 +115,15 @@ beforeEach((): void => {
 });
 
 describe('handleAzureResourceLinkRequest', (): void => {
+    it('masks the subscription name before reading the Azure resource', async (): Promise<void> => {
+        vi.mocked(readAzureResource).mockImplementation(async (readContext): Promise<{ name: string }> => {
+            expect(readContext.valuesToMask).toContain(subscription.name);
+            return { name: 'My-Resource' };
+        });
+
+        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
+    });
+
     it('starts one cancellable notification only after the first confirmation is accepted', async (): Promise<void> => {
         (vscode.window.showInformationMessage as Mock)
             .mockReset()

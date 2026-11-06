@@ -117,6 +117,7 @@ export async function handleAzureResourceLinkRequest(
                 return undefined;
             }
 
+            context.valuesToMask.push(subscription.name);
             context.telemetry.properties.failureStage = 'readAzureResource';
             report(vscode.l10n.t('Reading the resource from Azure…'));
             const { name: displayName } = await readAzureResource(context, subscription, {
