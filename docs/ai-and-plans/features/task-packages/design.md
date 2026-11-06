@@ -251,6 +251,10 @@ interface StreamingWriterSettings {
 - Sources: `retryAfterMs` on the return route; a new optional `getRetryAfterMs(error)` hook on the
   throwing route, returning `undefined` by default.
 - No cap. Stop interrupts the wait.
+- Known limitation: a suggested wait above Node's timer maximum (2,147,483,647 ms, about 24.8 days)
+  is not honored; Node fires such a timer after about 1 ms. Accepted as won't-fix in the
+  [iteration 01 review, F5](./iterations/01-extraction-plan-review.md#f5---an-uncapped-server-delay-can-overflow-nodes-timer);
+  revisit only if a real source of such hints appears.
 - Reading `RetryAfterMs=` from Azure Cosmos DB for MongoDB (RU) 16500 errors in the DocumentDB
   adapter is a separate follow-up because it changes shipped behavior, even if only by waiting
   longer.
