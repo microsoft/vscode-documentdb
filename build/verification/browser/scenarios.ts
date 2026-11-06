@@ -1465,7 +1465,7 @@ const diagnosticsScenarios = {
         diagnosticsConnectedCard,
         ['Certificate checks weakened'],
         [
-            'Connection successful, with 1 warning',
+            'Connection successful, but 1 check needs attention',
             attentionLine,
             'Certificate checks weakened · Secure connection (TLS)',
             detailsPointer,
@@ -1523,7 +1523,7 @@ const diagnosticsScenarios = {
         ]),
         diagnosticsCard('connected', { serverLine: { serverVersion: '7.0.12', host: '10.0.0.4', pingMs: 2 } }),
         ['Not needed: the host is an IP address', 'Not used: TLS is off for this connection'],
-        ['Connection successful', diagnosticsConnectedSummary],
+        ['Connection successful', 'All applicable checks passed. Sign-in succeeded and the database answered.'],
         ['10.0.0.4', '7.0.12', 'Ping'],
     ),
     'timeout-limited': diagnosticsScenario(
@@ -1780,7 +1780,7 @@ const diagnosticsScenarios = {
         diagnosticsConnectedCard,
         ['Connected · Listing databases denied'],
         [
-            'Connection successful, with 1 warning',
+            'Connection successful, but 1 check needs attention',
             attentionLine,
             'Listing databases denied · Database access',
             detailsPointer,

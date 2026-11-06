@@ -117,11 +117,35 @@ describe('DiagnosticsResultCard', () => {
         );
         expect(lines(host)).toEqual([
             'Connection successful',
-            'All checks passed. Sign-in succeeded and the database answered.',
+            'All applicable checks passed. Sign-in succeeded and the database answered.',
         ]);
         // Versions, ping and the answering host live in the rows' Details (decision 0041).
         expect(host.textContent).not.toMatch(/0\.107\.0|7\.0|c-1\.example\.net|Ping/);
         expect(buttonNames(host)).toEqual([]);
+    });
+
+    it.each([
+        [true, true, 'All applicable checks passed. Sign-in succeeded and the database answered.'],
+        [true, false, 'All applicable checks passed. The database answered.'],
+        [false, true, 'All checks passed. Sign-in succeeded and the database answered.'],
+        [false, false, 'All checks passed. The database answered.'],
+    ])('qualifies the all-clear when skipped=%s and authenticated=%s', async (skipped, authenticated, summary) => {
+        const rows = [
+            row('setup', 'done', [finding('info', 'Informational finding')]),
+            row('secureConnection', skipped ? 'skipped' : 'done'),
+        ];
+        const host = await render(card('connected', { authenticated }), rows);
+        expect(lines(host)).toEqual(['Connection successful', summary]);
+    });
+
+    it.each([
+        [1, 'Connection successful, but 1 check needs attention'],
+        [2, 'Connection successful, but 2 checks need attention'],
+    ])('counts %i warning rows as checks in the success title', async (count, title) => {
+        const rows = [row('secureConnection', 'warning'), row('databaseAccess', 'warning')].slice(0, count);
+        const result = card('connected');
+        expect(resultCardTitle(result, rows)).toBe(title);
+        expect(lines(await render(result, rows))[0]).toBe(title);
     });
 
     it('does not count the public Azure private-link address information as a warning', async () => {
@@ -157,17 +181,17 @@ describe('DiagnosticsResultCard', () => {
             ]),
         ];
         const result = card('connected');
-        expect(resultCardTitle(result, rows)).toBe('Connection successful, with 1 warning');
+        expect(resultCardTitle(result, rows)).toBe('Connection successful, but 1 check needs attention');
         const host = await render(result, rows);
         expect(lines(host)).toEqual([
-            'Connection successful, with 1 warning',
+            'Connection successful, but 1 check needs attention',
             'The connection works, but these checks need attention:',
             'Warning: Certificate checks weakened · Secure connection (TLS)',
             'Select Details on a row to see why and what to do.',
         ]);
 
         const two = [...rows, row('databaseAccess', 'warning', [finding('warning', 'Listing databases denied')])];
-        expect(resultCardTitle(result, two)).toBe('Connection successful, with 2 warnings');
+        expect(resultCardTitle(result, two)).toBe('Connection successful, but 2 checks need attention');
     });
 
     it('names rows that failed while the connection succeeded (review R6)', async () => {
@@ -301,7 +325,7 @@ describe('DiagnosticsResultCard', () => {
             `Next: ${signIn.nextStep}`,
         ]);
         expect(host.textContent).not.toMatch(
-            /Connection successful|All checks passed|with 1 warning|Contacting support/,
+            /Connection successful|All (applicable )?checks passed|check needs attention|Contacting support/,
         );
 
         const tls = row('secureConnection', 'warning', [finding('warning', 'Certificate checks weakened')]);

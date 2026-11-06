@@ -133,8 +133,9 @@ report says so.
 When the check ends, a result card appears below the list:
 
 - **Connection successful** means the real connection worked: "All checks passed. Sign-in succeeded
-  and the database answered." If a step ended with a warning or failed, the title counts it, for
-  example **Connection successful, with 1 warning**, and the card lists each such step with what was
+  and the database answered." If a step was skipped, the card says "All applicable checks passed"
+  instead. If a step ended with a warning or failed, the title counts it, for
+  example **Connection successful, but 1 check needs attention**, and the card lists each such step with what was
   found. Select **Details** on that step to see why and what to do. A warning, or a failed check of a
   single server, never turns a successful connection into a failure. The server version, ping and the
   server that answered are in the **Details** of **Server greeting (hello)** and **Database access**.

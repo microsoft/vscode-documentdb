@@ -389,7 +389,7 @@ panel shows full identifiers and no report placeholders while the report hides t
 private-link alias finding is informational: DNS is done and the card says "Connection successful"
 without warnings or private-access advice. `private-endpoint-blocked` keeps the same DNS information
 but fails at Network connection (TCP) with a timeout and the conditional private-access hint.
-`tls-warning` retains the real "Connection successful, with 1 warning" path.
+`tls-warning` retains the real "Connection successful, but 1 check needs attention" path.
 
 Every connection diagnosis fixture sets `stepPacing` to zero, so these static states render at once
 and the layout assertions see their final state. `paced-run` is the exception: it leaves `stepPacing`

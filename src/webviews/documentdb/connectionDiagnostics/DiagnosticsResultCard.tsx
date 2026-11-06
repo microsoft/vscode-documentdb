@@ -60,8 +60,8 @@ function successTitle(issues: readonly CardIssue[]): string {
     }
     if (warnings > 0) {
         return warnings === 1
-            ? l10n.t('Connection successful, with 1 warning')
-            : l10n.t('Connection successful, with {0} warnings', warnings);
+            ? l10n.t('Connection successful, but 1 check needs attention')
+            : l10n.t('Connection successful, but {0} checks need attention', warnings);
     }
     return l10n.t('Connection successful');
 }
@@ -244,15 +244,25 @@ function notConnectedLines(
  * One sentence, and the rows that need attention. Server version, API version, ping and the
  * answering host live in the Server greeting and Database access details (decision 0041).
  */
-function connectedLines(card: ResultCardData, issues: readonly CardIssue[], styles: Styles): JSX.Element[] {
+function connectedLines(
+    card: ResultCardData,
+    issues: readonly CardIssue[],
+    rows: readonly PanelRow[],
+    styles: Styles,
+): JSX.Element[] {
     if (issues.length === 0) {
-        return [
-            <Text key="summary">
-                {card.authenticated
-                    ? l10n.t('All checks passed. Sign-in succeeded and the database answered.')
-                    : l10n.t('All checks passed. The database answered.')}
-            </Text>,
-        ];
+        const skipped = rows.some((row): boolean => row.status === 'skipped');
+        let summary: string;
+        if (card.authenticated) {
+            summary = skipped
+                ? l10n.t('All applicable checks passed. Sign-in succeeded and the database answered.')
+                : l10n.t('All checks passed. Sign-in succeeded and the database answered.');
+        } else {
+            summary = skipped
+                ? l10n.t('All applicable checks passed. The database answered.')
+                : l10n.t('All checks passed. The database answered.');
+        }
+        return [<Text key="summary">{summary}</Text>];
     }
     return [
         <Text key="summary">{l10n.t('The connection works, but these checks need attention:')}</Text>,
@@ -380,7 +390,9 @@ export function DiagnosticsResultCard({
         lines = signInRequiredLines(card, issues, styles);
     } else {
         lines =
-            outcome === 'connected' ? connectedLines(card, issues, styles) : notConnectedLines(card, styles, onOpenUrl);
+            outcome === 'connected'
+                ? connectedLines(card, issues, rows, styles)
+                : notConnectedLines(card, styles, onOpenUrl);
     }
     if (coverage.retryWouldHelp) {
         lines.push(
