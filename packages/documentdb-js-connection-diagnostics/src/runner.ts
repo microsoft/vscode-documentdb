@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { DiagnosticsCancelledError, DiagnosticsConfigurationError } from './errors.js';
-import { resolveTimeouts, SAFETY_LIMITS } from './timeouts.js';
+import { resolveTimeouts, SAFETY_LIMITS, validateTimeoutMs } from './timeouts.js';
 
 import { type BuiltInFindingCode } from './findingCodes.js';
 import { type EffectiveTimeout, type TimeoutKind, type TimeoutProfile, type TimeoutSource } from './timeouts.js';
@@ -75,10 +75,7 @@ export async function runDiagnostics<TCode extends string>(options: {
     const kinds: readonly TimeoutKind[] = ['preparation', 'srv', 'probe', 'authentication', 'postConnect'];
     for (const kind of kinds) {
         if (connectionTimeouts && Object.hasOwn(connectionTimeouts, kind)) {
-            const value = connectionTimeouts[kind];
-            if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-                throw new DiagnosticsConfigurationError(`Invalid connection timeout: ${kind}`);
-            }
+            validateTimeoutMs(`input.connectionTimeouts.${kind}`, connectionTimeouts[kind], { allowNull: false });
         }
     }
 

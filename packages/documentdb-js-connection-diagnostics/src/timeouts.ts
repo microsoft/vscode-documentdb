@@ -16,6 +16,8 @@ export interface EffectiveTimeout {
     readonly source: TimeoutSource | null;
 }
 
+export const MAX_TIMEOUT_MS = 2_147_483_647;
+
 export const DEFAULT_TIMEOUTS: DiagnosticsTimeouts = {
     runTimeoutMs: 300_000,
     preparationTimeoutMs: 15_000,
@@ -31,6 +33,24 @@ export const SAFETY_LIMITS = {
     maxParallelHostChains: 4,
     maxWireReplyBytes: 1_048_576,
 } as const;
+
+export function validateTimeoutMs(
+    name: string,
+    value: unknown,
+    options: { readonly allowNull: boolean },
+): number | null {
+    if (value === null && options.allowNull) {
+        return null;
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > MAX_TIMEOUT_MS) {
+        throw new DiagnosticsConfigurationError(
+            `Invalid timeout: ${name}. Expected a positive finite number no greater than ${MAX_TIMEOUT_MS} ms${
+                options.allowNull ? ', or null to disable this diagnostic timeout' : ''
+            }.`,
+        );
+    }
+    return value;
+}
 
 export function timeoutsForProfile(profile: TimeoutProfile): DiagnosticsTimeouts {
     switch (profile) {
@@ -66,10 +86,7 @@ export function resolveTimeouts(
     let resolved = timeoutsForProfile(profile);
     for (const field of Object.keys(DEFAULT_TIMEOUTS) as (keyof DiagnosticsTimeouts)[]) {
         if (overrides && Object.hasOwn(overrides, field)) {
-            const value = overrides[field];
-            if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) {
-                throw new DiagnosticsConfigurationError(`Invalid timeout: ${field}`);
-            }
+            const value = validateTimeoutMs(field, overrides[field], { allowNull: true });
             resolved = { ...resolved, [field]: value };
         }
     }

@@ -7,11 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
     createTimeoutFinding,
+    DEFAULT_TIMEOUTS,
     DiagnosticsCancelledError,
     DiagnosticsConfigurationError,
     formatTarget,
+    MAX_TIMEOUT_MS,
     runDiagnostics,
     SAFETY_LIMITS,
+    timeoutsForProfile,
 } from './index.js';
 
 import {
@@ -23,9 +26,12 @@ import {
     type DiagnosticsEvent,
     type DiagnosticsInput,
     type DiagnosticsRun,
+    type DiagnosticsTimeouts,
     type EffectiveTimeout,
     type ProbeTarget,
     type RunContext,
+    type TimeoutKind,
+    type TimeoutProfile,
 } from './index.js';
 
 type Code = BuiltInFindingCode | 'custom.note';
@@ -77,6 +83,8 @@ async function flush(): Promise<void> {
 }
 
 const input: DiagnosticsInput = { connectionString: 'mongodb://example.test' };
+const timeoutProfiles: readonly TimeoutProfile[] = ['default', 'longer', 'noDiagnosticTimeouts'];
+const timeoutKinds: readonly TimeoutKind[] = ['preparation', 'srv', 'probe', 'authentication', 'postConnect'];
 
 beforeEach((): void => {
     vi.useFakeTimers();
@@ -504,9 +512,173 @@ describe('configuration validation', (): void => {
         ).rejects.toBeInstanceOf(DiagnosticsConfigurationError);
         expect(onEvent).not.toHaveBeenCalled();
     });
+
+    describe.each(timeoutProfiles)('timeout boundaries under %s', (timeoutProfile): void => {
+        it.each(Object.keys(DEFAULT_TIMEOUTS) as (keyof DiagnosticsTimeouts)[])(
+            'rejects invalid %s before checks, events, timers or I/O',
+            async (field): Promise<void> => {
+                const onEvent = vi.fn();
+                const readFile = vi.fn(async (): Promise<Uint8Array> => new Uint8Array());
+                const run = vi.fn(async (): Promise<Outcome> => {
+                    await readFile();
+                    return pass();
+                });
+                const clock = { now: vi.fn((): number => 0), setTimeout: vi.fn(), clearTimeout: vi.fn() };
+                for (const value of [
+                    0,
+                    -1,
+                    NaN,
+                    Infinity,
+                    '100',
+                    undefined,
+                    false,
+                    MAX_TIMEOUT_MS + 1,
+                    3_000_000_000,
+                ]) {
+                    const promise = runDiagnostics({
+                        input,
+                        checks: [check('work', { run })],
+                        timeoutProfile,
+                        timeouts: { [field]: value } as Partial<DiagnosticsTimeouts>,
+                        onEvent,
+                        io: { clock, readFile },
+                    });
+                    await expect(promise).rejects.toBeInstanceOf(DiagnosticsConfigurationError);
+                    await expect(promise).rejects.toThrow(field);
+                    await expect(promise).rejects.toThrow(String(MAX_TIMEOUT_MS));
+                    await expect(promise).rejects.toThrow('null to disable this diagnostic timeout');
+                }
+                for (const spy of [run, onEvent, clock.now, clock.setTimeout, clock.clearTimeout, readFile]) {
+                    expect(spy).not.toHaveBeenCalled();
+                }
+                expect(vi.getTimerCount()).toBe(0);
+            },
+        );
+
+        it.each(timeoutKinds)(
+            'rejects invalid connection %s before checks, events, timers or I/O',
+            async (kind): Promise<void> => {
+                const onEvent = vi.fn();
+                const readFile = vi.fn(async (): Promise<Uint8Array> => new Uint8Array());
+                const run = vi.fn(async (): Promise<Outcome> => {
+                    await readFile();
+                    return pass();
+                });
+                const clock = { now: vi.fn((): number => 0), setTimeout: vi.fn(), clearTimeout: vi.fn() };
+                for (const value of [
+                    0,
+                    -1,
+                    NaN,
+                    Infinity,
+                    '100',
+                    undefined,
+                    false,
+                    null,
+                    MAX_TIMEOUT_MS + 1,
+                    3_000_000_000,
+                ]) {
+                    const promise = runDiagnostics({
+                        input: {
+                            ...input,
+                            connectionTimeouts: { [kind]: value } as DiagnosticsInput['connectionTimeouts'],
+                        },
+                        checks: [check('work', { run })],
+                        timeoutProfile,
+                        onEvent,
+                        io: { clock, readFile },
+                    });
+                    await expect(promise).rejects.toBeInstanceOf(DiagnosticsConfigurationError);
+                    await expect(promise).rejects.toThrow(`input.connectionTimeouts.${kind}`);
+                    await expect(promise).rejects.toThrow(String(MAX_TIMEOUT_MS));
+                    await expect(promise).rejects.not.toThrow('null');
+                }
+                for (const spy of [run, onEvent, clock.now, clock.setTimeout, clock.clearTimeout, readFile]) {
+                    expect(spy).not.toHaveBeenCalled();
+                }
+                expect(vi.getTimerCount()).toBe(0);
+            },
+        );
+    });
 });
 
 describe('timeouts and coverage', (): void => {
+    it.each([undefined, ...timeoutKinds])(
+        'schedules the maximum diagnostic delay unchanged for %s',
+        async (kind): Promise<void> => {
+            let now = 0;
+            let fire: (() => void) | undefined;
+            const clock: DiagnosticsClock = {
+                now: (): number => now,
+                setTimeout: vi.fn((callback: () => void, _ms: number): unknown => {
+                    fire = callback;
+                    return 'handle';
+                }),
+                clearTimeout: vi.fn(),
+            };
+            const field = kind ? `${kind}TimeoutMs` : 'runTimeoutMs';
+            const promise = runDiagnostics({
+                input,
+                timeoutProfile: 'noDiagnosticTimeouts',
+                timeouts: { [field]: MAX_TIMEOUT_MS },
+                checks: [
+                    check('work', { timeout: kind, run: (): Promise<Outcome> => deferred<Outcome>().promise }),
+                ],
+                io: { clock },
+            });
+            expect(clock.setTimeout).toHaveBeenCalledExactlyOnceWith(expect.any(Function), MAX_TIMEOUT_MS);
+            now = MAX_TIMEOUT_MS;
+            fire?.();
+            const run = await promise;
+            expect(run.results[0].findings[0].data).toEqual({
+                operation: 'work',
+                timeoutMs: MAX_TIMEOUT_MS,
+                source: kind ? 'check' : 'run',
+            });
+            expect(run.durationMs).toBe(MAX_TIMEOUT_MS);
+            expect(clock.clearTimeout).toHaveBeenCalledExactlyOnceWith('handle');
+        },
+    );
+
+    describe.each(timeoutProfiles)('accepted connection boundaries under %s', (timeoutProfile): void => {
+        it.each(timeoutKinds)('accepts the maximum and fractional %s deadline', async (kind): Promise<void> => {
+            for (const value of [MAX_TIMEOUT_MS, 0.5]) {
+                let now = 0;
+                let fire: (() => void) | undefined;
+                const clock: DiagnosticsClock = {
+                    now: (): number => now,
+                    setTimeout: vi.fn((callback: () => void, _ms: number): unknown => {
+                        fire = callback;
+                        return 'handle';
+                    }),
+                    clearTimeout: vi.fn(),
+                };
+                const diagnosticTimeout = timeoutsForProfile(timeoutProfile)[`${kind}TimeoutMs`];
+                const expectedMs = Math.min(value, diagnosticTimeout ?? Infinity);
+                const source = expectedMs === value ? 'connection' : 'check';
+                const promise = runDiagnostics({
+                    input: { ...input, connectionTimeouts: { [kind]: value } },
+                    timeoutProfile,
+                    checks: [
+                        check('work', { timeout: kind, run: (): Promise<Outcome> => deferred<Outcome>().promise }),
+                    ],
+                    io: { clock },
+                });
+                expect(clock.setTimeout).toHaveBeenCalledExactlyOnceWith(expect.any(Function), expectedMs);
+                now = expectedMs;
+                fire?.();
+                const run = await promise;
+                expect(run.results[0].findings[0].data).toEqual({
+                    operation: 'work',
+                    timeoutMs: expectedMs,
+                    source,
+                });
+                expect(run.durationMs).toBe(expectedMs);
+                expect(run.coverage.retryWouldHelp).toBe(source !== 'connection');
+                expect(clock.clearTimeout).toHaveBeenCalledExactlyOnceWith('handle');
+            }
+        });
+    });
+
     it('times out at the effective deadline, never one unit before, with no host in English detail', async (): Promise<void> => {
         const pending = deferred<Outcome>();
         const promise = runDiagnostics({

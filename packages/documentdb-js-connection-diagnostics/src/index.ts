@@ -47,7 +47,7 @@ export type {
     ReportSummary,
 } from './report/types.js';
 export { createTimeoutFinding, formatTarget, runDiagnostics } from './runner.js';
-export { DEFAULT_TIMEOUTS, resolveTimeouts, SAFETY_LIMITS, timeoutsForProfile } from './timeouts.js';
+export { DEFAULT_TIMEOUTS, MAX_TIMEOUT_MS, resolveTimeouts, SAFETY_LIMITS, timeoutsForProfile } from './timeouts.js';
 export type { EffectiveTimeout, TimeoutKind, TimeoutProfile, TimeoutSource } from './timeouts.js';
 export type {
     Check,

@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_TIMEOUTS,
     DiagnosticsConfigurationError,
+    MAX_TIMEOUT_MS,
     resolveTimeouts,
     SAFETY_LIMITS,
     timeoutsForProfile,
@@ -68,14 +69,28 @@ describe('timeout profiles', (): void => {
     });
 
     it.each(fields)('rejects invalid overrides naming %s', (field): void => {
-        for (const value of [0, -1, NaN, Infinity, '100', undefined, false]) {
+        for (const value of [0, -1, NaN, Infinity, '100', undefined, false, MAX_TIMEOUT_MS + 1, 3_000_000_000]) {
             const overrides = { [field]: value } as Partial<DiagnosticsTimeouts>;
             expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(
                 DiagnosticsConfigurationError,
             );
             expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(field);
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(
+                String(MAX_TIMEOUT_MS),
+            );
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(
+                'null to disable this diagnostic timeout',
+            );
         }
         expect(resolveTimeouts('default', { [field]: null })[field]).toBeNull();
         expect(resolveTimeouts('default', { [field]: 0.5 })[field]).toBe(0.5);
+    });
+
+    it.each(profiles)('accepts the timer limit, fractions and null for every field under %s', (profile): void => {
+        for (const field of fields) {
+            for (const value of [MAX_TIMEOUT_MS, 0.5, null]) {
+                expect(resolveTimeouts(profile, { [field]: value })[field]).toBe(value);
+            }
+        }
     });
 });
