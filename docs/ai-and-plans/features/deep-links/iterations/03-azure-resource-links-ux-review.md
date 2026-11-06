@@ -172,19 +172,19 @@ to Government/China or manufacturing every DNS failure.
 a claim that runtime testing found no blockers. Shared/pre-existing gaps are identified
 so they do not silently become requirements for this PR.
 
-| ID  | Priority | Verified                      | Item                                                                        | Origin                                             | Status         |
-| --- | -------- | ----------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------- | -------------- |
-| F01 | **P1**   | ✅ **P1**, wider (9 sites)    | First-connect paths bypass readable SRV/Entra diagnostics                   | Shared/pre-existing, newly reached by Azure links  | ✅ Implemented |
-| F02 | **P1**   | ✅ **P2**, + double toast     | Missing target message suggests a connection failure even after connecting  | New Azure path reuses inherited text               | ✅ Implemented |
-| F03 | **P1**   | ◐ **P3**, fold into F01/F10   | Blocking failures alternate between modal, toast, and silent stop           | Mixed new/shared                                   | 🚫 Closed      |
-| F04 | **P2**   | ✅ **P3**                     | Action labels, titles, and surface names drift                              | Mixed new/shared                                   | ✅ Implemented |
-| F05 | **P2**   | ✅ **P2**                     | Filter prompt omits persistence and no-rollback consequences                | New presentation, intentional persistent design    | ✅ Implemented |
+| ID  | Priority | Verified                      | Item                                                                        | Origin                                             | Status                 |
+| --- | -------- | ----------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------- |
+| F01 | **P1**   | ✅ **P1**, wider (9 sites)    | First-connect paths bypass readable SRV/Entra diagnostics                   | Shared/pre-existing, newly reached by Azure links  | ✅ Implemented         |
+| F02 | **P1**   | ✅ **P2**, + double toast     | Missing target message suggests a connection failure even after connecting  | New Azure path reuses inherited text               | ✅ Implemented         |
+| F03 | **P1**   | ◐ **P3**, fold into F01/F10   | Blocking failures alternate between modal, toast, and silent stop           | Mixed new/shared                                   | 🚫 Closed              |
+| F04 | **P2**   | ✅ **P3**                     | Action labels, titles, and surface names drift                              | Mixed new/shared                                   | ✅ Implemented         |
+| F05 | **P2**   | ✅ **P2**                     | Filter prompt omits persistence and no-rollback consequences                | New presentation, intentional persistent design    | ✅ Implemented         |
 | F06 | **P2**   | ✅ **P3**, reframed           | Progress cancellation waits for operations; some waits have no status       | Mixed new/shared                                   | ↩️ Reverted (operator) |
-| F07 | **P2**   | ✅ **P2**, + D0013 drift      | "Opens: Shell/Collection View" omits automatic dashboard                    | Shared behavior exposed by new destinations        | ✅ Implemented |
-| F08 | **P2**   | ✅ **P2**                     | Some failures lack a next step or overstate what was established            | New messages plus inherited validation wording     | ✅ Implemented |
-| F09 | **P2**   | ◐ **P3**, convention          | Long diagnostic headings, jargon, and literal formatting reduce readability | Shared/pre-existing                                | ✅ Implemented |
-| F10 | **P2**   | ✅ **P2**, worse with `open=` | Saved connection in a folder can silently fail to reveal                    | Explicitly acknowledged pre-existing limitation    | ✅ Implemented |
-| F11 | —        | 🆕 **P2**                     | Link does not retry a cluster whose last expansion failed                   | New Azure path (and pre-existing Connections path) | ✅ Implemented |
+| F07 | **P2**   | ✅ **P2**, + D0013 drift      | "Opens: Shell/Collection View" omits automatic dashboard                    | Shared behavior exposed by new destinations        | ✅ Implemented         |
+| F08 | **P2**   | ✅ **P2**                     | Some failures lack a next step or overstate what was established            | New messages plus inherited validation wording     | ✅ Implemented         |
+| F09 | **P2**   | ◐ **P3**, convention          | Long diagnostic headings, jargon, and literal formatting reduce readability | Shared/pre-existing                                | ✅ Implemented         |
+| F10 | **P2**   | ✅ **P2**, worse with `open=` | Saved connection in a folder can silently fail to reveal                    | Explicitly acknowledged pre-existing limitation    | ✅ Implemented         |
+| F11 | —        | 🆕 **P2**                     | Link does not retry a cluster whose last expansion failed                   | New Azure path (and pre-existing Connections path) | ✅ Implemented         |
 
 > **🔎 Verification pass (2026-11-06, source `05901fe1`).** Each finding was rechecked against the
 > code; the verdict and any priority override sit in a `🔎 Verification` block directly under the
@@ -784,10 +784,10 @@ choice; shortening or lengthening them adds churn without helping the decision.
 
 [A7 - Progress and Cancel](#a7---progress-and-cancel)
 
-| Where                                           | Current                                                                                                          | Proposed                                                                                                                                                            | Why                                                                                         | Status                   |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------ |
+| Where                                           | Current                                                                                                          | Proposed                                                                                                                                                            | Why                                                                                         | Status                             |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------- |
 | A7, progress stage text in `Opening from Azure` | `Loading subscriptions…`, `Loading clusters…`, `Connecting…`, `Opening the database…`, `Opening the collection…` | Removed: the notification ends before the Discovery reveal and connect. The view spinner and the cancellable `Connecting to "review-cluster"…` notification remain. | One Cancel on screen at a time, and it does what it says (F06).                             | Reverted (`4ce49e36`): stages kept |
-| A7, progress title                              | `Opening from Azure`                                                                                             | `Opening Azure resource` (no ellipsis: VS Code renders `title: message`)                                                                                                                                           | Names what is opened, in the same form as `Opening DocumentDB connection…` (A7 evaluation). | Implemented (`d397035f`) |
+| A7, progress title                              | `Opening from Azure`                                                                                             | `Opening Azure resource` (no ellipsis: VS Code renders `title: message`)                                                                                            | Names what is opened, in the same form as `Opening DocumentDB connection…` (A7 evaluation). | Implemented (`d397035f`)           |
 
 ### A8 changes
 
