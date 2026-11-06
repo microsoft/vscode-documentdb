@@ -571,6 +571,11 @@ export const ConnectionDiagnostics = (): JSX.Element => {
                                             result={view.result}
                                             rows={view.rows}
                                             onRetry={startRun}
+                                            onOpenUrl={(url): void => {
+                                                void trpcClient.common.openUrl.mutate({ url }).catch(() => {
+                                                    // The host reports its own failures to open the link.
+                                                });
+                                            }}
                                         />
                                     </div>
                                 )}

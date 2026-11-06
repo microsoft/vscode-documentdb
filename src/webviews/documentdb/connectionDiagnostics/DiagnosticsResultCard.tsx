@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Divider, makeStyles, mergeClasses, Text, tokens } from '@fluentui/react-components';
+import { Button, Divider, Link, makeStyles, mergeClasses, Text, tokens } from '@fluentui/react-components';
 import { ErrorCircleRegular, WarningRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX, type ReactNode } from 'react';
@@ -163,9 +163,13 @@ function supportLines(): JSX.Element[] {
 }
 
 /** What failed, why, and what to do next, for a run that did not connect (design 4.13). */
-function notConnectedLines(card: ResultCardData, styles: Styles): JSX.Element[] {
+function notConnectedLines(
+    card: ResultCardData,
+    styles: Styles,
+    onOpenUrl?: (url: string) => void,
+): JSX.Element[] {
     const lines: JSX.Element[] = [];
-    const { headline, supporting } = card;
+    const { headline, supporting, learnMore } = card;
     if (headline) {
         lines.push(
             <Text key="cause" className={styles.cause}>
@@ -201,6 +205,15 @@ function notConnectedLines(card: ResultCardData, styles: Styles): JSX.Element[] 
     }
     if (card.providerHint) {
         lines.push(<Text key="provider">{card.providerHint}</Text>);
+    }
+    if (learnMore && onOpenUrl) {
+        lines.push(
+            <Link key="learnMore" onClick={(): void => onOpenUrl(learnMore.url)}>
+                {learnMore.topic === 'sovereignClouds'
+                    ? l10n.t('Sovereign Clouds (Azure Government, Azure China)')
+                    : l10n.t('Troubleshoot SRV DNS Lookups (querySrv EBADRESP)')}
+            </Link>,
+        );
     }
     const firewall = firewallSentence();
     // Network next steps from the host already end with this sentence; say it once, as the report does.
@@ -319,6 +332,7 @@ export interface DiagnosticsResultCardProps {
     /** The settled rows; a successful connection's card names those that need attention. */
     readonly rows: readonly PanelRow[];
     readonly onRetry: (profile: TimeoutProfile) => void;
+    readonly onOpenUrl?: (url: string) => void;
 }
 
 const UNBOUNDED_RETRY_NOTE_ID = 'connectivity-result-unbounded-retry-note';
@@ -326,9 +340,14 @@ const UNBOUNDED_RETRY_NOTE_ID = 'connectivity-result-unbounded-retry-note';
 /**
  * The outcome card below the fixed list (design 4.13, decisions 0029 and 0041): a short summary of
  * the diagnosis, with the facts left to each row's Details. It renders only the host's
- * `ResultCardData` and the rows, and performs no I/O; codes, URIs and timings never reach it.
+ * `ResultCardData` and the rows, and performs no I/O; finding codes and timings never reach it.
  */
-export function DiagnosticsResultCard({ result, rows, onRetry }: DiagnosticsResultCardProps): JSX.Element {
+export function DiagnosticsResultCard({
+    result,
+    rows,
+    onRetry,
+    onOpenUrl,
+}: DiagnosticsResultCardProps): JSX.Element {
     const styles = useStyles();
     const title = (
         // The card sits in the connection's section (h2), so its headline is the next level down.
@@ -360,7 +379,8 @@ export function DiagnosticsResultCard({ result, rows, onRetry }: DiagnosticsResu
     if (signInRequired) {
         lines = signInRequiredLines(card, issues, styles);
     } else {
-        lines = outcome === 'connected' ? connectedLines(card, issues, styles) : notConnectedLines(card, styles);
+        lines =
+            outcome === 'connected' ? connectedLines(card, issues, styles) : notConnectedLines(card, styles, onOpenUrl);
     }
     if (coverage.retryWouldHelp) {
         lines.push(

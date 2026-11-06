@@ -23,6 +23,8 @@ export interface ResultCardData {
         readonly corroboration?: 'serverSelection' | 'timedOut';
     };
     readonly providerHint?: string;
+    /** Documentation for a provider paragraph that was left out because it repeats the headline. */
+    readonly learnMore?: { readonly topic: 'sovereignClouds' | 'srvDns'; readonly url: string };
     readonly firewallHint: boolean;
     readonly earlierSignInFailure: boolean;
     readonly runTimeoutBeforeAttempt: boolean;

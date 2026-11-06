@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 
+import { Links } from '../../../constants';
 import { type ResultCardData } from './connectionDiagnosticsTypes';
 import { cardIssues, DiagnosticsResultCard, resultCardTitle, type RunResult } from './DiagnosticsResultCard';
 import { type PanelFindingDetail, type PanelRow } from './panelTypes';
@@ -54,13 +55,17 @@ function card(outcome: ResultCardData['outcome'], extra: Partial<ResultCardData>
 
 const mounted: { host: HTMLElement; root: Root }[] = [];
 
-async function render(result: RunResult, rows: readonly PanelRow[] = []): Promise<HTMLElement> {
+async function render(
+    result: RunResult,
+    rows: readonly PanelRow[] = [],
+    onOpenUrl?: (url: string) => void,
+): Promise<HTMLElement> {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
     mounted.push({ host, root });
     await act(async () => {
-        root.render(<DiagnosticsResultCard result={result} rows={rows} onRetry={vi.fn()} />);
+        root.render(<DiagnosticsResultCard result={result} rows={rows} onRetry={vi.fn()} onOpenUrl={onOpenUrl} />);
     });
     return host;
 }
@@ -209,6 +214,43 @@ describe('DiagnosticsResultCard', () => {
         ]);
         expect(buttonNames(host)).toEqual([]);
         expect(host.textContent).not.toContain(FIREWALL);
+    });
+
+    it.each([
+        ['sovereignClouds', Links.SovereignClouds, 'Sovereign Clouds (Azure Government, Azure China)'],
+        ['srvDns', Links.SrvDnsTroubleshooting, 'Troubleshoot SRV DNS Lookups (querySrv EBADRESP)'],
+    ] as const)(
+        'WI-8: opens the %s documentation link while keeping the private-access hint',
+        async (topic, url, title) => {
+            const onOpenUrl = vi.fn<(url: string) => void>();
+            const hint = 'Connect from the private network.';
+            const host = await render(card('failed', { providerHint: hint, learnMore: { topic, url } }), [], onOpenUrl);
+            const link = host.querySelector<HTMLElement>('.fui-Link');
+            expect(link?.textContent).toBe(title);
+            expect(lines(host)).toEqual(['Connection failed', hint, title, SUPPORT]);
+            expect(onOpenUrl).not.toHaveBeenCalled();
+            await act(async () => link?.click());
+            expect(onOpenUrl).toHaveBeenCalledExactlyOnceWith(url);
+        },
+    );
+
+    it('WI-8: shows a documentation link without a provider hint', async () => {
+        const host = await render(
+            card('failed', { learnMore: { topic: 'srvDns', url: Links.SrvDnsTroubleshooting } }),
+            [],
+            vi.fn(),
+        );
+        expect(lines(host)).toEqual([
+            'Connection failed',
+            'Troubleshoot SRV DNS Lookups (querySrv EBADRESP)',
+            SUPPORT,
+        ]);
+    });
+
+    it('WI-8: omits the documentation link without an open-URL callback', async () => {
+        const host = await render(card('failed', { learnMore: { topic: 'srvDns', url: Links.SrvDnsTroubleshooting } }));
+        expect(host.querySelector('.fui-Link')).toBeNull();
+        expect(lines(host)).toEqual(['Connection failed', SUPPORT]);
     });
 
     it("WI-27: words the driver's agreeing failure as corroboration of the root cause (decision 0047)", async () => {

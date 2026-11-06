@@ -211,22 +211,20 @@ export function createContextHintsCheck(
                 source: 'connectionDiagnostics',
             });
             signal.throwIfAborted();
-            const explanation = [
-                providerExplanation ? sanitizeExplanation(providerExplanation.message, context, getSetup()) : undefined,
-                privateAccessHint(context, earlierResults),
-            ]
-                .filter((message): message is string => message !== undefined)
-                .join(' ');
+            const privateHint = privateAccessHint(context, earlierResults);
             return {
                 status: 'pass',
                 findings: [],
-                facts: providerExplanation
-                    ? {
-                          providerId: providerExplanation.providerId,
-                          explanation,
-                          ...providerIdentifierFacts(providerExplanation.identifiers),
-                      }
-                    : { providerId: null, ...(explanation ? { explanation } : {}) },
+                facts: {
+                    ...(providerExplanation
+                        ? {
+                              providerId: providerExplanation.providerId,
+                              explanation: sanitizeExplanation(providerExplanation.message, context, getSetup()),
+                              ...providerIdentifierFacts(providerExplanation.identifiers),
+                          }
+                        : { providerId: null }),
+                    ...(privateHint ? { privateAccessHint: privateHint } : {}),
+                },
             };
         },
     };

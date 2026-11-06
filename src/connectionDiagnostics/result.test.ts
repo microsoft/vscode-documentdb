@@ -5,6 +5,7 @@
 
 import { type CheckResult, type CheckStepResult, type Finding } from '@documentdb-js/connection-diagnostics';
 import { describe, expect, it } from 'vitest';
+import { Links } from '../constants';
 import { describeFinding } from './findingMessages';
 import { rowForCheck } from './panelRows';
 import { deriveResult, type DiagnosticsResult } from './result';
@@ -417,6 +418,86 @@ describe('deriveResult', (): void => {
         expect(
             derive([connected, check('contextHints', { facts: { explanation: 'Start the stopped instance.' } })]),
         ).toMatchObject({ outcome: 'connected', providerHint: 'Start the stopped instance.' });
+    });
+
+    describe('WI-8: provider guidance repeats only unrelated evidence', (): void => {
+        const explanation = 'Provider-specific guidance.';
+        const privateAccessHint = 'Connect from the private network.';
+
+        it.each([
+            ['entra-sign-in', 'auth.entraTokenFailed', 'sovereignClouds', Links.SovereignClouds],
+            ['srv-dns', 'srv.compressedReplyRejected', 'srvDns', Links.SrvDnsTroubleshooting],
+            ['srv-dns', 'srv.notFound', 'srvDns', Links.SrvDnsTroubleshooting],
+            ['srv-dns', 'srv.txtUnsupportedOption', 'srvDns', Links.SrvDnsTroubleshooting],
+            ['srv-dns', 'srv.targetOutsideDomain', 'srvDns', Links.SrvDnsTroubleshooting],
+        ] as const)(
+            'replaces %s guidance for %s with its documentation, retaining any private-access hint',
+            (providerId, code, topic, url): void => {
+                for (const hint of [undefined, privateAccessHint]) {
+                    const hints = check('contextHints', { facts: { providerId, explanation, privateAccessHint: hint } });
+                    const result = derive([
+                        check('authenticate', { status: 'fail', findings: [finding(code)] }),
+                        hints,
+                    ]);
+                    expect(result.headline?.code).toBe(code);
+                    expect(result.providerHint).toBe(hint);
+                    expect(result.learnMore).toEqual({ topic, url });
+                    expect(hints.facts.explanation).toBe(explanation);
+                }
+            },
+        );
+
+        it.each([
+            ['entra-sign-in', 'auth.failed'],
+            ['srv-dns', 'auth.entraTokenFailed'],
+            ['entra-sign-in', 'srv.compressedReplyRejected'],
+            ['localQuickStart', 'auth.entraTokenFailed'],
+            ['kubernetes-port-forward', 'srv.compressedReplyRejected'],
+            ['atlas', 'auth.entraTokenFailed'],
+        ] as const)('keeps %s guidance for the unrelated %s headline', (providerId, code): void => {
+            for (const hint of [undefined, privateAccessHint]) {
+                const result = derive([
+                    check('authenticate', { status: 'fail', findings: [finding(code)] }),
+                    check('contextHints', { facts: { providerId, explanation, privateAccessHint: hint } }),
+                ]);
+                expect(result.providerHint).toBe(hint ? `${explanation} ${hint}` : explanation);
+                expect(result.learnMore).toBeUndefined();
+            }
+        });
+
+        it.each(['entra-sign-in', 'srv-dns'])(
+            'keeps %s guidance when there is no headline',
+            (providerId): void => {
+                const result = derive([
+                    connected,
+                    check('contextHints', { facts: { providerId, explanation, privateAccessHint } }),
+                ]);
+                expect(result.headline).toBeUndefined();
+                expect(result.providerHint).toBe(`${explanation} ${privateAccessHint}`);
+                expect(result.learnMore).toBeUndefined();
+            },
+        );
+
+        it.each([undefined, ''])(
+            'keeps a private-access hint without a non-empty provider explanation (%s)',
+            (explanation): void => {
+                const result = derive([
+                    rejectCredentials(),
+                    check('contextHints', { facts: { providerId: null, explanation, privateAccessHint } }),
+                ]);
+                expect(result.providerHint).toBe(privateAccessHint);
+                expect(result.learnMore).toBeUndefined();
+            },
+        );
+
+        it('omits empty provider and private-access hints', (): void => {
+            const result = derive([
+                rejectCredentials(),
+                check('contextHints', { facts: { explanation: '', privateAccessHint: '' } }),
+            ]);
+            expect(result.providerHint).toBeUndefined();
+            expect(result.learnMore).toBeUndefined();
+        });
     });
 
     it.each(['dns', 'tcp', 'tls', 'hello', 'authenticate'])(

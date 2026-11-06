@@ -149,10 +149,10 @@ describe('contextHints', (): void => {
         it('adds no hint when the connection succeeds, even with a failed seed', async (): Promise<void> => {
             expect(
                 await run([alias, { ...result('tcp'), target: alias.target }, result('authenticate', 'pass')]),
-            ).not.toHaveProperty('explanation');
+            ).not.toHaveProperty('privateAccessHint');
             expect(
                 await run([alias, { ...result('tcp', 'pass'), target: alias.target }, result('authenticate', 'pass')]),
-            ).not.toHaveProperty('explanation');
+            ).not.toHaveProperty('privateAccessHint');
         });
 
         it.each([
@@ -168,19 +168,21 @@ describe('contextHints', (): void => {
                 target: alias.target,
                 findings: [{ code, severity: 'error' as const, detail: { language: 'en' as const, text: 'Failed.' } }],
             };
-            expect(await run([alias, failure])).toMatchObject({ providerId: null, explanation: hint });
+            expect(await run([alias, failure])).toMatchObject({ providerId: null, privateAccessHint: hint });
+            expect(await run([alias, failure])).not.toHaveProperty('explanation');
             expect(await run([alias, { ...failure, target: 'other.example:27017' }], true)).not.toHaveProperty(
-                'explanation',
+                'privateAccessHint',
             );
-            expect(await run([{ ...alias, findings: [] }, failure])).not.toHaveProperty('explanation');
+            expect(await run([{ ...alias, findings: [] }, failure])).not.toHaveProperty('privateAccessHint');
         });
 
-        it('keeps the existing provider hint first', async (): Promise<void> => {
+        it('keeps the sanitized provider explanation separate from the private-access hint', async (): Promise<void> => {
             expect(
-                await run([alias, { ...result('tcp'), target: alias.target }], false, 'Check access from WSL.'),
+                await run([alias, { ...result('tcp'), target: alias.target }], false, `Check access from WSL. ${password}`),
             ).toMatchObject({
                 providerId: 'fixture',
-                explanation: `Check access from WSL. ${hint}`,
+                explanation: 'Check access from WSL. [secret omitted]',
+                privateAccessHint: hint,
             });
         });
 
@@ -195,8 +197,8 @@ describe('contextHints', (): void => {
                     },
                 ],
             };
-            expect(await run([alias, failure])).toHaveProperty('explanation', hint);
-            expect(await run([alias, failure], true)).not.toHaveProperty('explanation');
+            expect(await run([alias, failure])).toHaveProperty('privateAccessHint', hint);
+            expect(await run([alias, failure], true)).not.toHaveProperty('privateAccessHint');
             for (const [address, expected] of [
                 ['private.example:27017', hint],
                 ['other.example:27017', undefined],
@@ -223,7 +225,7 @@ describe('contextHints', (): void => {
                             ],
                             true,
                         )
-                    ).explanation,
+                    ).privateAccessHint,
                 ).toBe(expected);
             }
         });
@@ -257,7 +259,7 @@ describe('contextHints', (): void => {
                         ],
                         true,
                     ),
-                ).not.toHaveProperty('explanation');
+                ).not.toHaveProperty('privateAccessHint');
             }
         });
 
@@ -265,7 +267,7 @@ describe('contextHints', (): void => {
             'uses structured network error facts for a later failed step: %j',
             async (facts): Promise<void> => {
                 expect(await run([alias, { ...result('authenticate'), findings: [], facts }])).toHaveProperty(
-                    'explanation',
+                    'privateAccessHint',
                     hint,
                 );
             },
@@ -278,12 +280,12 @@ describe('contextHints', (): void => {
                 detail: { language: 'en' as const, text: 'Timed out.' },
             };
             expect(await run([alias, { ...result('tcp'), target: alias.target, findings: [finding] }])).toHaveProperty(
-                'explanation',
+                'privateAccessHint',
                 hint,
             );
             expect(
                 await run([alias, { ...result('authenticate'), findings: [{ ...finding, code: 'auth.tokenFailed' }] }]),
-            ).not.toHaveProperty('explanation');
+            ).not.toHaveProperty('privateAccessHint');
         });
 
         it.each(['auth.failed', 'tls.expired', 'tls.hostnameMismatch', 'cs.unparseable'])(
@@ -299,7 +301,7 @@ describe('contextHints', (): void => {
                             findings: [{ code, severity: 'error', detail: { language: 'en', text: 'Failed.' } }],
                         },
                     ]),
-                ).not.toHaveProperty('explanation');
+                ).not.toHaveProperty('privateAccessHint');
             },
         );
     });

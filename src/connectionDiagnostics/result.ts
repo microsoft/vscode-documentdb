@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type CheckResult, type Finding } from '@documentdb-js/connection-diagnostics';
+import { Links } from '../constants';
 import { panelRowIds, type PanelRowId } from '../webviews/documentdb/connectionDiagnostics/panelTypes';
 import { type FindingMessage } from './findingMessages';
 import { rowForCheck } from './panelRows';
@@ -30,6 +31,8 @@ export interface DiagnosticsResult {
         readonly corroboration?: 'serverSelection' | 'timedOut';
     };
     readonly providerHint?: string;
+    /** Documentation for a provider paragraph that was left out because it repeats the headline. */
+    readonly learnMore?: { readonly topic: 'sovereignClouds' | 'srvDns'; readonly url: string };
     readonly firewallHint: boolean;
     readonly earlierSignInFailure: boolean;
     readonly runTimeoutBeforeAttempt: boolean;
@@ -242,6 +245,24 @@ export function deriveResult(
         stoppedAtRow = undefined;
     }
 
+    const hints = results.find((result): boolean => result.checkId === 'contextHints')?.facts;
+    const providerId = text(hints?.providerId);
+    const headlineCode = headline?.finding.code;
+    const suppressed =
+        (providerId === 'entra-sign-in' && headlineCode === 'auth.entraTokenFailed') ||
+        (providerId === 'srv-dns' && headlineCode?.startsWith('srv.'));
+    const providerHint =
+        [suppressed ? undefined : text(hints?.explanation), text(hints?.privateAccessHint)]
+            .filter((part): part is string => part !== undefined)
+            .join(' ') || undefined;
+    let learnMore: DiagnosticsResult['learnMore'];
+    if (suppressed) {
+        learnMore =
+            providerId === 'entra-sign-in'
+                ? { topic: 'sovereignClouds', url: Links.SovereignClouds }
+                : { topic: 'srvDns', url: Links.SrvDnsTroubleshooting };
+    }
+
     const server = results.find((result): boolean => result.checkId === 'serverFacts')?.facts ?? {};
     const versions = record(server.versions);
     const pingMs =
@@ -277,7 +298,8 @@ export function deriveResult(
                   },
               }
             : {}),
-        providerHint: text(results.find((result): boolean => result.checkId === 'contextHints')?.facts.explanation),
+        providerHint,
+        learnMore,
         firewallHint: outcome === 'failed' && (isTransport(headline) || isTransport(supporting)),
         earlierSignInFailure:
             authenticate?.facts.earlierInSession !== undefined && authenticate.facts.earlierInSession !== null,
