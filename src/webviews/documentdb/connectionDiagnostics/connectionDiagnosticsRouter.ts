@@ -96,7 +96,7 @@ function shareCancelled(myCtx: WithTelemetry<RouterContext>, input: z.infer<type
 function completedReport(ctx: RouterContext, runId: string): DiagnosticsReport<FindingCode> {
     const snapshot = ctx.session.completedRun;
     if (!snapshot || snapshot.runId !== runId) {
-        throw new Error(vscode.l10n.t('This report is no longer available. Run the check again.'));
+        throw new Error(vscode.l10n.t('This report is no longer available. Run the diagnosis again.'));
     }
     return snapshot.report;
 }
@@ -245,7 +245,7 @@ function reportSummary(run: DiagnosticsRun<FindingCode>, result: DiagnosticsResu
         if (result.runTimeoutBeforeAttempt) {
             nextSteps.push(
                 vscode.l10n.t(
-                    'The time limit for the whole run expired before the connection was attempted. Run the check again with longer or no diagnostic timeouts.',
+                    'The time limit for the whole run expired before the connection was attempted. Run the diagnosis again with longer or no diagnostic timeouts.',
                 ),
             );
         }
@@ -519,7 +519,7 @@ export const connectionDiagnosticsRouter = router({
         .mutation(async ({ ctx, input }): Promise<boolean> => {
             const myCtx = reportContext(ctx, input);
             if (myCtx.session.runId !== input.runId) {
-                throw new Error(vscode.l10n.t('This report is no longer available. Run the check again.'));
+                throw new Error(vscode.l10n.t('This report is no longer available. Run the diagnosis again.'));
             }
             const preview = myCtx.session.reportPreview;
             if (preview) {

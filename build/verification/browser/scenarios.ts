@@ -975,7 +975,7 @@ const pacedRunConfig: (typeof diagnostics)['config'] = {
 const unreachable = {
     title: 'Network connection timed out',
     explanation: 'The TCP connection attempt timed out without connecting. This does not identify what blocked it.',
-    nextStep: `Check the endpoint and network path, then try again. ${firewallSentence}`,
+    nextStep: `Check the endpoint and network path, then run the diagnosis again. ${firewallSentence}`,
 };
 /** `access.signInRequired` (decision 0048). */
 const signInRequired = {
@@ -1630,7 +1630,7 @@ const diagnosticsScenarios = {
             ...authenticationHeadline(
                 'Sign-in needed',
                 'No Microsoft Entra ID sign-in is available without a prompt.',
-                "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again.",
+                "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
             ),
             earlierSignInFailure: true,
         }),
@@ -1638,7 +1638,7 @@ const diagnosticsScenarios = {
         [
             'Connection not tested',
             'No Microsoft Entra ID sign-in is available without a prompt.',
-            "Next: Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again.",
+            "Next: Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
             'A sign-in for this connection failed earlier. Show report has the details.',
             supportLine,
         ],
@@ -2084,7 +2084,7 @@ const diagnosticsScenarios = {
                             'Connection failed at Network connection (TCP)',
                             `${unreachable.title} (${diagnosticsHost}:27017)`,
                             unreachable.explanation,
-                            'Next: Check the endpoint and network path, then try again.',
+                            'Next: Check the endpoint and network path, then run the diagnosis again.',
                             firewallSentence,
                             'The driver also could not reach a server.',
                             supportLine,

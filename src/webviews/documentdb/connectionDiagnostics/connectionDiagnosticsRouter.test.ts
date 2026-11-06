@@ -386,7 +386,7 @@ describe('connectionDiagnosticsRouter', (): void => {
         const actions = caller(ctx);
         for (const action of [actions.showDiagnostics, actions.copyReport, actions.saveReport]) {
             await expect(action({ runId: 'wrong', hideIdentifiers: false })).rejects.toThrow(
-                'This report is no longer available. Run the check again.',
+                'This report is no longer available. Run the diagnosis again.',
             );
         }
         const pending = deferred<DiagnosticsRun<FindingCode>>();
@@ -616,7 +616,7 @@ describe('connectionDiagnosticsRouter', (): void => {
                 'cannot distinguish not being signed in from a consent or preauthorization failure',
             );
             expect(markdown).toContain(
-                "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again.",
+                "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
             );
         },
     );

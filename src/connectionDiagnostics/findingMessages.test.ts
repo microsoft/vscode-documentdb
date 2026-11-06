@@ -341,7 +341,7 @@ describe('localized finding messages', () => {
 
     it('explains unavailable credentials without opening sign-in', () => {
         expect(findingMessages['auth.credentialsUnavailable']({ missing: 'entraSession' }).nextStep).toBe(
-            "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again.",
+            "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
         );
         for (const missing of ['method', 'password']) {
             expect(findingMessages['cs.credentialsMissing']({ missing })).toEqual(

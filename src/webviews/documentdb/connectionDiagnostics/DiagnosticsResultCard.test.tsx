@@ -284,7 +284,7 @@ describe('DiagnosticsResultCard', () => {
                 title: 'Network connection timed out',
                 explanation:
                     'The TCP connection attempt timed out without connecting. This does not identify what blocked it.',
-                nextStep: `Check the endpoint and network path, then try again. ${FIREWALL}`,
+                nextStep: `Check the endpoint and network path, then run the diagnosis again. ${FIREWALL}`,
                 target: 'asf.com:27017',
             },
             supporting: { title: 'No server selected', corroboration: 'serverSelection' },
@@ -295,7 +295,7 @@ describe('DiagnosticsResultCard', () => {
             'Connection failed at Network connection (TCP)',
             'Network connection timed out (asf.com:27017)',
             'The TCP connection attempt timed out without connecting. This does not identify what blocked it.',
-            `Next: Check the endpoint and network path, then try again. ${FIREWALL}`,
+            `Next: Check the endpoint and network path, then run the diagnosis again. ${FIREWALL}`,
             'The driver also could not reach a server.',
             SUPPORT,
         ]);
@@ -357,7 +357,7 @@ describe('DiagnosticsResultCard', () => {
                 title: 'Sign-in needed',
                 explanation: 'No Microsoft Entra ID sign-in is available without a prompt.',
                 nextStep:
-                    "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again.",
+                    "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
             },
             earlierSignInFailure: true,
         });
@@ -367,7 +367,7 @@ describe('DiagnosticsResultCard', () => {
             'Connection not tested',
             'Sign-in needed',
             'No Microsoft Entra ID sign-in is available without a prompt.',
-            "Next: Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again.",
+            "Next: Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
             'A sign-in for this connection failed earlier. Show report has the details.',
             SUPPORT,
         ]);

@@ -60,28 +60,28 @@ function missingCredentialsMessage(data: FindingData): FindingMessage {
                 title: vscode.l10n.t('Choose an authentication method'),
                 explanation: vscode.l10n.t('No authentication method has been chosen. Network checks can still run.'),
                 nextStep: vscode.l10n.t(
-                    'Connect to the cluster and choose an authentication method, then run the check again.',
+                    'Connect to the cluster and choose an authentication method, then run the diagnosis again.',
                 ),
             };
         case 'password':
             return {
                 title: vscode.l10n.t('Stored password unavailable'),
                 explanation: vscode.l10n.t('No stored password is available. Network checks can still run.'),
-                nextStep: vscode.l10n.t('Connect to the cluster and enter the password, then run the check again.'),
+                nextStep: vscode.l10n.t('Connect to the cluster and enter the password, then run the diagnosis again.'),
             };
         case 'entraSession':
             return {
                 title: vscode.l10n.t('Sign-in needed'),
                 explanation: vscode.l10n.t('No Microsoft Entra ID sign-in is available without a prompt.'),
                 nextStep: vscode.l10n.t(
-                    "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again.",
+                    "Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the diagnosis again.",
                 ),
             };
         default:
             return {
                 title: vscode.l10n.t('Authentication input unavailable'),
                 explanation: vscode.l10n.t('Required authentication input is unavailable without a prompt.'),
-                nextStep: vscode.l10n.t('Connect to the cluster once, then run the check again.'),
+                nextStep: vscode.l10n.t('Connect to the cluster once, then run the diagnosis again.'),
             };
     }
 }
@@ -217,19 +217,19 @@ function notFoundMessage(data: FindingData): FindingMessage {
                 explanation: vscode.l10n.t(
                     'Azure reports that this resource no longer exists, or that it moved to another resource group or subscription.',
                 ),
-                nextStep: vscode.l10n.t('Refresh the view, then run the check again from the resource.'),
+                nextStep: vscode.l10n.t('Refresh the view, then run the diagnosis again from the resource.'),
             };
         case 'kubernetes':
             return {
                 title: vscode.l10n.t('Kubernetes service not found'),
                 explanation: vscode.l10n.t('The Kubernetes API reports that this service no longer exists.'),
-                nextStep: vscode.l10n.t('Refresh the Kubernetes view, then run the check again from the service.'),
+                nextStep: vscode.l10n.t('Refresh the Kubernetes view, then run the diagnosis again from the service.'),
             };
         default:
             return {
                 title: vscode.l10n.t('Connection not found'),
                 explanation: vscode.l10n.t('This connection no longer exists. It may have been removed.'),
-                nextStep: vscode.l10n.t('Refresh the view, then run the check again from the connection.'),
+                nextStep: vscode.l10n.t('Refresh the view, then run the diagnosis again from the connection.'),
             };
     }
 }
@@ -243,7 +243,7 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
             explanation: vscode.l10n.t(
                 'MongoDB Atlas reports that this cluster cannot accept connections right now, for example while it is paused or being created.',
             ),
-            nextStep: vscode.l10n.t('Check the cluster state in MongoDB Atlas, then run the check again.'),
+            nextStep: vscode.l10n.t('Check the cluster state in MongoDB Atlas, then run the diagnosis again.'),
         };
     }
     if (source === 'azure') {
@@ -255,7 +255,7 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
                         'The connection details could not be read from Azure because the Azure sign-in is missing or expired.',
                     ),
                     nextStep: vscode.l10n.t(
-                        "Connection diagnosis doesn't open sign-in. Sign in to Azure in VS Code, then run the check again.",
+                        "Connection diagnosis doesn't open sign-in. Sign in to Azure in VS Code, then run the diagnosis again.",
                     ),
                 };
             case 'accessDenied':
@@ -263,7 +263,7 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
                     title: vscode.l10n.t('Azure access denied'),
                     explanation: vscode.l10n.t("Azure denied access to this resource's connection details."),
                     nextStep: vscode.l10n.t(
-                        'Ask for read access to the resource, or sign in with an account that has it, then run the check again.',
+                        'Ask for read access to the resource, or sign in with an account that has it, then run the diagnosis again.',
                     ),
                 };
             case 'unreachable':
@@ -273,7 +273,7 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
                         'The connection details could not be read because Azure Resource Manager could not be reached from this host.',
                     ),
                     nextStep: vscode.l10n.t(
-                        'Check the network connection and proxy settings, then run the check again.',
+                        'Check the network connection and proxy settings, then run the diagnosis again.',
                     ),
                 };
             default:
@@ -281,7 +281,7 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
                     title: vscode.l10n.t('Azure details unavailable'),
                     explanation: vscode.l10n.t('The connection details could not be read from Azure.'),
                     nextStep: vscode.l10n.t(
-                        'Review the error name in the diagnostic report, refresh the view, then run the check again.',
+                        'Review the error name in the diagnostic report, refresh the view, then run the diagnosis again.',
                     ),
                 };
         }
@@ -312,7 +312,7 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
                     title: vscode.l10n.t('Kubernetes details unavailable'),
                     explanation: vscode.l10n.t("The service's connection details could not be read from Kubernetes."),
                     nextStep: vscode.l10n.t(
-                        'Check the kubeconfig source and context, review the error name in the diagnostic report, then run the check again.',
+                        'Check the kubeconfig source and context, review the error name in the diagnostic report, then run the diagnosis again.',
                     ),
                 };
         }
@@ -321,13 +321,13 @@ function sourceInaccessibleMessage(data: FindingData): FindingMessage {
         return {
             title: vscode.l10n.t('Atlas details unavailable'),
             explanation: vscode.l10n.t('The connection details could not be read from MongoDB Atlas.'),
-            nextStep: vscode.l10n.t('Refresh the MongoDB Atlas view, then run the check again.'),
+            nextStep: vscode.l10n.t('Refresh the MongoDB Atlas view, then run the diagnosis again.'),
         };
     }
     return {
         title: vscode.l10n.t('Connection details unavailable'),
         explanation: vscode.l10n.t('The connection details could not be read.'),
-        nextStep: vscode.l10n.t('Review the error name in the diagnostic report, then run the check again.'),
+        nextStep: vscode.l10n.t('Review the error name in the diagnostic report, then run the diagnosis again.'),
     };
 }
 
@@ -338,7 +338,7 @@ function endpointMissingMessage(data: FindingData): FindingMessage {
             return {
                 title: vscode.l10n.t('Service address pending'),
                 explanation: vscode.l10n.t('Kubernetes has not assigned an external address to this service yet.'),
-                nextStep: vscode.l10n.t('Wait until the service has an external address, then run the check again.'),
+                nextStep: vscode.l10n.t('Wait until the service has an external address, then run the diagnosis again.'),
             };
         case 'unreachable':
             return {
@@ -358,7 +358,7 @@ function endpointMissingMessage(data: FindingData): FindingMessage {
                           ? vscode.l10n.t('MongoDB Atlas did not return a connection string for this cluster.')
                           : vscode.l10n.t('This connection has no connection string.'),
                 nextStep: vscode.l10n.t(
-                    'Check that the resource is fully provisioned and that its connection details are complete, then run the check again.',
+                    'Check that the resource is fully provisioned and that its connection details are complete, then run the diagnosis again.',
                 ),
             };
     }
@@ -564,7 +564,7 @@ export const findingMessages: {
                         "This VS Code version couldn't read your DNS server's reply for the server list (SRV record), and the extension's workaround is turned off.",
                     ),
                     nextStep: vscode.l10n.t(
-                        'Remove the DOCUMENTDB_DISABLE_SRV_FALLBACK environment variable, restart VS Code, then run the check again.',
+                        'Remove the DOCUMENTDB_DISABLE_SRV_FALLBACK environment variable, restart VS Code, then run the diagnosis again.',
                     ),
                 };
             default:
@@ -574,7 +574,7 @@ export const findingMessages: {
                         "This VS Code version couldn't read your DNS server's reply for the server list (SRV record), and the extension's workaround could not read it either.",
                     ),
                     nextStep: vscode.l10n.t(
-                        'Check that the computer or remote host running these checks can reach its DNS servers, including over VPN, then run the check again.',
+                        'Check that the computer or remote host running these checks can reach its DNS servers, including over VPN, then run the diagnosis again.',
                     ),
                 };
         }
@@ -601,7 +601,7 @@ export const findingMessages: {
     'dns.temporaryFailure': (): FindingMessage => ({
         title: vscode.l10n.t('DNS lookup temporarily failed'),
         explanation: vscode.l10n.t('The system DNS resolver reported a temporary lookup failure.'),
-        nextStep: vscode.l10n.t('Check your DNS server and VPN connection, then run the check again.'),
+        nextStep: vscode.l10n.t('Check your DNS server and VPN connection, then run the diagnosis again.'),
     }),
     'dns.resolversDisagree': (data): FindingMessage => ({
         title: vscode.l10n.t('Name lookups disagree'),
@@ -690,7 +690,7 @@ export const findingMessages: {
         explanation: vscode.l10n.t(
             'The TCP connection attempt timed out without connecting. This does not identify what blocked it.',
         ),
-        nextStep: firewallAdvice(vscode.l10n.t('Check the endpoint and network path, then try again.')),
+        nextStep: firewallAdvice(vscode.l10n.t('Check the endpoint and network path, then run the diagnosis again.')),
     }),
     'tcp.unreachable': (): FindingMessage => ({
         title: vscode.l10n.t('Network route unavailable'),
@@ -867,7 +867,7 @@ export const findingMessages: {
     'target.inputCancelled': (): FindingMessage => ({
         title: vscode.l10n.t('Port not provided'),
         explanation: vscode.l10n.t('The port prompt was closed without a value, so nothing was tested.'),
-        nextStep: vscode.l10n.t('Run the check again and enter the port the server listens on.'),
+        nextStep: vscode.l10n.t('Run the diagnosis again and enter the port the server listens on.'),
     }),
     'target.sourceInaccessible': (data): FindingMessage => sourceInaccessibleMessage(data),
     'target.endpointMissing': (data): FindingMessage => endpointMissingMessage(data),
@@ -890,7 +890,7 @@ export const findingMessages: {
             title: vscode.l10n.t('Local port in use'),
             explanation,
             nextStep: vscode.l10n.t(
-                'Free the port, then run the check again. For a service in the Discovery view, setting documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy to autoSelect picks a free port. Connection diagnosis never uses a port another program holds.',
+                'Free the port, then run the diagnosis again. For a service in the Discovery view, setting documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy to autoSelect picks a free port. Connection diagnosis never uses a port another program holds.',
             ),
         };
     },
@@ -1142,7 +1142,7 @@ const reportFindingMessages: Partial<Record<FindingCode, (data: FindingData) => 
                         error,
                     ),
                     nextStep: vscode.l10n.t(
-                        'Unset DOCUMENTDB_DISABLE_SRV_FALLBACK, restart VS Code and run the check again.',
+                        'Unset DOCUMENTDB_DISABLE_SRV_FALLBACK, restart VS Code and run the diagnosis again.',
                     ),
                 };
             default:

@@ -40,7 +40,7 @@ There are three ways to open it:
   connection.
 
 Each cluster has one connection diagnosis panel. Opening it again brings the existing panel to the front and
-offers to run the check again.
+offers to run the diagnosis again.
 
 ## What the checks do
 
@@ -99,7 +99,7 @@ So the **Authentication** step is skipped, and the result says **Connection not 
 - a username and password connection has no stored password, or
 - Microsoft Entra ID has no sign-in available without a prompt.
 
-In those cases, connect to the cluster once in the usual way, then run the check again.
+In those cases, connect to the cluster once in the usual way, then run the diagnosis again.
 
 A sign-in without a prompt cannot tell "not signed in" apart from a consent or permission problem in
 Microsoft Entra ID. When this applies, the report says so and names the VS Code log to check
