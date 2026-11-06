@@ -34,7 +34,11 @@ export function parseAzureResourceLink(resourceId: string, tenantId?: string): A
         segments[5]?.toLowerCase() !== 'providers' ||
         (segments.length === 9 && !segments[8])
     ) {
-        throw new Error(vscode.l10n.t('This DocumentDB link has an invalid Azure resource ID.'));
+        throw new Error(
+            vscode.l10n.t(
+                'This DocumentDB link has an invalid Azure resource ID. Expected /subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.DocumentDB/mongoClusters/<name> or databaseAccounts/<name>.',
+            ),
+        );
     }
 
     const resourceType = segments[7]?.toLowerCase();
@@ -44,12 +48,14 @@ export function parseAzureResourceLink(resourceId: string, tenantId?: string): A
         (resourceType !== 'mongoclusters' && resourceType !== 'databaseaccounts')
     ) {
         throw new Error(
-            vscode.l10n.t('This link points to an Azure resource type the DocumentDB extension cannot open.'),
+            vscode.l10n.t(
+                'This link points to an Azure resource type the DocumentDB extension cannot open. Supported: Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts.',
+            ),
         );
     }
 
     if (tenantId !== undefined && !guid.test(tenantId)) {
-        throw new Error(vscode.l10n.t('This DocumentDB link has an invalid Azure tenant ID.'));
+        throw new Error(vscode.l10n.t('This DocumentDB link has an invalid Azure tenant ID. Expected a GUID.'));
     }
 
     const kind: AzureResourceKind = resourceType === 'mongoclusters' ? 'vcore' : 'ru';

@@ -103,13 +103,11 @@ export async function resolveAzureSubscription(
             vscode.l10n.t('Sign in to tenant'),
             {
                 modal: true,
-                detail: [
-                    vscode.l10n.t(
-                        'None of your signed-in Azure accounts can access subscription {0}.',
-                        request.subscriptionId,
-                    ),
-                    vscode.l10n.t('The link names tenant {0}. Sign in to that tenant to continue.', request.tenantId),
-                ].join('\n'),
+                detail: vscode.l10n.t(
+                    'We could not find subscription {0} with your current sign-in. The link names tenant {1}; signing in to that tenant may give access.',
+                    request.subscriptionId,
+                    request.tenantId,
+                ),
             },
             signInButton,
         );
@@ -137,6 +135,9 @@ export async function resolveAzureSubscription(
         },
     ];
     throw new Error(
-        vscode.l10n.t('None of your signed-in Azure accounts can access subscription {0}.', request.subscriptionId),
+        vscode.l10n.t(
+            'We could not find subscription {0} among your signed-in Azure accounts. Check that you are signed in with the right account and to the right Azure cloud.',
+            request.subscriptionId,
+        ),
     );
 }

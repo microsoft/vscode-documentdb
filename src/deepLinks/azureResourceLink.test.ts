@@ -12,9 +12,11 @@ const tenantId = 'abcdef01-2345-6789-abcd-ef0123456789';
 const prefix = `/subscriptions/${subscriptionId}/resourceGroups/MyGroup/providers`;
 const vcoreResourceId = `${prefix}/Microsoft.DocumentDB/mongoClusters/MyCluster`;
 const ruResourceId = `${prefix}/Microsoft.DocumentDB/databaseAccounts/MyAccount`;
-const invalidResourceId = 'This DocumentDB link has an invalid Azure resource ID.';
-const unsupportedResourceType = 'This link points to an Azure resource type the DocumentDB extension cannot open.';
-const invalidTenantId = 'This DocumentDB link has an invalid Azure tenant ID.';
+const invalidResourceId =
+    'This DocumentDB link has an invalid Azure resource ID. Expected /subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.DocumentDB/mongoClusters/<name> or databaseAccounts/<name>.';
+const unsupportedResourceType =
+    'This link points to an Azure resource type the DocumentDB extension cannot open. Supported: Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts.';
+const invalidTenantId = 'This DocumentDB link has an invalid Azure tenant ID. Expected a GUID.';
 
 describe('parseAzureResourceLink', () => {
     it('parses a vCore cluster', () => {

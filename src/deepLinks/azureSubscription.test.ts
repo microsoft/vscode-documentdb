@@ -236,10 +236,8 @@ describe('resolveAzureSubscription', (): void => {
             'Sign in to tenant',
             {
                 modal: true,
-                detail: [
-                    'None of your signed-in Azure accounts can access subscription Subscription-ID.',
-                    'The link names tenant TENANT-ID. Sign in to that tenant to continue.',
-                ].join('\n'),
+                detail:
+                    'We could not find subscription Subscription-ID with your current sign-in. The link names tenant TENANT-ID; signing in to that tenant may give access.',
             },
             'Sign in to tenant',
         );
@@ -263,7 +261,7 @@ describe('resolveAzureSubscription', (): void => {
         (vscode.window.showInformationMessage as Mock).mockResolvedValue('Sign in to tenant');
 
         await expect(resolveAzureSubscription(context, { ...request, tenantId: 'tenant-id' })).rejects.toThrow(
-            'None of your signed-in Azure accounts can access subscription Subscription-ID.',
+            'We could not find subscription Subscription-ID among your signed-in Azure accounts. Check that you are signed in with the right account and to the right Azure cloud.',
         );
 
         expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledTimes(2);
@@ -310,7 +308,7 @@ describe('resolveAzureSubscription', (): void => {
         ]);
 
         await expect(resolveAzureSubscription(context, request)).rejects.toThrow(
-            'None of your signed-in Azure accounts can access subscription Subscription-ID.',
+            'We could not find subscription Subscription-ID among your signed-in Azure accounts. Check that you are signed in with the right account and to the right Azure cloud.',
         );
 
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();

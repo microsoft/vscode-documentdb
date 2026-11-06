@@ -80,15 +80,24 @@ describe('readAzureResource', () => {
         getAccount.mockResolvedValue({ name: 'My-Resource', kind });
 
         await expect(readAzureResource(context, subscription, { ...request, kind: 'ru' })).rejects.toThrow(
-            'This Azure Cosmos DB account does not use the MongoDB API.',
+            'This Azure Cosmos DB account does not use the MongoDB API. Only accounts that use the MongoDB API can be opened.',
         );
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure resource refused: not MongoDB API');
     });
 
     it.each([
-        ['ResourceNotFound', 'The Azure resource my-resource was not found in subscription My subscription.'],
-        ['ResourceGroupNotFound', 'The Azure resource my-resource was not found in subscription My subscription.'],
-        ['AuthorizationFailed', 'Your Azure account cannot read the Azure resource my-resource.'],
+        [
+            'ResourceNotFound',
+            'The Azure resource my-resource was not found in subscription My subscription. Check the link, and whether the resource still exists.',
+        ],
+        [
+            'ResourceGroupNotFound',
+            'The Azure resource my-resource was not found in subscription My subscription. Check the link, and whether the resource still exists.',
+        ],
+        [
+            'AuthorizationFailed',
+            'Your Azure account cannot read the Azure resource my-resource. Ask the resource owner for read access, or sign in with a different account.',
+        ],
     ])('maps %s from vCore', async (code, message) => {
         vi.mocked(getClusterInformationFromAzure).mockRejectedValue({ code });
 
@@ -96,9 +105,18 @@ describe('readAzureResource', () => {
     });
 
     it.each([
-        ['ResourceNotFound', 'The Azure resource my-resource was not found in subscription My subscription.'],
-        ['ResourceGroupNotFound', 'The Azure resource my-resource was not found in subscription My subscription.'],
-        ['AuthorizationFailed', 'Your Azure account cannot read the Azure resource my-resource.'],
+        [
+            'ResourceNotFound',
+            'The Azure resource my-resource was not found in subscription My subscription. Check the link, and whether the resource still exists.',
+        ],
+        [
+            'ResourceGroupNotFound',
+            'The Azure resource my-resource was not found in subscription My subscription. Check the link, and whether the resource still exists.',
+        ],
+        [
+            'AuthorizationFailed',
+            'Your Azure account cannot read the Azure resource my-resource. Ask the resource owner for read access, or sign in with a different account.',
+        ],
     ])('maps %s from the RU account read', async (code, message) => {
         getAccount.mockRejectedValue({ code });
 
@@ -109,7 +127,7 @@ describe('readAzureResource', () => {
         vi.mocked(createCosmosDBManagementClient).mockRejectedValue({ code: 'AuthorizationFailed' });
 
         await expect(readAzureResource(context, subscription, { ...request, kind: 'ru' })).rejects.toThrow(
-            'Your Azure account cannot read the Azure resource my-resource.',
+            'Your Azure account cannot read the Azure resource my-resource. Ask the resource owner for read access, or sign in with a different account.',
         );
     });
 
