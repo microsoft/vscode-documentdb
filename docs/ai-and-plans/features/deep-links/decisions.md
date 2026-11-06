@@ -511,6 +511,14 @@ triggers it. An explicit request must not depend on that setting, or the link do
 users who turned it off. When the setting is on, the explicit open reuses the existing panel
 (`panelReused`), so nothing opens twice.
 
+> **Amended 2026-11-06 (UX review 03, F07; the operator asked for all review items to be fixed
+> in #1067):** the last sentence held only without `database`. Dashboard panels are keyed by
+> cluster **and** database, so `open=dashboard&database=app` opened the automatic cluster-wide
+> dashboard and the requested database-scoped one. A link with `open=dashboard` now suppresses
+> the automatic dashboard for its own expansion (`autoOpenDashboardSuppression.ts`), so only the
+> requested dashboard opens. Shell, collection and bare links keep the automatic dashboard; the
+> rejected alternative below still applies to them.
+
 A distinct activation source keeps link-driven opens apart from automatic ones, which the
 dashboards count as exposure rather than a deliberate open.
 

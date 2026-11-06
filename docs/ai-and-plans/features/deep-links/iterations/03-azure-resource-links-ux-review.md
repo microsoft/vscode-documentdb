@@ -174,17 +174,17 @@ so they do not silently become requirements for this PR.
 
 | ID | Priority | Verified | Item | Origin | Status |
 | --- | --- | --- | --- | --- | --- |
-| F01 | **P1** | ✅ **P1**, wider (9 sites) | First-connect paths bypass readable SRV/Entra diagnostics | Shared/pre-existing, newly reached by Azure links | 🟠 Open |
-| F02 | **P1** | ✅ **P2**, + double toast | Missing target message suggests a connection failure even after connecting | New Azure path reuses inherited text | 🟠 Open |
-| F03 | **P1** | ◐ **P3**, fold into F01/F10 | Blocking failures alternate between modal, toast, and silent stop | Mixed new/shared | 🟠 Open |
-| F04 | **P2** | ✅ **P3** | Action labels, titles, and surface names drift | Mixed new/shared | 🟠 Open |
-| F05 | **P2** | ✅ **P2** | Filter prompt omits persistence and no-rollback consequences | New presentation, intentional persistent design | 🟠 Open |
-| F06 | **P2** | ✅ **P3**, reframed | Progress cancellation waits for operations; some waits have no status | Mixed new/shared | 🟠 Open |
-| F07 | **P2** | ✅ **P2**, + D0013 drift | "Opens: Shell/Collection View" omits automatic dashboard | Shared behavior exposed by new destinations | 🟠 Open |
-| F08 | **P2** | ✅ **P2** | Some failures lack a next step or overstate what was established | New messages plus inherited validation wording | 🟠 Open |
-| F09 | **P2** | ◐ **P3**, convention | Long diagnostic headings, jargon, and literal formatting reduce readability | Shared/pre-existing | 🟠 Open |
-| F10 | **P2** | ✅ **P2**, worse with `open=` | Saved connection in a folder can silently fail to reveal | Explicitly acknowledged pre-existing limitation | 🟠 Open |
-| F11 | — | 🆕 **P2** | Link does not retry a cluster whose last expansion failed | New Azure path (and pre-existing Connections path) | 🟠 Open |
+| F01 | **P1** | ✅ **P1**, wider (9 sites) | First-connect paths bypass readable SRV/Entra diagnostics | Shared/pre-existing, newly reached by Azure links | ✅ Implemented |
+| F02 | **P1** | ✅ **P2**, + double toast | Missing target message suggests a connection failure even after connecting | New Azure path reuses inherited text | ✅ Implemented |
+| F03 | **P1** | ◐ **P3**, fold into F01/F10 | Blocking failures alternate between modal, toast, and silent stop | Mixed new/shared | 🚫 Closed |
+| F04 | **P2** | ✅ **P3** | Action labels, titles, and surface names drift | Mixed new/shared | ✅ Implemented |
+| F05 | **P2** | ✅ **P2** | Filter prompt omits persistence and no-rollback consequences | New presentation, intentional persistent design | ✅ Implemented |
+| F06 | **P2** | ✅ **P3**, reframed | Progress cancellation waits for operations; some waits have no status | Mixed new/shared | ✅ Implemented |
+| F07 | **P2** | ✅ **P2**, + D0013 drift | "Opens: Shell/Collection View" omits automatic dashboard | Shared behavior exposed by new destinations | ✅ Implemented |
+| F08 | **P2** | ✅ **P2** | Some failures lack a next step or overstate what was established | New messages plus inherited validation wording | ✅ Implemented |
+| F09 | **P2** | ◐ **P3**, convention | Long diagnostic headings, jargon, and literal formatting reduce readability | Shared/pre-existing | ✅ Implemented |
+| F10 | **P2** | ✅ **P2**, worse with `open=` | Saved connection in a folder can silently fail to reveal | Explicitly acknowledged pre-existing limitation | ✅ Implemented |
+| F11 | — | 🆕 **P2** | Link does not retry a cluster whose last expansion failed | New Azure path (and pre-existing Connections path) | ✅ Implemented |
 
 > **🔎 Verification pass (2026-11-06, source `05901fe1`).** Each finding was rechecked against the
 > code; the verdict and any priority override sit in a `🔎 Verification` block directly under the
@@ -206,7 +206,7 @@ focus, long dialogs, and error recovery.
 
 ### F01. First connection can miss the helpful diagnosis ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** ✅ Implemented
 
 **Observation:** Source-derived; [A14](#a14---connection-error-shells-and-recovery) shows
 the generic first-connect modal, while [A15](#a15---srv-dns-failures-fully-expanded) and
@@ -261,11 +261,13 @@ detail and the decoded-password retry. No provider should show UI or mutate the 
 > try again." only as the fallback when no provider matches. Add one test per provider family
 > showing that the first-connect path shows the diagnosis.
 
+> **Done (2026-11-06), commit `70d5295e` (sol):** new `showClusterConnectFailure()` in `src/documentdb/showClusterConnectFailure.ts` asks the diagnostics service, records `diagnosisProviderId`, and shows the diagnosis as the heading with the raw error as detail. Without a diagnosis it falls back to the unchanged generic heading and "Revisit…" detail. All 9 first-connect sites use it, and each awaits it before evicting credentials or deleting the client. The decoded-password helper delegates to it through `extraDetail`/`buttons`. Decision (95%): an optional `fallbackHeading` keeps the Azure VM's existing `Failed to connect to VM "…"` heading rather than making an unspecified wording change. Behaviour difference: cleanup now runs after the modal is dismissed. Updated the error-translation skill's call-site table and ordering rule. Tests: 8 helper tests, 1 decoded-password delegation test.
+
 <a id="f02"></a>
 
 ### F02. Missing target is reported as an uncertain connection failure ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** ✅ Implemented
 
 **Observation:** [A13](#a13---missing-database-or-collection) can appear after the cluster
 has connected and even after an automatic dashboard has opened.
@@ -306,9 +308,11 @@ failed child listing could also explain absence.
 > `Could not find database "app" on review-cluster. Check the name and your access, then open the link again.`
 > and `Could not find collection "orders" in database "app". …`. Drop "URL handling aborted".
 
+> **Done (2026-11-06), commits `9c483325` (Discovery, terra) and `9ecb9b39` (connection string, sol):** both paths replace "URL handling aborted…" with `Could not find database "{0}" on {1}…` / `Could not find collection "{0}" in database "{1}"…`. Both stop quietly (`openTargetResult = 'skippedClusterError'`) when the cluster node is in error state after expansion, which removes the double message after a `listDatabases` failure. The connection-string collection branch also returns quietly without a client (`skippedNotConnected`). On a collection miss it looks up the database to pick the right message. Tests added on both paths.
+
 ### F03. Failure surface depends on implementation layer ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** 🚫 Closed (folded into F01, F10, F11)
 
 **Observation:** See the [failure-surface comparison](#a18---failure-surface-comparison).
 
@@ -348,13 +352,15 @@ surface-specific exception, not necessarily something to turn into a modal.
 > | Agree a surface rule for user-blocking URL journeys (modal + detail) | Review | One mental model | Would turn malformed-link toasts into modals that block the window for a link the user may not care about; touches the SDK error path; large for little gain |
 > | **Close F03; track the silent stops under F10/F11 and explanation quality under F01** | Verification | No speculative policy; each concrete gap keeps an owner | The A18 comparison table loses its headline item (it stays useful as reference) |
 
+> **Closed (2026-11-06), no code:** as recommended, the concrete gaps were fixed under F01 (explanation quality), F10 (silent folder reveal) and F11 (no retry). Validation failures stay toasts by design.
+
 ## P2 - Polish, expectation, or feature gap
 
 <a id="f04"></a>
 
 ### F04. The same action has several labels ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** ✅ Implemented
 
 **Observation:** Inline comparisons in [A1](#a1---azure-resource-consent),
 [A3](#a3---existing-connection-consent), and [A8](#a8---database-authentication-prompts).
@@ -384,9 +390,11 @@ Shell`). Preserve official Azure product names.
 > | Full vocabulary pass now (all buttons, auth-wizard case, Local title) | Review | One consistent pass | Rewrites pre-existing strings and the shared auth wizard inside a deep-link PR; l10n churn; reviewers must check unrelated flows |
 > | **Fix only what #1067 introduces or rewrites:** `Shell` → `Interactive Shell`; `Yes, open connection` → `Open` (that dialog's detail was rewritten in this PR anyway); drop the em dash | Verification | Small diff tied to the PR; A1 and A3 then match | Auth wizard and Local dialog stay inconsistent until a later copy pass |
 
+> **Done (2026-11-06), commit `8997a6b2` (luna):** `Shell` → `Interactive Shell` in both consent builders; `Yes, open connection` → `Open` (one constant used for the button and both comparisons); em dash removed from the unknown-action message. The auth wizard and the Local dialog are unchanged (pre-existing, outside this PR). Pinned test strings updated.
+
 ### F05. Permanent filter changes sound like temporary navigation ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** ✅ Implemented
 
 **Observation:** [A6](#a6---filter-change-consent) lists effects, but not their duration.
 
@@ -415,9 +423,11 @@ proposal to silently change that design.
 > **Recommendation:** the review's option. Suggested line:
 > `These changes stay after the link opens. To undo them, use Filter Entries… on the provider in the Discovery view.`
 
+> **Done (2026-11-06), commit `c6e76f53` (luna):** the filter dialog adds `These changes stay after the link opens. To undo them, use Filter Entries… or Hide Provider on the provider in the Discovery view.` as its own paragraph before the Note. Test asserts it. The [proposed message changes](#proposed-message-changes) chapter records an alternative that also covers cancel and failure.
+
 ### F06. Cancel is checkpoint-based, not an immediate abort ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** ✅ Implemented
 
 **Observation:** [A7](#a7---progress-and-cancel) has a cancellable Azure notification.
 
@@ -450,11 +460,13 @@ completed filter changes.
 > | **End the outer progress before reveal/connect.** It then covers only the management-plane steps where a checkpoint cancel is meaningful; the tree's view progress and the inner, really-cancellable `Connecting…` notification take over | Verification | Only one Cancel on screen at a time, and it does what it says; no plumbing | The outer `Loading subscriptions…` / `Loading clusters…` / `Connecting…` stage text goes away (the view spinner stays). Needs a real-workbench check that the hand-off does not look like an early finish |
 > | Keep outer progress but make it non-cancellable from reveal onward | Verification | Keeps the stage text | VS Code cannot toggle `cancellable` mid-flight; would need two sequential progress calls anyway |
 
+> **Done (2026-11-06), commit `05f1d9fd` (terra):** the "Opening from Azure" notification now ends after the filter step. `revealInDiscoveryView` runs afterwards, with only the view spinner and the cancellable "Connecting to …" notification. Removed the `report` parameter and its five stage strings. The test that pinned those stage texts was removed, as required by the accepted option. A new test asserts reveal runs after the progress callback completes.
+
 <a id="f07"></a>
 
 ### F07. The declared destination is not always the only surface opened ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** ✅ Implemented
 
 **Observation:** [A10](#a10---success-and-cancellation-end-states) includes a default-on
 automatic dashboard before a shell or Collection View.
@@ -493,11 +505,13 @@ cluster-wide and requested database-scoped dashboard coexist.
 > options after one workbench run with the setting on; the dashboard-only option is the
 > minimal fix for the double panel.
 
+> **Done (2026-11-06), commit `2087c782` (sol, after one retry; the first sol run failed with a 401 before editing):** a link with `open=dashboard` suppresses the automatic dashboard during its own cluster expansion (`src/tree/documentdb/autoOpenDashboardSuppression.ts`, keyed by `clusterId`/`storageId`, released in `finally`). Only the requested dashboard opens. Shell, collection and bare links are unchanged. Decision (90%): this is the dashboard-only option, the minimal fix for the double panel; it was the recommended option the operator accepted with "fix all". D0013 in [decisions.md](../decisions.md) is amended. Tests: 17 across the module, `ClusterItemBase`, the Discovery helper, the Azure flow and the URI handler.
+
 <a id="f08"></a>
 
 ### F08. Error wording is unevenly actionable and certain ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** ✅ Implemented
 
 **Observation:** [A11](#a11---invalid-link-messages-bundled) and
 [A12](#a12---azure-lookup-and-access-failures) contain both repair instructions and bare
@@ -536,9 +550,11 @@ to bare validation/resource errors.
 > Validation: `This DocumentDB link has an invalid Azure resource ID. Expected /subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.DocumentDB/<mongoClusters|databaseAccounts>/<name>.`
 > and `… invalid Azure tenant ID. Expected a GUID.` ARM not-found/forbidden: add "Check the link, or ask the resource owner for read access."
 
+> **Done (2026-11-06), commit `684055a7` (terra):** all eight texts as proposed above: tenant prompt (no contradiction), final subscription error (account and cloud hint), resource-ID and tenant-ID shape, supported resource types, not found, forbidden, and RU wrong API. `Azure discovery is not available.` is unchanged (unreachable). Pinned tests updated.
+
 ### F09. Diagnostic content is useful but too heavy for a modal headline ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** ✅ Implemented
 
 **Observation:** [SRV explanations](#a15---srv-dns-failures-fully-expanded) and
 [Entra explanations](#a16---government-china-and-other-entra-failures-fully-expanded)
@@ -574,9 +590,11 @@ do not truncate away the cause or invent unverified cloud advice.
 > | Short heading + diagnosis + raw detail everywhere | Review (O2 option 2) | Easier to scan | Reverses a documented convention across 6 surfaces; webview `displayErrorMessage` has the same shape; not a deep-link change |
 > | **Leave the layout; do the small copy fixes (backticks, auth-method name) with the providers' owners** | Verification | Keeps one convention; tiny diffs | Long Government/broker headings stay long |
 
+> **Done (2026-11-06), commit `ed8da6fa` (luna):** SRV hints use "mongodb://" in plain quotes; the Entra rules say `Username and Password authentication`, matching the picker. Layout unchanged, per the documented convention. Two Entra test expectations updated.
+
 ### F10. A saved connection in a folder can look like nothing happened ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** ✅ Implemented
 
 **Observation:** [A10](#a10---success-and-cancellation-end-states) includes a nested saved
 connection as a separate regression check.
@@ -611,11 +629,13 @@ confirm the destination was not reached rather than reporting successful navigat
 > **Recommendation:** fix with `buildFullTreePath`, in #1067 if the operator accepts the
 > scope, otherwise as the very next PR. Remove the "Known limitation" comment with it.
 
+> **Done (2026-11-06), commit `9ecb9b39` (sol):** new `buildConnectionsViewTargetPath()` (folder-aware via `buildFullTreePath`) is used by `revealInConnectionsView` and both target lookups. A test confirms root-level and emulator paths are identical to before. Removed the "Known limitation" comment.
+
 <a id="f11"></a>
 
 ### F11. A link does not retry a cluster whose last expansion failed 🆕
 
-**Priority:** P2 (added by verification) · **Status:** 🟠 Open
+**Priority:** P2 (added by verification) · **Status:** ✅ Implemented
 
 **Finding:** A failed cluster expansion is cached in `failedChildrenCache` until the user
 clicks Retry ([BaseExtendedTreeDataProvider.ts#L528](../../../../../src/tree/BaseExtendedTreeDataProvider.ts#L528)).
@@ -637,6 +657,8 @@ Source-derived, not exercised.
 the F10 change. The test name `resets only the failed provider root…` is not a `TDD:` contract,
 but it records an intent, so confirm before changing it.
 
+> **Done (2026-11-06), commits `9c483325` (Discovery, terra) and `9ecb9b39` (Connections, sol):** a failed cluster or connection node is reset and refreshed before the link reveals it, so opening the link again retries. Decision (92%): in two provider-root tests, the `hasNodeErrorState` exactly-once assertions became "first call is the root", and one mock was narrowed to the root id. The `resetNodeErrorState`/`refresh` exactly-once assertions that pin "only the root is reset" are unchanged. **Needs a workbench check:** `refresh` + `reveal(expand)` on an already expanded node should connect once (same pattern as the existing provider-root reset).
+
 ## P3 - Nice-to-have / cosmetic / acknowledged
 
 No separate P3 items seeded. Small wording observations are kept inline with the relevant
@@ -644,7 +666,10 @@ screen rather than inflating the priority ledger.
 
 ## Implemented
 
-No UX fixes made by this pass. Production strings and behavior are unchanged.
+All of F01-F11 were fixed in #1067 on 2026-11-06 (F03 closed without code). Each finding's
+**Done** note lists its commit, model, decisions and tests. Runtime checks in a real workbench
+are still open, notably F11's refresh-and-reveal on an already expanded node and F06's progress
+hand-off.
 
 ## Iteration log
 
@@ -700,7 +725,7 @@ layout separately in the real workbench.
 This chapter collects every wording change proposed for the messages in
 [Appendix A](#appendix-a---presentation-walkthrough), one table per walkthrough section, so the
 operator can review them in one place. Proposals are suggestions until the operator accepts them.
-**Status:** "Being implemented (Fxx)" means #1067 is changing that text under the named finding;
+**Status:** "Implemented (Fxx)" means #1067 changed that text under the named finding (see its Done note);
 "Proposal only" means nobody is implementing it yet. Example values match Appendix A.
 
 ### A1 changes
@@ -709,7 +734,7 @@ operator can review them in one place. Proposals are suggestions until the opera
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A1, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Matches the `Open Interactive Shell` command title (F04). | Being implemented (F04) |
+| A1, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Matches the `Open Interactive Shell` command title (F04). | Implemented (F04) |
 | A1, modal detail, bare cluster or database link | No `Opens:` line | `Opens: Discovery view` | Says what `Open` does when no panel is requested (A1 evaluation). | Proposal only |
 
 ### A2 changes
@@ -718,7 +743,7 @@ operator can review them in one place. Proposals are suggestions until the opera
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A2, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Same destination name as A1 (F04). | Being implemented (F04) |
+| A2, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Same destination name as A1 (F04). | Implemented (F04) |
 | A2, modal detail | `A new connection will be added to your Connections View.` | `A new connection will be added to your Connections view.` | Same case as "Discovery view" elsewhere (F04). | Proposal only |
 
 ### A3 changes
@@ -727,8 +752,8 @@ operator can review them in one place. Proposals are suggestions until the opera
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A3, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Same destination name as A1 (F04). | Being implemented (F04) |
-| A3, button | `Yes, open connection` | `Open` | Same action, same button as A1 (F04). | Being implemented (F04) |
+| A3, modal detail | `Opens: Shell` | `Opens: Interactive Shell` | Same destination name as A1 (F04). | Implemented (F04) |
+| A3, button | `Yes, open connection` | `Open` | Same action, same button as A1 (F04). | Implemented (F04) |
 
 ### A4 changes
 
@@ -742,7 +767,7 @@ choice; shortening or lengthening them adds churn without helping the decision.
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
 | A5, modal title, signed out | `Sign in` | `Sign in to Azure` | Says which sign-in, separate from database authentication in A8 (A5 evaluation). | Proposal only |
-| A5, modal detail, tenant prompt | `None of your signed-in Azure accounts can access subscription 11111111-1111-1111-1111-111111111111.` then `The link names tenant 22222222-2222-2222-2222-222222222222. Sign in to that tenant to continue.` | `We could not find subscription 11111111-1111-1111-1111-111111111111 with your current sign-in. The link names tenant 22222222-2222-2222-2222-222222222222; signing in to that tenant may give access.` | The two current lines contradict each other (F08). | Being implemented (F08) |
+| A5, modal detail, tenant prompt | `None of your signed-in Azure accounts can access subscription 11111111-1111-1111-1111-111111111111.` then `The link names tenant 22222222-2222-2222-2222-222222222222. Sign in to that tenant to continue.` | `We could not find subscription 11111111-1111-1111-1111-111111111111 with your current sign-in. The link names tenant 22222222-2222-2222-2222-222222222222; signing in to that tenant may give access.` | The two current lines contradict each other (F08). | Implemented (F08) |
 
 ### A6 changes
 
@@ -750,7 +775,7 @@ choice; shortening or lengthening them adds churn without helping the decision.
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A6, modal detail, new line before `Note:` | No line | `These changes stay after the link opens. To undo them, use Filter Entries… or Hide Provider on the provider in the Discovery view.` | Discloses that filter changes persist, and where to undo them (F05). Alternative: `These changes stay even if the link does not open.` as the first sentence, which also covers cancel and failure. | Being implemented (F05) |
+| A6, modal detail, new line before `Note:` | No line | `These changes stay after the link opens. To undo them, use Filter Entries… or Hide Provider on the provider in the Discovery view.` | Discloses that filter changes persist, and where to undo them (F05). Alternative: `These changes stay even if the link does not open.` as the first sentence, which also covers cancel and failure. | Implemented (F05) |
 | A6, modal detail | `• Subscription Review subscription will be added to your Azure subscription filter. This also shows it in the Azure Resources view.` | `• Subscription "Review subscription" will be added to your Azure subscription filter. This also shows it in the Azure Resources view.` | Quotes set the subscription name apart from the sentence (A6 evaluation). | Proposal only |
 
 ### A7 changes
@@ -759,7 +784,7 @@ choice; shortening or lengthening them adds churn without helping the decision.
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A7, progress stage text in `Opening from Azure` | `Loading subscriptions…`, `Loading clusters…`, `Connecting…`, `Opening the database…`, `Opening the collection…` | Removed: the notification ends before the Discovery reveal and connect. The view spinner and the cancellable `Connecting to "review-cluster"…` notification remain. | One Cancel on screen at a time, and it does what it says (F06). | Being implemented (F06) |
+| A7, progress stage text in `Opening from Azure` | `Loading subscriptions…`, `Loading clusters…`, `Connecting…`, `Opening the database…`, `Opening the collection…` | Removed: the notification ends before the Discovery reveal and connect. The view spinner and the cancellable `Connecting to "review-cluster"…` notification remain. | One Cancel on screen at a time, and it does what it says (F06). | Implemented (F06) |
 | A7, progress title | `Opening from Azure` | `Opening Azure resource…` | Names what is opened, in the same form as `Opening DocumentDB connection…` (A7 evaluation). | Proposal only |
 
 ### A8 changes
@@ -785,7 +810,7 @@ choice; shortening or lengthening them adds churn without helping the decision.
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A10, end state for `open=dashboard`, auto-open on | Behavior: the automatic cluster-wide Cluster Dashboard also opens; with `database=app` that makes two panels | Only the requested Cluster Dashboard opens | The link names one destination, so one panel opens (F07). | Being implemented (F07) |
+| A10, end state for `open=dashboard`, auto-open on | Behavior: the automatic cluster-wide Cluster Dashboard also opens; with `database=app` that makes two panels | Only the requested Cluster Dashboard opens | The link names one destination, so one panel opens (F07). | Implemented (F07) |
 
 No new text for F10 or F11; both are behavior fixes.
 
@@ -795,10 +820,10 @@ No new text for F10 or F11; both are behavior fixes.
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A11, toast, unknown action | `This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.` | `This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version. Check for an update, or verify the link.` | Removes the em dash (F04). | Being implemented (F04) |
-| A11, toast, invalid resource ID | `This DocumentDB link has an invalid Azure resource ID.` | `This DocumentDB link has an invalid Azure resource ID. Expected /subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.DocumentDB/mongoClusters/<name> or databaseAccounts/<name>.` | Names the expected shape for link authors (F08). | Being implemented (F08) |
-| A11, toast, unsupported resource type | `This link points to an Azure resource type the DocumentDB extension cannot open.` | `This link points to an Azure resource type the DocumentDB extension cannot open. Supported: Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts.` | Names what is supported (F08). | Being implemented (F08) |
-| A11, toast, invalid tenant | `This DocumentDB link has an invalid Azure tenant ID.` | `This DocumentDB link has an invalid Azure tenant ID. Expected a GUID.` | Names the expected format (F08). | Being implemented (F08) |
+| A11, toast, unknown action | `This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.` | `This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version. Check for an update, or verify the link.` | Removes the em dash (F04). | Implemented (F04) |
+| A11, toast, invalid resource ID | `This DocumentDB link has an invalid Azure resource ID.` | `This DocumentDB link has an invalid Azure resource ID. Expected /subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.DocumentDB/mongoClusters/<name> or databaseAccounts/<name>.` | Names the expected shape for link authors (F08). | Implemented (F08) |
+| A11, toast, unsupported resource type | `This link points to an Azure resource type the DocumentDB extension cannot open.` | `This link points to an Azure resource type the DocumentDB extension cannot open. Supported: Azure DocumentDB clusters and Azure Cosmos DB for MongoDB (RU) accounts.` | Names what is supported (F08). | Implemented (F08) |
+| A11, toast, invalid tenant | `This DocumentDB link has an invalid Azure tenant ID.` | `This DocumentDB link has an invalid Azure tenant ID. Expected a GUID.` | Names the expected format (F08). | Implemented (F08) |
 | A11, toast, missing connection string | `A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.` | `This DocumentDB link is missing a connection string. Add a connectionString query parameter to the link.` | "Link", not "deep-link", like its siblings; a direct repair (F04, F09). | Proposal only |
 | A11, toast, missing resource ID | `A DocumentDB Azure link was opened without a resource ID. Ensure the link includes a resourceId query parameter.` | `This DocumentDB link is missing a resource ID. Add a resourceId query parameter to the link.` | Same shape as the connection-string message. | Proposal only |
 | A11, toast, wrong scheme | `Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://"` | `Invalid connection string format. It should start with "mongodb://" or "mongodb+srv://".` | Final period, like its siblings (F04). | Proposal only |
@@ -813,10 +838,10 @@ No change to the other A11 messages, which already name a repair, or to the SDK'
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A12, toast, subscription not returned (button `Manage Azure accounts` unchanged) | `None of your signed-in Azure accounts can access subscription 11111111-1111-1111-1111-111111111111.` | `We could not find subscription 11111111-1111-1111-1111-111111111111 among your signed-in Azure accounts. Check that you are signed in with the right account and to the right Azure cloud.` | Absence from the list is not an access test; adds account and cloud checks (F08). | Being implemented (F08) |
-| A12, toast, resource not found | `The Azure resource review-cluster was not found in subscription Review subscription.` | `The Azure resource review-cluster was not found in subscription Review subscription. Check the link, and whether the resource still exists.` | Adds a next step (F08). | Being implemented (F08) |
-| A12, toast, authorization failed | `Your Azure account cannot read the Azure resource review-cluster.` | `Your Azure account cannot read the Azure resource review-cluster. Ask the resource owner for read access, or sign in with a different account.` | Adds a next step (F08). | Being implemented (F08) |
-| A12, toast, RU account with another API | `This Azure Cosmos DB account does not use the MongoDB API.` | `This Azure Cosmos DB account does not use the MongoDB API. Only accounts that use the MongoDB API can be opened.` | Says what can be opened (F08). | Being implemented (F08) |
+| A12, toast, subscription not returned (button `Manage Azure accounts` unchanged) | `None of your signed-in Azure accounts can access subscription 11111111-1111-1111-1111-111111111111.` | `We could not find subscription 11111111-1111-1111-1111-111111111111 among your signed-in Azure accounts. Check that you are signed in with the right account and to the right Azure cloud.` | Absence from the list is not an access test; adds account and cloud checks (F08). | Implemented (F08) |
+| A12, toast, resource not found | `The Azure resource review-cluster was not found in subscription Review subscription.` | `The Azure resource review-cluster was not found in subscription Review subscription. Check the link, and whether the resource still exists.` | Adds a next step (F08). | Implemented (F08) |
+| A12, toast, authorization failed | `Your Azure account cannot read the Azure resource review-cluster.` | `Your Azure account cannot read the Azure resource review-cluster. Ask the resource owner for read access, or sign in with a different account.` | Adds a next step (F08). | Implemented (F08) |
+| A12, toast, RU account with another API | `This Azure Cosmos DB account does not use the MongoDB API.` | `This Azure Cosmos DB account does not use the MongoDB API. Only accounts that use the MongoDB API can be opened.` | Says what can be opened (F08). | Implemented (F08) |
 | A12, toast, provider unavailable | `Azure discovery is not available.` | `Azure discovery is not available. Reload the window, then open the link again.` | Adds a next step; low value, because both providers register at activation (F08 verification). | Proposal only |
 
 No change for other ARM or authentication failures: that text is upstream.
@@ -827,9 +852,9 @@ No change for other ARM or authentication failures: that text is upstream.
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A13, toast, database not found | `URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.` | `Could not find database "app" on review-cluster. Check the name and your access, then open the link again.` | Names what is missing and where; drops "URL handling aborted" (F02). | Being implemented (F02) |
-| A13, toast, collection not found | `URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.` | `Could not find collection "orders" in database "app". Check the name and your access, then open the link again.` | Names what is missing and where (F02). | Being implemented (F02) |
-| A13, toast after the cluster node already showed a connection failure | Behavior: the toast above appears on top of the A14 modal | No toast; the cluster modal and its retry row already explain the failure | One failure, one message (F02). | Being implemented (F02) |
+| A13, toast, database not found | `URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.` | `Could not find database "app" on review-cluster. Check the name and your access, then open the link again.` | Names what is missing and where; drops "URL handling aborted" (F02). | Implemented (F02) |
+| A13, toast, collection not found | `URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.` | `Could not find collection "orders" in database "app". Check the name and your access, then open the link again.` | Names what is missing and where (F02). | Implemented (F02) |
+| A13, toast after the cluster node already showed a connection failure | Behavior: the toast above appears on top of the A14 modal | No toast; the cluster modal and its retry row already explain the failure | One failure, one message (F02). | Implemented (F02) |
 | A13, toast, cluster not in Discovery | `Could not find review-cluster in the Discovery view. It may have been deleted, or a filter may still hide it.` | `Could not find review-cluster in the Discovery view. It may have been deleted, or a filter may still hide it. Check the filters on the provider in the Discovery view, then open the link again.` | Adds a next step and where (F08). | Proposal only |
 
 ### A14 changes
@@ -838,7 +863,7 @@ No change for other ARM or authentication failures: that text is upstream.
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A14, first-connection modal title and detail | Title `Failed to connect to "review-cluster"`; detail `Revisit connection details and try again.`, blank line, `Error: <raw error.message>` | Title: the matching A15 or A16 diagnosis; detail: `<raw error.message>`, the same layout as the cached-connection modal. The current title and detail stay only when no diagnosis applies. | A first connection gets the same explanation as a cached one (F01). | Being implemented (F01) |
+| A14, first-connection modal title and detail | Title `Failed to connect to "review-cluster"`; detail `Revisit connection details and try again.`, blank line, `Error: <raw error.message>` | Title: the matching A15 or A16 diagnosis; detail: `<raw error.message>`, the same layout as the cached-connection modal. The current title and detail stay only when no diagnosis applies. | A first connection gets the same explanation as a cached one (F01). | Implemented (F01) |
 | A14, modal button, decoded-password retry | `Try with Decoded Password` | `Try with decoded password` | Sentence case, like newer buttons (F04). | Proposal only |
 | A14, toast button, after decoded retry succeeds | `Update Saved Password` | `Update saved password` | Sentence case, like newer buttons (F04). | Proposal only |
 
@@ -852,8 +877,8 @@ feature; only the small F09 fix is listed. The same text also appears in the A17
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A15, modal title, EBADRESP or EFORMERR diagnosis (sentence shown) | ``Use a non-SRV `mongodb://` connection string, or a different DNS server.`` | `Use a non-SRV "mongodb://" connection string, or a different DNS server.` | Backticks show literally in a plain message (F09). | Being implemented (F09) |
-| A15, modal title, ECONNREFUSED diagnosis (sentence shown) | ``Check your network's DNS settings, or use a non-SRV `mongodb://` connection string.`` | `Check your network's DNS settings, or use a non-SRV "mongodb://" connection string.` | Backticks show literally in a plain message (F09). | Being implemented (F09) |
+| A15, modal title, EBADRESP or EFORMERR diagnosis (sentence shown) | ``Use a non-SRV `mongodb://` connection string, or a different DNS server.`` | `Use a non-SRV "mongodb://" connection string, or a different DNS server.` | Backticks show literally in a plain message (F09). | Implemented (F09) |
+| A15, modal title, ECONNREFUSED diagnosis (sentence shown) | ``Check your network's DNS settings, or use a non-SRV `mongodb://` connection string.`` | `Check your network's DNS settings, or use a non-SRV "mongodb://" connection string.` | Backticks show literally in a plain message (F09). | Implemented (F09) |
 
 No other change proposed. The resolver's fallback validation errors are technical but owned by
 the SRV feature.
@@ -865,8 +890,8 @@ Owned by the sovereign-clouds feature; only the small F09 fix is listed.
 
 | Where | Current | Proposed | Why | Status |
 | --- | --- | --- | --- | --- |
-| A16, modal title, preauthorization diagnosis (sentence shown) | `Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | `Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | Matches the A8 picker label (F09). | Being implemented (F09) |
-| A16, modal title, opaque broker failure with non-public-cloud context (sentence shown) | `Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | `Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | Matches the A8 picker label (F09). | Being implemented (F09) |
+| A16, modal title, preauthorization diagnosis (sentence shown) | `Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | `Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | Matches the A8 picker label (F09). | Implemented (F09) |
+| A16, modal title, opaque broker failure with non-public-cloud context (sentence shown) | `Use native DocumentDB authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | `Use Username and Password authentication or managed identity on an Azure VM as a workaround, and report this on GitHub.` | Matches the A8 picker label (F09). | Implemented (F09) |
 
 No other change proposed. The A16 inline notes are style suggestions for that feature, not errors.
 
