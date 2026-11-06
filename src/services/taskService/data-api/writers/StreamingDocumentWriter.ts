@@ -739,7 +739,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                 attempt++;
             }
 
-            currentBatch = outcome.remaining ?? [];
+            currentBatch = outcome.remaining ?? currentBatch.slice(outcome.result.processedCount);
             if (currentBatch.length === 0) {
                 break;
             }

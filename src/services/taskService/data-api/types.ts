@@ -310,6 +310,10 @@ export type StrategyBatchResult<TDocumentId = unknown> =
  */
 export interface BatchAttemptOutcome<TDocumentId = unknown> {
     result: StrategyBatchResult<TDocumentId>;
+    /**
+     * Documents still to write; when omitted, the batch minus its first `result.processedCount` documents.
+     * Adapters with unordered or scattered successes must supply it explicitly.
+     */
     remaining?: DocumentDetails[];
     errorType?: 'throttle' | 'network';
     retryAfterMs?: number;

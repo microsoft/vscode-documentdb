@@ -223,6 +223,56 @@ describe('StreamingDocumentWriter batch attempt outcomes', () => {
         expect(result).toMatchObject({ totalProcessed: 10, insertedCount: 10 });
     });
 
+    it('retries only the unwritten suffix for returned throttle progress containing only counts', async () => {
+        const writer = new OutcomeStreamingWriter();
+        const documents = createDocuments(10);
+        const onProgress = vi.fn();
+        writer.writeBatch.mockResolvedValueOnce({
+            result: { processedCount: 4, insertedCount: 4 },
+            errorType: 'throttle',
+        });
+
+        const result = await writer.streamDocuments(createDocumentStream(documents), config, { onProgress });
+
+        expect(writer.writeBatch).toHaveBeenCalledTimes(2);
+        expect(writer.writeBatch.mock.calls[0][0]).toEqual(documents);
+        expect(writer.writeBatch.mock.calls[1][0]).toEqual(documents.slice(4));
+        expect(result).toMatchObject({ totalProcessed: 10, insertedCount: 10 });
+        expect(onProgress.mock.calls.map(([count]) => count)).toEqual([4, 6]);
+    });
+
+    it('waits and exhausts the retry limit for a returned throttle without progress or remaining documents', async () => {
+        vi.useFakeTimers();
+        try {
+            const writer = new OutcomeStreamingWriter({ retry: { maxAttemptsWithoutProgress: 2 } });
+            const documents = createDocuments(1);
+            const onProgress = vi.fn();
+            writer.writeBatch.mockResolvedValue({
+                result: { processedCount: 0, insertedCount: 0 },
+                errorType: 'throttle',
+                retryAfterMs: 10,
+            });
+
+            const write = writer.streamDocuments(createDocumentStream(documents), config, { onProgress });
+            const rejection = expect(write).rejects.toThrow('Failed to complete operation after 2 attempts');
+
+            await vi.advanceTimersByTimeAsync(0);
+            expect(writer.writeBatch).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(9);
+            expect(writer.writeBatch).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(writer.writeBatch).toHaveBeenCalledTimes(2);
+            expect(writer.writeBatch.mock.calls[1][0]).toEqual(documents);
+            await vi.advanceTimersByTimeAsync(10);
+            await rejection;
+
+            expect(writer.writeBatch).toHaveBeenCalledTimes(2);
+            expect(onProgress).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it.each(['throttle', undefined] as const)(
         'exhausts the retry limit for returned remaining documents without progress (errorType: %s)',
         async (errorType) => {
