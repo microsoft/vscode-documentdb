@@ -17,7 +17,8 @@ code:
 **Reviewed head:** `d369c132b7facecf6a530dc350f608a7ad7ca443`
 **Base:** `main`, `a4b8451359f91cc54a27dfaf2a8289506c4e98d7`
 **Reviewers:** `rubber-duck` on `gpt-6.1-sol`; `code-review` on `claude-opus-5.5`.
-**Author decisions:** pending. This review does not authorize or implement fixes.
+**Author decisions:** recorded inline on 2026-11-06. The operator accepted every agent proposal
+(F3 as won't fix). Fixes are tracked by the done notes under each finding.
 
 ## Scope and method
 
@@ -70,6 +71,25 @@ necessarily mean agreement on the safest fix.
 then F5–F8. Investigate F3 separately before choosing an architectural fix. These are review
 recommendations, not the author's acceptance or a claim that fixes have landed.
 
+### Proposed pragmatic resolutions (agent proposal, accepted by the operator)
+
+The author's guidance for this pass: most findings are edge cases. Each fix should stop the flow
+from breaking completely, and won't-fix is acceptable. Each proposal is therefore the smallest
+change that removes a hard failure, reusing patterns the code already has. Architectural options
+from the review tables are deliberately not taken. Each finding's section below gives the
+proposal in full.
+
+| ID | Proposal | Size |
+| --- | --- | --- |
+| F1 | **Fix:** on a cache miss, fall back to `findChildById` from the connected cluster/database node; add an exact collection-name check | ~10 lines |
+| F2 | **Fix:** in the reveal helper, reset the provider root's cached error state and reload it before looking for the subscription | ~8 lines |
+| F3 | **Won't fix** in this PR; existing multi-account behavior; open an issue only if reproduced | none |
+| F4 | **Fix:** log allow-listed parameter names plus `unknown=<n>` | ~6 lines |
+| F5 | **Fix:** skip `open=` dispatch when `ClustersClient.exists(storageId)` is false, matching the Azure path | ~6 lines |
+| F6 | **Fix:** one cancellation check after the Discovery reveal returns, before any surface opens | ~5 lines |
+| F7 | **Fix:** add the subscription display name to `context.valuesToMask` | 1 line |
+| F8 | **Fix:** compare subscription IDs exactly, as the SDK does; invert the one existing test | 1 line + test |
+
 ## F1 - med - Repeated links lose warm-tree database/collection targets
 
 **Origin:** RD1 and CR1, independently reported by both reviewers.
@@ -116,7 +136,31 @@ that does not refetch expanded nodes. Cover repeated links, expanded clusters an
 collection targets, and database-scoped dashboard/shell links; verify authentication is not
 repeated. Also click the same link twice in an installed workbench.
 
-**Author decision and rationale:** Pending.
+**Proposed pragmatic resolution (agent):** **Fix, minimal fallback only.** Do not change
+root-read or cache-lifetime ownership in this PR.
+
+- In [`revealInDiscoveryView`](../../../../../src/tree/discovery-view/discoveryViewHelpers.ts#L154),
+  look up the database as `(await provider.findNodeById(dbId)) ?? (await provider.findChildById(clusterNode, dbId))`.
+  Look up the collection the same way, starting from `databaseNode`. The cold path still hits
+  the cache first and makes no extra request.
+- This mirrors the "not cached (already expanded); loading directly" fallback the same helper
+  already uses for the provider and subscription levels. The warm path behaves like the levels
+  above it rather than gaining a new mechanism.
+- The rubber-duck safeguards hold without more code. The fallback runs only after the existing
+  `ClustersClient.exists(clusterId)` check. With credentials cached,
+  [`ClusterItemBase.getChildren`](../../../../../src/tree/documentdb/ClusterItemBase.ts#L257)
+  reuses the cached client, so there is no new authentication prompt. The database result
+  already gets an exact `databaseInfo.name` check. Add the same exact-name check for the
+  collection result (`collectionInfo.name`), so the case-insensitive match in `findChildById`
+  cannot substitute a differently-cased collection.
+- **Not doing:** non-destructive root reads or workbench loading-generation synchronization.
+  That is the better long-term design, but it is a larger change to `DiscoveryBranchDataProvider`
+  and is not needed to stop the failure.
+- **Test:** a helper unit test where `findNodeById` misses and `findChildById` returns the node,
+  plus an exact-name rejection case for the collection. Manual: click the same database and
+  collection link twice in an installed build.
+
+**Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
 ## F2 - med - Recovery leaves a provider-root retry cache in place
 
@@ -153,7 +197,26 @@ every cluster's authentication failure state.
 and verify a fresh subscription listing and successful navigation. Assert unrelated cluster
 failure caches survive.
 
-**Author decision and rationale:** Pending.
+**Proposed pragmatic resolution (agent):** **Fix, in the reveal helper only.**
+
+- In [`revealInDiscoveryView`](../../../../../src/tree/discovery-view/discoveryViewHelpers.ts#L74),
+  after finding `providerRoot`, check `provider.hasNodeErrorState(providerRoot.id)`. If it is
+  set, call `provider.resetNodeErrorState(providerRoot.id)` and `provider.refresh(providerRoot)`,
+  then load the subscriptions with `provider.getChildren(providerRoot)`. That direct-load
+  fallback already exists for an empty cache; widen its condition to cover this case too.
+- Reaching the reveal step means `resolveAzureSubscription` has already succeeded. The cached
+  retry child for this provider root is therefore known to be stale, whether filters were
+  repaired or the user just signed in. One reset covers both triggers the review describes.
+- Only the target provider root is reset. Cluster-level authentication failures and other
+  providers are untouched. This is the same `resetNodeErrorState` + `refresh` pattern used by
+  [`switchAtlasViewMode`](../../../../../src/plugins/service-atlas-mongodb/commands/switchAtlasViewMode.ts#L35)
+  and [`refreshKubernetesRoot`](../../../../../src/plugins/service-kubernetes/commands/refreshKubernetesRoot.ts#L26).
+- **Not doing:** a new provider-level "recover and refresh" API. One caller does not justify it.
+- **Test:** a helper unit test where `hasNodeErrorState` returns true; assert reset, refresh,
+  and a fresh `getChildren`, and that no other node is reset. Manual: expand the provider with
+  everything filtered out, then follow a link and approve the filter change.
+
+**Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
 ## F3 - low - Account-identity handoff needs manual evidence
 
@@ -193,7 +256,18 @@ preserve the resolved principal end to end while retaining stable cluster cache 
 reversed account ordering, tenant hints, both Azure providers, and real cache/reveal behavior.
 A live multi-account Azure check remains necessary; no live reproduction is claimed here.
 
-**Author decision and rationale:** Pending.
+**Proposed pragmatic resolution (agent):** **Won't fix in this PR.**
+
+- No failure has been demonstrated. Both reviewers withdrew it as a confirmed regression.
+  Duplicate subscription tree IDs across accounts already existed in the Discovery view before
+  this PR. In the worst case, the link lands where a manual click in the Discovery view would
+  land: the same subscription node, under whichever account the tree already shows.
+- Every candidate fix changes tree identity, which is high-risk for an unproven edge case.
+- If a multi-account user reports a wrong-principal failure, open an issue then
+  ([CONTRIBUTING 6.5](../../../../../CONTRIBUTING.md#65-escape-hatch-create-issues-instead-of-blocking-the-pr)),
+  scoped to the existing duplicate-subscription behavior rather than to deep links. No issue now.
+
+**Author decision and rationale:** Accepted as won't fix (operator, 2026-11-06). Operator guidance: "a wont-fix is an accetable solution." and "these are mostly edge cases. I just don't want things to break completely."
 
 ## F4 - med - Query-key diagnostics can log credential material
 
@@ -223,7 +297,21 @@ parameter values to sanitize output-channel messages.
 queries, ampersand-split locators, rejected routes, and unknown connect sources. Assert
 sentinels are absent from every captured log.
 
-**Author decision and rationale:** Pending.
+**Proposed pragmatic resolution (agent):** **Fix, using the allow-list option.**
+
+- [`extractAndValidateParams`](../../../../../src/vscodeUriHandler.ts#L820) already defines the
+  known vocabulary (`connectionString`, `resourceId`, `tenantId`, `database`, `collection`,
+  `open`) for its `uriUnknownParamCount` telemetry. Lift that list into a module constant. In
+  the [`Handling link` log](../../../../../src/vscodeUriHandler.ts#L170), print only the known
+  names that are present, plus `unknown=<n>` when any other keys appear.
+- Raw key text is never logged, so malformed links cannot leak credentials, whatever their
+  shape. The useful diagnostics (which supported arguments arrived) are kept.
+- **Test:** update the three existing log assertions in
+  [`vscodeUriHandler.test.ts`](../../../../../src/vscodeUriHandler.test.ts#L129). Add one case
+  with a password-like sentinel in a key (for example `?mongodb://u:SENTINEL@h`) and assert the
+  sentinel is absent from the log and `unknown=1` is present.
+
+**Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
 ## F5 - low - A failed/cancelled connection still opens the requested surface
 
@@ -261,7 +349,28 @@ returning silently, and do not retry an already-failed attempt from the target c
 **Verification needed:** Failed and cancelled connections for both targets; no target command
 after failure/cancellation, no duplicate prompt, and no success-shaped telemetry.
 
-**Author decision and rationale:** Pending.
+**Proposed pragmatic resolution (agent):** **Fix with the `ClustersClient.exists(storageId)` guard.**
+
+- In [`handleConnectionStringRequest`](../../../../../src/vscodeUriHandler.ts#L657), before
+  resolving the node for `params.open`: if `!ClustersClient.exists(storageId)`, write a trace
+  line, set `context.telemetry.properties.openTargetResult = 'skippedNotConnected'`, and return.
+  The tree node has already shown its own failure modal or recorded the cancellation, so the
+  user is not left without feedback, and the target command never runs.
+- This is the same check the Azure path already uses after expansion
+  ([`discoveryViewHelpers.ts`](../../../../../src/tree/discovery-view/discoveryViewHelpers.ts#L144)),
+  so both link variants behave the same. To avoid success-shaped telemetry on either path, set
+  the same `openTargetResult` property where the Azure path returns `undefined` for
+  "not connected".
+- **Accepted residual risk:** rubber-duck's case, where an older client survives a failed
+  reconnect, still dispatches the target. That needs an earlier successful session plus a
+  failed reconnect during a link. At worst the target surfaces its own existing error, which
+  is not a broken flow. Propagating an explicit connection outcome is not worth the command/API
+  change for this.
+- **Test:** connection-string link with `open=shell` and `open=dashboard`, where
+  `ClustersClient.exists` returns false; assert no `openTargetOnNode` call and the telemetry
+  property is set.
+
+**Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
 ## F6 - low - Cancel during navigation does not stop target opening
 
@@ -292,7 +401,22 @@ Do not promise to undo completed visibility changes or interrupt an already-runn
 **Verification needed:** Cancel during each awaited navigation stage and before final
 dispatch. Assert no later navigation/surface command runs and cancellation is recorded.
 
-**Author decision and rationale:** Pending.
+**Proposed pragmatic resolution (agent):** **Fix with one check, not token plumbing.**
+
+- In [`handleAzureResourceLinkRequest`](../../../../../src/deepLinks/handleAzureResourceLink.ts#L199),
+  await `revealInDiscoveryView(...)` into a local variable, then apply the existing
+  `token.isCancellationRequested` block (`userCancelledAtStep = 'AzureProgress'`, trace, and
+  `return undefined`) before returning it. The URI handler opens a surface only on a defined
+  result, so cancelling stops the Collection View, dashboard, and shell from opening.
+- The tree may still finish expanding to the cluster, database, or collection after Cancel.
+  That is harmless, visible state, and the review already notes that an in-flight expansion
+  cannot be interrupted. Passing the token into the helper only to stop a tree reveal is not
+  worth the extra parameter.
+- **Test:** extend the existing cancellation tests in `handleAzureResourceLink.test.ts`. Cancel
+  while the reveal is running; assert the result is `undefined` and `userCancelledAtStep` is
+  recorded.
+
+**Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
 ## F7 - low - Subscription display name is missing from error masking
 
@@ -324,7 +448,17 @@ generic masking patterns cover an arbitrary subscription display name.
 **Verification needed:** A synthetic, non-pattern-matching subscription-name sentinel in
 the ARM error; assert it remains in the user-facing explanation but not captured telemetry.
 
-**Author decision and rationale:** Pending.
+**Proposed pragmatic resolution (agent):** **Fix, one line.**
+
+- In [`handleAzureResourceLinkRequest`](../../../../../src/deepLinks/handleAzureResourceLink.ts#L32),
+  right after `resolveAzureSubscription` returns a subscription, call
+  `context.valuesToMask.push(subscription.name)`. The user-facing message is unchanged.
+- **Test:** assert that `context.valuesToMask` contains the name before `readAzureResource` runs.
+  The end-to-end masking test the reviewers suggested would mostly re-test
+  `@microsoft/vscode-azext-utils`, which applies `valuesToMask`; the membership assertion is
+  enough here.
+
+**Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
 ## F8 - low - Visibility prediction differs from the SDK's casing rules
 
@@ -356,7 +490,24 @@ rather than changing the SDK or claiming the existing mixed-case entry is effect
 **Verification needed:** Use the real filtering semantics with uppercase/mixed-case tenant
 and subscription entries. After repair, `getSubscriptions(true)` must include the target.
 
-**Author decision and rationale:** Pending.
+**Proposed pragmatic resolution (agent):** **Fix by matching the SDK exactly.**
+
+- Verified against the installed SDK:
+  `VSCodeAzureSubscriptionProvider.getSubscriptions` filters with
+  `subscriptionIds.includes(sub.subscriptionId)`, and our
+  [`getSubscriptionFilters` override](../../../../../src/plugins/api-shared/azure/AzureSubscriptionProviderWithFilters.ts#L53)
+  only splits on `/`. Both are case-sensitive.
+- In [`computeVisibilityChanges`](../../../../../src/deepLinks/azureVisibility.ts#L32), drop
+  both `.toLowerCase()` calls, so the prediction uses the same rule as the filter it repairs.
+  A mixed-case entry then correctly reports `addSubscription`, and the repair appends the
+  canonical `tenantId/subscriptionId` entry, which the SDK accepts.
+- The leftover mixed-case duplicate entry is harmless: it matches nothing. No settings cleanup.
+- **Test:** the existing test
+  ["recognizes an already selected subscription regardless of casing"](../../../../../src/deepLinks/azureVisibility.test.ts#L163)
+  asserts the current wrong behavior. Invert it: an uppercase entry yields
+  `addSubscription: true`, and applying the change appends the canonical entry.
+
+**Author decision and rationale:** Accepted (operator, 2026-11-06): implement the proposal above. Operator guidance: "these are mostly edge cases. I just don't want things to break completely."
 
 ## Validation and limitations
 
@@ -389,8 +540,9 @@ independently by both models. F4–F8 were agreed after cross-validation. Both d
 to `low`/unconfirmed. The remaining solution-level cautions for F1 and F5 are recorded rather
 than presented as false consensus.
 
-No product code or author decisions have been changed. Stage 2 is pending: the author must
-decide each finding with a rationale inline above. Accepted fixes should then follow
+No product code changed during the review. Stage 2 is complete: the operator accepted
+every agent proposal inline (F3 as won't fix).
+Accepted fixes should then follow
 [CONTRIBUTING section 6.3](../../../../../CONTRIBUTING.md#63-stage-3-coding-agent-implements-the-fixes):
 individual fix commits, verification, commit links recorded against the finding, and PR
 responses where applicable. This document is the consolidated review record, not a
