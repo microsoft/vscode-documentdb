@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../../documentdb/showClusterConnectFailure';
 import { Views } from '../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from '../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
@@ -277,16 +278,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
         if (!isAtlasTlsHandshakeRejection(error)) {
             context.telemetry.properties.atlasConnectionFailureKind = 'other';
-            void vscode.window.showErrorMessage(
-                l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                {
-                    modal: true,
-                    detail:
-                        l10n.t('Revisit connection details and try again.') +
-                        '\n\n' +
-                        l10n.t('Error: {error}', { error: errorMessage }),
-                },
-            );
+            await showClusterConnectFailure({
+                clusterId: this.cluster.clusterId,
+                clusterName: this.cluster.name,
+                error,
+                context,
+            });
             return;
         }
 

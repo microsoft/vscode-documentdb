@@ -17,6 +17,7 @@ import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../..
 import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/auth/urlEncodedPassword';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../documentdb/showClusterConnectFailure';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
@@ -256,6 +257,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 // offer a single, user-confirmed retry with the decoded value. We never
                 // silently decode-and-retry to avoid tripping server-side lockout policies.
                 const { decodedPassword } = await showConnectionFailedAndMaybeOfferDecodedRetry({
+                    clusterId: this.cluster.clusterId,
                     clusterName: this.cluster.name,
                     password,
                     isNativeAuth: authMethod === AuthMethodId.NativeAuth,
@@ -287,16 +289,12 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
                         context.telemetry.properties.urlDecodePasswordResult = 'failed';
 
-                        void vscode.window.showErrorMessage(
-                            l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                            {
-                                modal: true,
-                                detail:
-                                    l10n.t('Revisit connection details and try again.') +
-                                    '\n\n' +
-                                    l10n.t('Error: {error}', { error: retryError.message }),
-                            },
-                        );
+                        await showClusterConnectFailure({
+                            clusterId: this.cluster.clusterId,
+                            clusterName: this.cluster.name,
+                            error: retryErr,
+                            context,
+                        });
                     }
 
                     if (retryClient) {

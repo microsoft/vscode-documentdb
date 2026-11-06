@@ -16,6 +16,7 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
 import { type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { showClusterConnectFailure } from '../../../../documentdb/showClusterConnectFailure';
 import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
@@ -328,16 +329,12 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                void vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
-                );
+                await showClusterConnectFailure({
+                    clusterId: this.cluster.clusterId,
+                    clusterName: this.cluster.name,
+                    error,
+                    context,
+                });
 
                 const { ClustersClient } = await import('../../../../documentdb/ClustersClient');
                 await ClustersClient.deleteClient(this.cluster.clusterId);
