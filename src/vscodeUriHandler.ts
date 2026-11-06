@@ -194,7 +194,7 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             if (route === undefined) {
                 throw new Error(
                     l10n.t(
-                        'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.',
+                        'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version. Check for an update, or verify the link.',
                     ),
                 );
             }
@@ -481,7 +481,7 @@ async function handleConnectionStringRequest(
     if (selectedDatabase && params.collection) {
         surface = l10n.t('Collection View');
     } else if (params.open) {
-        surface = params.open === 'dashboard' ? l10n.t('Cluster Dashboard') : l10n.t('Shell');
+        surface = params.open === 'dashboard' ? l10n.t('Cluster Dashboard') : l10n.t('Interactive Shell');
     }
 
     ext.outputChannel.trace(
@@ -620,16 +620,17 @@ async function handleConnectionStringRequest(
             l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
         ].join('\n');
         ext.outputChannel.trace('[DeepLink] Showing reveal connection confirmation');
+        const openButton = l10n.t('Open');
         const revealConfirmation = await vscode.window.showInformationMessage(
             l10n.t('Open connection?'),
             { modal: true, detail },
-            l10n.t('Yes, open connection'),
+            openButton,
         );
 
         ext.outputChannel.trace(
-            `[DeepLink] Reveal connection confirmation: ${revealConfirmation === l10n.t('Yes, open connection') ? 'accepted' : 'dismissed'}`,
+            `[DeepLink] Reveal connection confirmation: ${revealConfirmation === openButton ? 'accepted' : 'dismissed'}`,
         );
-        if (revealConfirmation !== l10n.t('Yes, open connection')) {
+        if (revealConfirmation !== openButton) {
             context.telemetry.properties.userCancelledAtStep = 'RevealConnection';
             return; // User cancelled
         }

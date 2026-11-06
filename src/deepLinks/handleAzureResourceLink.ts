@@ -61,7 +61,7 @@ export async function handleAzureResourceLinkRequest(
         } else if (request.open === 'dashboard') {
             surface = vscode.l10n.t('Cluster Dashboard');
         } else if (request.open === 'shell') {
-            surface = vscode.l10n.t('Shell');
+            surface = vscode.l10n.t('Interactive Shell');
         }
         if (surface) {
             detail.push(vscode.l10n.t('Opens: {0}', surface));

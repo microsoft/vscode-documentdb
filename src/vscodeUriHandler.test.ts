@@ -659,7 +659,7 @@ describe('globalUriHandler — saved connection open target', () => {
         mockGetAllConnections.mockResolvedValue([
             { id: 'existing-id', name: 'Production', secrets: { connectionString } },
         ]);
-        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Yes, open connection');
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Open');
     });
 
     it.each([undefined, 'db'])(
@@ -685,11 +685,11 @@ describe('globalUriHandler — saved connection open target', () => {
                     modal: true,
                     detail:
                         'A link wants to open a DocumentDB connection in VS Code.\n\n' +
-                        `Connection: Production\n${database ? 'Database: db\n' : ''}Opens: Shell\n\n` +
+                        `Connection: Production\n${database ? 'Database: db\n' : ''}Opens: Interactive Shell\n\n` +
                         'You might be asked for credentials to establish the connection.\n\n' +
                         'Note: You can disable these URL handling confirmations in the extension settings.',
                 },
-                'Yes, open connection',
+                'Open',
             );
             expect(revealInConnectionsView).toHaveBeenCalledExactlyOnceWith(
                 expect.objectContaining({ telemetry: expect.objectContaining({ properties: lastTelemetry }) }),
@@ -789,7 +789,7 @@ describe('globalUriHandler — saved connection open target', () => {
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
             expect.any(String),
             expect.objectContaining({ detail: expect.stringContaining('Opens: Cluster Dashboard') }),
-            'Yes, open connection',
+            'Open',
         );
         expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(
             'connectionsView/existing-id',
@@ -938,7 +938,7 @@ describe('globalUriHandler — connection confirmation', () => {
                     'Note: You can disable these URL handling confirmations in the extension settings.',
                 ].join('\n'),
             },
-            'Yes, open connection',
+            'Open',
         );
         expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain('secret');
     });
@@ -959,7 +959,7 @@ describe('globalUriHandler — connection confirmation', () => {
                 ]);
             }
             (vscode.window.showInformationMessage as Mock).mockResolvedValue(
-                saved ? 'Yes, open connection' : 'Add and open',
+                saved ? 'Open' : 'Add and open',
             );
             vi.mocked(buildConnectionsViewTreePath).mockReturnValue('collection-path');
             vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue({
@@ -979,7 +979,7 @@ describe('globalUriHandler — connection confirmation', () => {
                 expect(vscode.window.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
                     saved ? 'Open connection?' : 'Add and open connection?',
                     expect.objectContaining({ detail: expect.stringContaining('Opens: Collection View') }),
-                    saved ? 'Yes, open connection' : 'Add and open',
+                    saved ? 'Open' : 'Add and open',
                 );
             }
             const storageId = saved ? 'existing-id' : (mockSaveConnection.mock.calls[0][1] as { id: string }).id;
@@ -1002,7 +1002,7 @@ describe('globalUriHandler — connection confirmation', () => {
     );
 
     it.each([
-        { target: 'shell', surface: 'Shell', command: 'vscode-documentdb.command.shell.open' },
+        { target: 'shell', surface: 'Interactive Shell', command: 'vscode-documentdb.command.shell.open' },
         {
             target: 'dashboard',
             surface: 'Cluster Dashboard',
@@ -1058,7 +1058,7 @@ describe('globalUriHandler — connection confirmation', () => {
         mockGetAllConnections.mockResolvedValue([
             { id: 'existing-id', name: 'Production', secrets: { connectionString } },
         ]);
-        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Yes, open connection');
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue('Open');
         vi.mocked(buildConnectionsViewTreePath).mockReturnValue('collection-path');
 
         const error = await runHandler(
@@ -1353,7 +1353,7 @@ describe('globalUriHandler — telemetry shape', () => {
         const error = await runHandler('/nonsense');
 
         expect(error?.message).toBe(
-            'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.',
+            'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version. Check for an update, or verify the link.',
         );
     });
 

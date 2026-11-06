@@ -438,7 +438,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
     it.each([
         [{ database: 'sales', collection: 'orders' }, 'Opens: Collection View'],
         [{ open: 'dashboard' }, 'Opens: Cluster Dashboard'],
-        [{ open: 'shell' }, 'Opens: Shell'],
+        [{ open: 'shell' }, 'Opens: Interactive Shell'],
         [{}, undefined],
         [{ database: 'sales' }, undefined],
     ] satisfies [Partial<AzureResourceLinkRequest>, string | undefined][])(
