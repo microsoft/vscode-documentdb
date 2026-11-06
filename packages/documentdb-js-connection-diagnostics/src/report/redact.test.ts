@@ -11,8 +11,10 @@ import {
     buildReport,
     createBuiltInChecks,
     DEFAULT_TIMEOUTS,
+    englishReportText,
     redactReport,
     renderJson,
+    renderMarkdown,
     runDiagnostics,
 } from '../index.js';
 import { replyFrame } from '../test/wireResponder.js';
@@ -296,7 +298,7 @@ describe('identifier redaction and JSON rendering', (): void => {
             CN: 'ordinary-cn',
             records: [{ name: 'srv.example', port: 27017 }],
             subject: { CN: 'private-cn', O: 'private-org' },
-            issuerChain: [{ CN: 'private-cn', O: 'private-org' }],
+            issuerChain: [{ CN: 'Example Public Root CA', O: 'Example Trust Services' }],
             proxy: { variables: [{ host: 'proxy.example' }], noProxy: { entries: ['bypass.example'] } },
             NO_PROXY: { entries: ['other-bypass.example'] },
         });
@@ -306,10 +308,33 @@ describe('identifier redaction and JSON rendering', (): void => {
             CN: 'ordinary-cn',
             records: [{ name: 'host-1', port: 27017 }],
             subject: { CN: 'certificate-1', O: 'certificate-2' },
-            issuerChain: [{ CN: 'private-cn', O: 'private-org' }],
+            issuerChain: [{ CN: 'Example Public Root CA', O: 'Example Trust Services' }],
             proxy: { variables: [{ host: 'proxy-1' }], noProxy: { entries: ['host-2'] } },
             NO_PROXY: { entries: ['host-3'] },
         });
+    });
+
+    it('redacts self-signed certificate subject and issuer identifiers in JSON and Markdown', (): void => {
+        const subject = { CN: 'private-db.internal.example', O: 'Private Customer Organization' };
+        const report = customReport({
+            subject,
+            subjectAltNames: [`DNS:${subject.CN}`],
+            issuerChain: [subject],
+            selfIssued: true,
+        });
+        const redacted = redactReport(report);
+        expect(redacted.results[0].facts).toMatchObject({
+            subject: { CN: 'certificate-1', O: 'certificate-2' },
+            issuerChain: [{ CN: 'certificate-1', O: 'certificate-2' }],
+        });
+        const outputs = [
+            renderJson(report, { redact: true }),
+            renderMarkdown(report, { text: englishReportText, redact: true }).replace(/\\/g, ''),
+        ];
+        for (const output of outputs) {
+            expect(output).not.toContain(subject.CN);
+            expect(output).not.toContain(subject.O);
+        }
     });
 
     it('handles address objects, host ports, SAN prefixes and bracketed IPv6', (): void => {

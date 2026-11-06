@@ -243,8 +243,7 @@ export function redactReport<TCode extends string>(report: DiagnosticsReport<TCo
                 Object.fromEntries(
                     Object.entries(object).map(([key, child]): [string, unknown] => {
                         const next = [...path, key];
-                        const keep =
-                            preserve || key === 'issuerChain' || key === 'identifierKeys' || isProtectedKey(key);
+                        const keep = preserve || key === 'identifierKeys' || isProtectedKey(key);
                         return [
                             key,
                             replace(
