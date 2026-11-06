@@ -958,9 +958,7 @@ function extractAndValidateAzureParams(context: IActionContext, queryFragment: s
     };
     if (!params.resourceId) {
         throw new Error(
-            l10n.t(
-                'This DocumentDB link is missing a resource ID. Add a resourceId query parameter to the link.',
-            ),
+            l10n.t('This DocumentDB link is missing a resource ID. Add a resourceId query parameter to the link.'),
         );
     }
     if (params.collection && !params.database) {
