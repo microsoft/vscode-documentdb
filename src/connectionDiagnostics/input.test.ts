@@ -98,10 +98,7 @@ describe('buildDiagnosticsSetup', (): void => {
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(
             cached({ authMechanism: AuthMethodId.ManagedIdentity, managedIdentityConfig }),
         );
-        const setup = buildDiagnosticsSetup(
-            clusterId,
-            credentials({ managedIdentityAuthConfig: { tenantId: 't' } }),
-        );
+        const setup = buildDiagnosticsSetup(clusterId, credentials({ managedIdentityAuthConfig: { tenantId: 't' } }));
         expect(setup.transientCredentials?.managedIdentityConfig).toEqual(managedIdentityConfig);
         expect(setup.credentialState).toBe('available');
     });

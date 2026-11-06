@@ -23,10 +23,10 @@ updated: 2026-11-06
 
 Two independent passes ran **in parallel**, as requested:
 
-| Pass | Agent | Model | Original finding IDs |
-|---|---|---|---|
-| RD | `rubber-duck` | `gpt-6.1-sol` | RD1, RD2, RD3 |
-| CR | `code-review` | `claude-opus-5.5` | CR1, CR2 |
+| Pass | Agent         | Model             | Original finding IDs |
+| ---- | ------------- | ----------------- | -------------------- |
+| RD   | `rubber-duck` | `gpt-6.1-sol`     | RD1, RD2, RD3        |
+| CR   | `code-review` | `claude-opus-5.5` | CR1, CR2             |
 
 After both passes finished, each reviewer validated only the other reviewer's concrete candidates
 against the code and active decisions. This supplied the cross-vendor validation gate without
@@ -56,13 +56,13 @@ but address them with one coherent credential-selection change.
 One additional low item, K1, is an existing deferred limitation with a newly identified consequence,
 not a new blocker.
 
-| ID | Severity | Finding | Independent origin | Agreement after validation | Proposed resolution (2026-11-06) | Author decision |
-|---|---|---|---|---|---|---|
-| F1 | med | Discovery defaults replace the identity used by the working connection | RD1 | **Both agree: med** | Fix: identity follows the method's source (shared with F3) | **Accepted; done `d74501b3`** |
-| F2 | med | Hidden reports retain private certificate identities in self-signed issuer chains | RD2 | **Both agree: med** | Fix: one-line redaction change, accept over-redaction | **Accepted; done `0895ed18`** |
-| F3 | med | Unsaved session passwords cannot be diagnosed; remediation advice loops | CR1 | **Both agree: med** | Fix with F1: complete same-method session pair as fallback | **Accepted; done `d74501b3`** |
-| F4 | low | Concurrent Kubernetes tunnel starts inherit another caller's interactive policy | CR2 | **Both agree: low** | Partial: guard diagnosis from `externalAssumed`; won't fix the rest | **Accepted; done `ef7de528`** |
-| K1 | low | Internal hello deadlines suppress longer/no-timeout retries | RD3; historical S3 | **Both agree: low, already deferred** | Won't fix in this PR; keep the S3 deferral | Existing deferral; no new decision |
+| ID  | Severity | Finding                                                                           | Independent origin | Agreement after validation            | Proposed resolution (2026-11-06)                                    | Author decision                    |
+| --- | -------- | --------------------------------------------------------------------------------- | ------------------ | ------------------------------------- | ------------------------------------------------------------------- | ---------------------------------- |
+| F1  | med      | Discovery defaults replace the identity used by the working connection            | RD1                | **Both agree: med**                   | Fix: identity follows the method's source (shared with F3)          | **Accepted; done `d74501b3`**      |
+| F2  | med      | Hidden reports retain private certificate identities in self-signed issuer chains | RD2                | **Both agree: med**                   | Fix: one-line redaction change, accept over-redaction               | **Accepted; done `0895ed18`**      |
+| F3  | med      | Unsaved session passwords cannot be diagnosed; remediation advice loops           | CR1                | **Both agree: med**                   | Fix with F1: complete same-method session pair as fallback          | **Accepted; done `d74501b3`**      |
+| F4  | low      | Concurrent Kubernetes tunnel starts inherit another caller's interactive policy   | CR2                | **Both agree: low**                   | Partial: guard diagnosis from `externalAssumed`; won't fix the rest | **Accepted; done `ef7de528`**      |
+| K1  | low      | Internal hello deadlines suppress longer/no-timeout retries                       | RD3; historical S3 | **Both agree: low, already deferred** | Won't fix in this PR; keep the S3 deferral                          | Existing deferral; no new decision |
 
 ### Proposed resolutions: guiding rule
 
@@ -112,10 +112,10 @@ managed-identity configuration without the cached client ID. CR confirmed both p
 the producers and consumers. Existing input tests miss partial discovery defaults combined with a
 cached selected identity.
 
-| Option | Proposal | Pros | Cons |
-|---|---|---|---|
+| Option                                | Proposal                                                                                                                                                                                                                                                             | Pros                                                                                                  | Cons                                                                                                                                  |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | **A - recommended, together with F3** | Select the method and its identity configuration from one authoritative source. When the method comes from cache, preserve that cached native/Entra/managed-identity configuration as a unit. Fresh discovery data still supplies endpoint and transport properties. | Small, local change; matches the working connection; avoids mixing identities; no package API change. | Requires explicit source-selection and same-method cache rules; uses the session's tenant if discovery metadata subsequently changes. |
-| B | Add explicit provenance to credential/configuration results so discovery defaults cannot be mistaken for selected credentials. | Makes authority clear across producers; stronger long-term contract. | Broader type and producer changes across several tree-node implementations. |
+| B                                     | Add explicit provenance to credential/configuration results so discovery defaults cannot be mistaken for selected credentials.                                                                                                                                       | Makes authority clear across producers; stronger long-term contract.                                  | Broader type and producer changes across several tree-node implementations.                                                           |
 
 **Regression validation:** Add native ARM `admin-A` plus cached `user-B/password-B`, and fresh
 `{ tenantId }` plus cached `{ tenantId, clientId }` cases. Assert the configuration actually passed
@@ -171,7 +171,7 @@ Guiding rule: no wrong answers.
 > **Done (2026-11-06), commit `d74501b3`:** `buildDiagnosticsSetup` selects one identity source next
 > to the method (`target` when `selectedAuthMethod` is set, otherwise `cache`) and reads the native
 > pair, Entra and managed-identity configuration only from it. Discovery defaults no longer fill
-> identity fields. Leader decision (95%): the subagent first also skipped when the selected *user*
+> identity fields. Leader decision (95%): the subagent first also skipped when the selected _user_
 > was empty; sent back, because it changed behaviour beyond the item and the "Stored password
 > unavailable" message would be inaccurate. The skip stays password-only, as before. Tests: cached
 > native, managed-identity and Entra identities beat discovery defaults (3 tests). Model: sol.
@@ -213,10 +213,10 @@ currently asserts preservation using identical private subject/issuer values in 
 public-issuer fixture. Both reviewers identify this as an implementation assumption, not an
 operator decision requiring private names to remain visible.
 
-| Option | Proposal | Pros | Cons |
-|---|---|---|---|
+| Option              | Proposal                                                                                                                                        | Pros                                                                                                              | Cons                                                                                                                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A - recommended** | Continue excluding issuer-only names from identifier collection, but apply already-known private identifier substitutions inside `issuerChain`. | Small change; fixes the duplicated self-signed subject; preserves unrelated public CA names without an allowlist. | Does not independently classify private issuer-only names; can over-redact a public issuer sharing a subject value, such as an organization name. |
-| B | Explicitly classify self-issued or private-CA issuer identities and redact those too. | Can cover additional private issuer-only identities. | Broader policy decision; reliably distinguishing private and public issuers is harder and can hide useful CA evidence. |
+| B                   | Explicitly classify self-issued or private-CA issuer identities and redact those too.                                                           | Can cover additional private issuer-only identities.                                                              | Broader policy decision; reliably distinguishing private and public issuers is harder and can hide useful CA evidence.                            |
 
 **Regression validation:** Build self-signed TLS facts through the report builder and assert the
 private hostname and organization are absent from redacted JSON **and** Markdown. Use a separate,
@@ -301,11 +301,11 @@ A cached password can be stale; diagnostics should then test it and report the r
 F1 concerns discovery defaults overriding a cached chosen identity; F3 concerns an absent stored
 password blocking a usable session identity. Keep both regression cases.
 
-| Option | Proposal | Pros | Cons |
-|---|---|---|---|
+| Option                                | Proposal                                                                                                                                                                            | Pros                                                                                                                           | Cons                                                                                                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A - recommended, together with F1** | Use a complete authoritative stored native pair when available; otherwise use the complete cached native pair for the same cluster and selected method; otherwise explain the skip. | Supports unsaved passwords; never pairs one user's name with another user's password; retains complete stored-pair precedence. | Requires explicit eligibility rules and changing the existing empty-password expectation; stale cache can produce a genuine authentication failure. |
-| B | Replace field-level `??` with `||` fallback. | Very small patch; recognizes the empty-string sentinel. | Can still mix a stored username with another user's cached password; does not solve F1's configuration provenance. Not recommended. |
-| C | Retain behavior and advise saving the password. | No runtime behavior change. | Keeps the core check unavailable to users who do not save passwords and conflicts with session-credential intent. Not recommended. |
+| B                                     | Replace field-level `??` with `\|\|` fallback.                                                                                                                                      | Very small patch; recognizes the empty-string sentinel.                                                                        | Can still mix a stored username with another user's cached password; does not solve F1's configuration provenance. Not recommended.                 |
+| C                                     | Retain behavior and advise saving the password.                                                                                                                                     | No runtime behavior change.                                                                                                    | Keeps the core check unavailable to users who do not save passwords and conflicts with session-credential intent. Not recommended.                  |
 
 **Regression validation:** Cover an unsaved password after a successful wizard connection,
 different stored/cached usernames, mismatched cached methods, and complete stored-pair precedence.
@@ -394,11 +394,11 @@ The corresponding occupied-port policy at [decisions.md:1100](../decisions.md#L1
 is marked **Proposed**, not explicitly operator-approved. This qualification does not remove the
 ordinary-connect UX regression caused by inheriting a diagnostic caller's policy.
 
-| Option | Proposal | Pros | Cons |
-|---|---|---|---|
-| **A - recommended after validation** | Share raw binding work/outcomes, not caller-specific prompting. Publish the bind/busy outcome before any prompt; noninteractive callers reject busy ports, while interactive callers apply their own recovery policy. Retain generation checks. | Fixes both directions; preserves single-flight binding; diagnosis never awaits someone else's prompt; ordinary connect retains its UX. | Refactors a sensitive concurrency boundary and needs careful stop/invalidation coverage. |
-| B | Track the pending start's mode. Reject incompatible noninteractive joins before awaiting a prompt-bearing promise; let an interactive caller retry its own recovery after a noninteractive busy-port failure. | Can be narrower than separating bind and recovery phases. | More mode-dependent branches and retry races; rejecting only after awaiting the shared promise is insufficient. |
-| C | Explicitly defer the race. | No immediate implementation risk. | Leaves the ordinary-connect regression and diagnostic-policy contradiction. |
+| Option                               | Proposal                                                                                                                                                                                                                                        | Pros                                                                                                                                   | Cons                                                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **A - recommended after validation** | Share raw binding work/outcomes, not caller-specific prompting. Publish the bind/busy outcome before any prompt; noninteractive callers reject busy ports, while interactive callers apply their own recovery policy. Retain generation checks. | Fixes both directions; preserves single-flight binding; diagnosis never awaits someone else's prompt; ordinary connect retains its UX. | Refactors a sensitive concurrency boundary and needs careful stop/invalidation coverage.                        |
+| B                                    | Track the pending start's mode. Reject incompatible noninteractive joins before awaiting a prompt-bearing promise; let an interactive caller retry its own recovery after a noninteractive busy-port failure.                                   | Can be narrower than separating bind and recovery phases.                                                                              | More mode-dependent branches and retry races; rejecting only after awaiting the shared promise is insufficient. |
+| C                                    | Explicitly defer the race.                                                                                                                                                                                                                      | No immediate implementation risk.                                                                                                      | Leaves the ordinary-connect regression and diagnostic-policy contradiction.                                     |
 
 **Regression validation:** Add mixed-policy concurrency tests in both orders. Hold the interactive
 warning unresolved and assert diagnosis settles without answering it. Verify the ordinary caller
@@ -477,12 +477,12 @@ RD reproduced this with the actual runner/hello check and an in-memory silent so
 the path and historical decision. Existing hello tests exercise deadline classification but not the
 resulting runner coverage and retry visibility.
 
-| Option | Proposal | Pros | Cons |
-|---|---|---|---|
-| **A - recommended disposition now** | Keep this consequence attached to the existing S3 deferral. | Respects the author's prior decision; avoids unrelated contract changes during review fixes. | Retry actions remain unavailable for this diagnostic timeout. |
-| B - recommended comprehensive fix when S3 is addressed | Add explicit timeout metadata, including its source, independent of finding codes. | Consistent across hello, TCP and future specialized outcomes; preserves the distinction between diagnostic and connection-configured timeouts. | Larger public result-contract and propagation change. |
-| C | Add `check.timeout` alongside the specific hello finding when a diagnostic deadline expires. | Reuses existing coverage/retry accounting. | Produces duplicate error findings unless presentation is adjusted; must retain the limiting timeout source. |
-| D | Teach runner accounting about specialized timeout codes. | Smaller change without duplicate findings. | Brittle code list; `hello.inconclusive/truncated` still needs explicit deadline/source evidence to avoid treating every partial reply as a diagnostic timeout. |
+| Option                                                 | Proposal                                                                                     | Pros                                                                                                                                           | Cons                                                                                                                                                           |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A - recommended disposition now**                    | Keep this consequence attached to the existing S3 deferral.                                  | Respects the author's prior decision; avoids unrelated contract changes during review fixes.                                                   | Retry actions remain unavailable for this diagnostic timeout.                                                                                                  |
+| B - recommended comprehensive fix when S3 is addressed | Add explicit timeout metadata, including its source, independent of finding codes.           | Consistent across hello, TCP and future specialized outcomes; preserves the distinction between diagnostic and connection-configured timeouts. | Larger public result-contract and propagation change.                                                                                                          |
+| C                                                      | Add `check.timeout` alongside the specific hello finding when a diagnostic deadline expires. | Reuses existing coverage/retry accounting.                                                                                                     | Produces duplicate error findings unless presentation is adjusted; must retain the limiting timeout source.                                                    |
+| D                                                      | Teach runner accounting about specialized timeout codes.                                     | Smaller change without duplicate findings.                                                                                                     | Brittle code list; `hello.inconclusive/truncated` still needs explicit deadline/source evidence to avoid treating every partial reply as a diagnostic timeout. |
 
 **Regression validation if reopened:** Run hello through the real runner with a silent peer and a
 delayed partial reply; assert limited coverage and retry availability when diagnostic timeouts
@@ -548,4 +548,11 @@ Case 2 command. The existence of this review alone is not readiness approval.
 **Follow-up (2026-11-06):** the operator accepted F1–F4 and kept K1 deferred. Fixes landed with the
 `/lead` workflow in `ef7de528` (F4), `0895ed18` (F2) and `d74501b3` (F1, F3), each written by a
 `gpt-6.1-sol` subagent and reviewed by the leader. Case 1 ran after the batch: `npm run build` passed; focused Vitest (51 files, 1,283 tests) passed.
-Case 2 has not run.
+Case 2 had not run at that point.
+
+**Case 2 handover (2026-11-06):** `gpt-5.6-terra` ran the full suite after the F1-F4 fixes.
+`npm run l10n`, `npm run prettier-fix`, `npm run l10n:check`, `npm run lint`,
+`npm run build`, `npm run typecheck:tests`, `npx vitest run` and `npm run package`
+all passed. Vitest reported 379 passing files, 7,406 passing tests and one skipped test.
+Packaging produced an 8.61 MB VSIX. The generated formatting changes are included in this handover.
+No new live-service or installed-extension verification was performed; the limits above still apply.
