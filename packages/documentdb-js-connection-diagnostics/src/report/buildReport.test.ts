@@ -108,7 +108,7 @@ describe('report snapshots', (): void => {
         expect(report.connectionName).toBe('Savedconnection');
     });
 
-    it('applies sanitization limits to the complete steps payload', (): void => {
+    it('bounds steps without inserting non-step omission markers', (): void => {
         const steps = Array.from({ length: 33 }, (_, index): NonNullable<CheckResult<string>['steps']>[number] => ({
             stepId: `step-${index}`,
             status: 'pass',
@@ -117,9 +117,9 @@ describe('report snapshots', (): void => {
             facts: { invalid: new Date(), text: 'safe\0text' },
         }));
         const report = buildReport(run([{ ...result('custom'), steps }]));
-        expect(report.results[0].steps).toHaveLength(33);
+        expect(report.results[0].steps).toHaveLength(32);
         expect(report.results[0].steps?.[0].facts).toEqual({ text: 'safetext' });
-        expect(report.results[0].steps?.[32]).toBe('[1 more omitted]');
+        expect(report.results[0].omittedStepCount).toBe(1);
     });
 
     it('selects the smallest hello clock uncertainty and keeps the first result on ties', (): void => {

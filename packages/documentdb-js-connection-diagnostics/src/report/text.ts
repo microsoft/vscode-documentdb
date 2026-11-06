@@ -71,6 +71,8 @@ export interface FindingText {
     readonly nextStep?: string;
 }
 
+export type ReportOmissionKind = 'steps' | 'findings' | 'serverRows';
+
 export interface ReportText<TCode extends string> {
     readonly title: string;
     readonly formatTimestamp: (timestamp: number | Date) => string;
@@ -83,6 +85,7 @@ export interface ReportText<TCode extends string> {
     readonly describeFinding: (finding: Finding<TCode>, result: CheckResult<TCode>) => FindingText;
     readonly label: (key: ReportLabelKey) => string;
     readonly omitted: (count: number) => string;
+    readonly omittedEntries: (kind: ReportOmissionKind, count: number) => string;
     readonly retryAdvice: (coverage: DiagnosticsReport<TCode>['coverage']) => string | undefined;
     readonly traceNote: (runId: string) => string;
 }
@@ -187,6 +190,12 @@ export const englishReportText: ReportText<string> = {
     describeFinding: (finding): FindingText => ({ title: finding.code, explanation: finding.detail.text }),
     label: (key): string => labels[key],
     omitted: (count): string => `${count} more omitted`,
+    omittedEntries: (kind, count): string =>
+        ({
+            steps: `${count} more steps not shown`,
+            findings: `${count} more findings not shown`,
+            serverRows: `${count} more server rows not shown`,
+        })[kind],
     retryAdvice: (coverage): string | undefined => {
         if (coverage.retryWouldHelp) {
             return (

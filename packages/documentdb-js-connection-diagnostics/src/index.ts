@@ -31,7 +31,14 @@ export { redactReport } from './report/redact.js';
 export { renderJson } from './report/renderJson.js';
 export { renderMarkdown } from './report/renderMarkdown.js';
 export { englishReportText } from './report/text.js';
-export type { FindingText, RenderOptions, ReportLabelKey, ReportSectionId, ReportText } from './report/text.js';
+export type {
+    FindingText,
+    RenderOptions,
+    ReportLabelKey,
+    ReportOmissionKind,
+    ReportSectionId,
+    ReportText,
+} from './report/text.js';
 export type {
     ClockOffsetSummary,
     DiagnosticsReport,

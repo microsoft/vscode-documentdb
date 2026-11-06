@@ -12,6 +12,7 @@ export interface ReportSummary {
     readonly outcome: ReportOutcome;
     readonly headline?: { readonly checkId: string; readonly target?: string; readonly code?: string };
     readonly serverRows?: readonly { readonly label: string; readonly value: string }[];
+    readonly omittedServerRowCount?: number;
     readonly nextSteps?: readonly string[];
     readonly location?: string;
     readonly notes?: readonly string[];

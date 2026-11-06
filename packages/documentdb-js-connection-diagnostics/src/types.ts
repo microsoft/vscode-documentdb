@@ -37,6 +37,8 @@ export interface CheckStepResult<TCode extends string> {
     readonly skippedBecause?: { readonly reason: SkipReason; readonly stepId?: string };
     readonly durationMs: number;
     readonly findings: readonly Finding<TCode>[];
+    /** Populated by the report builder when findings are truncated; checks leave unset. */
+    readonly omittedFindingCount?: number;
     readonly facts: Readonly<Record<string, unknown>>;
 }
 
@@ -47,8 +49,12 @@ export interface CheckResult<TCode extends string> {
     readonly skippedBecause?: { readonly reason: SkipReason; readonly checkId?: string };
     readonly durationMs: number;
     readonly findings: readonly Finding<TCode>[];
+    /** Populated by the report builder when findings are truncated; checks leave unset. */
+    readonly omittedFindingCount?: number;
     readonly facts: Readonly<Record<string, unknown>>;
     readonly steps?: readonly CheckStepResult<TCode>[];
+    /** Populated by the report builder when steps are truncated; checks leave unset. */
+    readonly omittedStepCount?: number;
 }
 
 export type CheckOutcome<TCode extends string> = Omit<CheckResult<TCode>, 'checkId' | 'durationMs'>;

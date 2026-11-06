@@ -7,7 +7,7 @@ import { redactReport } from './redact.js';
 import { reportTimestamp } from './timestamps.js';
 
 import { type CheckResult, type CheckStepResult, type DiagnosticsTimeouts } from '../types.js';
-import { type RenderOptions, type ReportLabelKey, type ReportSectionId } from './text.js';
+import { type RenderOptions, type ReportLabelKey, type ReportOmissionKind, type ReportSectionId } from './text.js';
 import { type DiagnosticsReport } from './types.js';
 
 const checkSections: readonly ReportSectionId[] = [
@@ -130,6 +130,20 @@ export function renderMarkdown<TCode extends string>(
     function checkName(checkId: string): string {
         return `${escapeText(text.checkLabel(checkId))} (${codeSpan(checkId)})`;
     }
+    function omission(kind: ReportOmissionKind, count: number | undefined): string[] {
+        return count !== undefined && count > 0 ? [escapeText(text.omittedEntries(kind, count))] : [];
+    }
+    function resultOmissions(result: CheckResult<TCode>): string[] {
+        return [
+            ...omission('findings', result.omittedFindingCount),
+            ...(result.steps ?? []).flatMap((step): string[] =>
+                omission('findings', step.omittedFindingCount).map(
+                    (notice): string => `${checkName(step.stepId)}: ${notice}`,
+                ),
+            ),
+            ...omission('steps', result.omittedStepCount),
+        ];
+    }
     function statusLine(result: CheckResult<TCode> | CheckStepResult<TCode>): string {
         const parts = [
             `${label('status')}: ${escapeText(text.statusLabel(result.status))}`,
@@ -150,6 +164,7 @@ export function renderMarkdown<TCode extends string>(
         );
         blocks.push(statusLine(result));
         factsTable(result.facts);
+        blocks.push(...omission('findings', result.omittedFindingCount));
         for (const step of result.steps ?? []) {
             blocks.push(`#### ${checkName(step.stepId)}`);
             blocks.push(statusLine(step));
@@ -158,8 +173,10 @@ export function renderMarkdown<TCode extends string>(
                     `${label('code')}: ${step.findings.map((finding): string => codeSpan(finding.code)).join(', ')}`,
                 );
             }
+            blocks.push(...omission('findings', step.omittedFindingCount));
             factsTable(step.facts);
         }
+        blocks.push(...omission('steps', result.omittedStepCount));
     }
 
     function renderSectionResults(sectionId: ReportSectionId): void {
@@ -179,14 +196,17 @@ export function renderMarkdown<TCode extends string>(
                 parts.push(escapeText(headline.target));
             }
             if (headline.code !== undefined) {
-                const result = snapshot.results.find(
+                const candidates = snapshot.results.filter(
                     (candidate): boolean =>
                         candidate.checkId === headline.checkId &&
-                        (headline.target === undefined || candidate.target === headline.target) &&
-                        (candidate.findings.some((finding): boolean => finding.code === headline.code) ||
-                            (candidate.steps ?? []).some((step): boolean =>
-                                step.findings.some((finding): boolean => finding.code === headline.code),
-                            )),
+                        (headline.target === undefined || candidate.target === headline.target),
+                );
+                const result = candidates.find(
+                    (candidate): boolean =>
+                        candidate.findings.some((finding): boolean => finding.code === headline.code) ||
+                        (candidate.steps ?? []).some((step): boolean =>
+                            step.findings.some((finding): boolean => finding.code === headline.code),
+                        ),
                 );
                 const finding =
                     result &&
@@ -196,6 +216,9 @@ export function renderMarkdown<TCode extends string>(
                     ].find((candidate): boolean => candidate.code === headline.code);
                 if (result && finding) {
                     parts.push(escapeText(text.describeFinding(finding, result).title));
+                } else {
+                    parts.push(codeSpan(headline.code));
+                    parts.push(...candidates.flatMap(resultOmissions));
                 }
             }
         }
@@ -211,6 +234,7 @@ export function renderMarkdown<TCode extends string>(
         [label('field'), label('value')],
         (summary?.serverRows ?? []).map((row): string[] => [escapeText(row.label), escapeText(row.value)]),
     );
+    blocks.push(...omission('serverRows', summary?.omittedServerRowCount));
     for (const note of summary?.notes ?? []) {
         blocks.push(escapeText(note));
     }
@@ -285,7 +309,13 @@ export function renderMarkdown<TCode extends string>(
             },
         ),
     );
-    if (findings.length > 0 || grouped.has('findings')) {
+    const omittedFindings = snapshot.results.flatMap((result): string[] =>
+        resultOmissions(result).map(
+            (notice): string =>
+                `${checkName(result.checkId)}${result.target === undefined ? '' : ` (${escapeText(result.target)})`}: ${notice}`,
+        ),
+    );
+    if (findings.length > 0 || omittedFindings.length > 0 || grouped.has('findings')) {
         section('findings');
         const findingColumns: readonly ReportLabelKey[] = [
             'check',
@@ -297,6 +327,7 @@ export function renderMarkdown<TCode extends string>(
             'nextStep',
         ];
         table(findingColumns.map(label), findings);
+        blocks.push(...omittedFindings);
         renderSectionResults('findings');
     }
     if (snapshot.results.length > 0) {
@@ -318,6 +349,14 @@ export function renderMarkdown<TCode extends string>(
                 ]),
             ]),
         );
+        for (const result of snapshot.results) {
+            blocks.push(
+                ...omission('steps', result.omittedStepCount).map(
+                    (notice): string =>
+                        `${checkName(result.checkId)}${result.target === undefined ? '' : ` (${escapeText(result.target)})`}: ${notice}`,
+                ),
+            );
+        }
         renderSectionResults('timings');
     }
     const traceNote = text.traceNote(snapshot.runId);

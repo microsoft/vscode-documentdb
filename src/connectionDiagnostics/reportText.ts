@@ -169,6 +169,12 @@ export function createExtensionReportText(): ReportText<FindingCode> {
             })[profile],
         describeFinding: describeFindingForReport,
         omitted: (count): string => vscode.l10n.t('{0} more omitted', count),
+        omittedEntries: (kind, count): string =>
+            ({
+                steps: (): string => vscode.l10n.t('{0} more steps not shown', count),
+                findings: (): string => vscode.l10n.t('{0} more findings not shown', count),
+                serverRows: (): string => vscode.l10n.t('{0} more server rows not shown', count),
+            })[kind](),
         retryAdvice: (coverage): string | undefined => {
             const connectionLimited = coverage.timedOut.some((operation): boolean => operation.source === 'connection');
             if (coverage.retryWouldHelp) {

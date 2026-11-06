@@ -95,6 +95,68 @@ function fixtureMarkdown(run: DiagnosticsRun<FindingCode> = fixtureRun()): strin
 }
 
 describe('localized connectivity report text', () => {
+    it.each([
+        ['steps', '{0} more steps not shown'],
+        ['findings', '{0} more findings not shown'],
+        ['serverRows', '{0} more server rows not shown'],
+    ] as const)('localizes %s omissions with their count', (kind, template): void => {
+        const localize = vi.spyOn(vscode.l10n, 't').mockImplementation((message, ...args): string => {
+            const value = typeof message === 'string' ? message : message.message;
+            return `Localized: ${value.replace('{0}', String(args[0]))}`;
+        });
+        try {
+            const text = createExtensionReportText();
+            expect(text.omittedEntries(kind, 7)).toBe(`Localized: ${template.replace('{0}', '7')}`);
+            expect(localize).toHaveBeenCalledWith(template, 7);
+        } finally {
+            localize.mockRestore();
+        }
+    });
+
+    it.each([false, true])('renders localized structural omissions without timeout advice (redact=%s)', (redact): void => {
+        const source = fixtureRun({
+            limited: false,
+            timedOut: [],
+            retryWouldHelp: false,
+            omittedTargetCount: 0,
+        });
+        const findings = source.results.find((result): boolean => result.checkId === 'tcp')?.findings ?? [];
+        const report = buildReport({
+            ...source,
+            results: [{
+                checkId: 'tcp',
+                status: 'fail',
+                durationMs: 1,
+                facts: {},
+                findings: Array.from({ length: 33 }, () => findings[0]),
+                steps: Array.from({ length: 34 }, (_, index) => ({
+                    stepId: `step-${index}`,
+                    status: 'pass',
+                    durationMs: 1,
+                    facts: {},
+                    findings: Array.from({ length: 35 }, () => findings[0]),
+                })),
+            }],
+        }, {
+            summary: {
+                outcome: 'failed',
+                serverRows: Array.from({ length: 36 }, () => ({ label: 'Server', value: 'DocumentDB' })),
+            },
+        });
+        const markdown = renderMarkdown(report, { text: createExtensionReportText(), redact });
+        for (const [template, count] of [
+            ['{0} more findings not shown', 1],
+            ['{0} more findings not shown', 3],
+            ['{0} more steps not shown', 2],
+            ['{0} more server rows not shown', 4],
+        ] as const) {
+            expect(markdown).toContain(template.replace('{0}', String(count)));
+            expect(vscode.l10n.t).toHaveBeenCalledWith(template, count);
+        }
+        expect(markdown).not.toContain('Choose Retry');
+        expect(report.coverage).toEqual(source.coverage);
+    });
+
     it('renders localized section titles, row names and findings without convenience English', () => {
         const markdown = fixtureMarkdown();
         expect(markdown).toContain('# Connection diagnostics');

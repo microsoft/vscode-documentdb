@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 const textLimit = 8192;
-const listLimit = 32;
+export const REPORT_LIST_LIMIT = 32;
 const depthLimit = 8;
 
 export function sanitizeValue(value: unknown): unknown {
@@ -38,14 +38,14 @@ function sanitize(value: unknown, depth: number): unknown {
     }
     if (array) {
         const entries: unknown[] = [];
-        for (const entry of (value as unknown[]).slice(0, listLimit)) {
+        for (const entry of (value as unknown[]).slice(0, REPORT_LIST_LIMIT)) {
             const clean = sanitize(entry, depth + 1);
             if (clean !== undefined) {
                 entries.push(clean);
             }
         }
-        if (value.length > listLimit) {
-            entries.push(`[${value.length - listLimit} more omitted]`);
+        if (value.length > REPORT_LIST_LIMIT) {
+            entries.push(`[${value.length - REPORT_LIST_LIMIT} more omitted]`);
         }
         return entries;
     }
