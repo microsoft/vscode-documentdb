@@ -25,7 +25,8 @@ class RetryAfterStreamingWriter extends StreamingDocumentWriter {
         });
     }
 
-    public override writeBatch = vi.fn<() => Promise<StrategyBatchResult | BatchAttemptOutcome>>()
+    public override writeBatch = vi
+        .fn<() => Promise<StrategyBatchResult | BatchAttemptOutcome>>()
         .mockResolvedValue({ processedCount: 1, insertedCount: 1 });
 
     public override classifyError = vi.fn<(error: unknown) => ErrorType>(() => 'throttle');
@@ -84,9 +85,9 @@ describe('StreamingDocumentWriter server-suggested retry wait', () => {
             expect(trace).toHaveBeenCalledWith(
                 '[StreamingWriter] Waiting 60000 ms as suggested by the server (computed backoff 200 ms)',
             );
-            expect(
-                trace.mock.calls.filter(([message]) => message.includes('as suggested by the server')),
-            ).toHaveLength(1);
+            expect(trace.mock.calls.filter(([message]) => message.includes('as suggested by the server'))).toHaveLength(
+                1,
+            );
         } else {
             expect(trace).not.toHaveBeenCalledWith(expect.stringContaining('as suggested by the server'));
         }

@@ -76,19 +76,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         const indexCopier = context.copyIndexes ? createIndexCopier(context) : undefined;
 
         // Create the copy-paste task
-        const task = new CopyPasteCollectionTask(
-            config,
-            reader,
-            writer,
-            indexCopier,
-            undefined,
-            {
-                ...createExtensionTaskOptions(),
-                copyCollectionStrings: getExtensionCopyCollectionStrings(),
-                validateSource: createValidateSource(config),
-                collectMetadata: createCollectMetadata(config),
-            },
-        );
+        const task = new CopyPasteCollectionTask(config, reader, writer, indexCopier, undefined, {
+            ...createExtensionTaskOptions(),
+            copyCollectionStrings: getExtensionCopyCollectionStrings(),
+            validateSource: createValidateSource(config),
+            collectMetadata: createCollectMetadata(config),
+        });
 
         // Register task with the task service
         TaskService.registerTask(task);

@@ -280,5 +280,8 @@ export abstract class BaseDocumentReader implements DocumentReader {
      *   return await client.estimateDocumentCount(this.databaseName, this.collectionName);
      * }
      */
-    protected abstract countDocumentsInDatabase(signal?: AbortSignal, actionContext?: TaskTelemetryContext): Promise<number>;
+    protected abstract countDocumentsInDatabase(
+        signal?: AbortSignal,
+        actionContext?: TaskTelemetryContext,
+    ): Promise<number>;
 }

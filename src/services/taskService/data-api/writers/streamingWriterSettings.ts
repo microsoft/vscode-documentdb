@@ -84,7 +84,9 @@ export function resolveStreamingWriterSettings(
     ] as const;
     for (const [path, value] of positiveIntegers) {
         if (!Number.isInteger(value) || value < 1) {
-            throw new Error(`Invalid streaming writer setting ${path}: ${String(value)} (expected an integer of at least 1).`);
+            throw new Error(
+                `Invalid streaming writer setting ${path}: ${String(value)} (expected an integer of at least 1).`,
+            );
         }
     }
     if (settings.batching.startMode !== 'fast' && settings.batching.startMode !== 'ru-limited') {

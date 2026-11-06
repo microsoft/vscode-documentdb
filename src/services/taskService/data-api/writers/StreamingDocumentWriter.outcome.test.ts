@@ -50,10 +50,13 @@ class OutcomeStreamingWriter extends StreamingDocumentWriter {
 }
 
 function createDocuments(count: number): DocumentDetails[] {
-    return Array.from({ length: count }, (_, index): DocumentDetails => ({
-        id: index + 1,
-        documentContent: { value: index + 1 },
-    }));
+    return Array.from(
+        { length: count },
+        (_, index): DocumentDetails => ({
+            id: index + 1,
+            documentContent: { value: index + 1 },
+        }),
+    );
 }
 
 async function* createDocumentStream(documents: DocumentDetails[]): AsyncIterable<DocumentDetails> {

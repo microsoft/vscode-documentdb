@@ -40,7 +40,8 @@ export function getExtensionCopyCollectionStrings(): CopyCollectionStrings {
         skipped: (count: string): string => vscode.l10n.t('{0} skipped', count),
         replaced: (count: string): string => vscode.l10n.t('{0} replaced', count),
         created: (count: string): string => vscode.l10n.t('{0} created', count),
-        documentProgress: (processed: string, total: string): string => vscode.l10n.t('{0}/{1} documents', processed, total),
+        documentProgress: (processed: string, total: string): string =>
+            vscode.l10n.t('{0}/{1} documents', processed, total),
         writingBatch: vscode.l10n.t('writing batch...'),
     };
 }

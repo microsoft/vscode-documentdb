@@ -368,10 +368,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
 
         if (result.createdCount > 0 && !signal.aborted) {
-            this.updateProgress(
-                0,
-                this.copyCollectionStrings.indexesCopied(result.createdCount.toString()),
-            );
+            this.updateProgress(0, this.copyCollectionStrings.indexesCopied(result.createdCount.toString()));
             await this.waitForPresentationDelay(signal, this.indexPresentationDelayMs);
         }
     }

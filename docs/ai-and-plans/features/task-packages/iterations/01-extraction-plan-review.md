@@ -47,13 +47,13 @@ Severity reflects consequences for a consumer using the new contract:
 **high** = critical/widespread failure; **med** = substantial correctness or availability
 failure on a supported path; **low** = constrained edge case.
 
-| ID | Finding | Severity | Independent agreement | Validation gate |
-| --- | --- | --- | --- | --- |
-| F1 | Abort conflicts disappear from intermediate retry outcomes | med | **BOTH: Sol + Opus**, including severity | Confirmed |
-| F2 | Explicit `undefined` settings overwrite defaults and can hang flushing | med | **BOTH: Sol + Opus** on the defect; initially med vs low | Confirmed; med for the new contract |
-| F3 | A returned retry outcome without `remaining` can retry forever without backoff | med | Opus only | Confirmed with contract qualification |
-| F4 | Default telemetry runner turns a stopped task into Failed and duplicates failure events | med | Opus only | Confirmed with cancellation qualification |
-| F5 | Server waits exceeding Node's timer limit become approximately 1 ms | low | Sol only | Confirmed and independently reproduced in the gate |
+| ID  | Finding                                                                                 | Severity | Independent agreement                                    | Validation gate                                    |
+| --- | --------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------- | -------------------------------------------------- |
+| F1  | Abort conflicts disappear from intermediate retry outcomes                              | med      | **BOTH: Sol + Opus**, including severity                 | Confirmed                                          |
+| F2  | Explicit `undefined` settings overwrite defaults and can hang flushing                  | med      | **BOTH: Sol + Opus** on the defect; initially med vs low | Confirmed; med for the new contract                |
+| F3  | A returned retry outcome without `remaining` can retry forever without backoff          | med      | Opus only                                                | Confirmed with contract qualification              |
+| F4  | Default telemetry runner turns a stopped task into Failed and duplicates failure events | med      | Opus only                                                | Confirmed with cancellation qualification          |
+| F5  | Server waits exceeding Node's timer limit become approximately 1 ms                     | low      | Sol only                                                 | Confirmed and independently reproduced in the gate |
 
 **BOTH** means independently discovered by both original reviewers, not merely accepted after
 being shown the other report. Gate confirmation of F3-F5 is not a second independent discovery.
@@ -69,14 +69,14 @@ crash or silent data-loss path now. Wider contract hardening is deferred to that
 locked in early. Each finding below has a **Proposed resolution** paragraph. The author decision is
 still pending.
 
-| ID | Proposal | Cost |
-| --- | --- | --- |
-| F1 | **Fix now**, using the reviewer's recommended option (return early under Abort when a returned outcome carries errors). | A few lines and one test |
-| F2 | **Fix now, narrowly:** ignore `undefined` leaves when merging, and guard only the values that hang or crash. **Defer** the full validation matrix. | A small helper and a few assertions |
-| F3 | **Fix now:** default omitted `remaining` to the unwritten suffix, as decision 0009 already specifies. **Defer** the discriminated type and the zero-progress guard. | One line and one test |
-| F4 | **Fix now**, using the recommended `isFinalState()` guard on both outer catches. | Two lines and two tests |
-| F5 | **Won't fix**; record it as a known limitation. | Docs only |
-| Lint | **Fix now:** assign the picked enum ID directly instead of switching on it. | A few lines |
+| ID   | Proposal                                                                                                                                                            | Cost                                |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| F1   | **Fix now**, using the reviewer's recommended option (return early under Abort when a returned outcome carries errors).                                             | A few lines and one test            |
+| F2   | **Fix now, narrowly:** ignore `undefined` leaves when merging, and guard only the values that hang or crash. **Defer** the full validation matrix.                  | A small helper and a few assertions |
+| F3   | **Fix now:** default omitted `remaining` to the unwritten suffix, as decision 0009 already specifies. **Defer** the discriminated type and the zero-progress guard. | One line and one test               |
+| F4   | **Fix now**, using the recommended `isFinalState()` guard on both outer catches.                                                                                    | Two lines and two tests             |
+| F5   | **Won't fix**; record it as a known limitation.                                                                                                                     | Docs only                           |
+| Lint | **Fix now:** assign the picked enum ID directly instead of switching on it.                                                                                         | A few lines                         |
 
 ## F1 - Abort conflicts disappear from intermediate retry outcomes
 
@@ -118,10 +118,10 @@ throw-route statistics did not contain these errors.
 
 ### Fix proposals
 
-| Option | Pros | Cons |
-| --- | --- | --- |
+| Option                                                                                                                                                                                                                | Pros                                                                                                     | Cons                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | **Recommended:** before forwarding a returned outcome to partial-progress handling, return its result immediately when Abort and `result.errors` are present. Let existing outer handling record statistics and fail. | Small change; records counts once; preserves the original error; avoids writing the remaining documents. | Adds strategy-specific logic inside the retry loop; intermediate errors under other strategies still need separately defined treatment. |
-| Extract shared processing for statistics, progress, errors and fatal Abort behavior. | One consistent path for intermediate and final results. | Larger refactor; a thrown `StreamingWriterError` must bypass generic write-error handling or it can be logged/wrapped twice. |
+| Extract shared processing for statistics, progress, errors and fatal Abort behavior.                                                                                                                                  | One consistent path for intermediate and final results.                                                  | Larger refactor; a thrown `StreamingWriterError` must bypass generic write-error handling or it can be logged/wrapped twice.            |
 
 **Regression checks:** mixed conflict/throttle outcome under Abort rejects with
 `StreamingWriterError`, counts insertion and abort once, and makes no subsequent write.
@@ -182,10 +182,10 @@ or invalid leaves.
 
 ### Fix proposals
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| **Recommended:** resolve leaves with caller -> adapter -> package nullish fallback, or remove undefined leaves before merging; validate the resulting settings. | Supports ordinary optional configuration; prevents hangs/crashes; preserves layered defaults. | Requires explicit validation rules and additional merge/validation code. |
-| Reject explicit undefined overrides and all invalid values immediately. | Fails clearly and keeps configuration strict. | Rejects the common `{ x: maybeValue }` pattern; still requires numeric validation. |
+| Option                                                                                                                                                          | Pros                                                                                          | Cons                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Recommended:** resolve leaves with caller -> adapter -> package nullish fallback, or remove undefined leaves before merging; validate the resulting settings. | Supports ordinary optional configuration; prevents hangs/crashes; preserves layered defaults. | Requires explicit validation rules and additional merge/validation code.           |
+| Reject explicit undefined overrides and all invalid values immediately.                                                                                         | Fails clearly and keeps configuration strict.                                                 | Rejects the common `{ x: maybeValue }` pattern; still requires numeric validation. |
 
 Validate finite numeric values, positive integral batch sizes/attempt limits, maximum batch
 size not below initial size, nonnegative delays, supported start modes, and suitable
@@ -263,10 +263,10 @@ used the thrown route, which calculated the remaining suffix.
 
 ### Fix proposals
 
-| Option | Pros | Cons |
-| --- | --- | --- |
+| Option                                                                                                                                                                                                      | Pros                                                                                          | Cons                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Recommended:** default omitted `remaining` to `currentBatch.slice(processedCount)`, matching the thrown route; also fail explicitly if a completed attempt on a nonempty batch reports no total progress. | Restores route consistency; the outer guard protects against other zero-progress results too. | Prefix inference is unsuitable for scattered unordered successes; those adapters must explicitly supply `remaining`, which needs documentation. |
-| Require `remaining` for retryable outcomes through a discriminated type and runtime validation. | Makes the contract unambiguous and rejects mistakes early. | Changes the newly introduced type and is more verbose for adapters; runtime validation remains necessary for JavaScript callers. |
+| Require `remaining` for retryable outcomes through a discriminated type and runtime validation.                                                                                                             | Makes the contract unambiguous and rejects mistakes early.                                    | Changes the newly introduced type and is more verbose for adapters; runtime validation remains necessary for JavaScript callers.                |
 
 **Regression checks:** omitted remaining plus throttle waits, increments attempts and
 exhausts the configured retry limit; a partial prefix is not rewritten; unordered explicit
@@ -328,10 +328,10 @@ that did not exist with the previously mandatory extension telemetry wrapper.
 
 ### Fix proposals
 
-| Option | Pros | Cons |
-| --- | --- | --- |
+| Option                                                                                                      | Pros                                                                                                                                               | Cons                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | **Recommended:** guard both outer start catches with `!this.isFinalState()`; keep the work-handler rethrow. | Small change; retains the original error and telemetry reporting; preserves Stopped; runner failures before terminal handling still become Failed. | Outer handlers must distinguish an already-handled work failure from a runner failure; regression coverage is needed for both. |
-| Make the default runner swallow errors like the extension runner. | Aligns runner behavior. | Inherits the deferred initialization-swallowing behavior and hides errors from consumers. |
+| Make the default runner swallow errors like the extension runner.                                           | Aligns runner behavior.                                                                                                                            | Inherits the deferred initialization-swallowing behavior and hides errors from consumers.                                      |
 
 Removing the `runWork` rethrow instead would prevent the extension telemetry wrapper from
 observing the original failure and is not recommended.
@@ -382,10 +382,10 @@ provide such hints, and a multi-week server delay is an unusual edge case, hence
 
 ### Fix proposals
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| **Recommended:** wait in abortable chunks no larger than the native timer maximum, tracking the remaining duration. | Honors the uncapped-floor contract and retains cancellation. | Adds timer bookkeeping and abort-listener cleanup requirements. |
-| Reject oversized hints explicitly rather than passing them to a timer. | Simple and avoids an early retry. | Introduces a limit contrary to decision 0011; requires an explicit design decision before implementation. |
+| Option                                                                                                              | Pros                                                         | Cons                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Recommended:** wait in abortable chunks no larger than the native timer maximum, tracking the remaining duration. | Honors the uncapped-floor contract and retains cancellation. | Adds timer bookkeeping and abort-listener cleanup requirements.                                           |
+| Reject oversized hints explicitly rather than passing them to a timer.                                              | Simple and avoids an early retry.                            | Introduces a limit contrary to decision 0011; requires an explicit design decision before implementation. |
 
 Silently clamping to the timer maximum also violates the accepted minimum and is not a fix.
 
@@ -417,11 +417,11 @@ The parent review session independently confirmed these results and the static j
 
 Opus identified these specific cleanup items:
 
-| Observation | Suggested action | Trade-off |
-| --- | --- | --- |
-| Four unsafe enum-comparison lint errors in the [conflict picker switch](../../../../../src/commands/pasteCollection/PromptConflictResolutionStep.ts#L57) | Compare against the enum members rather than string literals. | Small source cleanup without intended runtime change; adds an implementation item beyond this report. |
-| The [localization bundle](../../../../../l10n/bundle.l10n.json) is stale after string moves/removals | Regenerate with `npm run l10n` at ready-for-review. | Restores source/bundle consistency; generation is intentionally deferred while the PR remains a draft. |
-| Prettier reports 12 files | Run `npm run prettier-fix` at ready-for-review. | Satisfies formatting checks; avoid unrelated formatting churn during this review-only pass. |
+| Observation                                                                                                                                              | Suggested action                                              | Trade-off                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Four unsafe enum-comparison lint errors in the [conflict picker switch](../../../../../src/commands/pasteCollection/PromptConflictResolutionStep.ts#L57) | Compare against the enum members rather than string literals. | Small source cleanup without intended runtime change; adds an implementation item beyond this report.  |
+| The [localization bundle](../../../../../l10n/bundle.l10n.json) is stale after string moves/removals                                                     | Regenerate with `npm run l10n` at ready-for-review.           | Restores source/bundle consistency; generation is intentionally deferred while the PR remains a draft. |
+| Prettier reports 12 files                                                                                                                                | Run `npm run prettier-fix` at ready-for-review.               | Satisfies formatting checks; avoid unrelated formatting churn during this review-only pass.            |
 
 These are readiness observations, not additional behavioral defects. Their cleanup does
 not replace addressing or explicitly deciding on F1-F5.

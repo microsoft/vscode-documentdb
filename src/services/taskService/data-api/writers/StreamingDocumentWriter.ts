@@ -4,11 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
-import {
-    type DataTransferStrings,
-    defaultDataTransferStrings,
-    noopDataTransferLogger,
-} from '../dataTransferHost';
+import { type DataTransferStrings, defaultDataTransferStrings, noopDataTransferLogger } from '../dataTransferHost';
 import {
     type AbortBatchResult,
     type BatchAttemptOutcome,
@@ -542,9 +538,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
             return;
         }
 
-        this.logger.trace(
-            `[StreamingWriter] Writing ${this.buffer.length} documents to target (may take a moment)...`,
-        );
+        this.logger.trace(`[StreamingWriter] Writing ${this.buffer.length} documents to target (may take a moment)...`);
 
         let pendingDocs = [...this.buffer];
         const allErrors: Array<{ documentId?: TDocumentId; error: Error }> = [];

@@ -10,8 +10,8 @@ import { ext } from '../../../../extensionVariables';
 import { createExtensionDataTransferOptions } from '../../extension/extensionDataTransferOptions';
 import { type TaskTelemetryContext } from '../../taskHost';
 import {
-    type AbortBatchResult,
     ConflictResolutionStrategy,
+    type AbortBatchResult,
     type DocumentDetails,
     type EnsureTargetExistsResult,
     type ErrorType,

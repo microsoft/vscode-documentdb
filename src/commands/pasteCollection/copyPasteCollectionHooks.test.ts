@@ -170,18 +170,25 @@ describe('createCollectMetadata', () => {
     it.each([
         { error: new Error('metadata unavailable'), message: 'metadata unavailable' },
         { error: 'metadata unavailable', message: 'Unknown error' },
-    ])('records metadata failures without preventing target metadata collection: $message', async ({ error, message }) => {
-        vi.mocked(ClustersClient.getClient)
-            .mockResolvedValueOnce({ getClusterMetadata: vi.fn().mockRejectedValue(error) } as unknown as ClustersClient)
-            .mockResolvedValueOnce({ getClusterMetadata: vi.fn().mockResolvedValue({}) } as unknown as ClustersClient);
-        const context = createContext();
+    ])(
+        'records metadata failures without preventing target metadata collection: $message',
+        async ({ error, message }) => {
+            vi.mocked(ClustersClient.getClient)
+                .mockResolvedValueOnce({
+                    getClusterMetadata: vi.fn().mockRejectedValue(error),
+                } as unknown as ClustersClient)
+                .mockResolvedValueOnce({
+                    getClusterMetadata: vi.fn().mockResolvedValue({}),
+                } as unknown as ClustersClient);
+            const context = createContext();
 
-        await expect(createCollectMetadata(config)(context)).resolves.toBeUndefined();
+            await expect(createCollectMetadata(config)(context)).resolves.toBeUndefined();
 
-        expect(context.telemetry.properties).toEqual({
-            source_metadata_error: message,
-            source_metadataCollectionSuccess: 'false',
-            target_metadataCollectionSuccess: 'true',
-        });
-    });
+            expect(context.telemetry.properties).toEqual({
+                source_metadata_error: message,
+                source_metadataCollectionSuccess: 'false',
+                target_metadataCollectionSuccess: 'true',
+            });
+        },
+    );
 });

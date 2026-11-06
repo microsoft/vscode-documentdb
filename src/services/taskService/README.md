@@ -335,14 +335,14 @@ The Data API provides the document streaming and writing infrastructure. See [`d
 
 ### Key Components
 
-| Component                   | Purpose                                     |
-| --------------------------- | ------------------------------------------- |
-| `DocumentReader`            | Streams documents from source (O(1) memory) |
-| `StreamingDocumentWriter`   | Abstract base class for streaming writes    |
-| `DocumentDbStreamingWriter` | MongoDB/DocumentDB implementation           |
-| `BatchSizeAdapter`          | Adaptive batching (fast/RU-limited modes)   |
+| Component                   | Purpose                                           |
+| --------------------------- | ------------------------------------------------- |
+| `DocumentReader`            | Streams documents from source (O(1) memory)       |
+| `StreamingDocumentWriter`   | Abstract base class for streaming writes          |
+| `DocumentDbStreamingWriter` | MongoDB/DocumentDB implementation                 |
+| `BatchSizeAdapter`          | Adaptive batching (fast/RU-limited modes)         |
 | `writeBatchWithRetry()`     | Inline exponential backoff for transient failures |
-| `WriteStats`                | Statistics aggregation                      |
+| `WriteStats`                | Statistics aggregation                            |
 
 ### Conflict Resolution Strategies
 

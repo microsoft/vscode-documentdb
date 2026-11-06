@@ -249,7 +249,7 @@ Add `getRetryAfterMs(error)` (default `undefined`) and `retryAfterMs` on the ret
 `max(backoff, retryAfterMs)`, abortable, with a trace line (decision 0011).
 
 > **Done (2026-11-05), commit `d0a1df09`:** the wait is `max(computeRetryDelay(...),
-> retryAfterMs)`, with no cap. Values that are not finite or are negative are ignored, and a
+retryAfterMs)`, with no cap. Values that are not finite or are negative are ignored, and a
 > trace line is written when the server value wins. The DocumentDB adapter is unchanged (reading
 > `RetryAfterMs` from 16500 errors stays a follow-up). The leader added an early return
 > when the signal is already aborted, plus a test. Before this, a Stop pressed during an
