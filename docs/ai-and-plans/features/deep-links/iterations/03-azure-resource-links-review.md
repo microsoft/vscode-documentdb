@@ -551,7 +551,12 @@ and subscription entries. After repair, `getSubscriptions(true)` must include th
 - **Stage 3 (2026-11-06):** fixes for F1, F2 and F4–F8 were implemented in one commit per finding,
   using the `/lead` workflow from #1060; F3 is won't fix. Case 1 checks after the last fix:
   `npm run build` passed; the focused run of the command above passed 8 files and 223 tests.
-  No `vscode.l10n.t` strings were added or removed. Case 2 has not run, and nothing was pushed.
+  No `vscode.l10n.t` strings were added or removed.
+- **Case 2 (2026-11-06), before marking ready for review:** `npm run l10n`, `prettier-fix`,
+  `l10n:check`, `build`, `typecheck:tests`, `npx vitest run` (330 files; 5,812 passed,
+  1 skipped) and `npm run package` passed. `npm run lint` first failed with 7 errors in test
+  mocks from an earlier commit (`59e30fa5`); after `3556c2b0`, `lint` and `build` passed. Prettier
+  output is in `1047af83`.
 
 ## Outcome
 
