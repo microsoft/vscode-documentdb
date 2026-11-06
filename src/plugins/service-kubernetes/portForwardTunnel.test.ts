@@ -655,6 +655,53 @@ describe('PortForwardTunnelManager', () => {
         }
     });
 
+    describe('TDD: concurrent tunnel starts keep the non-interactive port policy', () => {
+        it('rejects a non-interactive join when the interactive caller accepts an occupied port', async () => {
+            let promptInvoked!: () => void;
+            const promptInvokedPromise = new Promise<void>((resolve) => {
+                promptInvoked = resolve;
+            });
+            let resolvePrompt!: (value: string) => void;
+            mockShowWarningMessage.mockImplementationOnce(
+                () =>
+                    new Promise<string>((resolve) => {
+                        resolvePrompt = resolve;
+                        promptInvoked();
+                    }),
+            );
+
+            const blockingServer = net.createServer();
+            const port = await new Promise<number>((resolve) => {
+                blockingServer.listen(0, '127.0.0.1', () => {
+                    resolve((blockingServer.address() as net.AddressInfo).port);
+                });
+            });
+
+            try {
+                vi.useFakeTimers({ toFake: ['setTimeout'] });
+                const params = createMockParams({ localPort: port });
+                const interactiveStart = manager.startTunnel(params);
+                await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
+                await vi.advanceTimersByTimeAsync(750);
+                await promptInvokedPromise;
+
+                const nonInteractiveStart = manager.startTunnel(params, { interactive: false });
+                const results = Promise.all([
+                    expect(interactiveStart).resolves.toEqual({ outcome: 'externalAssumed' }),
+                    expect(nonInteractiveStart).rejects.toBeInstanceOf(LocalPortInUseError),
+                    expect(nonInteractiveStart).rejects.toMatchObject({ localPort: port, holder: 'otherProgram' }),
+                ]);
+                resolvePrompt('Use existing');
+
+                await results;
+                expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+            } finally {
+                vi.useRealTimers();
+                blockingServer.close();
+            }
+        });
+    });
+
     it('should not register tunnel when user accepts external port-forward', async () => {
         mockShowWarningMessage.mockResolvedValue('Use existing');
 

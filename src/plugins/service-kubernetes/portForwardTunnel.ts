@@ -228,6 +228,16 @@ export class PortForwardTunnelManager implements vscode.Disposable {
         const pendingStart = this._pendingStarts.get(key);
         if (pendingStart) {
             const result = await pendingStart;
+            if (options?.interactive === false && result.outcome === 'externalAssumed') {
+                throw new LocalPortInUseError(
+                    params.localPort,
+                    'otherProgram',
+                    vscode.l10n.t(
+                        'Port {0} is already in use. Choose a different local port.',
+                        String(params.localPort),
+                    ),
+                );
+            }
             return result.outcome === 'started' ? { outcome: 'reused' } : result;
         }
 
