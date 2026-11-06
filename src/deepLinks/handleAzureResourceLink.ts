@@ -167,6 +167,10 @@ export async function handleAzureResourceLinkRequest(
                 }
                 detail.push(
                     '',
+                    vscode.l10n.t(
+                        'These changes stay after the link opens. To undo them, use Filter Entries… or Hide Provider on the provider in the Discovery view.',
+                    ),
+                    '',
                     vscode.l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
                 );
 

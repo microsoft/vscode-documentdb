@@ -363,9 +363,21 @@ describe('handleAzureResourceLinkRequest', (): void => {
                     '• Tenant tenant-id will no longer be hidden by your tenant filter.',
                     '• Subscription My subscription will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
                     '',
+                    'These changes stay after the link opens. To undo them, use Filter Entries… or Hide Provider on the provider in the Discovery view.',
+                    '',
                     'Note: You can disable these URL handling confirmations in the extension settings.',
                 ].join('\n'),
             },
+            'Change filters and open',
+        );
+        expect(vscode.window.showInformationMessage).toHaveBeenNthCalledWith(
+            2,
+            'Change filters?',
+            expect.objectContaining({
+                detail: expect.stringContaining(
+                    'These changes stay after the link opens. To undo them, use Filter Entries… or Hide Provider on the provider in the Discovery view.',
+                ),
+            }),
             'Change filters and open',
         );
     });
