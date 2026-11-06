@@ -1932,3 +1932,119 @@ see; each observation can then be checked against its source and recorded with a
 priority. The ten open flags are recommendations for iteration 1, not implementation
 instructions. Before a chosen change is implemented, record the operator's reason, then
 verify that change independently.
+
+## Appendix F: message consistency proposal (2026-11-06)
+
+A read-only reviewer (Claude Opus 5.5) checked every user-facing message after UX-1 to UX-9 were
+implemented. It looked at style and at how much information each level carries. **This is a
+proposal; nothing in it is implemented or decided.**
+
+🧭 **Leader check of the “Must” item:** confirmed. When every timeout came from the connection's
+own setting, `retryWouldHelp` is false ([runner.ts](../../../../../packages/documentdb-js-connection-diagnostics/src/runner.ts#L448)),
+so the card shows no Retry buttons, yet the `check.timeout` Next step tells the user to choose them.
+The step's second sentence gives the right action, so this is a dead-end instruction like UX-9
+rather than a wrong diagnosis. I would rate it P2, not P1.
+
+### Proposal as returned
+
+#### F.1 Verdict
+
+**Mostly consistent. A full rewrite is not worth it, but about 15 targeted string changes are.** The card, Details and report all get their text from one function, `describeFinding`. Those three levels therefore can't contradict each other. The only exception is the report's technical wording for three DNS findings, which decision 0041 asks for. Most titles, explanations and Next steps already follow one clear house style, and the hedging is careful. The problems are a small set of outliers:
+
+- **One wrong answer (must fix):** for timeouts that came from the connection's own setting, the Next step tells the user to choose Retry buttons. The card doesn't show those buttons, and the report says they won't help.
+- **Two titles sound more certain than their explanations.**
+- **"this host" is ambiguous** in four places.
+- **Rerun wording is inconsistent.**
+- **The collapsed line and Details describe the same fact differently** in a few places.
+
+#### F.2 Style rules observed vs. broken
+
+| Rule | Followed | Counter-examples |
+|---|---|---|
+| Titles in sentence case, no period | all ~85 | none |
+| Title names what was observed (noun phrase, not an instruction) | ~83 | `cs.credentialsMissing` (method) “Choose an authentication method”; `cs.authSourceUnusual` “Check the authentication database” |
+| Title is no more certain than its explanation | all but 2 | `auth.entraAudienceMismatch` “Sign-in token targets another resource” and `auth.entraTenantMismatch` “Sign-in token belongs to another tenant”. Both explanations say “This is an unverified hint” |
+| Next step starts with an imperative, or “If …, <imperative>” | ~86 of ~90 | compressor “For {0}, remove it…”; `cs.credentialsMissing` (entraSession) and `target.sourceInaccessible` (azure/signInRequired) “Connection diagnosis doesn't open sign-in. …”; `firstPartyPreauthorization` “Only Microsoft can change this. …” |
+| Where the checks ran is “the host running these checks” (or the firewall sentence) | ~12 | “this host”, which can be read as the database host: `dns.privateEndpoint` “Make sure this host has access…”; `target.sourceInaccessible` (unreachable), `target.endpointMissing` (unreachable), `hello.advertisedMembersUnreachable` “…from this host” |
+| Rerun is “run the diagnosis again” (UX-7 glossary) | 1 (`access.signInRequired`) | 22× “then run the check again”; `target.inputCancelled` “Run the check again…”; `tcp.timeout` “then try again”. The 4× “then connect again” in `auth.*` are fine, because they mean the normal connect flow |
+| The panel says “your system's lookup” and never names a resolver (0041) | Details, `dns.resolversDisagree` | `dns.notFound` “The system DNS resolver could not find…”; `dns.temporaryFailure` “The system DNS resolver reported…” |
+| UI controls are named by their exact label, and only when they are shown | most | `access.signInRequired` “(Update Credentials…)” vs. 3× “Use Update Credentials to…”; `check.timeout` names Retry buttons that may be absent (see §4, Must) |
+| Hedging uses may / appears / can cause | all findings | Provider paragraphs C1 (missing, foreign) and C3 (tunnel not active) use “very likely” and a “We” voice |
+| No em dashes; “MongoDB API”, “MongoDB Atlas”; “username” | all | none |
+
+I left these alone on purpose, because the variation does no harm:
+
+- Titles range from 2 to 7 words.
+- The limiting second sentences use different verbs (“does not show / identify / establish / prove”).
+- Contractions are mixed (“can't” and “couldn't” in the strings decision 0041 wrote).
+- All ~12 token-failure branches share the title “Microsoft Entra ID sign-in failed”.
+
+#### F.3 Information per level
+
+| Level | Typical | Outliers | Why it matters |
+|---|---|---|---|
+| (a) Collapsed evidence line | 2–4 short fragments of 5 words or fewer; warning/error rows reuse the finding title | “The cluster rejected the username or password”: a full clause, and narrower than `auth.failed` (“credentials”, plus authSource advice). “Token obtained · The cluster rejected the token”. Setup row “Running on remote host WSL, not this computer” vs. Details “Database checks run in WSL, not on this computer”, and “Dev Container” vs. “the development container”. The imperative title “Choose an authentication method” appears inside the auth line | The same fact is worded two ways across levels. The credentials segment can be wrong when the real cause is authSource |
+| (b) Result card | Title, then a 1–2 sentence explanation, then a 1–2 sentence Next step | `check.timeout`: up to 4 sentences, and then the card adds both the retry note and the connection-timeout note, so it says the same thing twice. `prepare.localPortInUse`: 3 sentences. Card bullets and “Also detected:” show the title alone | When the title appears without its explanation, a suspicion can read as proven (the audience and tenant findings) |
+| (c) Details | The same text as the card, plus facts | none. The generic fallback (“This check did not succeed”) is fine | Identical by construction |
+| (d) Report | The same text, with technical versions of 3 DNS findings | The coverage text says Retry “does not change connection-configured timeouts”, which contradicts `check.timeout`'s Next step for connection-sourced timeouts | Cross-level contradiction |
+
+#### F.4 Proposal
+
+**Style guide**
+
+1. A title states what was observed. Use a noun phrase in sentence case, with no period. Never an instruction.
+2. A title can appear on its own (evidence line, card bullet, “Also detected”). If the explanation hedges, the title hedges too.
+3. In an explanation, sentence 1 states the observation. An optional sentence 2 says what it does not prove.
+4. A Next step starts with an imperative, or “If …, <imperative>”. Context that is not an action belongs in the explanation.
+5. Call the execution host “the host running these checks”. Never write “this host”.
+6. For rerunning, write “run the diagnosis again”. Use “connect again” only for the normal connection flow.
+7. Name buttons and commands by their exact label, without quotes or ellipsis, and only when they are available.
+8. For DNS, write “your system's lookup” and “a direct query to your DNS servers” (0041).
+9. Evidence segments are short fragments with no leading article, using the same nouns as Details.
+
+**Must**
+
+| Key | Current | Proposed |
+|---|---|---|
+| `check.timeout`, and the tcp/hello-specific path, when `data.source === 'connection'` | “Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled. If a connection timeout limited this step, change that connection setting first.” | “Increase the timeout configured on this connection, then run the diagnosis again.” Other sources: only the first sentence. Unknown source: unchanged. The firewall advice stays. This is a code branch with a test, not just a text change |
+
+**Should**
+
+| Key | Current | Proposed |
+|---|---|---|
+| `auth.entraAudienceMismatch` (title) | Sign-in token targets another resource | Sign-in token may target another resource |
+| `auth.entraTenantMismatch` (title) | Sign-in token belongs to another tenant | Sign-in token may belong to another tenant |
+| `cs.credentialsMissing` (method, title) | Choose an authentication method | No authentication method chosen |
+| `dns.privateEndpoint` (Next) | Make sure this host has access to the private network or VPN used by the endpoint. | Make sure the host running these checks can reach the private network or VPN used by the endpoint. |
+| 3× “…from this host” | …reached from this host. | …reached from the host running these checks. |
+| `dns.notFound` / `dns.temporaryFailure` | The system DNS resolver could not find this host name. / …reported a temporary lookup failure. | Your system's lookup could not find this host name. / Your system's lookup reported a temporary failure. |
+| entraSession | Expl.: “No Microsoft Entra ID sign-in is available without a prompt.” Next: “Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again.” | Expl.: “…without a prompt, and connection diagnosis does not open one.” Next: “Connect to the cluster once, then run the diagnosis again.” |
+| azure/signInRequired | Next: “Connection diagnosis doesn't open sign-in. Sign in to Azure in VS Code, then…” | Move the first sentence to the end of the explanation. Next: “Sign in to Azure in VS Code, then run the diagnosis again.” |
+| evidence `credentialsRejected` / `signedInNotAccepted` | The cluster rejected the username or password / Token obtained · The cluster rejected the token | Credentials rejected by the cluster / Token obtained · Token rejected by the cluster |
+| 23× rerun, plus `tcp.timeout` “then try again” | run the check again / try again | run the diagnosis again |
+| setup evidence; `env.remoteExtensionHost` (devContainer) | Running on remote host {WSL}, not this computer; “the development container” | Running in WSL / on the SSH host / in a dev container / in Codespaces, not on this computer; explanation says “a dev container” |
+
+**Could**
+
+| Key | Current | Proposed |
+|---|---|---|
+| compressor (Next) | For {0}, remove it from the compressors option, or put zlib first. | Remove {0} from the compressors option, or put zlib first. |
+| `access.signInRequired` | Choose an authentication method for this connection (Update Credentials…), then… | Use Update Credentials to choose an authentication method for this connection, then run the diagnosis again. |
+| `firstPartyPreauthorization` | Next begins “Only Microsoft can change this.” | Move that sentence into the explanation |
+| `tls.hostnameMismatch`, `tls.expired` | the administrator | your administrator |
+| `cs.authSourceUnusual` (title) | Check the authentication database | Uncommon authentication database (skip this if the instruction was chosen on purpose to soften the warning) |
+
+Provider paragraphs C1 and C3 (the “We” voice and “very likely”) are owned by the `*ErrorExplainer` layer and are shared with the tree's error dialogs. Review them there, not in this pass.
+
+#### F.5 Risks
+
+- **Decisions:**
+  - It agrees with 0041 (DNS vocabulary) and with 0038/0051 (“diagnosis” vocabulary). It does not touch the 0041 titles.
+  - 0033: the firewall sentence must stay byte-identical in `firewallAdvice` and in the card's `firewallSentence()`, because the card uses that exact text to avoid showing it twice.
+  - It revisits two recorded choices: the UX-3 location wording (`f6b41761`) and the UX-7 leader decision (90%) to keep “run the check again”.
+  - 0031 makes English wording non-contractual, so the risk to API consumers is low.
+- **Tests and pinned strings:**
+  - `findingMessages.test.ts`, `panelWording.test.ts`, `formatEvidence.test.ts`, `DiagnosticsResultCard.test.tsx`, `connectionDiagnosticsRouter.test.ts`, `acceptance.test.ts`, `reportText.test.ts`.
+  - `build/verification/browser/scenarios.ts`: lines 818, 1222 and 1489 (location), 1633 and 1641 (entraSession), 1997 (credentials rejected), and the DNS strings.
+  - `docs/user-manual/diagnose-connection.md`, lines 43 and 102, plus any quoted titles.
+- **l10n:** the repo has only `l10n/bundle.l10n.json`. Each change replaces a key, so run `npm run l10n` and `l10n:check`. “Choose an authentication method” is also used in `AtlasCredentialsView`, so that key stays.
