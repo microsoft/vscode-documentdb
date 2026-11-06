@@ -38,12 +38,12 @@ export class SrvDnsDiagnosticsProvider implements ConnectionDiagnosticsProvider 
             case 'EBADRESP':
             case 'EFORMERR':
                 return l10n.t(
-                    'The SRV record for this connection could not be resolved: the DNS reply could not be read. This often happens with home routers and some VPN or corporate DNS servers. Use a non-SRV `mongodb://` connection string, or a different DNS server. See {link} for troubleshooting.',
+                    'The SRV record for this connection could not be resolved: the DNS reply could not be read. This often happens with home routers and some VPN or corporate DNS servers. Use a non-SRV "mongodb://" connection string, or a different DNS server. See {link} for troubleshooting.',
                     { link: Links.SrvDnsTroubleshooting },
                 );
             case 'ECONNREFUSED':
                 return l10n.t(
-                    "The SRV record for this connection could not be resolved: the DNS server refused the query. Check your network's DNS settings, or use a non-SRV `mongodb://` connection string. See {link} for troubleshooting.",
+                    "The SRV record for this connection could not be resolved: the DNS server refused the query. Check your network's DNS settings, or use a non-SRV \"mongodb://\" connection string. See {link} for troubleshooting.",
                     { link: Links.SrvDnsTroubleshooting },
                 );
             default:
