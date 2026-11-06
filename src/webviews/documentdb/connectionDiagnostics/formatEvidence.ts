@@ -216,7 +216,7 @@ export function formatEvidenceSegment(segment: EvidenceSegment): string | undefi
         case 'clusterCloud':
             return l10n.t('Cluster in {0}', cloudText(segment.cloud));
         case 'signedInCloud':
-            return l10n.t('VS Code signed in to {0}', cloudText(segment.cloud));
+            return l10n.t('Sign-in set to {0}', cloudText(segment.cloud));
         case 'ping':
             return l10n.t('Ping {0}', formatDuration(segment.ms));
         case 'databasesVisible':

@@ -144,7 +144,7 @@ const authOutcomes: readonly AuthOutcome[] = [
             { kind: 'clusterCloud', cloud: 'AzureUSGovernment' },
             { kind: 'signedInCloud', cloud: 'AzureCloud' },
         ],
-        evidence: 'Microsoft Entra ID · Cluster in Azure US Government · VS Code signed in to Azure',
+        evidence: 'Microsoft Entra ID · Cluster in Azure US Government · Sign-in set to Azure',
         outcome: 'failed',
         fix: 'microsoft-sovereign-cloud.environment',
     },

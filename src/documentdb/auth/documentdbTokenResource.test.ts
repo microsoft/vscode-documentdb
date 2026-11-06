@@ -526,7 +526,7 @@ describe('resolveInteractiveTokenResource', () => {
         vi.mocked(deps.getConfiguredCloud).mockReturnValue({ name, isCustomCloud: false });
         await expect(resolveInteractiveTokenResource(`mongodb://cluster.${suffix}/`, deps)).rejects.toMatchObject({
             kind: 'cloudMismatch',
-            message: expect.stringContaining('microsoft-sovereign-cloud.environment'),
+            message: `This cluster is in ${hostDisplay}, but VS Code sign-in is set to ${audienceDisplay}. Change the "microsoft-sovereign-cloud.environment" setting to the cloud of the cluster, then connect again.`,
             details: expect.objectContaining({
                 hostCloud:
                     suffix === 'azure.us'

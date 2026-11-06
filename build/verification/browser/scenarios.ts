@@ -1670,7 +1670,7 @@ const diagnosticsScenarios = {
                 'Set microsoft-sovereign-cloud.environment to the cluster cloud, then connect again.',
             ),
         ),
-        ['Microsoft Entra ID · Cluster in Azure US Government · VS Code signed in to Azure'],
+        ['Microsoft Entra ID · Cluster in Azure US Government · Sign-in set to Azure'],
         [
             'Connection failed at Authentication',
             'The Azure cloud selected for sign-in does not match the cluster cloud.',

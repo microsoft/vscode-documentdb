@@ -31,7 +31,7 @@ describe('authentication and database evidence formatting', (): void => {
         [{ kind: 'signedInNotAccepted' }, 'Token obtained · The cluster rejected the token'],
         [{ kind: 'credentialsRejected' }, 'The cluster rejected the user name or password'],
         [{ kind: 'clusterCloud', cloud: 'AzureUSGovernment' }, 'Cluster in Azure US Government'],
-        [{ kind: 'signedInCloud', cloud: 'AzureCloud' }, 'VS Code signed in to Azure'],
+        [{ kind: 'signedInCloud', cloud: 'AzureCloud' }, 'Sign-in set to Azure'],
         [{ kind: 'ping', ms: 12 }, 'Ping 12 ms'],
         [{ kind: 'databasesVisible', count: 5 }, '5 databases visible'],
         [{ kind: 'databasesVisible', count: 1 }, '1 database visible'],
@@ -49,7 +49,7 @@ describe('authentication and database evidence formatting', (): void => {
                 { kind: 'clusterCloud', cloud: 'AzureUSGovernment' },
                 { kind: 'signedInCloud', cloud: 'AzureCloud' },
             ]),
-        ).toBe('Microsoft Entra ID · Cluster in Azure US Government · VS Code signed in to Azure');
+        ).toBe('Microsoft Entra ID · Cluster in Azure US Government · Sign-in set to Azure');
         expect(
             formatEvidence([
                 { kind: 'ping', ms: 12 },
