@@ -6,7 +6,7 @@ prs: [1066]
 created: 2026-11-06
 ---
 
-# Connection Diagnostics — UX Review Pack
+# Connection Diagnostics: UX Review Pack
 
 > **Who this is for:** the operator reviewing what end users of the DocumentDB extension for
 > Visual Studio Code will see in connection diagnosis, including failures that are difficult
@@ -29,8 +29,8 @@ created: 2026-11-06
 - **Scope:** entry points, progress, all summary-card branches and optional messages,
   warning combinations, expanded Details, sovereign/custom clouds, SRV failures, report
   sharing, and language consistency. No production changes or decisions are made here.
-- **Start here:** [presentation deck](#appendix-a--presentation-deck-and-current-flow).
-  Then use the [complete copy catalogue](#appendix-b--complete-finding-copy-catalogue)
+- **Start here:** [presentation deck](#appendix-a-presentation-deck-and-current-flow).
+  Then use the [complete copy catalogue](#appendix-b-complete-finding-copy-catalogue)
   to compare alternatives without needing a live cloud or broken DNS.
 
 ## How this review was run
@@ -57,7 +57,7 @@ restarted or replaced. Browser scenario links below are launch instructions for 
 
 **Verification:** catalogue coverage and local Markdown links are checked mechanically.
 Focused existing message/projection/card tests are run as a cross-check; results are recorded
-in the [evaluation pass](#appendix-e--evaluation-pass-and-hands-on-handoff).
+in the [evaluation pass](#appendix-e-evaluation-pass-and-hands-on-handoff).
 This is UX preparation, not a request to mark the PR ready for review: **Case 1**, not
 Case 2. No full handover suite or ready-state change is implied.
 
@@ -67,7 +67,7 @@ Case 2. No full handover suite or ready-state change is implied.
 
 | Priority | Meaning |
 | --- | --- |
-| **P0** | Blocking — the user gets stuck |
+| **P0** | Blocking: the user gets stuck |
 | **P1** | Broken / misleading, or a consistency & safety gap |
 | **P2** | Polish, expectation, or a smaller feature gap |
 | **P3** | Nice-to-have / cosmetic / acknowledged |
@@ -188,11 +188,11 @@ scope, repetition and recovery discoverability.
 | UX-9 | **P2** | **P3** · confirmed; defensive fallback path only | Live generic Details can direct users to unavailable Show report | 🟠 Open |
 | UX-10 | **P2** | **Close** · false alarm: host shows a notification | Copy report has no visible success confirmation | 🟠 Open |
 
-## P0 — Blocking (the user gets stuck)
+## P0: Blocking (the user gets stuck)
 
 None established by this preparation. This is not a claim that all real journeys have passed.
 
-## P1 — Broken / misleading, or consistency & safety
+## P1: Broken / misleading, or consistency & safety
 
 ### UX-1. Configured cloud is not signed-in cloud ⚠️
 
@@ -209,7 +209,7 @@ obtaining an account. [Projection](../../../../../src/connectionDiagnostics/pane
 💡 **Suggestion:** “VS Code configured for Azure,” paired with “Cluster in Azure US
 Government.” Preserve the actual sign-in state as unknown.
 
-> 🧭 **Verification — confirmed · keep P1**
+> 🧭 **Verification: confirmed · keep P1**
 >
 > The `signedInCloud` segment is filled from the finding's `configuredCloud`
 > ([panelRows.ts](../../../../../src/connectionDiagnostics/panelRows.ts#L510)) and rendered as
@@ -258,7 +258,7 @@ together. [Finding text](../../../../../src/connectionDiagnostics/findingMessage
 override, VM cloud and cluster cloud for managed identity. Do not prescribe an interactive
 setting that cannot change the failing token request.
 
-> 🧭 **Verification — confirmed · keep P1 (rare, but wrong next action)**
+> 🧭 **Verification: confirmed · keep P1 (rare, but wrong next action)**
 >
 > `entraTokenFailedFinding` stores only `ruleId` and `aadstsCode`
 > ([authenticate.ts](../../../../../src/connectionDiagnostics/checks/authenticate.ts#L824)), so
@@ -307,7 +307,7 @@ clock …”. On SSH this can direct attention to the laptop instead of the remo
 💡 **Suggestion:** “Host points to the host running these checks” and “The clock on the
 host running these checks …”; keep “this computer” only when the execution location is local.
 
-> 🧭 **Verification — confirmed, narrower than stated · P1 → P2**
+> 🧭 **Verification: confirmed, narrower than stated · P1 → P2**
 >
 > `package.json` has no `extensionKind`. The extension runs as a workspace extension, so on SSH,
 > WSL, containers and Codespaces the checks run remotely. The wrong viewpoint is limited to
@@ -333,7 +333,7 @@ host running these checks …”; keep “this computer” only when the executi
 | **Review: location-aware (“this computer” locally, “host running these checks” remotely)** | Friendliest wording in the common local case | Needs the remote kind passed to `findingMessages` *and* the webview formatter, plus two strings per message. Every renderer, including the report, must receive that context, or it shows the wrong variant |
 | **Mine: location-neutral wording** | Correct everywhere (panel, report, local, remote); no new code path; fewer strings | Slightly less personal locally; “localhost” is mild jargon (it is already the user's own word in most of these connection strings) |
 
-## P2 — Polish, expectation, or feature gap
+## P2: Polish, expectation, or feature gap
 
 ### UX-4. Warning count means rows, not findings ⚠️
 
@@ -348,7 +348,7 @@ inside Connection settings can produce “with 1 warning.”
 💡 **Suggestion:** “with warnings in 1 check” / “with warnings in 2 checks,” or keep
 the current title but make the unit explicit. Details must still contain every finding.
 
-> 🧭 **Verification — confirmed, low impact · P2 → P3**
+> 🧭 **Verification: confirmed, low impact · P2 → P3**
 >
 > `cardIssues` returns one entry per warning/error row
 > ([DiagnosticsResultCard.tsx](../../../../../src/webviews/documentdb/connectionDiagnostics/DiagnosticsResultCard.tsx#L37)),
@@ -382,7 +382,7 @@ SRV workaround). This is broader than “all checks that ran.”
 💡 **Suggestion:** “The connection succeeded. No blocking issues were found.” Alternatively
 “All applicable checks passed,” without implying an audit of every configuration or permission.
 
-> 🧭 **Verification — partly confirmed · P2 → P3**
+> 🧭 **Verification: partly confirmed · P2 → P3**
 >
 > **Skipped rows: confirmed.** In the `ip-address-tls-off` fixture, DNS and TLS are `skipped`
 > and the card still says “All checks passed”
@@ -422,7 +422,7 @@ in the safe resolution facts.
 clear pointer to the full report. Do not promise to show an exact token audience URL when
 the retained fact is only a cloud category. Options: [O1](#o1-how-much-cloud-configuration-belongs-in-details).
 
-> 🧭 **Verification — confirmed · keep P2; the review looks at the wrong scenario**
+> 🧭 **Verification: confirmed · keep P2; the review looks at the wrong scenario**
 >
 > The gap matters most for a **token failure**, not for a success. With `auth.entraTokenFailed`,
 > the evidence line returns “Microsoft Entra ID · Sign-in failed” *before* the cloud segment is
@@ -460,7 +460,7 @@ the actual default-profile button, and reserve “Connect …” for the normal 
 Keep the exact command “Update Credentials…” when naming it. Prefer one spelling of
 “user name.” Do not replace technical option names or protocol names.
 
-> 🧭 **Verification — confirmed · P2 → P3 (polish), with one choice made concrete**
+> 🧭 **Verification: confirmed · P2 → P3 (polish), with one choice made concrete**
 >
 > The strings exist as quoted: “Try Retry with longer timeouts …”
 > ([findingMessages.ts](../../../../../src/connectionDiagnostics/findingMessages.ts#L380)) and
@@ -501,7 +501,7 @@ network advice is not. Some provider text says “very likely” where the main 
 and review each pair together. Preserve uncertainty; do not make a suspected firewall,
 private-access setting or cloud mismatch sound proven.
 
-> 🧭 **Verification — partly confirmed · P2 for two concrete pairs, the rest P3**
+> 🧭 **Verification: partly confirmed · P2 for two concrete pairs, the rest P3**
 >
 > The card adds `providerHint` as plain text after the headline
 > ([DiagnosticsResultCard.tsx](../../../../../src/webviews/documentdb/connectionDiagnostics/DiagnosticsResultCard.tsx#L202),
@@ -553,7 +553,7 @@ cancelled/unexpected-failure runs do not expose it either.
 💡 **Suggestion:** qualify availability (“When the diagnosis finishes, choose Show report …”)
 and consider a different fallback for a run that never produces an exportable report.
 
-> 🧭 **Verification — confirmed text, rare path · P2 → P3**
+> 🧭 **Verification: confirmed text, rare path · P2 → P3**
 >
 > `fallbackFinding` is used only when a row is warning/error but has **no finding of that
 > severity** ([panelDetails.ts](../../../../../src/connectionDiagnostics/panelDetails.ts#L176)).
@@ -585,7 +585,7 @@ state. The operator cannot visually distinguish a successful copy from a quiet n
 💡 **Suggestion:** a brief inline “Report copied” acknowledgement, reusing the existing
 localized phrase and leaving keyboard focus in place. Keep cancelling Save/consent quiet.
 
-> 🧭 **Verification — false alarm · close (🚫)**
+> 🧭 **Verification: false alarm · close (🚫)**
 >
 > The review traced only the webview. After writing to the clipboard, the host's `copyReport`
 > procedure shows a VS Code notification: “The report was copied to the clipboard.”
@@ -604,7 +604,7 @@ localized phrase and leaving keyboard focus in place. Keep cancelling Save/conse
 | **Review: inline “Report copied” in the webview** | Confirmation next to the button | Adds a third confirmation; does not match every other copy action in the extension |
 | **Mine: close; optionally drop the webview announcer after a screen-reader check** | Matches existing extension behavior; no new UI | The notification appears away from the button (bottom right), as it does for every other copy action |
 
-## P3 — Nice-to-have / cosmetic / acknowledged
+## P3: Nice-to-have / cosmetic / acknowledged
 
 No separate P3 items seeded. Theme, spacing and narrow-width checks remain on the live checklist.
 
@@ -631,7 +631,7 @@ confirmed for two concrete pairs (Entra ID `resourceNotInTenant`, SRV workaround
 its C1 note is overstated. These are recommendations only. Priorities and fixes still need the
 operator's triage.
 
-## Open ideas — options, pros & cons
+## Open ideas: options, pros & cons
 
 ### O1. How much cloud configuration belongs in Details?
 
@@ -646,7 +646,7 @@ Related: **UX-6**. The report already holds the safe technical evidence.
 💡 **Suggested:** B with a small, deliberately selected fact set; otherwise A.
 This is not an approved design change. Capture the operator's choice and reason before implementation.
 
-## Appendix A — presentation deck and current flow
+## Appendix A: presentation deck and current flow
 
 ### A0. How to use this deck
 
@@ -689,7 +689,7 @@ of every finding. All findings remain available through Details and the report.
 Expanded healthy rows can show the facts in A12. The card deliberately does not repeat server
 versions, ping or answering host. There is no support footer on a successful card.
 
-**Inline evaluation — UX-5:** “All checks passed” does not distinguish an intentionally
+**Inline evaluation (UX-5):** “All checks passed” does not distinguish an intentionally
 skipped TLS/DNS check from one that ran, and does not promise that there are no informational
 findings. Prefer an all-clear scoped to the real connection, not to an exhaustive audit.
 
@@ -774,15 +774,15 @@ unexpected-error cards take separate paths and do not have that support footer.
 
 **Possible row evidence (alternatives):**
 
-> Diagnosis setup — Running on this computer · Linux · x64
+> Diagnosis setup: Running on this computer · Linux · x64
 >
 > **OR** Running on remote host SSH, not this computer · Linux · x64
 >
 > **OR** Running on remote host WSL / Dev Container / Codespaces, not this computer
 >
-> Server address (DNS) — Not needed: the host is an IP address
+> Server address (DNS): Not needed: the host is an IP address
 >
-> Secure connection (TLS) — Not used: TLS is off for this connection
+> Secure connection (TLS): Not used: TLS is off for this connection
 
 The slash-separated remote names above are **OR** alternatives, not a literal slash-delimited
 UI label. Unknown remote types use “Running on a remote host, not this computer.”
@@ -793,7 +793,7 @@ host; DNS workaround used for the server list; Private/Public address for this A
 name; Host points to this computer; Clock difference detected; No databases visible;
 Read role reported; Port-forward tunnel stays open. See Appendix B for exact bodies/Next.
 
-**Inline evaluation — UX-3 / UX-5:** location-aware setup wording is good. Loopback and clock
+**Inline evaluation (UX-3 / UX-5):** location-aware setup wording is good. Loopback and clock
 copy must not switch back to the laptop's viewpoint. An informational clock problem can
 recommend action without changing “All checks passed”; inspect that combination deliberately.
 Proxy detection is informational too: it does not prove that the configured proxy carries
@@ -833,7 +833,7 @@ Because it is Information, it does not create a summary warning.
 a value, so nothing was tested.” / **Next:** “Run the check again and enter the port the server
 listens on.” This is different from cancelling the entire run.
 
-### A6. SRV / DNS / TCP / TLS / hello — hard-to-reproduce alternatives
+### A6. SRV / DNS / TCP / TLS / hello: hard-to-reproduce alternatives
 
 | Layer and OR scenarios | What the collapsed row/card can name | What expanded Details additionally shows | Inline evaluation |
 | --- | --- | --- | --- |
@@ -904,7 +904,7 @@ the token request happens from the remote/Azure VM host, not an interactive lapt
 
 **Cloud mismatch, before token acquisition:**
 
-> Authentication — Microsoft Entra ID · Cluster in Azure US Government · VS Code signed in to Azure
+> Authentication: Microsoft Entra ID · Cluster in Azure US Government · VS Code signed in to Azure
 >
 > **Connection failed at Authentication**
 >
@@ -918,7 +918,7 @@ Expanded: **Error: Azure cloud mismatch**, same explanation/Next; Method and Mec
 when known; **Prepare Microsoft Entra ID sign-in failed**. Later recorded stages can say
 **not run**. Do not show “Get a token … done” for this example.
 
-**Inline evaluation — UX-1:** “VS Code signed in to Azure” is the source-confirmed misleading
+**Inline evaluation (UX-1):** “VS Code signed in to Azure” is the source-confirmed misleading
 line; the known fact is configuration, not a successful sign-in.
 
 **Mixed domains warning (independent of the eventual authentication outcome):**
@@ -945,7 +945,7 @@ This warning lives in **Server address (DNS)** for Entra ID/managed identity, is
 (no single culprit host appended), and never stops the checks. Custom trusted suffixes can
 avoid the outside-domain warning; a suffix does not select a token audience.
 
-**Inline evaluation — UX-7:** “Azure (public cloud)” here versus “Azure” in row evidence is
+**Inline evaluation (UX-7):** “Azure (public cloud)” here versus “Azure” in row evidence is
 a small naming inconsistency. “One connection can't use more than one cloud” is definitive
 configuration guidance; the warning itself must not be presented as a proven failed sign-in.
 
@@ -967,7 +967,7 @@ names are adjacent in B7; no government cloud is needed to read them.
 | Exact custom resource URL, token or full token claims? | No | No raw token; safe summarized claims and categories only, not a reconstruction of omitted secrets/custom URLs |
 | Which host-trust/custom/metadata path was used? | Not in Details | Allowlisted flags such as `allHostsAllowed`, `customHostnameSuffixSet`, `customHostnameSuffixSource`, `armMetadata`, `imdsAzEnvironment`, when recorded |
 
-**Inline evaluation — UX-6:** do not promise cloud/resource details inside the expansion
+**Inline evaluation (UX-6):** do not promise cloud/resource details inside the expansion
 when the operator must actually choose Show report. The README already calls this an open
 operator question. The catalogue distinguishes panel text from report-only text.
 
@@ -998,7 +998,7 @@ operator question. The catalogue distinguishes panel text from report-only text.
 > **Next:** Check microsoft-sovereign-cloud.environment. If it matches the cluster, ask your
 > tenant administrator to check resource availability.
 
-**Inline evaluation — UX-2:** that Next step is appropriate for the interactive selector,
+**Inline evaluation (UX-2):** that Next step is appropriate for the interactive selector,
 not for managed identity. The managed-identity provider paragraph in C4 can append a different
 instruction to inspect `documentDB.customEnvironment.ossrdbmsEndpoint` and VM/cluster cloud.
 Read them as a pair: this is not just stylistic duplication.
@@ -1029,7 +1029,7 @@ Network-operation generic timeouts additionally get the firewall/VPN sentence. A
 connection-limited TCP/hello timeout can retain the specific explanation but use the generic
 Next step, to mention the connection setting.
 
-**Inline evaluation — UX-7:** use “Choose Retry with longer timeouts …” instead of
+**Inline evaluation (UX-7):** use “Choose Retry with longer timeouts …” instead of
 “Try Retry …”; keep the literal button names. “Re-run” means the default profile, not a
 promise to reuse longer/no-timeout settings.
 
@@ -1049,7 +1049,7 @@ promise to reuse longer/no-timeout settings.
 >
 > **Next:** Choose Show report for the technical details of this check.
 
-**Inline evaluation — UX-9:** a settled row is expandable before the run finishes, but
+**Inline evaluation (UX-9):** a settled row is expandable before the run finishes, but
 Show report is not yet a button. It never becomes available after Cancel/unexpected failure.
 Qualify that recommendation rather than making it look like a missing control.
 
@@ -1125,12 +1125,12 @@ does not invent a finite list of arbitrary filesystem/clipboard errors.
 🧭 *Incorrect: the host also shows the VS Code notification “The report was copied to the clipboard.”
 ([connectionDiagnosticsRouter.ts](../../../../../src/webviews/documentdb/connectionDiagnostics/connectionDiagnosticsRouter.ts#L541)).*
 
-**Inline evaluation — UX-7 / UX-10:** “diagnostic page” could simply be “diagnosis”; copying
+**Inline evaluation (UX-7 / UX-10):** “diagnostic page” could simply be “diagnosis”; copying
 needs a visible acknowledgement as well as an accessible one. The consent/report failure
 surfaces are otherwise appropriately different from a connection error modal.
 🧭 *The UX-7 part stands. The UX-10 part is already met by the notification.*
 
-### A12. Expanded fact layouts — all eight rows
+### A12. Expanded fact layouts: all eight rows
 
 These are actual field labels. A layout lists **possible** facts, not a promise that every
 failed run obtains all of them. Findings always precede these facts.
@@ -1191,11 +1191,11 @@ finding is the headline and is not listed again. If other rows have issues, it a
 They can live under a clean success card. Their complete instructions in B8 avoid promising
 that a write was attempted or that permissions were exhaustively audited.
 
-**Inline evaluation — UX-4 / UX-5:** keep the difference between usability, authentication,
+**Inline evaluation (UX-4 / UX-5):** keep the difference between usability, authentication,
 and informational access results; do not convert every empty list into a failed connection.
 The all-clear should not obscure the actionable “No databases visible” explanation.
 
-## Appendix B — complete finding-copy catalogue
+## Appendix B: complete finding-copy catalogue
 
 **Coverage:** 69 stable finding keys; all are included below. Input-dependent
 branches are grouped with **OR**. Data-unavailable variants document the message mapper’s
@@ -1207,7 +1207,7 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 
 ### B1. Diagnosis setup and cross-cutting timeouts
 
-#### `check.timeout` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L377)
+#### `check.timeout`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L377)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1218,19 +1218,19 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | Greeting probe deadline | **No server response**<br>No handshake reply arrived before the reply deadline. This alone does not show that the server is unreachable.<br>**Next:** Confirm that the endpoint accepts MongoDB API connections and try a longer timeout. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | **UX-7:** “Try Retry …” is awkward. Keep diagnostic limits separate from connection-configured limits. |
 | Greeting connection-configured deadline | **No server response**<br>No handshake reply arrived before the reply deadline. This alone does not show that the server is unreachable.<br>**Next:** Try Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled. If a connection timeout limited this step, change that connection setting first. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | **UX-7:** “Try Retry …” is awkward. Keep diagnostic limits separate from connection-configured limits. |
 
-#### `env.proxyConfigured` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L399)
+#### `env.proxyConfigured`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L399)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Proxy settings detected**<br>Proxy environment variables are set. They and the VS Code proxy setting do not automatically apply to database traffic.<br>**Next:** Check how database traffic should reach this cluster from the host running these checks. | Information only. This does not claim that a proxy carries database traffic; can coexist with clean success (**UX-5**). |
 
-#### `env.caresRejectsCompressedSrv` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L410)
+#### `env.caresRejectsCompressedSrv`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L410)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Known DNS issue in this VS Code version**<br>Some DNS servers send server list (SRV) replies that this VS Code version can't read. The extension works around this automatically. | Information about a runtime limitation, not proof this run failed. No corrective action is required while fallback works. |
 
-#### `env.remoteExtensionHost` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L812)
+#### `env.remoteExtensionHost`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L812)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1243,25 +1243,25 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 
 ### B2. Connection settings, source lookup and preparation
 
-#### `cs.unparseable` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L416)
+#### `cs.unparseable`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L416)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Connection string not recognized**<br>The connection string could not be read as a valid MongoDB API connection string.<br>**Next:** Check the connection string scheme, host names, ports and option syntax. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `cs.srvWithPort` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L421)
+#### `cs.srvWithPort`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L421)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Port not allowed with SRV**<br>The SRV connection string includes an explicit port.<br>**Next:** Remove the port. SRV records supply the server ports. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `cs.srvMultipleHosts` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L426)
+#### `cs.srvMultipleHosts`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L426)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **SRV requires one host**<br>The SRV connection string lists more than one seed host.<br>**Next:** Use the single SRV host name supplied for the cluster. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `cs.unknownOption` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L431)
+#### `cs.unknownOption`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L431)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1269,7 +1269,7 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | Option known, no suggested correction | **Unsupported connection option**<br>The driver does not recognize the connection option unknownOption.<br>**Next:** Remove the unsupported option or correct its spelling. | Clear corrective action. A suggested option is a possibility, not an automatic correction. |
 | Data unavailable / generic alternative | **Unsupported connection option**<br>The connection string contains an option the driver does not recognize.<br>**Next:** Remove the unsupported option or correct its spelling. | Clear corrective action. A suggested option is a possibility, not an automatic correction. |
 
-#### `cs.optionIgnoredByDriver` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L446)
+#### `cs.optionIgnoredByDriver`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L446)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1277,25 +1277,25 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | Option known, no replacement supplied | **Deprecated connection option**<br>The connection option legacyOption is deprecated. This does not establish that the driver ignores it.<br>**Next:** Review the driver documentation and remove or replace the deprecated option. | The internal code name is stronger than the UI: the UI correctly does not assert that a deprecated option is ignored. |
 | Data unavailable / generic alternative | **Deprecated connection option**<br>The connection string uses a deprecated driver option. This does not establish that the driver ignores it.<br>**Next:** Review the driver documentation and remove or replace the deprecated option. | The internal code name is stronger than the UI: the UI correctly does not assert that a deprecated option is ignored. |
 
-#### `cs.conflictingTlsOptions` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L466)
+#### `cs.conflictingTlsOptions`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L466)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Conflicting secure connection settings**<br>The ssl and tls options disagree.<br>**Next:** Keep one tls option with the value required by your cluster. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `cs.tlsVerificationDisabled` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L471)
+#### `cs.tlsVerificationDisabled`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L471)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Certificate checks weakened**<br>Connection options disable certificate or host name verification.<br>**Next:** Restore certificate verification and configure a trusted CA and matching server host name. | Actionable warning, not a failed connection. Can coexist with TLS certificate findings (**UX-4**). |
 
-#### `cs.directConnectionWithMultipleHosts` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L478)
+#### `cs.directConnectionWithMultipleHosts`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L478)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Direct connection has multiple hosts**<br>A direct connection is requested with more than one seed host.<br>**Next:** Use a single host for a direct connection, or remove directConnection to allow discovery. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `cs.unencodedReservedCharacter` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L485)
+#### `cs.unencodedReservedCharacter`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L485)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1303,21 +1303,21 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | password | **Credential character needs encoding**<br>The password contains a reserved character that is not percent-encoded.<br>**Next:** Percent-encode reserved characters in connection-string credentials. | “Percent-encode” is technical but precise. Never show the actual password. |
 | Data unavailable / generic alternative | **Credential character needs encoding**<br>A credential contains a reserved character that is not percent-encoded.<br>**Next:** Percent-encode reserved characters in connection-string credentials. | “Percent-encode” is technical but precise. Never show the actual password. |
 
-#### `cs.authSourceUnusual` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L498)
+#### `cs.authSourceUnusual`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L498)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Authentication database known | **Check the authentication database**<br>The authentication database is applicationdb, rather than admin or $external. This may be intentional.<br>**Next:** Confirm that authSource names the database where this user is defined. | Good “may be intentional” caveat. Do not frame non-admin authentication databases as invalid. |
 | Data unavailable / generic alternative | **Check the authentication database**<br>The authentication database is neither admin nor $external. This may be intentional.<br>**Next:** Confirm that authSource names the database where this user is defined. | Good “may be intentional” caveat. Do not frame non-admin authentication databases as invalid. |
 
-#### `cs.compressorUnavailable` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L514)
+#### `cs.compressorUnavailable`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L514)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Compressor known | **Compressor unavailable**<br>The connection requests snappy, but the extension cannot use it.<br>**Next:** For snappy, remove it from the compressors option, or put zlib first. | Warning about requested configuration; distinguish from the negotiated compressor failing after sign-in. |
 | Data unavailable / generic alternative | **Compressor unavailable**<br>A requested compressor is not available in the extension.<br>**Next:** Remove the unavailable compressor from the compressors option, or put zlib first. | Warning about requested configuration; distinguish from the negotiated compressor failing after sign-in. |
 
-#### `target.notFound` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L837)
+#### `target.notFound`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L837)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1325,13 +1325,13 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | kubernetes | **Kubernetes service not found**<br>The Kubernetes API reports that this service no longer exists.<br>**Next:** Refresh the Kubernetes view, then run the check again from the service. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 | other OR Data unavailable / generic alternative | **Connection not found**<br>This connection no longer exists. It may have been removed.<br>**Next:** Refresh the view, then run the check again from the connection. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `target.inputCancelled` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L838)
+#### `target.inputCancelled`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L838)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Port not provided**<br>The port prompt was closed without a value, so nothing was tested.<br>**Next:** Run the check again and enter the port the server listens on. | Not tested, not a failed connection. Distinguish closing the port prompt from cancelling the diagnosis. |
 
-#### `target.sourceInaccessible` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L843)
+#### `target.sourceInaccessible`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L843)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1346,7 +1346,7 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | Other Atlas lookup failure | **Atlas details unavailable**<br>The connection details could not be read from MongoDB Atlas.<br>**Next:** Refresh the MongoDB Atlas view, then run the check again. | Good source-specific recovery. Azure sign-in for reading metadata is not database sign-in. |
 | Data unavailable / generic alternative | **Connection details unavailable**<br>The connection details could not be read.<br>**Next:** Review the error name in the diagnostic report, then run the check again. | Good source-specific recovery. Azure sign-in for reading metadata is not database sign-in. |
 
-#### `target.endpointMissing` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L844)
+#### `target.endpointMissing`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L844)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1356,7 +1356,7 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | Atlas did not return a string | **Connection string unavailable**<br>MongoDB Atlas did not return a connection string for this cluster.<br>**Next:** Check that the resource is fully provisioned and that its connection details are complete, then run the check again. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 | Data unavailable / generic alternative | **Connection string unavailable**<br>This connection has no connection string.<br>**Next:** Check that the resource is fully provisioned and that its connection details are complete, then run the check again. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `cs.credentialsMissing` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L845)
+#### `cs.credentialsMissing`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L845)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1364,7 +1364,7 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | password | **Stored password unavailable**<br>No stored password is available. Network checks can still run.<br>**Next:** Connect to the cluster and enter the password, then run the check again. | Information in Connection settings; the Authentication skip controls “Connection not tested.” Do not count as a summary warning. |
 | Data unavailable / generic alternative | **Authentication input unavailable**<br>Required authentication input is unavailable without a prompt.<br>**Next:** Connect to the cluster once, then run the check again. | Information in Connection settings; the Authentication skip controls “Connection not tested.” Do not count as a summary warning. |
 
-#### `prepare.localPortInUse` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L846)
+#### `prepare.localPortInUse`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L846)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1373,7 +1373,7 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | Another tunnel, port not retained | **Local port in use**<br>The local port for the port-forward tunnel is used by another Kubernetes tunnel.<br>**Next:** Free the port, then run the check again. For a service in the Discovery view, setting documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy to autoSelect picks a free port. Connection diagnosis never uses a port another program holds. | **UX-7:** long setting path is useful evidence but makes the Next step dense. Short instruction first. |
 | Data unavailable / generic alternative | **Local port in use**<br>The local port for the port-forward tunnel is used by another program.<br>**Next:** Free the port, then run the check again. For a service in the Discovery view, setting documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy to autoSelect picks a free port. Connection diagnosis never uses a port another program holds. | **UX-7:** long setting path is useful evidence but makes the Next step dense. Short instruction first. |
 
-#### `prepare.sharedTunnel` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L868)
+#### `prepare.sharedTunnel`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L868)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1383,13 +1383,13 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 
 ### B3. Server address (SRV and DNS)
 
-#### `srv.notFound` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L515)
+#### `srv.notFound`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L515)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Server addresses not found**<br>DNS returned no usable SRV server addresses for this connection.<br>**Next:** Check the SRV host name and the DNS configuration on this network, including VPN access. | No usable addresses is an observation, not proof that the domain does not exist. |
 
-#### `srv.compressedReplyRejected` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L522)
+#### `srv.compressedReplyRejected`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L522)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1397,56 +1397,56 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | Workaround disabled: Error | **Server list could not be read**<br>This VS Code version couldn't read your DNS server's reply for the server list (SRV record), and the extension's workaround is turned off.<br>**Next:** Remove the DOCUMENTDB_DISABLE_SRV_FALLBACK environment variable, restart VS Code, then run the check again. | Successful fallback is Information. Disabled/failed fallback is Error. Compare the extra SRV provider text (**UX-8**). |
 | Workaround also failed: Error OR Data unavailable / generic alternative | **Server list could not be read**<br>This VS Code version couldn't read your DNS server's reply for the server list (SRV record), and the extension's workaround could not read it either.<br>**Next:** Check that the computer or remote host running these checks can reach its DNS servers, including over VPN, then run the check again. | Successful fallback is Information. Disabled/failed fallback is Error. Compare the extra SRV provider text (**UX-8**). |
 
-#### `srv.txtUnsupportedOption` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L553)
+#### `srv.txtUnsupportedOption`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L553)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **DNS connection options invalid**<br>The DNS TXT record contains unsupported or invalid connection options.<br>**Next:** Ask the DNS or cluster administrator to correct the TXT record. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `srv.targetOutsideDomain` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L558)
+#### `srv.targetOutsideDomain`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L558)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **DNS target outside the expected domain**<br>An SRV target does not meet the parent-domain rule for this connection.<br>**Next:** Check the cluster SRV record with your DNS administrator. Do not bypass the domain check. | Keep the safety instruction not to bypass the domain rule. |
 
-#### `dns.notFound` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L565)
+#### `dns.notFound`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L565)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Host name not found**<br>The system DNS resolver could not find this host name.<br>**Next:** Check the host name and the DNS settings used by the computer or remote host running these checks. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `dns.temporaryFailure` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L572)
+#### `dns.temporaryFailure`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L572)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **DNS lookup temporarily failed**<br>The system DNS resolver reported a temporary lookup failure.<br>**Next:** Check your DNS server and VPN connection, then run the check again. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `dns.resolversDisagree` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L577)
+#### `dns.resolversDisagree`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L577)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Direct query failed with no addresses | **Name lookups disagree**<br>Your system found this host name, but a direct query to your DNS servers did not. A VPN, split DNS or a hosts file entry can cause this.<br>**Next:** If the connection fails or reaches the wrong server, check your hosts file, VPN and split DNS settings. Connections use your system's answer for host names; the server list of a mongodb+srv connection comes from a direct DNS query. | Good distinction between system lookup and direct DNS. Keep library names report-only. Multiple causes are possibilities. |
 | Data unavailable / generic alternative | **Name lookups disagree**<br>Your system and a direct query to your DNS servers returned different addresses for this host name. A VPN, split DNS or a hosts file entry can cause this.<br>**Next:** If the connection fails or reaches the wrong server, check your hosts file, VPN and split DNS settings. Connections use your system's answer for host names; the server list of a mongodb+srv connection comes from a direct DNS query. | Good distinction between system lookup and direct DNS. Keep library names report-only. Multiple causes are possibilities. |
 
-#### `dns.privateEndpoint` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L593)
+#### `dns.privateEndpoint`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L593)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Private address for this Azure host name**<br>The name goes through Azure's private-link alias and resolves to a private address. This does not prove how the cluster is configured.<br>**Next:** Make sure this host has access to the private network or VPN used by the endpoint. | Information. Good caveat that address/alias observations do not prove cluster configuration. |
 
-#### `dns.privateEndpointPublicAddress` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L600)
+#### `dns.privateEndpointPublicAddress`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L600)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Public address for this Azure host name**<br>The name goes through Azure's private-link alias and resolves to a public address. That is normal outside the cluster's private network. | Information, not a broken-private-endpoint verdict. Public resolution can be normal. |
 
-#### `dns.loopback` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L606)
+#### `dns.loopback`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L606)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Host points to this computer**<br>The host name resolves to a loopback address on the host running these checks.<br>**Next:** Confirm that the database or local tunnel is running on that host, especially in remote VS Code sessions. | **UX-3:** “this computer” can mean the wrong machine on SSH/WSL/container hosts. |
 
-#### `dns.mixedHostDomains` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L613)
+#### `dns.mixedHostDomains`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L613)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1459,25 +1459,25 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 
 ### B4. Network connection (TCP)
 
-#### `tcp.refused` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L652)
+#### `tcp.refused`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L652)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Network connection refused**<br>The TCP connection was refused. The service may be stopped or listening on a different port.<br>**Next:** Check the port and that the database service or tunnel is running. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | Good “may be” rather than a proven stopped service. Exact firewall prose is deduplicated; similar provider advice may still repeat (**UX-8**). |
 
-#### `tcp.timeout` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L659)
+#### `tcp.timeout`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L659)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Network connection timed out**<br>The TCP connection attempt timed out without connecting. This does not identify what blocked it.<br>**Next:** Check the endpoint and network path, then try again. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | Good explicit uncertainty. Do not equate elapsed time with rejected credentials or a confirmed firewall. |
 
-#### `tcp.unreachable` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L666)
+#### `tcp.unreachable`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L666)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Network route unavailable**<br>The host or its network could not be reached through the current route.<br>**Next:** Check routing and whether the required VPN or private network is connected. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | Names routing as the observation; VPN advice remains a check, not an assertion. |
 
-#### `tcp.reset` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L673)
+#### `tcp.reset`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L673)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1486,49 +1486,49 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 
 ### B5. Secure connection (TLS)
 
-#### `tls.notTlsServer` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L678)
+#### `tls.notTlsServer`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L678)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Endpoint did not speak TLS**<br>The endpoint returned a non-TLS reply to the secure handshake.<br>**Next:** Check the endpoint, port and TLS requirements. Use the secure endpoint supplied by the cluster administrator. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `tls.handshakeRejectedByServer` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L685)
+#### `tls.handshakeRejectedByServer`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L685)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Secure handshake closed**<br>The server closed the TLS handshake before sending a certificate.<br>**Next:** Check the endpoint and its secure connection requirements. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | Closed handshake is an observation; firewall remains a possibility. |
 
-#### `tls.selfSigned` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L690)
+#### `tls.selfSigned`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L690)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Self-signed certificate detected**<br>The certificate or its chain contains a self-signed certificate.<br>**Next:** Obtain the trusted CA certificate from your administrator and configure tlsCAFile. Do not disable certificate checks. | Preserve “Do not disable certificate checks.” A configured bypass changes severity, not the underlying certificate issue. |
 
-#### `tls.untrustedIssuer` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L697)
+#### `tls.untrustedIssuer`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L697)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Certificate issuer not trusted**<br>The certificate issuer could not be verified using the configured trust store.<br>**Next:** Check the CA bundle and any corporate TLS inspection certificate with your administrator. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `tls.hostnameMismatch` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L704)
+#### `tls.hostnameMismatch`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L704)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Certificate host name mismatch**<br>The certificate does not match the host name used for the connection.<br>**Next:** Use the host name covered by the certificate, or ask the administrator to correct the certificate. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `tls.expired` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L711)
+#### `tls.expired`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L711)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Certificate expired**<br>A certificate in the server certificate chain has expired.<br>**Next:** Check the clock on the host running these checks and ask the administrator to renew the expired certificate. | Correctly tells the user to check the clock on the execution host, not necessarily the laptop. |
 
-#### `tls.notYetValid` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L718)
+#### `tls.notYetValid`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L718)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Certificate not yet valid**<br>A certificate in the server certificate chain has a validity date in the future.<br>**Next:** Check the clock on the host running these checks and the certificate validity dates with your administrator. | Good host-specific clock advice; certificate validity is not authentication failure. |
 
-#### `tls.verificationBypassed` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L725)
+#### `tls.verificationBypassed`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L725)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1537,46 +1537,46 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 
 ### B6. Server greeting and driver-discovered members
 
-#### `hello.noReply` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L734)
+#### `hello.noReply`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L734)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **No server response**<br>No handshake reply arrived before the reply deadline. This alone does not show that the server is unreachable.<br>**Next:** Confirm that the endpoint accepts MongoDB API connections and try a longer timeout. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | Careful deadline wording. A probe timeout is not proof the real connection cannot work. |
 
-#### `hello.notWireProtocol` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L743)
+#### `hello.notWireProtocol`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L743)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Unexpected server protocol**<br>The endpoint replied, but not using the MongoDB API wire protocol.<br>**Next:** Check that the host and port belong to the database endpoint, not a web or management endpoint. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `hello.closedWithoutReply` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L750)
+#### `hello.closedWithoutReply`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L750)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Plaintext handshake closed; TLS may be needed | **Server closed without a reply**<br>The endpoint closed before a complete reply to the plaintext handshake. It may require TLS.<br>**Next:** Check whether this endpoint requires TLS and enable it when required. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 | Data unavailable / generic alternative | **Server closed without a reply**<br>The endpoint closed before a complete handshake reply arrived.<br>**Next:** Check the database endpoint and its connection requirements with your administrator. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `hello.inconclusive` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L763)
+#### `hello.inconclusive`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L763)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Server greeting inconclusive**<br>The bounded handshake reply could not establish a successful server response. The reply may be incomplete, invalid or rejected.<br>**Next:** Check the endpoint and review the reply evidence in the diagnostic report. The real connection attempt is tested separately. | **UX-7:** “bounded handshake” is support terminology; consider “The greeting check could not confirm a successful response.” |
 
-#### `hello.mechanismNotOffered` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L772)
+#### `hello.mechanismNotOffered`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L772)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Requested mechanism known | **Authentication mechanism not offered**<br>The server did not advertise SCRAM-SHA-256 for this user.<br>**Next:** Check the user authentication mechanism and authentication database with the cluster administrator. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 | Data unavailable / generic alternative | **Authentication mechanism not offered**<br>The server did not advertise the expected authentication mechanism for this user.<br>**Next:** Check the user authentication mechanism and authentication database with the cluster administrator. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `hello.compressorUnavailable` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L785)
+#### `hello.compressorUnavailable`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L785)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Compressor negotiated | **Compressor unavailable**<br>The server accepted snappy, but the extension cannot use it for commands after sign-in.<br>**Next:** For snappy, remove it from the compressors option, or put zlib first. | Distinguish accepted compression from failed post-sign-in commands; result can stop at Database access. |
 | Data unavailable / generic alternative | **Compressor unavailable**<br>A requested compressor is not available in the extension.<br>**Next:** Remove the unavailable compressor from the compressors option, or put zlib first. | Distinguish accepted compression from failed post-sign-in commands; result can stop at Database access. |
 
-#### `hello.clockOffset` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L786)
+#### `hello.clockOffset`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L786)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1584,7 +1584,7 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | Execution host 8 min ahead | **Clock difference detected**<br>This computer's clock is 8 min ahead of the server. The measurement is an estimate.<br>**Next:** Synchronize the clock on the host running these checks. Clock differences can affect certificates and Microsoft Entra ID tokens. | **UX-3/UX-5:** “This computer” is ambiguous remotely. This actionable finding is Information and can appear under “All checks passed.” |
 | Data unavailable / generic alternative | **Clock difference detected**<br>This computer's clock differs from the server clock. The measurement is an estimate.<br>**Next:** Synchronize the clock on the host running these checks. Clock differences can affect certificates and Microsoft Entra ID tokens. | **UX-3/UX-5:** “This computer” is ambiguous remotely. This actionable finding is Information and can appear under “All checks passed.” |
 
-#### `hello.advertisedMembersUnreachable` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L879)
+#### `hello.advertisedMembersUnreachable`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L879)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1594,21 +1594,21 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 
 ### B7. Authentication, clouds and tokens
 
-#### `auth.failed` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L897)
+#### `auth.failed`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L897)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Native authentication OR Data unavailable / generic alternative | **Authentication rejected**<br>The server rejected the selected authentication credentials.<br>**Next:** Check the user name and password, and the authentication database. | Useful native versus identity distinction. Token acquisition succeeded does not mean the cluster accepted it. |
 | Entra ID OR managed identity | **Authentication rejected**<br>Sign-in succeeded, but the cluster did not accept this identity.<br>**Next:** Check that this identity is added as a user on the cluster. | Useful native versus identity distinction. Token acquisition succeeded does not mean the cluster accepted it. |
 
-#### `auth.mechanismMismatch` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L910)
+#### `auth.mechanismMismatch`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L910)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Requested mechanism known | **Authentication mechanism mismatch**<br>The server does not offer the requested authentication mechanism SCRAM-SHA-256.<br>**Next:** Choose an authentication mechanism supported by this user and cluster. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 | Data unavailable / generic alternative | **Authentication mechanism mismatch**<br>The selected authentication mechanism does not match what the server offers.<br>**Next:** Choose an authentication mechanism supported by this user and cluster. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `auth.credentialsUnavailable` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L921)
+#### `auth.credentialsUnavailable`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L921)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1617,32 +1617,32 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | entraSession | **Sign-in needed**<br>No Microsoft Entra ID sign-in is available without a prompt.<br>**Next:** Connection diagnosis doesn't open sign-in. Connect to the cluster once, then run the check again. | Missing input, not rejection. “Connect …” means leave diagnosis and use the normal connection flow (**UX-7**). |
 | Data unavailable / generic alternative | **Authentication input unavailable**<br>Required authentication input is unavailable without a prompt.<br>**Next:** Connect to the cluster once, then run the check again. | Missing input, not rejection. “Connect …” means leave diagnosis and use the normal connection flow (**UX-7**). |
 
-#### `auth.serverSelectionTimeout` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L922)
+#### `auth.serverSelectionTimeout`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L922)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | Extension local/emulator fail-fast policy | **No server selected**<br>The driver could not select a server within the short time limit the extension uses for emulator and local connections. This does not show that credentials were rejected.<br>**Next:** Review the per-server errors in the diagnostic report, and check that the server is running and listening on the configured host and port. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | Good explicit non-rejection caveat. The local/emulator limit is extension policy, not a user-editable timeout. |
 | Data unavailable / generic alternative | **No server selected**<br>The driver could not select a server before its time limit. This does not show that credentials were rejected.<br>**Next:** Review the per-server errors in the diagnostic report and check the cluster endpoints. If a connection timeout limited the attempt, change that connection setting before retrying. A firewall or IP allowlist may be blocking this connection. Check access from the computer or remote host where these checks ran, including VPN and network rules. | Good explicit non-rejection caveat. The local/emulator limit is extension policy, not a user-editable timeout. |
 
-#### `auth.driverOptionsRejected` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L949)
+#### `auth.driverOptionsRejected`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L949)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Connection options rejected**<br>The driver rejected the connection options before connecting, so nothing was sent to the server.<br>**Next:** Check the option values in the connection string, such as true or false for switches and numbers for timeouts, then connect again. | Good temporal precision: no data was sent to the server. |
 
-#### `auth.connectFailed` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L958)
+#### `auth.connectFailed`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L958)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Connection attempt failed**<br>The connection attempt failed, and the diagnosis could not identify a more specific cause.<br>**Next:** Review the earlier steps and the error name in the diagnostic report, check the connection settings, then connect again. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `auth.cloudMismatch` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L967)
+#### `auth.cloudMismatch`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L967)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Azure cloud mismatch**<br>The Azure cloud selected for sign-in does not match the cluster cloud.<br>**Next:** Set microsoft-sovereign-cloud.environment to the cluster cloud, then connect again. | **UX-1:** body says selected cloud correctly; the collapsed row incorrectly says VS Code is signed in to it. |
 
-#### `auth.tokenResourceUnresolved` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L972)
+#### `auth.tokenResourceUnresolved`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L972)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1652,13 +1652,13 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | managedIdentityCloudUnknown | **Sign-in resource unavailable**<br>The sign-in resource could not be determined from the cloud configuration.<br>**Next:** Confirm the Azure VM cloud and configure documentDB.customEnvironment.ossrdbmsEndpoint when the cloud cannot be determined. | **UX-6:** expanded stage details omit configuration facts; the report retains safe categories, not an exact custom URL. |
 | Data unavailable / generic alternative | **Sign-in resource unavailable**<br>The sign-in resource could not be determined from the cloud configuration.<br>**Next:** Check microsoft-sovereign-cloud.environment and the custom cloud settings with your cloud administrator. | **UX-6:** expanded stage details omit configuration facts; the report retains safe categories, not an exact custom URL. |
 
-#### `auth.oidcHostNotAllowed` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1005)
+#### `auth.oidcHostNotAllowed`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1005)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Host not allowed for sign-in**<br>The driver does not allow this cluster host for Microsoft Entra ID authentication.<br>**Next:** Verify the trusted service domain with your cloud administrator and set documentDB.customEnvironment.hostnameSuffix in user settings. Only trust your service domain. | No separate wording flag seeded; confirm the stated cause and next action against the actual row outcome. |
 
-#### `auth.entraTokenFailed` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1014)
+#### `auth.entraTokenFailed`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1014)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1675,13 +1675,13 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 | brokerOpaque | **Microsoft Entra ID sign-in failed**<br>The sign-in service reported an error without further details.<br>**Next:** Open Developer: Show Logs… and check Microsoft Authentication or Microsoft Sovereign Cloud Authentication for your selected cloud. Ask your IT help desk for help interpreting the error. | **UX-2/UX-8:** resourceNotInTenant advice is not method-aware here. Compare provider guidance; never promise a government-cloud preauthorization rollout. |
 | unknownAadsts OR Data unavailable / generic alternative | **Microsoft Entra ID sign-in failed**<br>Microsoft Entra ID could not provide a sign-in token.<br>**Next:** Review the sign-in details in the diagnostic report with your tenant administrator or IT help desk. | **UX-2/UX-8:** resourceNotInTenant advice is not method-aware here. Compare provider guidance; never promise a government-cloud preauthorization rollout. |
 
-#### `auth.entraAudienceMismatch` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1015)
+#### `auth.entraAudienceMismatch`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1015)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Sign-in token targets another resource**<br>The token audience differs from the requested sign-in resource. This is an unverified hint from the token claims.<br>**Next:** Check the selected cloud and sign-in resource with your administrator, then connect again. | Keep “unverified hint.” Multiple token warnings count as one Authentication issue on the card (**UX-4**). |
 
-#### `auth.entraTenantMismatch` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1024)
+#### `auth.entraTenantMismatch`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1024)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1690,25 +1690,25 @@ automatically create a summary issue. Main-card composition is in A0–A3.
 
 ### B8. Database access
 
-#### `access.listDatabasesDenied` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1031)
+#### `access.listDatabasesDenied`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1031)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Listing databases denied**<br>The connection succeeded, but the server denied the database-list request used by the extension.<br>**Next:** Ask the cluster administrator for permission to list the databases you need. The connection itself is working. | Correctly preserves a successful connection; does not promise broad cluster permissions. |
 
-#### `access.signInRequired` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1041)
+#### `access.signInRequired`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1041)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **Sign-in required to use this connection**<br>The server answered, but it requires sign-in to list or read databases. This connection is set to No authentication.<br>**Next:** Choose an authentication method for this connection (Update Credentials…), then run the diagnosis again. | Special warning card, not generic failure. Other warning/error rows can still be listed without repeating Database access. |
 
-#### `access.noDatabasesVisible` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1050)
+#### `access.noDatabasesVisible`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1050)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
 | This finding | **No databases visible**<br>The connection succeeded, but the database-list request returned no databases visible to this user.<br>**Next:** Confirm that databases exist and that this user has access to the ones you need. | Information; can appear beneath a clean success card (**UX-5**). Zero visible databases is not necessarily a failure. |
 
-#### `access.readRoleReported` — [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1057)
+#### `access.readRoleReported`: [source](../../../../../src/connectionDiagnostics/findingMessages.ts#L1057)
 
 | OR scenario | Current displayed text (title, explanation, Next) | Inline evaluation |
 | --- | --- | --- |
@@ -1742,9 +1742,9 @@ These are the only three finding-message overrides; other finding bodies match t
 
 **OR** the log is **Microsoft Sovereign Cloud Authentication** for a non-public cloud.
 
-**Inline evaluation — UX-6/UX-7:** the limitation is well qualified, but users need an explicit route to the report. The panel says “No … sign-in … without a prompt,” not that consent has definitely failed. Keep “earlier” separate from the current outcome. [source](../../../../../src/webviews/documentdb/connectionDiagnostics/connectionDiagnosticsRouter.ts#L258)
+**Inline evaluation (UX-6/UX-7):** the limitation is well qualified, but users need an explicit route to the report. The panel says “No … sign-in … without a prompt,” not that consent has definitely failed. Keep “earlier” separate from the current outcome. [source](../../../../../src/webviews/documentdb/connectionDiagnostics/connectionDiagnosticsRouter.ts#L258)
 
-## Appendix C — extra provider paragraphs that can appear in the summary
+## Appendix C: extra provider paragraphs that can appear in the summary
 
 These are **additional paragraphs**, not replacements for the primary finding. The service
 returns the first applicable provider explanation, not every provider's explanation. The
@@ -1770,7 +1770,7 @@ are context, not repetition (see UX-8).*
 
 > MongoDB Atlas closed the TLS connection with an internal error. That is a transport-level rejection rather than a failed sign-in, so it is worth checking whether this machine’s IP address is on the project’s IP access list, and whether the cluster is paused.
 
-**Inline evaluation — UX-3/UX-8:** “this machine’s IP address” should mean the execution host, including SSH/container. Do not interpret the IP-access-list suggestion as a confirmed cause. [source](../../../../../src/plugins/service-atlas-mongodb/atlasConnectionErrors.ts#L63)
+**Inline evaluation (UX-3/UX-8):** “this machine’s IP address” should mean the execution host, including SSH/container. Do not interpret the IP-access-list suggestion as a confirmed cause. [source](../../../../../src/plugins/service-atlas-mongodb/atlasConnectionErrors.ts#L63)
 
 ### C3. Kubernetes tunnel OR SRV provider explanations
 
@@ -1809,9 +1809,9 @@ These can follow the shorter diagnostic token finding. They reuse existing trans
 
 > This name resolved to a public address. If the cluster allows only private access, connect from its virtual network or a network that resolves the private endpoint (VPN, peering or a private DNS zone).
 
-**Inline evaluation — UX-8:** good “If”; the checks do not prove the cluster’s private-access configuration. This hint can be joined to the selected provider paragraph. It is not shown for a successful real connection, an authentication rejection alone, or a failure correlated only to a different host. [source](../../../../../src/connectionDiagnostics/checks/contextHints.ts#L170)
+**Inline evaluation (UX-8):** good “If”; the checks do not prove the cluster’s private-access configuration. This hint can be joined to the selected provider paragraph. It is not shown for a successful real connection, an authentication rejection alone, or a failure correlated only to a different host. [source](../../../../../src/connectionDiagnostics/checks/contextHints.ts#L170)
 
-## Appendix D — existing browser scenarios and manual sequence
+## Appendix D: existing browser scenarios and manual sequence
 
 Use the existing dev harness; no real government cloud or deliberately broken DNS is
 needed for these fixtures. Start a current `npm run watch:views` process, then open
@@ -1857,7 +1857,7 @@ Suggested hands-on order:
    at narrow width and with keyboard-only navigation. Do not treat source coverage as
    completion of these visual/accessibility checks.
 
-## Appendix E — evaluation pass and hands-on handoff
+## Appendix E: evaluation pass and hands-on handoff
 
 ### Language verdict
 
