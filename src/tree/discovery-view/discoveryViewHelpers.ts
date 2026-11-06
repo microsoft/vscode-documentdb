@@ -69,6 +69,7 @@ export async function waitForDiscoveryViewReady(context: IActionContext, maxAtte
 export async function revealInDiscoveryView(
     context: IActionContext,
     request: DiscoveryRevealRequest,
+    report?: (message: string) => void,
 ): Promise<DiscoveryRevealResult | undefined> {
     ext.outputChannel.trace('[DeepLink] Focusing the Discovery view');
     await vscode.commands.executeCommand(`${Views.DiscoveryView}.focus`);
@@ -88,6 +89,7 @@ export async function revealInDiscoveryView(
                     provider.resetNodeErrorState(providerRoot.id);
                     provider.refresh(providerRoot);
                 }
+                report?.(vscode.l10n.t('Loading subscriptions…'));
                 ext.outputChannel.trace('[DeepLink] Revealing and expanding the Discovery provider root');
                 await ext.discoveryTreeView.reveal(providerRoot, { select: false, focus: false, expand: true });
             }
@@ -103,6 +105,7 @@ export async function revealInDiscoveryView(
                 node.id.toLowerCase().endsWith(`/${request.subscriptionId.toLowerCase()}`),
             );
             if (subscriptionNode) {
+                report?.(vscode.l10n.t('Loading clusters…'));
                 ext.outputChannel.trace('[DeepLink] Revealing and expanding the subscription node');
                 await ext.discoveryTreeView.reveal(subscriptionNode, { select: false, focus: false, expand: true });
             }
@@ -144,6 +147,7 @@ export async function revealInDiscoveryView(
             // so expansion is the only connect.
             ext.outputChannel.trace('[DeepLink] Showing the cluster in the Discovery view');
             await ext.discoveryTreeView.reveal(clusterNode, { select: true, focus: false, expand: false });
+            report?.(vscode.l10n.t('Connecting…'));
             ext.outputChannel.trace('[DeepLink] Revealing and expanding the cluster');
             const release = request.suppressAutoOpenDashboard
                 ? suppressAutoOpenDashboard(clusterNode.cluster.clusterId)
@@ -172,6 +176,7 @@ export async function revealInDiscoveryView(
 
             let databaseNode: DatabaseItem | undefined;
             if (request.database) {
+                report?.(vscode.l10n.t('Opening the database…'));
                 ext.outputChannel.trace(`[DeepLink] Looking up database ${request.database}`);
                 const dbId = `${clusterNode.id}/${request.database}`;
                 const node = (await provider.findNodeById(dbId)) ?? (await provider.findChildById(clusterNode, dbId));
@@ -202,6 +207,7 @@ export async function revealInDiscoveryView(
                 });
 
                 if (request.collection) {
+                    report?.(vscode.l10n.t('Opening the collection…'));
                     ext.outputChannel.trace(`[DeepLink] Looking up collection ${request.collection}`);
                     const collId = `${databaseNode.id}/${request.collection}`;
                     const collectionNode =

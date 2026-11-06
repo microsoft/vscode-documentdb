@@ -90,13 +90,13 @@ export async function handleAzureResourceLinkRequest(
         ext.outputChannel.trace('[DeepLink] Azure confirmation skipped (confirmations disabled)');
     }
 
-    const displayName = await vscode.window.withProgress(
+    return vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: vscode.l10n.t('Opening Azure resource…'),
+            title: vscode.l10n.t('Opening Azure resource'),
             cancellable: true,
         },
-        async (progress, token): Promise<string | undefined> => {
+        async (progress, token): Promise<DiscoveryRevealResult | undefined> => {
             const report = (message: string): void => progress.report({ message });
             const subscription = await resolveAzureSubscription(
                 context,
@@ -210,22 +210,27 @@ export async function handleAzureResourceLinkRequest(
                 return undefined;
             }
 
-            return displayName;
+            context.telemetry.properties.failureStage = 'revealCluster';
+            ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
+            const result = await revealInDiscoveryView(
+                context,
+                {
+                    providerId: link.providerId,
+                    subscriptionId: link.subscriptionId,
+                    azureResourceId: link.resourceId,
+                    displayName,
+                    database: request.database,
+                    collection: request.collection,
+                    suppressAutoOpenDashboard: request.open === 'dashboard',
+                },
+                report,
+            );
+            if (token.isCancellationRequested) {
+                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
+                return undefined;
+            }
+            return result;
         },
     );
-    if (displayName === undefined) {
-        return undefined;
-    }
-
-    context.telemetry.properties.failureStage = 'revealCluster';
-    ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
-    return revealInDiscoveryView(context, {
-        providerId: link.providerId,
-        subscriptionId: link.subscriptionId,
-        azureResourceId: link.resourceId,
-        displayName,
-        database: request.database,
-        collection: request.collection,
-        suppressAutoOpenDashboard: request.open === 'dashboard',
-    });
 }
