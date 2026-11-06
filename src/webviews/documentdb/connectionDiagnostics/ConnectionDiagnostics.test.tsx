@@ -926,7 +926,7 @@ describe('ConnectionDiagnostics', () => {
         const text = host.textContent ?? '';
         expect(text).toContain('Host name not found (db-host-1)');
         expect(text).toContain('Not checked: Server address (DNS) did not succeed');
-        expect(text).toContain("This computer's clock is 12 min behind");
+        expect(text).toContain('Clock 12 min behind the server');
         expect(text).not.toMatch(/\b[a-z]+\.[a-z][A-Za-z]+\b/);
         expect(text).not.toContain('AADSTS');
         expect(text).not.toMatch(/\d\s?ms\b/);

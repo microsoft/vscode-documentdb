@@ -14,7 +14,7 @@ export interface DiagnosticsViewState {
     readonly sequence: number;
     /** Undefined until the host's `started` update names the run. */
     readonly runId: string | undefined;
-    /** This computer's clock: a remote extension host's clock may differ. */
+    /** Clock where these checks ran; a remote extension host's clock may differ. */
     readonly startedAt: number;
     readonly finishedAt?: number;
     readonly rows: readonly PanelRow[];

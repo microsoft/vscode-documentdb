@@ -273,10 +273,10 @@ export function formatEvidenceSegment(segment: EvidenceSegment): string | undefi
             return l10n.t('Primary found');
         case 'clockOffset': {
             const minutes = Math.round(Math.abs(segment.offsetMs) / 60_000);
-            // A positive offset means the server's clock is ahead of this computer's.
+            // A positive offset means the server's clock is ahead of the clock where these checks ran.
             return segment.offsetMs > 0
-                ? l10n.t("This computer's clock is {0} min behind", minutes)
-                : l10n.t("This computer's clock is {0} min ahead", minutes);
+                ? l10n.t('Clock {0} min behind the server', minutes)
+                : l10n.t('Clock {0} min ahead of the server', minutes);
         }
         case 'finding':
             return segment.target === undefined ? segment.title : l10n.t('{0} ({1})', segment.title, segment.target);

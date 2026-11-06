@@ -281,12 +281,19 @@ describe('localized finding messages', () => {
         },
     );
 
+    it('names loopback resolution without assuming where the checks run', () => {
+        expect(findingMessages['dns.loopback']({}).title).toBe('Host name resolves to localhost');
+    });
+
     it('uses the server-minus-local offset with the correct clock direction', () => {
-        expect(findingMessages['hello.clockOffset']({ offsetMs: 420000 }).explanation).toContain(
-            "This computer's clock is 7 min behind",
+        expect(findingMessages['hello.clockOffset']({}).explanation).toBe(
+            'The clock where these checks ran differs from the server clock. The measurement is an estimate.',
         );
-        expect(findingMessages['hello.clockOffset']({ offsetMs: -480000 }).explanation).toContain(
-            "This computer's clock is 8 min ahead",
+        expect(findingMessages['hello.clockOffset']({ offsetMs: 420000 }).explanation).toBe(
+            'The clock where these checks ran is 7 min behind the server. The measurement is an estimate.',
+        );
+        expect(findingMessages['hello.clockOffset']({ offsetMs: -480000 }).explanation).toBe(
+            'The clock where these checks ran is 8 min ahead of the server. The measurement is an estimate.',
         );
         for (const offsetMs of ['420000', null, NaN, Infinity]) {
             const message = findingMessages['hello.clockOffset']({ offsetMs });

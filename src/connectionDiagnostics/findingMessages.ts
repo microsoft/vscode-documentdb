@@ -623,7 +623,7 @@ export const findingMessages: {
         ),
     }),
     'dns.loopback': (): FindingMessage => ({
-        title: vscode.l10n.t('Host points to this computer'),
+        title: vscode.l10n.t('Host name resolves to localhost'),
         explanation: vscode.l10n.t('The host name resolves to a loopback address on the host running these checks.'),
         nextStep: vscode.l10n.t(
             'Confirm that the database or local tunnel is running on that host, especially in remote VS Code sessions.',
@@ -805,18 +805,18 @@ export const findingMessages: {
     'hello.clockOffset': (data): FindingMessage => {
         const offset = numberField(data, 'offsetMs');
         let explanation = vscode.l10n.t(
-            "This computer's clock differs from the server clock. The measurement is an estimate.",
+            'The clock where these checks ran differs from the server clock. The measurement is an estimate.',
         );
         if (offset !== undefined) {
             const minutes = Math.round(Math.abs(offset) / 60000);
             explanation =
                 offset > 0
                     ? vscode.l10n.t(
-                          "This computer's clock is {0} min behind the server. The measurement is an estimate.",
+                          'The clock where these checks ran is {0} min behind the server. The measurement is an estimate.',
                           minutes,
                       )
                     : vscode.l10n.t(
-                          "This computer's clock is {0} min ahead of the server. The measurement is an estimate.",
+                          'The clock where these checks ran is {0} min ahead of the server. The measurement is an estimate.',
                           minutes,
                       );
         }

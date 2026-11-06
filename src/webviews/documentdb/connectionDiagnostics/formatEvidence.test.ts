@@ -33,6 +33,8 @@ describe('authentication and database evidence formatting', (): void => {
         [{ kind: 'clusterCloud', cloud: 'AzureUSGovernment' }, 'Cluster in Azure US Government'],
         [{ kind: 'signedInCloud', cloud: 'AzureCloud' }, 'Sign-in set to Azure'],
         [{ kind: 'ping', ms: 12 }, 'Ping 12 ms'],
+        [{ kind: 'clockOffset', offsetMs: 720_000 }, 'Clock 12 min behind the server'],
+        [{ kind: 'clockOffset', offsetMs: -480_000 }, 'Clock 8 min ahead of the server'],
         [{ kind: 'databasesVisible', count: 5 }, '5 databases visible'],
         [{ kind: 'databasesVisible', count: 1 }, '1 database visible'],
         [{ kind: 'databasesVisible', count: 0 }, '0 databases visible'],

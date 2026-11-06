@@ -850,7 +850,7 @@ const severalFindingsRows = withRows([
                 ),
                 diagnosticsFinding(
                     'info',
-                    'Host points to this computer',
+                    'Host name resolves to localhost',
                     'The host name resolves to a loopback address on the host running these checks.',
                     'Confirm that the database or local tunnel is running on that host, especially in remote VS Code sessions.',
                     [seedA],
@@ -1417,7 +1417,7 @@ const diagnosticsScenarios = {
                 ...expandDetails('serverAddress'),
                 detailsText('serverAddress', [
                     `Host name not found (${seedB})`,
-                    `Host points to this computer (${seedA})`,
+                    `Host name resolves to localhost (${seedA})`,
                     `${seedA} Addresses 127.0.0.1 (IPv4, loopback)`,
                     `${seedB} Your system's lookup No answer`,
                 ]),
@@ -1425,7 +1425,7 @@ const diagnosticsScenarios = {
                     kind: 'order',
                     name: 'The error is listed before the information',
                     selector: '#connectivity-checks-serverAddress [role="region"] li',
-                    texts: ['Host name not found', 'Host points to this computer'],
+                    texts: ['Host name not found', 'Host name resolves to localhost'],
                 },
                 ...expandDetails('networkConnection'),
                 detailsText('networkConnection', [
