@@ -28,6 +28,9 @@ vi.mock('../../extensionVariables', () => ({
         discoveryBranchDataProvider: {
             getChildren: vi.fn(),
             getCachedChildren: vi.fn(),
+            hasNodeErrorState: vi.fn(),
+            resetNodeErrorState: vi.fn(),
+            refresh: vi.fn(),
             findNodeById: vi.fn(),
             findChildById: vi.fn(),
         },
@@ -47,6 +50,9 @@ const missingTargetMessage =
     'URL handling aborted. Connection was unsuccessful or the specified database/collection does not exist.';
 const getChildren = vi.mocked(ext.discoveryBranchDataProvider.getChildren);
 const getCachedChildren = vi.mocked(ext.discoveryBranchDataProvider.getCachedChildren);
+const hasNodeErrorState = vi.mocked(ext.discoveryBranchDataProvider.hasNodeErrorState);
+const resetNodeErrorState = vi.mocked(ext.discoveryBranchDataProvider.resetNodeErrorState);
+const refresh = vi.mocked(ext.discoveryBranchDataProvider.refresh);
 const findNodeById = vi.mocked(ext.discoveryBranchDataProvider.findNodeById);
 const findChildById = vi.mocked(ext.discoveryBranchDataProvider.findChildById);
 const reveal = vi.mocked(ext.discoveryTreeView.reveal);
@@ -106,6 +112,7 @@ describe('Discovery view helpers', () => {
             async (id: string): Promise<TreeElement | undefined> =>
                 [databaseNode, collectionNode].find((node): boolean => node.id === id),
         );
+        hasNodeErrorState.mockReturnValue(false);
         findChildById.mockResolvedValue(undefined);
         reveal.mockResolvedValue(undefined);
         exists.mockReturnValue(true);
@@ -212,6 +219,40 @@ describe('Discovery view helpers', () => {
             );
         },
     );
+
+    it('resets only the failed provider root before revealing it and reloads stale retry children', async (): Promise<void> => {
+        hasNodeErrorState.mockReturnValue(true);
+        getCachedChildren.mockImplementation((node: TreeElement): TreeElement[] =>
+            node === rootNode ? [createNode(`${rootNode.id}/retry`)] : (children.get(node) ?? []),
+        );
+
+        expect(await revealInDiscoveryView(context, request)).toMatchObject({ clusterNode });
+
+        expect(hasNodeErrorState).toHaveBeenCalledExactlyOnceWith(rootNode.id);
+        expect(resetNodeErrorState).toHaveBeenCalledExactlyOnceWith(rootNode.id);
+        expect(refresh).toHaveBeenCalledExactlyOnceWith(rootNode);
+        expect(resetNodeErrorState.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
+        expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(reveal.mock.invocationCallOrder[0]);
+        expect(reveal).toHaveBeenNthCalledWith(1, rootNode, { select: false, focus: false, expand: true });
+        expect(getChildren.mock.calls).toEqual([[undefined], [undefined], [rootNode]]);
+        expect(reveal.mock.invocationCallOrder[0]).toBeLessThan(getChildren.mock.invocationCallOrder[2]);
+        expect(reveal).toHaveBeenNthCalledWith(2, subscriptionNode, { select: false, focus: false, expand: true });
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith(
+            '[DeepLink] Resetting the Discovery provider root error state',
+        );
+    });
+
+    it('preserves cached subscription navigation without resetting or refreshing a healthy provider root', async (): Promise<void> => {
+        expect(await revealInDiscoveryView(context, request)).toMatchObject({ clusterNode });
+
+        expect(hasNodeErrorState).toHaveBeenCalledExactlyOnceWith(rootNode.id);
+        expect(resetNodeErrorState).not.toHaveBeenCalled();
+        expect(refresh).not.toHaveBeenCalled();
+        expect(getChildren.mock.calls).toEqual([[undefined], [undefined]]);
+        expect(getCachedChildren.mock.calls).toEqual([[rootNode], [subscriptionNode]]);
+        expect(reveal).toHaveBeenNthCalledWith(1, rootNode, { select: false, focus: false, expand: true });
+        expect(reveal).toHaveBeenNthCalledWith(2, subscriptionNode, { select: false, focus: false, expand: true });
+    });
 
     it('waits for cluster expansion before checking the client', async () => {
         exists.mockReturnValue(false);

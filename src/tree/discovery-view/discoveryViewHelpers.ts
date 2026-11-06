@@ -80,14 +80,20 @@ export async function revealInDiscoveryView(
             ext.outputChannel.trace('[DeepLink] Looking up the Discovery provider root');
             const roots = await provider.getChildren(undefined as never);
             const providerRoot = roots?.find((node): boolean => node.id.endsWith(`/${request.providerId}`));
+            const hadErrorState = providerRoot ? provider.hasNodeErrorState(providerRoot.id) : false;
             if (providerRoot) {
+                if (hadErrorState) {
+                    ext.outputChannel.trace('[DeepLink] Resetting the Discovery provider root error state');
+                    provider.resetNodeErrorState(providerRoot.id);
+                    provider.refresh(providerRoot);
+                }
                 report?.(vscode.l10n.t('Loading subscriptions…'));
                 ext.outputChannel.trace('[DeepLink] Revealing and expanding the Discovery provider root');
                 await ext.discoveryTreeView.reveal(providerRoot, { select: false, focus: false, expand: true });
             }
             ext.outputChannel.trace('[DeepLink] Looking up the subscription node in the cache');
             let subscriptions = providerRoot ? provider.getCachedChildren(providerRoot) : undefined;
-            if (providerRoot && subscriptions?.length === 0) {
+            if (providerRoot && (hadErrorState || subscriptions?.length === 0)) {
                 ext.outputChannel.trace(
                     '[DeepLink] Provider root children not cached (already expanded); loading directly',
                 );
