@@ -93,6 +93,8 @@ implementation facade. Browser graphs allow zero because today's webviews do not
 BSON, but reject duplicates. Each views graph is the `views.js` entry's static import closure plus
 that view's lazy chunk and its static import closure, never every dynamic child. The lazy chunk's
 `facadeModuleId` must match the registry-backed map and appear in the entry's `dynamicImports`.
+When adding a webview, register its facade in `viewModules` in
+[`inspect.cjs`](./inspect.cjs) and its page label in [`build-size-report.cjs`](./build-size-report.cjs).
 Local Quick Start and Atlas Credentials must always exclude Monaco and SlickGrid.
 
 The packaged manifest's top-level icon and local file paths under `contributes` are required,
@@ -215,17 +217,17 @@ L1 measures the packaged bytes of whole graphs, not single files, and no size ev
 graph comes from, and L1 checks those reports' hashes against the packaged bytes, so the sizes are
 those of the files inside the VSIX. `manifestReport.graphSizes` holds one byte count per graph:
 
-| Graph                                                                                       | Files counted                                                                                                                                  |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main`                                                                                      | the `main.mjs` loader and every host chunk reachable through `imports` and `dynamicImports`                                                    |
-| `mainStartup`                                                                               | the imports-only closure of `main.mjs` plus the awaited `./src/extension.ts` implementation chunk (the Kubernetes invariant's startup closure) |
-| `playgroundWorker`                                                                          | `playgroundWorker.mjs` and everything it reaches, static and dynamic                                                                           |
-| `playgroundTsPlugin`                                                                        | `playgroundTsPlugin.cjs` and its static closure                                                                                                |
-| `viewsEntry`                                                                                | `views.js` and its static import closure                                                                                                       |
-| `viewsAssets`                                                                               | every non-JavaScript asset owned by the views bundle report (fonts, CSS and future CSS-linked resources), counted once                         |
-| `collectionView`, `documentView`, `localQuickStart`, `atlasCredentials`, `clusterDashboard` | JavaScript closures only: the `views.js` static closure plus the view's lazy chunk and its static closure                                      |
-| `editorWorker`, `jsonWorker`                                                                | each Monaco worker script (`<name>.worker-<hash>.js`, self-contained classic scripts)                                                          |
-| `vsix`                                                                                      | the compressed VSIX file                                                                                                                       |
+| Graph                                                                                                                | Files counted                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main`                                                                                                               | the `main.mjs` loader and every host chunk reachable through `imports` and `dynamicImports`                                                    |
+| `mainStartup`                                                                                                        | the imports-only closure of `main.mjs` plus the awaited `./src/extension.ts` implementation chunk (the Kubernetes invariant's startup closure) |
+| `playgroundWorker`                                                                                                   | `playgroundWorker.mjs` and everything it reaches, static and dynamic                                                                           |
+| `playgroundTsPlugin`                                                                                                 | `playgroundTsPlugin.cjs` and its static closure                                                                                                |
+| `viewsEntry`                                                                                                         | `views.js` and its static import closure                                                                                                       |
+| `viewsAssets`                                                                                                        | every non-JavaScript asset owned by the views bundle report (fonts, CSS and future CSS-linked resources), counted once                         |
+| `collectionView`, `documentView`, `localQuickStart`, `atlasCredentials`, `clusterDashboard`, `connectionDiagnostics` | JavaScript closures only: the `views.js` static closure plus the view's lazy chunk and its static closure                                      |
+| `editorWorker`, `jsonWorker`                                                                                         | each Monaco worker script (`<name>.worker-<hash>.js`, self-contained classic scripts)                                                          |
+| `vsix`                                                                                                               | the compressed VSIX file                                                                                                                       |
 
 On same-repository PRs, L1 compares these sizes with the base branch's cached sizes and flags a
 graph that changed by **at least 5% of its base or at least 50 KiB** (`SIZE_CHANGE_FRACTION`
@@ -243,7 +245,7 @@ build size section to its job summary and hands it to the `<!-- ci-report -->` c
   bytes inside a collapsed `<details>` block.
 
 Rows list the pages (`collectionView`, `documentView`, `localQuickStart`, `atlasCredentials`,
-`clusterDashboard`), activation (`mainStartup`), `main`, `playgroundWorker` and `vsix` first, then
+`clusterDashboard`, `connectionDiagnostics`), activation (`mainStartup`), `main`, `playgroundWorker` and `vsix` first, then
 the other graphs. Each flagged growth also emits a GitHub warning annotation, so it shows in the
 checks UI. Shared chunks count in every graph that loads them, so rows do not add up.
 
