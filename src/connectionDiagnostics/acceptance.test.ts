@@ -836,12 +836,12 @@ describe('Acceptance (design §8.1)', (): void => {
         expect(result(connected.run, 'hello').status).toBe('pass');
         expect(rowText(connected, 'serverResponse')).toContain('DocumentDB gateway');
         expect(rowText(connected, 'serverResponse')).not.toMatch(/replica set|sharded/i);
-        expect(rowText(connected, 'serverResponse')).toContain('clock is 7 min behind');
+        expect(rowText(connected, 'serverResponse')).toContain('Clock 7 min behind the server');
         expect(connected.markdown.replace(/\\/g, '')).toContain('hello.clockOffset');
         bridge.getSessionFromVSCode.mockRejectedValue(new Error('AADSTS53003: blocked by conditional access'));
         const failed = await finish(context(AuthMethodId.MicrosoftEntraID));
         expect(failed.result).toMatchObject({ outcome: 'failed', headline: { code: 'auth.entraTokenFailed' } });
-        expect(rowText(failed, 'serverResponse')).toContain('clock is 7 min behind');
+        expect(rowText(failed, 'serverResponse')).toContain('Clock 7 min behind the server');
         expect(rowText(failed, 'authentication')).toContain('Sign-in failed');
         expect(failed.markdown.replace(/\\/g, '')).toContain('hello.clockOffset');
         expect(failed.markdown.replace(/\\/g, '')).toContain('auth.entraTokenFailed');
