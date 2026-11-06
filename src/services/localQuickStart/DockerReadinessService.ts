@@ -3,7 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DockerClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
+import {
+    DockerClient,
+    PodmanClient,
+    type ListContextItem,
+    type PromiseCommandResponse,
+} from '@microsoft/vscode-container-client';
 import { CancellationTokenLike, type Shell } from '@microsoft/vscode-processutils';
 import { type Writable } from 'stream';
 import * as vscode from 'vscode';
@@ -46,6 +51,7 @@ export const PROVIDER_MEMORY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 export const DOCKER_PROVIDER_MEMORY_KEY = 'documentdb.quickstart.dockerProvider';
 
 interface DockerReadinessClient {
+    readonly id?: string;
     checkInstall(options: object): Promise<PromiseCommandResponse<string>>;
     info(options: object): Promise<PromiseCommandResponse<unknown>>;
     listContexts(options: object): Promise<PromiseCommandResponse<ListContextItem[]>>;
@@ -60,6 +66,8 @@ export interface DockerProbeOutput {
 
 export interface DockerReadinessServiceDependencies {
     readonly client?: DockerReadinessClient;
+    /** Called once per check, so a CLI installed or removed since the last one is picked up. */
+    readonly getClient?: () => DockerReadinessClient;
     readonly shellProvider?: Shell;
     readonly platform?: NodeJS.Platform;
     readonly arch?: string;
@@ -79,7 +87,7 @@ export interface DockerReadinessServiceDependencies {
 }
 
 interface ResolvedDependencies {
-    readonly client: DockerReadinessClient;
+    readonly getClient: () => DockerReadinessClient;
     readonly shellProvider: Shell;
     readonly platform: NodeJS.Platform;
     readonly arch: string;
@@ -228,8 +236,9 @@ export class DockerReadinessService {
 
     public constructor(dependencies: DockerReadinessServiceDependencies = {}) {
         const platform = dependencies.platform ?? process.platform;
+        const client = dependencies.client ?? new DockerClient();
         this.dependencies = {
-            client: dependencies.client ?? new DockerClient(),
+            getClient: dependencies.getClient ?? (() => client),
             shellProvider: dependencies.shellProvider ?? getDockerShellProvider(platform),
             platform,
             arch: dependencies.arch ?? process.arch,
@@ -293,7 +302,11 @@ export class DockerReadinessService {
     }
 
     private async runAndMemoize(request: DockerReadinessRequest): Promise<DockerReadiness> {
-        const check = this.runReadiness(request.cancellationToken, request.suppressCommandEcho === true);
+        const client = this.dependencies.getClient();
+        const cli = client.id === PodmanClient.ClientId ? 'podman' : 'docker';
+        const check = this.runReadiness(client, request.cancellationToken, request.suppressCommandEcho === true).then(
+            (readiness): DockerReadiness => ({ ...readiness, cli }),
+        );
         this.inFlight = check;
         try {
             const result = await check;
@@ -351,11 +364,18 @@ export class DockerReadinessService {
     }
 
     private async readContexts(
+        client: DockerReadinessClient,
         cancellationToken: vscode.CancellationToken,
         didDeadlineExpire: () => boolean,
         suppressCommandEcho: boolean,
     ): Promise<DockerContextProbeResult> {
-        const response = await this.dependencies.client.listContexts({});
+        let response: PromiseCommandResponse<ListContextItem[]>;
+        try {
+            response = await client.listContexts({});
+        } catch {
+            // Podman has no contexts.
+            return { contexts: [], succeeded: false };
+        }
         const evidence = await this.runProbe(
             'contexts',
             response,
@@ -381,6 +401,7 @@ export class DockerReadinessService {
     }
 
     private async runReadiness(
+        client: DockerReadinessClient,
         callerToken: vscode.CancellationToken | undefined,
         suppressCommandEcho: boolean,
     ): Promise<DockerReadiness> {
@@ -428,18 +449,12 @@ export class DockerReadinessService {
             const [versionProbe, infoProbe] = await Promise.all([
                 this.runProbe(
                     'cliVersion',
-                    this.dependencies.client.checkInstall({}),
+                    client.checkInstall({}),
                     cancellationToken,
                     didDeadlineExpire,
                     suppressCommandEcho,
                 ),
-                this.runProbe(
-                    'info',
-                    this.dependencies.client.info({}),
-                    cancellationToken,
-                    didDeadlineExpire,
-                    suppressCommandEcho,
-                ),
+                this.runProbe('info', client.info({}), cancellationToken, didDeadlineExpire, suppressCommandEcho),
             ]);
 
             if (callerCancelled) {
@@ -540,6 +555,7 @@ export class DockerReadinessService {
             let contextsResolved = false;
             if (!deadlineExpired && !this.dependencies.environmentVariables['DOCKER_HOST']) {
                 const contextResult = await this.readContexts(
+                    client,
                     cancellationToken,
                     didDeadlineExpire,
                     suppressCommandEcho,

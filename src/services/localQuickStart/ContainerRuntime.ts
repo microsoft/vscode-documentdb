@@ -20,16 +20,18 @@
  */
 
 import {
-    DockerClient,
+    type DockerClient,
     type InspectContainersItem,
     type Like,
     type ListContainersItem,
+    type PodmanClient,
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
 import { type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vscode-processutils';
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
+import { createContainerClient, resolveContainerCli, type ResolvedContainerCli } from './containerCli';
 import { type DockerCommandResponse, getDockerShellProvider, runDockerCommand } from './dockerCommand';
 import { CapturingTeeWritable } from './dockerProbes';
 import { startDockerProvider as launchDockerProvider } from './DockerProviderLauncher';
@@ -167,14 +169,14 @@ export interface IContainerRuntime {
 }
 
 /**
- * Stateless wrapper around a single Docker {@link DockerClient}. Each call
- * builds a fresh runner so its line-buffered stdout/stderr writables don't leak state
- * between commands.
+ * Stateless wrapper around the Docker or Podman CLI. Each call builds a fresh runner so its
+ * line-buffered stdout/stderr writables don't leak state between commands.
  */
 class ContainerRuntimeImpl implements IContainerRuntime {
-    private readonly client = new DockerClient();
+    private cli: ResolvedContainerCli = resolveContainerCli();
+    private client: DockerClient | PodmanClient = createContainerClient(this.cli);
     private readonly readinessService = new DockerReadinessService({
-        client: this.client,
+        getClient: () => this.refreshClient(),
         shellProvider: SHELL_PROVIDER,
         createProbeOutput: () => {
             const channel = getQuickStartOutputChannel();
@@ -186,6 +188,16 @@ class ContainerRuntimeImpl implements IContainerRuntime {
             };
         },
     });
+
+    /** Re-resolved on every readiness check so installing or moving Docker or Podman needs no reload. */
+    private refreshClient(): DockerClient | PodmanClient {
+        const cli = resolveContainerCli();
+        if (cli.cli !== this.cli.cli || cli.executable !== this.cli.executable) {
+            this.cli = cli;
+            this.client = createContainerClient(cli);
+        }
+        return this.client;
+    }
 
     private makeRunner(
         secrets: ReadonlyArray<string>,
@@ -488,14 +500,26 @@ export function hasExited(item: InspectContainersItem): boolean {
     return status === 'exited' || status === 'dead';
 }
 
-/** The exit code Docker recorded for a stopped container; the normalized item omits it. */
-export function getExitCode(item: InspectContainersItem): number | undefined {
+interface RawInspectRecord {
+    readonly Id?: unknown;
+    readonly State?: { ExitCode?: unknown };
+    readonly HostConfig?: { PortBindings?: Record<string, Array<{ HostPort?: unknown }> | null> };
+}
+
+/** Docker's `raw` is this container's record; Podman's is the whole inspect array. */
+function readRawInspect(item: InspectContainersItem): RawInspectRecord | undefined {
     try {
-        const raw = JSON.parse(item.raw) as { State?: { ExitCode?: unknown } };
-        return typeof raw.State?.ExitCode === 'number' ? raw.State.ExitCode : undefined;
+        const parsed = JSON.parse(item.raw) as RawInspectRecord | RawInspectRecord[];
+        return Array.isArray(parsed) ? (parsed.find((record) => record.Id === item.id) ?? parsed[0]) : parsed;
     } catch {
         return undefined;
     }
+}
+
+/** The exit code Docker recorded for a stopped container; the normalized item omits it. */
+export function getExitCode(item: InspectContainersItem): number | undefined {
+    const exitCode = readRawInspect(item)?.State?.ExitCode;
+    return typeof exitCode === 'number' ? exitCode : undefined;
 }
 
 /** The host port a container was published on. Unlike {@link getBoundHostPort}, also known while it is stopped. */
@@ -503,15 +527,8 @@ export function getPublishedHostPort(
     item: InspectContainersItem,
     containerPort: number = QUICK_START_PORT,
 ): number | undefined {
-    try {
-        const raw = JSON.parse(item.raw) as {
-            HostConfig?: { PortBindings?: Record<string, Array<{ HostPort?: unknown }> | null> };
-        };
-        const hostPort = Number(raw.HostConfig?.PortBindings?.[`${containerPort}/tcp`]?.[0]?.HostPort);
-        return Number.isInteger(hostPort) && hostPort > 0 ? hostPort : undefined;
-    } catch {
-        return undefined;
-    }
+    const hostPort = Number(readRawInspect(item)?.HostConfig?.PortBindings?.[`${containerPort}/tcp`]?.[0]?.HostPort);
+    return Number.isInteger(hostPort) && hostPort > 0 ? hostPort : undefined;
 }
 
 /** Singleton Docker-backed runtime; the default injected into {@link QuickStartService} (WI-0). */

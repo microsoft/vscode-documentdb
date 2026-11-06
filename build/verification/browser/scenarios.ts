@@ -126,7 +126,7 @@ function dockerMissing(
         } as const satisfies TypedRpcFixtures,
         steps: setupSteps,
         readiness: {
-            content: ['Docker CLI not found', label],
+            content: ['Docker or Podman CLI not found', label],
             selectors: ['[role="button"], button'],
             noProgressbar: true,
         },

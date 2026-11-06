@@ -71,6 +71,8 @@ const DAEMON_UNAVAILABLE_SIGNATURES: ReadonlyArray<RegExp> = [
     /is the docker daemon running/i,
     /error during connect/i,
     /connection refused/i,
+    /cannot connect to podman/i,
+    /unable to connect to podman socket/i,
 ];
 
 const CONTEXT_UNAVAILABLE_SIGNATURES: ReadonlyArray<RegExp> = [

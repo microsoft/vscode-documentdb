@@ -99,9 +99,9 @@ Images older than 1.0-rc2, which you can pick with the image-tag setting on the 
 
 The readiness screen separates Docker CLI, daemon, and daemon-platform facts. Use **View Docker output** for command details. Use **Refresh** to discard cached and remembered provider facts and run every check again.
 
-### Docker CLI not found
+### Docker or Podman CLI not found
 
-Install [Docker Engine](https://docs.docker.com/engine/install/) or Docker Desktop, then open **Set up DocumentDB Local** again. If Docker works in a terminal but not in VS Code, confirm that the extension host inherited the same `PATH`, `DOCKER_HOST`, and `DOCKER_CONTEXT` configuration.
+Install [Docker Engine](https://docs.docker.com/engine/install/), Docker Desktop, or [Podman](https://podman.io/docs/installation), then open **Set up DocumentDB Local** again. The extension uses `docker` when it is on `PATH` and falls back to `podman` otherwise. If Docker works in a terminal but not in VS Code, confirm that the extension host inherited the same `PATH`, `DOCKER_HOST`, and `DOCKER_CONTEXT` configuration.
 
 ### Linux or WSL socket access denied
 

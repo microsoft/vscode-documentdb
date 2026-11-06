@@ -354,7 +354,7 @@ function dockerDaemonValues(): Readonly<Record<DockerReadinessPresentationState,
 
 function dockerFailureLabels(): Readonly<Record<DockerFailureKind, string>> {
     return {
-        cliMissing: l10n.t('Docker CLI not found'),
+        cliMissing: l10n.t('Docker or Podman CLI not found'),
         permissionDenied: l10n.t('Docker access denied'),
         daemonUnavailable: l10n.t('Docker daemon unavailable'),
         daemonStarting: l10n.t('Docker daemon starting'),
@@ -438,15 +438,15 @@ function dockerPermissionDetailValues(): Readonly<Record<DockerPermissionDetail,
 
 function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
     return {
-        installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen DocumentDB Local setup.'),
+        installDocker: l10n.t('Install Docker or Podman, then reopen DocumentDB Local setup.'),
         installDockerWindows: l10n.t(
-            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
+            'Install Docker Desktop or Podman, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so the CLI stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop or the Podman machine and wait until it is ready, then check again.',
         ),
         installDockerMac: l10n.t(
-            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
+            'Install Docker Desktop or Podman, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so the CLI stays undetected until it is restarted. Start Docker Desktop or the Podman machine and wait until it is ready, then check again.',
         ),
         installDockerWsl: l10n.t(
-            'Docker was not found in this WSL distribution. If you use Docker Desktop, turn on its WSL integration for this distribution. Otherwise install Docker Engine here. Then check again.',
+            'Neither Docker nor Podman was found in this WSL distribution. If you use Docker Desktop, turn on its WSL integration for this distribution. Otherwise install Docker Engine or Podman here. Then check again.',
         ),
         accessDeniedLinux: l10n.t(
             'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
@@ -471,6 +471,9 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
         ),
         dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
         daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
+        podmanNotRunning: l10n.t(
+            'Podman is installed but its machine is not running. Run "podman machine start" or start it from Podman Desktop, then check again.',
+        ),
         daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
         wslIntegrationUnavailable: l10n.t(
             'Enable Docker Desktop integration for this WSL distribution, then check again.',
@@ -509,6 +512,10 @@ function dockerGuides(): Readonly<Record<DockerGuideKey, { readonly label: strin
         dockerTroubleshooting: {
             label: l10n.t('Open Docker troubleshooting guide'),
             href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
+        },
+        podmanMachine: {
+            label: l10n.t('Open Podman machine guide'),
+            href: 'https://docs.podman.io/en/latest/markdown/podman-machine-start.1.html',
         },
         dockerContexts: {
             label: l10n.t('Open Docker context guide'),
@@ -587,7 +594,7 @@ function dockerDetailTargetLabels(): Readonly<Record<ReturnType<typeof getDocker
 
 function dockerDetailFailureLabels(): Readonly<Record<DockerDetailFailureKey, string>> {
     return {
-        noCli: l10n.t('no Docker CLI found'),
+        noCli: l10n.t('no Docker or Podman CLI found'),
         accessDenied: l10n.t('access denied'),
         notRunning: l10n.t('not running'),
         daemonNotRunning: l10n.t('daemon not running'),

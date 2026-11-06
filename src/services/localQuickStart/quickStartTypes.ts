@@ -382,6 +382,8 @@ interface DockerReadinessBase {
     readonly checkedAtMs: number;
     readonly cliInstalled: boolean;
     readonly cliVersion?: string;
+    /** Which CLI ran the check; `podman` only when Docker's was missing. */
+    readonly cli?: 'docker' | 'podman';
     readonly osType?: 'linux' | 'windows';
     readonly daemonArchitecture?: string;
     readonly diagnosticFingerprint?: string;

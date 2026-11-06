@@ -65,6 +65,23 @@ describe('classifyDockerFailure', () => {
         });
     });
 
+    it('reads a stopped Podman machine from its stderr when the Docker socket still answers', () => {
+        const infoProbe: DockerProbeEvidence = {
+            probe: 'info',
+            exitCode: 125,
+            stdout: '',
+            stderr: 'Cannot connect to Podman. Please verify your connection to the Linux system using `podman system connection list`',
+            endedBy: 'exit',
+            durationMs: 10,
+        };
+        const endpointProbe = { kind: 'unixSocket', source: 'platformDefault' } as const;
+
+        expect(classifyDockerFailure({ infoProbe, endpointProbe })).toEqual({
+            failureKind: 'daemonUnavailable',
+            outcome: 'diagnosed',
+        });
+    });
+
     it('uses a structured permission error when the endpoint errno is unavailable', () => {
         const infoProbe: DockerProbeEvidence = {
             probe: 'info',

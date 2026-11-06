@@ -41,6 +41,7 @@ export type DockerGuidanceKey =
     | 'pendingRestartContainer'
     | 'dockerDesktopNotRunning'
     | 'daemonNotRunning'
+    | 'podmanNotRunning'
     | 'daemonStarting'
     | 'wslIntegrationUnavailable'
     | 'remoteDockerUnavailable'
@@ -59,6 +60,7 @@ export type DockerGuideKey =
     | 'installMacDesktop'
     | 'linuxPostInstall'
     | 'dockerTroubleshooting'
+    | 'podmanMachine'
     | 'dockerContexts'
     | 'wslIntegration'
     | 'remoteDocker'
@@ -277,7 +279,7 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
             if (readiness.provider === 'dockerDesktop' && readiness.providerEvidence !== 'installedApplication') {
                 return 'dockerDesktopNotRunning';
             }
-            return 'daemonNotRunning';
+            return readiness.cli === 'podman' ? 'podmanNotRunning' : 'daemonNotRunning';
         case 'daemonStarting':
             return 'daemonStarting';
         case 'contextUnavailable':
@@ -313,7 +315,10 @@ function getGuide(readiness: DockerReadiness): DockerGuideKey {
             if (readiness.environment === 'wsl' && readiness.provider === 'dockerDesktop' && !readiness.startAction) {
                 return 'wslIntegration';
             }
-            return isRemoteEnvironment(readiness) ? 'remoteDocker' : 'dockerTroubleshooting';
+            if (isRemoteEnvironment(readiness)) {
+                return 'remoteDocker';
+            }
+            return readiness.cli === 'podman' ? 'podmanMachine' : 'dockerTroubleshooting';
         case 'windowsContainers':
             return 'linuxContainers';
         case 'unsupportedHost':

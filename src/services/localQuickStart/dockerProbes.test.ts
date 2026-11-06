@@ -106,6 +106,20 @@ describe('parseDockerInfoFacts', () => {
         });
     });
 
+    it('reads the same facts from podman info', () => {
+        const podmanInfo = JSON.stringify({
+            host: { arch: 'arm64', os: 'linux', distribution: { distribution: 'fedora' } },
+            version: { Version: '6.0.2' },
+        });
+        expect(parseDockerInfoFacts(podmanInfo)).toEqual({
+            osType: 'linux',
+            operatingSystem: undefined,
+            architecture: 'arm64',
+            serverVersion: '6.0.2',
+            serverErrors: [],
+        });
+    });
+
     it('returns undefined for invalid JSON', () => {
         expect(parseDockerInfoFacts('not json')).toBeUndefined();
     });
