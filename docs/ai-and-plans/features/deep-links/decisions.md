@@ -590,6 +590,16 @@ expansion is still the only connect. Made by the orchestrator while the maintain
 the remaining double listing (the helper walks the data provider, VS Code walks its own cache) is
 left until trace timestamps show it matters.
 
+### Amendment (2026-11-06)
+
+The [#1067 review](iterations/03-azure-resource-links-review.md) (F1) found that a cluster already
+connected and expanded keeps its database and collection nodes in VS Code but not in the provider's
+parent cache, so `findNodeById` alone missed them. Database and collection nodes are still looked up
+in the cache first; on a miss, the helper now lists the children of the connected cluster or database
+node (`findChildById`) and requires an exact name match. This runs only after a client exists, and it
+reuses that client, so it is not a second connect. Accepted by the maintainer with the review's
+proposals.
+
 ---
 
 ## 0016 — The Azure confirmation comes before the lookup
