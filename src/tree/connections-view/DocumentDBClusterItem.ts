@@ -146,6 +146,9 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
                 // If the wizard was aborted or failed, return null
                 if (!credentialsProvided) {
+                    this.lastConnectionOutcome = 'canceled';
+                    context.telemetry.properties.result = 'Canceled';
+                    context.telemetry.properties.connectionResult = 'cancelled';
                     return null;
                 }
 

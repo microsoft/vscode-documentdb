@@ -118,6 +118,9 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
             // Prompt for credentials
             const credentialsProvided = await this.promptForCredentials(wizardContext);
             if (!credentialsProvided) {
+                this.lastConnectionOutcome = 'canceled';
+                context.telemetry.properties.result = 'Canceled';
+                context.telemetry.properties.connectionResult = 'cancelled';
                 return null;
             }
 

@@ -486,7 +486,11 @@ describe('ClusterItemBase.connect', () => {
         // Keying either lookup on the tree position opens a second, duplicate connection.
         expect(mockHasCredentials).toHaveBeenCalledWith(cluster.clusterId);
         expect(mockHasCredentials).not.toHaveBeenCalledWith(cluster.treeId);
-        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(cluster.clusterId, expect.anything());
+        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(
+            cluster.clusterId,
+            expect.anything(),
+            expect.any(Function),
+        );
     });
 
     it('authenticates when no credentials are cached, without preparing a cached client', async () => {

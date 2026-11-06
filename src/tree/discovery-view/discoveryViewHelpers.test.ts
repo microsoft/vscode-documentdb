@@ -40,7 +40,7 @@ vi.mock('../../extensionVariables', () => ({
 }));
 
 vi.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { exists: vi.fn() },
+    ClustersClient: { exists: vi.fn(), getExistingClient: vi.fn() },
 }));
 
 interface FakeClusterNode extends TreeElement {

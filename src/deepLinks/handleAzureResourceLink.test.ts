@@ -232,7 +232,12 @@ describe('handleAzureResourceLinkRequest', (): void => {
             if (step !== 'apply') {
                 expect(applyVisibilityChanges).not.toHaveBeenCalled();
             } else {
-                expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes);
+                expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(
+                    link.providerId,
+                    subscription,
+                    changes,
+                    context,
+                );
             }
             if (step === 'resolve') {
                 expect(readAzureResource).not.toHaveBeenCalled();
@@ -297,7 +302,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
         });
         expect(computeVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription);
         expect(hasVisibilityChanges).toHaveBeenCalledWith(changes);
-        expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes);
+        expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes, context);
         expect(revealInDiscoveryView).toHaveBeenCalledExactlyOnceWith(
             context,
             {
@@ -331,6 +336,10 @@ describe('handleAzureResourceLinkRequest', (): void => {
             visibilityProviderShown: 'true',
             visibilityTenantUnfiltered: 'true',
             visibilitySubscriptionAdded: 'true',
+            visibilityChangesApplied: 'false',
+            visibilityProviderApplied: 'false',
+            visibilityTenantApplied: 'false',
+            visibilitySubscriptionApplied: 'false',
             failureStage: 'revealCluster',
         });
         expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith();
@@ -459,7 +468,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
             }),
             'Change filters and open',
         );
-        expect(applyVisibilityChanges).toHaveBeenCalledWith('ru-provider', subscription, changes);
+        expect(applyVisibilityChanges).toHaveBeenCalledWith('ru-provider', subscription, changes, context);
     });
 
     it.each([
@@ -540,7 +549,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
             '[DeepLink] Azure confirmation skipped (confirmations disabled)',
         );
         expect(ext.outputChannel.trace).not.toHaveBeenCalledWith('[DeepLink] Showing filter change confirmation');
-        expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes);
+        expect(applyVisibilityChanges).toHaveBeenCalledExactlyOnceWith(link.providerId, subscription, changes, context);
         expect(revealInDiscoveryView).toHaveBeenCalledTimes(1);
     });
 

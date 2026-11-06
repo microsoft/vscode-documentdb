@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
@@ -70,6 +71,19 @@ afterEach((): void => {
 });
 
 describe('Azure deep-link visibility', (): void => {
+    it('distinguishes completed changes from partial application before a failure', async (): Promise<void> => {
+        const context = { telemetry: { properties: {}, measurements: {} } } as IActionContext;
+        const changes = { showProvider: true, unfilterTenant: true, addSubscription: true };
+        vi.mocked(removeUnselectedTenant).mockRejectedValue(new Error('filter write failed'));
+        await expect(applyVisibilityChanges(providerId, subscription, changes, context)).rejects.toThrow(
+            'filter write failed',
+        );
+        expect(context.telemetry.properties.visibilityProviderApplied).toBe('true');
+        expect(context.telemetry.properties.visibilityTenantApplied).toBeUndefined();
+        expect(context.telemetry.properties.visibilitySubscriptionApplied).toBeUndefined();
+        expect(context.telemetry.properties.visibilityChangesApplied).not.toBe('true');
+    });
+
     it.each<VisibilityChanges>([
         { showProvider: true, unfilterTenant: false, addSubscription: false },
         { showProvider: false, unfilterTenant: true, addSubscription: false },

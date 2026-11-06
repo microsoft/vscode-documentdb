@@ -128,7 +128,6 @@ describe('resolveAzureSubscription', (): void => {
             failureStage: 'resolveSubscription',
             azureSignInRequired: 'true',
             tenantSignInRequired: 'false',
-            subscriptionAccountCount: '1',
         });
     });
 
@@ -142,6 +141,8 @@ describe('resolveAzureSubscription', (): void => {
             failureStage: 'azureSignIn',
             azureSignInRequired: 'true',
             userCancelledAtStep: 'AzureSignIn',
+            deepLinkOutcome: 'canceled',
+            result: 'Canceled',
         });
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure sign-in confirmation: dismissed');
         expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
@@ -173,7 +174,6 @@ describe('resolveAzureSubscription', (): void => {
             failureStage: 'resolveSubscription',
             azureSignInRequired: 'false',
             tenantSignInRequired: 'false',
-            subscriptionAccountCount: '1',
         });
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
         expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
@@ -191,7 +191,7 @@ describe('resolveAzureSubscription', (): void => {
 
         expect(isTenantFilteredOut).toHaveBeenNthCalledWith(1, filtered.tenantId, filtered.account.id);
         expect(isTenantFilteredOut).toHaveBeenNthCalledWith(2, visible.tenantId, visible.account.id);
-        expect(context.telemetry.properties.subscriptionAccountCount).toBe('2');
+        expect(context.telemetry.measurements.subscriptionAccountCount).toBe(2);
     });
 
     it('falls back to the first candidate when all matching tenants are filtered out', async (): Promise<void> => {
@@ -204,7 +204,7 @@ describe('resolveAzureSubscription', (): void => {
 
         await expect(resolveAzureSubscription(context, request)).resolves.toBe(first);
 
-        expect(context.telemetry.properties.subscriptionAccountCount).toBe('2');
+        expect(context.telemetry.measurements.subscriptionAccountCount).toBe(2);
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     });
 
@@ -248,7 +248,6 @@ describe('resolveAzureSubscription', (): void => {
             failureStage: 'resolveSubscription',
             azureSignInRequired: 'false',
             tenantSignInRequired: 'true',
-            subscriptionAccountCount: '1',
         });
     });
 
@@ -270,7 +269,7 @@ describe('resolveAzureSubscription', (): void => {
             failureStage: 'resolveSubscription',
             azureSignInRequired: 'false',
             tenantSignInRequired: 'true',
-            subscriptionAccountCount: '0',
+            errorReason: 'subscriptionNotFound',
         });
         expect(context.errorHandling.buttons).toEqual([
             { title: 'Manage Azure accounts', callback: expect.any(Function) },
@@ -314,7 +313,7 @@ describe('resolveAzureSubscription', (): void => {
         expect(azureSubscriptionProvider.signIn).not.toHaveBeenCalled();
         expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledExactlyOnceWith(false);
         expect(context.telemetry.properties.tenantSignInRequired).toBe('false');
-        expect(context.telemetry.properties.subscriptionAccountCount).toBe('0');
+        expect(context.telemetry.measurements.subscriptionAccountCount).toBe(0);
         expect(context.errorHandling.buttons?.[0].title).toBe('Manage Azure accounts');
     });
 

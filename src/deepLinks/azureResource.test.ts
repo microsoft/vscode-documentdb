@@ -33,7 +33,7 @@ vi.mock('../utils/azureClients', () => ({
     createCosmosDBManagementClient: vi.fn(),
 }));
 
-const context = {} as IActionContext;
+const context = { telemetry: { properties: {}, measurements: {} } } as IActionContext;
 const subscription = { name: 'My subscription' } as AzureSubscription;
 const request: AzureResourceReadRequest = { kind: 'vcore', resourceGroup: 'my-group', name: 'my-resource' };
 const getAccount = vi.fn();
@@ -41,6 +41,7 @@ const getAccount = vi.fn();
 describe('readAzureResource', () => {
     beforeEach(() => {
         vi.resetAllMocks();
+        context.telemetry.properties = {};
         vi.mocked(createCosmosDBManagementClient).mockResolvedValue({
             databaseAccounts: { get: getAccount },
         } as unknown as CosmosDBManagementClient);

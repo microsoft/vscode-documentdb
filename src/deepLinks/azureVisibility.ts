@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type AzureSubscription } from '@microsoft/vscode-azext-azureauth';
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
 import {
@@ -48,15 +49,22 @@ export async function applyVisibilityChanges(
     providerId: string,
     subscription: AzureSubscription,
     changes: VisibilityChanges,
+    context?: IActionContext,
 ): Promise<void> {
     let changed = false;
     if (changes.showProvider) {
         await showDiscoveryProvider(providerId);
+        if (context) {
+            context.telemetry.properties.visibilityProviderApplied = 'true';
+        }
         ext.outputChannel.trace('[DeepLink] Discovery provider shown');
         changed = true;
     }
     if (changes.unfilterTenant) {
         await removeUnselectedTenant(subscription.tenantId, subscription.account.id);
+        if (context) {
+            context.telemetry.properties.visibilityTenantApplied = 'true';
+        }
         ext.outputChannel.trace('[DeepLink] Tenant unfiltered');
         changed = true;
     }
@@ -67,6 +75,9 @@ export async function applyVisibilityChanges(
                 ...selectedSubscriptions,
                 `${subscription.tenantId}/${subscription.subscriptionId}`,
             ]);
+            if (context) {
+                context.telemetry.properties.visibilitySubscriptionApplied = 'true';
+            }
             ext.outputChannel.trace('[DeepLink] Subscription added to filter');
             changed = true;
         }
@@ -74,6 +85,9 @@ export async function applyVisibilityChanges(
     if (changed) {
         ext.discoveryBranchDataProvider.refresh();
         ext.outputChannel.trace('[DeepLink] Discovery view refreshed');
+    }
+    if (context) {
+        context.telemetry.properties.visibilityChangesApplied = changed ? 'true' : 'false';
     }
 }
 

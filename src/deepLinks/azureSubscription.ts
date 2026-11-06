@@ -10,6 +10,7 @@ import { ext } from '../extensionVariables';
 import { type AzureSubscriptionProviderWithFilters } from '../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { isTenantFilteredOut } from '../plugins/api-shared/azure/subscriptionFiltering/subscriptionFilteringHelpers';
 import { DiscoveryService } from '../services/discoveryServices';
+import { cancelDeepLink, measureDeepLinkPhase } from './deepLinkTelemetry';
 
 /** A discovery provider that lists Azure subscriptions. Both Azure Mongo providers satisfy it. */
 export interface AzureSubscriptionDiscoveryProvider {
@@ -51,23 +52,30 @@ export async function resolveAzureSubscription(
     const { azureSubscriptionProvider } = provider;
     ext.outputChannel.trace('[DeepLink] Checking Azure sign-in');
     report?.(vscode.l10n.t('Checking Azure sign-in…'));
-    const isSignedIn = await azureSubscriptionProvider.isSignedIn();
+    const isSignedIn = await measureDeepLinkPhase(context, 'azureSignInCheck', () =>
+        azureSubscriptionProvider.isSignedIn(),
+    );
     ext.outputChannel.trace(`[DeepLink] Azure sign-in: ${isSignedIn ? 'signed in' : 'sign-in required'}`);
     context.telemetry.properties.azureSignInRequired = isSignedIn ? 'false' : 'true';
     if (!isSignedIn) {
         const signInButton = vscode.l10n.t('Sign in');
         ext.outputChannel.trace('[DeepLink] Showing Azure sign-in confirmation');
-        const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('Sign in to Azure'),
-            { modal: true, detail: vscode.l10n.t('Sign in to Azure to open {0}.', request.resourceName) },
-            signInButton,
+        const choice = await measureDeepLinkPhase(context, 'confirmation', () =>
+            vscode.window.showInformationMessage(
+                vscode.l10n.t('Sign in to Azure'),
+                { modal: true, detail: vscode.l10n.t('Sign in to Azure to open {0}.', request.resourceName) },
+                signInButton,
+            ),
         );
         ext.outputChannel.trace(
             `[DeepLink] Azure sign-in confirmation: ${choice === signInButton ? 'accepted' : 'dismissed'}`,
         );
-        if (choice !== signInButton || !(await azureSubscriptionProvider.signIn())) {
+        if (
+            choice !== signInButton ||
+            !(await measureDeepLinkPhase(context, 'azureSignIn', () => azureSubscriptionProvider.signIn()))
+        ) {
             ext.outputChannel.trace('[DeepLink] Azure sign-in stopped');
-            context.telemetry.properties.userCancelledAtStep = 'AzureSignIn';
+            cancelDeepLink(context, 'AzureSignIn');
             return undefined;
         }
         ext.outputChannel.trace('[DeepLink] Azure sign-in: signed in');
@@ -78,7 +86,9 @@ export async function resolveAzureSubscription(
     for (let attempt = 0; attempt < 2; attempt++) {
         ext.outputChannel.trace('[DeepLink] Listing subscriptions');
         report?.(vscode.l10n.t('Looking for the subscription…'));
-        const subscriptions = await azureSubscriptionProvider.getSubscriptions(false);
+        const subscriptions = await measureDeepLinkPhase(context, 'subscriptionLookup', () =>
+            azureSubscriptionProvider.getSubscriptions(false),
+        );
         const candidates = subscriptions.filter(
             (subscription) =>
                 subscription.subscriptionId.toLowerCase() === request.subscriptionId.toLowerCase() &&
@@ -86,7 +96,8 @@ export async function resolveAzureSubscription(
                     subscription.tenantId.toLowerCase() === request.tenantId.toLowerCase()),
         );
         ext.outputChannel.trace(`[DeepLink] ${candidates.length} matching subscription(s) found`);
-        context.telemetry.properties.subscriptionAccountCount = String(candidates.length);
+        context.telemetry.measurements.subscriptionAccountCount = candidates.length;
+        context.telemetry.measurements.subscriptionLookupAttempts = attempt + 1;
         const subscription =
             candidates.find((candidate) => !isTenantFilteredOut(candidate.tenantId, candidate.account.id)) ??
             candidates[0];
@@ -99,30 +110,34 @@ export async function resolveAzureSubscription(
         }
 
         context.telemetry.properties.tenantSignInRequired = 'true';
+        const tenantId = request.tenantId;
         ext.outputChannel.trace('[DeepLink] Tenant sign-in offered');
         const signInButton = vscode.l10n.t('Sign in to tenant');
-        const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('Sign in to tenant'),
-            {
-                modal: true,
-                detail: vscode.l10n.t(
-                    'We could not find subscription {0} with your current sign-in. The link names tenant {1}; signing in to that tenant may give access.',
-                    request.subscriptionId,
-                    request.tenantId,
-                ),
-            },
-            signInButton,
+        const choice = await measureDeepLinkPhase(context, 'confirmation', () =>
+            vscode.window.showInformationMessage(
+                vscode.l10n.t('Sign in to tenant'),
+                {
+                    modal: true,
+                    detail: vscode.l10n.t(
+                        'We could not find subscription {0} with your current sign-in. The link names tenant {1}; signing in to that tenant may give access.',
+                        request.subscriptionId,
+                        tenantId,
+                    ),
+                },
+                signInButton,
+            ),
         );
         ext.outputChannel.trace(`[DeepLink] Tenant sign-in ${choice === signInButton ? 'chosen' : 'dismissed'}`);
         if (choice !== signInButton) {
-            context.telemetry.properties.userCancelledAtStep = 'AzureTenantSignIn';
+            cancelDeepLink(context, 'AzureTenantSignIn');
             return undefined;
         }
         report?.(vscode.l10n.t('Signing in to tenant…'));
-        await azureSubscriptionProvider.signIn(request.tenantId);
+        await measureDeepLinkPhase(context, 'azureSignIn', () => azureSubscriptionProvider.signIn(tenantId));
     }
 
     ext.outputChannel.trace('[DeepLink] Subscription not found');
+    context.telemetry.properties.errorReason = 'subscriptionNotFound';
     context.errorHandling.buttons = [
         {
             title: vscode.l10n.t('Manage Azure accounts'),
@@ -130,6 +145,10 @@ export async function resolveAzureSubscription(
                 await callWithTelemetryAndErrorHandling(
                     'globalUriHandler.manageAzureAccounts',
                     async (ctx): Promise<void> => {
+                        Object.assign(ctx.telemetry.properties, {
+                            deepLinkCorrelationId: context.telemetry.properties.deepLinkCorrelationId,
+                            deepLinkSource: context.telemetry.properties.deepLinkSource,
+                        });
                         await provider.configureCredentials?.(ctx);
                     },
                 );

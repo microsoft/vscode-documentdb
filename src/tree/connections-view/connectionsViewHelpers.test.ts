@@ -118,7 +118,7 @@ describe('buildConnectionsViewTargetPath', () => {
 });
 
 describe('revealInConnectionsView', () => {
-    const context = {} as IActionContext;
+    const context = { telemetry: { properties: {}, measurements: {} } } as IActionContext;
 
     it.each([false, true])(
         'reveals nested connection, database, and collection paths with isEmulator=%s',

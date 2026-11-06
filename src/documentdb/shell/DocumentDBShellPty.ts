@@ -7,6 +7,7 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { type DeepLinkTelemetry, trackDeepLinkTelemetry } from '../../deepLinks/deepLinkTelemetry';
 import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { maskSecrets } from '../../services/localQuickStart/outputMasking';
@@ -48,6 +49,7 @@ const COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS = 100;
  * Configuration for the interactive shell Pseudoterminal.
  */
 export interface DocumentDBShellPtyOptions {
+    readonly deepLink?: DeepLinkTelemetry;
     /** Connection parameters for the shell session. */
     readonly connectionInfo: ShellConnectionInfo;
     /** Optional command to pre-fill in the input line after initialization (not executed). */
@@ -126,8 +128,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _commandCount: number = 0;
     /** Whether the session was successfully initialized (for guarding sessionEnd emission). */
     private _sessionStarted: boolean = false;
+    private readonly _deepLink: DeepLinkTelemetry | undefined;
+
+    public get shellSessionId(): string {
+        return this._shellSessionId;
+    }
 
     constructor(options: DocumentDBShellPtyOptions) {
+        this._deepLink = options.deepLink;
         this._connectionInfo = options.connectionInfo;
         this._currentDatabase = options.connectionInfo.databaseName;
         this._initialInput = options.initialInput;
@@ -241,6 +249,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             void callWithTelemetryAndErrorHandling('shell.sessionEnd', async (context) => {
                 context.errorHandling.suppressDisplay = true;
                 context.telemetry.properties.shellSessionId = this._shellSessionId;
+                trackDeepLinkTelemetry(context, this._deepLink);
             });
         }
 
@@ -476,7 +485,26 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private async initializeSession(): Promise<void> {
         try {
-            const metadata = await this._sessionManager.initialize();
+            const metadata = await callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.errorHandling.rethrow = true;
+                context.telemetry.maskEntireErrorMessage = true;
+                trackDeepLinkTelemetry(context, this._deepLink);
+                context.telemetry.properties.shellSessionId = this._shellSessionId;
+                context.telemetry.properties.connectionCorrelationId = this._connectionCorrelationId;
+                context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
+                const metadata = await this._sessionManager.initialize();
+                context.telemetry.properties.authMethod = metadata.authMechanism;
+                context.telemetry.properties.isEmulator = metadata.isEmulator ? 'true' : 'false';
+                context.telemetry.measurements.activeShellSessionCount = getRegisteredShellTerminals().length;
+                const domainProps: Record<string, string | undefined> = {};
+                this.collectShellDomainTelemetry(domainProps);
+                Object.assign(context.telemetry.properties, domainProps);
+                return metadata;
+            });
+            if (!metadata) {
+                throw new UserCancelledError('shell.sessionStart');
+            }
 
             void this._completionProvider.prewarmCollections({
                 clusterId: this._connectionInfo.clusterId,
@@ -489,23 +517,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // ── Telemetry: shell session started ─────────────────────────
             this._sessionStarted = true;
-            void callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
-                context.errorHandling.suppressDisplay = true;
-                context.telemetry.properties.shellSessionId = this._shellSessionId;
-                context.telemetry.properties.authMethod = metadata.authMechanism;
-                context.telemetry.properties.isEmulator = metadata.isEmulator ? 'true' : 'false';
-                context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
-                context.telemetry.measurements.activeShellSessionCount = getRegisteredShellTerminals().length;
-
-                if (this._connectionCorrelationId) {
-                    context.telemetry.properties.connectionCorrelationId = this._connectionCorrelationId;
-                }
-
-                // Domain info — privacy-safe hashed host data
-                const domainProps: Record<string, string | undefined> = {};
-                this.collectShellDomainTelemetry(domainProps);
-                Object.assign(context.telemetry.properties, domainProps);
-            });
 
             // Display connection summary
             let authLabel: string;
@@ -713,6 +724,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         await callWithTelemetryAndErrorHandling('shell.eval', async (context) => {
             context.errorHandling.suppressDisplay = true;
             context.errorHandling.rethrow = true; // let the outer catch handle display
+            trackDeepLinkTelemetry(context, this._deepLink);
 
             // ── Pre-eval telemetry ───────────────────────────────────────
             context.telemetry.properties.shellSessionId = this._shellSessionId;

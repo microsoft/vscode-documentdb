@@ -47,6 +47,11 @@
 import { callWithTelemetryAndErrorHandling, parseError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { initWebviewTrpc, type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import { getInvocationSignal, telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
+import {
+    readDeepLinkTelemetry,
+    trackDeepLinkTelemetry,
+    type DeepLinkTelemetry,
+} from '../../deepLinks/deepLinkTelemetry';
 import { WEBVIEW_CONFIG } from './configuration';
 
 /**
@@ -56,7 +61,7 @@ import { WEBVIEW_CONFIG } from './configuration';
  * richer DocumentDB context as needed), and the host dispatcher invokes them
  * through this instance's `createCallerFactory`.
  */
-const trpc = initWebviewTrpc<FrameworkBaseRouterContext>();
+const trpc = initWebviewTrpc<FrameworkBaseRouterContext & Partial<DeepLinkTelemetry>>();
 const { publicProcedure, router, mergeRouters, createCallerFactory } = trpc;
 
 /**
@@ -115,6 +120,7 @@ const documentDbTelemetryRunner: TelemetryRunner<RpcEnrichment> = {
     async run(eventId, invocation, invoke) {
         const result = await callWithTelemetryAndErrorHandling(eventId, async (actionContext) => {
             actionContext.errorHandling.suppressDisplay = true;
+            trackDeepLinkTelemetry(actionContext, readDeepLinkTelemetry(invocation.ctx));
 
             const middlewareResult = await invoke({ actionContext });
 

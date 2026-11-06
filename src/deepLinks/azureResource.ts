@@ -40,6 +40,7 @@ export async function readAzureResource(
         const client = await createCosmosDBManagementClient(context, subscription);
         const account = await client.databaseAccounts.get(request.resourceGroup, request.name);
         if (account.kind?.toLowerCase() !== 'mongodb') {
+            context.telemetry.properties.errorReason = 'unsupportedAccountApi';
             ext.outputChannel.trace('[DeepLink] Azure resource refused: not MongoDB API');
             throw new Error(
                 vscode.l10n.t(
@@ -52,6 +53,7 @@ export async function readAzureResource(
     } catch (error: unknown) {
         if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
             if (error.code === 'ResourceNotFound' || error.code === 'ResourceGroupNotFound') {
+                context.telemetry.properties.errorReason = 'resourceNotFound';
                 ext.outputChannel.trace('[DeepLink] Azure resource refused: not found');
                 throw new Error(
                     vscode.l10n.t(
@@ -62,6 +64,7 @@ export async function readAzureResource(
                 );
             }
             if (error.code === 'AuthorizationFailed') {
+                context.telemetry.properties.errorReason = 'resourceReadForbidden';
                 ext.outputChannel.trace('[DeepLink] Azure resource refused: not authorized');
                 throw new Error(
                     vscode.l10n.t(

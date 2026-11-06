@@ -12,6 +12,7 @@ import { readAzureResource } from './azureResource';
 import { parseAzureResourceLink } from './azureResourceLink';
 import { resolveAzureSubscription } from './azureSubscription';
 import { applyVisibilityChanges, computeVisibilityChanges, hasVisibilityChanges } from './azureVisibility';
+import { cancelDeepLink, measureDeepLinkPhase } from './deepLinkTelemetry';
 
 export interface AzureResourceLinkRequest {
     readonly resourceId: string;
@@ -76,14 +77,16 @@ export async function handleAzureResourceLinkRequest(
 
         const openButton = vscode.l10n.t('Open');
         ext.outputChannel.trace('[DeepLink] Showing Azure confirmation');
-        const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('Open Azure resource?'),
-            { modal: true, detail: detail.join('\n') },
-            openButton,
+        const choice = await measureDeepLinkPhase(context, 'confirmation', () =>
+            vscode.window.showInformationMessage(
+                vscode.l10n.t('Open Azure resource?'),
+                { modal: true, detail: detail.join('\n') },
+                openButton,
+            ),
         );
         ext.outputChannel.trace(`[DeepLink] Azure confirmation: ${choice === openButton ? 'accepted' : 'dismissed'}`);
         if (choice !== openButton) {
-            context.telemetry.properties.userCancelledAtStep = 'AzureConfirmation';
+            cancelDeepLink(context, 'AzureConfirmation');
             return undefined;
         }
     } else {
@@ -98,18 +101,20 @@ export async function handleAzureResourceLinkRequest(
         },
         async (progress, token): Promise<DiscoveryRevealResult | undefined> => {
             const report = (message: string): void => progress.report({ message });
-            const subscription = await resolveAzureSubscription(
-                context,
-                {
-                    providerId: link.providerId,
-                    subscriptionId: link.subscriptionId,
-                    tenantId: link.tenantId,
-                    resourceName: link.name,
-                },
-                report,
+            const subscription = await measureDeepLinkPhase(context, 'azureSubscriptionResolution', () =>
+                resolveAzureSubscription(
+                    context,
+                    {
+                        providerId: link.providerId,
+                        subscriptionId: link.subscriptionId,
+                        tenantId: link.tenantId,
+                        resourceName: link.name,
+                    },
+                    report,
+                ),
             );
             if (token.isCancellationRequested) {
-                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                cancelDeepLink(context, 'AzureProgress');
                 ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
                 return undefined;
             }
@@ -120,21 +125,25 @@ export async function handleAzureResourceLinkRequest(
             context.valuesToMask.push(subscription.name);
             context.telemetry.properties.failureStage = 'readAzureResource';
             report(vscode.l10n.t('Reading the resource from Azure…'));
-            const { name: displayName } = await readAzureResource(context, subscription, {
-                kind: link.kind,
-                resourceGroup: link.resourceGroup,
-                name: link.name,
-            });
+            const { name: displayName } = await measureDeepLinkPhase(context, 'azureResourceRead', () =>
+                readAzureResource(context, subscription, {
+                    kind: link.kind,
+                    resourceGroup: link.resourceGroup,
+                    name: link.name,
+                }),
+            );
             if (token.isCancellationRequested) {
-                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                cancelDeepLink(context, 'AzureProgress');
                 ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
                 return undefined;
             }
 
             context.telemetry.properties.failureStage = 'computeVisibility';
-            const changes = await computeVisibilityChanges(link.providerId, subscription);
+            const changes = await measureDeepLinkPhase(context, 'visibilityComputation', () =>
+                computeVisibilityChanges(link.providerId, subscription),
+            );
             if (token.isCancellationRequested) {
-                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                cancelDeepLink(context, 'AzureProgress');
                 ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
                 return undefined;
             }
@@ -142,6 +151,10 @@ export async function handleAzureResourceLinkRequest(
             context.telemetry.properties.visibilityTenantUnfiltered = changes.unfilterTenant ? 'true' : 'false';
             context.telemetry.properties.visibilitySubscriptionAdded = changes.addSubscription ? 'true' : 'false';
             const visibilityChangesNeeded = hasVisibilityChanges(changes);
+            context.telemetry.properties.visibilityChangesApplied = 'false';
+            context.telemetry.properties.visibilityProviderApplied = 'false';
+            context.telemetry.properties.visibilityTenantApplied = 'false';
+            context.telemetry.properties.visibilitySubscriptionApplied = 'false';
 
             context.telemetry.properties.failureStage = 'confirmFilterChanges';
             if (showUrlHandlingConfirmations && visibilityChangesNeeded) {
@@ -178,21 +191,23 @@ export async function handleAzureResourceLinkRequest(
 
                 const changeFiltersButton = vscode.l10n.t('Change filters and open');
                 ext.outputChannel.trace('[DeepLink] Showing filter change confirmation');
-                const choice = await vscode.window.showInformationMessage(
-                    vscode.l10n.t('Change filters?'),
-                    { modal: true, detail: detail.join('\n') },
-                    changeFiltersButton,
+                const choice = await measureDeepLinkPhase(context, 'confirmation', () =>
+                    vscode.window.showInformationMessage(
+                        vscode.l10n.t('Change filters?'),
+                        { modal: true, detail: detail.join('\n') },
+                        changeFiltersButton,
+                    ),
                 );
                 ext.outputChannel.trace(
                     `[DeepLink] Filter change confirmation: ${choice === changeFiltersButton ? 'accepted' : 'dismissed'}`,
                 );
                 if (token.isCancellationRequested) {
-                    context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                    cancelDeepLink(context, 'AzureProgress');
                     ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
                     return undefined;
                 }
                 if (choice !== changeFiltersButton) {
-                    context.telemetry.properties.userCancelledAtStep = 'AzureFilterChanges';
+                    cancelDeepLink(context, 'AzureFilterChanges');
                     return undefined;
                 }
             }
@@ -201,32 +216,36 @@ export async function handleAzureResourceLinkRequest(
             if (visibilityChangesNeeded) {
                 ext.outputChannel.trace('[DeepLink] Applying filter changes');
                 report(vscode.l10n.t('Updating filters…'));
-                await applyVisibilityChanges(link.providerId, subscription, changes);
+                await measureDeepLinkPhase(context, 'visibilityApplication', () =>
+                    applyVisibilityChanges(link.providerId, subscription, changes, context),
+                );
             }
 
             if (token.isCancellationRequested) {
-                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                cancelDeepLink(context, 'AzureProgress');
                 ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
                 return undefined;
             }
 
             context.telemetry.properties.failureStage = 'revealCluster';
             ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
-            const result = await revealInDiscoveryView(
-                context,
-                {
-                    providerId: link.providerId,
-                    subscriptionId: link.subscriptionId,
-                    azureResourceId: link.resourceId,
-                    displayName,
-                    database: request.database,
-                    collection: request.collection,
-                    suppressAutoOpenDashboard: request.open === 'dashboard',
-                },
-                report,
+            const result = await measureDeepLinkPhase(context, 'treeReveal', () =>
+                revealInDiscoveryView(
+                    context,
+                    {
+                        providerId: link.providerId,
+                        subscriptionId: link.subscriptionId,
+                        azureResourceId: link.resourceId,
+                        displayName,
+                        database: request.database,
+                        collection: request.collection,
+                        suppressAutoOpenDashboard: request.open === 'dashboard',
+                    },
+                    report,
+                ),
             );
             if (token.isCancellationRequested) {
-                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
+                cancelDeepLink(context, 'AzureProgress');
                 ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
                 return undefined;
             }

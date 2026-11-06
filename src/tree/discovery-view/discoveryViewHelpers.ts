@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { failDeepLink, recordDeepLinkConnectionAttempt } from '../../deepLinks/deepLinkTelemetry';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
@@ -129,6 +130,7 @@ export async function revealInDiscoveryView(
 
             ext.outputChannel.trace(`[DeepLink] Cluster node ${clusterNode ? 'found' : 'not found'}`);
             if (!clusterNode) {
+                context.telemetry.properties.errorReason = 'clusterNotFound';
                 throw new Error(
                     vscode.l10n.t(
                         'Could not find {0} in the Discovery view. It may have been deleted, or a filter may still hide it. Check the filters on the provider in the Discovery view, then open the link again.',
@@ -148,6 +150,12 @@ export async function revealInDiscoveryView(
             ext.outputChannel.trace('[DeepLink] Showing the cluster in the Discovery view');
             await ext.discoveryTreeView.reveal(clusterNode, { select: true, focus: false, expand: false });
             report?.(vscode.l10n.t('Connecting…'));
+            context.telemetry.properties.failureStage = 'connectCluster';
+            context.telemetry.properties.connectionReused = ClustersClient.getExistingClient(
+                clusterNode.cluster.clusterId,
+            )
+                ? 'true'
+                : 'false';
             ext.outputChannel.trace('[DeepLink] Revealing and expanding the cluster');
             const release = request.suppressAutoOpenDashboard
                 ? suppressAutoOpenDashboard(clusterNode.cluster.clusterId)
@@ -161,9 +169,15 @@ export async function revealInDiscoveryView(
             } finally {
                 release?.();
             }
+            recordDeepLinkConnectionAttempt(context, clusterNode);
+            if (context.telemetry.properties.deepLinkOutcome === 'canceled') {
+                context.telemetry.properties.openTargetResult = 'skippedCanceled';
+                return undefined;
+            }
             if (provider.hasNodeErrorState(clusterNode.id)) {
                 ext.outputChannel.trace('[DeepLink] Cluster expansion failed; the node already explained why');
                 context.telemetry.properties.openTargetResult = 'skippedClusterError';
+                failDeepLink(context, 'connectionFailed', 'clusterExpansionFailed');
                 return undefined;
             }
             const clusterId = clusterNode.cluster.clusterId;
@@ -171,11 +185,13 @@ export async function revealInDiscoveryView(
             ext.outputChannel.trace(`[DeepLink] Cluster ${connected ? 'connected' : 'not connected'}`);
             if (!connected) {
                 context.telemetry.properties.openTargetResult = 'skippedNotConnected';
+                failDeepLink(context, 'connectionFailed', 'notConnected');
                 return undefined;
             }
 
             let databaseNode: DatabaseItem | undefined;
             if (request.database) {
+                context.telemetry.properties.failureStage = 'findDatabase';
                 report?.(vscode.l10n.t('Opening the database…'));
                 ext.outputChannel.trace(`[DeepLink] Looking up database ${request.database}`);
                 const dbId = `${clusterNode.id}/${request.database}`;
@@ -189,6 +205,7 @@ export async function revealInDiscoveryView(
                     node.databaseInfo.name !== request.database
                 ) {
                     ext.outputChannel.trace('[DeepLink] Database not found');
+                    context.telemetry.properties.errorReason = 'databaseNotFound';
                     throw new Error(
                         vscode.l10n.t(
                             'Could not find database "{0}" on {1}. Check the name and your access, then open the link again.',
@@ -207,6 +224,7 @@ export async function revealInDiscoveryView(
                 });
 
                 if (request.collection) {
+                    context.telemetry.properties.failureStage = 'findCollection';
                     report?.(vscode.l10n.t('Opening the collection…'));
                     ext.outputChannel.trace(`[DeepLink] Looking up collection ${request.collection}`);
                     const collId = `${databaseNode.id}/${request.collection}`;
@@ -221,6 +239,7 @@ export async function revealInDiscoveryView(
                         collectionNode.collectionInfo.name !== request.collection
                     ) {
                         ext.outputChannel.trace('[DeepLink] Collection not found');
+                        context.telemetry.properties.errorReason = 'collectionNotFound';
                         throw new Error(
                             vscode.l10n.t(
                                 'Could not find collection "{0}" in database "{1}". Check the name and your access, then open the link again.',

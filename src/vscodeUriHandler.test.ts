@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as vscode from 'vscode';
@@ -13,6 +14,7 @@ import { NoAuthHandler } from './documentdb/auth/NoAuthHandler';
 import { ClustersClient } from './documentdb/ClustersClient';
 import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
+import { settingsKeys } from './settingsKeys';
 import {
     buildConnectionsViewTargetPath,
     revealInConnectionsView,
@@ -24,16 +26,19 @@ import { globalUriHandler } from './vscodeUriHandler';
 
 /** Telemetry recorded by the mocked azext wrapper, so routing decisions can be asserted. */
 let lastTelemetry: Record<string, string> = {};
+let lastMeasurements: Record<string, number> = {};
+const receivedTelemetry: Record<string, string>[] = [];
 let lastValuesToMask: string[] = [];
 let showUrlHandlingConfirmations = true;
 const mockGetAllConnections = vi.fn().mockResolvedValue([]);
 const mockSaveConnection = vi.fn().mockResolvedValue(undefined);
 const suppressDashboard = vi.spyOn(dashboardSuppression, 'suppressAutoOpenDashboard');
 
-vi.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
+    ...(await importOriginal<{ UserCancelledError: typeof UserCancelledError }>()),
     callWithTelemetryAndErrorHandling: vi.fn(
         async (
-            _eventName: string,
+            eventName: string,
             callback: (ctx: { telemetry: { properties: Record<string, string> }; valuesToMask: string[] }) => unknown,
         ) => {
             const context = {
@@ -44,7 +49,11 @@ vi.mock('@microsoft/vscode-azext-utils', () => ({
                 return await callback(context);
             } finally {
                 lastTelemetry = context.telemetry.properties;
+                lastMeasurements = context.telemetry.measurements;
                 lastValuesToMask = context.valuesToMask;
+                if (eventName === 'globalUriHandler.received') {
+                    receivedTelemetry.push({ ...context.telemetry.properties });
+                }
             }
         },
     ),
@@ -60,7 +69,7 @@ vi.mock('./deepLinks/handleAzureResourceLink', () => ({
     handleAzureResourceLinkRequest: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('./documentdb/ClustersClient', () => ({ ClustersClient: { exists: vi.fn() } }));
+vi.mock('./documentdb/ClustersClient', () => ({ ClustersClient: { exists: vi.fn(), getExistingClient: vi.fn() } }));
 
 // Keep storage, tree navigation, and webview creation isolated from the URI handler.
 vi.mock('./commands/openCollectionView/openCollectionView', () => ({ openCollectionViewInternal: vi.fn() }));
@@ -115,12 +124,15 @@ async function runHandler(path: string, query: string = ''): Promise<Error | und
 beforeEach(() => {
     vi.clearAllMocks();
     lastTelemetry = {};
+    lastMeasurements = {};
+    receivedTelemetry.length = 0;
     lastValuesToMask = [];
     showUrlHandlingConfirmations = true;
     mockGetAllConnections.mockResolvedValue([]);
     mockSaveConnection.mockResolvedValue(undefined);
     vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(undefined);
     vi.mocked(ClustersClient.exists).mockReturnValue(true);
+    vi.mocked(ClustersClient.getExistingClient).mockReturnValue(undefined);
     vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(undefined);
     vi.mocked(ext.connectionsBranchDataProvider.hasNodeErrorState).mockReturnValue(false);
     vi.mocked(buildConnectionsViewTargetPath).mockImplementation(
@@ -135,7 +147,7 @@ beforeEach(() => {
             return path;
         },
     );
-    vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+    vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue({ opened: true });
     vi.spyOn(vscode.window, 'withProgress').mockImplementation(
         async (_options, task): Promise<unknown> =>
             task({ report: vi.fn() }, new vscode.CancellationTokenSource().token),
@@ -170,8 +182,8 @@ describe('globalUriHandler — diagnostic logging', () => {
         expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
             '[DeepLink] Handling link: action=connect source=connectionString parameters=none unknown=1',
         );
-        expect(lastTelemetry.uriParamCount).toBe('1');
-        expect(lastTelemetry.uriUnknownParamCount).toBe('1');
+        expect(lastMeasurements.uriParamCount).toBe(1);
+        expect(lastMeasurements.uriUnknownParamCount).toBe(1);
         const logged = [
             ...vi.mocked(ext.outputChannel.info).mock.calls,
             ...vi.mocked(ext.outputChannel.trace).mock.calls,
@@ -191,8 +203,8 @@ describe('globalUriHandler — diagnostic logging', () => {
         expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
             '[DeepLink] Handling link: action=connect source=connectionString parameters=database,open,database unknown=2 open=shell',
         );
-        expect(lastTelemetry.uriParamCount).toBe('5');
-        expect(lastTelemetry.uriUnknownParamCount).toBe('2');
+        expect(lastMeasurements.uriParamCount).toBe(5);
+        expect(lastMeasurements.uriUnknownParamCount).toBe(2);
         const logged = [
             ...vi.mocked(ext.outputChannel.info).mock.calls,
             ...vi.mocked(ext.outputChannel.trace).mock.calls,
@@ -232,7 +244,7 @@ describe('globalUriHandler — diagnostic logging', () => {
         await runHandler('/connect', 'connectionString=mongodb%3A%2F%2Fuser%3Asecret%40host');
 
         expect(ext.outputChannel.error).toHaveBeenCalledWith(
-            '[DeepLink] Failed: failureStage=handleRequest errorName=Error',
+            '[DeepLink] Failed: failureStage=saveConnection errorName=Error',
         );
         const logged = [
             ...vi.mocked(ext.outputChannel.info).mock.calls,
@@ -474,8 +486,8 @@ describe('globalUriHandler — connect parameter validation', () => {
         const error = await runHandler(path, `${query}&open=${open}`);
 
         expect(lastTelemetry.openTarget).toBe(expected);
-        expect(lastTelemetry.uriParamCount).toBe('2');
-        expect(lastTelemetry.uriUnknownParamCount).toBe('0');
+        expect(lastMeasurements.uriParamCount).toBe(2);
+        expect(lastMeasurements.uriUnknownParamCount).toBe(0);
         if (path === '/connect/azure') {
             expect(error).toBeUndefined();
             expect(handleAzureResourceLinkRequest).toHaveBeenCalledExactlyOnceWith(
@@ -548,8 +560,8 @@ describe('globalUriHandler — connect parameter validation', () => {
         expect(lastTelemetry.hasParamCollection).toBe('true');
         expect(lastTelemetry.hasParamConnectionString).toBeUndefined();
         expect(lastTelemetry.openTarget).toBe('none');
-        expect(lastTelemetry.uriParamCount).toBe('5');
-        expect(lastTelemetry.uriUnknownParamCount).toBe('1');
+        expect(lastMeasurements.uriParamCount).toBe(5);
+        expect(lastMeasurements.uriUnknownParamCount).toBe(1);
         expect(lastValuesToMask).toEqual(
             expect.arrayContaining(['/subscriptions/sub/resourceGroups/rg', 'tenant', 'sales', 'orders']),
         );
@@ -604,10 +616,10 @@ describe('globalUriHandler — Azure open target', () => {
             'vscode-documentdb.command.clusterDashboard.open',
             clusterNode,
             null,
-            { activationSource: 'deepLink' },
+            { activationSource: 'deepLink', deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId } },
         );
-        expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
-        expect(getSetting).not.toHaveBeenCalled();
+        expect(getSetting).toHaveBeenCalledWith(settingsKeys.showUrlHandlingConfirmations, true);
+        expect(lastTelemetry.confirmationsEnabled).toBe('false');
         expect(lastTelemetry.failureStage).toBe('openTarget');
     });
 
@@ -621,11 +633,11 @@ describe('globalUriHandler — Azure open target', () => {
             'vscode-documentdb.command.clusterDashboard.open',
             databaseNode,
             null,
-            { activationSource: 'deepLink' },
+            { activationSource: 'deepLink', deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId } },
         );
     });
 
-    it('opens the shell with only the node as its argument', async (): Promise<void> => {
+    it('opens the shell with the node and deep-link attribution', async (): Promise<void> => {
         vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue(result);
 
         const error = await runHandler('/connect/azure', 'resourceId=example&open=shell');
@@ -634,6 +646,8 @@ describe('globalUriHandler — Azure open target', () => {
         expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
             'vscode-documentdb.command.shell.open',
             clusterNode,
+            null,
+            { deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId } },
         );
         expect(lastTelemetry.failureStage).toBe('openTarget');
     });
@@ -789,6 +803,8 @@ describe('globalUriHandler — saved connection open target', () => {
             expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith(
                 'vscode-documentdb.command.shell.open',
                 node,
+                null,
+                { deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId } },
             );
             expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
             expect(openCollectionViewInternal).not.toHaveBeenCalled();
@@ -811,7 +827,7 @@ describe('globalUriHandler — saved connection open target', () => {
             );
 
             expect(error).toBeUndefined();
-            expect(ClustersClient.exists).toHaveBeenCalledExactlyOnceWith('existing-id');
+            expect(ClustersClient.exists).toHaveBeenCalledWith('existing-id');
             expect(vi.mocked(revealInConnectionsView).mock.invocationCallOrder[0]).toBeLessThan(
                 vi.mocked(ClustersClient.exists).mock.invocationCallOrder[0],
             );
@@ -822,7 +838,7 @@ describe('globalUriHandler — saved connection open target', () => {
                 '[DeepLink] Cluster not connected; not opening the target',
             );
             expect(lastTelemetry.openTargetResult).toBe('skippedNotConnected');
-            expect(lastTelemetry.failureStage).toBe('openTarget');
+            expect(lastTelemetry.failureStage).toBe('revealCluster');
         },
     );
 
@@ -842,22 +858,27 @@ describe('globalUriHandler — saved connection open target', () => {
             );
 
             expect(error).toBeUndefined();
-            expect(ClustersClient.exists).toHaveBeenCalledExactlyOnceWith('existing-id');
+            expect(ClustersClient.exists).toHaveBeenCalledWith('existing-id');
             expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(node.id, false);
             if (target === 'shell') {
                 expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith(
                     'vscode-documentdb.command.shell.open',
                     node,
+                    null,
+                    { deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId } },
                 );
             } else {
                 expect(vscode.commands.executeCommand).toHaveBeenLastCalledWith(
                     'vscode-documentdb.command.clusterDashboard.open',
                     node,
                     null,
-                    { activationSource: 'deepLink' },
+                    {
+                        activationSource: 'deepLink',
+                        deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId },
+                    },
                 );
             }
-            expect(lastTelemetry.openTargetResult).toBeUndefined();
+            expect(lastTelemetry.openTargetResult).toBe('opened');
         },
     );
 
@@ -887,7 +908,7 @@ describe('globalUriHandler — saved connection open target', () => {
         );
         expect(ext.connectionsBranchDataProvider.hasNodeErrorState).toHaveBeenCalledExactlyOnceWith(clusterPath);
         expect(ext.connectionsBranchDataProvider.findNodeById).toHaveBeenCalledExactlyOnceWith(treePath, false);
-        expect(ClustersClient.exists).toHaveBeenCalledExactlyOnceWith('existing-id');
+        expect(ClustersClient.exists).toHaveBeenCalledWith('existing-id');
         if (collection) {
             expect(openCollectionViewInternal).toHaveBeenCalledWith(
                 expect.anything(),
@@ -903,7 +924,11 @@ describe('globalUriHandler — saved connection open target', () => {
                     ? 'vscode-documentdb.command.clusterDashboard.open'
                     : 'vscode-documentdb.command.shell.open',
                 node,
-                ...(query.startsWith('open=dashboard') ? [null, { activationSource: 'deepLink' }] : []),
+                null,
+                {
+                    ...(query.startsWith('open=dashboard') ? { activationSource: 'deepLink' } : {}),
+                    deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId },
+                },
             );
         }
     });
@@ -1250,9 +1275,12 @@ describe('globalUriHandler — connection confirmation', () => {
             if (target === 'dashboard') {
                 expect(vscode.commands.executeCommand).toHaveBeenCalledWith(command, node, null, {
                     activationSource: 'deepLink',
+                    deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId },
                 });
             } else {
-                expect(vscode.commands.executeCommand).toHaveBeenCalledWith(command, node);
+                expect(vscode.commands.executeCommand).toHaveBeenCalledWith(command, node, null, {
+                    deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId },
+                });
             }
         },
     );
@@ -1560,6 +1588,101 @@ describe('globalUriHandler — the verb list is a security boundary', () => {
 });
 
 describe('globalUriHandler — telemetry shape', () => {
+    it.each(['/local', '/local/documentdb', '/connect/azure', '/connect', ''])(
+        'records publisher attribution and a matching arrival event for %s',
+        async (path): Promise<void> => {
+            await runHandler(path, 'source=Docs_Quickstart');
+            expect(lastTelemetry.deepLinkSource).toBe('docs_quickstart');
+            expect(lastTelemetry.deepLinkSourceStatus).toBe('valid');
+            expect(lastTelemetry.deepLinkCorrelationId).toMatch(/^[a-f0-9-]{36}$/);
+            expect(receivedTelemetry).toHaveLength(1);
+            expect(receivedTelemetry[0]).toMatchObject({
+                deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId,
+                deepLinkSource: 'docs_quickstart',
+            });
+            expect(lastMeasurements.uriUnknownParamCount).toBe(0);
+        },
+    );
+
+    it('gives repeated clicks different attempt ids', async (): Promise<void> => {
+        await runHandler('/local', 'source=docs');
+        const first = lastTelemetry.deepLinkCorrelationId;
+        await runHandler('/local', 'source=docs');
+        expect(lastTelemetry.deepLinkCorrelationId).not.toBe(first);
+    });
+
+    it('ignores invalid source metadata without blocking a local link or logging its value', async (): Promise<void> => {
+        await runHandler('/local', 'source=https%3A%2F%2Fprivate.example%2Fsecret');
+        expect(lastTelemetry.deepLinkSourceStatus).toBe('invalid');
+        expect(lastTelemetry.deepLinkSource).toBeUndefined();
+        expect(lastTelemetry.deepLinkOutcome).toBe('completed');
+        expect(ext.outputChannel.warn).toHaveBeenCalledTimes(1);
+        const output = [
+            ...vi.mocked(ext.outputChannel.info).mock.calls,
+            ...vi.mocked(ext.outputChannel.warn).mock.calls,
+        ]
+            .flat()
+            .join(' ');
+        expect(output).not.toContain('private.example');
+        expect(output).not.toContain('secret');
+    });
+
+    it('records dismissal as cancellation rather than success', async (): Promise<void> => {
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
+        await runHandler('/local', 'source=docs');
+        expect(lastTelemetry).toMatchObject({
+            result: 'Canceled',
+            deepLinkOutcome: 'canceled',
+            userCancelledAtStep: 'OpenLocalQuickStart',
+            deepLinkSource: 'docs',
+        });
+        expect(lastMeasurements.confirmationTimeMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it.each([undefined, { opened: false }])(
+        'does not count a swallowed destination failure as completion (%j)',
+        async (commandResult): Promise<void> => {
+            vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue({
+                clusterId: 'cluster-id',
+                clusterNode: { cluster: { name: 'Cluster' } } as DiscoveryRevealResult['clusterNode'],
+            });
+            vi.mocked(vscode.commands.executeCommand).mockResolvedValue(commandResult);
+            await runHandler('/connect/azure', 'resourceId=example&open=shell&source=portal');
+            expect(lastTelemetry).toMatchObject({
+                result: 'Failed',
+                deepLinkOutcome: 'destinationFailed',
+                errorReason: 'destinationNotOpened',
+                openTargetResult: 'notOpened',
+            });
+        },
+    );
+
+    it('joins successful destination and connection sessions to the publisher and attempt', async (): Promise<void> => {
+        vi.mocked(handleAzureResourceLinkRequest).mockResolvedValue({
+            clusterId: 'cluster-id',
+            clusterNode: { cluster: { name: 'Cluster' } } as DiscoveryRevealResult['clusterNode'],
+        });
+        vi.mocked(ClustersClient.getExistingClient).mockReturnValue({
+            connectionCorrelationId: 'startup-id',
+        } as ClustersClient);
+        vi.mocked(vscode.commands.executeCommand).mockResolvedValue({ opened: true, shellSessionId: 'shell-id' });
+        await runHandler('/connect/azure', 'resourceId=example&open=shell&source=portal');
+        expect(lastTelemetry).toMatchObject({
+            deepLinkOutcome: 'completed',
+            deepLinkSource: 'portal',
+            connectionCorrelationId: 'startup-id',
+            shellSessionId: 'shell-id',
+            openTargetResult: 'opened',
+        });
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.shell.open',
+            expect.anything(),
+            null,
+            { deepLink: { deepLinkCorrelationId: lastTelemetry.deepLinkCorrelationId, deepLinkSource: 'portal' } },
+        );
+        expect(lastMeasurements.openTargetTimeMs).toBeGreaterThanOrEqual(0);
+    });
+
     it('records the verb and the failure stage for an unrecognized route', async () => {
         await runHandler('/nonsense');
 
@@ -1568,6 +1691,8 @@ describe('globalUriHandler — telemetry shape', () => {
         expect(lastTelemetry.failureStage).toBe('parseRoute');
         expect(lastTelemetry.errorName).toBe('Error');
         expect(lastTelemetry.deepLinkVerb).toBe('unrecognized');
+        expect(lastTelemetry.deepLinkOutcome).toBe('failed');
+        expect(receivedTelemetry).toHaveLength(1);
     });
 
     it('surfaces the actionable link error without an internal URI-processing prefix', async () => {
@@ -1583,6 +1708,6 @@ describe('globalUriHandler — telemetry shape', () => {
 
         expect(lastTelemetry.uriScheme).toBe('vscode');
         expect(lastTelemetry.uriAuthority).toBe('ms-azuretools.vscode-documentdb');
-        expect(lastTelemetry.uriPathLength).toBe(String('/local'.length));
+        expect(lastMeasurements.uriPathLength).toBe('/local'.length);
     });
 });

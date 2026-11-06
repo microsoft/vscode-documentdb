@@ -110,6 +110,53 @@ Local" link has no connection string by definition, because the container does n
   once and the node shows the outcome
   ([0015](./decisions.md#0015--an-azure-link-always-expands-the-cluster-node)).
 
+## Telemetry contract
+
+The optional `source` query parameter identifies where a publisher placed a link, independently of
+`deepLinkConnectSource` (how its connection is located). It accepts a single 1-64 character ASCII
+label, starting with a letter or digit and containing only letters, digits, hyphens, and underscores.
+It is normalized to lowercase and recorded as `deepLinkSource`. `deepLinkSourceStatus` is `valid`,
+`absent`, or `invalid`; invalid or repeated tags are ignored and warned about without echoing their
+values. Publishers must not put personal information, credentials, resource IDs, or URLs in tags.
+
+- `globalUriHandler.received` records arrival, including malformed routes, before any confirmation
+  or network work. `globalUriHandler` records the terminal outcome. Both share a freshly generated
+  `deepLinkCorrelationId`; a received event without its terminal event is unfinished, not success.
+- `deepLinkOutcome` is `completed`, `canceled`, `connectionFailed`, `destinationFailed`, or `failed`.
+  Non-throwing cancellations set framework `result=Canceled`; non-throwing failures set `Failed`.
+  Thrown failures retain the framework's own error classification. `lastStage`, `failureStage`,
+  `errorReason`, `userCancelledAtStep`, and `openTargetResult` explain where the flow stopped.
+- `deepLinkTarget` classifies cluster/database/collection/dashboard/shell/localSetup intent.
+  `confirmationsEnabled`, `connectionDisposition` (new/reused saved entry), `connectionReused`
+  (cached client), and `connectionSaved` distinguish important variants.
+- A connection's `connectionCorrelationId` joins the link to `connect.startup` and its metadata,
+  including failed attempts whose clients were evicted. Cluster nodes retain the latest attempt
+  ID and cancellation outcome without changing stable cluster IDs or tree identities.
+- Dashboard and shell commands return whether a destination actually opened, rather than relying
+  on a command resolving without throwing. The terminal link event captures `dashboardSessionId`,
+  `shellSessionId`, `collectionSessionId`, or `quickStartSessionId` as applicable. Destination
+  host RPC and webview events carry the originating link ID and source; shell startup/evaluation/
+  end and wizard step/close events do too. Dashboard reuse keeps the existing panel's original
+  attribution and session ID; the new link event records the join and `panelReused`.
+- **Completed means navigation/opening completed, not that every destination is fully initialized.**
+  Use the correlated `shell.sessionStart` result for worker readiness and the destination's RPC/
+  webview results for loading failures. Opening Local setup does not mean provisioning succeeded.
+- URI lengths, qualifier/parameter counts, and matching subscription-account count are numeric
+  **measurements**, not their former string properties. Existing tree-activation timing and retry
+  measurements remain. Phase measurements end in `TimeMs` and accumulate across retries:
+  confirmation, Azure sign-in/check, subscription lookup/resolution, ARM resource read, visibility
+  computation/application, connection save, tree reveal, and destination opening. Total duration
+  remains framework-owned; resolution/reveal phases may include their nested work.
+- The existing `visibilityProviderShown`, `visibilityTenantUnfiltered`, and
+  `visibilitySubscriptionAdded` flags describe changes **needed**, not completed. Separate
+  `visibilityProviderApplied`, `visibilityTenantApplied`, and `visibilitySubscriptionApplied`
+  flags record each successful write, even if a later write fails. `visibilityChangesApplied`
+  becomes true after the application finishes with changes.
+
+Unit tests cover source validation, explicit outcomes, phase measurements and correlation. They
+do not establish backend ingestion or GDPR classification; new fields/events still need those
+checks in the telemetry pipeline before dashboard use.
+
 ## Timeline
 
 | Date       | What                                                                          |

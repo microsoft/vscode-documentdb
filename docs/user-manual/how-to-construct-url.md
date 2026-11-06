@@ -31,12 +31,12 @@ vscode://ms-azuretools.vscode-documentdb/<action>?<parameters>
 
 ### Supported Actions
 
-| Action             | What it does                                                                                    | Parameters                                                 |
-| ------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `connect`          | Opens a connection to a cluster, optionally navigating into it                                  | `connectionString`, `database`, `collection`, `open`       |
-| `connect/azure`    | Opens an Azure DocumentDB or Azure Cosmos DB for MongoDB (RU) resource by its Azure resource ID | `resourceId`, `tenantId`, `database`, `collection`, `open` |
-| `local`            | Opens the **DocumentDB Local** setup wizard                                                     | none                                                       |
-| `local/documentdb` | Opens the **DocumentDB Local** setup wizard                                                     | none                                                       |
+| Action             | What it does                                                                                    | Parameters                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `connect`          | Opens a connection to a cluster, optionally navigating into it                                  | `connectionString`, `database`, `collection`, `open`, `source`       |
+| `connect/azure`    | Opens an Azure DocumentDB or Azure Cosmos DB for MongoDB (RU) resource by its Azure resource ID | `resourceId`, `tenantId`, `database`, `collection`, `open`, `source` |
+| `local`            | Opens the **DocumentDB Local** setup wizard                                                     | Optional `source`                                                    |
+| `local/documentdb` | Opens the **DocumentDB Local** setup wizard                                                     | Optional `source`                                                    |
 
 Only the actions in this table are recognized. A link naming anything else is refused with an
 explanatory message — the extension never treats the path as a command name, so a link cannot
@@ -66,6 +66,7 @@ are ignored.
 | `database`         | Optional                                                          | Optional                                    | Name of the database to open                                                          |
 | `collection`       | Optional; requires a database parameter or connection-string path | Optional; requires the `database` parameter | Collection to open                                                                    |
 | `open`             | Optional                                                          | Optional                                    | `dashboard` or `shell` (case-insensitive); cannot be combined with `collection`       |
+| `source`           | Optional                                                          | Optional                                    | Publisher attribution label; also supported on `/local` and `/local/documentdb`       |
 
 ### Parameter Details
 
@@ -75,6 +76,16 @@ are ignored.
 - **`database`**: When provided, the extension will automatically navigate to the specified database after establishing the connection. Names with spaces or special characters must be double-encoded (see [Encoding Parameter Values](#encoding-parameter-values)).
 - **`collection`**: The extension opens the Collection View for this collection. For `/connect`, a database must be supplied either through the `database` parameter or in the connection-string path. For `/connect/azure`, the `database` parameter is required. Otherwise the link is rejected before connecting. Names with spaces or special characters must be double-encoded (see [Encoding Parameter Values](#encoding-parameter-values)).
 - **`open`**: `dashboard` opens the Cluster Dashboard, scoped to `database` when provided, even if opening the dashboard automatically on connect is turned off. It replaces the automatic dashboard for that link, so only the requested dashboard opens. `shell` opens the interactive shell, scoped to `database` when provided. The parameter is case-insensitive and cannot be combined with `collection`; a link never carries a shell script, query, or command.
+- **`source`**: An optional publisher label used only for telemetry attribution, on every action and on legacy links without an action. Use 1-64 ASCII letters, digits, hyphens, or underscores, starting with a letter or digit. Labels are recorded in lowercase. For example, use `source=azure-portal`, `source=documentdb-website`, or `source=docs-quickstart` to distinguish where you publish links. Do not include names, email addresses, resource identifiers, credentials, URLs, or other sensitive information. Empty, invalid, or repeated `source` parameters are ignored for attribution (with a diagnostic warning); they do not prevent the link from opening. The label does not change routing, authentication, confirmations, or telemetry consent.
+
+For example, a website's setup link can be:
+
+```text
+vscode://ms-azuretools.vscode-documentdb/local?source=documentdb-website
+```
+
+For an existing link, append `&source=docs-quickstart` to its query. This publisher tag is
+independent of the connection source named by the path (`/connect` versus `/connect/azure`).
 
 ## Encoding Parameter Values
 

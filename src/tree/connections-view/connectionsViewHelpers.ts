@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { recordDeepLinkConnectionAttempt } from '../../deepLinks/deepLinkTelemetry';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
@@ -326,6 +327,7 @@ export async function revealInConnectionsView(
         focus: !database, // Only focus if this is the final step
         expand: true,
     });
+    recordDeepLinkConnectionAttempt(context, connectionNode);
 
     // Step 2: Reveal the database (if provided)
     if (database) {

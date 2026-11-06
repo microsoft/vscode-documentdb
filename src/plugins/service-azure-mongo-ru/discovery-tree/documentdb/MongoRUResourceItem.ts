@@ -124,6 +124,7 @@ export class MongoRUResourceItem extends ClusterItemBase<AzureClusterModel> {
                 return clustersClient;
             } catch (error) {
                 if (error instanceof UserCancelledError) {
+                    this.lastConnectionOutcome = 'canceled';
                     context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
                     context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
