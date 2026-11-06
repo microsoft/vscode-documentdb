@@ -170,18 +170,6 @@ describe('Discovery view helpers', () => {
         );
     });
 
-    it('reports loading before each ancestor reveal and connecting before cluster expansion', async (): Promise<void> => {
-        const report = vi.fn<(message: string) => void>();
-
-        await revealInDiscoveryView(context, request, report);
-
-        expect(report.mock.calls).toEqual([['Loading subscriptions…'], ['Loading clusters…'], ['Connecting…']]);
-        expect(report.mock.invocationCallOrder[0]).toBeLessThan(reveal.mock.invocationCallOrder[0]);
-        expect(report.mock.invocationCallOrder[1]).toBeLessThan(reveal.mock.invocationCallOrder[1]);
-        expect(reveal.mock.invocationCallOrder[2]).toBeLessThan(report.mock.invocationCallOrder[2]);
-        expect(report.mock.invocationCallOrder[2]).toBeLessThan(reveal.mock.invocationCallOrder[3]);
-    });
-
     it('reads each cached level only after its expansion has completed', async (): Promise<void> => {
         const loadedChildren = new Map<TreeElement, TreeElement[]>();
         getCachedChildren.mockImplementation((node: TreeElement): TreeElement[] => loadedChildren.get(node) ?? []);
@@ -407,16 +395,7 @@ describe('Discovery view helpers', () => {
     });
 
     it('finds a database by its tree id and returns the database node', async (): Promise<void> => {
-        const report = vi.fn<(message: string) => void>();
-        const result = await revealInDiscoveryView(context, { ...request, database: 'db' }, report);
-
-        expect(report.mock.calls).toEqual([
-            ['Loading subscriptions…'],
-            ['Loading clusters…'],
-            ['Connecting…'],
-            ['Opening the database…'],
-        ]);
-        expect(report.mock.invocationCallOrder[3]).toBeLessThan(findNodeById.mock.invocationCallOrder[0]);
+        const result = await revealInDiscoveryView(context, { ...request, database: 'db' });
 
         expect(result).toEqual({ clusterNode, clusterId: clusterNode.cluster.clusterId, databaseNode });
         expect(findNodeById).toHaveBeenCalledExactlyOnceWith(`${clusterNode.id}/db`);
@@ -460,7 +439,6 @@ describe('Discovery view helpers', () => {
     });
 
     it('finds a requested collection by its tree id after expanding the database', async (): Promise<void> => {
-        const report = vi.fn<(message: string) => void>();
         findNodeById.mockImplementation(async (id: string): Promise<TreeElement | undefined> => {
             if (id === databaseNode.id) {
                 expect(reveal.mock.calls).toEqual([
@@ -474,20 +452,7 @@ describe('Discovery view helpers', () => {
             expect(reveal).toHaveBeenLastCalledWith(databaseNode, { select: true, focus: false, expand: true });
             return id === collectionNode.id ? collectionNode : undefined;
         });
-        const result = await revealInDiscoveryView(
-            context,
-            { ...request, database: 'db', collection: 'products' },
-            report,
-        );
-
-        expect(report.mock.calls).toEqual([
-            ['Loading subscriptions…'],
-            ['Loading clusters…'],
-            ['Connecting…'],
-            ['Opening the database…'],
-            ['Opening the collection…'],
-        ]);
-        expect(report.mock.invocationCallOrder[4]).toBeLessThan(findNodeById.mock.invocationCallOrder[1]);
+        const result = await revealInDiscoveryView(context, { ...request, database: 'db', collection: 'products' });
         expect(result?.databaseNode).toBe(databaseNode);
         expect(findNodeById.mock.calls).toEqual([[`${clusterNode.id}/db`], [`${databaseNode.id}/products`]]);
         expect(findChildById).not.toHaveBeenCalled();

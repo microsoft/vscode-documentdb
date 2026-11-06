@@ -148,7 +148,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
         );
     });
 
-    it('forwards progress reporting to subscription resolution and reveal and reports before reads and filter updates', async (): Promise<void> => {
+    it('forwards progress reporting to subscription resolution and reports before reads and filter updates', async (): Promise<void> => {
         vi.mocked(resolveAzureSubscription).mockImplementation(
             async (_context, _request, report): Promise<AzureSubscription> => {
                 report?.('Checking Azure sign-in…');
@@ -162,23 +162,12 @@ describe('handleAzureResourceLinkRequest', (): void => {
         vi.mocked(applyVisibilityChanges).mockImplementation(async (): Promise<void> => {
             expect(progress.report).toHaveBeenLastCalledWith({ message: 'Updating filters…' });
         });
-        vi.mocked(revealInDiscoveryView).mockImplementation(
-            async (_context, _request, report): Promise<DiscoveryRevealResult> => {
-                report?.('Finding the cluster in the Discovery view…');
-                return revealResult;
-            },
-        );
-
         await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
 
-        expect(vi.mocked(resolveAzureSubscription).mock.calls[0][2]).toBe(
-            vi.mocked(revealInDiscoveryView).mock.calls[0][2],
-        );
         expect(progress.report.mock.calls).toEqual([
             [{ message: 'Checking Azure sign-in…' }],
             [{ message: 'Reading the resource from Azure…' }],
             [{ message: 'Updating filters…' }],
-            [{ message: 'Finding the cluster in the Discovery view…' }],
         ]);
     });
 
@@ -236,16 +225,31 @@ describe('handleAzureResourceLinkRequest', (): void => {
         expect(context.telemetry.properties.userCancelledAtStep).toBeUndefined();
     });
 
-    it('stops when progress is cancelled during reveal', async (): Promise<void> => {
+    it('reveals only after the progress notification callback has completed', async (): Promise<void> => {
+        const notificationCompleted = vi.fn();
+        vi.mocked(vscode.window.withProgress).mockImplementation(
+            async <T>(
+                _options: vscode.ProgressOptions,
+                task: (
+                    progress: vscode.Progress<{ message?: string; increment?: number }>,
+                    token: vscode.CancellationToken,
+                ) => Thenable<T>,
+            ): Promise<T> => {
+                const result = await task(progress, token);
+                expect(revealInDiscoveryView).not.toHaveBeenCalled();
+                notificationCompleted();
+                return result;
+            },
+        );
         vi.mocked(revealInDiscoveryView).mockImplementation(async (): Promise<DiscoveryRevealResult> => {
-            token.isCancellationRequested = true;
+            expect(notificationCompleted).toHaveBeenCalledOnce();
             return revealResult;
         });
 
-        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBeUndefined();
-
-        expect(context.telemetry.properties.userCancelledAtStep).toBe('AzureProgress');
-        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Cancelled from the progress notification');
+        await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
+        expect(notificationCompleted.mock.invocationCallOrder[0]).toBeLessThan(
+            vi.mocked(revealInDiscoveryView).mock.invocationCallOrder[0],
+        );
     });
 
     it('logs the parsed link and confirmation without Azure identifiers', async (): Promise<void> => {
@@ -295,7 +299,6 @@ describe('handleAzureResourceLinkRequest', (): void => {
                 database: 'sales',
                 collection: 'orders',
             },
-            expect.any(Function),
         );
         const callOrder = [
             vi.mocked(parseAzureResourceLink).mock.invocationCallOrder[0],
@@ -417,7 +420,6 @@ describe('handleAzureResourceLinkRequest', (): void => {
         expect(revealInDiscoveryView).toHaveBeenCalledWith(
             context,
             expect.objectContaining({ database: undefined, collection: undefined }),
-            expect.any(Function),
         );
     });
 

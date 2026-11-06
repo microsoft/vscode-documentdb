@@ -88,13 +88,13 @@ export async function handleAzureResourceLinkRequest(
         ext.outputChannel.trace('[DeepLink] Azure confirmation skipped (confirmations disabled)');
     }
 
-    return vscode.window.withProgress(
+    const displayName = await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
             title: vscode.l10n.t('Opening from Azure'),
             cancellable: true,
         },
-        async (progress, token): Promise<DiscoveryRevealResult | undefined> => {
+        async (progress, token): Promise<string | undefined> => {
             const report = (message: string): void => progress.report({ message });
             const subscription = await resolveAzureSubscription(
                 context,
@@ -208,26 +208,21 @@ export async function handleAzureResourceLinkRequest(
                 return undefined;
             }
 
-            context.telemetry.properties.failureStage = 'revealCluster';
-            ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
-            const result = await revealInDiscoveryView(
-                context,
-                {
-                    providerId: link.providerId,
-                    subscriptionId: link.subscriptionId,
-                    azureResourceId: link.resourceId,
-                    displayName,
-                    database: request.database,
-                    collection: request.collection,
-                },
-                report,
-            );
-            if (token.isCancellationRequested) {
-                context.telemetry.properties.userCancelledAtStep = 'AzureProgress';
-                ext.outputChannel.trace('[DeepLink] Cancelled from the progress notification');
-                return undefined;
-            }
-            return result;
+            return displayName;
         },
     );
+    if (displayName === undefined) {
+        return undefined;
+    }
+
+    context.telemetry.properties.failureStage = 'revealCluster';
+    ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
+    return revealInDiscoveryView(context, {
+        providerId: link.providerId,
+        subscriptionId: link.subscriptionId,
+        azureResourceId: link.resourceId,
+        displayName,
+        database: request.database,
+        collection: request.collection,
+    });
 }
