@@ -30,6 +30,11 @@ If the source offers competing options for an item (for example the reviewer's f
 verification note's fix), state which option you treat as accepted for each item, in one message,
 before coding. If the operator cannot be asked, write that list at the top of the source document.
 
+If the operator approves a set of items as a whole (for example "fix all"), treat each item's
+recommended option as accepted, including where it amends a recorded decision. Amend that decision
+with a factual note that cites the instruction; never write the operator's rationale. The other
+always-ask triggers still apply.
+
 If the source document is uncommitted, commit only that document first as a docs-only commit so
 done notes have a base. Leave other uncommitted changes alone and mention them.
 
@@ -51,8 +56,11 @@ The evaluator may use your own class because it is read-only with short output.
 - **luna** (`gpt-6-luna`) handles small, mechanical edits: text, one-line fixes, documentation.
 
 If a tier is unavailable, use the next closest tier and say so in the report. If that model needs
-permission, ask or park. For each item, state which model you chose and why. All coding models are
-eager: give each one a precise, bounded task.
+permission, ask or park. A call that fails before any work (authorization error, 5xx, timeout) is
+retried once on the same tier, after checking `git status` for partial edits; then use the next
+tier. A model the operator names for a task overrides the tiers for that task. For each item,
+state which model you chose and why. All coding models are eager: give each one a precise, bounded
+task.
 
 ## Planning and parallel work
 
@@ -62,7 +70,15 @@ span items, define them all before starting the first.
 **Owned files come from a search, not from memory.** When an item changes a user-facing string,
 search the whole repository for the old text (`git grep -F "<old text>"`) and list every hit as an
 owned file: tests, scenarios and user documentation pin strings far from the code. When an item
-changes a type or interface, search for the places that produce and consume it.
+changes a type or interface, search for the places that produce and consume it. When an item
+changes how often or in what order a function is called, search its tests for exact-call
+assertions (`toHaveBeenCalledExactlyOnceWith`, `toHaveBeenCalledTimes`, call-order checks) and
+state in the prompt which of them may change, and how.
+
+**Items only a running workbench can verify** (progress notifications, focus, timing, tree reveal,
+panel layout): schedule them last, do not build other items on their lines, and list them first
+in the report as unverified, with the steps to try. Recommend that the operator tries them before
+pushing.
 
 Run items in parallel in the shared tree only when their files do not overlap. Shared pin files
 (test fixtures, scenario files, documentation that quotes strings) and a workspace package that
@@ -112,8 +128,8 @@ Use one subagent per work item, except for coupled follow-ups and chains (above)
 > - Unless the item explicitly requires a different step, run only focused tests
 >   (`npx vitest run <paths>`) and, if needed, `npx tsc --noEmit -p .`. Do not run build, lint,
 >   l10n, prettier, or package unless the item explicitly requires it.
-> - Other agents may be working in the same tree. If a test outside your item fails, report it; do
->   not fix it.
+> - Other agents may be working in the same tree. If a test or type error outside your item
+>   fails, report it; do not fix it.
 > - Report only to the leader; never message other agents.
 > - Fill every field in this report; write "none" instead of omitting a field. No narrative; under
 >   250 words:
@@ -139,13 +155,16 @@ Use one subagent per work item, except for coupled follow-ups and chains (above)
   - changes user-visible behaviour or wording beyond what was specified;
   - changes behaviour that an accepted work item specifies;
   - would implement an accepted work item that conflicts with a recorded decision: park the item
-    with the options you see; do not implement either reading;
+    with the options you see; do not implement either reading, unless the operator approved that
+    option, alone or as part of a set (see Input);
   - touches a security or trust boundary (authentication, allowlists, secrets, permissions);
   - changes persisted data, settings schemas, a public API, or an exported format (saved reports,
     JSON output, anything with a schema version);
   - deviates from a recorded decision in a feature's `decisions.md`;
   - weakens or removes a test that pins behaviour (and always for `TDD:` tests). Updating a test
-    to wording or behaviour the operator approved is not weakening it;
+    to wording or behaviour the operator approved is not weakening it. Neither is relaxing an
+    incidental check (an exact call count) while the assertions that carry the test's intent
+    stay; name the kept assertions in the done note;
   - requires pushing, rewriting history, or editing a PR, an issue or another external system.
 - Ask as one concise question with the options and your recommendation. When a confidence figure
   is close to a threshold, state what would change your mind. Do not round up.
@@ -179,6 +198,9 @@ Review every subagent's changes using the context budget above. Send back anythi
 the item, is over-engineered, or is hard to follow, with specific instructions. Check that:
 
 - user-facing strings use `vscode.l10n.t()`;
+- every `l10n.t(...)` string the diff adds, removes or changes was specified
+  (`git diff -U0 | grep -E '^[-+].*l10n\.t\('`), and reads correctly where it is shown: a
+  progress notification renders `title: message`, so a title ends without punctuation;
 - cluster lookups use `clusterId`, never `treeId`;
 - no secrets reach logs or telemetry.
 
@@ -187,7 +209,9 @@ handling), check that its runtime behaviour matches, not only its types.
 
 ## Commits and records
 
-- **One commit per work item.** Follow the existing subject style and include the item ID.
+- **One commit per work item.** Follow the existing subject style and include the item ID. When
+  two items change the same lines, one commit may cover both: name every item in the subject and
+  point each item's done note to it.
 - Never amend, rebase or force-push. Never use `git add -f`. Do not push unless the operator asks.
 - **Done note.** After each item's commit, record it **inline in the source document** under that
   item:
@@ -200,6 +224,11 @@ handling), check that its runtime behaviour matches, not only its types.
   in a new iteration file under `docs/ai-and-plans/features/<name>/iterations/`. Commit notes as
   docs-only commits, never mixed into code commits. You may batch several notes into one docs
   commit.
+
+- **Reverting after operator testing.** If the operator rejects an item after testing, `git revert`
+  its commit and restore any later item that shared its lines. Change its done note to
+  **Reverted (date), commit `<sha>`, operator decision:** with the reason. Update every place in
+  the source that shows the item's status: index tables, the per-item status line and summaries.
 
 ## Checks
 
@@ -217,8 +246,13 @@ run checks after every commit.**
 
 ## Finish
 
+Before the report, check that the user documentation and the feature README still describe the
+changed behaviour. Search them for statements about what the items changed, not only for quoted
+strings, and fix them in a docs-only commit.
+
 End with a short report:
 
+- items that still need a workbench check, listed first, with the steps to try;
 - each work item, its commit SHA, and its model;
 - the decisions you made, with confidence;
 - the questions you escalated and the questions you parked;
