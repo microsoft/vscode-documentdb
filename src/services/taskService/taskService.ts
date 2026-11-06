@@ -287,7 +287,9 @@ export abstract class Task {
                 this.updateStatus(TaskState.Stopping, this.strings.stoppedDuringInitialization);
                 // Let runWork handle the final state transition
                 void this.runWork().catch((error) => {
-                    this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
+                    if (!this.isFinalState()) {
+                        this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
+                    }
                 });
                 return;
             }
@@ -296,7 +298,9 @@ export abstract class Task {
 
             // Start the actual work asynchronously
             void this.runWork().catch((error) => {
-                this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
+                if (!this.isFinalState()) {
+                    this.updateStatus(TaskState.Failed, this.strings.taskFailed, 0, error);
+                }
             });
         } catch (error) {
             this.updateStatus(TaskState.Failed, this.strings.failedToInitializeTask, 0, error);
