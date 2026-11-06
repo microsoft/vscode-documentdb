@@ -2048,3 +2048,24 @@ Provider paragraphs C1 and C3 (the “We” voice and “very likely”) are own
   - `build/verification/browser/scenarios.ts`: lines 818, 1222 and 1489 (location), 1633 and 1641 (entraSession), 1997 (credentials rejected), and the DNS strings.
   - `docs/user-manual/diagnose-connection.md`, lines 43 and 102, plus any quoted titles.
 - **l10n:** the repo has only `l10n/bundle.l10n.json`. Each change replaces a key, so run `npm run l10n` and `l10n:check`. “Choose an authentication method” is also used in `AtlasCredentialsView`, so that key stays.
+
+### Implementation (2026-11-06)
+
+The operator approved every Must, Should and Could row: “please be the lead and implement all the
+must should and could ones”. One commit per theme:
+
+| Commit | Rows | Notes |
+| --- | --- | --- |
+| `c3be4f95` | Must: `check.timeout` by source | `connection` → “Increase the timeout configured on this connection, then run the diagnosis again.”; `check`/`run` → only the Retry sentence; unknown source keeps the combined text. A check- or run-sourced TCP/hello timeout keeps its own specific Next step (the first attempt changed that too and was sent back). Model: terra. |
+| `e647df97` | Should: rerun wording | “run the diagnosis again” everywhere, including `tcp.timeout` and the router's “report is no longer available”. “connect again” is unchanged. This supersedes the UX-7 leader decision to keep “run the check again”. Model: luna. |
+| `d8dbb777` | Should: entraSession, Azure sign-in needed; Could: compressor, `access.signInRequired`, `firstPartyPreauthorization` | Next steps start with the action; “connection diagnosis does not open sign-in” and “Only Microsoft can change this” moved into the explanations. Model: luna. |
+| `447bc4a6` | Should: token-claim titles, missing-method title; Could: `cs.authSourceUnusual` | “Sign-in token may target another resource”, “Sign-in token may belong to another tenant”, “No authentication method chosen”, “Uncommon authentication database”. Atlas Credentials keeps its own “Choose an authentication method”. Model: luna. |
+| `bd22f341` | Should: “this host” ×4 | Now “the host running these checks”. Model: luna. |
+| `8cab214c` | Should: DNS vocabulary (0041) | “Your system's lookup …” in the panel; report-only wording unchanged. Model: luna. |
+| `2b9a4b18` | Could: TLS Next steps | “ask your administrator”. Model: luna. |
+| `3d1afa2e` | Should: evidence segments, setup location | “Credentials rejected by the cluster”, “Token obtained · Token rejected by the cluster”, “Running in WSL / on the SSH host / in a dev container / in Codespaces, not on this computer”, and “a dev container” in the explanation. The report's location line is unchanged. Model: luna. |
+
+Not done, as the proposal advised: the DocumentDB Local and Kubernetes provider paragraphs (C1, C3) are
+shared with the tree's error dialogs and should be reviewed in the error-explanation layer. Also
+not done: the card can show the retry note and the connection-timeout note together (§3); the
+proposal raised it as an observation, with no rewrite row.
