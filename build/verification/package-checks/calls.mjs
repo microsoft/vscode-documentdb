@@ -136,8 +136,8 @@ export const allChecks = {
         const m = await load('@documentdb-js/connection-diagnostics');
         assert.ok(m.builtInFindingCodes.includes('tcp.refused'));
         assert.equal(m.isBuiltInFindingCode('auth.failed'), false);
-        assert.equal(m.resolveTimeouts().runTimeoutMs, 300000);
-        return 'built-in finding codes include tcp.refused and exclude auth.failed';
+        assert.equal(m.resolveTimeouts('default').runTimeoutMs, 300000);
+        return 'built-in finding codes include tcp.refused and exclude auth.failed; default run timeout is 300000 ms';
     },
 
     '@microsoft/vscode-ext-webview': async (load) => {
