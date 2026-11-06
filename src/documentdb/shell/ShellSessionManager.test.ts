@@ -307,7 +307,7 @@ describe('ShellSessionManager', () => {
             tokenResourceReason: source === 'vscode' ? 'setting' : 'host',
             configuredCloud: 'AzureUSGovernment',
             hostCloud: 'AzureUSGovernment',
-            errorKind: 'none',
+            entraFailureKind: 'none',
         });
         expect(resolver).toHaveBeenCalledWith(connectionString);
         expect(provider.mock.calls.at(-1)?.[0]).toEqual(['https://ossrdbms-aad.database.usgovcloudapi.net/.default']);
@@ -352,7 +352,7 @@ describe('ShellSessionManager', () => {
                 undefined,
                 { startupCorrelationId: 'startup-id', surface, startupProperties },
             );
-            expect(startupProperties.errorKind).toBe(error.kind);
+            expect(startupProperties.entraFailureKind).toBe(error.kind);
             expect(mockGetSessionFromVSCode).not.toHaveBeenCalled();
             expect(mockGetManagedIdentityAccessToken).not.toHaveBeenCalled();
             expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
@@ -405,7 +405,7 @@ describe('ShellSessionManager', () => {
                 undefined,
                 { startupCorrelationId: 'startup-id', surface, startupProperties },
             );
-            expect(startupProperties.errorKind).toBe('tokenAcquisitionFailed');
+            expect(startupProperties.entraFailureKind).toBe('tokenAcquisitionFailed');
             expect(JSON.stringify(startupProperties)).not.toMatch(/https|private|AADSTS|original/);
 
             expect(postResponse).toHaveBeenCalledExactlyOnceWith({
@@ -488,8 +488,8 @@ describe('ShellSessionManager', () => {
                 accessToken: 'private-token',
             });
             expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();
-            expect(failedProperties.errorKind).toBe('tokenAcquisitionFailed');
-            expect(successfulProperties.errorKind).toBe('none');
+            expect(failedProperties.entraFailureKind).toBe('tokenAcquisitionFailed');
+            expect(successfulProperties.entraFailureKind).toBe('none');
             expect(await diagnostics.explain({ clusterId, error })).toMatch(
                 /^The sign-in window reported an error without details\./,
             );

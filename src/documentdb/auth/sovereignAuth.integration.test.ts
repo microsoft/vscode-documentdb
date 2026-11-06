@@ -201,7 +201,7 @@ describe('sovereign authentication with real audience resolvers', () => {
             tokenResourceReason: 'setting',
             configuredCloud: cloud.cloud,
             hostCloud: cloud.cloud,
-            errorKind: 'none',
+            entraFailureKind: 'none',
         });
         expect(JSON.stringify(startupProperties)).not.toMatch(/private|https|authority/);
     });
@@ -282,7 +282,7 @@ describe('sovereign authentication with real audience resolvers', () => {
                     cloudCategory: 'usgov',
                     tokenResourceReason: authMethod === AuthMethodId.ManagedIdentity ? 'host' : 'setting',
                     hostCloud: 'AzureUSGovernment',
-                    errorKind: 'none',
+                    entraFailureKind: 'none',
                 });
                 expect(JSON.stringify(startup)).not.toMatch(/private|https|authority/);
             } finally {

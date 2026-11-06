@@ -126,7 +126,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             // the next real connect's error is explained.
             if (!(error instanceof AuthInputUnavailableError)) {
                 if (traceContext?.startupProperties) {
-                    traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                    traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                 }
                 recordEntraTokenFailure(this.clusterCredentials.clusterId, {
                     cloudCategory: resolved.cloudCategory,

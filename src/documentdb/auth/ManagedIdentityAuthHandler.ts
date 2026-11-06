@@ -139,7 +139,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                         };
                     } catch (error) {
                         if (traceContext?.startupProperties) {
-                            traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                            traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                         }
                         recordEntraTokenFailure(this.clusterCredentials.clusterId, {
                             cloudCategory: resolved.cloudCategory,

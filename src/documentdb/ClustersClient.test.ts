@@ -328,7 +328,7 @@ describe('regular connection startup diagnostics', () => {
                 tokenResourceReason: 'host',
                 configuredCloud: 'custom',
                 hostCloud: 'AzureUSGovernment',
-                errorKind: 'cloudMismatch',
+                entraFailureKind: 'cloudMismatch',
             });
             expect(events[1].telemetry.properties.cloudCategory).toBeUndefined();
             expect(JSON.stringify(events)).not.toContain('private-');

@@ -103,7 +103,7 @@ describe('ManagedIdentityAuthHandler', () => {
             tokenResourceReason: 'host',
             configuredCloud: 'AzureCloud',
             hostCloud: 'AzureCloud',
-            errorKind: 'none',
+            entraFailureKind: 'none',
         });
 
         expect(options.authMechanism).toBe('MONGODB-OIDC');
@@ -259,7 +259,7 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
 
         await expect(invokeOidcCallback(options)).rejects.toBe(error);
-        expect(startupProperties.errorKind).toBe('tokenAcquisitionFailed');
+        expect(startupProperties.entraFailureKind).toBe('tokenAcquisitionFailed');
         expect(JSON.stringify(startupProperties)).not.toMatch(/cluster-1|AADSTS|https/);
         expect(getRecentEntraTokenFailure('cluster-1')).toEqual({
             cloudCategory: 'usgov',
@@ -289,7 +289,7 @@ describe('ManagedIdentityAuthHandler', () => {
                 startupProperties,
             }),
         ).rejects.toBe(error);
-        expect(startupProperties.errorKind).toBe('managedIdentityCloudUnknown');
+        expect(startupProperties.entraFailureKind).toBe('managedIdentityCloudUnknown');
         expect(getManagedIdentityAccessToken).not.toHaveBeenCalled();
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
@@ -328,8 +328,8 @@ describe('ManagedIdentityAuthHandler', () => {
         });
         await expect(invokeOidcCallback(successful.options)).resolves.toMatchObject({ accessToken: 'a-token' });
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
-        expect(failedProperties.errorKind).toBe('tokenAcquisitionFailed');
-        expect(successfulProperties.errorKind).toBe('none');
+        expect(failedProperties.entraFailureKind).toBe('tokenAcquisitionFailed');
+        expect(successfulProperties.entraFailureKind).toBe('none');
         expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toMatch(
             /^The sign-in window reported an error without details\./,
         );

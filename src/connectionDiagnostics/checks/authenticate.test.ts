@@ -885,7 +885,7 @@ describe('createAuthenticateCheck', (): void => {
                 tokenResourceReason: 'setting',
                 configuredCloud: 'AzureCloud',
                 hostCloud: 'AzureCloud',
-                errorKind: 'none',
+                entraFailureKind: 'none',
             });
             expect(mocks.getSessionFromVSCode).toHaveBeenCalledWith([`${publicResource}/.default`], tenant, {
                 silent: true,

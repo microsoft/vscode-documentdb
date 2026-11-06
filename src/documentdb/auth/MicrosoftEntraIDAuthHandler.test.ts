@@ -134,7 +134,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
                 startupProperties,
             }),
         ).rejects.toBe(error);
-        expect(startupProperties.errorKind).toBe('cloudMismatch');
+        expect(startupProperties.entraFailureKind).toBe('cloudMismatch');
         expect(getSessionFromVSCode).not.toHaveBeenCalled();
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
     });
@@ -270,8 +270,8 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             startupProperties: successfulProperties,
         });
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
-        expect(failedProperties.errorKind).toBe('tokenAcquisitionFailed');
-        expect(successfulProperties.errorKind).toBe('none');
+        expect(failedProperties.entraFailureKind).toBe('tokenAcquisitionFailed');
+        expect(successfulProperties.entraFailureKind).toBe('none');
         expect(await diagnostics.explain({ clusterId: 'cluster-1', error })).toMatch(
             /^The sign-in window reported an error without details\./,
         );
@@ -324,7 +324,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
                 startupProperties,
             }),
         ).rejects.toThrow('secret-token');
-        expect(startupProperties.errorKind).toBe('tokenAcquisitionFailed');
+        expect(startupProperties.entraFailureKind).toBe('tokenAcquisitionFailed');
         expect(JSON.stringify(startupProperties)).not.toContain('secret-token');
         expect(mockOutputChannel.error).toHaveBeenCalledWith(
             expect.stringContaining('[Authentication] startup=startup-id surface=extension'),
@@ -454,8 +454,8 @@ describe('MicrosoftEntraIDAuthHandler', () => {
             await expect(result).rejects.toBeInstanceOf(AuthInputUnavailableError);
             await expect(result).rejects.toMatchObject({ missing: 'entraSession' });
             expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
-            expect(startupProperties.errorKind).not.toBe('tokenAcquisitionFailed');
-            expect(startupProperties.errorKind).toBe('none');
+            expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+            expect(startupProperties.entraFailureKind).toBe('none');
             expect(events).toEqual(['resolved:*.azure.com', 'tokenStarted', 'tokenFailed']);
         });
 
@@ -497,7 +497,7 @@ describe('MicrosoftEntraIDAuthHandler', () => {
                 ruleId: 'firstPartyPreauthorization',
                 timestamp: expect.any(Number),
             });
-            expect(startupProperties.errorKind).toBe('tokenAcquisitionFailed');
+            expect(startupProperties.entraFailureKind).toBe('tokenAcquisitionFailed');
         });
 
         it('notifies the observer in real order and passes the token only to the observer', async () => {
