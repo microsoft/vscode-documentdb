@@ -572,7 +572,7 @@ const dnsFailureRun = diagnosticsRun('stage0-run-dns', {
         stoppedAtRow: 'serverAddress',
         headline: {
             title: 'Host name not found',
-            explanation: 'The system DNS resolver could not find this host name.',
+            explanation: "Your system's lookup could not find this host name.",
             nextStep:
                 'Check the host name and the DNS settings used by the computer or remote host running these checks.',
             target: diagnosticsHost,
@@ -591,7 +591,7 @@ const dnsFailureRun = diagnosticsRun('stage0-run-dns', {
                     diagnosticsFinding(
                         'error',
                         'Host name not found',
-                        'The system DNS resolver could not find this host name.',
+                        "Your system's lookup could not find this host name.",
                         'Check the host name and the DNS settings used by the computer or remote host running these checks.',
                         [diagnosticsHost],
                     ),
@@ -844,7 +844,7 @@ const severalFindingsRows = withRows([
                 diagnosticsFinding(
                     'error',
                     'Host name not found',
-                    'The system DNS resolver could not find this host name.',
+                    "Your system's lookup could not find this host name.",
                     'Check the host name and the DNS settings used by the computer or remote host running these checks.',
                     [seedB],
                 ),
@@ -1140,7 +1140,7 @@ const diagnosticsScenarios = {
                     [
                         'Connection failed at Server address (DNS)',
                         `Host name not found (${diagnosticsHost})`,
-                        'The system DNS resolver could not find this host name.',
+                        "Your system's lookup could not find this host name.",
                         'Next: Check the host name and the DNS settings used by the computer or remote host running these checks.',
                         supportLine,
                     ],
@@ -1402,7 +1402,7 @@ const diagnosticsScenarios = {
                 stoppedAtRow: 'serverAddress',
                 headline: {
                     title: 'Host name not found',
-                    explanation: 'The system DNS resolver could not find this host name.',
+                    explanation: "Your system's lookup could not find this host name.",
                     nextStep:
                         'Check the host name and the DNS settings used by the computer or remote host running these checks.',
                     target: seedB,

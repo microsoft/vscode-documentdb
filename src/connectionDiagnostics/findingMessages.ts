@@ -593,14 +593,14 @@ export const findingMessages: {
     }),
     'dns.notFound': (): FindingMessage => ({
         title: vscode.l10n.t('Host name not found'),
-        explanation: vscode.l10n.t('The system DNS resolver could not find this host name.'),
+        explanation: vscode.l10n.t("Your system's lookup could not find this host name."),
         nextStep: vscode.l10n.t(
             'Check the host name and the DNS settings used by the computer or remote host running these checks.',
         ),
     }),
     'dns.temporaryFailure': (): FindingMessage => ({
         title: vscode.l10n.t('DNS lookup temporarily failed'),
-        explanation: vscode.l10n.t('The system DNS resolver reported a temporary lookup failure.'),
+        explanation: vscode.l10n.t("Your system's lookup reported a temporary failure."),
         nextStep: vscode.l10n.t('Check your DNS server and VPN connection, then run the diagnosis again.'),
     }),
     'dns.resolversDisagree': (data): FindingMessage => ({
