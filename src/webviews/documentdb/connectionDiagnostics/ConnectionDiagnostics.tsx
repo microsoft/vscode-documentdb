@@ -246,6 +246,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
     const [view, setView] = useState<DiagnosticsViewState>(() => startingState(0, Date.now()));
     const [now, setNow] = useState<number>(() => Date.now());
     const [hideIdentifiers, setHideIdentifiers] = useState(false);
+    const [connectionName, setConnectionName] = useState(configuration.connectionName);
     const [offerRerun, setOfferRerun] = useState(false);
     const [reportError, setReportError] = useState<string | undefined>(undefined);
     // Counts successful copies; each one remounts the announcer so a repeated copy is announced again.
@@ -342,9 +343,12 @@ export const ConnectionDiagnostics = (): JSX.Element => {
         subscribeRun(sequenceRef.current, 'default', 'initial');
         const events = trpcClient.connectionDiagnostics.panelEvents.subscribe(undefined, {
             onData(event: PanelEvent): void {
-                // An offer arriving mid-run would push the rows down; the run already answers it.
-                if (event.type === 'offerRerun' && viewRef.current.phase !== 'running') {
-                    setOfferRerun(true);
+                if (event.type === 'offerRerun') {
+                    setConnectionName(event.connectionName);
+                    // Keep the layout steady mid-run, even when a replacement target was selected.
+                    if (viewRef.current.phase !== 'running') {
+                        setOfferRerun(true);
+                    }
                 }
             },
         });
@@ -545,7 +549,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
                             </MessageBarActions>
                         </MessageBar>
                     )}
-                    <ContainerSection title={configuration.connectionName} subtitle={runStatusText(view, now)}>
+                    <ContainerSection title={connectionName} subtitle={runStatusText(view, now)}>
                         <StatusList
                             id={CHECKS_LIST_ID}
                             ariaLabel={l10n.t('Connection checks')}

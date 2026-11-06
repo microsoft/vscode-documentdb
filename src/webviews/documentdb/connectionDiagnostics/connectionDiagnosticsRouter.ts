@@ -32,11 +32,7 @@ import {
     getPlannedDiagnosticsChecks,
     runConnectionDiagnostics,
 } from '../../../connectionDiagnostics/runConnectionDiagnostics';
-import {
-    type DiagnosticsEntryPoint,
-    type DiagnosticsTarget,
-    type FindingCode,
-} from '../../../connectionDiagnostics/types';
+import { type FindingCode } from '../../../connectionDiagnostics/types';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
@@ -45,8 +41,6 @@ import { type DiagnosticsPanelSession } from './diagnosticsPanelSession';
 import { type PanelRow } from './panelTypes';
 
 export type RouterContext = BaseRouterContext & {
-    target: DiagnosticsTarget;
-    entryPoint: DiagnosticsEntryPoint;
     session: DiagnosticsPanelSession;
 };
 
@@ -323,7 +317,7 @@ export const connectionDiagnosticsRouter = router({
             const myCtx = ctx as RouterContext;
             const { session } = myCtx;
             const active = session.startRun(randomUUID(), input.requestId);
-            const { runId, abortController } = active;
+            const { runId, abortController, subject } = active;
             const startedAt = Date.now();
             const projector = new PanelRowProjector(describeFinding, getPlannedDiagnosticsChecks());
             const initialRows = projector.rows();
@@ -361,8 +355,8 @@ export const connectionDiagnosticsRouter = router({
             const execute = async (): Promise<void> => {
                 try {
                     const run = await runConnectionDiagnostics({
-                        target: myCtx.target,
-                        entryPoint: myCtx.entryPoint,
+                        target: subject.target,
+                        entryPoint: subject.entryPoint,
                         runId,
                         runTrigger: input.trigger,
                         runIndex: active.runIndex,
@@ -394,7 +388,7 @@ export const connectionDiagnosticsRouter = router({
                     const { outcome } = result;
                     const report = buildReport(run, {
                         summary: reportSummary(run, result),
-                        connectionName: myCtx.target.displayName,
+                        connectionName: subject.target.displayName,
                         identifierKeys: diagnosticsIdentifierKeys,
                     });
                     session.completedRun = { runId, report };

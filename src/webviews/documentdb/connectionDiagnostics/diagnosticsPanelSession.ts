@@ -6,13 +6,22 @@
 import { type DiagnosticsReport } from '@documentdb-js/connection-diagnostics';
 import { type Uri } from 'vscode';
 import { type RunConnectionDiagnosticsOptions } from '../../../connectionDiagnostics/runConnectionDiagnostics';
-import { type FindingCode } from '../../../connectionDiagnostics/types';
+import {
+    type DiagnosticsEntryPoint,
+    type DiagnosticsTarget,
+    type FindingCode,
+} from '../../../connectionDiagnostics/types';
 import { type PanelEvent } from './connectionDiagnosticsTypes';
 
 export type CancelReason = ReturnType<NonNullable<RunConnectionDiagnosticsOptions['cancelReason']>>;
 
 /** Bounds the Cancel requests remembered for runs whose subscription has not started yet. */
 const MAX_EARLY_CANCELS = 32;
+
+export interface DiagnosticsSubject {
+    readonly target: DiagnosticsTarget;
+    readonly entryPoint: DiagnosticsEntryPoint;
+}
 
 export class DiagnosticsPanelRun {
     public readonly abortController = new AbortController();
@@ -23,6 +32,7 @@ export class DiagnosticsPanelRun {
         public readonly runIndex: number,
         /** The view's identity for the subscription that started this run; Cancel must name it. */
         public readonly requestId: string,
+        public readonly subject: DiagnosticsSubject,
     ) {}
 
     public abort(reason: CancelReason): void {
@@ -50,18 +60,34 @@ export class DiagnosticsPanelSession {
     public runId: string | undefined;
     public runIndex = 0;
     public completedRun: { readonly runId: string; readonly report: DiagnosticsReport<FindingCode> } | undefined;
-    private readonly panelEvents: PanelEvent[] = [];
+    private panelEvent: PanelEvent | undefined;
     private readonly listeners = new Set<() => void>();
     private readonly earlyCancels = new Set<string>();
+    private currentSubject: DiagnosticsSubject;
     private disposed = false;
 
-    public constructor(public readonly diagnosticsSessionId: string) {}
+    public constructor(
+        public readonly diagnosticsSessionId: string,
+        initialSubject: DiagnosticsSubject,
+    ) {
+        this.currentSubject = initialSubject;
+    }
+
+    public get subject(): DiagnosticsSubject {
+        return this.currentSubject;
+    }
+
+    public retarget(nextSubject: DiagnosticsSubject): void {
+        if (!this.disposed) {
+            this.currentSubject = nextSubject;
+        }
+    }
 
     public startRun(runId: string, requestId: string): DiagnosticsPanelRun {
         this.currentRun?.abort('rerun');
         this.completedRun = undefined;
         this.runId = runId;
-        const run = new DiagnosticsPanelRun(runId, ++this.runIndex, requestId);
+        const run = new DiagnosticsPanelRun(runId, ++this.runIndex, requestId, this.subject);
         this.currentRun = run;
         if (this.disposed) {
             run.abort('panelClosed');
@@ -91,20 +117,23 @@ export class DiagnosticsPanelSession {
 
     public offerRerun(): void {
         if (!this.disposed) {
-            this.panelEvents.push({ type: 'offerRerun' });
+            this.panelEvent = { type: 'offerRerun', connectionName: this.subject.target.displayName };
             this.wake();
         }
     }
 
     public async *events(signal?: AbortSignal): AsyncGenerator<PanelEvent, void, void> {
+        // Replay the latest name after a reload; older offers must not restore a stale header.
+        let lastEvent: PanelEvent | undefined;
         let wake: (() => void) | undefined;
         const onWake = (): void => wake?.();
         this.listeners.add(onWake);
         signal?.addEventListener('abort', onWake);
         try {
             while (!this.disposed && !signal?.aborted) {
-                const event = this.panelEvents.shift();
-                if (event) {
+                const event = this.panelEvent;
+                if (event && event !== lastEvent) {
+                    lastEvent = event;
                     yield event;
                 } else {
                     await new Promise<void>((resolve): void => {
@@ -124,7 +153,7 @@ export class DiagnosticsPanelSession {
         this.currentRun?.abort('panelClosed');
         this.completedRun = undefined;
         this.reportPreview = undefined;
-        this.panelEvents.length = 0;
+        this.panelEvent = undefined;
         this.earlyCancels.clear();
         this.wake();
     }

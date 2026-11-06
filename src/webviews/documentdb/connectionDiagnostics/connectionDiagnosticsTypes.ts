@@ -67,6 +67,7 @@ export type RunUpdate =
 
 export interface PanelEvent {
     readonly type: 'offerRerun';
+    readonly connectionName: string;
 }
 
 export interface ConnectionDiagnosticsConfiguration {

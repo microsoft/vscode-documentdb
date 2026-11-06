@@ -1024,10 +1024,14 @@ describe('ConnectionDiagnostics', () => {
 
     it('offers a re-run from a second open only when no run is active', async () => {
         await render();
-        await act(async () => client.panelHandlers[0].onData({ type: 'offerRerun' }));
+        await act(async () =>
+            client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Orders cluster' }),
+        );
         expect(host.textContent).not.toContain('Connection Diagnostics is already open for this connection.');
         await finish('run-1');
-        await act(async () => client.panelHandlers[0].onData({ type: 'offerRerun' }));
+        await act(async () =>
+            client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Orders cluster' }),
+        );
         expect(host.textContent).toContain(
             'Connection Diagnostics is already open for this connection. Run the diagnosis again?',
         );
@@ -1040,6 +1044,53 @@ describe('ConnectionDiagnostics', () => {
             requestId: anyRequestId,
         });
         expect(host.textContent).not.toContain('Connection Diagnostics is already open for this connection.');
+    });
+
+    it('updates the connection header during a run without restarting it or moving focus', async (): Promise<void> => {
+        await render();
+        await send({ type: 'started', runId: 'run-1', startedAt: 1, rows: pending });
+        const cancel = footerButton('Cancel');
+        await act(async () => cancel.focus());
+        expect(host.textContent).toContain('Orders cluster');
+
+        await act(async () =>
+            client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Renamed connection' }),
+        );
+
+        expect(host.textContent).toContain('Renamed connection');
+        expect(host.textContent).not.toContain('Orders cluster');
+        expect(host.textContent).not.toContain('Connection Diagnostics is already open for this connection.');
+        expect(client.trpc.connectionDiagnostics.run.subscribe).toHaveBeenCalledOnce();
+        expect(client.trpc.connectionDiagnostics.cancel.mutate).not.toHaveBeenCalled();
+        expect(document.activeElement).toBe(cancel);
+        await finish('run-1');
+        expect(host.textContent).toContain('Renamed connection');
+        await click(footerButton('Show report'));
+        expect(client.trpc.connectionDiagnostics.showDiagnostics.mutate).toHaveBeenCalledWith({
+            runId: 'run-1',
+            hideIdentifiers: false,
+        });
+    });
+
+    it('updates the completed connection header but keeps its result and report until an explicit re-run', async (): Promise<void> => {
+        await render();
+        await finish('run-1');
+        const card = host.querySelector('#connectivity-result');
+        const previousResult = card?.textContent;
+        await act(async () =>
+            client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Latest selected connection' }),
+        );
+
+        expect(host.textContent).toContain('Latest selected connection');
+        expect(host.textContent).not.toContain('Orders cluster');
+        expect(host.querySelector('#connectivity-result')).toBe(card);
+        expect(card?.textContent).toBe(previousResult);
+        expect(client.trpc.connectionDiagnostics.run.subscribe).toHaveBeenCalledOnce();
+        await click(footerButton('Show report'));
+        expect(client.trpc.connectionDiagnostics.showDiagnostics.mutate).toHaveBeenCalledWith({
+            runId: 'run-1',
+            hideIdentifiers: false,
+        });
     });
 
     describe('focus when a focused control disappears', () => {
@@ -1113,7 +1164,9 @@ describe('ConnectionDiagnostics', () => {
             async (label) => {
                 await render();
                 await finish('run-1');
-                await act(async () => client.panelHandlers[0].onData({ type: 'offerRerun' }));
+                await act(async () =>
+                    client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Orders cluster' }),
+                );
                 const offerButton = [...host.querySelectorAll<HTMLButtonElement>('.fui-MessageBar button')].find(
                     (button): boolean => (button.getAttribute('aria-label') ?? button.textContent) === label,
                 );

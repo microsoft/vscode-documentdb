@@ -214,19 +214,20 @@ function context(
         nativeAuthConfig: { connectionUser: 'alice', connectionPassword: password },
         ...(method === AuthMethodId.ManagedIdentity ? { managedIdentityAuthConfig: {} } : {}),
     };
-    const session = new DiagnosticsPanelSession('acceptance-session');
-    sessions.push(session);
-    return {
-        dbExperience: API.DocumentDB,
-        webviewName: 'connectionDiagnostics',
+    const session = new DiagnosticsPanelSession('acceptance-session', {
         entryPoint: 'contextMenu',
-        session,
         target: {
             clusterId: 'acceptance-cluster',
             displayName: 'Acceptance fixture',
             sourceView: 'connections',
             getCredentials: vi.fn(async (): Promise<EphemeralClusterCredentials> => credentials),
         },
+    });
+    sessions.push(session);
+    return {
+        dbExperience: API.DocumentDB,
+        webviewName: 'connectionDiagnostics',
+        session,
     };
 }
 
@@ -441,7 +442,7 @@ describe('Acceptance (design §8.1)', (): void => {
                 redact: false,
             });
         expect(render()).toBe(render());
-        const reads = vi.mocked(view.ctx.target.getCredentials).mock.calls.length;
+        const reads = vi.mocked(view.ctx.session.subject.target.getCredentials).mock.calls.length;
         const connects = bridge.connect.mock.calls.length;
         const probes = fixture.requests.length;
         const dnsLookups = vi.mocked(fixture.dns.lookup).mock.calls.length;
@@ -462,7 +463,7 @@ describe('Acceptance (design §8.1)', (): void => {
         expect(shown).toBe(`${render().trimEnd()}\n\n${renderExtensionReportFooter()}\n`);
         expect(copied).toBe(shown);
         expect(saved && Buffer.from(saved).toString('utf8')).toBe(shown);
-        expect(vi.mocked(view.ctx.target.getCredentials).mock.calls).toHaveLength(reads);
+        expect(vi.mocked(view.ctx.session.subject.target.getCredentials).mock.calls).toHaveLength(reads);
         expect(bridge.connect.mock.calls).toHaveLength(connects);
         expect(fixture.requests).toHaveLength(probes);
         expect(vi.mocked(fixture.dns.lookup).mock.calls).toHaveLength(dnsLookups);

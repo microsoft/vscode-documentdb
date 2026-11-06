@@ -28,17 +28,17 @@ export function openConnectionDiagnostics(options: { target: DiagnosticsTarget; 
     const { target, entryPoint } = options;
     const existing = panels.get(target.clusterId);
     if (existing) {
+        existing.session.retarget({ target, entryPoint });
+        existing.controller.panel.title = vscode.l10n.t('Diagnose: {0}', target.displayName);
         existing.controller.panel.reveal();
         existing.session.offerRerun();
         return { panelAction: 'focused', diagnosticsSessionId: existing.session.diagnosticsSessionId };
     }
 
-    const session = new DiagnosticsPanelSession(randomUUID());
+    const session = new DiagnosticsPanelSession(randomUUID(), { target, entryPoint });
     const context: RouterContext = {
         dbExperience: API.DocumentDB,
         webviewName: 'connectionDiagnostics',
-        target,
-        entryPoint,
         session,
     };
     const controller = openAppWebview<ConnectionDiagnosticsConfiguration>({

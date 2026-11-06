@@ -15,6 +15,7 @@ import {
     type RunConnectionDiagnosticsOptions,
 } from '../../../connectionDiagnostics/runConnectionDiagnostics';
 import { type FindingCode } from '../../../connectionDiagnostics/types';
+import { type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { createCallerFactory } from '../../_integration/trpc';
 import { connectionDiagnosticsRouter, type RouterContext } from './connectionDiagnosticsRouter';
@@ -61,14 +62,15 @@ function context(signal?: AbortSignal): RouterContext {
     return {
         dbExperience: API.DocumentDB,
         webviewName: 'connectionDiagnostics',
-        target: {
-            clusterId: 'stable-cluster',
-            displayName: connectionName,
-            sourceView: 'connections',
-            getCredentials: vi.fn(),
-        },
-        entryPoint: 'contextMenu',
-        session: new DiagnosticsPanelSession('session-id'),
+        session: new DiagnosticsPanelSession('session-id', {
+            target: {
+                clusterId: 'stable-cluster',
+                displayName: connectionName,
+                sourceView: 'connections',
+                getCredentials: vi.fn(),
+            },
+            entryPoint: 'contextMenu',
+        }),
         signal,
     };
 }
@@ -245,6 +247,93 @@ describe('connectionDiagnosticsRouter', (): void => {
         },
     );
 
+    it('keeps the active run subject and report identity while a replacement becomes the next run subject', async (): Promise<void> => {
+        const ctx = context();
+        const oldCredentials = deferred<EphemeralClusterCredentials>();
+        const original = {
+            ...ctx.session.subject.target,
+            correlation: {
+                connectionCorrelationId: 'original-connection',
+                failedStartupCorrelationId: 'old-failure',
+            },
+            getCredentials: vi.fn().mockReturnValue(oldCredentials.promise),
+        };
+        ctx.session.retarget({ target: original, entryPoint: 'contextMenu' });
+        const replacementCredentials: EphemeralClusterCredentials = {
+            connectionString: 'mongodb://replacement.example/',
+            availableAuthMethods: [],
+        };
+        const replacement = {
+            ...original,
+            displayName: 'Replacement connection',
+            sourceView: 'discovery',
+            correlation: {
+                connectionCorrelationId: 'replacement-connection',
+                failedStartupCorrelationId: 'new-failure',
+            },
+            getCredentials: vi.fn().mockResolvedValue(replacementCredentials),
+        };
+        const credentialsRead: (EphemeralClusterCredentials | undefined)[] = [];
+        vi.mocked(runConnectionDiagnostics).mockImplementation(
+            async (options): Promise<DiagnosticsRun<FindingCode>> => {
+                credentialsRead.push(await options.target.getCredentials({ signal: options.signal }));
+                return emitRun(options);
+            },
+        );
+        const stream = iterator(await caller(ctx).run(runInput()));
+        const first = (await stream.next()).value;
+        const originalRun = ctx.session.currentRun;
+        const originalOptions = latestOptions();
+        const originalSubject = ctx.session.subject;
+
+        ctx.session.retarget({ target: replacement, entryPoint: 'errorNode' });
+        ctx.session.offerRerun();
+        expect(ctx.session.currentRun).toBe(originalRun);
+        expect(originalRun?.subject).toBe(originalSubject);
+        expect(originalOptions.target).toBe(original);
+        expect(originalOptions).toMatchObject({
+            entryPoint: 'contextMenu',
+            runIndex: 1,
+            diagnosticsSessionId: 'session-id',
+            target: { correlation: original.correlation, sourceView: 'connections' },
+        });
+        expect(originalOptions.signal.aborted).toBe(false);
+        expect(replacement.getCredentials).not.toHaveBeenCalled();
+
+        const initialCredentials: EphemeralClusterCredentials = {
+            connectionString: 'mongodb://original.example/',
+            availableAuthMethods: [],
+        };
+        oldCredentials.resolve(initialCredentials);
+        expect((await collect(stream)).at(-1)?.type).toBe('finished');
+        const completed = ctx.session.completedRun;
+        expect(completed?.report.connectionName).toBe(connectionName);
+        expect(completed?.runId).toBe(first?.runId);
+        ctx.session.retarget({ target: replacement, entryPoint: 'commandPalette' });
+        ctx.session.offerRerun();
+        expect(ctx.session.completedRun).toBe(completed);
+        await caller(ctx).copyReport({ runId: completed?.runId ?? 'missing', hideIdentifiers: false });
+        expect(vscode.env.clipboard.writeText).toHaveBeenLastCalledWith(
+            expect.stringContaining(`Connection diagnostics – ${connectionName}`),
+        );
+
+        const nextRunId = await finish(ctx);
+        expect(latestOptions().target).toBe(replacement);
+        expect(latestOptions()).toMatchObject({
+            entryPoint: 'commandPalette',
+            runIndex: 2,
+            diagnosticsSessionId: 'session-id',
+            target: { correlation: replacement.correlation, sourceView: 'discovery' },
+        });
+        expect(credentialsRead).toEqual([initialCredentials, replacementCredentials]);
+        expect(original.getCredentials).toHaveBeenCalledOnce();
+        expect(replacement.getCredentials).toHaveBeenCalledOnce();
+        expect(runConnectionDiagnostics).toHaveBeenCalledTimes(2);
+        expect(nextRunId).not.toBe(first?.runId);
+        expect(ctx.session.completedRun?.report.connectionName).toBe(replacement.displayName);
+        ctx.session.dispose();
+    });
+
     it('cancels during preparation with the started run ID before any check event, without waiting for the runner', async (): Promise<void> => {
         const pending = deferred<DiagnosticsRun<FindingCode>>();
         vi.mocked(runConnectionDiagnostics).mockReturnValue(pending.promise);
@@ -374,7 +463,7 @@ describe('connectionDiagnosticsRouter', (): void => {
         const stream = iterator(await caller(ctx).panelEvents());
         const waiting = stream.next();
         ctx.session.offerRerun();
-        expect((await waiting).value).toEqual({ type: 'offerRerun' });
+        expect((await waiting).value).toEqual({ type: 'offerRerun', connectionName });
         const done = stream.next();
         subscription.abort();
         expect((await done).done).toBe(true);
