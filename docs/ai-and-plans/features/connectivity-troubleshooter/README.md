@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: notes
 status: active
 created: 2026-10-27
-updated: 2026-11-04
+updated: 2026-11-06
 code:
   - packages/documentdb-js-connection-diagnostics/**
   - src/connectionDiagnostics/**
@@ -296,5 +296,7 @@ None in the design. Known limits:
 1. This README.
 2. [design.md](./design.md), sections 1, 4, 5 and 6.
 3. [decisions.md](./decisions.md) for the reasoning behind any one choice.
-4. History only when needed: [iterations/](./iterations/) (the implementation review and the
+4. [UX review pack for #1066](./iterations/05-ux-review.md) for summary-message combinations,
+   expanded Details, hard-to-reproduce cloud/SRV scenarios, and inline language suggestions.
+5. History only when needed: [iterations/](./iterations/) (the implementation review and the
    work-item log).

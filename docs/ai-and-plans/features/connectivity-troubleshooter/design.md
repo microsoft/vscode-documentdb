@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: design
 status: active
 created: 2026-10-27
-updated: 2026-11-04
+updated: 2026-11-06
 ---
 
 # Diagnose connection: design
@@ -15,10 +15,12 @@ updated: 2026-11-04
 > in RN-1…RN-5 ([0051](./decisions.md#0051--internal-names-follow-the-feature-connection-diagnostics));
 > this docs folder keeps its name.
 
-> The complete proposal, ready for evaluation before implementation. Nothing here is implemented;
-> once code exists, the code is authoritative for behavior. No question is left open: every
-> earlier `Open` or `Proposed` item is resolved below and in [decisions.md](./decisions.md).
-> Where consolidation changed an earlier draft significantly, a **Changed:** note says why.
+> This document records the feature's design intent. The feature is now implemented; see the
+> [feature README](./README.md) for its status and the [UX review pack](./iterations/05-ux-review.md)
+> for current user-facing presentations. Code is authoritative for behavior; proposed choices
+> still awaiting operator confirmation are identified in the README and
+> [decisions.md](./decisions.md). Where consolidation changed an earlier draft significantly,
+> a **Changed:** note says why.
 
 ## 1. Who it is for
 
