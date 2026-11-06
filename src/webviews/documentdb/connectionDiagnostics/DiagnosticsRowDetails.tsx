@@ -23,6 +23,7 @@ import {
 import {
     type PanelAddress,
     type PanelAuthStage,
+    type PanelCloud,
     type PanelCommandOutcome,
     type PanelEvidenceDetail,
     type PanelFindingDetail,
@@ -82,6 +83,19 @@ function addressClassText(address: PanelAddress): string {
             return l10n.t('{0}, loopback', family);
         case 'linkLocal':
             return l10n.t('{0}, link-local', family);
+    }
+}
+
+function cloudText(cloud: PanelCloud): string {
+    switch (cloud) {
+        case 'AzureCloud':
+            return l10n.t('Azure');
+        case 'AzureUSGovernment':
+            return l10n.t('Azure US Government');
+        case 'AzureChinaCloud':
+            return l10n.t('Azure China');
+        case 'custom':
+            return l10n.t('Custom cloud');
     }
 }
 
@@ -515,6 +529,14 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                             term: signedIn ? l10n.t('Signed in as') : l10n.t('User'),
                             value: evidence.user,
                             mono: true,
+                        },
+                        evidence.signInCloud !== undefined && {
+                            term: l10n.t('Sign-in cloud'),
+                            value: cloudText(evidence.signInCloud),
+                        },
+                        evidence.clusterCloud !== undefined && {
+                            term: l10n.t('Cluster cloud'),
+                            value: cloudText(evidence.clusterCloud),
                         },
                         evidence.authSource !== undefined && {
                             term: l10n.t('Authentication database'),

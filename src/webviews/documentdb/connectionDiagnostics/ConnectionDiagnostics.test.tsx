@@ -1234,6 +1234,39 @@ describe('ConnectionDiagnostics', () => {
             });
         }
 
+        it.each([
+            ['AzureCloud', 'Azure'],
+            ['AzureUSGovernment', 'Azure US Government'],
+            ['AzureChinaCloud', 'Azure China'],
+            ['custom', 'Custom cloud'],
+        ] as const)('shows %s sign-in and cluster clouds in Details, not collapsed evidence', async (cloud, label) => {
+            await render();
+            await send({ type: 'started', runId: 'run-1', startedAt: 1, rows: pending });
+            await send({
+                type: 'finished', runId: 'run-1', finishedAt: 2,
+                rows: rowsWith(connected, [{
+                    id: 'authentication', status: 'done', segments: [{ kind: 'authMethod', method: 'entraId' }],
+                    details: { findings: [], evidence: [{
+                        kind: 'auth', method: 'entraId', user: 'user@example.com',
+                        signInCloud: cloud, clusterCloud: 'AzureChinaCloud',
+                        stages: [{ stage: 'getToken', outcome: 'done' }],
+                    }] },
+                }]),
+                outcome: 'connected', result: cardResult('connected'), coverage,
+            });
+            const toggle = toggles().find(
+                (button): boolean => button.getAttribute('aria-label') === 'Details for Authentication',
+            );
+            if (!toggle) {
+                throw new Error('Missing Authentication details toggle');
+            }
+            expect(toggle.closest('[role="listitem"]')?.textContent).not.toContain('Sign-in cloud');
+            await click(toggle);
+            expect(region(toggle).textContent).toContain(
+                `Signed in asuser@example.comSign-in cloud${label}Cluster cloudAzure ChinaSteps`,
+            );
+        });
+
         it('WI-27: labels each command outcome, telling sign-in and permission refusals from unsupported commands', async () => {
             await render();
             await send({ type: 'started', runId: 'run-1', startedAt: 1, rows: pending });

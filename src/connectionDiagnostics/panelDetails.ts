@@ -18,6 +18,7 @@ import {
     type PanelAuthMethod,
     type PanelAuthSource,
     type PanelAuthStage,
+    type PanelCloud,
     type PanelCommandOutcome,
     type PanelConnectionOption,
     type PanelEvidenceDetail,
@@ -480,6 +481,26 @@ function authEvidence(
     const authSource =
         known === 'native' && parsed ? authSourceOf(parsed, connectionOptions(parsed, context)) : undefined;
     const stages = known === 'none' ? [] : authStages(result, known);
+    const configuration = result.steps?.find((step): boolean => step.stepId === 'auth.signInConfiguration')?.facts ?? {};
+    const mismatch = allFindings(result).find((finding): boolean => finding.code === 'auth.cloudMismatch')?.data ?? {};
+    const azureClouds: readonly Exclude<PanelCloud, 'custom'>[] = ['AzureCloud', 'AzureUSGovernment', 'AzureChinaCloud'];
+    const clusterCloud =
+        known === 'entraId' || known === 'managedIdentity'
+            ? azureClouds.find((cloud): boolean => cloud === (configuration.hostCloud ?? mismatch.hostCloud))
+            : undefined;
+    const configuredCloud = configuration.configuredCloud ?? mismatch.configuredCloud;
+    const cloudCategory = configuration.cloudCategory ?? mismatch.cloudCategory;
+    let signInCloud: PanelCloud | undefined;
+    if (known === 'entraId') {
+        signInCloud = [...azureClouds, 'custom' as const].find((cloud): boolean => cloud === configuredCloud);
+    } else if (known === 'managedIdentity') {
+        signInCloud = ([
+            ['public', 'AzureCloud'],
+            ['usgov', 'AzureUSGovernment'],
+            ['china', 'AzureChinaCloud'],
+            ['custom', 'custom'],
+        ] as const).find(([category]): boolean => category === cloudCategory)?.[1];
+    }
     if (!known && !mechanism && !user) {
         return [];
     }
@@ -491,6 +512,8 @@ function authEvidence(
             ...(mechanism?.negotiated ? { mechanismNegotiated: true } : {}),
             ...(user ? { user } : {}),
             ...(authSource ? { authSource } : {}),
+            ...(signInCloud ? { signInCloud } : {}),
+            ...(clusterCloud ? { clusterCloud } : {}),
             stages,
         },
     ];

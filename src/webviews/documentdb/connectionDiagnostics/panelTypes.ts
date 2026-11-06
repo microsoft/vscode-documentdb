@@ -16,6 +16,7 @@ export const panelRowIds = [
 
 export type PanelRowId = (typeof panelRowIds)[number];
 export type PanelRowStatus = 'pending' | 'active' | 'done' | 'warning' | 'error' | 'skipped';
+export type PanelCloud = 'AzureCloud' | 'AzureUSGovernment' | 'AzureChinaCloud' | 'custom';
 
 export type EvidenceSegment =
     | { readonly kind: 'authMethod'; readonly method: 'native' | 'entraId' | 'managedIdentity' | 'none' }
@@ -238,6 +239,10 @@ export type PanelEvidenceDetail =
           readonly user?: string;
           /** Username and password only. */
           readonly authSource?: PanelAuthSource;
+          /** Microsoft Entra ID and managed identity only. Interactive: the configured sign-in cloud; managed identity: the token resource's cloud. */
+          readonly signInCloud?: PanelCloud;
+          /** The cloud recognized from the cluster host names. */
+          readonly clusterCloud?: Exclude<PanelCloud, 'custom'>;
           readonly stages: readonly PanelAuthStage[];
       }
     | {
