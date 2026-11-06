@@ -396,7 +396,7 @@ export const findingMessages: {
     'check.timeout': (data): FindingMessage => {
         const operation = stringField(data, 'operation');
         const nextStep = vscode.l10n.t(
-            'Try Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled. If a connection timeout limited this step, change that connection setting first.',
+            'Choose Retry with longer timeouts, or Retry without diagnostic timeouts, which may wait until cancelled. If a connection timeout limited this step, change that connection setting first.',
         );
         const generic: FindingMessage = {
             title: vscode.l10n.t('Step timed out'),
@@ -504,7 +504,7 @@ export const findingMessages: {
     'cs.unencodedReservedCharacter': (data): FindingMessage => {
         let explanation = vscode.l10n.t('A credential contains a reserved character that is not percent-encoded.');
         if (stringField(data, 'part') === 'username') {
-            explanation = vscode.l10n.t('The user name contains a reserved character that is not percent-encoded.');
+            explanation = vscode.l10n.t('The username contains a reserved character that is not percent-encoded.');
         } else if (stringField(data, 'part') === 'password') {
             explanation = vscode.l10n.t('The password contains a reserved character that is not percent-encoded.');
         }
@@ -923,7 +923,7 @@ export const findingMessages: {
                 : vscode.l10n.t('The server rejected the selected authentication credentials.'),
             nextStep: entra
                 ? vscode.l10n.t('Check that this identity is added as a user on the cluster.')
-                : vscode.l10n.t('Check the user name and password, and the authentication database.'),
+                : vscode.l10n.t('Check the username and password, and the authentication database.'),
         };
     },
     'auth.mechanismMismatch': (data): FindingMessage => {

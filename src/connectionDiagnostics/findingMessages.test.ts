@@ -335,7 +335,7 @@ describe('localized finding messages', () => {
             );
         }
         expect(findingMessages['auth.failed']({ authMethod: 'NativeAuth' }).nextStep).toContain(
-            'Check the user name and password',
+            'Check the username and password',
         );
     });
 

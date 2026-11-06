@@ -332,7 +332,7 @@ function shareWarning(confirmLabel: 'Copy report' | 'Save report'): {
 } {
     return {
         message: 'This report includes host and identity details.',
-        detail: 'Host names, addresses and the user name are not hidden. To hide them, cancel, select Hide identifiers in the report, and then share again.',
+        detail: 'Host names, addresses and the username are not hidden. To hide them, cancel, select Hide identifiers in the report, and then share again.',
         confirmLabel,
         severity: 'warning',
     };
@@ -1968,7 +1968,7 @@ const diagnosticsScenarios = {
                             'error',
                             'Authentication rejected',
                             'The server rejected the selected authentication credentials.',
-                            'Check the user name and password, and the authentication database.',
+                            'Check the username and password, and the authentication database.',
                         ),
                     ],
                     [
@@ -1991,14 +1991,14 @@ const diagnosticsScenarios = {
             authenticationHeadline(
                 'Authentication rejected',
                 'The server rejected the selected authentication credentials.',
-                'Check the user name and password, and the authentication database.',
+                'Check the username and password, and the authentication database.',
             ),
         ),
-        ['Username and password · SCRAM-SHA-256 · The cluster rejected the user name or password'],
+        ['Username and password · SCRAM-SHA-256 · The cluster rejected the username or password'],
         [
             'Connection failed at Authentication',
             'The server rejected the selected authentication credentials.',
-            'Next: Check the user name and password, and the authentication database.',
+            'Next: Check the username and password, and the authentication database.',
             supportLine,
         ],
         ['A firewall or IP allowlist'],

@@ -218,7 +218,7 @@ describe('DiagnosticsResultCard', () => {
                 headline: {
                     title: 'Authentication rejected',
                     explanation: 'The server rejected the selected authentication credentials.',
-                    nextStep: 'Check the user name and password, and the authentication database.',
+                    nextStep: 'Check the username and password, and the authentication database.',
                     target: 'db-2:27017',
                 },
                 supporting: { title: 'Network connection refused', target: 'db-1:27017' },
@@ -231,7 +231,7 @@ describe('DiagnosticsResultCard', () => {
             title,
             'Authentication rejected (db-2:27017)',
             'The server rejected the selected authentication credentials.',
-            'Next: Check the user name and password, and the authentication database.',
+            'Next: Check the username and password, and the authentication database.',
             'Also detected: Network connection refused (db-1:27017)',
             'The Kubernetes port forward is managed by the extension.',
             SUPPORT,

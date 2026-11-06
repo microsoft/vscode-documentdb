@@ -119,7 +119,7 @@ function commandOutcomeText(outcome: PanelCommandOutcome): string {
 function authStageText(stage: PanelAuthStage['stage']): string {
     switch (stage) {
         case 'sendPassword':
-            return l10n.t('Send user name and password to the cluster');
+            return l10n.t('Send username and password to the cluster');
         case 'prepareSignIn':
             return l10n.t('Prepare Microsoft Entra ID sign-in');
         case 'getToken':

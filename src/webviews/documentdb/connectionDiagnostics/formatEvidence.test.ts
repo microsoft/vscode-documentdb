@@ -29,7 +29,7 @@ describe('authentication and database evidence formatting', (): void => {
         [{ kind: 'noSilentSignIn' }, 'No sign-in available without a prompt'],
         [{ kind: 'signInFailed' }, 'Sign-in failed'],
         [{ kind: 'signedInNotAccepted' }, 'Token obtained · The cluster rejected the token'],
-        [{ kind: 'credentialsRejected' }, 'The cluster rejected the user name or password'],
+        [{ kind: 'credentialsRejected' }, 'The cluster rejected the username or password'],
         [{ kind: 'clusterCloud', cloud: 'AzureUSGovernment' }, 'Cluster in Azure US Government'],
         [{ kind: 'signedInCloud', cloud: 'AzureCloud' }, 'Sign-in set to Azure'],
         [{ kind: 'ping', ms: 12 }, 'Ping 12 ms'],

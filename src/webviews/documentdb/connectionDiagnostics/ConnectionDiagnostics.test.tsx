@@ -616,7 +616,7 @@ describe('ConnectionDiagnostics', () => {
             await shareReport('Copy report to clipboard');
             expect(confirm).toHaveBeenCalledWith({
                 message: 'This report includes host and identity details.',
-                detail: 'Host names, addresses and the user name are not hidden. To hide them, cancel, select Hide identifiers in the report, and then share again.',
+                detail: 'Host names, addresses and the username are not hidden. To hide them, cancel, select Hide identifiers in the report, and then share again.',
                 confirmLabel: 'Copy report',
                 severity: 'warning',
             });
@@ -1025,10 +1025,10 @@ describe('ConnectionDiagnostics', () => {
     it('offers a re-run from a second open only when no run is active', async () => {
         await render();
         await act(async () => client.panelHandlers[0].onData({ type: 'offerRerun' }));
-        expect(host.textContent).not.toContain('This diagnostic page was already open.');
+        expect(host.textContent).not.toContain('Connection Diagnostics is already open for this connection.');
         await finish('run-1');
         await act(async () => client.panelHandlers[0].onData({ type: 'offerRerun' }));
-        expect(host.textContent).toContain('This diagnostic page was already open. Run the check again?');
+        expect(host.textContent).toContain('Connection Diagnostics is already open for this connection. Run the diagnosis again?');
         const offer = buttons('Re-run').find((button) => button.closest('.fui-MessageBar'));
         if (!offer) throw new Error('Missing offer Re-run');
         await click(offer);
@@ -1037,7 +1037,7 @@ describe('ConnectionDiagnostics', () => {
             trigger: 'rerun',
             requestId: anyRequestId,
         });
-        expect(host.textContent).not.toContain('This diagnostic page was already open.');
+        expect(host.textContent).not.toContain('Connection Diagnostics is already open for this connection.');
     });
 
     describe('focus when a focused control disappears', () => {
@@ -1118,7 +1118,7 @@ describe('ConnectionDiagnostics', () => {
                 if (!offerButton) throw new Error(`Missing offer ${label}`);
                 await focus(offerButton);
                 await click(offerButton);
-                expect(host.textContent).not.toContain('This diagnostic page was already open.');
+                expect(host.textContent).not.toContain('Connection Diagnostics is already open for this connection.');
                 expect(document.activeElement).toBe(footerButton(label === 'Re-run' ? 'Cancel' : 'Re-run'));
             },
         );

@@ -423,7 +423,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
             const { confirmed } = await trpcClient.common.confirm.mutate({
                 message: l10n.t('This report includes host and identity details.'),
                 detail: l10n.t(
-                    'Host names, addresses and the user name are not hidden. To hide them, cancel, select Hide identifiers in the report, and then share again.',
+                    'Host names, addresses and the username are not hidden. To hide them, cancel, select Hide identifiers in the report, and then share again.',
                 ),
                 confirmLabel: action === 'copyReport' ? l10n.t('Copy report') : l10n.t('Save report'),
                 severity: 'warning',
@@ -527,7 +527,7 @@ export const ConnectionDiagnostics = (): JSX.Element => {
                     {offerRerun && !running && (
                         <MessageBar intent="info" ref={offerFocusRef}>
                             <MessageBarBody>
-                                {l10n.t('This diagnostic page was already open. Run the check again?')}
+                                {l10n.t('Connection Diagnostics is already open for this connection. Run the diagnosis again?')}
                             </MessageBarBody>
                             <MessageBarActions
                                 containerAction={

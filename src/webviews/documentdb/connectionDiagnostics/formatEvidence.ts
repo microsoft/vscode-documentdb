@@ -206,7 +206,7 @@ export function formatEvidenceSegment(segment: EvidenceSegment): string | undefi
         case 'signedInNotAccepted':
             return l10n.t('Token obtained · The cluster rejected the token');
         case 'credentialsRejected':
-            return l10n.t('The cluster rejected the user name or password');
+            return l10n.t('The cluster rejected the username or password');
         case 'serverNotReached':
             return l10n.t('Could not reach a server');
         case 'signInNotTested':
