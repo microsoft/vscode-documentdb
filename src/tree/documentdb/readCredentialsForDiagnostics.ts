@@ -25,6 +25,7 @@ function isTypedDiagnosticError(error: unknown): boolean {
  * Runs a node's credential read in diagnostic intent: its telemetry is still recorded, but errors are
  * neither displayed nor swallowed. Untyped failures are wrapped as {@link ConnectionSourceUnavailableError}
  * for `source`, so the caller sees which source failed without parsing messages.
+ * Independent nested `callWithTelemetryAndErrorHandling` contexts inside readers also require masking.
  */
 export async function readCredentialsForDiagnostics<T>(
     callbackId: string,
@@ -35,6 +36,7 @@ export async function readCredentialsForDiagnostics<T>(
     read.signal.throwIfAborted();
     try {
         return await callWithTelemetryAndErrorHandling(callbackId, async (context: IActionContext): Promise<T> => {
+            context.telemetry.maskEntireErrorMessage = true;
             context.errorHandling.rethrow = true;
             context.errorHandling.suppressDisplay = true;
             context.errorHandling.suppressReportIssue = true;

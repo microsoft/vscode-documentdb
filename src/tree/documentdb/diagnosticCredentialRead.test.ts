@@ -101,16 +101,23 @@ describe('diagnostic credential reads (review R2, option A)', (): void => {
 
     describe('readCredentialsForDiagnostics', (): void => {
         it('records telemetry but neither displays nor swallows errors', async (): Promise<void> => {
-            const failure = new Error('boom');
-            await expect(
-                readCredentialsForDiagnostics('read', 'azure', read(), async (): Promise<never> => {
-                    throw failure;
-                }),
-            ).rejects.toMatchObject({
+            const cause = new Error('Private resource unavailable');
+            const failure = Object.assign(
+                new Error('Permission denied for namespace orchid-prod at api.orchid.internal'),
+                { cause },
+            );
+            const pending = readCredentialsForDiagnostics('read', 'azure', read(), async (context): Promise<never> => {
+                expect(context.telemetry.maskEntireErrorMessage).toBe(true);
+                throw failure;
+            });
+            await expect(pending).rejects.toMatchObject({
                 name: 'ConnectionSourceUnavailableError',
                 source: 'azure',
                 sourceError: failure,
             });
+            const wrapped = await pending.catch((error: unknown): unknown => error);
+            expect(wrapped instanceof ConnectionSourceUnavailableError && wrapped.sourceError).toBe(failure);
+            expect(failure.cause).toBe(cause);
             expect(telemetry.contexts[0].errorHandling).toMatchObject({
                 rethrow: true,
                 suppressDisplay: true,
@@ -118,25 +125,68 @@ describe('diagnostic credential reads (review R2, option A)', (): void => {
             });
             expect(telemetry.contexts[0].telemetry.properties.connectionIntent).toBe('diagnostic');
             expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+            expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
         });
 
-        it('passes typed errors through unchanged', async (): Promise<void> => {
-            const typed = new ConnectionEndpointUnavailableError('kubernetes', 'pending');
+        it.each([
+            new ConnectionSourceUnavailableError('atlas', new Error('Private source unavailable')),
+            new ConnectionEndpointUnavailableError('kubernetes', 'pending'),
+            new ConnectionInputCancelledError('port'),
+        ])('passes $name through unchanged with masking already enabled', async (typed): Promise<void> => {
             await expect(
-                readCredentialsForDiagnostics('read', 'kubernetes', read(), async (): Promise<never> => {
+                readCredentialsForDiagnostics('read', 'kubernetes', read(), async (context): Promise<never> => {
+                    expect(context.telemetry.maskEntireErrorMessage).toBe(true);
                     throw typed;
                 }),
             ).rejects.toBe(typed);
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+            expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+        });
+
+        it('returns successful reads unchanged with masking already enabled', async (): Promise<void> => {
+            const credentials = { connectionString: 'mongodb://private.example/' };
+            await expect(
+                readCredentialsForDiagnostics('read', 'azure', read(), async (context): Promise<typeof credentials> => {
+                    expect(context.telemetry.maskEntireErrorMessage).toBe(true);
+                    return credentials;
+                }),
+            ).resolves.toBe(credentials);
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+            expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
         });
 
         it('does not start a read for an aborted run', async (): Promise<void> => {
             const controller = new AbortController();
-            controller.abort();
+            const reason = new Error('Diagnosis cancelled');
+            controller.abort(reason);
             const callback = vi.fn();
             await expect(
                 readCredentialsForDiagnostics('read', 'azure', read(controller.signal), callback),
-            ).rejects.toThrow();
+            ).rejects.toBe(reason);
             expect(callback).not.toHaveBeenCalled();
+            expect(telemetry.contexts).toHaveLength(0);
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+            expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+        });
+
+        it('preserves cancellation during a read without source wrapping or notifications', async (): Promise<void> => {
+            const controller = new AbortController();
+            const reason = new Error('Diagnosis cancelled');
+            await expect(
+                readCredentialsForDiagnostics(
+                    'read',
+                    'azure',
+                    read(controller.signal),
+                    async (context): Promise<never> => {
+                        expect(context.telemetry.maskEntireErrorMessage).toBe(true);
+                        controller.abort(reason);
+                        controller.signal.throwIfAborted();
+                        throw new Error('Expected the aborted signal to throw');
+                    },
+                ),
+            ).rejects.toBe(reason);
+            expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+            expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
         });
 
         it('bridges the run signal to a cancellation token', (): void => {
@@ -181,6 +231,7 @@ describe('diagnostic credential reads (review R2, option A)', (): void => {
 
             await expect(item().getCredentials()).resolves.toBeUndefined();
             expect(vscode.window.showErrorMessage).toHaveBeenCalledOnce();
+            expect(telemetry.contexts[0].telemetry.maskEntireErrorMessage).toBeUndefined();
         });
     });
 
