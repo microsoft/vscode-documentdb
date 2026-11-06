@@ -387,7 +387,7 @@ describe('Discovery view helpers', () => {
         children.set(undefined, [createNode('discoveryView/other-provider')]);
 
         await expect(revealInDiscoveryView(context, request)).rejects.toThrow(
-            'Could not find example in the Discovery view. It may have been deleted, or a filter may still hide it.',
+            'Could not find example in the Discovery view. It may have been deleted, or a filter may still hide it. Check the filters on the provider in the Discovery view, then open the link again.',
         );
         expect(reveal).not.toHaveBeenCalled();
         expect(getCachedChildren).not.toHaveBeenCalled();
@@ -398,7 +398,7 @@ describe('Discovery view helpers', () => {
         children.set(rootNode, [createNode(`${rootNode.id}/other-subscription`)]);
 
         await expect(revealInDiscoveryView(context, request)).rejects.toThrow(
-            'Could not find example in the Discovery view. It may have been deleted, or a filter may still hide it.',
+            'Could not find example in the Discovery view. It may have been deleted, or a filter may still hide it. Check the filters on the provider in the Discovery view, then open the link again.',
         );
         expect(reveal).toHaveBeenCalledExactlyOnceWith(rootNode, { select: false, focus: false, expand: true });
         expect(getCachedChildren).toHaveBeenCalledExactlyOnceWith(rootNode);
@@ -410,7 +410,7 @@ describe('Discovery view helpers', () => {
         children.set(subscriptionNode, [createNode('not-a-cluster')]);
 
         await expect(revealInDiscoveryView(context, request)).rejects.toThrow(
-            'Could not find example in the Discovery view. It may have been deleted, or a filter may still hide it.',
+            'Could not find example in the Discovery view. It may have been deleted, or a filter may still hide it. Check the filters on the provider in the Discovery view, then open the link again.',
         );
         expect(reveal.mock.calls).toEqual([
             [rootNode, { select: false, focus: false, expand: true }],

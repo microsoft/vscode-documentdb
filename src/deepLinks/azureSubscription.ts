@@ -43,7 +43,9 @@ export async function resolveAzureSubscription(
     context.telemetry.properties.failureStage = 'azureSignIn';
     const provider = DiscoveryService.getProvider(request.providerId);
     if (!isAzureSubscriptionDiscoveryProvider(provider)) {
-        throw new Error(vscode.l10n.t('Azure discovery is not available.'));
+        throw new Error(
+            vscode.l10n.t('Azure discovery is not available. Reload the window, then open the link again.'),
+        );
     }
 
     const { azureSubscriptionProvider } = provider;
@@ -56,7 +58,7 @@ export async function resolveAzureSubscription(
         const signInButton = vscode.l10n.t('Sign in');
         ext.outputChannel.trace('[DeepLink] Showing Azure sign-in confirmation');
         const choice = await vscode.window.showInformationMessage(
-            vscode.l10n.t('Sign in'),
+            vscode.l10n.t('Sign in to Azure'),
             { modal: true, detail: vscode.l10n.t('Sign in to Azure to open {0}.', request.resourceName) },
             signInButton,
         );

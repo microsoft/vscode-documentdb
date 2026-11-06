@@ -128,7 +128,7 @@ export async function revealInDiscoveryView(
             if (!clusterNode) {
                 throw new Error(
                     vscode.l10n.t(
-                        'Could not find {0} in the Discovery view. It may have been deleted, or a filter may still hide it.',
+                        'Could not find {0} in the Discovery view. It may have been deleted, or a filter may still hide it. Check the filters on the provider in the Discovery view, then open the link again.',
                         request.displayName,
                     ),
                 );

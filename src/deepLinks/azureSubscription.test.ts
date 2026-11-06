@@ -111,7 +111,7 @@ describe('resolveAzureSubscription', (): void => {
         expect(DiscoveryService.getProvider).toHaveBeenCalledWith(request.providerId);
         expect(azureSubscriptionProvider.isSignedIn).toHaveBeenCalledWith();
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-            'Sign in',
+            'Sign in to Azure',
             { modal: true, detail: 'Sign in to Azure to open linked-resource.' },
             'Sign in',
         );
@@ -324,7 +324,7 @@ describe('resolveAzureSubscription', (): void => {
             (DiscoveryService.getProvider as Mock).mockReturnValue(provider);
 
             await expect(resolveAzureSubscription(context, request)).rejects.toThrow(
-                'Azure discovery is not available.',
+                'Azure discovery is not available. Reload the window, then open the link again.',
             );
 
             expect(context.telemetry.properties.failureStage).toBe('azureSignIn');

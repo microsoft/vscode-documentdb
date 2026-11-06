@@ -153,9 +153,9 @@ describe('handleAzureResourceLinkRequest', (): void => {
 
         await expect(handleAzureResourceLinkRequest(context, request)).resolves.toBe(revealResult);
 
-        expect(vi.mocked(vscode.window.withProgress).mock.calls[0][0].title).toBe('Opening from Azure');
+        expect(vi.mocked(vscode.window.withProgress).mock.calls[0][0].title).toBe('Opening Azure resource…');
         expect(vscode.window.withProgress).toHaveBeenCalledExactlyOnceWith(
-            { location: vscode.ProgressLocation.Notification, title: 'Opening from Azure', cancellable: true },
+            { location: vscode.ProgressLocation.Notification, title: 'Opening Azure resource…', cancellable: true },
             expect.any(Function),
         );
     });
@@ -374,7 +374,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
                     'To show My-Resource, the extension needs to change your filters:',
                     '• The Azure DocumentDB discovery provider will be shown in the Discovery view.',
                     '• Tenant tenant-id will no longer be hidden by your tenant filter.',
-                    '• Subscription My subscription will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
+                    '• Subscription "My subscription" will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
                     '',
                     'These changes stay after the link opens. To undo them, use Filter Entries… or Hide Provider on the provider in the Discovery view.',
                     '',
@@ -412,6 +412,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
                     'Resource: my-resource (Azure DocumentDB)',
                     'Resource group: my-group',
                     'Subscription ID: subscription-id',
+                    'Opens: Discovery view',
                     '',
                     'Note: You can disable these URL handling confirmations in the extension settings.',
                 ].join('\n'),
@@ -463,8 +464,8 @@ describe('handleAzureResourceLinkRequest', (): void => {
         [{ database: 'sales', collection: 'orders' }, 'Opens: Collection View'],
         [{ open: 'dashboard' }, 'Opens: Cluster Dashboard'],
         [{ open: 'shell' }, 'Opens: Interactive Shell'],
-        [{}, undefined],
-        [{ database: 'sales' }, undefined],
+        [{}, 'Opens: Discovery view'],
+        [{ database: 'sales' }, 'Opens: Discovery view'],
     ] satisfies [Partial<AzureResourceLinkRequest>, string | undefined][])(
         'describes the surface for %j',
         async (target, opensLine): Promise<void> => {
@@ -475,6 +476,18 @@ describe('handleAzureResourceLinkRequest', (): void => {
             expect(surfaceLines).toEqual(opensLine === undefined ? [] : [opensLine]);
         },
     );
+
+    it('shows Discovery view as the destination for a bare Azure link when confirmations are on', async (): Promise<void> => {
+        getSetting.mockReturnValue(true);
+
+        await handleAzureResourceLinkRequest(context, { resourceId: link.resourceId });
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            'Open Azure resource?',
+            expect.objectContaining({ detail: expect.stringContaining('Opens: Discovery view') }),
+            'Open',
+        );
+    });
 
     it.each([undefined, 'Not Open'])(
         'stops before subscription resolution when the first confirmation returns %s',

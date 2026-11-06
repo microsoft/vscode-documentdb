@@ -62,6 +62,8 @@ export async function handleAzureResourceLinkRequest(
             surface = vscode.l10n.t('Cluster Dashboard');
         } else if (request.open === 'shell') {
             surface = vscode.l10n.t('Interactive Shell');
+        } else {
+            surface = vscode.l10n.t('Discovery view');
         }
         if (surface) {
             detail.push(vscode.l10n.t('Opens: {0}', surface));
@@ -91,7 +93,7 @@ export async function handleAzureResourceLinkRequest(
     const displayName = await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: vscode.l10n.t('Opening from Azure'),
+            title: vscode.l10n.t('Opening Azure resource…'),
             cancellable: true,
         },
         async (progress, token): Promise<string | undefined> => {
@@ -160,7 +162,7 @@ export async function handleAzureResourceLinkRequest(
                 if (changes.addSubscription) {
                     detail.push(
                         vscode.l10n.t(
-                            '• Subscription {0} will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
+                            '• Subscription "{0}" will be added to your Azure subscription filter. This also shows it in the Azure Resources view.',
                             subscription.name,
                         ),
                     );
