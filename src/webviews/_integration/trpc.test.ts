@@ -17,7 +17,7 @@ vi.mock('vscode', async (importOriginal) => {
 });
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-utils')>()),
+    ...(await importOriginal<Record<string, unknown>>()),
     callWithTelemetryAndErrorHandling: async <T>(
         _eventId: string,
         callback: (context: IActionContext) => Promise<T>,
