@@ -76,7 +76,7 @@ Values below are milliseconds. These are diagnostic timeouts, not evidence that 
 | Authentication / `authenticationTimeoutMs`                      | 45000               | 90000             | `null`                                               |
 | Each post-connect operation / `postConnectTimeoutMs`            | 5000                | 10000             | `null`                                               |
 
-Use `timeoutProfile` on `runDiagnostics` or `timeoutsForProfile(profile)` to select a profile. Per-run `timeouts` overrides accept positive finite milliseconds or `null`; **`null` means no diagnostic timeout** for that field. Preparation, authentication and post-connect timeouts are available to consumer checks that declare those kinds.
+Use `timeoutProfile` on `runDiagnostics` or `timeoutsForProfile(profile)` to select a profile. Per-run `timeouts` overrides accept positive finite milliseconds up to the exported `MAX_TIMEOUT_MS` (`2_147_483_647`), or `null`; **`null` means no diagnostic timeout** for that field. `input.connectionTimeouts` accepts the same numeric range, but not `null`. Both input routes use one validator and reject out-of-range values before checks or I/O, even with a custom clock or the `noDiagnosticTimeouts` profile. Values are never clamped. Preparation, authentication and post-connect timeouts are available to consumer checks that declare those kinds.
 
 When resolving timeouts directly, `resolveTimeouts(profile, overrides?)` requires an explicit profile, for example `resolveTimeouts('default')`. Only `runDiagnostics` defaults an omitted `timeoutProfile` to `default`.
 
@@ -104,7 +104,16 @@ These limits apply in every timeout profile:
 | One report text field            | 8 KiB (8192 characters)                        |
 | One repeated report list         | 32 entries                                     |
 
-Some checks apply smaller bounds as well. Omitted targets, addresses and bounded check lists carry counts; report sanitization adds an omission marker for a list it truncates. Text is sanitized before truncation and facts are flattened for Markdown tables. The real driver's inputs are never trimmed to fit diagnostic limits.
+Some checks apply smaller bounds as well. Omitted targets, addresses and bounded check lists carry counts.
+Report steps, findings per result or step, and `summary.serverRows` retain at most 32 typed records.
+Their parents carry optional `omittedStepCount`, `omittedFindingCount` and `omittedServerRowCount`
+fields, respectively, only when entries were omitted. These are additive fields in report
+`schemaVersion: 1`; the original run is not modified. Markdown uses localized omission notices,
+including for an omitted headline finding, without offering a timeout retry. Arbitrary payload
+lists still use a string omission marker. Text is sanitized before truncation and facts are
+flattened for Markdown tables. Each step's facts and each finding's data receive their own
+sanitization depth limit, independent of their position in the report. The real driver's inputs
+are never trimmed to fit diagnostic limits.
 
 ## Secrets and identifiers
 

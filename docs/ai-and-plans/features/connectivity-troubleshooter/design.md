@@ -237,8 +237,11 @@ remains; a whole-run timeout can prevent it from starting, but a probe verdict a
 These time limits are **timeouts**, not a count of allowed checks or a verdict that the server is
 down. Use `*TimeoutMs` in the API and implementation, and "timeout" in user-facing messages and
 documentation. Non-time safety limits are separate. Default values are not persistent settings;
-the API accepts per-run overrides. A supplied timeout must be a positive finite number of
-milliseconds or `null` to remove that diagnostic timeout; reject invalid values explicitly.
+the API accepts per-run overrides. A supplied diagnostic timeout must be a positive finite number
+of milliseconds no greater than `MAX_TIMEOUT_MS` (`2_147_483_647`), or `null` to remove that
+diagnostic timeout. The same numeric bound applies to `input.connectionTimeouts`, which does not
+accept `null`. Both routes share validation and reject invalid values before checks or I/O;
+oversized values are never clamped.
 
 | Work                                                       | Default timeout        | Longer-timeout retry    |
 | ---------------------------------------------------------- | ---------------------- | ----------------------- |
@@ -1065,7 +1068,10 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
   Details each host's time and each TCP address's connect time, are the exception
   ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-squared-badge-the-list-shades-the-row-under-the-pointer)).
 - **The result card** (4.13) below the list, expanding into place.
-- One panel per `clusterId`; opening it again focuses the panel and offers to re-run.
+- One panel per `clusterId`; opening it again focuses the panel and offers to re-run. The session
+  replaces its current target and entry point with the newly selected node, updating the tab title
+  and connection name. Each run snapshots that subject once for credentials, correlation and report
+  naming; reopening does not change an active run or discard a completed report.
 - Live narration through the existing `Announcer`, as Local Quick Start does: one announcement per
   settled row and one for the result card; progress text in an evidence line is not announced. Rows keep
   stable IDs so focus does not jump while they update. When Cancel, a result-card retry, the re-run
@@ -1352,15 +1358,20 @@ report in any language.
 | Wire protocol            | Handshake used, round trip, topology facts (DocumentDB gateway or MongoDB topology), wire versions, advertised members, compressors offered and accepted, server time and clock offset with its uncertainty                                                                                                                                                     |
 | Authentication           | Method; for Entra ID the three phases with timings, cloud and resource decision, token claim summary, classifier rule and AADSTS code; the driver result; "Earlier in this session" when 4.9.1 applies                                                                                                                                                          |
 | Server and access        | Each post-connect command with its outcome and duration; server, engine and API versions; topology; reported roles; database count; ping round trip                                                                                                                                                                                                             |
-| Findings                 | Every finding in order: code, severity, localized explanation and next step, sanitized error code and name. JSON also preserves the convenience English `detail` object and its language tag; Markdown uses the extension's localized message table                                                                                                             |
-| Timings                  | One table: every check and phase with status and duration                                                                                                                                                                                                                                                                                                       |
+| Findings                 | Retained findings in order, at most 32 per check or phase, with omission counts: code, severity, localized explanation and next step, sanitized error code and name. JSON also preserves the convenience English `detail` object and its language tag; Markdown uses the extension's localized message table                                                                 |
+| Timings                  | One table: every check and retained phase with status and duration; a notice explains omitted phases                                                                                                                                                                                                                                                              |
 | Trace                    | The run ID, and a note that the Output channel lines for this run carry it (6.4)                                                                                                                                                                                                                                                                                |
 | About this report        | Closing attribution to the DocumentDB extension for Visual Studio Code and a link to its Visual Studio Marketplace listing. An About-style summary includes extension version/channel, VS Code, Node.js and OS even when environment checks were skipped; discovery and migration plug-in lists are excluded. JSON ends with equivalent `generatedBy` metadata. |
 
 Server replies pass through field allowlists; raw command documents, driver monitoring events and
 the dashboard's metadata map are never embedded. Each text field is limited to 8 KiB and each
-repeated list to 32 entries, with a count of what was omitted; sanitization happens before
-truncation. All values are escaped as text, so a host name, certificate field or error message
+repeated evidence list to 32 entries, with a count of what was omitted; sanitization happens before
+text truncation. Structural steps, findings (both per check and per step) and summary server rows
+remain typed records. Their parents carry optional `omittedStepCount`, `omittedFindingCount` or
+`omittedServerRowCount` fields, present only when entries were omitted; arbitrary payload lists
+retain their string omission marker. Markdown renders localized omission notices, including when
+the headline finding was omitted, without suggesting a timeout retry. JSON retains these additive
+fields under `schemaVersion: 1`; the original run is unchanged. All values are escaped as text, so a host name, certificate field or error message
 cannot add Markdown headings, links, images, HTML or code fences.
 
 An opening, with illustrative values:
@@ -1514,13 +1525,16 @@ Event names are logical; the framework adds the extension's namespace.
 
 A random `diagnosticsSessionId` per panel and a fresh `diagnosticsRunCorrelationId` per run
 (the run ID used in 6.4) are carried through the command, run and report actions. The IDs present
-when the panel opens are carried on the command and on every `runStarted`/`run` event:
+when Diagnose is invoked are carried on the command and snapshotted for each later `runStarted`/`run` event:
 `journeyCorrelationId` (discovery lineage), `connectionCorrelationId` (the connected extension
 client, if any) and `failedStartupCorrelationId`, the `startupCorrelationId` of the cluster's last
 failed `connect.startup`. `ClustersClient` keeps that last failed startup per cluster until a
 startup succeeds, and the next `connect.startup` carries it as `previousFailedStartupCorrelationId`,
-so failed connect → diagnosis → retry is one join. A panel that is focused, not created, keeps the
-IDs of its first opening; the focusing command still records its own with the session ID. No ID is
+so failed connect → diagnosis → retry is one join. Focusing an existing panel replaces the target,
+entry point and correlation IDs for subsequent runs while preserving the panel's session ID.
+An active run keeps its original snapshot, including its report name. This replaces the
+first-opening-only linkage, following the operator's 2026-11-06 approval of C4's second assessment
+in [iteration 06](./iterations/06-copilot-review.md#second-assessment---c4). No ID is
 derived from a host, connection name, `clusterId` or `treeId`.
 
 The run scope measures the runner, not subscription setup. On cancel it closes promptly with a

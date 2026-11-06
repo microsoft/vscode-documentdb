@@ -67,6 +67,19 @@ Implementation order: **C3, C4, C1, C2** (unchanged). C1 and C2 affect only the 
 can move to a follow-up package PR if merge scope is tight. They cannot be skipped before the
 package is published.
 
+### Implementation approval (2026-11-06)
+
+The operator requested implementation of this review, following the recommended/chosen solution
+from the **second assessment for each item**: C3 **A**, C4 **A**, C1 **A′**, C2 **A**.
+The assessment above records the recommendations as written; this instruction accepts these
+four choices, including the report's additive omission fields, the timeout input constraint and
+replacement of first-opening-only correlation on panel reuse.
+
+Work follows the leader workflow retrieved from PR #1060 at `4176c081`, with
+`claude-opus-5.5` as the operator-named advisor. Implementation models use the host defaults;
+no coding-model override was requested. Completion records are added below the corresponding
+items in this repository copy, never in the read-only attachment.
+
 ## C1 - Truncation inserts strings into typed report arrays
 
 **Source comment:** [discussion_r4494004762](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494004762),
@@ -186,6 +199,27 @@ Reject C and D for the reasons above.
 appears inside localized string lists such as `nextSteps`/`notes`/fact lists. Leave it in this
 PR, and record it only if the report gains a non-English consumer.
 
+**Done (2026-11-06), commit `ff55f27e`:** C1 A′ preserves typed structural arrays with
+32-entry caps and optional parent omission counts, including top-level findings and server rows.
+Counts are recomputed, absent when zero and never trusted from the input; the run stays unchanged.
+Markdown explains omissions, including an omitted headline code, without timeout advice.
+Operator decision: implement second-assessment A′; leader confidence 97% that this matches the
+instruction. Advised (`claude-opus-5.5`): no correctness/design blockers, confidence 85%.
+Worker: host-default `gpt-6.1-sol`. New boundary tests cover 32/33/39 entries, both redaction
+modes, Markdown/JSON, bogus counts, freezing, input immutability and sanitization.
+Report suites: **85 passed**; package build passed; root report-text/acceptance/router suites:
+**77 passed**. Step facts and finding data now receive their own sanitization depth budget.
+The advisor recommended localization generation before commit and formatting; these procedural
+recommendations were **deferred under the repository's mandatory Case 1 policy**. The three
+new localization templates are intentionally not yet in the generated bundle. Case 2, including
+`npm run l10n`, `prettier-fix` and `l10n:check`, remains required before review handoff.
+
+**Build follow-up, commit `0ca8c110`:** the final root build caught `TS2493` in the
+new localization test: the overloaded `vscode.l10n.t` spy inferred an empty rest tuple.
+The same worker added an explicit `unknown[]` rest type, preserving all assertions and
+production behavior. The localized-text suite then passed **17 tests** and `npm run build`
+passed. This test-only correction is a separate commit rather than amending the C1 commit.
+
 ## C2 - Accepted timeout values can overflow Node timers
 
 **Source comment:** [discussion_r4494004860](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494004860),
@@ -268,6 +302,17 @@ value, { allowNull })`, used by both `resolveTimeouts` and the `connectionTimeou
 the limit as a constant so the README and tests use the same number. Reject C: clamping silently
 changes the requested deadline, which is the kind of quiet wrong answer this feature avoids.
 B is not worth its complexity for a diagnosis lasting more than 24 days.
+
+**Done (2026-11-06), commit `290cb77b`:** C2 A shares timeout validation between
+diagnostic overrides and all five runner connection-timeout kinds, exporting `MAX_TIMEOUT_MS`
+(`2_147_483_647`). The maximum is accepted; larger values fail before checks/events/I/O.
+Only diagnostic overrides accept or suggest `null`; fractions remain valid, with no clamping.
+Operator decision: implement second-assessment A; leader confidence 99% that this matches the
+instruction. Advised (`claude-opus-5.5`): approved, confidence 88%. Worker: host-default
+`gpt-6.1-sol`. Tests cover every field/profile, invalid and boundary inputs, early rejection,
+and maximum effective delays through an injected clock: **115 passed**; package build passed.
+The separate URI/network-option `connectTimeoutMS` route remains outside this accepted item;
+this change does not claim to validate every possible network deadline.
 
 ## C3 - Nested credential-read telemetry lacks whole-error masking
 
@@ -360,6 +405,17 @@ runs. If a later provider adds a nested `callWithTelemetryAndErrorHandling` insi
 that child context also needs masking. Add one sentence to that effect in the
 `readCredentialsForDiagnostics` doc comment. Masking the normal `getCredentials` path is
 outside this PR's scope; record it as a follow-up if wanted.
+
+**Done (2026-11-06), commit `174a5d4f`:** C3 A enables whole-error masking before any
+diagnostic credential callback and documents the same requirement for nested independent
+contexts. Operator decision: implement second-assessment A; leader confidence 99% that this
+matches that instruction. Advised (`claude-opus-5.5`): approved, confidence 88%; error wrapping,
+typed-error identity and notification suppression remain unchanged. Worker: host-default
+`gpt-6.1-sol`. Added success and during-read cancellation regressions, expanded typed failures,
+and asserted masking inside callbacks; focused credential-read suite: **20 passed**.
+The tests verify the SDK flag, not an emitted telemetry sink; the advisor verified SDK masking.
+Ordinary credential-read masking and the pre-existing SDK handling of `UserCancelledError`
+remain outside this change.
 
 ## C4 - Reopening a panel retains the first tree node
 
@@ -461,7 +517,75 @@ the node by ID on every run) remains a reasonable follow-up for "press Run again
 reopening". It needs a provider lookup contract with no prompts and no side effects, which
 is out of scope here.
 
-## Verification record and handoff
+**Done (2026-11-06), commit `289312cb`:** C4 A makes the panel session the sole owner of
+the current target and entry point. Each run snapshots its reader, name and correlation;
+reopening retargets the existing panel, updates its title/header and preserves previous reports.
+Operator decision: implement second-assessment A; leader confidence 97% that this matches the
+instruction. Advised (`claude-opus-5.5`): no blockers, confidence 85%. Worker: host-default
+`gpt-6.1-sol`. Added replacement-availability, active-run snapshot, latest-name replay and
+header/report regressions; controller, router, React and acceptance suites: **124 passed**.
+The existing suppression of rerun offers during an active run remains: reopening updates the
+header, but that offer is not queued for when the run finishes; Re-run remains available then.
+A reloaded webview briefly uses its original configured name until the latest-name event arrives.
+Live discovery recovery and tab/header behavior still need an operator workbench check.
+Provider re-resolution for a standalone Re-run (option B) remains out of scope.
+
+## Implementation verification and handoff (2026-11-06)
+
+### Still needs a live workbench check
+
+These are not claimed as live-verified; the corresponding host and React regressions pass:
+
+1. Open Diagnose on an unavailable discovery node, refresh it after it becomes available, and
+   invoke Diagnose again. Confirm the same panel is focused, its current name appears, and
+   Re-run reads the replacement node rather than requiring the panel to be closed.
+2. Reopen Diagnose from a renamed/refreshed node during an active run. Confirm the header/tab
+   update while the active run's report keeps its original name; the next Re-run uses the new
+   subject. The existing active-run suppression of the rerun banner is unchanged.
+
+### Final automated checks
+
+**Case 1 (implementation, not a ready-for-review handoff):**
+
+- `npm run build` — **passed**, including workspace builds and root TypeScript compilation.
+  The first attempt found the C1 test-typing issue documented above; it was corrected and the
+  build rerun successfully.
+- Combined focused suite — **39 files, 1,326 tests passed**:
+
+  ```bash
+  npx vitest run \
+    packages/documentdb-js-connection-diagnostics/src/report \
+    packages/documentdb-js-connection-diagnostics/src/timeouts.test.ts \
+    packages/documentdb-js-connection-diagnostics/src/runner.test.ts \
+    src/tree/documentdb/diagnosticCredentialRead.test.ts \
+    src/webviews/documentdb/connectionDiagnostics \
+    src/connectionDiagnostics
+  ```
+
+`l10n`, `prettier-fix`, `l10n:check`, `lint`, `typecheck:tests`, the full runtime suite and
+`package` were **not run**. All Case 2 checks remain required before review handoff; in
+particular, the three new localized omission templates still need generation. No PR state,
+GitHub thread, issue or remote branch was changed.
+
+### Decisions and advisor record
+
+All four operator-selected solutions were implemented; none was parked or replaced.
+The source attachment was read-only and was not edited. Code commits are C3 `174a5d4f`,
+C4 `289312cb`, C1 `ff55f27e` (test correction `0ca8c110`), and C2 `290cb77b`.
+All coding workers resolved to host-default `gpt-6.1-sol`.
+
+Five `claude-opus-5.5` advisor consultations covered the interface plan and each item's
+logic review. Final correctness verdicts were C3 88%, C4 85%, C1 85% and C2 88%.
+The plan advisor's report-only subtype alternative was not adopted: the operator explicitly
+selected A′'s counts on `CheckResult`/`CheckStepResult`. The C1 advisor's procedural request
+to generate localization before commit was deferred under the repository's Case 1 rule.
+No accepted technical solution was changed, and no operator question remains parked.
+
+Last host-log checkpoint: **leader 118.2 AIU; subagents 454.2 AIU; total 572.4 AIU**.
+These are the statistics helper's reported figures, not estimates; subsequent documentation
+and handoff activity is outside that checkpoint.
+
+## Assessment verification record and handoff (before implementation)
 
 **Existing tests:** 118 passed, zero failed, through the VS Code test runner across:
 

@@ -40,7 +40,9 @@ There are three ways to open it:
   connection.
 
 Each cluster has one connection diagnosis panel. Opening it again brings the existing panel to the front and
-offers to run the diagnosis again.
+offers to run the diagnosis again using the node you just selected, including refreshed discovery
+details and its current name. It does not start a run automatically. If a diagnosis is already
+running, that run and its report keep the connection details captured when it started.
 
 ## What the checks do
 

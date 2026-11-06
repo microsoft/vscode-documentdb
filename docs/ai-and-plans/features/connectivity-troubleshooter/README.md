@@ -162,9 +162,19 @@ ceiling, not a required wait. Shorter connection-configured timeouts still win.
   opened/exported reports; no report history is added. Ordinary Re-run uses defaults.
   Connection, OS, resolver and driver limits can still end a retry;
   if a connection-configured timeout is the cause, explain that this setting must be changed.
+- Reopening Diagnose for the same cluster reuses the panel but refreshes the selected target,
+  name, entry point and correlation for subsequent runs. An active run and its report keep the
+  subject captured at run start; reopening never starts a run automatically.
+- Package timeout overrides and `input.connectionTimeouts` accept positive finite milliseconds
+  up to `MAX_TIMEOUT_MS` (`2_147_483_647`). Only diagnostic overrides also accept `null`; invalid
+  values fail before checks or I/O, rather than silently changing the requested deadline.
 - Target (16), address-per-host (8), parallel-chain (4), wire-size (1 MiB) and report safety limits
   remain in force in every mode. "Without diagnostic timeouts" never means without security or
   resource limits.
+
+Report steps, findings per check or step, and summary server rows are capped at 32 records.
+Optional omission counts on their parents preserve the typed JSON shape (`schemaVersion: 1`);
+localized Markdown notices explain missing entries without implying a diagnostic timeout.
 
 Four waves of four hosts with four 10-second probes can take 160 seconds before authentication.
 The proposed 300-second whole-run default leaves room for preparation, SRV, the 45-second real

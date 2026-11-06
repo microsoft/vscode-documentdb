@@ -930,6 +930,13 @@ Shorter connection-configured timeouts still win and are not changed by a retry.
 address, concurrency, reply-size, report and security limits stay in force. Disabling diagnostic
 timeouts cannot remove OS, resolver or driver limits or make non-abortable I/O cancellable.
 
+**Amendment (2026-11-06):** the operator requested implementation of the chosen second-assessment
+solutions in [iteration 06, C2](./iterations/06-copilot-review.md#second-assessment---c2).
+Diagnostic overrides and `input.connectionTimeouts` share validation of positive finite values
+up to `MAX_TIMEOUT_MS` (`2_147_483_647`); only diagnostic overrides accept `null`. Oversized
+values are rejected before checks or I/O, not clamped. This approves that input constraint, not
+the proposed default measurements below.
+
 The 300-second default, doubled retry profile and precise API spelling are proposed choices, not
 operator-approved measurements. The explicit requirements above come from the operator.
 
