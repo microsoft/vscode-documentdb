@@ -54,6 +54,13 @@ Local" link has no connection string by definition, because the container does n
 - [docs/user-manual/how-to-construct-url.md](../../../user-manual/how-to-construct-url.md) — **the
   public contract.** Any change to the vocabulary belongs there in the same PR.
 
+## UX review
+
+- [Iteration 3 review pack](./iterations/03-azure-resource-links-ux-review.md) maps the Azure
+  resource and connection-string journeys, shows full dialog details and bundled SRV/sovereign-cloud
+  message variants, and places language/consistency suggestions beside each presentation.
+  It is source-backed preparation, not evidence of live cloud or workbench verification.
+
 ## Architecture (intent — code is authoritative for behavior)
 
 - **The path is the verb; the query is its arguments.** Putting the action in the query would mean
@@ -128,5 +135,7 @@ Local" link has no connection string by definition, because the container does n
   and `ConnectionType.Emulators` are removed by issue
   [#870](https://github.com/microsoft/vscode-documentdb/issues/870), milestone 0.11.0. That work and
   this share a file.
-- **No end-to-end test of the `connect` path.** The new suite covers routing and the allow-list;
-  `connect`'s storage, duplicate detection, and TLS handling remain untested.
+- **No installed-workbench end-to-end test of the `connect` path.** The unit suite now exercises
+  storage, duplicate detection, confirmations, and TLS handling with mocks. Real activation,
+  tree navigation, focus, and dialog rendering still need the
+  [UX walkthrough](./iterations/03-azure-resource-links-ux-review.md).
