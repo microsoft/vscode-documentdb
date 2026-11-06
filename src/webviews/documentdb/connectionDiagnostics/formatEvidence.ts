@@ -49,15 +49,15 @@ export function locationText(remoteKind: string): string {
         case 'local':
             return l10n.t('Running on this computer');
         case 'wsl':
-            return l10n.t('Running on remote host {0}, not this computer', l10n.t('WSL'));
+            return l10n.t('Running in WSL, not on this computer');
         case 'ssh':
-            return l10n.t('Running on remote host {0}, not this computer', l10n.t('SSH'));
+            return l10n.t('Running on the SSH host, not on this computer');
         case 'devContainer':
-            return l10n.t('Running on remote host {0}, not this computer', l10n.t('Dev Container'));
+            return l10n.t('Running in a dev container, not on this computer');
         case 'codespaces':
-            return l10n.t('Running on remote host {0}, not this computer', l10n.t('Codespaces'));
+            return l10n.t('Running in Codespaces, not on this computer');
         default:
-            return l10n.t('Running on a remote host, not this computer');
+            return l10n.t('Running on a remote host, not on this computer');
     }
 }
 
@@ -204,9 +204,9 @@ export function formatEvidenceSegment(segment: EvidenceSegment): string | undefi
         case 'signInFailed':
             return l10n.t('Sign-in failed');
         case 'signedInNotAccepted':
-            return l10n.t('Token obtained · The cluster rejected the token');
+            return l10n.t('Token obtained · Token rejected by the cluster');
         case 'credentialsRejected':
-            return l10n.t('The cluster rejected the username or password');
+            return l10n.t('Credentials rejected by the cluster');
         case 'serverNotReached':
             return l10n.t('Could not reach a server');
         case 'signInNotTested':

@@ -727,7 +727,7 @@ describe('Acceptance (design §8.1)', (): void => {
             'Checks ran on the remote host (ssh), not this computer.',
         );
         expect(view.markdown.replace(/\\/g, '')).toContain(firewall);
-        expect(rowText(view, 'setup')).toContain('remote host SSH, not this computer');
+        expect(rowText(view, 'setup')).toContain('Running on the SSH host, not on this computer');
         expect(view.json).toContain('ETIMEDOUT');
     });
 

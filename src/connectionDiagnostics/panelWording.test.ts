@@ -173,7 +173,7 @@ const authOutcomes: readonly AuthOutcome[] = [
         code: 'auth.failed',
         phase: 'auth.serverAuthentication',
         segments: [{ kind: 'authMethod', method: 'entraId' }, { kind: 'signedInNotAccepted' }],
-        evidence: 'Microsoft Entra ID · Token obtained · The cluster rejected the token',
+        evidence: 'Microsoft Entra ID · Token obtained · Token rejected by the cluster',
         outcome: 'failed',
         fix: 'added as a user on the cluster',
     },

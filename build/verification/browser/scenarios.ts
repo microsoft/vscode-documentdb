@@ -815,7 +815,7 @@ const privateEndpointRun = diagnosticsRun('stage0-run-private-endpoint', {
     rows: privateEndpointRows,
 });
 const privateEndpointEvidence = [
-    'Running on remote host WSL, not this computer · Linux · x64',
+    'Running in WSL, not on this computer · Linux · x64',
     'SRV record lists 1 host · All resolve',
 ] as const;
 
@@ -1219,7 +1219,7 @@ const diagnosticsScenarios = {
                     'Known DNS issue in this VS Code version',
                     'Checks run on a remote host',
                     'Database checks run in WSL, not on this computer.',
-                    'Checks ran Running on remote host WSL, not this computer',
+                    'Checks ran Running in WSL, not on this computer',
                     'Operating system Linux 6.6.87.2-microsoft-standard-WSL2',
                 ]),
                 ...expandDetails('networkConnection'),
@@ -1486,7 +1486,7 @@ const diagnosticsScenarios = {
             },
         ]),
         diagnosticsConnectedCard,
-        ['Running on remote host WSL, not this computer'],
+        ['Running in WSL, not on this computer'],
         ['Connection successful', diagnosticsConnectedSummary],
         serverFacts,
     ),
@@ -1732,7 +1732,7 @@ const diagnosticsScenarios = {
                 'Check that this identity is added as a user on the cluster.',
             ),
         ),
-        ['Microsoft Entra ID · Token obtained · The cluster rejected the token'],
+        ['Microsoft Entra ID · Token obtained · Token rejected by the cluster'],
         [
             'Connection failed at Authentication',
             'Sign-in succeeded, but the cluster did not accept this identity.',
@@ -1994,7 +1994,7 @@ const diagnosticsScenarios = {
                 'Check the username and password, and the authentication database.',
             ),
         ),
-        ['Username and password · SCRAM-SHA-256 · The cluster rejected the username or password'],
+        ['Username and password · SCRAM-SHA-256 · Credentials rejected by the cluster'],
         [
             'Connection failed at Authentication',
             'The server rejected the selected authentication credentials.',

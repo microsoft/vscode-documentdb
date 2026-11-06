@@ -849,7 +849,7 @@ export const findingMessages: {
                 explanation = vscode.l10n.t('Database checks run on the SSH host, not on this computer.');
                 break;
             case 'devContainer':
-                explanation = vscode.l10n.t('Database checks run in the development container, not on this computer.');
+                explanation = vscode.l10n.t('Database checks run in a dev container, not on this computer.');
                 break;
             case 'codespaces':
                 explanation = vscode.l10n.t('Database checks run in Codespaces, not on this computer.');
