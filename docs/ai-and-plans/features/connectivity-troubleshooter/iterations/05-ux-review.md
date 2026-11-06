@@ -177,16 +177,16 @@ scope, repetition and recovery discoverability.
 
 | # | Priority | 🧭 Verified | Item | Status |
 | --- | --- | --- | --- | --- |
-| UX-1 | **P1** | **P1** · confirmed; also affects the connect-path error | Configured cloud described as an actual VS Code sign-in | 🟠 Open |
-| UX-2 | **P1** | **P1** · confirmed; two conflicting instructions on one card | Managed-identity token failure can recommend an irrelevant setting | 🟠 Open |
-| UX-3 | **P1** | **P2** · confirmed, narrower: titles and evidence only | “This computer” can point at the wrong machine in remote sessions | 🟠 Open |
-| UX-4 | **P2** | **P3** · confirmed; title matches the visible bullets | “Warnings” counts affected rows, not individual findings | 🟠 Open |
-| UX-5 | **P2** | **P3** · confirmed for skipped rows; informational findings are not a defect | “All checks passed” includes skipped checks and informational advice | 🟠 Open |
-| UX-6 | **P2** | **P2** · confirmed; worst on token failure, not success | Expanded authentication omits cloud/resource facts available in report | 🟠 Open |
-| UX-7 | **P2** | **P3** · confirmed; pick “username”, not “user name” | Retry and sign-in terminology needs a small consistency pass | 🟠 Open |
-| UX-8 | **P2** | **P2** for Entra ID and SRV pairs · C1 note overstated | Provider paragraphs repeat or strengthen the main explanation | 🟠 Open |
-| UX-9 | **P2** | **P3** · confirmed; defensive fallback path only | Live generic Details can direct users to unavailable Show report | 🟠 Open |
-| UX-10 | **P2** | **Close** · false alarm: host shows a notification | Copy report has no visible success confirmation | 🟠 Open |
+| UX-1 | **P1** | **P1** · confirmed; also affects the connect-path error | Configured cloud described as an actual VS Code sign-in | ✅ Implemented `b65d52d5` |
+| UX-2 | **P1** | **P1** · confirmed; two conflicting instructions on one card | Managed-identity token failure can recommend an irrelevant setting | ✅ Implemented `1c2d8fb9` |
+| UX-3 | **P1** | **P2** · confirmed, narrower: titles and evidence only | “This computer” can point at the wrong machine in remote sessions | ✅ Implemented `f6b41761` |
+| UX-4 | **P2** | **P3** · confirmed; title matches the visible bullets | “Warnings” counts affected rows, not individual findings | ✅ Implemented `9e2ae302` |
+| UX-5 | **P2** | **P3** · confirmed for skipped rows; informational findings are not a defect | “All checks passed” includes skipped checks and informational advice | ✅ Implemented `9e2ae302` |
+| UX-6 | **P2** | **P2** · confirmed; worst on token failure, not success | Expanded authentication omits cloud/resource facts available in report | ✅ Implemented `1047d7a1` |
+| UX-7 | **P2** | **P3** · confirmed; pick “username”, not “user name” | Retry and sign-in terminology needs a small consistency pass | ✅ Implemented `828beb89` |
+| UX-8 | **P2** | **P2** for Entra ID and SRV pairs · C1 note overstated | Provider paragraphs repeat or strengthen the main explanation | ✅ Implemented `fd179a89` |
+| UX-9 | **P2** | **P3** · confirmed; defensive fallback path only | Live generic Details can direct users to unavailable Show report | ✅ Implemented `72269aa3` |
+| UX-10 | **P2** | **Close** · false alarm: host shows a notification | Copy report has no visible success confirmation | 🚫 Closed (false alarm) |
 
 ## P0: Blocking (the user gets stuck)
 
@@ -240,6 +240,8 @@ Government.” Preserve the actual sign-in state as unknown.
 | **Mine: “Sign-in set to Azure” in the panel and connect error** | Names what the setting controls (the sign-in cloud). Pairs with “Cluster in …”. One term across modal, panel and the finding's own “selected for sign-in” | Touches one more string in a shared auth file (`documentdbTokenResource.ts`), with its tests |
 | **Omit the second segment, keep only “Cluster in …”** | Shortest; nothing can be wrong | The user then has to open Details or read the finding to learn which cloud is selected; the mismatch is less visible at a glance |
 
+> **Done (2026-11-06), commit `b65d52d5`:** the collapsed evidence reads “Sign-in set to {cloud}”, and the connect-path error says “… but VS Code sign-in is set to {cloud}”; the user manual quotes were updated. Leader decision (95%): same wording on both surfaces, per the verification note. The custom-cloud error “VS Code is signed in to a custom cloud …” was not in scope and is unchanged. Tests: existing wording tests updated. Model: terra.
+
 ### UX-2. Managed identity receives interactive-cloud advice ⚠️
 
 **Priority:** P1 · **Status:** 🟠 Open
@@ -291,6 +293,8 @@ setting that cannot change the failing token request.
 | **Review / mine: method-aware finding (`authMethod` in data)** | Correct in the card, Details and report; follows an existing pattern; `authMethod` is a safe enum for report and telemetry | Two more localized strings; finding-message tests need a managed-identity case |
 | **Alternative: drop the Next step for managed identity and rely on the provider paragraph** | No new strings | The provider paragraph is optional (it needs a recorded token failure). Details and the report would then have no instruction, and the card's structure would differ by method |
 
+> **Done (2026-11-06), commit `1c2d8fb9`:** `auth.entraTokenFailed` now records `authMethod`. For managed identity, `resourceNotInTenant` names the resource override and the VM cloud; `applicationNotInDirectory`, `tenantNotFound` and `accountNotInTenant` fall back to the generic message. Interactive text is unchanged. Tests: 19 cases in `findingMessages.test.ts` and `authenticate.test.ts`. Model: terra.
+
 ### UX-3. Remote checks say “this computer” ⚠️
 
 **Priority:** P1 · **Status:** 🟠 Open
@@ -335,6 +339,8 @@ host running these checks …”; keep “this computer” only when the executi
 
 ## P2: Polish, expectation, or feature gap
 
+> **Done (2026-11-06), commits `f6b41761`, `8a14a397`:** loopback title “Host name resolves to localhost”; clock text “The clock where these checks ran is {0} min behind the server …”; clock evidence “Clock {0} min behind the server”. Setup-row “this computer” wording is unchanged (it is correct there). Atlas provider text (C2) unchanged. Model: luna.
+
 ### UX-4. Warning count means rows, not findings ⚠️
 
 **Priority:** P2 · **Status:** 🟠 Open
@@ -366,6 +372,8 @@ the current title but make the unit explicit. Details must still contain every f
 | **Review: “with warnings in 1 check”** | Accurate unit; keeps the word “warning” | New, slightly clumsy phrasing; plural “warnings” for a single warning |
 | **Mine: “but 1 check needs attention”** | Reuses existing wording; one unit in all three branches; no plural trap | The title no longer says “warning”; severity comes only from the icon and screen-reader prefix |
 | **Count findings instead** | Number matches Details | The title count would disagree with the visible bullets: worse than today |
+
+> **Done (2026-11-06), commit `9e2ae302`:** warning-only titles read “Connection successful, but 1 check needs attention” / “… {0} checks need attention”, so every branch counts checks. Tests: 6 new card cases (shared with UX-5). Model: terra.
 
 ### UX-5. Unqualified all-clear wording ⚠️
 
@@ -404,6 +412,8 @@ SRV workaround). This is broader than “all checks that ran.”
 | **Review B: “All applicable checks passed” (always)** | One-word change; accurate | “Applicable” is unnecessary when nothing was skipped (the most common case) |
 | **Mine: B only when a row was skipped** | Accurate and minimal in every case | One more string and one condition in `connectedLines` |
 
+> **Done (2026-11-06), commit `9e2ae302`:** when any row is skipped, the all-clear reads “All applicable checks passed. …”; otherwise it is unchanged. Informational findings do not change it. Model: terra.
+
 ### UX-6. Government-cloud Details is thinner than the report ⚠️
 
 **Priority:** P2 · **Status:** 🟠 Open
@@ -440,6 +450,8 @@ the retained fact is only a cloud category. Options: [O1](#o1-how-much-cloud-con
 > category) and **Cluster cloud** (`hostCloud`, when the host names are recognized). Leave the
 > selection reason (`setting`/`host`/`imds`/`armMetadata`/…) in the report. It needs a glossary
 > to be useful, and mostly helps support with custom clouds.
+
+> **Done (2026-11-06), commit `1047d7a1` (O1.B, in Details only):** the expanded Authentication row shows **Sign-in cloud** and **Cluster cloud** for Microsoft Entra ID and managed identity, only when recorded. Interactive uses the configured cloud; managed identity uses the token resource's cloud category; the cloud-mismatch finding data is the fallback. The collapsed line and the report are unchanged; the selection reason stays report-only. Tests: 18 cases in `panelDetails.test.ts` and `ConnectionDiagnostics.test.tsx`. Model: terra.
 
 ### UX-7. Small glossary and action-copy pass ⚠️
 
@@ -483,6 +495,8 @@ Keep the exact command “Update Credentials…” when naming it. Prefer one sp
 | --- | --- | --- |
 | **“username” (match the extension)** | Matches the connect wizard, method label, validation and notifications; 5 strings change | Differs from the Microsoft style-guide default |
 | **“user name” (style guide)** | Style-guide default | Changes 32 existing strings outside this feature, or leaves the extension inconsistent |
+
+> **Done (2026-11-06), commit `828beb89`:** “username” in the 5 diagnostics strings and the sharing warning; “Choose Retry with longer timeouts …”; rerun banner “Connection Diagnostics is already open for this connection. Run the diagnosis again?”. Leader decision (90%): left the 27 “run the check again” Next steps alone, because the review named only the banner; the consistency review proposed below may revisit them. Model: luna.
 
 ### UX-8. Stacked advice can repeat or change certainty ⚠️
 
@@ -538,6 +552,8 @@ private-access setting or cloud mismatch sound proven.
 | **Mine: drop same-evidence provider paragraphs; keep a docs link** | No repeated advice; one level of certainty; shorter card; the link becomes clickable | Loses “report this on GitHub” from the Entra ID paragraph unless it moves into the finding. Needs a small provider-to-finding map in `result.ts`, with tests |
 | **Align wording only (“may” in both, no repeated setting)** | Smallest text change | Still two paragraphs telling the user the same thing; any future rule change has to update two places |
 
+> **Done (2026-11-06), commit `fd179a89`:** `contextHints` stores the provider text and the private-access hint as separate facts. The card leaves out the `entra-sign-in` paragraph when the headline is `auth.entraTokenFailed`, and the `srv-dns` paragraph when the headline is an `srv.*` finding, and shows a clickable link to the matching user-manual page instead. Other providers and the private-access hint are unchanged; the report keeps every fact. Tests: 20 cases in `result.test.ts` and `DiagnosticsResultCard.test.tsx`. Model: sol.
+
 ### UX-9. Show report can be recommended before it is available ⚠️
 
 **Priority:** P2 · **Status:** 🟠 Open
@@ -571,9 +587,11 @@ and consider a different fallback for a run that never produces an exportable re
 | **Mine: “Run the diagnosis to the end, then …”** | True in running, cancelled and failed states; one string | Slightly indirect while the run is already about to finish |
 | **Offer a report for cancelled runs** | Removes the dead end everywhere | Feature change (partial-report semantics, redaction, tests) for a rare defensive path; not justified by this finding |
 
+> **Done (2026-11-06), commit `72269aa3`:** the fallback Next step reads “Run the diagnosis to the end, then choose Show report for the technical details.” Model: luna.
+
 ### UX-10. Copy confirmation is screen-reader-only ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** 🚫 Closed (false alarm)
 
 **Observation:** source-derived A11.
 
@@ -604,13 +622,18 @@ localized phrase and leaving keyboard focus in place. Keep cancelling Save/conse
 | **Review: inline “Report copied” in the webview** | Confirmation next to the button | Adds a third confirmation; does not match every other copy action in the extension |
 | **Mine: close; optionally drop the webview announcer after a screen-reader check** | Matches existing extension behavior; no new UI | The notification appears away from the button (bottom right), as it does for every other copy action |
 
+> **Closed (2026-11-06), no code change:** false alarm, verified above; the host already shows a notification after copying.
+
+
 ## P3: Nice-to-have / cosmetic / acknowledged
 
 No separate P3 items seeded. Theme, spacing and narrow-width checks remain on the live checklist.
 
 ## Implemented
 
-None by this review. Existing implementation is the subject of the review, not a fix made here.
+UX-1 to UX-9 were implemented on 2026-11-06; see the done note under each finding. UX-10 was closed as a false alarm.
+
+Also done on 2026-11-06, at the operator's request (“no emdashes please”): commit `22264901` removes em dashes from the Markdown diagnostic report. Headings put the target in parentheses, the summary uses ` · `, and empty values read “(none)”. Commit `c538241b` removes em dashes from this document.
 
 ## Iteration log
 
