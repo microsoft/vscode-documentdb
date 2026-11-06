@@ -51,11 +51,31 @@ export function unresolvedDiagnosticsInput(): DiagnosticsInput {
 export function buildDiagnosticsSetup(clusterId: string, credentials: EphemeralClusterCredentials): DiagnosticsSetup {
     const cached = CredentialCache.getCredentials(clusterId);
     const chosenAuthMethod = credentials.selectedAuthMethod ?? cached?.authMechanism;
-    const password = credentials.nativeAuthConfig?.connectionPassword ?? cached?.nativeAuthConfig?.connectionPassword;
+    let identitySource: 'target' | 'cache' | undefined;
+    if (credentials.selectedAuthMethod !== undefined) {
+        identitySource = 'target';
+    } else if (cached?.authMechanism !== undefined) {
+        identitySource = 'cache';
+    }
+    if (
+        identitySource === 'target' &&
+        chosenAuthMethod === AuthMethodId.NativeAuth &&
+        (!credentials.nativeAuthConfig?.connectionUser || !credentials.nativeAuthConfig?.connectionPassword) &&
+        cached?.authMechanism === AuthMethodId.NativeAuth &&
+        cached.nativeAuthConfig?.connectionUser &&
+        cached.nativeAuthConfig.connectionPassword
+    ) {
+        identitySource = 'cache';
+    }
+    const selectedNativeAuthConfig =
+        identitySource === 'target' ? credentials.nativeAuthConfig : cached?.nativeAuthConfig;
+    const entraIdConfig = identitySource === 'target' ? credentials.entraIdAuthConfig : cached?.entraIdConfig;
+    const managedIdentityConfig =
+        identitySource === 'target' ? credentials.managedIdentityAuthConfig : cached?.managedIdentityConfig;
     let credentialState: DiagnosticsSetup['credentialState'] = 'available';
     if (chosenAuthMethod === undefined) {
         credentialState = 'noMethod';
-    } else if (chosenAuthMethod === AuthMethodId.NativeAuth && !password) {
+    } else if (chosenAuthMethod === AuthMethodId.NativeAuth && !selectedNativeAuthConfig?.connectionPassword) {
         credentialState = 'passwordMissing';
     }
     let connectionString = credentials.connectionString;
@@ -72,9 +92,8 @@ export function buildDiagnosticsSetup(clusterId: string, credentials: EphemeralC
     const nativeAuthConfig =
         chosenAuthMethod === AuthMethodId.NativeAuth
             ? {
-                  connectionUser:
-                      credentials.nativeAuthConfig?.connectionUser ?? cached?.nativeAuthConfig?.connectionUser ?? '',
-                  connectionPassword: password ?? '',
+                  connectionUser: selectedNativeAuthConfig?.connectionUser ?? '',
+                  connectionPassword: selectedNativeAuthConfig?.connectionPassword ?? '',
               }
             : undefined;
     const transientCredentials: CachedClusterCredentials | undefined =
@@ -94,14 +113,8 @@ export function buildDiagnosticsSetup(clusterId: string, credentials: EphemeralC
                   nativeAuthConfig,
                   emulatorConfiguration:
                       storedEmulatorConfiguration(credentials.connectionProperties) ?? cached?.emulatorConfiguration,
-                  entraIdConfig:
-                      chosenAuthMethod === AuthMethodId.NoAuth
-                          ? undefined
-                          : (credentials.entraIdAuthConfig ?? cached?.entraIdConfig),
-                  managedIdentityConfig:
-                      chosenAuthMethod === AuthMethodId.NoAuth
-                          ? undefined
-                          : (credentials.managedIdentityAuthConfig ?? cached?.managedIdentityConfig),
+                  entraIdConfig: chosenAuthMethod === AuthMethodId.NoAuth ? undefined : entraIdConfig,
+                  managedIdentityConfig: chosenAuthMethod === AuthMethodId.NoAuth ? undefined : managedIdentityConfig,
               };
     let networkOptions: NetworkOptions | undefined;
     if (credentialState === 'available' && chosenAuthMethod && transientCredentials && parseable) {

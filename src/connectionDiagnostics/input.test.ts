@@ -79,6 +79,46 @@ describe('buildDiagnosticsSetup', (): void => {
         expect(setup.input.networkOptionLayers).toEqual([{ origin: 'authHandler', options: {} }]);
     });
 
+    it('uses the whole cached native identity instead of discovery defaults when the method is cached', (): void => {
+        const nativeAuthConfig = { connectionUser: 'user-B', connectionPassword: 'password-B' };
+        vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached({ nativeAuthConfig }));
+        const setup = buildDiagnosticsSetup(
+            clusterId,
+            credentials({ nativeAuthConfig: { connectionUser: 'admin-A' } }),
+        );
+        expect(setup.transientCredentials?.nativeAuthConfig).toEqual(nativeAuthConfig);
+        const parsed = new DocumentDBConnectionString(setup.input.connectionString);
+        expect(parsed.username).toBe('user-B');
+        expect(parsed.password).toBe('password-B');
+        expect(setup.credentialState).toBe('available');
+    });
+
+    it('uses the whole cached managed identity instead of discovery defaults when the method is cached', (): void => {
+        const managedIdentityConfig = { tenantId: 't', clientId: 'c' };
+        vi.mocked(CredentialCache.getCredentials).mockReturnValue(
+            cached({ authMechanism: AuthMethodId.ManagedIdentity, managedIdentityConfig }),
+        );
+        const setup = buildDiagnosticsSetup(
+            clusterId,
+            credentials({ managedIdentityAuthConfig: { tenantId: 't' } }),
+        );
+        expect(setup.transientCredentials?.managedIdentityConfig).toEqual(managedIdentityConfig);
+        expect(setup.credentialState).toBe('available');
+    });
+
+    it('uses the whole cached Entra identity instead of discovery defaults when the method is cached', (): void => {
+        const entraIdConfig = { tenantId: 'cached-tenant', subscriptionId: 'cached-subscription' };
+        vi.mocked(CredentialCache.getCredentials).mockReturnValue(
+            cached({ authMechanism: AuthMethodId.MicrosoftEntraID, entraIdConfig }),
+        );
+        const setup = buildDiagnosticsSetup(
+            clusterId,
+            credentials({ entraIdAuthConfig: { tenantId: 'discovery-tenant' } }),
+        );
+        expect(setup.transientCredentials?.entraIdConfig).toEqual(entraIdConfig);
+        expect(setup.credentialState).toBe('available');
+    });
+
     it('uses stored native credentials before cached ones and excludes them from non-secret input fields', async (): Promise<void> => {
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached());
         const setup = buildDiagnosticsSetup(
@@ -97,7 +137,7 @@ describe('buildDiagnosticsSetup', (): void => {
         expect(JSON.stringify(nonSecretInput)).not.toContain('stored-user');
     });
 
-    it('does not replace an explicitly empty stored password with a stale cached password', async (): Promise<void> => {
+    it('uses the complete cached native pair when the stored password is explicitly empty', async (): Promise<void> => {
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached());
         const setup = buildDiagnosticsSetup(
             clusterId,
@@ -106,6 +146,63 @@ describe('buildDiagnosticsSetup', (): void => {
                 nativeAuthConfig: { connectionUser: user, connectionPassword: '' },
             }),
         );
+        expect(setup.credentialState).toBe('available');
+        expect(setup.transientCredentials?.nativeAuthConfig).toEqual({
+            connectionUser: user,
+            connectionPassword: password,
+        });
+        const parsed = new DocumentDBConnectionString(setup.input.connectionString);
+        expect(parsed.username).toBe(user);
+        expect(parsed.password).toBe(password);
+        expect(setup.input.networkOptionLayers).toEqual([{ origin: 'authHandler', options: {} }]);
+    });
+
+    it('replaces the whole incomplete stored native pair when the cached user differs', (): void => {
+        const nativeAuthConfig = { connectionUser: 'other-user', connectionPassword: 'pw' };
+        vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached({ nativeAuthConfig }));
+        const setup = buildDiagnosticsSetup(
+            clusterId,
+            credentials({
+                selectedAuthMethod: AuthMethodId.NativeAuth,
+                nativeAuthConfig: { connectionUser: 'stored-user', connectionPassword: '' },
+            }),
+        );
+        expect(setup.transientCredentials?.nativeAuthConfig).toEqual(nativeAuthConfig);
+        const parsed = new DocumentDBConnectionString(setup.input.connectionString);
+        expect(parsed.username).toBe('other-user');
+        expect(parsed.password).toBe('pw');
+        expect(setup.credentialState).toBe('available');
+    });
+
+    it.each([
+        { connectionUser: '', connectionPassword: 'stored-password' },
+        { connectionUser: 'stored-user' },
+        undefined,
+    ])('uses the complete cached native pair for incomplete stored config %j', (nativeAuthConfig): void => {
+        vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached());
+        const setup = buildDiagnosticsSetup(
+            clusterId,
+            credentials({ selectedAuthMethod: AuthMethodId.NativeAuth, nativeAuthConfig }),
+        );
+        expect(setup.transientCredentials?.nativeAuthConfig).toEqual({
+            connectionUser: user,
+            connectionPassword: password,
+        });
+        expect(setup.credentialState).toBe('available');
+    });
+
+    it.each([
+        { authMechanism: AuthMethodId.MicrosoftEntraID },
+        { nativeAuthConfig: { connectionUser: 'other-user', connectionPassword: '' } },
+        { nativeAuthConfig: { connectionUser: '', connectionPassword: 'cached-password' } },
+    ])('keeps the incomplete stored pair when the cache is not a complete native identity: %j', (overrides): void => {
+        vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached(overrides));
+        const nativeAuthConfig = { connectionUser: 'stored-user', connectionPassword: '' };
+        const setup = buildDiagnosticsSetup(
+            clusterId,
+            credentials({ selectedAuthMethod: AuthMethodId.NativeAuth, nativeAuthConfig }),
+        );
+        expect(setup.transientCredentials?.nativeAuthConfig).toEqual(nativeAuthConfig);
         expect(setup.credentialState).toBe('passwordMissing');
         expect(setup.input.connectionString).toBe(uri);
         expect(setup.input.networkOptionLayers).toBeUndefined();
