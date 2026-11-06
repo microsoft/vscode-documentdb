@@ -31,6 +31,7 @@ import {
     withConnectionsViewProgress,
 } from './tree/connections-view/connectionsViewHelpers';
 import { type TreeElement } from './tree/TreeElement';
+import { suppressAutoOpenDashboard } from './tree/documentdb/autoOpenDashboardSuppression';
 import { nonNullValue } from './utils/nonNull';
 import { generateDocumentDBStorageId } from './utils/storageUtils';
 
@@ -650,24 +651,29 @@ async function handleConnectionStringRequest(
     // This is a little trick: the first withProgress shows the notification with a user-friendly message,
     // while the second withProgress (via withConnectionsViewProgress) is used to show the 'loading animation' in the Connections View.
     ext.outputChannel.trace('[DeepLink] Revealing in the Connections View');
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: l10n.t('Opening DocumentDB connection…'),
-            cancellable: false,
-        },
-        async () => {
-            await withConnectionsViewProgress(async () => {
-                await revealInConnectionsView(
-                    context,
-                    storageId,
-                    isInEmulatorZone,
-                    selectedDatabase,
-                    params.collection,
-                );
-            });
-        },
-    );
+    const release = params.open === 'dashboard' ? suppressAutoOpenDashboard(storageId) : undefined;
+    try {
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: l10n.t('Opening DocumentDB connection…'),
+                cancellable: false,
+            },
+            async () => {
+                await withConnectionsViewProgress(async () => {
+                    await revealInConnectionsView(
+                        context,
+                        storageId,
+                        isInEmulatorZone,
+                        selectedDatabase,
+                        params.collection,
+                    );
+                });
+            },
+        );
+    } finally {
+        release?.();
+    }
 
     const clusterPath = await buildConnectionsViewTargetPath(storageId, isInEmulatorZone);
     if (ext.connectionsBranchDataProvider.hasNodeErrorState(clusterPath)) {

@@ -15,6 +15,7 @@ import { Views } from './documentdb/Views';
 import { ext } from './extensionVariables';
 import { buildConnectionsViewTargetPath, revealInConnectionsView } from './tree/connections-view/connectionsViewHelpers';
 import { type DiscoveryRevealResult } from './tree/discovery-view/discoveryViewHelpers';
+import * as dashboardSuppression from './tree/documentdb/autoOpenDashboardSuppression';
 import { type EmulatorConfiguration } from './utils/emulatorConfiguration';
 import { globalUriHandler } from './vscodeUriHandler';
 
@@ -24,6 +25,7 @@ let lastValuesToMask: string[] = [];
 let showUrlHandlingConfirmations = true;
 const mockGetAllConnections = vi.fn().mockResolvedValue([]);
 const mockSaveConnection = vi.fn().mockResolvedValue(undefined);
+const suppressDashboard = vi.spyOn(dashboardSuppression, 'suppressAutoOpenDashboard');
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(
@@ -677,6 +679,60 @@ describe('globalUriHandler — saved connection open target', () => {
             { id: 'existing-id', name: 'Production', secrets: { connectionString } },
         ]);
         (vscode.window.showInformationMessage as Mock).mockResolvedValue('Open');
+    });
+
+    it.each(['open=dashboard', 'open=dashboard&database=db', 'open=shell', 'database=db&collection=items', ''])(
+        'suppresses the automatic dashboard during reveal only for dashboard links: %s',
+        async (query): Promise<void> => {
+            const expectedSuppression = query.startsWith('open=dashboard');
+            const node = {
+                id: 'connectionsView/folder/existing-id',
+                getTreeItem: (): vscode.TreeItem => ({ label: 'Production' }),
+            };
+            vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
+            vi.mocked(revealInConnectionsView).mockImplementationOnce(async (_context, storageId): Promise<void> => {
+                expect(storageId).toBe('existing-id');
+                expect(dashboardSuppression.isAutoOpenDashboardSuppressed(storageId)).toBe(expectedSuppression);
+                expect(dashboardSuppression.isAutoOpenDashboardSuppressed(node.id)).toBe(false);
+                await Promise.resolve();
+                expect(dashboardSuppression.isAutoOpenDashboardSuppressed(storageId)).toBe(expectedSuppression);
+            });
+            vi.mocked(ext.connectionsBranchDataProvider.hasNodeErrorState).mockImplementationOnce((): boolean => {
+                expect(dashboardSuppression.isAutoOpenDashboardSuppressed('existing-id')).toBe(false);
+                return false;
+            });
+
+            const error = await runHandler(
+                '/connect',
+                `connectionString=${encodeURIComponent(connectionString)}&${query}`,
+            );
+
+            expect(error).toBeUndefined();
+            expect(revealInConnectionsView).toHaveBeenCalledTimes(1);
+            if (expectedSuppression) {
+                expect(suppressDashboard).toHaveBeenCalledExactlyOnceWith('existing-id');
+            } else {
+                expect(suppressDashboard).not.toHaveBeenCalled();
+            }
+            expect(dashboardSuppression.isAutoOpenDashboardSuppressed('existing-id')).toBe(false);
+        },
+    );
+
+    it('releases dashboard suppression when revealing a saved connection throws', async (): Promise<void> => {
+        const revealError = new Error('reveal failed');
+        vi.mocked(revealInConnectionsView).mockImplementationOnce(async (): Promise<void> => {
+            expect(dashboardSuppression.isAutoOpenDashboardSuppressed('existing-id')).toBe(true);
+            throw revealError;
+        });
+
+        const error = await runHandler(
+            '/connect',
+            `connectionString=${encodeURIComponent(connectionString)}&open=dashboard`,
+        );
+
+        expect(error).toBe(revealError);
+        expect(suppressDashboard).toHaveBeenCalledExactlyOnceWith('existing-id');
+        expect(dashboardSuppression.isAutoOpenDashboardSuppressed('existing-id')).toBe(false);
     });
 
     it.each([undefined, 'db'])(

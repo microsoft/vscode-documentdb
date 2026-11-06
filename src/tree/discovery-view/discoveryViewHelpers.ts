@@ -11,6 +11,7 @@ import { ext } from '../../extensionVariables';
 import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
 import { type ClusterItemBase } from '../documentdb/ClusterItemBase';
 import { type DatabaseItem } from '../documentdb/DatabaseItem';
+import { suppressAutoOpenDashboard } from '../documentdb/autoOpenDashboardSuppression';
 
 export interface DiscoveryRevealRequest {
     readonly providerId: string;
@@ -19,6 +20,7 @@ export interface DiscoveryRevealRequest {
     readonly displayName: string;
     readonly database?: string;
     readonly collection?: string;
+    readonly suppressAutoOpenDashboard?: boolean;
 }
 
 export interface DiscoveryRevealResult {
@@ -143,11 +145,18 @@ export async function revealInDiscoveryView(
             ext.outputChannel.trace('[DeepLink] Showing the cluster in the Discovery view');
             await ext.discoveryTreeView.reveal(clusterNode, { select: true, focus: false, expand: false });
             ext.outputChannel.trace('[DeepLink] Revealing and expanding the cluster');
-            await ext.discoveryTreeView.reveal(clusterNode, {
-                select: true,
-                focus: !request.database,
-                expand: true,
-            });
+            const release = request.suppressAutoOpenDashboard
+                ? suppressAutoOpenDashboard(clusterNode.cluster.clusterId)
+                : undefined;
+            try {
+                await ext.discoveryTreeView.reveal(clusterNode, {
+                    select: true,
+                    focus: !request.database,
+                    expand: true,
+                });
+            } finally {
+                release?.();
+            }
             if (provider.hasNodeErrorState(clusterNode.id)) {
                 ext.outputChannel.trace('[DeepLink] Cluster expansion failed; the node already explained why');
                 context.telemetry.properties.openTargetResult = 'skippedClusterError';

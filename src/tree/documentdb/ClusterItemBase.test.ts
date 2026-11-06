@@ -13,6 +13,7 @@ import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItemBase';
+import { suppressAutoOpenDashboard } from './autoOpenDashboardSuppression';
 
 // Captures telemetry events emitted via callWithTelemetryAndErrorHandling when its callback throws.
 const mockTelemetryEvents: Array<{ eventName: string; properties: Record<string, string>; suppressDisplay?: boolean }> =
@@ -216,6 +217,27 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
         expect(mockGetSetting).toHaveBeenCalledWith('documentDB.userInterface.showDashboardOnConnect');
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.clusterDashboard.open',
+            item,
+            null,
+            { activationSource: 'autoOpenOnConnect' },
+        );
+    });
+
+    it('does not auto-open the dashboard while the stable cluster id is suppressed', async (): Promise<void> => {
+        mockGetSetting.mockReturnValue(true);
+        const cluster = { ...makeCluster(), treeId: 'connectionsView/folder/cluster-1' };
+        const item = new TestClusterItem(cluster, makeClient(vi.fn().mockResolvedValue([{ name: 'database' }])));
+        const release = suppressAutoOpenDashboard(cluster.clusterId);
+        try {
+            await item.getChildren();
+            expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        } finally {
+            release();
+        }
+
+        await item.getChildren();
+        expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
             'vscode-documentdb.command.clusterDashboard.open',
             item,
             null,

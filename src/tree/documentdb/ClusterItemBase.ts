@@ -37,6 +37,7 @@ import { containsRetryNode, createRetryNode } from '../api/retryNode';
 import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { DatabaseItem } from './DatabaseItem';
+import { isAutoOpenDashboardSuppressed } from './autoOpenDashboardSuppression';
 
 /**
  * Full connection details for a DocumentDB cluster used at runtime during service discovery.
@@ -388,7 +389,11 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             return this.createErrorRecoveryChildren(true);
         }
 
-        if (!wasConnected && (SettingsService.getSetting<boolean>(settingsKeys.showDashboardOnConnect) ?? true)) {
+        if (
+            !wasConnected &&
+            (SettingsService.getSetting<boolean>(settingsKeys.showDashboardOnConnect) ?? true) &&
+            !isAutoOpenDashboardSuppressed(this.cluster.clusterId)
+        ) {
             await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
                 activationSource: 'autoOpenOnConnect',
             });

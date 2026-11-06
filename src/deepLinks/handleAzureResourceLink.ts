@@ -224,5 +224,6 @@ export async function handleAzureResourceLinkRequest(
         displayName,
         database: request.database,
         collection: request.collection,
+        suppressAutoOpenDashboard: request.open === 'dashboard',
     });
 }

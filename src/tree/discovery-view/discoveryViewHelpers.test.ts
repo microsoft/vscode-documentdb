@@ -13,6 +13,7 @@ import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../TreeElement';
 import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
 import { type TreeCluster } from '../models/BaseClusterModel';
+import * as dashboardSuppression from '../documentdb/autoOpenDashboardSuppression';
 import { type DiscoveryRevealRequest, revealInDiscoveryView, waitForDiscoveryViewReady } from './discoveryViewHelpers';
 
 vi.mock('../../extensionVariables', () => ({
@@ -55,6 +56,7 @@ const findNodeById = vi.mocked(ext.discoveryBranchDataProvider.findNodeById);
 const findChildById = vi.mocked(ext.discoveryBranchDataProvider.findChildById);
 const reveal = vi.mocked(ext.discoveryTreeView.reveal);
 const exists = vi.mocked(ClustersClient.exists);
+const suppressDashboard = vi.spyOn(dashboardSuppression, 'suppressAutoOpenDashboard');
 
 function createNode(id: string): TreeElement {
     return { id, getTreeItem: (): vscode.TreeItem => ({ id }) };
@@ -130,6 +132,58 @@ describe('Discovery view helpers', () => {
     afterEach(() => {
         vi.useRealTimers();
     });
+
+    it('suppresses only the expanding cluster reveal and releases before subsequent work', async (): Promise<void> => {
+        reveal.mockImplementation(async (node, options): Promise<void> => {
+            expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.cluster.clusterId)).toBe(
+                node === clusterNode && options?.expand === true,
+            );
+            expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.id)).toBe(false);
+            await Promise.resolve();
+            expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.cluster.clusterId)).toBe(
+                node === clusterNode && options?.expand === true,
+            );
+        });
+        exists.mockImplementation((): boolean => {
+            expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.cluster.clusterId)).toBe(false);
+            return true;
+        });
+
+        await revealInDiscoveryView(context, { ...request, database: 'db', suppressAutoOpenDashboard: true });
+
+        expect(suppressDashboard).toHaveBeenCalledExactlyOnceWith(clusterNode.cluster.clusterId);
+        expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.cluster.clusterId)).toBe(false);
+    });
+
+    it('releases suppression when the expanding reveal throws', async (): Promise<void> => {
+        const error = new Error('reveal failed');
+        reveal.mockImplementation(async (node, options): Promise<void> => {
+            if (node === clusterNode && options?.expand) {
+                expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.cluster.clusterId)).toBe(true);
+                throw error;
+            }
+        });
+
+        await expect(
+            revealInDiscoveryView(context, { ...request, suppressAutoOpenDashboard: true }),
+        ).rejects.toBe(error);
+
+        expect(suppressDashboard).toHaveBeenCalledExactlyOnceWith(clusterNode.cluster.clusterId);
+        expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.cluster.clusterId)).toBe(false);
+    });
+
+    it.each([undefined, false])(
+        'does not suppress the dashboard when the flag is %s',
+        async (suppressAutoOpenDashboard): Promise<void> => {
+            reveal.mockImplementation(async (): Promise<void> => {
+                expect(dashboardSuppression.isAutoOpenDashboardSuppressed(clusterNode.cluster.clusterId)).toBe(false);
+            });
+
+            await revealInDiscoveryView(context, { ...request, suppressAutoOpenDashboard });
+
+            expect(suppressDashboard).not.toHaveBeenCalled();
+        },
+    );
 
     it('matches the ARM resource id case-insensitively and expands the cluster once', async () => {
         exists.mockImplementation((clusterId: string): boolean => {

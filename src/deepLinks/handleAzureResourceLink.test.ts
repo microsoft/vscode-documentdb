@@ -121,6 +121,18 @@ beforeEach((): void => {
 });
 
 describe('handleAzureResourceLinkRequest', (): void => {
+    it.each([undefined, 'shell', 'dashboard'] as const)(
+        'suppresses the automatic dashboard only for open=%s when requested',
+        async (open): Promise<void> => {
+            await handleAzureResourceLinkRequest(context, { ...request, collection: undefined, open });
+
+            expect(revealInDiscoveryView).toHaveBeenCalledExactlyOnceWith(
+                context,
+                expect.objectContaining({ suppressAutoOpenDashboard: open === 'dashboard' }),
+            );
+        },
+    );
+
     it('masks the subscription name before reading the Azure resource', async (): Promise<void> => {
         vi.mocked(readAzureResource).mockImplementation(async (readContext): Promise<{ name: string }> => {
             expect(readContext.valuesToMask).toContain(subscription.name);
@@ -298,6 +310,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
                 displayName: 'My-Resource',
                 database: 'sales',
                 collection: 'orders',
+                suppressAutoOpenDashboard: false,
             },
         );
         const callOrder = [
