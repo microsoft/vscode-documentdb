@@ -138,6 +138,48 @@ describe('globalUriHandler — diagnostic logging', () => {
         expect(logged).not.toContain('tenant-private');
     });
 
+    it('never logs credentials supplied as an unknown query key', async (): Promise<void> => {
+        await runHandler('/connect', 'mongodb://u:SENTINEL_PW@h');
+
+        expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
+            '[DeepLink] Handling link: action=connect source=connectionString parameters=none unknown=1',
+        );
+        expect(lastTelemetry.uriParamCount).toBe('1');
+        expect(lastTelemetry.uriUnknownParamCount).toBe('1');
+        const logged = [
+            ...vi.mocked(ext.outputChannel.info).mock.calls,
+            ...vi.mocked(ext.outputChannel.trace).mock.calls,
+            ...vi.mocked(ext.outputChannel.debug).mock.calls,
+            ...vi.mocked(ext.outputChannel.warn).mock.calls,
+            ...vi.mocked(ext.outputChannel.error).mock.calls,
+            ...vi.mocked(ext.outputChannel.appendLine).mock.calls,
+        ]
+            .flat()
+            .join(' ');
+        expect(logged).not.toContain('SENTINEL_PW');
+    });
+
+    it('logs known query keys in order with duplicates while counting unknown keys', async (): Promise<void> => {
+        await runHandler('/connect', 'database=sales&SENTINEL_PW&open=shell&database=archive&Open=dashboard');
+
+        expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
+            '[DeepLink] Handling link: action=connect source=connectionString parameters=database,open,database unknown=2 open=shell',
+        );
+        expect(lastTelemetry.uriParamCount).toBe('5');
+        expect(lastTelemetry.uriUnknownParamCount).toBe('2');
+        const logged = [
+            ...vi.mocked(ext.outputChannel.info).mock.calls,
+            ...vi.mocked(ext.outputChannel.trace).mock.calls,
+            ...vi.mocked(ext.outputChannel.debug).mock.calls,
+            ...vi.mocked(ext.outputChannel.warn).mock.calls,
+            ...vi.mocked(ext.outputChannel.error).mock.calls,
+            ...vi.mocked(ext.outputChannel.appendLine).mock.calls,
+        ]
+            .flat()
+            .join(' ');
+        expect(logged).not.toContain('SENTINEL_PW');
+    });
+
     it('never logs connection string credentials or hosts', async (): Promise<void> => {
         showUrlHandlingConfirmations = false;
         (vscode.window.showInformationMessage as Mock).mockResolvedValue('Add and open');

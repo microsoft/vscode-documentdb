@@ -35,6 +35,7 @@ import { generateDocumentDBStorageId } from './utils/storageUtils';
 
 // #region Type Definitions
 
+const KNOWN_QUERY_PARAMS = new Set(['connectionString', 'resourceId', 'tenantId', 'database', 'collection', 'open']);
 const OPEN_TARGETS = ['dashboard', 'shell'] as const;
 type OpenTarget = (typeof OPEN_TARGETS)[number];
 
@@ -169,13 +170,22 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
                 }
             } finally {
                 const queryParams = new URLSearchParams(uri.query);
-                const parameterNames = [...queryParams.keys()].join(',') || 'none';
+                const parameterNames: string[] = [];
+                let unknownParamCount = 0;
+                for (const key of queryParams.keys()) {
+                    if (KNOWN_QUERY_PARAMS.has(key)) {
+                        parameterNames.push(key);
+                    } else {
+                        unknownParamCount++;
+                    }
+                }
                 const open = OPEN_TARGETS.find((target) => target === queryParams.get('open')?.toLowerCase());
                 ext.outputChannel.info(
                     `[DeepLink] Handling link: action=${route?.verb ?? 'unrecognized'}` +
                         (source ? ` source=${source}` : '') +
                         (resourceType ? ` localType=${resourceType}` : '') +
-                        ` parameters=${parameterNames}` +
+                        ` parameters=${parameterNames.join(',') || 'none'}` +
+                        (unknownParamCount ? ` unknown=${unknownParamCount}` : '') +
                         (open ? ` open=${open}` : ''),
                 );
             }
@@ -818,12 +828,11 @@ function parseOpenTarget(value: string | null): OpenTarget | undefined {
 function recordParamsInTelemetry(context: IActionContext, queryFragment: string): URLSearchParams {
     const queryParams = new URLSearchParams(queryFragment);
     const sensitiveKeys = ['connectionString', 'resourceId', 'tenantId', 'database', 'collection'];
-    const knownKeys = new Set([...sensitiveKeys, 'open']);
     let paramCount = 0;
     let unknownParamCount = 0;
     for (const [key] of queryParams) {
         paramCount++;
-        if (!knownKeys.has(key)) {
+        if (!KNOWN_QUERY_PARAMS.has(key)) {
             unknownParamCount++;
         }
     }
