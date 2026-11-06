@@ -2,6 +2,8 @@
 
 Technical documentation for the Task Service framework, which provides long-running background task management for the DocumentDB extension for Visual Studio Code.
 
+Feature design and rationale: [Task Packages](../../../docs/ai-and-plans/features/task-packages/README.md).
+
 ---
 
 ## Table of Contents
@@ -25,7 +27,7 @@ The Task Service provides a framework for managing long-running background opera
 
 - **Task lifecycle management** (start, stop, state transitions)
 - **Progress reporting** to VS Code progress notifications
-- **Resource conflict detection** (preventing concurrent operations on same collections)
+- **Resource conflict detection** (blocking destructive operations that conflict with active tasks)
 - **Telemetry integration** for observability
 - **Graceful cancellation** via AbortSignal
 
@@ -47,12 +49,11 @@ The primary use case is the **Copy-and-Paste Collection** feature, which streams
                                         │
                                         ▼
 ┌───────────────────────────────────────────────────────────────────────────┐
-│                           TaskServiceManager                              │
+│                               TaskService                                 │
 │  ─────────────────────────────────────────────────────────────────────    │
-│  • Singleton registry of all tasks                                        │
-│  • Progress notification coordination                                     │
-│  • Resource conflict checking                                             │
-│  • Task lookup and management                                             │
+│  • Instance registry (`TaskServiceImpl` implementation)                   │
+│  • Task registration, lookup, and lifecycle events                        │
+│  • Resource conflict queries for destructive operations                   │
 └─────────────────────────────────┬─────────────────────────────────────────┘
                                   │ registerTask()
                                   ▼
@@ -74,6 +75,8 @@ The primary use case is the **Copy-and-Paste Collection** feature, which streams
 │                        CopyPasteCollectionTask                            │
 │  ─────────────────────────────────────────────────────────────────────    │
 │  • Implements ResourceTrackingTask interface                              │
+│  • Validates source, counts documents, and ensures target exists          │
+│  • Optionally copies indexes before streaming documents                   │
 │  • Coordinates DocumentReader and StreamingDocumentWriter                 │
 │  • Maps streaming progress to task progress                               │
 │  • Handles StreamingWriterError for partial statistics                    │
@@ -134,18 +137,19 @@ The `Task` class implements the template method pattern for consistent lifecycle
 | `updateProgress()` | Report progress (0-100) with message      | During `doWork()`      |
 | `updateStatus()`   | Update state machine (internal use)       | Managed by base class  |
 
-### TaskServiceManager (Singleton)
+### TaskService (Registry)
 
 **Location:** `taskService.ts`
 
-Manages the registry of all tasks and coordinates with VS Code's progress API.
+The `TaskService` interface is implemented by the private `TaskServiceImpl` class. `createTaskService()` creates an independent registry. The extension exports its shared registry and progress reporter from `extension/taskServiceInstance.ts`; `ClustersExtension` attaches the reporter once.
 
 **Key Responsibilities:**
 
 - Task registration and lookup
-- Resource conflict checking before task start
-- Progress notification lifecycle
-- Task event forwarding
+- Task lifecycle event forwarding
+- Resource conflict queries used by destructive operations
+
+`registerTask()` checks for a duplicate task ID and subscribes to task events; it does not check resource conflicts. Progress notifications are handled separately by `TaskProgressReportingService`.
 
 ### ResourceTrackingTask (Interface)
 
@@ -159,11 +163,13 @@ interface ResourceTrackingTask {
 }
 
 interface ResourceDefinition {
-  connectionId: string;
-  databaseName: string;
+  clusterId?: string;
+  databaseName?: string;
   collectionName?: string;
 }
 ```
+
+Use the stable `cluster.clusterId` for `clusterId`, never `treeId`; tree IDs can change when a connection moves between folders.
 
 ---
 
@@ -182,12 +188,12 @@ const task = new CopyPasteCollectionTask(config, reader, writer);
 ### 2. Task Registration
 
 ```typescript
-TaskServiceManager.registerTask(task);
+TaskService.registerTask(task);
 ```
 
-- Task is added to registry
-- Resource conflict check is performed
-- If conflict exists, registration fails
+- Task is added to the registry and its events are forwarded
+- Registration fails only if another task already has the same ID
+- Resource conflicts are checked by destructive commands, not during registration
 
 ### 3. Task Start
 
@@ -208,6 +214,8 @@ await task.start();
 2. `doWork()` is called with AbortSignal and telemetry context
 3. Progress updates flow through `updateProgress()`
 4. Telemetry event `taskService.taskExecution` is recorded
+
+For `CopyPasteCollectionTask`, the phases run in this order: validate the source collection, count source documents, ensure the target collection exists, optionally copy indexes through `CollectionIndexCopier`, then stream documents. Source validation, counting, and target setup happen in `onInitialize()`; the optional index phase runs in `doWork()` before document streaming.
 
 ### 4. Task Completion
 
@@ -232,7 +240,7 @@ await task.start();
 
 ### 5. Progress Notification
 
-The `TaskServiceManager` shows a VS Code progress notification:
+The `TaskProgressReportingService` shows a VS Code progress notification for registered tasks:
 
 ```
 [Cancel] Copying "myCollection" from "source" to "target"
@@ -243,7 +251,7 @@ Progress is updated via `updateProgress()` which:
 
 1. Updates internal status
 2. Fires `onDidChangeStatus` event
-3. Manager updates VS Code progress notification
+3. `TaskProgressReportingService` updates the VS Code progress notification
 
 ---
 
@@ -251,7 +259,7 @@ Progress is updated via `updateProgress()` which:
 
 ### Purpose
 
-Prevents concurrent operations on the same database resources (e.g., two tasks copying to the same collection).
+Lets destructive operations detect active tasks using the same database resources (for example, before deleting a collection or removing/moving a connection).
 
 ### How It Works
 
@@ -260,21 +268,21 @@ Prevents concurrent operations on the same database resources (e.g., two tasks c
 class CopyPasteCollectionTask implements ResourceTrackingTask {
   getUsedResources(): ResourceDefinition[] {
     return [
-      { connectionId: 'src', databaseName: 'db1', collectionName: 'col1' },
-      { connectionId: 'tgt', databaseName: 'db2', collectionName: 'col2' },
+      { clusterId: sourceCluster.clusterId, databaseName: 'db1', collectionName: 'col1' },
+      { clusterId: targetCluster.clusterId, databaseName: 'db2', collectionName: 'col2' },
     ];
   }
 }
 
-// Manager checks for conflicts before registration
-if (hasResourceConflict(newTask, existingTasks)) {
-  throw new Error('Resource conflict detected');
-}
+// Destructive commands query active task resources before proceeding.
+const canProceed = await checkCanProceedAndInformUser(TaskService, resource, 'delete collection');
 ```
 
 ### Conflict Rules
 
-- Same `connectionId` + `databaseName` + `collectionName` = **Conflict**
+`checkCanProceedAndInformUser()` uses `TaskService.getConflictingTasks()` for resource-level checks. Connection and folder operations use `TaskService.findConflictingTasksForConnections()` to query tasks by stable cluster IDs. These checks are performed by the destructive command flows, not by `registerTask()`.
+
+- Same `clusterId` + `databaseName` + `collectionName` = **Conflict**
 - Operations on different collections in same database = **OK**
 - Read-only operations currently use same conflict model (conservative)
 
@@ -327,14 +335,14 @@ The Data API provides the document streaming and writing infrastructure. See [`d
 
 ### Key Components
 
-| Component                   | Purpose                                     |
-| --------------------------- | ------------------------------------------- |
-| `DocumentReader`            | Streams documents from source (O(1) memory) |
-| `StreamingDocumentWriter`   | Abstract base class for streaming writes    |
-| `DocumentDbStreamingWriter` | MongoDB/DocumentDB implementation           |
-| `BatchSizeAdapter`          | Adaptive batching (fast/RU-limited modes)   |
-| `RetryOrchestrator`         | Exponential backoff for transient failures  |
-| `WriteStats`                | Statistics aggregation                      |
+| Component                   | Purpose                                           |
+| --------------------------- | ------------------------------------------------- |
+| `DocumentReader`            | Streams documents from source (O(1) memory)       |
+| `StreamingDocumentWriter`   | Abstract base class for streaming writes          |
+| `DocumentDbStreamingWriter` | MongoDB/DocumentDB implementation                 |
+| `BatchSizeAdapter`          | Adaptive batching (fast/RU-limited modes)         |
+| `writeBatchWithRetry()`     | Inline exponential backoff for transient failures |
+| `WriteStats`                | Statistics aggregation                            |
 
 ### Conflict Resolution Strategies
 
@@ -435,7 +443,7 @@ class MyTask extends Task implements ResourceTrackingTask {
   getUsedResources(): ResourceDefinition[] {
     return [
       {
-        connectionId: this.config.connectionId,
+        clusterId: this.config.clusterId,
         databaseName: this.config.databaseName,
         collectionName: this.config.collectionName,
       },
@@ -511,7 +519,7 @@ The writer uses a single buffer (not two-level buffering) because:
 ```
 src/services/taskService/
 ├── README.md                           # This documentation
-├── taskService.ts                      # Task base class + TaskServiceManager
+├── taskService.ts                      # Task base class + TaskService registry factory
 ├── taskService.test.ts                 # Task lifecycle tests
 ├── taskServiceResourceTracking.ts      # Resource conflict detection
 ├── taskServiceResourceTracking.test.ts
@@ -519,6 +527,10 @@ src/services/taskService/
 ├── data-api/                           # Document streaming infrastructure
 │   ├── README.md                       # Data API documentation
 │   ├── types.ts                        # Public interfaces
+│   ├── indexes/                         # Collection index copying
+│   │   ├── CollectionIndexCopier.ts
+│   │   ├── DocumentDbCollectionIndexCopier.ts
+│   │   └── createIndexCopier.ts
 │   ├── readers/
 │   │   ├── BaseDocumentReader.ts       # Abstract reader (see JSDoc for diagrams)
 │   │   ├── DocumentDbDocumentReader.ts # MongoDB/DocumentDB implementation
@@ -527,9 +539,8 @@ src/services/taskService/
 │       ├── StreamingDocumentWriter.ts  # Abstract writer (see JSDoc for diagrams)
 │       ├── StreamingDocumentWriter.test.ts # Comprehensive tests
 │       ├── DocumentDbStreamingWriter.ts # MongoDB/DocumentDB implementation
-│       ├── writerTypes.internal.ts     # Internal types (PreFilterResult, etc.)
+│       ├── writerTypes.internal.ts     # Internal adaptive batching configuration
 │       ├── BatchSizeAdapter.ts         # Adaptive batching
-│       ├── RetryOrchestrator.ts        # Retry logic
 │       └── WriteStats.ts               # Statistics aggregation
 └── tasks/
     ├── DemoTask.ts                     # Simple example task
@@ -586,7 +597,7 @@ try {
 
 When a task transitions to `Failed`, the framework handles failure reporting centrally:
 
-1. **Error logging**: The `Task` base class automatically logs the error to the output channel via `ext.outputChannel.error()` — task authors do NOT need to do this manually.
+1. **Error logging**: The lifecycle log observer, attached during extension activation, logs registered task failures via `ext.outputChannel.error()` — task authors do NOT need to do this manually. The `Task` base class does not write lifecycle lines.
 2. **User notification**: The `TaskProgressReportingService` automatically shows an error notification with a **"Show Output"** button, allowing the user to view error details on demand.
 3. **No auto-show**: The output channel is NOT opened automatically — this avoids disrupting the user's workflow. The user can choose to view it via the button.
 

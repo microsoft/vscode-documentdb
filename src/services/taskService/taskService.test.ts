@@ -5,7 +5,10 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Task, TaskService, TaskState, type TaskStatus } from './taskService';
+import { type TaskLogger, type TaskOptions, type TaskTelemetryContext, type TaskTelemetryRunner } from './taskHost';
+import { createTaskService, isTerminalState, Task, TaskState, type TaskStatus } from './taskService';
+
+const TaskService = createTaskService();
 
 // Mock extensionVariables (ext) module
 vi.mock('../../extensionVariables', () => ({
@@ -160,7 +163,7 @@ describe('TaskService', () => {
     let taskService: typeof TaskService;
 
     beforeEach(() => {
-        // Clear the singleton state between tests
+        // Clear the service state between tests
         taskService = TaskService;
         // Clear any existing tasks
         taskService.listTasks().forEach((task) => {
@@ -175,6 +178,18 @@ describe('TaskService', () => {
 
         expect(taskService.getTask(task.id)).toBe(task);
         expect(taskService.listTasks()).toContain(task);
+    });
+
+    it('should not share registered tasks between service instances', () => {
+        const firstService = createTaskService();
+        const secondService = createTaskService();
+        const task = new TestTask('Isolated Task');
+
+        firstService.registerTask(task);
+
+        expect(firstService.getTask(task.id)).toBe(task);
+        expect(secondService.getTask(task.id)).toBeUndefined();
+        expect(secondService.listTasks()).toEqual([]);
     });
 
     it('should track task progress and state transitions in correct order', async () => {
@@ -384,5 +399,194 @@ describe('TaskService', () => {
         await waitForTaskCompletion(task);
 
         expect(task.getStatus().state).toBe(TaskState.Stopped);
+    });
+});
+
+describe('Task host options', () => {
+    class HostTestTask extends Task {
+        public readonly type = 'host-test';
+        public readonly name = 'Host Task';
+
+        constructor(
+            options?: TaskOptions,
+            private readonly work: (signal: AbortSignal) => Promise<void> = async (): Promise<void> => {},
+        ) {
+            super(options);
+        }
+
+        protected doWork(signal: AbortSignal): Promise<void> {
+            return this.work(signal);
+        }
+    }
+
+    function createLogger(): TaskLogger {
+        return {
+            appendLine: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+        };
+    }
+
+    it.each([TaskState.Initializing, TaskState.Running])(
+        'preserves one Stopped notification when default-runner work rejects after stopping in %s',
+        async (stopState) => {
+            const error = new Error('Work aborted');
+            const task = new HostTestTask(
+                undefined,
+                (signal: AbortSignal): Promise<void> =>
+                    new Promise((_resolve, reject) => {
+                        if (signal.aborted) {
+                            reject(error);
+                            return;
+                        }
+                        signal.addEventListener('abort', (): void => reject(error), { once: true });
+                    }),
+            );
+            const terminalStatuses: TaskStatus[] = [];
+            task.onDidChangeStatus((status) => {
+                if (isTerminalState(status.state)) {
+                    terminalStatuses.push(status);
+                }
+                if (stopState === TaskState.Initializing && status.state === TaskState.Initializing) {
+                    task.stop();
+                }
+            });
+
+            await task.start();
+            if (stopState === TaskState.Running) {
+                task.stop();
+            }
+            await waitForTaskCompletion(task);
+            await new Promise<void>((resolve) => setImmediate(resolve));
+
+            expect(task.getStatus().state).toBe(TaskState.Stopped);
+            expect(terminalStatuses.map((status) => status.state)).toEqual([TaskState.Stopped]);
+        },
+    );
+
+    it('emits Failed once with the original error when default-runner work rejects', async () => {
+        const error = new Error('Work failed');
+        const task = new HostTestTask(undefined, async (): Promise<void> => {
+            throw error;
+        });
+        const terminalStatuses: TaskStatus[] = [];
+        task.onDidChangeStatus((status) => {
+            if (isTerminalState(status.state)) {
+                terminalStatuses.push(status);
+            }
+        });
+
+        await task.start();
+        await waitForTaskCompletion(task);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+
+        expect(task.getStatus().state).toBe(TaskState.Failed);
+        expect(task.getStatus().error).toBe(error);
+        expect(terminalStatuses).toHaveLength(1);
+        expect(terminalStatuses[0].error).toBe(error);
+    });
+
+    it('fails when the telemetry runner throws before invoking the work callback', async () => {
+        const error = new Error('Telemetry runner failed');
+        const telemetry: TaskTelemetryRunner = async <T>(
+            eventName: string,
+            callback: (context: TaskTelemetryContext) => Promise<T>,
+        ): Promise<T> => {
+            if (eventName === 'taskService.taskExecution') {
+                throw error;
+            }
+            return callback({ telemetry: { properties: {}, measurements: {} } });
+        };
+        const work = vi.fn(async (): Promise<void> => {});
+        const task = new HostTestTask({ telemetry }, work);
+
+        await task.start();
+        await waitForTaskCompletion(task);
+
+        expect(work).not.toHaveBeenCalled();
+        expect(task.getStatus().state).toBe(TaskState.Failed);
+        expect(task.getStatus().error).toBe(error);
+    });
+
+    it('does not write lifecycle lines to the injected logger', async () => {
+        const logger = createLogger();
+        const completedTask = new HostTestTask({ logger });
+        const failedTask = new HostTestTask({ logger }, async (): Promise<void> => {
+            throw new Error('expected failure');
+        });
+        const stoppedTask = new HostTestTask(
+            { logger },
+            (signal: AbortSignal): Promise<void> =>
+                new Promise((resolve) => {
+                    signal.addEventListener('abort', (): void => resolve(), { once: true });
+                }),
+        );
+
+        await completedTask.start();
+        await waitForTaskCompletion(completedTask);
+        await failedTask.start();
+        await waitForTaskCompletion(failedTask);
+        await stoppedTask.start();
+        stoppedTask.stop();
+        await waitForTaskCompletion(stoppedTask);
+
+        expect(logger.appendLine).not.toHaveBeenCalled();
+        expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('uses the injected runner and populates its contexts with the unchanged task telemetry properties', async () => {
+        const contexts: TaskTelemetryContext[] = [];
+        const eventNames: string[] = [];
+        const telemetry: TaskTelemetryRunner = async <T>(
+            eventName: string,
+            callback: (context: TaskTelemetryContext) => Promise<T>,
+        ): Promise<T> => {
+            const context: TaskTelemetryContext = { telemetry: { properties: {}, measurements: {} } };
+            eventNames.push(eventName);
+            contexts.push(context);
+            return callback(context);
+        };
+        const task = new HostTestTask({ telemetry });
+
+        await task.start();
+        await waitForTaskCompletion(task);
+
+        expect(eventNames).toEqual(['taskService.taskInitialization', 'taskService.taskExecution']);
+        expect(contexts[0].telemetry.properties).toEqual({
+            task_id: task.id,
+            task_type: task.type,
+            task_name: task.name,
+            task_phase: 'initialization',
+            task_initializationCompleted: 'true',
+        });
+        expect(contexts[1].telemetry.properties).toEqual({
+            task_id: task.id,
+            task_type: task.type,
+            task_name: task.name,
+            task_phase: 'execution',
+            task_final_state: 'completed',
+        });
+    });
+
+    it('merges injected partial strings with the English defaults', async () => {
+        const task = new HostTestTask({
+            strings: {
+                taskCreated: 'Ready',
+                taskCompletedSuccessfully: 'Finished',
+                cannotStartInState: (state: string): string => `Already ${state}`,
+            },
+        });
+        const messages: Array<string | undefined> = [];
+        task.onDidChangeStatus((status) => messages.push(status.message));
+
+        expect(task.getStatus().message).toBe('Ready');
+        await task.start();
+        await waitForTaskCompletion(task);
+
+        expect(messages).toEqual(['Initializing task...', 'Task is running', 'Finished']);
+        await expect(task.start()).rejects.toThrow('Already Completed');
     });
 });

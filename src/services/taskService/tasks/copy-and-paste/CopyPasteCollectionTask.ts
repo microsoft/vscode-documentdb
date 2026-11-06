@@ -3,23 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as vscode from 'vscode';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
-import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
+import { type TaskTelemetryContext } from '../../taskHost';
 import { Task } from '../../taskService';
 import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
+import {
+    type CopyCollectionStrings,
+    type CopyPasteCollectionTaskOptions,
+    defaultCopyCollectionStrings,
+} from './copyCollectionStrings';
 import { type CopyPasteConfig } from './copyPasteConfig';
 
 /**
  * Error thrown when source validation fails for copy-paste operations.
  * This is used to distinguish user-facing validation errors from other errors (e.g., network issues).
  */
-class SourceValidationError extends Error {
+export class SourceValidationError extends Error {
     constructor(message: string) {
         super(message);
         this.name = 'SourceValidationError';
@@ -38,6 +39,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     public readonly name: string;
 
     private readonly config: CopyPasteConfig;
+    private readonly copyCollectionStrings: CopyCollectionStrings;
+    private readonly validateSource?: CopyPasteCollectionTaskOptions['validateSource'];
+    private readonly collectMetadata?: CopyPasteCollectionTaskOptions['collectMetadata'];
     private readonly documentReader: DocumentReader;
     private readonly documentWriter: StreamingDocumentWriter;
     private readonly indexCopier?: CollectionIndexCopier;
@@ -66,23 +70,24 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         documentWriter: StreamingDocumentWriter,
         indexCopier?: CollectionIndexCopier,
         indexPresentationDelayMs: number = CopyPasteCollectionTask.INDEX_PRESENTATION_DELAY_MS,
+        options?: CopyPasteCollectionTaskOptions,
     ) {
-        super();
+        super(options);
         this.config = config;
+        this.copyCollectionStrings = { ...defaultCopyCollectionStrings, ...options?.copyCollectionStrings };
+        this.validateSource = options?.validateSource;
+        this.collectMetadata = options?.collectMetadata;
         this.documentReader = documentReader;
         this.documentWriter = documentWriter;
         this.indexCopier = indexCopier;
         this.indexPresentationDelayMs = indexPresentationDelayMs;
 
         // Generate a descriptive name for the task
-        this.name = vscode.l10n.t(
-            'Copy "{sourceCollection}" from "{sourceDatabase}" to "{targetDatabase}/{targetCollection}"',
-            {
-                sourceCollection: config.source.collectionName,
-                sourceDatabase: config.source.databaseName,
-                targetDatabase: config.target.databaseName,
-                targetCollection: config.target.collectionName,
-            },
+        this.name = this.copyCollectionStrings.taskName(
+            config.source.collectionName,
+            config.source.databaseName,
+            config.target.databaseName,
+            config.target.collectionName,
         );
     }
 
@@ -108,97 +113,29 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     }
 
     /**
-     * Collects cluster metadata for telemetry purposes.
-     * This method attempts to gather cluster information without failing the task if metadata collection fails.
-     *
-     * @param clusterId Cluster ID to collect metadata for
-     * @param prefix Prefix for telemetry properties (e.g., 'source' or 'target')
-     * @param context Telemetry context to add properties to
-     */
-    private async collectClusterMetadata(clusterId: string, prefix: string, context: IActionContext): Promise<void> {
-        try {
-            const client = await ClustersClient.getClient(clusterId);
-            const metadata = await client.getClusterMetadata();
-
-            // Add metadata with prefix to avoid conflicts between source and target
-            for (const [key, value] of Object.entries(metadata)) {
-                if (value !== undefined && value !== null) {
-                    context.telemetry.properties[`${prefix}_${key}`] = String(value);
-                }
-            }
-
-            context.telemetry.properties[`${prefix}_metadataCollectionSuccess`] = 'true';
-        } catch (error) {
-            // Log the error but don't fail the task
-            context.telemetry.properties[`${prefix}_metadata_error`] =
-                error instanceof Error ? error.message : 'Unknown error';
-            context.telemetry.properties[`${prefix}_metadataCollectionSuccess`] = 'false';
-        }
-    }
-
-    /**
      * Initializes the task by counting documents and ensuring target collection exists.
      *
      * @param signal AbortSignal to check for cancellation
      * @param context Optional telemetry context for tracking task operations
      */
-    protected async onInitialize(signal: AbortSignal, context?: IActionContext): Promise<void> {
+    protected async onInitialize(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
         if (context) {
             context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
         }
-        // Validate source cluster credentials (stale reference protection)
-        if (!CredentialCache.hasCredentials(this.config.source.clusterId)) {
-            // Clear the stale clipboard reference
-            ext.copiedCollectionNode = undefined;
-            void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
-
-            if (context) {
-                context.telemetry.properties.sourceClusterDisconnected = 'true';
-            }
-
-            throw new SourceValidationError(
-                vscode.l10n.t(
-                    'The source cluster is no longer connected. Please reconnect and copy the collection again.',
-                ),
-            );
-        }
-
-        // Validate source collection still exists
-        this.updateStatus(this.getStatus().state, vscode.l10n.t('Validating source collection...'));
-        try {
-            const sourceClient = await ClustersClient.getClient(this.config.source.clusterId);
-            const collections = await sourceClient.listCollections(this.config.source.databaseName);
-            const collectionExists = collections.some((c) => c.name === this.config.source.collectionName);
-
-            if (!collectionExists) {
-                // Clear the stale clipboard reference
-                ext.copiedCollectionNode = undefined;
-                void vscode.commands.executeCommand('setContext', 'documentdb.copiedCollectionNode', false);
-
-                if (context) {
-                    context.telemetry.properties.sourceCollectionNotFound = 'true';
+        if (this.validateSource) {
+            this.updateStatus(this.getStatus().state, this.copyCollectionStrings.validatingSourceCollection);
+            try {
+                await this.validateSource(signal, context);
+            } catch (error) {
+                if (error instanceof SourceValidationError) {
+                    throw error;
                 }
-
-                throw new SourceValidationError(
-                    vscode.l10n.t(
-                        'The source collection "{0}" no longer exists in database "{1}". It may have been deleted or renamed.',
-                        this.config.source.collectionName,
-                        this.config.source.databaseName,
+                throw new Error(
+                    this.copyCollectionStrings.failedToValidateSource(
+                        error instanceof Error ? error.message : String(error),
                     ),
                 );
             }
-        } catch (error) {
-            // Re-throw our own validation errors
-            if (error instanceof SourceValidationError) {
-                throw error;
-            }
-            // Wrap other errors (e.g., network issues)
-            throw new Error(
-                vscode.l10n.t(
-                    'Failed to validate source collection: {0}',
-                    error instanceof Error ? error.message : String(error),
-                ),
-            );
         }
 
         // Add copy-paste specific telemetry properties
@@ -208,16 +145,15 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             context.telemetry.properties.isCrossConnection =
                 this.config.source.clusterId !== this.config.target.clusterId ? 'true' : 'false';
 
-            // Collect cluster metadata for source and target connections and await their completion (non-blocking for errors)
-            const metadataPromises = [this.collectClusterMetadata(this.config.source.clusterId, 'source', context)];
-            if (this.config.source.clusterId !== this.config.target.clusterId) {
-                metadataPromises.push(this.collectClusterMetadata(this.config.target.clusterId, 'target', context));
+            try {
+                await this.collectMetadata?.(context);
+            } catch {
+                // Metadata collection must not fail the task.
             }
-            await Promise.allSettled(metadataPromises);
         }
 
         // Count total documents for progress calculation
-        this.updateStatus(this.getStatus().state, vscode.l10n.t('Counting documents in the source collection...'));
+        this.updateStatus(this.getStatus().state, this.copyCollectionStrings.countingSourceDocuments);
 
         try {
             this.sourceDocumentCount = await this.documentReader.countDocuments(signal, context);
@@ -227,7 +163,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 context.telemetry.measurements.sourceDocumentCount = this.sourceDocumentCount;
             }
         } catch (error) {
-            throw new Error(vscode.l10n.t('Failed to count documents in the source collection.'), {
+            throw new Error(this.copyCollectionStrings.failedToCountSourceDocuments, {
                 cause: error,
             });
         }
@@ -237,7 +173,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
 
         // Ensure target exists
-        this.updateStatus(this.getStatus().state, vscode.l10n.t('Ensuring target exists...'));
+        this.updateStatus(this.getStatus().state, this.copyCollectionStrings.ensuringTargetExists);
 
         try {
             const ensureTargetResult = await this.documentWriter.ensureTargetExists();
@@ -247,7 +183,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 context.telemetry.properties.targetWasCreated = ensureTargetResult.targetWasCreated ? 'true' : 'false';
             }
         } catch (error) {
-            throw new Error(vscode.l10n.t('Failed to ensure the target collection exists.'), {
+            throw new Error(this.copyCollectionStrings.failedToEnsureTargetExists, {
                 cause: error,
             });
         }
@@ -259,7 +195,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param signal AbortSignal to check for cancellation
      * @param context Optional telemetry context for tracking task operations
      */
-    protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
+    protected async doWork(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
         if (context) {
             context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
         }
@@ -273,7 +209,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
         // Handle empty source collection
         if (this.sourceDocumentCount === 0) {
-            this.updateProgress(100, vscode.l10n.t('Source collection is empty.'));
+            this.updateProgress(100, this.copyCollectionStrings.sourceCollectionEmpty);
             if (context) {
                 context.telemetry.measurements.totalProcessedDocuments = 0;
                 context.telemetry.measurements.bufferFlushCount = 0;
@@ -317,14 +253,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                             progressMessage += ` - ${details}`;
                         }
 
-                        ext.outputChannel.trace(
-                            vscode.l10n.t(
-                                '[CopyPasteTask] onProgress: {0}% ({1}/{2} docs) - {3}',
-                                progressPercentage.toString(),
-                                this.totalProcessedDocuments.toString(),
-                                this.sourceDocumentCount.toString(),
-                                progressMessage,
-                            ),
+                        this.logger.trace(
+                            `[CopyPasteTask] onProgress: ${progressPercentage}% (${this.totalProcessedDocuments}/${this.sourceDocumentCount} docs) - ${progressMessage}`,
                         );
 
                         this.updateProgress(progressPercentage, progressMessage);
@@ -368,7 +298,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
                 // Build error message with partial stats
                 const partialSummary = this.buildSummaryMessage(error.partialStats);
-                const errorMessage = vscode.l10n.t('Task failed after partial completion: {0}', partialSummary);
+                const errorMessage = this.copyCollectionStrings.failedAfterPartialCompletion(partialSummary);
 
                 // Update error message to include partial stats
                 throw new Error(`${errorMessage}\n${error.message}`);
@@ -383,30 +313,23 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
     }
 
-    private async copyIndexes(signal: AbortSignal, context?: IActionContext): Promise<void> {
+    private async copyIndexes(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
         if (!this.indexCopier) {
-            throw new Error(vscode.l10n.t('Index copy services were not configured.'));
+            throw new Error(this.copyCollectionStrings.indexCopyServicesNotConfigured);
         }
 
-        this.updateProgress(0, vscode.l10n.t('Copying indexes before documents...'));
-        ext.outputChannel.trace(vscode.l10n.t('[CopyPasteTask] Starting index copy phase.'));
+        this.updateProgress(0, this.copyCollectionStrings.copyingIndexesBeforeDocuments);
+        this.logger.trace('[CopyPasteTask] Starting index copy phase.');
 
         let result: IndexCopyResult;
         try {
             result = await this.indexCopier.copyIndexes({
                 signal,
                 onStart: (total) => {
-                    this.updateProgress(0, vscode.l10n.t('Copying {0} indexes...', total.toString()));
+                    this.updateProgress(0, this.copyCollectionStrings.copyingIndexes(total.toString()));
                 },
                 onProgress: ({ completed, total, indexName }) => {
-                    ext.outputChannel.trace(
-                        vscode.l10n.t(
-                            '[CopyPasteTask] Index copy progress: {0}/{1} ({2}).',
-                            completed.toString(),
-                            total.toString(),
-                            indexName,
-                        ),
-                    );
+                    this.logger.trace(`[CopyPasteTask] Index copy progress: ${completed}/${total} (${indexName}).`);
                 },
             });
         } catch (error) {
@@ -419,7 +342,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 context.telemetry.properties.indexCopyFailed = 'true';
                 context.telemetry.properties.indexCopyError = error instanceof Error ? error.name : 'UnknownError';
             }
-            throw new Error(vscode.l10n.t('Failed to copy indexes before copying documents: {0}', errorMessage), {
+            throw new Error(this.copyCollectionStrings.failedToCopyIndexes(errorMessage), {
                 cause: error,
             });
         }
@@ -435,32 +358,17 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
 
         if (result.cancelled) {
-            ext.outputChannel.warn(
-                vscode.l10n.t(
-                    '[CopyPasteTask] Index copy was cancelled after {0} indexes were created. Created indexes remain on the target.',
-                    result.createdCount.toString(),
-                ),
+            this.logger.warn(
+                `[CopyPasteTask] Index copy was cancelled after ${result.createdCount} indexes were created. Created indexes remain on the target.`,
             );
         } else {
-            ext.outputChannel.trace(
-                vscode.l10n.t(
-                    '[CopyPasteTask] Index copy completed: {0} created, {1} skipped, {2} conflicts, {3} renamed.',
-                    result.createdCount.toString(),
-                    result.skippedCount.toString(),
-                    result.conflictingCount.toString(),
-                    result.renamedCount.toString(),
-                ),
+            this.logger.trace(
+                `[CopyPasteTask] Index copy completed: ${result.createdCount} created, ${result.skippedCount} skipped, ${result.conflictingCount} conflicts, ${result.renamedCount} renamed.`,
             );
         }
 
         if (result.createdCount > 0 && !signal.aborted) {
-            this.updateProgress(
-                0,
-                vscode.l10n.t(
-                    '{0} indexes copied. Document copy will begin shortly...',
-                    result.createdCount.toString(),
-                ),
-            );
+            this.updateProgress(0, this.copyCollectionStrings.indexesCopied(result.createdCount.toString()));
             await this.waitForPresentationDelay(signal, this.indexPresentationDelayMs);
         }
     }
@@ -496,20 +404,20 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         const parts: string[] = [];
 
         // Always show total processed
-        parts.push(vscode.l10n.t('{0} processed', stats.totalProcessed.toLocaleString()));
+        parts.push(this.copyCollectionStrings.processed(stats.totalProcessed.toLocaleString()));
 
         // Add strategy-specific breakdown (only non-zero counts)
         if ((stats.insertedCount ?? 0) > 0) {
-            parts.push(vscode.l10n.t('{0} inserted', (stats.insertedCount ?? 0).toLocaleString()));
+            parts.push(this.copyCollectionStrings.inserted((stats.insertedCount ?? 0).toLocaleString()));
         }
         if ((stats.skippedCount ?? 0) > 0) {
-            parts.push(vscode.l10n.t('{0} skipped', (stats.skippedCount ?? 0).toLocaleString()));
+            parts.push(this.copyCollectionStrings.skipped((stats.skippedCount ?? 0).toLocaleString()));
         }
         if ((stats.replacedCount ?? 0) > 0) {
-            parts.push(vscode.l10n.t('{0} replaced', (stats.replacedCount ?? 0).toLocaleString()));
+            parts.push(this.copyCollectionStrings.replaced((stats.replacedCount ?? 0).toLocaleString()));
         }
         if ((stats.createdCount ?? 0) > 0) {
-            parts.push(vscode.l10n.t('{0} created', (stats.createdCount ?? 0).toLocaleString()));
+            parts.push(this.copyCollectionStrings.created((stats.createdCount ?? 0).toLocaleString()));
         }
 
         return parts.join(', ');
@@ -525,8 +433,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     private getProgressMessage(progressPercentage?: number, suffix?: string): string {
         // Format: "45% - 1,234/5,678 documents" with optional suffix
         const percentageStr = progressPercentage !== undefined ? `${progressPercentage}% - ` : '';
-        const countStr = vscode.l10n.t(
-            '{0}/{1} documents',
+        const countStr = this.copyCollectionStrings.documentProgress(
             this.totalProcessedDocuments.toLocaleString(),
             this.sourceDocumentCount.toLocaleString(),
         );
@@ -561,7 +468,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
                 // Build suffix with growing dots: "writing batch..." then "writing batch...." etc.
                 const extraDots = '.'.repeat(this.reassuranceTicks - CopyPasteCollectionTask.REASSURANCE_START_TICKS);
-                const suffix = vscode.l10n.t('writing batch...') + extraDots;
+                const suffix = this.copyCollectionStrings.writingBatch + extraDots;
                 const message = this.getProgressMessage(progressPercentage, suffix);
                 this.updateProgress(progressPercentage ?? 0, message);
             }

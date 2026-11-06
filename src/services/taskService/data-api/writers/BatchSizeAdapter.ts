@@ -3,24 +3,27 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { l10n } from 'vscode';
-import { ext } from '../../../../extensionVariables';
-import { FAST_MODE, type OptimizationModeConfig, RU_LIMITED_MODE } from './writerTypes.internal';
+import { type TaskLogger } from '../../taskHost';
+import { type DataTransferOptions, noopDataTransferLogger } from '../dataTransferHost';
+import { type ModeConfig } from '../types';
+import { type ResolvedStreamingWriterSettings, resolveStreamingWriterSettings } from './streamingWriterSettings';
+import { type OptimizationModeConfig } from './writerTypes.internal';
 
 /**
  * Configuration for batch size adaptation behavior.
  */
 export interface BatchSizeAdapterConfig {
+    /** Initial optimization mode (default: fast) */
+    startMode?: 'fast' | 'ru-limited';
+    /** Fast mode batch sizes and growth */
+    fast?: Partial<ModeConfig>;
+    /** RU-limited mode batch sizes and growth */
+    ruLimited?: Partial<ModeConfig>;
     /** Buffer memory limit in MB (default: 24) */
     bufferMemoryLimitMB?: number;
     /** Minimum batch size (default: 1) */
     minBatchSize?: number;
 }
-
-const DEFAULT_CONFIG: Required<BatchSizeAdapterConfig> = {
-    bufferMemoryLimitMB: 24,
-    minBatchSize: 1,
-};
 
 /**
  * Adaptive batch size manager for dual-mode operation (fast vs. RU-limited).
@@ -50,7 +53,8 @@ const DEFAULT_CONFIG: Required<BatchSizeAdapterConfig> = {
  * const constraints = adapter.getBufferConstraints();
  */
 export class BatchSizeAdapter {
-    private readonly config: Required<BatchSizeAdapterConfig>;
+    private readonly config: ResolvedStreamingWriterSettings['batching'];
+    private readonly modes: Record<OptimizationModeConfig['mode'], OptimizationModeConfig>;
 
     /** Current optimization mode configuration */
     private currentMode: OptimizationModeConfig;
@@ -58,10 +62,17 @@ export class BatchSizeAdapter {
     /** Current batch size (adaptive, changes based on success/throttle) */
     private currentBatchSize: number;
 
-    constructor(config?: BatchSizeAdapterConfig) {
-        this.config = { ...DEFAULT_CONFIG, ...config };
-        this.currentMode = FAST_MODE;
-        this.currentBatchSize = FAST_MODE.initialBatchSize;
+    private readonly logger: TaskLogger;
+
+    constructor(config?: BatchSizeAdapterConfig, options?: DataTransferOptions) {
+        this.logger = options?.logger ?? noopDataTransferLogger;
+        this.config = resolveStreamingWriterSettings(undefined, { batching: config }).batching;
+        this.modes = {
+            fast: { mode: 'fast', ...this.config.fast },
+            'ru-limited': { mode: 'ru-limited', ...this.config.ruLimited },
+        };
+        this.currentMode = this.modes[this.config.startMode];
+        this.currentBatchSize = this.currentMode.initialBatchSize;
     }
 
     /**
@@ -93,7 +104,7 @@ export class BatchSizeAdapter {
     /**
      * Grows the batch size after a successful write operation.
      *
-     * Growth behavior depends on current optimization mode:
+     * Default growth behavior depends on current optimization mode:
      * - Fast mode: 20% growth per success, max 2000 documents
      * - RU-limited mode: 10% growth per success, max 1000 documents
      */
@@ -109,14 +120,8 @@ export class BatchSizeAdapter {
 
         this.currentBatchSize = Math.min(this.currentMode.maxBatchSize, Math.max(percentageIncrease, minimalIncrease));
 
-        ext.outputChannel.trace(
-            l10n.t(
-                '[BatchSizeAdapter] Success: Growing batch size {0} → {1} (mode: {2}, growth: {3}%)',
-                previousBatchSize.toString(),
-                this.currentBatchSize.toString(),
-                this.currentMode.mode,
-                ((growthFactor - 1) * 100).toFixed(1),
-            ),
+        this.logger.trace(
+            `[BatchSizeAdapter] Success: Growing batch size ${previousBatchSize} → ${this.currentBatchSize} (mode: ${this.currentMode.mode}, growth: ${((growthFactor - 1) * 100).toFixed(1)}%)`,
         );
     }
 
@@ -132,13 +137,8 @@ export class BatchSizeAdapter {
         const previousBatchSize = this.currentBatchSize;
         this.currentBatchSize = Math.max(this.config.minBatchSize, successfulCount);
 
-        ext.outputChannel.trace(
-            l10n.t(
-                '[BatchSizeAdapter] Throttle: Adjusting batch size {0} → {1} (proven capacity: {2})',
-                previousBatchSize.toString(),
-                this.currentBatchSize.toString(),
-                successfulCount.toString(),
-            ),
+        this.logger.trace(
+            `[BatchSizeAdapter] Throttle: Adjusting batch size ${previousBatchSize} → ${this.currentBatchSize} (proven capacity: ${successfulCount})`,
         );
     }
 
@@ -151,12 +151,8 @@ export class BatchSizeAdapter {
         const previousBatchSize = this.currentBatchSize;
         this.currentBatchSize = Math.max(this.config.minBatchSize, Math.floor(this.currentBatchSize / 2) || 1);
 
-        ext.outputChannel.trace(
-            l10n.t(
-                '[BatchSizeAdapter] Throttle with no progress: Halving batch size {0} → {1}',
-                previousBatchSize.toString(),
-                this.currentBatchSize.toString(),
-            ),
+        this.logger.trace(
+            `[BatchSizeAdapter] Throttle with no progress: Halving batch size ${previousBatchSize} → ${this.currentBatchSize}`,
         );
     }
 
@@ -166,7 +162,7 @@ export class BatchSizeAdapter {
      * This one-way transition occurs when the first throttle error is detected,
      * indicating the target database has throughput limits.
      *
-     * Mode changes:
+     * Default mode changes:
      * - Initial batch size: 500 → 100
      * - Max batch size: 2000 → 1000
      * - Growth factor: 20% → 10%
@@ -196,37 +192,29 @@ export class BatchSizeAdapter {
         const previousMaxBatchSize = this.currentMode.maxBatchSize;
 
         // Switch to RU-limited mode
-        this.currentMode = RU_LIMITED_MODE;
+        this.currentMode = this.modes['ru-limited'];
 
         // Reset batch size based on proven capacity vs RU mode initial
-        if (successfulCount <= RU_LIMITED_MODE.initialBatchSize) {
+        if (successfulCount <= this.currentMode.initialBatchSize) {
             // Low proven capacity: respect what actually worked
             this.currentBatchSize = Math.max(this.config.minBatchSize, successfulCount);
         } else {
             // High proven capacity: start conservatively with RU initial, can grow later
-            this.currentBatchSize = Math.min(successfulCount, RU_LIMITED_MODE.maxBatchSize);
+            this.currentBatchSize = Math.min(successfulCount, this.currentMode.maxBatchSize);
         }
 
-        ext.outputChannel.info(
-            l10n.t(
-                '[BatchSizeAdapter] Switched from {0} mode to {1} mode after throttle. ' +
-                    'Batch size: {2} → {3}, Max: {4} → {5}',
-                previousMode,
-                this.currentMode.mode,
-                previousBatchSize.toString(),
-                this.currentBatchSize.toString(),
-                previousMaxBatchSize.toString(),
-                this.currentMode.maxBatchSize.toString(),
-            ),
+        this.logger.info(
+            `[BatchSizeAdapter] Switched from ${previousMode} mode to ${this.currentMode.mode} mode after throttle. ` +
+                `Batch size: ${previousBatchSize} → ${this.currentBatchSize}, Max: ${previousMaxBatchSize} → ${this.currentMode.maxBatchSize}`,
         );
     }
 
     /**
-     * Resets the adapter to initial fast mode state.
+     * Resets the adapter to its configured initial mode and batch size.
      * Useful for testing or reusing the adapter.
      */
     reset(): void {
-        this.currentMode = FAST_MODE;
-        this.currentBatchSize = FAST_MODE.initialBatchSize;
+        this.currentMode = this.modes[this.config.startMode];
+        this.currentBatchSize = this.currentMode.initialBatchSize;
     }
 }
