@@ -1024,14 +1024,10 @@ describe('ConnectionDiagnostics', () => {
 
     it('offers a re-run from a second open only when no run is active', async () => {
         await render();
-        await act(async () =>
-            client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Orders cluster' }),
-        );
+        await act(async () => client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Orders cluster' }));
         expect(host.textContent).not.toContain('Connection Diagnostics is already open for this connection.');
         await finish('run-1');
-        await act(async () =>
-            client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Orders cluster' }),
-        );
+        await act(async () => client.panelHandlers[0].onData({ type: 'offerRerun', connectionName: 'Orders cluster' }));
         expect(host.textContent).toContain(
             'Connection Diagnostics is already open for this connection. Run the diagnosis again?',
         );

@@ -84,18 +84,21 @@ describe.each([false, true])('bounded structural report lists (redact=%s)', (red
             omittedFindingCount: 999,
             omittedStepCount: 999,
             findings: Array.from({ length: findingCount }, (_, index): Finding<string> => finding(`result.${index}`)),
-            steps: Array.from({ length: stepCount }, (_, index): CheckStepResult<string> => ({
-                stepId: `step\0-${index}`,
-                status: index % 2 === 0 ? 'skipped' : 'warning',
-                skippedBecause: { reason: 'dependencyFailed', stepId: 'earlier\0-step' },
-                durationMs: index,
-                facts: payload,
-                omittedFindingCount: 999,
-                findings: Array.from(
-                    { length: stepFindingCount },
-                    (_, findingIndex): Finding<string> => finding(`step.${index}.${findingIndex}`),
-                ),
-            })),
+            steps: Array.from(
+                { length: stepCount },
+                (_, index): CheckStepResult<string> => ({
+                    stepId: `step\0-${index}`,
+                    status: index % 2 === 0 ? 'skipped' : 'warning',
+                    skippedBecause: { reason: 'dependencyFailed', stepId: 'earlier\0-step' },
+                    durationMs: index,
+                    facts: payload,
+                    omittedFindingCount: 999,
+                    findings: Array.from(
+                        { length: stepFindingCount },
+                        (_, findingIndex): Finding<string> => finding(`step.${index}.${findingIndex}`),
+                    ),
+                }),
+            ),
         };
         const summary: ReportSummary = {
             outcome: 'failed',
@@ -144,7 +147,10 @@ describe.each([false, true])('bounded structural report lists (redact=%s)', (red
                     data: { host: redact ? 'host-1' : host, text: 'safetext' },
                     detail: { language: 'en', text: `Observed ${redact ? 'host-1' : host}` },
                 });
-                expect(entry.data?.list).toEqual([...Array.from({ length: 32 }, (_, i): number => i), '[2 more omitted]']);
+                expect(entry.data?.list).toEqual([
+                    ...Array.from({ length: 32 }, (_, i): number => i),
+                    '[2 more omitted]',
+                ]);
             }
             for (const [index, step] of (result.steps ?? []).entries()) {
                 expect(step).toMatchObject({
@@ -205,23 +211,33 @@ describe.each([false, true])('bounded structural report lists (redact=%s)', (red
                 status: 'fail',
                 durationMs: 1,
                 facts: {},
-                findings: kind === 'findings' ? Array.from({ length: count }, (_, i): Finding<string> => finding(`code.${i}`)) : [],
-                steps: kind === 'findings' ? [] : Array.from({ length: kind === 'steps' ? count : 1 }, (_, index): CheckStepResult<string> => ({
-                    stepId: `step-${index}`,
-                    status: 'fail',
-                    durationMs: 1,
-                    facts: {},
-                    findings: Array.from(
-                        { length: kind === 'stepFindings' ? count : 1 },
-                        (_, i): Finding<string> => finding(`code.${kind === 'steps' ? index : i}`),
-                    ),
-                })),
+                findings:
+                    kind === 'findings'
+                        ? Array.from({ length: count }, (_, i): Finding<string> => finding(`code.${i}`))
+                        : [],
+                steps:
+                    kind === 'findings'
+                        ? []
+                        : Array.from(
+                              { length: kind === 'steps' ? count : 1 },
+                              (_, index): CheckStepResult<string> => ({
+                                  stepId: `step-${index}`,
+                                  status: 'fail',
+                                  durationMs: 1,
+                                  facts: {},
+                                  findings: Array.from(
+                                      { length: kind === 'stepFindings' ? count : 1 },
+                                      (_, i): Finding<string> => finding(`code.${kind === 'steps' ? index : i}`),
+                                  ),
+                              }),
+                          ),
             });
             const report = buildReport(source, {
                 summary: { outcome: 'failed', headline: { checkId: 'custom', code: 'code.32' } },
             });
-            const omittedEntries = vi.fn((omissionKind: ReportOmissionKind, count: number): string =>
-                `Localized ${omissionKind} ${count} | omitted`,
+            const omittedEntries = vi.fn(
+                (omissionKind: ReportOmissionKind, count: number): string =>
+                    `Localized ${omissionKind} ${count} | omitted`,
             );
             const describeFinding = vi.fn(englishReportText.describeFinding);
             const markdown = renderMarkdown(report, {
@@ -248,14 +264,20 @@ describe('structural report copy boundaries', (): void => {
             omittedFindingCount: 123,
             omittedStepCount: 456,
         };
-        for (const steps of [undefined, [], [{
-            stepId: 'empty',
-            status: 'pass' as const,
-            durationMs: 1,
-            findings: [],
-            facts: {},
-            omittedFindingCount: 789,
-        }]]) {
+        for (const steps of [
+            undefined,
+            [],
+            [
+                {
+                    stepId: 'empty',
+                    status: 'pass' as const,
+                    durationMs: 1,
+                    findings: [],
+                    facts: {},
+                    omittedFindingCount: 789,
+                },
+            ],
+        ]) {
             const report = buildReport(run({ ...owner, ...(steps === undefined ? {} : { steps }) }), {
                 summary: { outcome: 'connected', serverRows: [], omittedServerRowCount: 123 },
             });
@@ -275,20 +297,30 @@ describe('structural report copy boundaries', (): void => {
             nested = { child: nested };
         }
         const facts = { nested, deeper: { child: nested }, text: `\0${'a'.repeat(8193)}`, invalid: new Date() };
-        const report = buildReport(run({
-            checkId: 'custom',
-            status: 'pass',
-            durationMs: 1,
-            facts: {},
-            findings: [],
-            steps: [{
-                stepId: 'phase',
+        const report = buildReport(
+            run({
+                checkId: 'custom',
                 status: 'pass',
                 durationMs: 1,
-                facts,
-                findings: [{ ...finding('custom.observed'), data: facts, detail: { language: 'en', text: facts.text } }],
-            }],
-        }));
+                facts: {},
+                findings: [],
+                steps: [
+                    {
+                        stepId: 'phase',
+                        status: 'pass',
+                        durationMs: 1,
+                        facts,
+                        findings: [
+                            {
+                                ...finding('custom.observed'),
+                                data: facts,
+                                detail: { language: 'en', text: facts.text },
+                            },
+                        ],
+                    },
+                ],
+            }),
+        );
         const step = report.results[0].steps?.[0];
         expect(step?.facts).not.toHaveProperty('invalid');
         expect(step?.facts.text).toBe(`${'a'.repeat(8192)} [truncated 1 characters]`);

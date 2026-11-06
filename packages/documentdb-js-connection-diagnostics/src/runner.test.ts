@@ -620,9 +620,7 @@ describe('timeouts and coverage', (): void => {
                 input,
                 timeoutProfile: 'noDiagnosticTimeouts',
                 timeouts: { [field]: MAX_TIMEOUT_MS },
-                checks: [
-                    check('work', { timeout: kind, run: (): Promise<Outcome> => deferred<Outcome>().promise }),
-                ],
+                checks: [check('work', { timeout: kind, run: (): Promise<Outcome> => deferred<Outcome>().promise })],
                 io: { clock },
             });
             expect(clock.setTimeout).toHaveBeenCalledExactlyOnceWith(expect.any(Function), MAX_TIMEOUT_MS);

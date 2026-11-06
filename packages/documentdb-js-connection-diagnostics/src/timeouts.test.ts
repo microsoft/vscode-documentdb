@@ -75,9 +75,7 @@ describe('timeout profiles', (): void => {
                 DiagnosticsConfigurationError,
             );
             expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(field);
-            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(
-                String(MAX_TIMEOUT_MS),
-            );
+            expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(String(MAX_TIMEOUT_MS));
             expect((): DiagnosticsTimeouts => resolveTimeouts('default', overrides)).toThrow(
                 'null to disable this diagnostic timeout',
             );

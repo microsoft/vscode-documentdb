@@ -113,49 +113,57 @@ describe('localized connectivity report text', () => {
         }
     });
 
-    it.each([false, true])('renders localized structural omissions without timeout advice (redact=%s)', (redact): void => {
-        const source = fixtureRun({
-            limited: false,
-            timedOut: [],
-            retryWouldHelp: false,
-            omittedTargetCount: 0,
-        });
-        const findings = source.results.find((result): boolean => result.checkId === 'tcp')?.findings ?? [];
-        const report = buildReport({
-            ...source,
-            results: [{
-                checkId: 'tcp',
-                status: 'fail',
-                durationMs: 1,
-                facts: {},
-                findings: Array.from({ length: 33 }, () => findings[0]),
-                steps: Array.from({ length: 34 }, (_, index) => ({
-                    stepId: `step-${index}`,
-                    status: 'pass',
-                    durationMs: 1,
-                    facts: {},
-                    findings: Array.from({ length: 35 }, () => findings[0]),
-                })),
-            }],
-        }, {
-            summary: {
-                outcome: 'failed',
-                serverRows: Array.from({ length: 36 }, () => ({ label: 'Server', value: 'DocumentDB' })),
-            },
-        });
-        const markdown = renderMarkdown(report, { text: createExtensionReportText(), redact });
-        for (const [template, count] of [
-            ['{0} more findings not shown', 1],
-            ['{0} more findings not shown', 3],
-            ['{0} more steps not shown', 2],
-            ['{0} more server rows not shown', 4],
-        ] as const) {
-            expect(markdown).toContain(template.replace('{0}', String(count)));
-            expect(vscode.l10n.t).toHaveBeenCalledWith(template, count);
-        }
-        expect(markdown).not.toContain('Choose Retry');
-        expect(report.coverage).toEqual(source.coverage);
-    });
+    it.each([false, true])(
+        'renders localized structural omissions without timeout advice (redact=%s)',
+        (redact): void => {
+            const source = fixtureRun({
+                limited: false,
+                timedOut: [],
+                retryWouldHelp: false,
+                omittedTargetCount: 0,
+            });
+            const findings = source.results.find((result): boolean => result.checkId === 'tcp')?.findings ?? [];
+            const report = buildReport(
+                {
+                    ...source,
+                    results: [
+                        {
+                            checkId: 'tcp',
+                            status: 'fail',
+                            durationMs: 1,
+                            facts: {},
+                            findings: Array.from({ length: 33 }, () => findings[0]),
+                            steps: Array.from({ length: 34 }, (_, index) => ({
+                                stepId: `step-${index}`,
+                                status: 'pass',
+                                durationMs: 1,
+                                facts: {},
+                                findings: Array.from({ length: 35 }, () => findings[0]),
+                            })),
+                        },
+                    ],
+                },
+                {
+                    summary: {
+                        outcome: 'failed',
+                        serverRows: Array.from({ length: 36 }, () => ({ label: 'Server', value: 'DocumentDB' })),
+                    },
+                },
+            );
+            const markdown = renderMarkdown(report, { text: createExtensionReportText(), redact });
+            for (const [template, count] of [
+                ['{0} more findings not shown', 1],
+                ['{0} more findings not shown', 3],
+                ['{0} more steps not shown', 2],
+                ['{0} more server rows not shown', 4],
+            ] as const) {
+                expect(markdown).toContain(template.replace('{0}', String(count)));
+                expect(vscode.l10n.t).toHaveBeenCalledWith(template, count);
+            }
+            expect(markdown).not.toContain('Choose Retry');
+            expect(report.coverage).toEqual(source.coverage);
+        },
+    );
 
     it('renders localized section titles, row names and findings without convenience English', () => {
         const markdown = fixtureMarkdown();

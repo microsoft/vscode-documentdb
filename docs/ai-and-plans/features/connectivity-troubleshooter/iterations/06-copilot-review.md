@@ -29,7 +29,7 @@ updated: 2026-11-06
 
 **All four comments identify real defects: three medium, one low.** Two claims need qualification:
 the report can throw before the exact expression Copilot names, and a large timeout override does
-not make *every* operation time out when a shorter applicable deadline wins.
+not make _every_ operation time out when a shorter applicable deadline wins.
 
 Severity here means:
 
@@ -39,12 +39,12 @@ Severity here means:
   contrary to the telemetry contract.
 - **Low:** a real defect requiring an unusual configuration, with normal product defaults unaffected.
 
-| ID | Actual GitHub comment | Verdict | Severity | Confidence | Recommended option |
-| --- | --- | --- | --- | --- | --- |
-| C1 | [Preserve typed report steps when truncating arrays](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494004762) | Valid; also affects findings inside a step | Medium | High: reproduced | A: schema-aware bounded copying with separate omission metadata |
-| C2 | [Reject timeout values above the Node timer limit](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494004860) | Valid; the oversized value must become the effective timer delay | Low | High: reproduced with controls | A: explicit upper-bound validation, including the equivalent runner input |
-| C3 | [Mask diagnostic credential-read errors in their own telemetry context](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494004930) | Valid; outer masking does not protect the inner event | Medium | High: source trace and local masking reproduction | A: enable whole-error masking before the callback |
-| C4 | [Refresh the target when reusing the diagnosis panel](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494005005) | Valid; reopening discards the replacement node | Medium | High: reproduced with replacement targets; Atlas path source-verified | A: session-owned current target, snapshotted for each run |
+| ID  | Actual GitHub comment                                                                                                                                    | Verdict                                                          | Severity | Confidence                                                            | Recommended option                                                        |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | -------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| C1  | [Preserve typed report steps when truncating arrays](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494004762)                    | Valid; also affects findings inside a step                       | Medium   | High: reproduced                                                      | A: schema-aware bounded copying with separate omission metadata           |
+| C2  | [Reject timeout values above the Node timer limit](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494004860)                      | Valid; the oversized value must become the effective timer delay | Low      | High: reproduced with controls                                        | A: explicit upper-bound validation, including the equivalent runner input |
+| C3  | [Mask diagnostic credential-read errors in their own telemetry context](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494004930) | Valid; outer masking does not protect the inner event            | Medium   | High: source trace and local masking reproduction                     | A: enable whole-error masking before the callback                         |
+| C4  | [Refresh the target when reusing the diagnosis panel](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4494005005)                   | Valid; reopening discards the replacement node                   | Medium   | High: reproduced with replacement targets; Atlas path source-verified | A: session-owned current target, snapshotted for each run                 |
 
 Suggested implementation order: **C3, C4, C1, C2**. C3 crosses the telemetry privacy boundary;
 C4 gives a misleading answer in a normal recovery workflow; C1 breaks the reusable package's
@@ -56,12 +56,12 @@ A second pass re-traced each finding against the same head (`579ef676`). It **ag
 are real**. It changes one severity, chooses an option for each, and refines C1. Details are
 inline at the end of each section, under **Second assessment**.
 
-| ID | First severity | Second severity | Chosen solution | Delta from the first assessment |
-| --- | --- | --- | --- | --- |
-| C1 | Medium | **Low** in the extension, Medium for the package before publication | **A′** (a concrete form of A): typed `copyStep`, `omitted*Count` fields on the parent record, and the same cap on top-level findings and `summary.serverRows` | The first rubric is applied inconsistently: C1 is as unreachable from the product as C2. Top-level `result.findings` is currently **unbounded**, contrary to the README limit |
-| C2 | Low | **Low** (agree) | **A**, using one shared validator for both input routes | Confirmed the shipped extension never passes overrides or `connectionTimeouts` |
-| C3 | Medium | **Medium** (agree), fix first | **A** | The exposure largely repeats the existing unmasked `getCredentials` event (same reads, mostly the same event name). It breaks the diagnostics contract but is not a new leak class |
-| C4 | Medium | **Medium** (agree) | **A**; keep B as a follow-up | Also discards the newer `entryPoint` and correlation IDs, so telemetry links reruns to the old failure. Only providers that keep discovery state in the node instance return a wrong *diagnosis* |
+| ID  | First severity | Second severity                                                     | Chosen solution                                                                                                                                               | Delta from the first assessment                                                                                                                                                                  |
+| --- | -------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| C1  | Medium         | **Low** in the extension, Medium for the package before publication | **A′** (a concrete form of A): typed `copyStep`, `omitted*Count` fields on the parent record, and the same cap on top-level findings and `summary.serverRows` | The first rubric is applied inconsistently: C1 is as unreachable from the product as C2. Top-level `result.findings` is currently **unbounded**, contrary to the README limit                    |
+| C2  | Low            | **Low** (agree)                                                     | **A**, using one shared validator for both input routes                                                                                                       | Confirmed the shipped extension never passes overrides or `connectionTimeouts`                                                                                                                   |
+| C3  | Medium         | **Medium** (agree), fix first                                       | **A**                                                                                                                                                         | The exposure largely repeats the existing unmasked `getCredentials` event (same reads, mostly the same event name). It breaks the diagnostics contract but is not a new leak class               |
+| C4  | Medium         | **Medium** (agree)                                                  | **A**; keep B as a follow-up                                                                                                                                  | Also discards the newer `entryPoint` and correlation IDs, so telemetry links reruns to the old failure. Only providers that keep discovery state in the node instance return a wrong _diagnosis_ |
 
 Implementation order: **C3, C4, C1, C2** (unchanged). C1 and C2 affect only the package and
 can move to a follow-up package PR if merge scope is tight. They cannot be skipped before the
@@ -104,11 +104,11 @@ on [sanitize.ts](../../../../../packages/documentdb-js-connection-diagnostics/sr
 
 Local source-level reproduction:
 
-| Input to the report builder | Observed result |
-| --- | --- |
-| 32 valid steps | Markdown renders |
-| 33 valid steps | Markdown throws with identifiers shown **and** hidden |
-| One step containing 33 valid findings | Markdown throws with identifiers shown **and** hidden |
+| Input to the report builder                           | Observed result                                                                                            |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 32 valid steps                                        | Markdown renders                                                                                           |
+| 33 valid steps                                        | Markdown throws with identifiers shown **and** hidden                                                      |
+| One step containing 33 valid findings                 | Markdown throws with identifiers shown **and** hidden                                                      |
 | 33 valid steps, JSON output without identifier hiding | JSON contains the string `[1 more omitted]` at `results[0].steps[32]`, violating the declared record shape |
 
 With the package's English report text, the observed exception was
@@ -123,12 +123,12 @@ arrays and publishes the resulting report as typed data.
 
 ### Options
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| **A. Copy structural records explicitly; enforce their bounds separately and store omission counts outside record arrays.** Reuse the existing finding-copy logic, sanitize facts/data/text, and render report-truncation notices from typed metadata. | Preserves record types, the existing size bound, and truthful omission information; fixes Markdown and JSON together; does not invent a diagnostic outcome. | Requires small report-schema/type additions and renderer/redaction wiring; compatibility and localized omission wording need explicit consideration. |
-| **B. Preserve every structural step/finding; bound only arbitrary facts and payload arrays.** | Smallest code change, matching the existing top-level result/finding copying pattern; no new report metadata; retains all diagnostic evidence. | Relaxes the documented repeated-list bound and permits unbounded structural report growth. Requires an intentional safety-contract/documentation change. |
-| **C. Make omission markers an explicit union member and teach all consumers to handle them.** | Can retain the existing truncation representation and count. | Changes the public record-array contract and spreads branching through renderers, redaction, summary lookup, timings, and downstream consumers. Guarding only the reported line is incomplete. |
-| **D. Defer, documenting a maximum of 32 steps/findings per step.** | No implementation work; current fixed authentication phases remain below the step threshold. | Currently accepted inputs still crash, and the report builder still lies about its output type. Documentation alone cannot enforce the limit. |
+| Option                                                                                                                                                                                                                                                 | Pros                                                                                                                                                        | Cons                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Copy structural records explicitly; enforce their bounds separately and store omission counts outside record arrays.** Reuse the existing finding-copy logic, sanitize facts/data/text, and render report-truncation notices from typed metadata. | Preserves record types, the existing size bound, and truthful omission information; fixes Markdown and JSON together; does not invent a diagnostic outcome. | Requires small report-schema/type additions and renderer/redaction wiring; compatibility and localized omission wording need explicit consideration.                                           |
+| **B. Preserve every structural step/finding; bound only arbitrary facts and payload arrays.**                                                                                                                                                          | Smallest code change, matching the existing top-level result/finding copying pattern; no new report metadata; retains all diagnostic evidence.              | Relaxes the documented repeated-list bound and permits unbounded structural report growth. Requires an intentional safety-contract/documentation change.                                       |
+| **C. Make omission markers an explicit union member and teach all consumers to handle them.**                                                                                                                                                          | Can retain the existing truncation representation and count.                                                                                                | Changes the public record-array contract and spreads branching through renderers, redaction, summary lookup, timings, and downstream consumers. Guarding only the reported line is incomplete. |
+| **D. Defer, documenting a maximum of 32 steps/findings per step.**                                                                                                                                                                                     | No implementation work; current fixed authentication phases remain below the step threshold.                                                                | Currently accepted inputs still crash, and the report builder still lies about its output type. Documentation alone cannot enforce the limit.                                                  |
 
 **Recommendation: A.** Keep omission information in the report model, not as a fabricated
 successful/skipped check or an invented consumer finding code. Distinguish report truncation from
@@ -165,7 +165,7 @@ silently malformed. Because the package (`@documentdb-js/connection-diagnostics`
 
 **A gap the first assessment missed:** top-level findings are **not bounded at all**.
 [copyResult](../../../../../packages/documentdb-js-connection-diagnostics/src/report/buildReport.ts#L71)
-maps `result.findings` through `copyFinding` without a cap. Only findings *inside steps*
+maps `result.findings` through `copyFinding` without a cap. Only findings _inside steps_
 receive the 32-entry cap, by accident of the generic traversal. The
 [README safety limit](../../../../../packages/documentdb-js-connection-diagnostics/README.md#L105)
 ("One repeated report list: 32 entries") is therefore broken in one place and malformed in
@@ -241,11 +241,11 @@ There is no independent oversized run timer that automatically terminates every 
 
 Source-level reproductions on Node.js 22.21.1 used a check that normally completes after 25 ms:
 
-| Configuration | Observed result |
-| --- | --- |
-| `runTimeoutMs: 3_000_000_000`, check without its own timeout kind | `check.timeout`, source `run`, after 5 ms; Node emitted `TimeoutOverflowWarning` |
-| Same large run timeout, check with the normal `probe` timeout | Pass after 25 ms; the shorter probe deadline wins |
-| `probeTimeoutMs: 3_000_000_000`, normal run timeout | Pass after 26 ms; the remaining run deadline wins |
+| Configuration                                                                   | Observed result                                                                         |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `runTimeoutMs: 3_000_000_000`, check without its own timeout kind               | `check.timeout`, source `run`, after 5 ms; Node emitted `TimeoutOverflowWarning`        |
+| Same large run timeout, check with the normal `probe` timeout                   | Pass after 25 ms; the shorter probe deadline wins                                       |
+| `probeTimeoutMs: 3_000_000_000`, normal run timeout                             | Pass after 26 ms; the remaining run deadline wins                                       |
 | `input.connectionTimeouts.probe: 3_000_000_000`, `noDiagnosticTimeouts` profile | `check.timeout`, source `connection`, after 2 ms; Node emitted `TimeoutOverflowWarning` |
 
 Elapsed times are observations, not timing guarantees. The stable assertion is the unexpected
@@ -259,12 +259,12 @@ severity low despite the incorrect timeout result.
 
 ### Options
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| **A. Reject numeric deadlines above `2_147_483_647` at the package input boundaries.** Use a shared range rule for diagnostic overrides and the runner's equivalent connection deadlines. | Small, predictable fix; fails explicitly before I/O; no misleading early timeout; `null` already expresses no diagnostic timeout. | Narrows the documented positive-finite contract, including for custom clocks that could support longer delays; requires a clear error and documentation. |
-| **B. Support long deadlines by scheduling bounded timer chunks.** | Honors the existing broad numeric contract and finite multi-week deadlines. | Adds rescheduling, elapsed-time, cancellation, and cleanup complexity for an implausible diagnosis duration; default-clock and injected-clock semantics need careful handling. |
-| **C. Clamp oversized values, or interpret them as `null`.** | Very small implementation; avoids Node's immediate overflow. | Silently changes user intent: clamping shortens a requested deadline; `null` removes it. Neither is an honest implementation of an explicit finite timeout. |
-| **D. Defer with documentation directing callers to `null`.** | Reasonable low-priority deferral if release scope is frozen; product defaults are unaffected. | Public inputs still produce misleading timeouts, despite the cheap validation fix. |
+| Option                                                                                                                                                                                    | Pros                                                                                                                              | Cons                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A. Reject numeric deadlines above `2_147_483_647` at the package input boundaries.** Use a shared range rule for diagnostic overrides and the runner's equivalent connection deadlines. | Small, predictable fix; fails explicitly before I/O; no misleading early timeout; `null` already expresses no diagnostic timeout. | Narrows the documented positive-finite contract, including for custom clocks that could support longer delays; requires a clear error and documentation.                       |
+| **B. Support long deadlines by scheduling bounded timer chunks.**                                                                                                                         | Honors the existing broad numeric contract and finite multi-week deadlines.                                                       | Adds rescheduling, elapsed-time, cancellation, and cleanup complexity for an implausible diagnosis duration; default-clock and injected-clock semantics need careful handling. |
+| **C. Clamp oversized values, or interpret them as `null`.**                                                                                                                               | Very small implementation; avoids Node's immediate overflow.                                                                      | Silently changes user intent: clamping shortens a requested deadline; `null` removes it. Neither is an honest implementation of an explicit finite timeout.                    |
+| **D. Defer with documentation directing callers to `null`.**                                                                                                                              | Reasonable low-priority deferral if release scope is frozen; product defaults are unaffected.                                     | Public inputs still produce misleading timeouts, despite the cheap validation fix.                                                                                             |
 
 **Recommendation: A.** Name the offending field and upper limit, and explain `null` for
 **diagnostic overrides**. Do not promise `null` for `input.connectionTimeouts`, whose current
@@ -293,8 +293,8 @@ passes only `timeoutProfile`, never `timeouts` overrides. The extension also nev
 [input.test.ts](../../../../../src/connectionDiagnostics/input.test.ts#L264) asserts.
 
 This finding still matters more than its reach suggests. Under the repository rule that
-"diagnostics must never show an incorrect answer", an early `check.timeout` is a *wrong
-diagnosis*: it is the worse kind of failure, even though it is rarer than C1's crash.
+"diagnostics must never show an incorrect answer", an early `check.timeout` is a _wrong
+diagnosis_: it is the worse kind of failure, even though it is rarer than C1's crash.
 
 **Chosen solution: A.** Implement it as **one** helper, for example `validateTimeoutMs(name,
 value, { allowNull })`, used by both `resolveTimeouts` and the `connectionTimeouts` loop in
@@ -355,12 +355,12 @@ guarantee required here, not the claim that every error is emitted completely un
 
 ### Options
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| **A. Set `context.telemetry.maskEntireErrorMessage = true` before invoking the credential callback.** | Minimal, shared fix across providers; follows existing diagnosis policy; preserves event duration/result and safe categorical properties; does not change error propagation. | Removes detailed error-message/type text from this event, so useful classifications must use explicitly safe, bounded properties. |
-| **B. Suppress the nested event entirely.** | Stops this event from disclosing data, including any accidentally added non-error properties. | Loses credential-read observability and duration; broader than necessary, and contrary to the helper's current intent to retain telemetry. |
-| **C. Add a bespoke error sanitizer or register anticipated sensitive values.** | Could retain more diagnostic detail. | Resource names and private hostnames are not exhaustively predictable; fails to provide the required guarantee and duplicates SDK/error-policy machinery. |
-| **D. Defer because the parent context is masked.** | No implementation work. | Not a mitigation: the independent child event remains exposed. |
+| Option                                                                                                | Pros                                                                                                                                                                         | Cons                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Set `context.telemetry.maskEntireErrorMessage = true` before invoking the credential callback.** | Minimal, shared fix across providers; follows existing diagnosis policy; preserves event duration/result and safe categorical properties; does not change error propagation. | Removes detailed error-message/type text from this event, so useful classifications must use explicitly safe, bounded properties.                         |
+| **B. Suppress the nested event entirely.**                                                            | Stops this event from disclosing data, including any accidentally added non-error properties.                                                                                | Loses credential-read observability and duration; broader than necessary, and contrary to the helper's current intent to retain telemetry.                |
+| **C. Add a bespoke error sanitizer or register anticipated sensitive values.**                        | Could retain more diagnostic detail.                                                                                                                                         | Resource names and private hostnames are not exhaustively predictable; fails to provide the required guarantee and duplicates SDK/error-policy machinery. |
+| **D. Defer because the parent context is masked.**                                                    | No implementation work.                                                                                                                                                      | Not a mitigation: the independent child event remains exposed.                                                                                            |
 
 **Recommendation: A.** Set the flag immediately on entry to the nested callback, before provider
 work. Keep the current typed-error wrapping, rethrow behavior, and no-dialog behavior. Do not
@@ -395,7 +395,7 @@ private host or namespace names.
 The SDK behaviour was verified in
 `node_modules/@microsoft/vscode-azext-utils/dist/esm/src/callWithTelemetryAndErrorHandling.js`:
 masking is evaluated per context in `finally`, and whole-error masking replaces every
-property whose *name* matches `/(error|exception)/i`. Other properties receive only the
+property whose _name_ matches `/(error|exception)/i`. Other properties receive only the
 less aggressive mask. The Kubernetes reader's `populateTelemetry` adds only bounded values
 (`discoveryProviderId`, `view`, `serviceType`, `journeyCorrelationId`), so option A covers the
 remaining exposure.
@@ -453,12 +453,12 @@ workaround, not an acceptable hidden prerequisite for obtaining a correct rerun.
 
 ### Options
 
-| Option | Pros | Cons |
-| --- | --- | --- |
+| Option                                                                                                                                                 | Pros                                                                                                                                                    | Cons                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A. Let the existing panel session own the current target/entry point; replace them when Diagnose is invoked again, and snapshot them at run start.** | Small, local change; preserves one panel and its session; uses the exact node the user just selected; does not add provider lookup or network activity. | Requires controller/session/router wiring and run-snapshot tests; does not by itself refresh a cached node when the user only presses Run again without reopening from a refreshed tree. |
-| **B. Resolve the current node by stable ID and owning provider on every run.** | Can also address stale nodes when rerunning without another Diagnose command. | Broader dependency on provider lookup/cache semantics, deleted-node behavior, and no-prompt/no-side-effect guarantees; lookup by stable ID alone does not guarantee fresh service data. |
-| **C. Dispose and recreate the panel for every new target object.** | Straightforward way to discard the stale closure. | Loses panel/session continuity, can interrupt runs or report state, and fights the intended focus-and-offer-rerun behavior. |
-| **D. Document close-and-reopen as a workaround.** | No code change. | Leaves a misleading diagnosis in the exact workflow that should recover it; unsuitable as the recommended fix. |
+| **B. Resolve the current node by stable ID and owning provider on every run.**                                                                         | Can also address stale nodes when rerunning without another Diagnose command.                                                                           | Broader dependency on provider lookup/cache semantics, deleted-node behavior, and no-prompt/no-side-effect guarantees; lookup by stable ID alone does not guarantee fresh service data.  |
+| **C. Dispose and recreate the panel for every new target object.**                                                                                     | Straightforward way to discard the stale closure.                                                                                                       | Loses panel/session continuity, can interrupt runs or report state, and fights the intended focus-and-offer-rerun behavior.                                                              |
+| **D. Document close-and-reopen as a workaround.**                                                                                                      | No code change.                                                                                                                                         | Leaves a misleading diagnosis in the exact workflow that should recover it; unsuitable as the recommended fix.                                                                           |
 
 **Recommendation: A** for the reported reopening defect. Reuse
 [DiagnosticsPanelSession](../../../../../src/webviews/documentdb/connectionDiagnostics/diagnosticsPanelSession.ts)
@@ -502,11 +502,11 @@ Implementation constraints:
   state held in the node instance. Atlas is confirmed (cluster state and endpoint). Kubernetes
   starts from the instance's `serviceInfo`. Saved connections and the Azure Resource Manager
   readers re-read their source on every call, so they still produce a current diagnosis.
-- **Wrong telemetry linkage** happens for *every* provider. `correlation` (`connectionCorrelationId`,
+- **Wrong telemetry linkage** happens for _every_ provider. `correlation` (`connectionCorrelationId`,
   `failedStartupCorrelationId`) and `entryPoint` are captured in
   [diagnoseConnection](../../../../../src/commands/diagnoseConnection/diagnoseConnection.ts)
   and read by the [router](../../../../../src/webviews/documentdb/connectionDiagnostics/connectionDiagnosticsRouter.ts#L364).
-  After "connect fails again -> Diagnose", the rerun links to the *first* failed startup and
+  After "connect fails again -> Diagnose", the rerun links to the _first_ failed startup and
   reports the first entry point. This affects the funnel analysis described in the telemetry
   design, beyond the user-visible result.
 
@@ -592,12 +592,12 @@ The operator requested that each fixed Copilot issue be recorded both here and i
 review thread, explaining what changed, how it addresses the issue and the fix commit.
 Replies were posted and read back for all four items:
 
-| Item | Reply | Fix reference |
-| --- | --- | --- |
-| C1 | [Typed report truncation](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234530) | `ff55f27e`, test correction `0ca8c110` |
-| C2 | [Timer-safe timeout validation](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234438) | `290cb77b` |
-| C3 | [Diagnostic credential telemetry masking](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234481) | `174a5d4f` |
-| C4 | [Refreshed panel target and run snapshots](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234546) | `289312cb` |
+| Item | Reply                                                                                                                       | Fix reference                          |
+| ---- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| C1   | [Typed report truncation](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234530)                  | `ff55f27e`, test correction `0ca8c110` |
+| C2   | [Timer-safe timeout validation](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234438)            | `290cb77b`                             |
+| C3   | [Diagnostic credential telemetry masking](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234481)  | `174a5d4f`                             |
+| C4   | [Refreshed panel target and run snapshots](https://github.com/microsoft/vscode-documentdb/pull/1066#discussion_r4495234546) | `289312cb`                             |
 
 Each reply includes the full commit hash, implementation rationale and relevant validation,
 and explicitly states that the commits are local and not yet pushed. The threads remain open;

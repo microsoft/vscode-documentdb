@@ -96,9 +96,7 @@ function copyResult<TCode extends string>(result: CheckResult<TCode>): CheckResu
             ? { omittedFindingCount: result.findings.length - REPORT_LIST_LIMIT }
             : {}),
         facts: sanitizeValue(result.facts) as Readonly<Record<string, unknown>>,
-        ...(result.steps === undefined
-            ? {}
-            : { steps: result.steps.slice(0, REPORT_LIST_LIMIT).map(copyStep) }),
+        ...(result.steps === undefined ? {} : { steps: result.steps.slice(0, REPORT_LIST_LIMIT).map(copyStep) }),
         ...(result.steps !== undefined && result.steps.length > REPORT_LIST_LIMIT
             ? { omittedStepCount: result.steps.length - REPORT_LIST_LIMIT }
             : {}),
@@ -114,17 +112,19 @@ function copySummary(summary: ReportSummary): ReportSummary {
         ...(summary.serverRows === undefined
             ? {}
             : {
-                  serverRows: summary.serverRows.slice(0, REPORT_LIST_LIMIT).map(
-                      (row): { label: string; value: string } => ({
+                  serverRows: summary.serverRows
+                      .slice(0, REPORT_LIST_LIMIT)
+                      .map((row): { label: string; value: string } => ({
                           label: sanitizeValue(row.label) as string,
                           value: sanitizeValue(row.value) as string,
-                      }),
-                  ),
+                      })),
               }),
         ...(summary.serverRows !== undefined && summary.serverRows.length > REPORT_LIST_LIMIT
             ? { omittedServerRowCount: summary.serverRows.length - REPORT_LIST_LIMIT }
             : {}),
-        ...(summary.nextSteps === undefined ? {} : { nextSteps: sanitizeValue(summary.nextSteps) as readonly string[] }),
+        ...(summary.nextSteps === undefined
+            ? {}
+            : { nextSteps: sanitizeValue(summary.nextSteps) as readonly string[] }),
         ...(summary.location === undefined ? {} : { location: sanitizeValue(summary.location) as string }),
         ...(summary.notes === undefined ? {} : { notes: sanitizeValue(summary.notes) as readonly string[] }),
     };
