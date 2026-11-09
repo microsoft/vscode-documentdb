@@ -26,6 +26,7 @@ import {
 } from './dockerProbes';
 import { getDockerStartCapability } from './DockerProviderLauncher';
 import {
+    classifyContainerEngine,
     classifyDockerFailure,
     classifyDockerProvider,
     getDockerDiagnosticFingerprint,
@@ -304,7 +305,7 @@ export class DockerReadinessService {
     private async runAndMemoize(request: DockerReadinessRequest): Promise<DockerReadiness> {
         const client = this.dependencies.getClient();
         const cli = client.id === PodmanClient.ClientId ? 'podman' : 'docker';
-        const check = this.runReadiness(client, request.cancellationToken, request.suppressCommandEcho === true).then(
+        const check = this.runReadiness(client, cli, request.cancellationToken, request.suppressCommandEcho === true).then(
             (readiness): DockerReadiness => ({ ...readiness, cli }),
         );
         this.inFlight = check;
@@ -402,6 +403,7 @@ export class DockerReadinessService {
 
     private async runReadiness(
         client: DockerReadinessClient,
+        cli: 'docker' | 'podman',
         callerToken: vscode.CancellationToken | undefined,
         suppressCommandEcho: boolean,
     ): Promise<DockerReadiness> {
@@ -423,6 +425,7 @@ export class DockerReadinessService {
                 canContinueAnyway: false,
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled: false,
+                ...classifyContainerEngine({ cli, cliInstalled: false }),
                 daemonReachable: false,
                 arch: this.dependencies.arch,
                 platformSupported: false,
@@ -476,6 +479,7 @@ export class DockerReadinessService {
                     canContinueAnyway: false,
                     checkedAtMs: this.dependencies.now(),
                     cliInstalled: false,
+                    ...classifyContainerEngine({ cli, cliInstalled: false }),
                     cliVersion,
                     daemonReachable: false,
                     arch: this.dependencies.arch,
@@ -483,10 +487,19 @@ export class DockerReadinessService {
                 };
             }
             const infoFacts = parseDockerInfoFacts(infoProbe.stdout);
+            const engineInput = {
+                cli,
+                cliInstalled,
+                cliVersionStdout: versionProbe.stdout,
+                cliVersionStderr: versionProbe.stderr,
+                podmanInfo: infoFacts?.podmanInfo,
+                daemonOperatingSystem: infoFacts?.operatingSystem,
+            };
             const infoSucceeded = isSuccessfulProbe(infoProbe) && infoFacts !== undefined;
             const hasServerErrors = (infoFacts?.serverErrors.length ?? 0) > 0;
             if (infoSucceeded && !hasServerErrors) {
                 const configuredEndpoint = this.dependencies.environmentVariables['DOCKER_HOST'];
+                const engine = classifyContainerEngine({ ...engineInput, endpointAddress: configuredEndpoint });
                 const endpointKind: DockerEndpointKind = configuredEndpoint
                     ? endpointFromValue(configuredEndpoint, 'dockerHostEnv').kind
                     : 'unknown';
@@ -505,9 +518,10 @@ export class DockerReadinessService {
                     environment,
                     daemonReachable: true,
                     daemonOperatingSystem: infoFacts.operatingSystem,
+                    engine: engine.engine,
                 });
                 await this.dependencies.writeProviderMemory({
-                    provider: provider.provider,
+                    provider: provider.provider === 'podman' ? 'unknown' : provider.provider,
                     endpointKind,
                     hostEnvironment: environment,
                     daemonArchitecture,
@@ -520,12 +534,14 @@ export class DockerReadinessService {
                         environment,
                         endpointKind,
                         ...provider,
+                        ...engine,
                         executionTarget: getDockerExecutionTarget(environment),
                         failureKind: 'windowsContainers',
                         canContinueAnyway: false,
                         checkedAtMs: this.dependencies.now(),
                         cliInstalled: true,
                         cliVersion,
+                        serverVersion: infoFacts.serverVersion,
                         daemonReachable: true,
                         osType,
                         daemonArchitecture,
@@ -538,11 +554,13 @@ export class DockerReadinessService {
                     environment,
                     endpointKind,
                     ...provider,
+                    ...engine,
                     executionTarget: getDockerExecutionTarget(environment),
                     canContinueAnyway: false,
                     checkedAtMs: this.dependencies.now(),
                     cliInstalled: true,
                     cliVersion,
+                    serverVersion: infoFacts.serverVersion,
                     daemonReachable: true,
                     osType,
                     daemonArchitecture,
@@ -636,6 +654,7 @@ export class DockerReadinessService {
                     : 'unknown';
             const failureResult = {
                 environment,
+                ...classifyContainerEngine({ ...engineInput, endpointAddress: endpoint.address }),
                 endpointKind: endpoint.kind,
                 endpointSource: endpoint.source,
                 ...startCapability,
@@ -655,6 +674,7 @@ export class DockerReadinessService {
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled,
                 cliVersion,
+                serverVersion: infoFacts?.serverVersion,
                 daemonArchitecture: infoFacts?.architecture
                     ? normalizeDaemonArchitecture(infoFacts.architecture)
                     : undefined,

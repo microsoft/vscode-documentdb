@@ -371,6 +371,7 @@ function dockerProviderLabels(): Readonly<Record<DockerProvider, string>> {
     return {
         dockerDesktop: l10n.t('Docker Desktop'),
         dockerEngine: l10n.t('Docker Engine'),
+        podman: 'Podman',
         unknown: l10n.t('Unknown'),
     };
 }
@@ -570,6 +571,7 @@ function dockerDetailProviderLabels(): Readonly<Record<DockerProvider, string>> 
     return {
         dockerDesktop: l10n.t('Docker Desktop'),
         dockerEngine: l10n.t('Docker Engine'),
+        podman: 'Podman',
         unknown: l10n.t('Docker'),
     };
 }

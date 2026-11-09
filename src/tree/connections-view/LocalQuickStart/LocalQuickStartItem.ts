@@ -199,6 +199,8 @@ function dockerProviderLabel(readiness: DockerReadiness): string {
             return l10n.t('Docker Desktop');
         case 'dockerEngine':
             return l10n.t('Docker Engine');
+        case 'podman':
+            return 'Podman';
         default:
             return l10n.t('Unknown');
     }

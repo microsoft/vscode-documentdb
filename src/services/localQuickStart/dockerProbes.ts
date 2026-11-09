@@ -62,6 +62,7 @@ export interface DockerServiceManagerProbeDependencies {
 }
 
 export interface DockerInfoFacts {
+    readonly podmanInfo?: true;
     readonly osType?: string;
     readonly operatingSystem?: string;
     readonly architecture?: string;
@@ -80,8 +81,8 @@ const DockerInfoSchema = z.object({
 });
 
 const PodmanInfoSchema = z.object({
-    host: z.object({ arch: z.string().optional(), os: z.string().optional() }).optional(),
-    version: z.object({ Version: z.string().optional() }).optional(),
+    host: z.object({ arch: z.string().optional(), os: z.string() }),
+    version: z.object({ Version: z.string() }),
 });
 
 export class CapturingTeeWritable extends Writable {
@@ -200,6 +201,7 @@ export function parseDockerInfoFacts(output: string): DockerInfoFacts | undefine
         // `podman info` nests the same facts under `host` and `version`.
         const podman = PodmanInfoSchema.safeParse(json).data;
         return {
+            ...(podman ? { podmanInfo: true as const } : {}),
             osType: result.data.OSType ?? podman?.host?.os,
             operatingSystem: result.data.OperatingSystem,
             architecture: result.data.Architecture ?? podman?.host?.arch,

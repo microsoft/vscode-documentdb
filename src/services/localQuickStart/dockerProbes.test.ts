@@ -112,11 +112,34 @@ describe('parseDockerInfoFacts', () => {
             version: { Version: '6.0.2' },
         });
         expect(parseDockerInfoFacts(podmanInfo)).toEqual({
+            podmanInfo: true,
             osType: 'linux',
             operatingSystem: undefined,
             architecture: 'arm64',
             serverVersion: '6.0.2',
             serverErrors: [],
+        });
+    });
+
+    it.each([
+        ['empty object', {}],
+        ['Docker info', { OSType: 'linux', OperatingSystem: 'Docker Desktop', ServerVersion: '28.1.1' }],
+        ['host only', { host: { os: 'linux' } }],
+        ['version only', { version: { Version: '6.0.2' } }],
+        ['missing host OS', { host: { arch: 'arm64' }, version: { Version: '6.0.2' } }],
+        ['non-string host OS', { host: { os: 1 }, version: { Version: '6.0.2' } }],
+        ['non-string version', { host: { os: 'linux' }, version: { Version: 6 } }],
+    ])('does not identify %s as Podman', (_name, info) => {
+        expect(parseDockerInfoFacts(JSON.stringify(info))?.podmanInfo).toBeUndefined();
+    });
+
+    it('identifies Podman without optional architecture metadata', () => {
+        expect(
+            parseDockerInfoFacts(JSON.stringify({ host: { os: 'linux' }, version: { Version: '6.0.2' } })),
+        ).toMatchObject({
+            podmanInfo: true,
+            osType: 'linux',
+            serverVersion: '6.0.2',
         });
     });
 

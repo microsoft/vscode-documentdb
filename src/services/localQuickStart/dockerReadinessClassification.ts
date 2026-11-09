@@ -5,6 +5,8 @@
 
 import { createHash } from 'crypto';
 import {
+    type ContainerEngine,
+    type ContainerEngineEvidence,
     type DockerEndpointKind,
     type DockerEndpointProbe,
     type DockerFailureKind,
@@ -15,6 +17,18 @@ import {
     type DockerProviderMemory,
     type DockerReadinessOutcome,
 } from './quickStartTypes';
+
+export interface ContainerEngineInput {
+    readonly cli: 'docker' | 'podman';
+    readonly cliInstalled: boolean;
+    readonly cliVersionStdout?: string;
+    readonly cliVersionStderr?: string;
+    readonly podmanInfo?: boolean;
+    readonly daemonOperatingSystem?: string;
+    readonly serverComponentNames?: ReadonlyArray<string>;
+    readonly endpointAddress?: string;
+    readonly dockerSocketTarget?: string;
+}
 
 export type DockerFailureClassification =
     | {
@@ -49,6 +63,7 @@ export interface DockerProviderClassificationEvidence {
     readonly environment: DockerHostEnvironment;
     readonly daemonReachable: boolean;
     readonly daemonOperatingSystem?: string;
+    readonly engine?: ContainerEngine;
     readonly contexts?: ReadonlyArray<DockerProviderContext>;
     readonly activeEndpoint?: DockerProviderEndpoint;
     readonly rememberedProvider?: DockerProviderMemory;
@@ -164,6 +179,39 @@ function isDockerDesktopOperatingSystem(operatingSystem: string | undefined): bo
     return operatingSystem !== undefined && /(?:^|\s)docker desktop(?:\s|$)/i.test(operatingSystem);
 }
 
+export function classifyContainerEngine(
+    input: ContainerEngineInput,
+): { engine: ContainerEngine; engineEvidence: ContainerEngineEvidence } {
+    if (input.cli === 'podman' && input.cliInstalled) {
+        return { engine: 'podman', engineEvidence: 'selectedCli' };
+    }
+    if (input.podmanInfo === true) {
+        return { engine: 'podman', engineEvidence: 'podmanInfo' };
+    }
+    if (
+        input.cliVersionStdout?.startsWith('podman version') ||
+        input.cliVersionStderr?.includes('Emulate Docker CLI using podman')
+    ) {
+        return { engine: 'podman', engineEvidence: 'podmanShim' };
+    }
+    if (input.serverComponentNames?.includes('Podman Engine')) {
+        return { engine: 'podman', engineEvidence: 'serverComponents' };
+    }
+    if (isDockerDesktopOperatingSystem(input.daemonOperatingSystem)) {
+        return { engine: 'docker', engineEvidence: 'dockerDesktopInfo' };
+    }
+    if (input.serverComponentNames?.includes('Engine')) {
+        return { engine: 'docker', engineEvidence: 'serverComponents' };
+    }
+    if (input.endpointAddress?.toLowerCase().includes('podman')) {
+        return { engine: 'unknown', engineEvidence: 'endpointPath' };
+    }
+    if (input.dockerSocketTarget?.toLowerCase().includes('podman')) {
+        return { engine: 'unknown', engineEvidence: 'dockerSocketLink' };
+    }
+    return { engine: 'unknown', engineEvidence: 'none' };
+}
+
 function isDockerDesktopEndpoint(endpoint: string | undefined): boolean {
     return endpoint !== undefined && DOCKER_DESKTOP_ENDPOINT_SIGNATURES.some((signature) => signature.test(endpoint));
 }
@@ -182,6 +230,9 @@ function canUseInstalledDesktopEvidence(environment: DockerHostEnvironment): boo
 
 export function classifyDockerProvider(evidence: DockerProviderClassificationEvidence): DockerProviderClassification {
     if (evidence.daemonReachable) {
+        if (evidence.engine === 'podman') {
+            return { provider: 'podman', providerEvidence: 'liveDaemon' };
+        }
         if (!evidence.daemonOperatingSystem) {
             return { provider: 'unknown', providerEvidence: 'liveDaemon' };
         }

@@ -51,6 +51,276 @@ function evidence(
 }
 
 describe('DockerReadinessService', () => {
+    it.each([
+        {
+            name: 'selected Podman CLI',
+            cli: 'podman',
+            versionStdout: 'podman version 6.0.2',
+            versionStderr: '',
+            info: { host: { os: 'linux', arch: 'aarch64' }, version: { Version: '6.0.2' } },
+            engine: 'podman',
+            engineEvidence: 'selectedCli',
+            provider: 'podman',
+            storedProvider: 'unknown',
+            serverVersion: '6.0.2',
+            outcome: 'ready',
+        },
+        {
+            name: 'Docker CLI with Podman info',
+            cli: 'docker',
+            versionStdout: 'Docker version 28.1.1',
+            versionStderr: '',
+            info: { host: { os: 'linux', arch: 'aarch64' }, version: { Version: '6.0.2' } },
+            engine: 'podman',
+            engineEvidence: 'podmanInfo',
+            provider: 'podman',
+            storedProvider: 'unknown',
+            serverVersion: '6.0.2',
+            outcome: 'ready',
+        },
+        {
+            name: 'Podman shim stdout with Docker-compatible info',
+            cli: 'docker',
+            versionStdout: 'podman version 6.0.2',
+            versionStderr: '',
+            info: {
+                OSType: 'linux',
+                Architecture: 'aarch64',
+                OperatingSystem: 'Ubuntu 24.04',
+                ServerVersion: '6.0.2',
+            },
+            engine: 'podman',
+            engineEvidence: 'podmanShim',
+            provider: 'podman',
+            storedProvider: 'unknown',
+            serverVersion: '6.0.2',
+            outcome: 'ready',
+        },
+        {
+            name: 'Podman shim stderr with Docker-compatible info',
+            cli: 'docker',
+            versionStdout: 'Docker version 28.1.1',
+            versionStderr: 'Emulate Docker CLI using podman',
+            info: {
+                OSType: 'linux',
+                Architecture: 'aarch64',
+                OperatingSystem: 'Ubuntu 24.04',
+                ServerVersion: '6.0.2',
+            },
+            engine: 'podman',
+            engineEvidence: 'podmanShim',
+            provider: 'podman',
+            storedProvider: 'unknown',
+            serverVersion: '6.0.2',
+            outcome: 'ready',
+        },
+        {
+            name: 'Docker Desktop with independent server version',
+            cli: 'docker',
+            versionStdout: 'Docker version 28.1.1',
+            versionStderr: '',
+            info: {
+                OSType: 'linux',
+                Architecture: 'aarch64',
+                OperatingSystem: 'Docker Desktop',
+                ServerVersion: '29.8.0',
+            },
+            engine: 'docker',
+            engineEvidence: 'dockerDesktopInfo',
+            provider: 'dockerDesktop',
+            storedProvider: 'dockerDesktop',
+            serverVersion: '29.8.0',
+            outcome: 'ready',
+        },
+        {
+            name: 'generic daemon OS without positive engine evidence',
+            cli: 'docker',
+            versionStdout: 'Docker version 28.1.1',
+            versionStderr: '',
+            info: {
+                OSType: 'linux',
+                Architecture: 'aarch64',
+                OperatingSystem: 'Ubuntu 24.04',
+                ServerVersion: '28.1.1',
+            },
+            engine: 'unknown',
+            engineEvidence: 'none',
+            provider: 'dockerEngine',
+            storedProvider: 'dockerEngine',
+            serverVersion: '28.1.1',
+            outcome: 'ready',
+        },
+        {
+            name: 'reachable Windows-container Docker Desktop',
+            cli: 'docker',
+            versionStdout: 'Docker version 28.1.1',
+            versionStderr: '',
+            info: {
+                OSType: 'windows',
+                Architecture: 'aarch64',
+                OperatingSystem: 'Docker Desktop',
+                ServerVersion: '29.8.0',
+            },
+            engine: 'docker',
+            engineEvidence: 'dockerDesktopInfo',
+            provider: 'dockerDesktop',
+            storedProvider: 'dockerDesktop',
+            serverVersion: '29.8.0',
+            outcome: 'diagnosed',
+        },
+    ] as const)(
+        'reports engine facts for $name without extra probes or a new memory schema',
+        async ({
+            cli,
+            versionStdout,
+            versionStderr,
+            info,
+            engine,
+            engineEvidence,
+            provider,
+            storedProvider,
+            serverVersion,
+            outcome,
+        }) => {
+            const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+                if (options.probe === 'info') {
+                    return evidence('info', { stdout: JSON.stringify(info) });
+                }
+                return evidence(options.probe, { stdout: versionStdout, stderr: versionStderr });
+            });
+            const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+            const probeEndpoint = vi.fn();
+            const service = new DockerReadinessService({
+                client: { ...createClient(), id: cli === 'podman' ? PodmanClient.ClientId : undefined },
+                shellProvider: new Bash(),
+                platform: 'linux',
+                environmentVariables: {},
+                now: () => 1_000,
+                runProbe,
+                probeEndpoint,
+                writeProviderMemory,
+            });
+
+            await expect(service.getReadiness()).resolves.toMatchObject({
+                outcome,
+                cli,
+                engine,
+                engineEvidence,
+                provider,
+                providerEvidence: 'liveDaemon',
+                serverVersion,
+                cliVersion: versionStdout,
+                daemonReachable: true,
+            });
+            expect(runProbe).toHaveBeenCalledTimes(2);
+            expect(probeEndpoint).not.toHaveBeenCalled();
+            expect(writeProviderMemory.mock.calls).toEqual([
+                [
+                    {
+                        provider: storedProvider,
+                        endpointKind: 'unknown',
+                        hostEnvironment: 'linux',
+                        daemonArchitecture: 'arm64',
+                        osType: 'OSType' in info ? info.OSType : info.host.os,
+                        recordedAtMs: 1_000,
+                    },
+                ],
+            ]);
+        },
+    );
+
+    it.each(['missing', 'unsupported'] as const)('does not claim the selected Podman CLI when %s', async (state) => {
+        const runProbe = vi.fn(
+            async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
+                evidence(options.probe, { spawnErrorCode: 'ENOENT' }),
+        );
+        const service = new DockerReadinessService({
+            client: { ...createClient(), id: PodmanClient.ClientId },
+            shellProvider: new Bash(),
+            platform: state === 'unsupported' ? 'aix' : 'linux',
+            environmentVariables: {},
+            runProbe,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            failureKind: state === 'unsupported' ? 'unsupportedHost' : 'cliMissing',
+            cli: 'podman',
+            cliInstalled: false,
+            engine: 'unknown',
+            engineEvidence: 'none',
+        });
+        expect(runProbe).toHaveBeenCalledTimes(state === 'unsupported' ? 0 : 2);
+    });
+
+    it('adds Podman engine facts without changing legacy remembered-provider behavior', async () => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            return evidence('cliVersion', { stdout: 'podman version 6.0.2' });
+        });
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+        const service = new DockerReadinessService({
+            client: { ...createClient(), id: PodmanClient.ClientId },
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: { DOCKER_HOST: 'unix:///var/run/docker.sock' },
+            now: () => 1_000,
+            runProbe,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            readProviderMemory: () => ({
+                provider: 'dockerDesktop',
+                endpointKind: 'unixSocket',
+                hostEnvironment: 'linux',
+                recordedAtMs: 500,
+            }),
+            writeProviderMemory,
+            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            failureKind: 'daemonStarting',
+            engine: 'podman',
+            engineEvidence: 'selectedCli',
+            provider: 'dockerDesktop',
+            providerEvidence: 'rememberedProvider',
+            providerRecordedAtMs: 500,
+        });
+        expect(runProbe).toHaveBeenCalledTimes(2);
+        expect(writeProviderMemory).not.toHaveBeenCalled();
+    });
+
+    it('keeps a Podman endpoint inference unknown on failure', async () => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: { DOCKER_HOST: 'unix:///run/podman/podman.sock' },
+            runProbe,
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'ENOENT',
+            }),
+            readProviderMemory: () => undefined,
+            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            failureKind: 'daemonUnavailable',
+            engine: 'unknown',
+            engineEvidence: 'endpointPath',
+            provider: 'unknown',
+        });
+        expect(runProbe).toHaveBeenCalledTimes(2);
+    });
+
     it('classifies a Linux endpoint EACCES and returns the copyable group command', async () => {
         const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             switch (options.probe) {

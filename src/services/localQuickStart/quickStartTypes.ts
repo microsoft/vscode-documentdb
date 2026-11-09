@@ -286,7 +286,19 @@ export type DockerHostEnvironment =
     | 'otherRemote'
     | 'unsupported';
 
-export type DockerProvider = 'dockerDesktop' | 'dockerEngine' | 'unknown';
+export type ContainerEngine = 'docker' | 'podman' | 'unknown';
+
+export type ContainerEngineEvidence =
+    | 'selectedCli'
+    | 'podmanInfo'
+    | 'podmanShim'
+    | 'serverComponents'
+    | 'dockerDesktopInfo'
+    | 'endpointPath'
+    | 'dockerSocketLink'
+    | 'none';
+
+export type DockerProvider = 'dockerDesktop' | 'dockerEngine' | 'podman' | 'unknown';
 
 export type DockerProviderEvidence =
     | 'liveDaemon'
@@ -353,7 +365,7 @@ export interface DockerRecoveryCommand {
 }
 
 export interface DockerProviderMemory {
-    readonly provider: DockerProvider;
+    readonly provider: Exclude<DockerProvider, 'podman'>;
     readonly endpointKind: DockerEndpointKind;
     readonly hostEnvironment: DockerHostEnvironment;
     readonly daemonArchitecture?: string;
@@ -384,6 +396,9 @@ interface DockerReadinessBase {
     readonly cliVersion?: string;
     /** Which CLI ran the check; `podman` only when Docker's was missing. */
     readonly cli?: 'docker' | 'podman';
+    readonly engine?: ContainerEngine;
+    readonly engineEvidence?: ContainerEngineEvidence;
+    readonly serverVersion?: string;
     readonly osType?: 'linux' | 'windows';
     readonly daemonArchitecture?: string;
     readonly diagnosticFingerprint?: string;
