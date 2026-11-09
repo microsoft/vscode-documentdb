@@ -38,6 +38,7 @@ const knownErrorNames: ReadonlySet<string> = new Set([
     'CredentialUnavailableError',
     'NotSignedInError',
     'LocalPortInUseError',
+    'ConnectionPreparationError',
 ]);
 
 export function connectionOutcome(run: Pick<DiagnosticsRun<FindingCode>, 'results'>): ConnectionOutcome {

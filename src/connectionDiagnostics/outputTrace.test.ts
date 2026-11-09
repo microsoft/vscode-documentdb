@@ -6,7 +6,8 @@
 import { type CheckResult } from '@documentdb-js/connection-diagnostics';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ext } from '../extensionVariables';
-import { connectionOutcome, DiagnosticsOutputTrace } from './outputTrace';
+import { ConnectionPreparationError } from '../services/connectionReachabilityService';
+import { connectionOutcome, DiagnosticsOutputTrace, safeErrorName } from './outputTrace';
 import { type FindingCode } from './types';
 
 vi.mock('../extensionVariables', () => ({ ext: { outputChannel: { info: vi.fn() } } }));
@@ -74,6 +75,37 @@ describe('DiagnosticsOutputTrace', (): void => {
         expect(ext.outputChannel.info).toHaveBeenCalledWith(
             '[Connection diagnosis] run=run-id failed errorName=unknown',
         );
+    });
+
+    it('traces the preparation finding and safe wrapper classification, never source evidence', (): void => {
+        const error = new ConnectionPreparationError('noReadyBackend', new Error('private-service private-namespace'));
+        const trace = new DiagnosticsOutputTrace('run-id');
+        trace.onEvent({
+            type: 'checkFinished',
+            runId: 'run-id',
+            at: 0,
+            result: {
+                checkId: 'prepare',
+                status: 'fail',
+                durationMs: 2,
+                facts: { errorName: safeErrorName(error) },
+                findings: [
+                    {
+                        code: 'prepare.failed',
+                        severity: 'error',
+                        data: { source: error.sourceError },
+                        detail: { language: 'en', text: 'private-service private-namespace' },
+                    },
+                ],
+            },
+        });
+        trace.failed(error);
+        const lines = vi.mocked(ext.outputChannel.info).mock.calls.map((call): string => String(call[0]));
+        expect(lines).toEqual([
+            '[Connection diagnosis] run=run-id check=prepare status=fail durationMs=2 codes=prepare.failed',
+            '[Connection diagnosis] run=run-id failed errorName=ConnectionPreparationError',
+        ]);
+        expect(lines.join('\n')).not.toMatch(/private-service|private-namespace|sourceError/);
     });
 });
 

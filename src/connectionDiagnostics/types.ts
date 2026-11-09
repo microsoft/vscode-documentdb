@@ -15,6 +15,7 @@ export const extensionFindingCodes = [
     'target.endpointMissing',
     'cs.credentialsMissing',
     'prepare.localPortInUse',
+    'prepare.failed',
     'prepare.sharedTunnel',
     'dns.mixedHostDomains',
     'hello.advertisedMembersUnreachable',

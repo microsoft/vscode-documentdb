@@ -327,6 +327,7 @@ export const representativeData: Readonly<Record<FindingCode, Readonly<Record<st
     'target.sourceInaccessible': { source: 'kubernetes', reason: 'unreachable', errorName: 'Error' },
     'target.endpointMissing': { source: 'kubernetes', reason: 'pending' },
     'cs.credentialsMissing': { missing: 'password', authMethod: 'NativeAuth' },
+    'prepare.failed': { providerId: 'kubernetes-port-forward', reason: 'noReadyBackend', errorName: 'Error' },
     'prepare.localPortInUse': { localPort: 27017, holder: 'otherProgram' },
     'prepare.sharedTunnel': { tunnel: 'started' },
     'dns.mixedHostDomains': {

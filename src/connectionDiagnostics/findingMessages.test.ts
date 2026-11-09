@@ -63,6 +63,7 @@ const representativeData: Readonly<Record<FindingCode, Readonly<Record<string, u
     'target.sourceInaccessible': { source: 'kubernetes', reason: 'unreachable', errorName: 'Error' },
     'target.endpointMissing': { source: 'kubernetes', reason: 'pending' },
     'cs.credentialsMissing': { missing: 'password', authMethod: 'NativeAuth' },
+    'prepare.failed': { providerId: 'kubernetes-port-forward', reason: 'noReadyBackend', errorName: 'Error' },
     'prepare.localPortInUse': { localPort: 27017, holder: 'otherProgram' },
     'prepare.sharedTunnel': { tunnel: 'started' },
     'dns.mixedHostDomains': {
@@ -105,6 +106,36 @@ function assertPlainMessage(message: FindingMessage): void {
 }
 
 describe('localized finding messages', () => {
+    it.each([
+        ['sourceUnreachable', 'Kubernetes API unreachable'],
+        ['accessDenied', 'Kubernetes access denied'],
+        ['targetNotFound', 'Kubernetes service not found'],
+        ['noReadyBackend', 'No ready pods behind the service'],
+        ['sourceMissing', 'Kubeconfig source not found'],
+        ['other', 'Connection preparation failed'],
+    ])('describes Kubernetes preparation reason %s', (reason, title): void => {
+        const message = findingMessages['prepare.failed']({ providerId: 'kubernetes-port-forward', reason });
+        expect(message.title).toBe(title);
+        expect(message.explanation).toBeTruthy();
+        expect(message.nextStep).toBeTruthy();
+        if (reason === 'noReadyBackend') {
+            expect(message).toEqual({
+                title,
+                explanation: "Kubernetes reports no ready endpoint for the service's port.",
+                nextStep: 'Check that the database pods are running and ready and that the service selects them.',
+            });
+        }
+    });
+
+    it.each(['sourceUnreachable', 'accessDenied', 'targetNotFound', 'noReadyBackend', 'sourceMissing', 'other'])(
+        'uses generic preparation wording for unknown providers even for %s',
+        (reason): void => {
+            expect(findingMessages['prepare.failed']({ providerId: 'private-provider', reason }).title).toBe(
+                'Connection preparation failed',
+            );
+        },
+    );
+
     it('covers exactly the built-in and extension finding codes', () => {
         expect(Object.keys(findingMessages).sort()).toEqual([...codes].sort());
     });

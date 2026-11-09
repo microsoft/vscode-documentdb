@@ -175,8 +175,13 @@ describe('prepare check', (): void => {
         );
         expect(result).toEqual({
             status: 'fail',
-            facts: { providerId: 'tunnel', elapsedMs: expect.any(Number), errorName: 'TypeError' },
-            findings: [],
+            facts: { providerId: 'other', elapsedMs: expect.any(Number), errorName: 'TypeError' },
+            findings: [
+                expect.objectContaining({
+                    code: 'prepare.failed',
+                    data: { providerId: 'other', reason: 'other', errorName: 'TypeError' },
+                }),
+            ],
         });
         expect(JSON.stringify(result)).not.toMatch(/secret-password|private.example/);
     });
@@ -215,7 +220,110 @@ describe('prepare check', (): void => {
             new AbortController().signal,
         );
         expect(result.status).toBe('fail');
+        expect(result).toMatchObject({
+            facts: { providerId: 'kubernetes-port-forward', errorName: 'ConnectionPreparationError' },
+            findings: [
+                {
+                    code: 'prepare.failed',
+                    data: {
+                        providerId: 'kubernetes-port-forward',
+                        reason: 'accessDenied',
+                        errorName: 'Error',
+                        statusCode: 403,
+                    },
+                },
+            ],
+        });
         expect(JSON.stringify(result)).not.toMatch(/secret-password|private-|sourceError|body/);
+    });
+
+    it.each([
+        'sourceUnreachable',
+        'accessDenied',
+        'targetNotFound',
+        'noReadyBackend',
+        'sourceMissing',
+        'other',
+    ] as const)('retains the classified %s reason and safe source evidence', async (reason): Promise<void> => {
+        const source = Object.assign(new TypeError('private-service private-namespace'), { response: { status: 503 } });
+        ConnectionReachabilityService.registerProvider({
+            id: 'kubernetes-port-forward',
+            appliesTo: (): boolean => true,
+            ensureReachable: async (): Promise<void> => {
+                throw new ConnectionPreparationError(reason, source);
+            },
+        });
+        const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
+            context,
+            new AbortController().signal,
+        );
+        expect(result.findings).toEqual([
+            expect.objectContaining({
+                code: 'prepare.failed',
+                data: { providerId: 'kubernetes-port-forward', reason, errorName: 'TypeError', statusCode: 503 },
+            }),
+        ]);
+        expect(JSON.stringify(result)).not.toMatch(/private-service|private-namespace|sourceError|message|cause/);
+    });
+
+    it('bounds unknown provider IDs, unknown source names and HTTP status', async (): Promise<void> => {
+        const source = Object.assign(new Error('private-service'), { name: 'private-namespace', statusCode: 700 });
+        ConnectionReachabilityService.registerProvider({
+            id: 'private-provider',
+            appliesTo: (): boolean => true,
+            ensureReachable: async (): Promise<void> => {
+                throw new ConnectionPreparationError('sourceMissing', source);
+            },
+        });
+        const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
+            context,
+            new AbortController().signal,
+        );
+        expect(result).toMatchObject({
+            facts: { providerId: 'other', errorName: 'ConnectionPreparationError' },
+            findings: [{ data: { providerId: 'other', reason: 'sourceMissing', errorName: 'unknown' } }],
+        });
+        expect(JSON.stringify(result)).not.toMatch(/private-|700/);
+    });
+
+    it('does not classify a generic Kubernetes error by its HTTP status', async (): Promise<void> => {
+        ConnectionReachabilityService.registerProvider({
+            id: 'kubernetes-port-forward',
+            appliesTo: (): boolean => true,
+            ensureReachable: async (): Promise<void> => {
+                throw Object.assign(new Error('private-service private-namespace'), { status: 403 });
+            },
+        });
+        const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
+            context,
+            new AbortController().signal,
+        );
+        expect(result.findings).toEqual([
+            expect.objectContaining({
+                code: 'prepare.failed',
+                data: {
+                    providerId: 'kubernetes-port-forward',
+                    reason: 'other',
+                    errorName: 'Error',
+                    statusCode: 403,
+                },
+            }),
+        ]);
+        expect(JSON.stringify(result)).not.toMatch(/private-service|private-namespace/);
+    });
+
+    it('propagates cancellation instead of mapping a late provider failure', async (): Promise<void> => {
+        const controller = new AbortController();
+        ConnectionReachabilityService.registerProvider({
+            id: 'kubernetes-port-forward',
+            appliesTo: (): boolean => true,
+            ensureReachable: async (): Promise<void> => {
+                controller.abort();
+                throw new ConnectionPreparationError('sourceUnreachable', new Error('private-service'));
+            },
+        });
+        await expect(createPrepareCheck(target, (): DiagnosticsSetup => setup).run(context, controller.signal)).rejects
+            .toThrow();
     });
 
     it('does not register cleanup that could close a shared tunnel on cancellation', async (): Promise<void> => {

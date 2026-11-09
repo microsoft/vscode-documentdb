@@ -5,11 +5,14 @@
 
 import { type Check, type CheckOutcome, type Finding, type RunContext } from '@documentdb-js/connection-diagnostics';
 import {
+    ConnectionPreparationError,
     ConnectionReachabilityService,
     LocalPortInUseError,
     type ConnectionReachabilityObserver,
     type ConnectionReachabilityResult,
 } from '../../services/connectionReachabilityService';
+import { httpStatus } from '../../utils/connectionErrorClassification';
+import { type PrepareFailedData } from '../findingData';
 import { type DiagnosticsSetup } from '../input';
 import { safeErrorName } from '../outputTrace';
 import { type DiagnosticsTarget, type FindingCode } from '../types';
@@ -61,11 +64,9 @@ export function createPrepareCheck(
                     elapsedMs = elapsed;
                     result = completed;
                 },
-                onProviderFailed(id, elapsed, error): void {
+                onProviderFailed(id, elapsed): void {
                     providerId = id;
                     elapsedMs = elapsed;
-                    errorName = safeErrorName(error);
-                    failure = error;
                 },
             };
             signal.throwIfAborted();
@@ -77,14 +78,41 @@ export function createPrepareCheck(
                     { interactive: false, verifyEndpoint: true, signal },
                 );
             } catch (error) {
+                signal.throwIfAborted();
                 errorName = safeErrorName(error);
                 failure = error;
             }
             if (errorName !== undefined) {
+                if (!(failure instanceof LocalPortInUseError)) {
+                    const sourceError = failure instanceof ConnectionPreparationError ? failure.sourceError : failure;
+                    const statusCode = httpStatus(failure) ?? httpStatus(sourceError);
+                    const data: PrepareFailedData = {
+                        providerId: providerId === 'kubernetes-port-forward' ? providerId : 'other',
+                        reason: failure instanceof ConnectionPreparationError ? failure.reason : 'other',
+                        errorName: safeErrorName(sourceError),
+                        ...(statusCode === undefined ? {} : { statusCode }),
+                    };
+                    return {
+                        status: 'fail',
+                        facts: { providerId: data.providerId, elapsedMs, errorName },
+                        findings: [
+                            {
+                                code: 'prepare.failed',
+                                severity: 'error',
+                                data: { ...data },
+                                detail: { language: 'en', text: 'Connection preparation failed.' },
+                            },
+                        ],
+                    };
+                }
                 return {
                     status: 'fail',
-                    facts: { providerId: providerId ?? null, elapsedMs, errorName },
-                    findings: failure instanceof LocalPortInUseError ? [localPortInUse(failure)] : [],
+                    facts: {
+                        providerId: providerId === 'kubernetes-port-forward' ? providerId : 'other',
+                        elapsedMs,
+                        errorName,
+                    },
+                    findings: [localPortInUse(failure)],
                 };
             }
             if (providerId === undefined) {

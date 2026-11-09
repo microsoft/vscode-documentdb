@@ -6,16 +6,21 @@
 import {
     buildReport,
     DEFAULT_TIMEOUTS,
+    renderJson,
     renderMarkdown,
     skipReasons,
     type CheckResult,
     type DiagnosticsRun,
     type ReportLabelKey,
     type ReportSectionId,
+    type RunContext,
 } from '@documentdb-js/connection-diagnostics';
 import * as os from 'os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { ConnectionPreparationError, ConnectionReachabilityService } from '../services/connectionReachabilityService';
+import { createPrepareCheck } from './checks/prepare';
+import { type DiagnosticsSetup } from './input';
 import { createExtensionReportAttribution, createExtensionReportText, renderExtensionReportFooter } from './reportText';
 import { type FindingCode } from './types';
 
@@ -95,6 +100,71 @@ function fixtureMarkdown(run: DiagnosticsRun<FindingCode> = fixtureRun()): strin
 }
 
 describe('localized connectivity report text', () => {
+    it.each([
+        [false, 'kubernetes-port-forward', 'Kubernetes access denied'],
+        [true, 'kubernetes-port-forward', 'Kubernetes access denied'],
+        [false, 'private-provider', 'Connection preparation failed'],
+        [true, 'private-provider', 'Connection preparation failed'],
+    ])(
+        'keeps preparation evidence out of reports (redact=%s, provider=%s)',
+        async (redact, providerId, title): Promise<void> => {
+            const source = Object.assign(new Error('private-service private-namespace'), { code: 403 });
+            ConnectionReachabilityService.registerProvider({
+                id: providerId,
+                appliesTo: (): boolean => true,
+                ensureReachable: async (): Promise<void> => {
+                    throw new ConnectionPreparationError('accessDenied', source, 403);
+                },
+            });
+            try {
+                const setup: DiagnosticsSetup = {
+                    input: { connectionString: 'mongodb://localhost/' },
+                    chosenAuthMethod: undefined,
+                    credentialState: 'noMethod',
+                    connectionProperties: { enabled: true },
+                    transientCredentials: undefined,
+                };
+                const outcome = await createPrepareCheck(
+                    {
+                        clusterId: 'fixture',
+                        displayName: 'fixture',
+                        sourceView: 'connections',
+                        getCredentials: async (): Promise<undefined> => undefined,
+                    },
+                    (): DiagnosticsSetup => setup,
+                ).run({} as RunContext, new AbortController().signal);
+                const run: DiagnosticsRun<FindingCode> = {
+                    ...fixtureRun({ limited: false, timedOut: [], retryWouldHelp: false, omittedTargetCount: 0 }),
+                    targets: [],
+                    results: [
+                        { ...outcome, checkId: 'prepare', durationMs: 1 },
+                        {
+                            checkId: 'authenticate',
+                            status: 'skipped',
+                            durationMs: 0,
+                            facts: {},
+                            findings: [],
+                            skippedBecause: { reason: 'dependencyFailed', checkId: 'prepare' },
+                        },
+                    ],
+                };
+                const report = buildReport(run, {
+                    summary: { outcome: 'failed', headline: { checkId: 'prepare', code: 'prepare.failed' } },
+                });
+                const markdown = renderMarkdown(report, { text: createExtensionReportText(), redact });
+                const json = renderJson(report, { redact });
+                expect(markdown).toContain(title);
+                expect(markdown).toContain('Dependency failed');
+                expect(json).toContain('prepare.failed');
+                for (const text of [markdown, json]) {
+                    expect(text).not.toMatch(/private-service|private-namespace|private-provider|sourceError|"cause"/);
+                }
+            } finally {
+                ConnectionReachabilityService.resetForTests();
+            }
+        },
+    );
+
     it.each([
         ['steps', '{0} more steps not shown'],
         ['findings', '{0} more findings not shown'],

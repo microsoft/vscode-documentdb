@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type DocumentDBEntraCloud } from '../documentdb/auth/entraScopes';
+import { type ConnectionPreparationReason } from '../services/connectionReachabilityService';
 
 export interface EnvRemoteExtensionHostData {
     readonly remoteKind: string;
@@ -34,6 +35,13 @@ export interface TargetEndpointMissingData {
 export interface PrepareLocalPortInUseData {
     readonly localPort: number;
     readonly holder: 'otherProgram' | 'otherTunnel';
+}
+
+export interface PrepareFailedData {
+    readonly providerId: 'kubernetes-port-forward' | 'other';
+    readonly reason: ConnectionPreparationReason;
+    readonly errorName: string;
+    readonly statusCode?: number;
 }
 
 export interface PrepareSharedTunnelData {

@@ -878,6 +878,41 @@ export const findingMessages: {
     'target.sourceInaccessible': (data): FindingMessage => sourceInaccessibleMessage(data),
     'target.endpointMissing': (data): FindingMessage => endpointMissingMessage(data),
     'cs.credentialsMissing': (data): FindingMessage => missingCredentialsMessage(data),
+    'prepare.failed': (data): FindingMessage => {
+        if (stringField(data, 'providerId') === 'kubernetes-port-forward') {
+            switch (stringField(data, 'reason')) {
+                case 'sourceUnreachable':
+                    return sourceInaccessibleMessage({ source: 'kubernetes', reason: 'unreachable' });
+                case 'accessDenied':
+                    return sourceInaccessibleMessage({ source: 'kubernetes', reason: 'accessDenied' });
+                case 'targetNotFound':
+                    return notFoundMessage({ source: 'kubernetes' });
+                case 'noReadyBackend':
+                    return {
+                        title: vscode.l10n.t('No ready pods behind the service'),
+                        explanation: vscode.l10n.t("Kubernetes reports no ready endpoint for the service's port."),
+                        nextStep: vscode.l10n.t(
+                            'Check that the database pods are running and ready and that the service selects them.',
+                        ),
+                    };
+                case 'sourceMissing':
+                    return {
+                        title: vscode.l10n.t('Kubeconfig source not found'),
+                        explanation: vscode.l10n.t(
+                            'The kubeconfig source needed to prepare the connection was not found.',
+                        ),
+                        nextStep: vscode.l10n.t(
+                            'Check the kubeconfig source and context, then run the diagnosis again.',
+                        ),
+                    };
+            }
+        }
+        return {
+            title: vscode.l10n.t('Connection preparation failed'),
+            explanation: vscode.l10n.t('The connection could not be prepared for diagnosis.'),
+            nextStep: vscode.l10n.t('Review the error name in the diagnostic report, then run the diagnosis again.'),
+        };
+    },
     'prepare.localPortInUse': (data): FindingMessage => {
         const localPort = numberField(data, 'localPort');
         const otherTunnel = stringField(data, 'holder') === 'otherTunnel';

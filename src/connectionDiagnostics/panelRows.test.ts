@@ -16,6 +16,7 @@ import {
 } from '@documentdb-js/connection-diagnostics';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ConnectionPreparationError, ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
 import { panelRowIds, type PanelRow, type PanelRowId } from '../webviews/documentdb/connectionDiagnostics/panelTypes';
 import { describeFinding } from './findingMessages';
@@ -282,6 +283,45 @@ describe('PanelRowProjector', (): void => {
             { kind: 'finding', title: describeFinding(finding('cs.unparseable')).title },
             { kind: 'preparationFailed', providerId: 'kubernetes' },
         ]);
+    });
+
+    it.each([
+        ['sourceUnreachable', 'Kubernetes API unreachable'],
+        ['noReadyBackend', 'No ready pods behind the service'],
+    ])('shows %s at Connection settings and skips later rows', (reason, title): void => {
+        const projector = new PanelRowProjector(describeFinding, planned);
+        setup(projector);
+        complete(projector, 'connectionString');
+        complete(projector, 'credentials');
+        complete(projector, 'prepare', {
+            status: 'fail',
+            facts: { providerId: 'kubernetes-port-forward' },
+            findings: [finding('prepare.failed', 'error', { providerId: 'kubernetes-port-forward', reason })],
+        });
+        for (const id of ['srv', 'dns', 'tcp', 'tls', 'hello', 'authenticate', 'connectionAccess', 'serverFacts']) {
+            complete(projector, id, {
+                status: 'skipped',
+                skippedBecause: { reason: 'dependencyFailed', checkId: 'prepare' },
+            });
+        }
+        projector.finish();
+        expect(projector.rows()).toHaveLength(8);
+        expect(row(projector, 'connectionSettings')).toMatchObject({
+            status: 'error',
+            segments: [
+                { kind: 'finding', title },
+                { kind: 'preparationFailed', providerId: 'kubernetes-port-forward' },
+            ],
+        });
+        for (const id of [
+            'serverAddress',
+            'networkConnection',
+            'secureConnection',
+            'serverResponse',
+            'authentication',
+        ] as const) {
+            expect(row(projector, id).status).toBe('skipped');
+        }
     });
 
     it('keeps IP address DNS and disabled TLS rows as explained skips', (): void => {
@@ -626,6 +666,63 @@ describe('PanelRowProjector', (): void => {
 });
 
 describe('planned diagnostics checks', (): void => {
+    it.each(['sourceUnreachable', 'noReadyBackend'] as const)(
+        'runs no network probes or authentication after %s preparation failure',
+        async (reason): Promise<void> => {
+            const actual = await vi.importActual<typeof ConnectionDiagnostics>('@documentdb-js/connection-diagnostics');
+            vi.mocked(createBuiltInChecks).mockReturnValue(actual.createBuiltInChecks());
+            ConnectionReachabilityService.registerProvider({
+                id: 'kubernetes-port-forward',
+                appliesTo: (): boolean => true,
+                ensureReachable: async (): Promise<void> => {
+                    throw new ConnectionPreparationError(reason, new Error('private-service private-namespace'));
+                },
+            });
+            try {
+                const plan = getPlannedDiagnosticsChecks();
+                const projector = new PanelRowProjector(describeFinding, plan);
+                const run = await runConnectionDiagnostics({
+                    target: {
+                        clusterId: 'fixture',
+                        displayName: 'fixture',
+                        sourceView: 'connections',
+                        async getCredentials(): Promise<EphemeralClusterCredentials> {
+                            return {
+                                connectionString: 'mongodb://127.0.0.1:27017',
+                                availableAuthMethods: [],
+                                connectionProperties: { enabled: true },
+                            };
+                        },
+                    },
+                    entryPoint: 'contextMenu',
+                    runTrigger: 'initial',
+                    runIndex: 1,
+                    diagnosticsSessionId: 'fixture',
+                    timeoutProfile: 'default',
+                    signal: new AbortController().signal,
+                    onEvent: (event): void => projector.apply(event),
+                });
+                expect(run.results.find((item): boolean => item.checkId === 'prepare')).toMatchObject({
+                    status: 'fail',
+                    findings: [{ code: 'prepare.failed', data: { reason } }],
+                });
+                for (const id of ['srv', 'dns', 'authenticate']) {
+                    expect(run.results.find((item): boolean => item.checkId === id)).toMatchObject({
+                        status: 'skipped',
+                        skippedBecause: { reason: 'dependencyFailed', checkId: 'prepare' },
+                    });
+                }
+                for (const id of ['tcp', 'tls', 'hello']) {
+                    expect(run.results.find((item): boolean => item.checkId === id)?.status).toBe('skipped');
+                }
+                expect(row(projector, 'connectionSettings').status).toBe('error');
+                expect(JSON.stringify(run)).not.toMatch(/private-service|private-namespace/);
+            } finally {
+                ConnectionReachabilityService.resetForTests();
+            }
+        },
+    );
+
     it.each([false, true])(
         'matches ordered IDs and scopes actually executed, with extra checks: %s',
         async (withExtra): Promise<void> => {

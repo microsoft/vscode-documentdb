@@ -49,6 +49,30 @@ function rejectCredentials(): CheckResult<FindingCode> {
 }
 
 describe('deriveResult', (): void => {
+    it.each([
+        ['sourceUnreachable', 'Kubernetes API unreachable'],
+        ['noReadyBackend', 'No ready pods behind the service'],
+    ])('stops at preparation for %s without a network or authentication headline', (reason, title): void => {
+        const result = derive([
+            check('prepare', {
+                status: 'fail',
+                findings: [finding('prepare.failed', { providerId: 'kubernetes-port-forward', reason })],
+            }),
+            check('dns', { status: 'skipped', skippedBecause: { reason: 'dependencyFailed', checkId: 'prepare' } }),
+            check('authenticate', {
+                status: 'skipped',
+                skippedBecause: { reason: 'dependencyFailed', checkId: 'prepare' },
+            }),
+        ]);
+        expect(result).toMatchObject({
+            outcome: 'failed',
+            stoppedAtRow: 'connectionSettings',
+            headline: { checkId: 'prepare', code: 'prepare.failed', title },
+            firewallHint: false,
+        });
+        expect(result.supporting).toBeUndefined();
+    });
+
     it('acceptance 1: a real connection produces a server line with the answering host and ping', (): void => {
         expect(
             derive([
