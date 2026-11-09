@@ -32,8 +32,8 @@ code:
 
 - **Builds on:** [#1065](https://github.com/microsoft/vscode-documentdb/pull/1065) ·
   `dev/guanzhousong/quickstart-podman-fallback`
-- **Status:** partial implementation; W2 (`8087eb30`) and W7 (`31775c89`) complete; W1 and
-  W8 deferred; remaining items are not complete.
+- **Status:** partial implementation; W2 (`8087eb30`), W4 (`fb06ae0d`), and W7 (`31775c89`)
+  complete; W1 and W8 deferred; remaining items are not complete.
 
 ## Why
 
@@ -299,6 +299,16 @@ specified in the source plan; no new label decision is recorded.
   logic (87%); leader coordination confidence was 99% and selected Sol for cross-module
   impact. Added 48 tests; `npm run build` passed; focused tests passed across five root
   files (157 tests: classifier, probes, readiness service, integration, and tree item).
+- **W4 — Done (2026-11-09), commit `fb06ae0d`:** Applied the three Introduction strings
+  exactly as specified in source A, keeping the presentation static and updating matching
+  browser content assertions; no calls, order, or timing changed. The source item was
+  treated as accepted under /lead's operator-unavailable rule. Leader mechanical-review
+  confidence was 99%; exact source wording required no advisor logic gate. Terra was selected
+  for the bounded W4→W5 UI chain. Added 0 tests; strengthened existing expected-content
+  assertions. `npm run build` passed; `scenarios.test.ts` passed (15 tests; registry and
+  declaration check only, rendered UI not yet tested). Pre-existing observation, not a W4
+  behavior change: the mount `getDockerStatus` call can probe readiness while Introduction
+  is visible; this was not changed and is out of scope.
 - **W7 — Done (2026-11-09), commit `31775c89`:** Added bounded `containerCli` (omitted if
   absent), `containerEngine` (default `unknown`), and `containerEngineEvidence` (default
   `none`), retaining existing `docker*` properties and fingerprint semantics. The source
