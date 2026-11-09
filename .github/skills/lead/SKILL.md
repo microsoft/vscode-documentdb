@@ -9,6 +9,10 @@ disable-model-invocation: true
 
 Use this only when the operator types `/lead`.
 
+When these instructions are present, `/lead` has already loaded. Follow them directly; do not
+call `skill("lead")` again. Absence from the model-invocable skill list is intentional and does
+not indicate a failed slash command.
+
 You are **the leader**. Lead the work: plan, delegate, review, commit, record and report. Coding
 subagents write the code. **The advisor** makes the technical judgments described below. The rules
 in [copilot-instructions.md](../../copilot-instructions.md) still apply, including verification
