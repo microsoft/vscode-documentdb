@@ -46,6 +46,7 @@ import {
     describePasswordEncodingProblem,
     getCredentialValidation,
 } from './credentialValidation';
+import { DOCKER_GUIDE_KEYS, DOCKER_GUIDE_URLS } from './dockerReadinessPresentation';
 import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
 import { type QuickStartWizardSession, reportWizardStep } from './wizardTelemetry';
 
@@ -228,6 +229,22 @@ export const localQuickStartRouter = router({
         sessionContext(ctx);
         getQuickStartOutputChannel().show(true);
     }),
+
+    /**
+     * Open a Docker guide (install, troubleshooting, …) by key. The URL is resolved here rather than
+     * sent by the panel, so only the known guides can be opened and each click is counted per guide.
+     */
+    openGuide: publicProcedureWithTelemetry
+        .input(z.object({ guide: z.enum(DOCKER_GUIDE_KEYS) }))
+        .mutation(async ({ ctx, input }): Promise<void> => {
+            const tctx = sessionContext(ctx);
+            tctx.actionContext.telemetry.properties.guide = input.guide;
+            const failureKind = QuickStartService.getDockerReadinessSnapshot()?.failureKind;
+            if (failureKind) {
+                tctx.actionContext.telemetry.properties.dockerFailureKind = failureKind;
+            }
+            await vscode.env.openExternal(vscode.Uri.parse(DOCKER_GUIDE_URLS[input.guide]));
+        }),
 
     /**
      * The webview moved to another phase. Navigation that stays inside the webview reaches the host

@@ -60,3 +60,14 @@ export function normalizeCompletionSource(raw: string | undefined): CompletionSo
 export const CompletionCommandIds = {
     completionAccepted: 'vscode-documentdb.command.internal.completionAccepted',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Offered
+// ---------------------------------------------------------------------------
+
+/**
+ * Counts surfaces offering completions (`src_<surface>`), the denominator of the accepted
+ * counts. Like the accepted counters it is accumulated; the default growing batch size sends
+ * the first offer of a session at once.
+ */
+export const COMPLETION_OFFERED_EVENT = 'completion.offered';

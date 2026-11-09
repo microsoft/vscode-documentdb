@@ -713,6 +713,12 @@ export class SurveyService implements vscode.Disposable {
                 this.telemetry.reportInvitationShown(invitation.id, invitation.isReminder);
                 this.telemetry.reportFeedbackActivated(invitation.activation, invitation.id);
             },
+            onHidden: (): void => {
+                if (!this.isLive(invitation) || !invitation.visible) {
+                    return;
+                }
+                this.telemetry.reportInvitationHidden(invitation.id);
+            },
             onOpenForm: async (selectedRating): Promise<SurveyOpenFormResult> => {
                 if (!this.isLive(invitation) || !this.isEnabled() || !this.isPresentationPermitted()) {
                     return 'blocked';

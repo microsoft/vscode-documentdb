@@ -251,6 +251,11 @@ export class ClustersClient {
     //     }
     // }
 
+    /** Whether this client starts the Local Quick Start managed instance, as marked in its cached credentials. */
+    private isLocalQuickStartInstance(): boolean {
+        return CredentialCache.getCredentials(this.clusterId)?.localQuickStartInstance === true;
+    }
+
     private async initClient(abortSignal?: AbortSignal): Promise<void> {
         const startupId = randomUUID();
         this.connectionCorrelationId = startupId;
@@ -264,6 +269,9 @@ export class ClustersClient {
                 context.telemetry.properties.connectionCorrelationId = startupId;
                 context.telemetry.properties.startupCorrelationId = startupId;
                 context.telemetry.properties.surface = 'extension';
+                context.telemetry.properties.localQuickStartInstance = this.isLocalQuickStartInstance()
+                    ? 'true'
+                    : 'false';
                 const startedAt = Date.now();
                 const startup: ClientStartup = {
                     id: startupId,
@@ -372,12 +380,14 @@ export class ClustersClient {
         // Emit static metadata (domain info) BEFORE the connection attempt.
         // This ensures destination telemetry is available even when connections fail.
         const correlationId = startup.id;
+        const localQuickStartInstance = credentials.localQuickStartInstance === true ? 'true' : 'false';
         void callWithTelemetryAndErrorHandling('connect.staticmetadata', async (context) => {
             const { getDomainMetadata } = await import('./utils/getClusterMetadata');
             const domainMetadata = getDomainMetadata(hosts);
             context.telemetry.properties = {
                 startupCorrelationId: correlationId,
                 connectionCorrelationId: correlationId,
+                localQuickStartInstance,
                 ...context.telemetry.properties,
                 ...domainMetadata,
             };
@@ -414,6 +424,7 @@ export class ClustersClient {
                 authmethod: authMethod,
                 startupCorrelationId: correlationId,
                 connectionCorrelationId: correlationId,
+                localQuickStartInstance,
                 ...context.telemetry.properties,
                 ...metadata,
             };

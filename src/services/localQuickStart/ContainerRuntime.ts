@@ -39,8 +39,23 @@ import {
     type DockerLaunchResult,
     type DockerReadiness,
     type DockerReadinessRequest,
+    type ImagePullOutcome,
     QUICK_START_PORT,
 } from './quickStartTypes';
+
+/**
+ * Read `docker pull`'s closing status line. Both the classic and the containerd image store end a
+ * pull with one of these two lines; anything else (another CLI, a changed wording) stays unknown.
+ */
+export function classifyImagePullOutput(output: string): ImagePullOutcome {
+    if (/^Status: Downloaded newer image for /im.test(output)) {
+        return 'downloaded';
+    }
+    if (/^Status: Image is up to date for /im.test(output)) {
+        return 'upToDate';
+    }
+    return 'unknown';
+}
 
 /**
  * Shell used to run docker commands. A shell provider is REQUIRED so the runner
@@ -129,7 +144,8 @@ export interface CreateContainerOptions {
 export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
     isPortFree(port?: number): Promise<boolean>;
-    pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void>;
+    /** Resolves with whether the pull downloaded the image, for telemetry only. */
+    pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<ImagePullOutcome>;
     createAndRunContainer(
         options: CreateContainerOptions,
         secrets: ReadonlyArray<string>,
@@ -254,8 +270,14 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         });
     }
 
-    public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void> {
-        await this.runCommand(this.client.pullImage({ imageRef }), [], token);
+    public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<ImagePullOutcome> {
+        const { command, args } = await this.client.pullImage({ imageRef });
+        const outcome = await this.runCommand<ImagePullOutcome>(
+            { command, args, parse: (output) => Promise.resolve(classifyImagePullOutput(output)) },
+            [],
+            token,
+        );
+        return outcome ?? 'unknown';
     }
 
     /** `docker run` detached, returning the new container id. */

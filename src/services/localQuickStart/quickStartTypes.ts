@@ -152,6 +152,26 @@ export const PROVISION_STAGES: readonly ProvisionStage[] = [
     'waiting',
 ] as const;
 
+/** What `docker pull` reported: the image was downloaded, the local copy was current, or neither could be told. */
+export type ImagePullOutcome = 'downloaded' | 'upToDate' | 'unknown';
+
+/**
+ * Why a setup run failed, as reported in `failureCode` on the provision telemetry events. A fixed
+ * set, so it never carries Docker's or the driver's own wording.
+ */
+export type ProvisionFailureCode =
+    | 'none'
+    | 'dockerCliMissing'
+    | 'dockerDaemonUnreachable'
+    | 'dockerPermissionDenied'
+    | 'portInUse'
+    | 'diskFull'
+    | 'imagePullFailed'
+    | 'readinessTimeout'
+    | 'containerExited'
+    | 'cancelled'
+    | 'other';
+
 /** Setup wizard phases. `provisioning` and `failed` both render the Set up step. */
 export const QUICK_START_WIZARD_PHASES = ['introduction', 'configure', 'provisioning', 'failed', 'success'] as const;
 export type QuickStartWizardPhase = (typeof QUICK_START_WIZARD_PHASES)[number];

@@ -20,6 +20,7 @@ import {
     type ShowCollectionsMessage,
 } from './clusterDashboardContextMenu';
 import { type RouterContext } from './clusterDashboardRouter';
+import { reportDashboardClosed, trackDashboardLifetime } from './dashboardLifetimeTelemetry';
 import { describeMissingNamespace, resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
@@ -387,6 +388,8 @@ export function openClusterDashboardWebview(
     });
 
     openPanels.set(panelKey, { controller, config: initialData });
+    const session = initialData;
+    trackDashboardLifetime(controller, (lifetime) => reportDashboardClosed(lifetime, session));
     controller.onDisposed(() => {
         if (openPanels.get(panelKey)?.controller === controller) {
             openPanels.delete(panelKey);

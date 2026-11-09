@@ -719,6 +719,132 @@ describe('SurveyInvitationView', (): void => {
         h.presenter.dispose();
     });
 
+    it('reports a shown invitation hidden once when the sidebar is hidden, and keeps it live', async (): Promise<void> => {
+        const h = harness();
+        h.service.recordSurveyActivityWithInvitation('connection');
+        await h.service.whenIdle();
+        h.surface.visibility(false);
+        h.surface.visibility(true);
+        expect(h.events.some((event): boolean => event.name === 'survey.invitationHidden')).toBe(false);
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        const state = { ...h.state() };
+        h.surface.visibility(false);
+        h.surface.visibility(true);
+        h.surface.visibility(false);
+        await flush();
+        const hidden = h.events.filter((event): boolean => event.name === 'survey.invitationHidden');
+        expect(hidden).toEqual([
+            {
+                name: 'survey.invitationHidden',
+                properties: {
+                    invitationSessionId: request.invitationSessionId,
+                    surveyCampaignId: 'test',
+                    surveyPolicyVersion: '1',
+                },
+                measurements: {},
+            },
+        ]);
+        expect(h.state()).toEqual(state);
+        expect(h.service.getDebugStatus().invitationActive).toBe(true);
+        expect(h.surface.view.webview.html).not.toBe('');
+        h.surface.visibility(true);
+        h.surface.message({ type: 'askLater' });
+        await flush();
+        expect(h.state().lastOutcome).toBe('askLater');
+        expect(h.events.map((event): string => event.name).slice(-2)).toEqual([
+            'survey.invitationHidden',
+            'survey.invitationResolved',
+        ]);
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('does not report hidden for visibility changes during the reveal', async (): Promise<void> => {
+        const h = harness();
+        vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            if (command === `${SURVEY_VIEW_ID}.open`) {
+                h.presenter.resolveWebviewView(h.surface.view);
+                h.surface.message({ type: 'rendered' });
+                h.surface.visibility(false);
+                h.surface.visibility(true);
+            }
+            return undefined;
+        });
+        h.service.recordSurveyActivityWithInvitation('connection');
+        await h.service.whenIdle();
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationShown')).toHaveLength(1);
+        expect(h.events.some((event): boolean => event.name === 'survey.invitationHidden')).toBe(false);
+        h.surface.visibility(false);
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationHidden')).toHaveLength(1);
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it.each([
+        ['askLater', { type: 'askLater' }],
+        ['neverAgain', { type: 'neverAgain' }],
+        ['openForm', { type: 'openForm' }],
+    ] as const)('does not report hidden when the sidebar hides after %s', async (_label, message): Promise<void> => {
+        const h = harness();
+        h.open.mockResolvedValue(true);
+        h.service.recordSurveyActivityWithInvitation('connection');
+        await h.service.whenIdle();
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        h.surface.message(message);
+        await flush();
+        h.surface.visibility(false);
+        await flush();
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationResolved')).toHaveLength(1);
+        expect(h.events.some((event): boolean => event.name === 'survey.invitationHidden')).toBe(false);
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it('does not report hidden while a browser opening is in progress, on removal, or after dispose', async (): Promise<void> => {
+        const h = harness();
+        h.service.recordSurveyActivityWithInvitation('connection');
+        await h.service.whenIdle();
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        let complete!: (result: boolean) => void;
+        h.open.mockImplementationOnce(
+            (): Promise<boolean> =>
+                new Promise((resolve): void => {
+                    complete = resolve;
+                }),
+        );
+        h.surface.message({ type: 'openForm' });
+        h.surface.visibility(false);
+        complete(false);
+        await flush();
+        expect(h.events.some((event): boolean => event.name === 'survey.invitationHidden')).toBe(false);
+        h.surface.visibility(true);
+        h.surface.close();
+        h.surface.visibility(false);
+        await flush();
+        expect(h.state().lastOutcome).toBe('dismissed');
+        expect(h.events.some((event): boolean => event.name === 'survey.invitationHidden')).toBe(false);
+        h.service.dispose();
+        h.presenter.dispose();
+        h.surface.visibility(true);
+        h.surface.visibility(false);
+        expect(h.events.some((event): boolean => event.name === 'survey.invitationHidden')).toBe(false);
+    });
+
+    it('does not report hidden for manually opened feedback', async (): Promise<void> => {
+        const h = harness();
+        expect(await h.service.showFeedbackForm('collectionView', 'documents')).toBe(true);
+        h.surface.message({ type: 'rendered' });
+        await flush();
+        h.surface.visibility(false);
+        await flush();
+        expect(h.events.some((event): boolean => event.name === 'survey.invitationHidden')).toBe(false);
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
     it('explicit hide records dismissed, while collapse or switching containers does not', async (): Promise<void> => {
         const h = harness();
         h.service.recordSurveyActivityWithInvitation('connection');

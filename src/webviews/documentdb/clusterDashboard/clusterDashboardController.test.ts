@@ -18,7 +18,7 @@ vi.mock('vscode', () => ({
 
 vi.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: vi.fn(async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
-        callback({ telemetry: { properties: {}, measurements: {} } }),
+        callback({ telemetry: { properties: {}, measurements: {} }, errorHandling: {} }),
     ),
 }));
 
@@ -54,7 +54,7 @@ type FakeController = {
     onDisposed: (handler: () => void) => void;
     revealToForeground: Mock;
     dispose: () => void;
-    panel: { webview: { postMessage: Mock } };
+    panel: { webview: { postMessage: Mock }; visible: boolean; onDidChangeViewState: Mock };
 };
 
 function createFakeController(): FakeController {
@@ -63,7 +63,11 @@ function createFakeController(): FakeController {
     return {
         isDisposed: false,
         revealToForeground: vi.fn(),
-        panel: { webview: { postMessage: vi.fn().mockResolvedValue(true) } },
+        panel: {
+            webview: { postMessage: vi.fn().mockResolvedValue(true) },
+            visible: true,
+            onDidChangeViewState: vi.fn(() => ({ dispose: vi.fn() })),
+        },
         onDisposed(handler: () => void): void {
             handlers.push(handler);
         },

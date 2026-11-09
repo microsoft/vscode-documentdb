@@ -103,7 +103,13 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             view.webview.onDidReceiveMessage((message: unknown): void => {
                 void this.handleMessage(message).catch((): void => undefined);
             }),
-            view.onDidChangeVisibility((): void => this.checkVisibility()),
+            view.onDidChangeVisibility((): void => {
+                if (view.visible) {
+                    this.checkVisibility();
+                } else {
+                    this.checkHidden(view);
+                }
+            }),
             view.onDidDispose((): void => {
                 if (this.view !== view) {
                     return;
@@ -171,6 +177,28 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             invitation.reported = true;
             invitation.callbacks.onVisible();
         }
+    }
+
+    /**
+     * Reports a user-driven visible-to-hidden transition of a reported invitation. Skipped
+     * while revealing (the reveal itself can toggle visibility), and once the invitation is
+     * closed, a choice is in progress, or it was cleared, so ending it never counts as hidden.
+     */
+    private checkHidden(view: vscode.WebviewView): void {
+        const invitation = this.active;
+        if (
+            this.disposed ||
+            this.view !== view ||
+            view.visible ||
+            !invitation ||
+            !invitation.reported ||
+            invitation.revealing ||
+            invitation.closed ||
+            invitation.busy
+        ) {
+            return;
+        }
+        invitation.callbacks.onHidden?.();
     }
 
     private async handleMessage(message: unknown): Promise<void> {

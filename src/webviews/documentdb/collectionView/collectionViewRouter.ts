@@ -24,7 +24,11 @@ import { parseFindExpression } from '../../../documentdb/playground/parseFindExp
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { recordSurveyActivityWithInvitation } from '../../../services/survey/SurveyService';
-import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
+import {
+    COMPLETION_CATEGORIES,
+    COMPLETION_OFFERED_EVENT,
+    CompletionSources,
+} from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { escapeJsString } from '../../../utils/escapeJsString';
@@ -697,6 +701,15 @@ export const collectionsViewRouter = router({
             skip: parsed.skip,
             limit: parsed.limit,
         };
+    }),
+
+    /** Called once per panel, the first time the query editor offers a completion. */
+    completionOffered: publicProcedureWithTelemetry.mutation(({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        myCtx.actionContext.telemetry.suppressAll = true;
+        accumulateTelemetry(COMPLETION_OFFERED_EVENT, (sample) => {
+            sample.measurements[`src_${CompletionSources.CollectionView}`] = 1;
+        });
     }),
 
     completionAccepted: publicProcedureWithTelemetry

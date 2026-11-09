@@ -31,6 +31,9 @@ export interface CachedClusterCredentials {
     entraIdConfig?: EntraIdAuthConfig;
     /** Present (possibly empty, meaning system-assigned) for managed identity connections. */
     managedIdentityConfig?: ManagedIdentityAuthConfig;
+
+    /** The cluster is the Local Quick Start managed instance. Reported in connection telemetry only. */
+    localQuickStartInstance?: boolean;
 }
 
 /**
@@ -224,6 +227,7 @@ export class CredentialCache {
      * @param emulatorConfiguration - The emulator configuration object (optional, only relevant for local workspace connections).
      * @param entraIdConfig - The Entra ID configuration object (optional, only relevant for Microsoft Entra ID authentication).
      * @param managedIdentityConfig - The managed identity configuration (optional; an empty object selects the system-assigned identity).
+     * @param options - `localQuickStartInstance` marks the Local Quick Start managed instance for connection telemetry.
      */
     public static setAuthCredentials(
         clusterId: string,
@@ -233,6 +237,7 @@ export class CredentialCache {
         emulatorConfiguration?: EmulatorConfiguration,
         entraIdConfig?: EntraIdAuthConfig,
         managedIdentityConfig?: ManagedIdentityAuthConfig,
+        options?: { readonly localQuickStartInstance?: boolean },
     ): void {
         const username = nativeAuthConfig?.connectionUser ?? '';
         const password = nativeAuthConfig?.connectionPassword ?? '';
@@ -252,6 +257,7 @@ export class CredentialCache {
             entraIdConfig: entraIdConfig,
             nativeAuthConfig: nativeAuthConfig,
             managedIdentityConfig: managedIdentityConfig,
+            ...(options?.localQuickStartInstance === true ? { localQuickStartInstance: true } : {}),
         };
 
         CredentialCache._store.set(clusterId, credentials);

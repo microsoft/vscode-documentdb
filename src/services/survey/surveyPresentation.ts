@@ -32,6 +32,14 @@ export interface SurveyInvitationCallbacks {
     /** The content is rendered and visible to the user. Only the first call counts. */
     onVisible(): void;
     /**
+     * Content already reported through `onVisible` stopped being visible (the sidebar was
+     * hidden or another view replaced it) while the invitation is still open and no choice is
+     * in progress. Not an outcome: the user can show it again and still choose. The surface may
+     * call it on every such transition; the service reports only the first.
+     * Only automatic invitations implement it.
+     */
+    onHidden?(): void;
+    /**
      * The primary "Continue to survey" button, with an optional locally selected rating (D0023).
      * On `opened` the service resolves the invitation and disposes the handle.
      * On `failed` the invitation stays open; the surface reports the failure in a modal error
