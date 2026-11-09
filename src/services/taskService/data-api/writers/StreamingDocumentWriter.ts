@@ -3,28 +3,32 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as vscode from 'vscode';
-import { ext } from '../../../../extensionVariables';
+import { type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
+import { type DataTransferStrings, defaultDataTransferStrings, noopDataTransferLogger } from '../dataTransferHost';
 import {
+    type AbortBatchResult,
+    type BatchAttemptOutcome,
     ConflictResolutionStrategy,
     type DocumentDetails,
     type EnsureTargetExistsResult,
-    type StreamWriteResult,
-} from '../types';
-import { BatchSizeAdapter } from './BatchSizeAdapter';
-import { RetryOrchestrator } from './RetryOrchestrator';
-import {
-    type AbortBatchResult,
     type ErrorType,
     type GenerateNewIdsBatchResult,
+    isBatchAttemptOutcome,
     isSkipResult,
     type OverwriteBatchResult,
     type PartialProgress,
     type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
-} from './writerTypes.internal';
+    type StreamingWriterOptions,
+    type StreamWriteResult,
+} from '../types';
+import { BatchSizeAdapter } from './BatchSizeAdapter';
+import {
+    computeRetryDelay,
+    type ResolvedStreamingWriterSettings,
+    resolveStreamingWriterSettings,
+} from './streamingWriterSettings';
 import { WriteStats } from './WriteStats';
 
 /**
@@ -47,7 +51,7 @@ export interface StreamWriteOptions {
     /** Signal to abort the streaming operation */
     abortSignal?: AbortSignal;
     /** Optional action context for telemetry collection */
-    actionContext?: IActionContext;
+    actionContext?: TaskTelemetryContext;
 }
 
 /**
@@ -103,10 +107,15 @@ export class StreamingWriterError extends Error {
  * Provides integrated buffering, adaptive batching, retry logic, and progress reporting
  * for high-volume document write operations.
  *
+ * Batching, memory estimation and retry backoff are configurable through StreamingWriterSettings.
+ * Defaults start at 500 documents in fast mode, buffer up to 24 MB, and retry up to 10 times
+ * without progress using 100 ms exponential backoff (×2, capped at 5 s, ±30% jitter).
+ * Sequence diagrams and trace output below illustrate these defaults.
+ *
  * ## Key Features
  *
  * 1. **Buffer Management**: Single-level buffering with adaptive flush triggers
- * 2. **Integrated Retry Logic**: Uses RetryOrchestrator for transient failure handling
+ * 2. **Integrated Retry Logic**: Uses an inline retry loop in `writeBatchWithRetry` for transient failures
  * 3. **Adaptive Batching**: Uses BatchSizeAdapter for dual-mode (fast/RU-limited) operation
  * 4. **Statistics Aggregation**: Uses WriteStats for progress tracking
  * 5. **Immediate Progress Reporting**: Partial progress reported during throttle recovery
@@ -115,11 +124,12 @@ export class StreamingWriterError extends Error {
  *
  * Subclasses implement 3 methods:
  *
- * 1. `writeBatch(documents, strategy)`: Write a batch with the specified strategy
+ * 1. `writeBatch(documents, strategy)`: Return a strategy result or a `BatchAttemptOutcome` with remaining documents
  * 2. `classifyError(error)`: Classify errors for retry decisions
- * 3. `extractPartialProgress(error)`: Extract progress from throttle/network errors
+ * 3. `extractPartialProgress(error)`: Extract progress and optional remaining documents from thrown throttle errors
  *
  * Plus `ensureTargetExists()` for collection setup.
+ * Optionally override `getRetryAfterMs(error)` for server-suggested waits on thrown retryable errors.
  *
  * ## Sequence Diagrams
  *
@@ -152,7 +162,8 @@ export class StreamingWriterError extends Error {
  * ### Throttle Recovery with Partial Progress
  *
  * When the database throttles a request but has already written some documents,
- * the partial progress is reported immediately and the batch is sliced for retry:
+ * partial progress is reported immediately, whether thrown or returned in a `BatchAttemptOutcome`.
+ * Retry uses explicit `remaining` documents, or drops the written prefix when only a count is reported:
  *
  * ```
  * flushBuffer              writeBatchWithRetry              writeBatch           BatchSizeAdapter
@@ -193,23 +204,24 @@ export class StreamingWriterError extends Error {
  * Network errors trigger exponential backoff retries without slicing:
  *
  * ```
- * writeBatchWithRetry              writeBatch                  RetryOrchestrator
- *      │                             │                               │
- *      │ writeBatch()                │                               │
- *      │────────────────────────────>│                               │
- *      │                             │                               │
- *      │<── NETWORK ERROR            │                               │
- *      │                             │                               │
- *      │ classifyError() → 'network' │                               │
- *      │                             │                               │
- *      │ attempt++                   │                               │
- *      │ retryDelay(attempt)         │ (exponential backoff + jitter)│
- *      │                             │                               │
- *      │ writeBatch() (same batch)   │                               │
- *      │────────────────────────────>│                               │
- *      │                             │                               │
- *      │<── SUCCESS                  │                               │
- *      │                             │                               │
+ * writeBatchWithRetry              writeBatch
+ *      │                             │
+ *      │ writeBatch()                │
+ *      │────────────────────────────>│
+ *      │                             │
+ *      │<── NETWORK ERROR            │
+ *      │                             │
+ *      │ classifyError() → 'network' │
+ *      │                             │
+ *      │ attempt++                   │
+ *      │ retryDelay(attempt)         │
+ *      │ (backoff + jitter)          │
+ *      │                             │
+ *      │ writeBatch() (same batch)   │
+ *      │────────────────────────────>│
+ *      │                             │
+ *      │<── SUCCESS                  │
+ *      │                             │
  * ```
  *
  * ## Trace Output Example
@@ -249,11 +261,19 @@ export class StreamingWriterError extends Error {
  * @template TDocumentId Type of document identifiers used by the database implementation
  */
 export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
+    /**
+     * Conflict strategies supported by this writer. Subclasses that cannot implement every
+     * strategy override this property; consumers use it to offer only supported strategies.
+     */
+    public readonly supportedConflictStrategies: readonly ConflictResolutionStrategy[] = [
+        ConflictResolutionStrategy.Abort,
+        ConflictResolutionStrategy.Skip,
+        ConflictResolutionStrategy.Overwrite,
+        ConflictResolutionStrategy.GenerateNewIds,
+    ];
+
     /** Batch size adapter for adaptive batching */
     protected readonly batchSizeAdapter: BatchSizeAdapter;
-
-    /** Retry orchestrator for transient failure handling */
-    protected readonly retryOrchestrator: RetryOrchestrator;
 
     /** Target database name */
     protected readonly databaseName: string;
@@ -267,11 +287,20 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     /** Estimated memory usage of buffer in bytes */
     private bufferMemoryEstimate: number = 0;
 
-    protected constructor(databaseName: string, collectionName: string) {
+    private readonly logger: TaskLogger;
+    private readonly strings: DataTransferStrings;
+    private readonly settings: ResolvedStreamingWriterSettings;
+
+    protected constructor(databaseName: string, collectionName: string, options?: StreamingWriterOptions) {
         this.databaseName = databaseName;
         this.collectionName = collectionName;
-        this.batchSizeAdapter = new BatchSizeAdapter();
-        this.retryOrchestrator = new RetryOrchestrator();
+        this.logger = options?.logger ?? noopDataTransferLogger;
+        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
+        this.settings = resolveStreamingWriterSettings(options?.adapterDefaults, options?.settings);
+        this.batchSizeAdapter = new BatchSizeAdapter(this.settings.batching, {
+            logger: this.logger,
+            strings: this.strings,
+        });
     }
 
     // =================================
@@ -295,22 +324,19 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         // Reset state for this operation
         this.buffer = [];
         this.bufferMemoryEstimate = 0;
-        const stats = new WriteStats();
+        const stats = new WriteStats({ logger: this.logger, strings: this.strings });
         const abortSignal = options?.abortSignal;
 
-        ext.outputChannel.trace(
-            vscode.l10n.t(
-                '[StreamingWriter] Starting document streaming with {0} strategy',
-                config.conflictResolutionStrategy,
-            ),
+        this.logger.trace(
+            `[StreamingWriter] Starting document streaming with ${config.conflictResolutionStrategy} strategy`,
         );
 
-        ext.outputChannel.trace(vscode.l10n.t('[StreamingWriter] Reading documents from source...'));
+        this.logger.trace('[StreamingWriter] Reading documents from source...');
 
         // Stream documents and buffer them
         for await (const document of documentStream) {
             if (abortSignal?.aborted) {
-                ext.outputChannel.trace(vscode.l10n.t('[StreamingWriter] Abort signal received during streaming'));
+                this.logger.trace('[StreamingWriter] Abort signal received during streaming');
                 break;
             }
 
@@ -357,7 +383,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * Writes a batch of documents using the specified conflict resolution strategy.
      *
      * This is the primary abstract method that subclasses must implement. It handles
-     * all four conflict resolution strategies internally and returns strategy-specific
+     * the supported conflict resolution strategies internally and returns strategy-specific
      * results using semantic names.
      *
      * EXPECTED RETURN TYPES BY STRATEGY:
@@ -377,20 +403,21 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * **GenerateNewIds**: GenerateNewIdsBatchResult { insertedCount }
      * - Store original _id in backup field
      *
-     * IMPORTANT: Throw throttle/network errors for retry handling.
+     * For retry handling, throw throttle/network errors or return a BatchAttemptOutcome
+     * containing the result, remaining documents and error type.
      * Return conflicts in errors array (don't throw them).
      *
      * @param documents Batch of documents to write
      * @param strategy Conflict resolution strategy to use
      * @param actionContext Optional context for telemetry
-     * @returns Strategy-specific batch result with semantic field names
+     * @returns Strategy-specific batch result, or an outcome with retry information
      * @throws For throttle/network errors that should be retried
      */
     protected abstract writeBatch(
         documents: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
-        actionContext?: IActionContext,
-    ): Promise<StrategyBatchResult<TDocumentId>>;
+        actionContext?: TaskTelemetryContext,
+    ): Promise<StrategyBatchResult<TDocumentId> | BatchAttemptOutcome<TDocumentId>>;
 
     /**
      * Classifies an error into a specific type for retry handling.
@@ -406,12 +433,12 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * @param actionContext Optional context for telemetry
      * @returns Error type classification
      */
-    protected abstract classifyError(error: unknown, actionContext?: IActionContext): ErrorType;
+    protected abstract classifyError(error: unknown, actionContext?: TaskTelemetryContext): ErrorType;
 
     /**
      * Extracts partial progress from an error (for throttle recovery).
      *
-     * When a throttle or network error occurs, this method extracts how many
+     * When a throttle error is thrown, this method extracts how many
      * documents were successfully processed before the error. This allows
      * the retry logic to:
      * - Report accurate progress
@@ -426,8 +453,16 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      */
     protected abstract extractPartialProgress(
         error: unknown,
-        actionContext?: IActionContext,
+        actionContext?: TaskTelemetryContext,
     ): PartialProgress | undefined;
+
+    /**
+     * Gets the server-suggested retry wait in milliseconds from a thrown throttle or network error.
+     * Defaults to undefined, preserving the computed backoff when no suggestion is available.
+     */
+    protected getRetryAfterMs(_error: unknown): number | undefined {
+        return undefined;
+    }
 
     /**
      * Pre-filters documents for Skip strategy by querying the target for existing IDs.
@@ -451,7 +486,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      */
     protected preFilterForSkipStrategy(
         _documents: DocumentDetails[],
-        _actionContext?: IActionContext,
+        _actionContext?: TaskTelemetryContext,
     ): Promise<PreFilterResult<TDocumentId> | undefined> {
         return Promise.resolve(undefined);
     }
@@ -484,12 +519,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      * Estimates document memory usage in bytes.
      */
     private estimateDocumentMemory(document: DocumentDetails): number {
-        try {
-            const jsonString = JSON.stringify(document.documentContent);
-            return jsonString.length * 2; // UTF-16 encoding
-        } catch {
-            return 1024; // 1KB fallback
-        }
+        return this.settings.estimateDocumentSize(document);
     }
 
     // =================================
@@ -508,12 +538,7 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
             return;
         }
 
-        ext.outputChannel.trace(
-            vscode.l10n.t(
-                '[StreamingWriter] Writing {0} documents to target (may take a moment)...',
-                this.buffer.length.toString(),
-            ),
-        );
+        this.logger.trace(`[StreamingWriter] Writing ${this.buffer.length} documents to target (may take a moment)...`);
 
         let pendingDocs = [...this.buffer];
         const allErrors: Array<{ documentId?: TDocumentId; error: Error }> = [];
@@ -598,11 +623,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         // Record flush
         stats.recordFlush();
 
-        ext.outputChannel.trace(
-            vscode.l10n.t(
-                '[StreamingWriter] Buffer flush complete ({0} total processed so far)',
-                stats.getTotalProcessed().toString(),
-            ),
+        this.logger.trace(
+            `[StreamingWriter] Buffer flush complete (${stats.getTotalProcessed()} total processed so far)`,
         );
 
         // Clear buffer
@@ -620,7 +642,8 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
      *
      * When a throttle error occurs with partial progress (some documents were
      * successfully inserted before the rate limit was hit), we accumulate the
-     * partial progress and slice the batch to skip already-processed documents.
+     * partial progress and retry the remaining documents. Progress may be thrown
+     * or returned; explicit remaining documents override the default prefix slicing.
      *
      * The onPartialProgress callback is called immediately when partial progress
      * is detected during throttle recovery, allowing real-time progress reporting.
@@ -632,12 +655,12 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         batch: DocumentDetails[],
         strategy: ConflictResolutionStrategy,
         abortSignal: AbortSignal | undefined,
-        actionContext: IActionContext | undefined,
+        actionContext: TaskTelemetryContext | undefined,
         onPartialProgress: (partialResult: StrategyBatchResult<TDocumentId>) => void,
     ): Promise<StrategyBatchResult<TDocumentId> | null> {
         let currentBatch = batch;
         let attempt = 0;
-        const maxAttempts = 10;
+        const maxAttempts = this.settings.retry.maxAttemptsWithoutProgress;
 
         // For Skip strategy: pre-filter conflicts ONCE before retry loop
         if (strategy === ConflictResolutionStrategy.Skip) {
@@ -664,59 +687,62 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
                 return null;
             }
 
+            let outcome: BatchAttemptOutcome<TDocumentId>;
             try {
                 const result = await this.writeBatch(currentBatch, strategy, actionContext);
-                // Success - return the result (partial progress already reported via callback)
-                return result;
+                outcome = isBatchAttemptOutcome(result) ? result : { result };
             } catch (error) {
                 const errorType = this.classifyError(error, actionContext);
-
-                if (errorType === 'throttle') {
-                    const progress = this.extractPartialProgress(error, actionContext);
-                    const successfulCount = progress?.processedCount ?? 0;
-
-                    this.batchSizeAdapter.handleThrottle(successfulCount);
-
-                    if (successfulCount > 0) {
-                        const remainingCount = currentBatch.length - successfulCount;
-                        ext.outputChannel.debug(
-                            vscode.l10n.t(
-                                '[StreamingWriter] Throttle: wrote {0} docs, {1} remaining in batch',
-                                successfulCount.toString(),
-                                remainingCount.toString(),
-                            ),
-                        );
-
-                        // Report partial progress immediately via callback
-                        if (progress) {
-                            const partialResult = this.progressToResult(progress, strategy);
-                            onPartialProgress(partialResult);
-                        }
-
-                        // Slice the batch to only contain remaining documents
-                        currentBatch = currentBatch.slice(successfulCount);
-                        attempt = 0; // Reset attempts when progress is made
-                    } else {
-                        attempt++;
-                    }
-
-                    await this.retryDelay(attempt, abortSignal);
-                    continue;
+                if (errorType !== 'throttle' && errorType !== 'network') {
+                    throw error;
                 }
 
-                if (errorType === 'network') {
-                    attempt++;
-                    await this.retryDelay(attempt, abortSignal);
-                    continue;
-                }
-
-                // For 'conflict', 'validator', and 'other' - don't retry
-                throw error;
+                const progress =
+                    errorType === 'throttle' ? this.extractPartialProgress(error, actionContext) : undefined;
+                outcome = {
+                    result: this.progressToResult(progress ?? { processedCount: 0 }, strategy),
+                    remaining: progress?.remaining ?? currentBatch.slice(progress?.processedCount ?? 0),
+                    errorType,
+                    retryAfterMs: this.getRetryAfterMs(error),
+                };
             }
+
+            if (strategy === ConflictResolutionStrategy.Abort && outcome.result.errors?.length) {
+                return outcome.result;
+            }
+
+            if (!outcome.errorType && !outcome.remaining?.length) {
+                // Success - partial progress already reported via callback
+                return outcome.result;
+            }
+
+            const written = outcome.result.processedCount;
+            if (outcome.errorType === 'throttle') {
+                this.batchSizeAdapter.handleThrottle(written);
+            }
+
+            if (written > 0) {
+                const remainingCount = outcome.remaining?.length ?? 0;
+                this.logger.debug(
+                    `[StreamingWriter] Throttle: wrote ${written} docs, ${remainingCount} remaining in batch`,
+                );
+
+                onPartialProgress(outcome.result);
+                attempt = 0;
+            } else {
+                attempt++;
+            }
+
+            currentBatch = outcome.remaining ?? currentBatch.slice(outcome.result.processedCount);
+            if (currentBatch.length === 0) {
+                break;
+            }
+
+            await this.retryDelay(attempt, abortSignal, outcome.retryAfterMs);
         }
 
         if (currentBatch.length > 0) {
-            throw new Error(vscode.l10n.t('Failed to complete operation after {0} attempts', maxAttempts.toString()));
+            throw new Error(this.strings.failedAfterAttempts(maxAttempts.toString()));
         }
 
         // All documents processed via partial progress - return empty result
@@ -765,20 +791,25 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
     /**
      * Delays before retry with exponential backoff and jitter.
      *
-     * Uses ±30% jitter to prevent thundering herd when multiple clients
-     * are retrying simultaneously against the same server.
+     * Uses configurable jitter (±30% by default) to prevent thundering herd when multiple clients
+     * are retrying simultaneously against the same server. A valid server suggestion is an
+     * uncapped floor on this delay; cancellation interrupts the wait.
      */
-    private async retryDelay(attempt: number, abortSignal?: AbortSignal): Promise<void> {
-        const baseDelay = 100; // ms
-        const maxDelay = 5000; // ms
-        const jitterRange = 0.3; // ±30% jitter
+    private async retryDelay(attempt: number, abortSignal?: AbortSignal, retryAfterMs?: number): Promise<void> {
+        const backoff = computeRetryDelay(attempt, this.settings.retry);
+        const serverDelay =
+            retryAfterMs !== undefined && Number.isFinite(retryAfterMs) && retryAfterMs >= 0 ? retryAfterMs : 0;
+        const delay = Math.max(backoff, serverDelay);
+        if (serverDelay > backoff) {
+            this.logger.trace(
+                `[StreamingWriter] Waiting ${serverDelay} ms as suggested by the server (computed backoff ${backoff} ms)`,
+            );
+        }
 
-        // Calculate base exponential delay
-        const exponentialDelay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-
-        // Apply jitter: multiply by random factor in range [1-jitter, 1+jitter]
-        const jitterFactor = 1 + (Math.random() * 2 - 1) * jitterRange;
-        const delay = Math.round(exponentialDelay * jitterFactor);
+        if (abortSignal?.aborted) {
+            // The abort event has already fired; do not wait (a server-suggested wait has no cap).
+            return;
+        }
 
         await new Promise<void>((resolve) => {
             const timeout = setTimeout(resolve, delay);
@@ -811,21 +842,17 @@ export abstract class StreamingDocumentWriter<TDocumentId = unknown> {
         const firstError = errors[0];
         const currentStats = stats.getFinalStats();
 
-        ext.outputChannel.error(
-            vscode.l10n.t(
-                '[StreamingWriter] Fatal error ({0}): {1}',
-                strategy,
-                firstError?.error?.message ?? 'Unknown error',
-            ),
+        this.logger.error(
+            `[StreamingWriter] Fatal error (${strategy}): ${firstError?.error?.message ?? 'Unknown error'}`,
         );
 
         const statsError = new StreamingWriterError(
-            vscode.l10n.t('Write operation failed: {0}', firstError?.error?.message ?? 'Unknown error'),
+            this.strings.writeOperationFailed(firstError?.error?.message ?? this.strings.unknownError),
             currentStats,
             firstError?.error,
         );
 
-        ext.outputChannel.error(vscode.l10n.t('[StreamingWriter] Partial progress: {0}', statsError.getStatsString()));
+        this.logger.error(`[StreamingWriter] Partial progress: ${statsError.getStatsString()}`);
 
         throw statsError;
     }

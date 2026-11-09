@@ -3,9 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { l10n } from 'vscode';
-import { ext } from '../../../../extensionVariables';
+import { type TaskLogger, type TaskTelemetryContext } from '../../taskHost';
+import {
+    type DataTransferOptions,
+    type DataTransferStrings,
+    defaultDataTransferStrings,
+    noopDataTransferLogger,
+} from '../dataTransferHost';
 import { type DocumentDetails, type DocumentReader, type DocumentReaderOptions } from '../types';
 import { KeepAliveOrchestrator } from './KeepAliveOrchestrator';
 
@@ -32,9 +36,14 @@ export abstract class BaseDocumentReader implements DocumentReader {
     /** Source collection name */
     protected readonly collectionName: string;
 
-    protected constructor(databaseName: string, collectionName: string) {
+    private readonly logger: TaskLogger;
+    private readonly strings: DataTransferStrings;
+
+    protected constructor(databaseName: string, collectionName: string, options?: DataTransferOptions) {
         this.databaseName = databaseName;
         this.collectionName = collectionName;
+        this.logger = options?.logger ?? noopDataTransferLogger;
+        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
     }
 
     /**
@@ -132,10 +141,13 @@ export abstract class BaseDocumentReader implements DocumentReader {
         }
 
         // Keep-alive enabled: use orchestrator for buffer management
-        const orchestrator = new KeepAliveOrchestrator({
-            intervalMs: options.keepAliveIntervalMs,
-            timeoutMs: options.keepAliveTimeoutMs,
-        });
+        const orchestrator = new KeepAliveOrchestrator(
+            {
+                intervalMs: options.keepAliveIntervalMs,
+                timeoutMs: options.keepAliveTimeoutMs,
+            },
+            { logger: this.logger, strings: this.strings },
+        );
 
         try {
             // Start database stream with orchestrator
@@ -181,14 +193,12 @@ export abstract class BaseDocumentReader implements DocumentReader {
      * const count = await reader.countDocuments();
      * console.log(`Total documents: ${count}`);
      */
-    public async countDocuments(signal?: AbortSignal, actionContext?: IActionContext): Promise<number> {
-        ext.outputChannel.trace(
-            l10n.t('[Reader] Counting documents in {0}.{1}', this.databaseName, this.collectionName),
-        );
+    public async countDocuments(signal?: AbortSignal, actionContext?: TaskTelemetryContext): Promise<number> {
+        this.logger.trace(`[Reader] Counting documents in ${this.databaseName}.${this.collectionName}`);
 
         const count = await this.countDocumentsInDatabase(signal, actionContext);
 
-        ext.outputChannel.trace(l10n.t('[Reader] Document count result: {0} documents', count.toString()));
+        this.logger.trace(`[Reader] Document count result: ${count} documents`);
 
         return count;
     }
@@ -219,7 +229,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
      *
      * @example
      * // Azure Cosmos DB for MongoDB API implementation
-     * protected async *streamDocumentsFromDatabase(signal?: AbortSignal, actionContext?: IActionContext) {
+     * protected async *streamDocumentsFromDatabase(signal?: AbortSignal, actionContext?: TaskTelemetryContext) {
      *   const client = await ClustersClient.getClient(this.connectionId);
      *   const documentStream = client.streamDocuments(
      *     this.databaseName,
@@ -237,7 +247,7 @@ export abstract class BaseDocumentReader implements DocumentReader {
      */
     protected abstract streamDocumentsFromDatabase(
         signal?: AbortSignal,
-        actionContext?: IActionContext,
+        actionContext?: TaskTelemetryContext,
     ): AsyncIterable<DocumentDetails>;
 
     /**
@@ -264,11 +274,14 @@ export abstract class BaseDocumentReader implements DocumentReader {
      *
      * @example
      * // Azure Cosmos DB for MongoDB API implementation
-     * protected async countDocumentsInDatabase(signal?: AbortSignal, actionContext?: IActionContext) {
+     * protected async countDocumentsInDatabase(signal?: AbortSignal, actionContext?: TaskTelemetryContext) {
      *   const client = await ClustersClient.getClient(this.connectionId);
      *   // Use estimated count for O(1) performance
      *   return await client.estimateDocumentCount(this.databaseName, this.collectionName);
      * }
      */
-    protected abstract countDocumentsInDatabase(signal?: AbortSignal, actionContext?: IActionContext): Promise<number>;
+    protected abstract countDocumentsInDatabase(
+        signal?: AbortSignal,
+        actionContext?: TaskTelemetryContext,
+    ): Promise<number>;
 }

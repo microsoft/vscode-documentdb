@@ -4,8 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import Denque from 'denque';
-import { l10n } from 'vscode';
-import { ext } from '../../../../extensionVariables';
+import { type TaskLogger } from '../../taskHost';
+import {
+    type DataTransferOptions,
+    type DataTransferStrings,
+    defaultDataTransferStrings,
+    noopDataTransferLogger,
+} from '../dataTransferHost';
 import { type DocumentDetails } from '../types';
 
 /**
@@ -137,7 +142,12 @@ export class KeepAliveOrchestrator {
         maxBufferLength: 0,
     };
 
-    constructor(config?: KeepAliveConfig) {
+    private readonly logger: TaskLogger;
+    private readonly strings: DataTransferStrings;
+
+    constructor(config?: KeepAliveConfig, options?: DataTransferOptions) {
+        this.logger = options?.logger ?? noopDataTransferLogger;
+        this.strings = { ...defaultDataTransferStrings, ...options?.strings };
         // Filter out undefined values to ensure defaults are used
         // (object spread would overwrite defaults with undefined if keys exist)
         this.config = {
@@ -178,16 +188,14 @@ export class KeepAliveOrchestrator {
 
         // Check for timeout from keep-alive callback
         if (this.timedOut) {
-            throw new Error(l10n.t('Keep-alive timeout exceeded'));
+            throw new Error(this.strings.keepAliveTimeoutExceeded);
         }
 
         // 1. Try buffer first (already pre-fetched by keep-alive)
         if (!this.buffer.isEmpty()) {
             const doc = this.buffer.shift();
             if (doc) {
-                ext.outputChannel.trace(
-                    l10n.t('[KeepAlive] Read from buffer, remaining: {0} documents', this.buffer.length.toString()),
-                );
+                this.logger.trace(`[KeepAlive] Read from buffer, remaining: ${this.buffer.length} documents`);
                 return { done: false, value: doc };
             }
         }
@@ -253,12 +261,8 @@ export class KeepAliveOrchestrator {
         if (keepAliveElapsedMs >= this.config.timeoutMs) {
             // Keep-alive timeout exceeded - abort the operation
             await this.dbIterator.return?.();
-            const errorMessage = l10n.t(
-                'Keep-alive timeout exceeded: stream has been running for {0} seconds (limit: {1} seconds)',
-                Math.floor(keepAliveElapsedMs / 1000).toString(),
-                Math.floor(this.config.timeoutMs / 1000).toString(),
-            );
-            ext.outputChannel.error(l10n.t('[KeepAlive] {0}', errorMessage));
+            const errorMessage = `Keep-alive timeout exceeded: stream has been running for ${Math.floor(keepAliveElapsedMs / 1000)} seconds (limit: ${Math.floor(this.config.timeoutMs / 1000)} seconds)`;
+            this.logger.error(`[KeepAlive] ${errorMessage}`);
             this.timedOut = true;
             return;
         }
@@ -280,12 +284,8 @@ export class KeepAliveOrchestrator {
                         this.stats.maxBufferLength = currentBufferLength;
                     }
 
-                    ext.outputChannel.trace(
-                        l10n.t(
-                            '[KeepAlive] Background read: count={0}, buffer length={1}',
-                            this.stats.keepAliveReadCount.toString(),
-                            currentBufferLength.toString(),
-                        ),
+                    this.logger.trace(
+                        `[KeepAlive] Background read: count=${this.stats.keepAliveReadCount}, buffer length=${currentBufferLength}`,
                     );
                 }
             } catch {
@@ -293,12 +293,8 @@ export class KeepAliveOrchestrator {
                 // Persistent errors will surface when consumer calls next()
             }
         } else {
-            ext.outputChannel.trace(
-                l10n.t(
-                    '[KeepAlive] Skipped: only {0}s since last read (interval: {1}s)',
-                    Math.floor(timeSinceLastRead / 1000).toString(),
-                    Math.floor(this.config.intervalMs / 1000).toString(),
-                ),
+            this.logger.trace(
+                `[KeepAlive] Skipped: only ${Math.floor(timeSinceLastRead / 1000)}s since last read (interval: ${Math.floor(this.config.intervalMs / 1000)}s)`,
             );
         }
     }

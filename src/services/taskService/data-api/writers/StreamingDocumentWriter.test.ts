@@ -6,10 +6,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
-import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
 import {
     type AbortBatchResult,
+    ConflictResolutionStrategy,
+    type DocumentDetails,
+    type EnsureTargetExistsResult,
     type ErrorType,
     type GenerateNewIdsBatchResult,
     type OverwriteBatchResult,
@@ -17,7 +18,8 @@ import {
     type PreFilterResult,
     type SkipBatchResult,
     type StrategyBatchResult,
-} from './writerTypes.internal';
+} from '../types';
+import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
 
 // Mock extensionVariables (ext) module
 vi.mock('../../../../extensionVariables', () => ({

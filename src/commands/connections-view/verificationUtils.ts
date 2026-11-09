@@ -11,7 +11,7 @@ import {
     type ConnectionType,
     type StoredItem,
 } from '../../services/connectionStorageService';
-import { TaskService } from '../../services/taskService/taskService';
+import { TaskService } from '../../services/taskService/extension/taskServiceInstance';
 import { type TaskInfo } from '../../services/taskService/taskServiceResourceTracking';
 
 /**

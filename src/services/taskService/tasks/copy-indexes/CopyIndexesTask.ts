@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import {
@@ -11,6 +10,8 @@ import {
     type CollectionIndexCopier,
     type IndexCopyResult,
 } from '../../data-api/indexes/CollectionIndexCopier';
+import { createExtensionTaskOptions } from '../../extension/extensionTaskOptions';
+import { type TaskTelemetryContext } from '../../taskHost';
 import { Task } from '../../taskService';
 import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 
@@ -30,7 +31,7 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
         private readonly config: CopyIndexesConfig,
         private readonly indexCopier: CollectionIndexCopier,
     ) {
-        super();
+        super(createExtensionTaskOptions());
         this.name = vscode.l10n.t(
             'Copy indexes from "{sourceDatabase}/{sourceCollection}" to "{targetDatabase}/{targetCollection}"',
             {
@@ -46,13 +47,13 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
         return [this.config.source, this.config.target];
     }
 
-    protected async onInitialize(_signal: AbortSignal, context?: IActionContext): Promise<void> {
+    protected async onInitialize(_signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
         if (context) {
             context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
         }
     }
 
-    protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
+    protected async doWork(signal: AbortSignal, context?: TaskTelemetryContext): Promise<void> {
         let total = 0;
         let completed = 0;
 
@@ -135,7 +136,7 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
         ext.outputChannel.trace(vscode.l10n.t('[IndexCopy] {0}', message));
     }
 
-    private recordResultTelemetry(context: IActionContext | undefined, result: IndexCopyResult): void {
+    private recordResultTelemetry(context: TaskTelemetryContext | undefined, result: IndexCopyResult): void {
         if (!context) {
             return;
         }
