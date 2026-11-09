@@ -757,6 +757,43 @@ describe('runConnectionDiagnostics', (): void => {
         },
     );
 
+    it.each(['accessDenied', 'notFound'] as const)(
+        'preserves Secret %s metadata through the run while keeping network probes runnable and telemetry unchanged',
+        async (reason): Promise<void> => {
+            const request = options();
+            vi.mocked(request.target.getCredentials).mockResolvedValue({
+                connectionString: `mongodb://${host}/`,
+                availableAuthMethods: [AuthMethodId.NativeAuth],
+                selectedAuthMethod: AuthMethodId.NativeAuth,
+                credentialReadIssue: { source: 'kubernetes', reason },
+            });
+            const run = await runConnectionDiagnostics(request);
+            for (const id of ['credentials', 'dns', 'tcp', 'hello']) {
+                expect(run.results.find((result): boolean => result.checkId === id)?.status).toBe('pass');
+            }
+            for (const [id, code] of [
+                ['credentials', 'cs.credentialsMissing'],
+                ['authenticate', 'auth.credentialsUnavailable'],
+            ]) {
+                expect(run.results.find((result): boolean => result.checkId === id)?.findings).toEqual([
+                    expect.objectContaining({
+                        code,
+                        data: {
+                            missing: 'password',
+                            authMethod: AuthMethodId.NativeAuth,
+                            passwordSource: 'kubernetes',
+                            passwordReadIssue: reason,
+                        },
+                    }),
+                ]);
+            }
+            expect(run.results.find((result): boolean => result.checkId === 'authenticate')?.status).toBe('skipped');
+            expect(mongo.clients).toHaveLength(0);
+            expect(terminalContext().telemetry.properties.authSkipReason).toBe('password');
+            expect(JSON.stringify(terminalContext().telemetry)).not.toMatch(/passwordReadIssue|passwordSource/);
+        },
+    );
+
     it('records limited coverage and timeout aggregates without claiming a connection failure', async (): Promise<void> => {
         vi.useFakeTimers();
         let started: () => void = (): void => {};

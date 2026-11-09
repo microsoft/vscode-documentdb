@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CredentialCache, type CachedClusterCredentials } from '../documentdb/CredentialCache';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
-import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
+import { type DiagnosticClusterCredentials } from '../tree/documentdb/diagnosticCredentialRead';
 import { buildDiagnosticsSetup, detectAvailableCompressors } from './input';
 import { extensionFindingCodes } from './types';
 
@@ -17,7 +17,7 @@ const password = 'secret:@encoded';
 const user = 'fixture-user';
 const uri = 'mongodb://private.example:27017/';
 
-function credentials(overrides: Partial<EphemeralClusterCredentials> = {}): EphemeralClusterCredentials {
+function credentials(overrides: Partial<DiagnosticClusterCredentials> = {}): DiagnosticClusterCredentials {
     return { connectionString: uri, availableAuthMethods: [AuthMethodId.NativeAuth], ...overrides };
 }
 
@@ -56,6 +56,60 @@ describe('buildDiagnosticsSetup', (): void => {
         const builtIn: ReadonlySet<string> = new Set(builtInFindingCodes);
         expect(extensionFindingCodes.filter((code): boolean => builtIn.has(code))).toEqual([]);
     });
+
+    it.each(['accessDenied', 'notFound'] as const)(
+        'preserves a bounded Secret %s issue only while the password is missing',
+        (reason): void => {
+            const credentialReadIssue = { source: 'kubernetes', reason } as const;
+            const connectionProperties = { fixture: 'port-forward metadata' };
+            const setup = buildDiagnosticsSetup(
+                clusterId,
+                credentials({
+                    selectedAuthMethod: AuthMethodId.NativeAuth,
+                    credentialReadIssue,
+                    connectionProperties,
+                }),
+            );
+            expect(setup.credentialState).toBe('passwordMissing');
+            expect(setup.passwordReadIssue).toEqual(credentialReadIssue);
+            expect(setup.input.connectionString).toBe(uri);
+            expect(setup.connectionProperties).toBe(connectionProperties);
+            expect(setup.input.networkOptionLayers).toBeUndefined();
+        },
+    );
+
+    it.each(['accessDenied', 'notFound'] as const)(
+        'uses a complete cached password instead of a Secret %s issue',
+        (reason): void => {
+            vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached());
+            const setup = buildDiagnosticsSetup(
+                clusterId,
+                credentials({
+                    selectedAuthMethod: AuthMethodId.NativeAuth,
+                    credentialReadIssue: { source: 'kubernetes', reason },
+                }),
+            );
+            expect(setup.credentialState).toBe('available');
+            expect(setup).not.toHaveProperty('passwordReadIssue');
+            expect(setup.transientCredentials?.nativeAuthConfig).toEqual(cached().nativeAuthConfig);
+        },
+    );
+
+    it.each([undefined, AuthMethodId.NoAuth, AuthMethodId.NativeAuth])(
+        'omits the Secret issue when method %s does not have a missing password',
+        (selectedAuthMethod): void => {
+            const setup = buildDiagnosticsSetup(
+                clusterId,
+                credentials({
+                    selectedAuthMethod,
+                    nativeAuthConfig: { connectionUser: user, connectionPassword: password },
+                    credentialReadIssue: { source: 'kubernetes', reason: 'accessDenied' },
+                }),
+            );
+            expect(setup.credentialState).not.toBe('passwordMissing');
+            expect(setup).not.toHaveProperty('passwordReadIssue');
+        },
+    );
 
     it('honors the stored method before a cached method and never infers from available methods', async (): Promise<void> => {
         vi.mocked(CredentialCache.getCredentials).mockReturnValue(cached());

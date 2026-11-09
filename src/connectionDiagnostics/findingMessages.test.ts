@@ -106,6 +106,55 @@ function assertPlainMessage(message: FindingMessage): void {
 }
 
 describe('localized finding messages', () => {
+    it.each(['cs.credentialsMissing', 'auth.credentialsUnavailable'] as const)(
+        'explains bounded Kubernetes Secret read issues in %s without asking for a password',
+        (code): void => {
+            for (const reason of ['accessDenied', 'notFound'] as const) {
+                const message = findingMessages[code]({
+                    missing: 'password',
+                    passwordSource: 'kubernetes',
+                    passwordReadIssue: reason,
+                    secretName: 'PRIVATE-SECRET',
+                    namespace: 'PRIVATE-NAMESPACE',
+                    serviceName: 'PRIVATE-SERVICE',
+                    message: 'PRIVATE-ERROR',
+                });
+                expect(message.title).toBe(
+                    reason === 'accessDenied'
+                        ? 'Kubernetes Secret password unreadable'
+                        : 'Kubernetes Secret password not found',
+                );
+                expect(message.explanation).toContain(
+                    reason === 'accessDenied' ? 'was denied' : 'was not found',
+                );
+                expect(message.explanation).toContain('Network checks can still run.');
+                expect(message.nextStep).toContain(
+                    reason === 'accessDenied' ? 'can read the credential Secret' : 'credential Secret exists',
+                );
+                expect(JSON.stringify(message)).not.toMatch(/enter the password|PRIVATE-/);
+                assertPlainMessage(message);
+            }
+        },
+    );
+
+    it.each(['cs.credentialsMissing', 'auth.credentialsUnavailable'] as const)(
+        'keeps ordinary missing-password wording for unknown or non-Kubernetes issues in %s',
+        (code): void => {
+            const ordinary = findingMessages[code]({ missing: 'password' });
+            for (const data of [
+                { passwordSource: 'kubernetes', passwordReadIssue: 'private-error' },
+                { passwordSource: 'other', passwordReadIssue: 'accessDenied' },
+                { passwordReadIssue: 'notFound' },
+            ]) {
+                expect(findingMessages[code]({ missing: 'password', ...data })).toEqual(ordinary);
+            }
+            expect(ordinary.title).toBe('Stored password unavailable');
+            expect(ordinary.nextStep).toBe(
+                'Connect to the cluster and enter the password, then run the diagnosis again.',
+            );
+        },
+    );
+
     it.each([
         'tcp.refused',
         'tcp.timeout',

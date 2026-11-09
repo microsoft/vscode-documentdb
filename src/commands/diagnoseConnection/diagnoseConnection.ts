@@ -16,12 +16,11 @@ import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
 import { isTreeElementWithContextValue } from '../../tree/TreeElementWithContextValue';
+import { CLUSTER_ITEM_CONTEXT_VALUE, ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import {
-    CLUSTER_ITEM_CONTEXT_VALUE,
-    ClusterItemBase,
-    type EphemeralClusterCredentials,
-} from '../../tree/documentdb/ClusterItemBase';
-import { type DiagnosticCredentialRead } from '../../tree/documentdb/diagnosticCredentialRead';
+    type DiagnosticClusterCredentials,
+    type DiagnosticCredentialRead,
+} from '../../tree/documentdb/diagnosticCredentialRead';
 import { pickTreeNode } from '../../utils/pickItem/pickTreeNode';
 import { openConnectionDiagnostics } from '../../webviews/documentdb/connectionDiagnostics/connectionDiagnosticsController';
 
@@ -84,7 +83,7 @@ export async function diagnoseConnection(
         sourceView,
         correlation,
         // Each node's diagnostic read: silent, no tunnel, typed failures (design §4.3, §5.3).
-        getCredentials(read: DiagnosticCredentialRead): Promise<EphemeralClusterCredentials | undefined> {
+        getCredentials(read: DiagnosticCredentialRead): Promise<DiagnosticClusterCredentials | undefined> {
             return targetNode.getCredentialsForDiagnostics(read);
         },
     };

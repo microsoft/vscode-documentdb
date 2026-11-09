@@ -24,8 +24,10 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
 import { CredentialCache } from '../documentdb/CredentialCache';
-import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
-import { ConnectionSourceUnavailableError } from '../tree/documentdb/diagnosticCredentialRead';
+import {
+    ConnectionSourceUnavailableError,
+    type DiagnosticClusterCredentials,
+} from '../tree/documentdb/diagnosticCredentialRead';
 import { nonNullValue } from '../utils/nonNull';
 import { createRunOwnedClient, type RunOwnedClient } from './auth/runOwnedClient';
 import { createAuthenticateCheck } from './checks/authenticate';
@@ -69,7 +71,7 @@ interface DiagnosticsCheckInputs {
     readonly target: DiagnosticsTarget;
     readonly getSetup: () => DiagnosticsSetup;
     readonly peekSetup: () => DiagnosticsSetup | undefined;
-    readonly onResolved: (credentials: EphemeralClusterCredentials) => void;
+    readonly onResolved: (credentials: DiagnosticClusterCredentials) => void;
     readonly onResolutionFailed: (error: unknown) => void;
     readonly getResolutionError: () => unknown;
     readonly getTelemetryProperties: () => ITelemetryContext['properties'];
@@ -214,7 +216,7 @@ export async function runConnectionDiagnostics(
                     clusterId: options.target.clusterId,
                     displayName: options.target.displayName,
                     sourceView: options.target.sourceView,
-                    async getCredentials(read): Promise<EphemeralClusterCredentials | undefined> {
+                    async getCredentials(read): Promise<DiagnosticClusterCredentials | undefined> {
                         const credentials = await options.target.getCredentials(read);
                         const cached = CredentialCache.getCredentials(options.target.clusterId);
                         if (credentials) {

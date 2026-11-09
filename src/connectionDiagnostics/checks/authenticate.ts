@@ -38,6 +38,7 @@ import { prepareDriverConnectionString } from '../../documentdb/srv/prepareDrive
 import { ConnectionStartupTimings } from '../../documentdb/utils/ConnectionStartupTimings';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { type CredentialReadIssue } from '../../tree/documentdb/diagnosticCredentialRead';
 import { type AuthTraceContext } from '../../utils/authTrace';
 import { type RunOwnedClient } from '../auth/runOwnedClient';
 import { summarizeTokenClaims, type TokenClaimSummary } from '../auth/tokenClaims';
@@ -303,7 +304,7 @@ export function createAuthenticateCheck(
             return skipped('method');
         }
         if (setup.credentialState === 'passwordMissing') {
-            return skipped('password', method);
+            return skipped('password', method, setup.passwordReadIssue);
         }
 
         const oidc = method === AuthMethodId.MicrosoftEntraID || method === AuthMethodId.ManagedIdentity;
@@ -605,12 +606,16 @@ export function createAuthenticateCheck(
         }
     }
 
-    function skipped(missing: 'method' | 'password', method?: AuthMethodId): CheckOutcome<FindingCode> {
+    function skipped(
+        missing: 'method' | 'password',
+        method?: AuthMethodId,
+        passwordReadIssue?: CredentialReadIssue,
+    ): CheckOutcome<FindingCode> {
         return {
             status: 'skipped',
             skippedBecause: { reason: 'inputUnavailable' },
             facts: { ...(method === undefined ? {} : { authMethod: method }), authenticated: false },
-            findings: [credentialsUnavailableFinding(missing, method)],
+            findings: [credentialsUnavailableFinding(missing, method, passwordReadIssue)],
         };
     }
 
@@ -636,7 +641,10 @@ export function createAuthenticateCheck(
             steps?.skip('auth.serverAuthentication', 'dependencySkipped', 'auth.token');
         }
         facts.authenticated = false;
-        return { status: 'skipped', findings: [credentialsUnavailableFinding(missing, method)] };
+        return {
+            status: 'skipped',
+            findings: [credentialsUnavailableFinding(missing, method, getSetup().passwordReadIssue)],
+        };
     }
 }
 
@@ -843,7 +851,10 @@ function entraTokenFailedFinding(
 function credentialsUnavailableFinding(
     missing: 'method' | 'password' | 'entraSession',
     method: AuthMethodId | undefined,
+    passwordReadIssue?: CredentialReadIssue,
 ): Finding<FindingCode> {
+    const kubernetesIssue =
+        missing === 'password' && passwordReadIssue?.source === 'kubernetes' ? passwordReadIssue.reason : undefined;
     const text = {
         method: 'No authentication method has been chosen, so authentication was not tested.',
         password: 'No stored password is available, so authentication was not tested.',
@@ -853,8 +864,14 @@ function credentialsUnavailableFinding(
     return makeFinding(
         'auth.credentialsUnavailable',
         'info',
-        { missing, ...(method === undefined ? {} : { authMethod: method }) },
-        text,
+        {
+            missing,
+            ...(method === undefined ? {} : { authMethod: method }),
+            ...(kubernetesIssue === undefined
+                ? {}
+                : { passwordSource: 'kubernetes', passwordReadIssue: kubernetesIssue }),
+        },
+        kubernetesIssue ? 'The Kubernetes Secret password could not be read, so authentication was not tested.' : text,
     );
 }
 

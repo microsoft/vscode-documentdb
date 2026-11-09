@@ -10,6 +10,35 @@ import { type DiagnosticsSetup } from '../input';
 import { createCredentialsCheck } from './credentials';
 
 describe('credentials check', (): void => {
+    it.each(['accessDenied', 'notFound'] as const)(
+        'allows network checks and records the bounded Kubernetes Secret %s issue',
+        async (reason): Promise<void> => {
+            const result = await createCredentialsCheck(
+                (): DiagnosticsSetup => ({
+                    input: { connectionString: 'mongodb://private.example/' },
+                    credentialState: 'passwordMissing',
+                    chosenAuthMethod: AuthMethodId.NativeAuth,
+                    passwordReadIssue: { source: 'kubernetes', reason },
+                    connectionProperties: undefined,
+                    transientCredentials: undefined,
+                }),
+            ).run({} as RunContext, new AbortController().signal);
+            expect(result.status).toBe('pass');
+            expect(result.facts).toEqual({ authMethod: AuthMethodId.NativeAuth, credentialState: 'passwordMissing' });
+            expect(result.findings).toEqual([
+                expect.objectContaining({
+                    code: 'cs.credentialsMissing',
+                    data: {
+                        missing: 'password',
+                        authMethod: AuthMethodId.NativeAuth,
+                        passwordSource: 'kubernetes',
+                        passwordReadIssue: reason,
+                    },
+                }),
+            ]);
+        },
+    );
+
     it.each([
         ['available', AuthMethodId.NativeAuth, undefined],
         ['available', AuthMethodId.NoAuth, undefined],

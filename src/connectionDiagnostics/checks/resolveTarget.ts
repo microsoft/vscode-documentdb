@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Check, type CheckOutcome, type Finding, type RunContext } from '@documentdb-js/connection-diagnostics';
-import { type EphemeralClusterCredentials } from '../../tree/documentdb/ClusterItemBase';
 import {
     ConnectionEndpointUnavailableError,
     ConnectionInputCancelledError,
     ConnectionSourceUnavailableError,
     type ConnectionDetailsSource,
+    type DiagnosticClusterCredentials,
 } from '../../tree/documentdb/diagnosticCredentialRead';
 import { httpStatus, networkCode } from '../../utils/connectionErrorClassification';
 import { safeErrorName } from '../outputTrace';
@@ -93,14 +93,14 @@ export function classifyResolutionFailure(error: unknown): Finding<FindingCode> 
  */
 export function createResolveTargetCheck(
     target: DiagnosticsTarget,
-    onResolved: (credentials: EphemeralClusterCredentials) => void,
+    onResolved: (credentials: DiagnosticClusterCredentials) => void,
     onFailed: (error: unknown) => void,
 ): Check<RunContext, FindingCode> {
     return {
         id: 'resolveTarget',
         scope: 'run',
         async run(_context, signal): Promise<CheckOutcome<FindingCode>> {
-            let credentials: EphemeralClusterCredentials | undefined;
+            let credentials: DiagnosticClusterCredentials | undefined;
             try {
                 credentials = await target.getCredentials({ signal });
             } catch (error) {

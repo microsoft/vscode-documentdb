@@ -5,6 +5,7 @@
 
 import { type DocumentDBEntraCloud } from '../documentdb/auth/entraScopes';
 import { type ConnectionPreparationReason } from '../services/connectionReachabilityService';
+import { type CredentialReadIssue } from '../tree/documentdb/diagnosticCredentialRead';
 
 export interface EnvRemoteExtensionHostData {
     readonly remoteKind: string;
@@ -51,6 +52,8 @@ export interface PrepareSharedTunnelData {
 export interface CsCredentialsMissingData {
     readonly missing: 'method' | 'password';
     readonly authMethod?: string;
+    readonly passwordSource?: 'kubernetes';
+    readonly passwordReadIssue?: CredentialReadIssue['reason'];
 }
 
 /** Counts and cloud enums only: host names never enter finding data. */
@@ -81,6 +84,8 @@ export interface AuthMechanismMismatchData {
 export interface AuthCredentialsUnavailableData {
     readonly missing: 'method' | 'password' | 'entraSession';
     readonly authMethod?: string;
+    readonly passwordSource?: 'kubernetes';
+    readonly passwordReadIssue?: CredentialReadIssue['reason'];
 }
 
 export interface AuthServerSelectionTimeoutData {

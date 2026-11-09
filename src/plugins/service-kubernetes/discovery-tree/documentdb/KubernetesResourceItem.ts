@@ -24,6 +24,8 @@ import { ext } from '../../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
 import {
     ConnectionEndpointUnavailableError,
+    type CredentialReadIssue,
+    type DiagnosticClusterCredentials,
     type DiagnosticCredentialRead,
 } from '../../../../tree/documentdb/diagnosticCredentialRead';
 import { readCredentialsForDiagnostics } from '../../../../tree/documentdb/readCredentialsForDiagnostics';
@@ -237,7 +239,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
      */
     public override async getCredentialsForDiagnostics(
         read: DiagnosticCredentialRead,
-    ): Promise<EphemeralClusterCredentials | undefined> {
+    ): Promise<DiagnosticClusterCredentials | undefined> {
         return readCredentialsForDiagnostics(
             'getCredentials.diagnostic',
             'kubernetes',
@@ -393,7 +395,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
     private async resolveClusterCredentials(
         context: IActionContext,
         options: ResolveConnectionOptions,
-    ): Promise<EphemeralClusterCredentials | undefined> {
+    ): Promise<DiagnosticClusterCredentials | undefined> {
         const signal = options.diagnostic?.signal;
         const kubeConfig = await loadConfiguredKubeConfig(this.sourceId);
         const coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
@@ -416,26 +418,50 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         // DKO services resolve credentials via DocumentDB CR secrets.
         let resolvedUsername: string | undefined;
         let resolvedPassword: string | undefined;
+        let credentialReadIssue: CredentialReadIssue | undefined;
 
-        const dkoCreds = await resolveDocumentDBCredentials(
-            coreApi,
-            kubeConfig,
-            this.serviceInfo.namespace,
-            this.serviceInfo.serviceName,
-        );
+        const dkoCreds = options.diagnostic
+            ? await resolveDocumentDBCredentials(
+                  coreApi,
+                  kubeConfig,
+                  this.serviceInfo.namespace,
+                  this.serviceInfo.serviceName,
+                  {
+                      strict: true,
+                      // Generic services may read annotated Secrets without permission to list DKO resources.
+                      ...(this.serviceInfo.sourceKind === 'generic' ? { ignoreDkoAccessDenied: true } : {}),
+                  },
+              )
+            : await resolveDocumentDBCredentials(
+                  coreApi,
+                  kubeConfig,
+                  this.serviceInfo.namespace,
+                  this.serviceInfo.serviceName,
+              );
 
-        if (dkoCreds) {
+        if (dkoCreds && 'credentialReadIssue' in dkoCreds) {
+            credentialReadIssue = dkoCreds.credentialReadIssue;
+        } else if (dkoCreds) {
             resolvedUsername = dkoCreds.username;
             resolvedPassword = dkoCreds.password;
         } else if (this.serviceInfo.sourceKind === 'generic' && this.serviceInfo.credentialSecretName) {
             // Generic services may declare a credential secret via the
             // documentdb.vscode.extension/credential-secret annotation.
-            const genericCreds = await resolveGenericServiceCredentials(
-                coreApi,
-                this.serviceInfo.namespace,
-                this.serviceInfo.credentialSecretName,
-            );
-            if (genericCreds) {
+            const genericCreds = options.diagnostic
+                ? await resolveGenericServiceCredentials(
+                      coreApi,
+                      this.serviceInfo.namespace,
+                      this.serviceInfo.credentialSecretName,
+                      { strict: true },
+                  )
+                : await resolveGenericServiceCredentials(
+                      coreApi,
+                      this.serviceInfo.namespace,
+                      this.serviceInfo.credentialSecretName,
+                  );
+            if (genericCreds && 'credentialReadIssue' in genericCreds) {
+                credentialReadIssue = genericCreds.credentialReadIssue;
+            } else if (genericCreds) {
                 resolvedUsername = genericCreds.username;
                 resolvedPassword = genericCreds.password;
             }
@@ -462,6 +488,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,
             connectionProperties: resolvedConnectionDetails.connectionProperties,
+            ...(credentialReadIssue ? { credentialReadIssue } : {}),
         };
     }
 

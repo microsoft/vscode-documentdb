@@ -29,6 +29,8 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { AuthInputUnavailableError } from '../../documentdb/auth/createAuthHandler';
+import { NativeAuthHandler } from '../../documentdb/auth/NativeAuthHandler';
 import type * as documentdbTokenResource from '../../documentdb/auth/documentdbTokenResource';
 import { type TokenResourceResolverDeps } from '../../documentdb/auth/documentdbTokenResource';
 import type * as entraTokenFailures from '../../documentdb/auth/entraErrors/entraTokenFailures';
@@ -386,6 +388,46 @@ describe('createAuthenticateCheck', (): void => {
     });
 
     describe('skips only where a real connect would prompt', (): void => {
+        it.each([
+            ['accessDenied', 'passwordMissing'],
+            ['notFound', 'passwordMissing'],
+            ['accessDenied', 'available'],
+            ['notFound', 'available'],
+        ] as const)(
+            'preserves a Kubernetes Secret %s issue when auth is unavailable from state %s',
+            async (reason, credentialState): Promise<void> => {
+                const deps = fakeDeps();
+                if (credentialState === 'available') {
+                    vi.spyOn(NativeAuthHandler.prototype, 'configureAuth').mockRejectedValue(
+                        new AuthInputUnavailableError('password'),
+                    );
+                }
+                const setup: DiagnosticsSetup = {
+                    ...setupFor(AuthMethodId.NativeAuth, privateHost, {}, credentialState),
+                    passwordReadIssue: { source: 'kubernetes', reason },
+                };
+                const { result, telemetry } = await runAuth(setup, { deps });
+                expect(result).toMatchObject({
+                    status: 'skipped',
+                    skippedBecause: { reason: 'inputUnavailable' },
+                    findings: [
+                        expect.objectContaining({
+                            code: 'auth.credentialsUnavailable',
+                            data: {
+                                missing: 'password',
+                                authMethod: AuthMethodId.NativeAuth,
+                                passwordSource: 'kubernetes',
+                                passwordReadIssue: reason,
+                            },
+                        }),
+                    ],
+                });
+                expect(deps.createClient).not.toHaveBeenCalled();
+                expect(mocks.getSessionFromVSCode).not.toHaveBeenCalled();
+                expect(JSON.stringify(telemetry)).not.toMatch(/passwordReadIssue|passwordSource/);
+            },
+        );
+
         it.each([
             ['no chosen method', setupFor(undefined, publicHost), 'method', undefined],
             [

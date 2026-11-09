@@ -4,8 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type BuiltInFindingCode } from '@documentdb-js/connection-diagnostics';
-import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
-import { type DiagnosticCredentialRead } from '../tree/documentdb/diagnosticCredentialRead';
+import {
+    type DiagnosticClusterCredentials,
+    type DiagnosticCredentialRead,
+} from '../tree/documentdb/diagnosticCredentialRead';
 
 export const extensionFindingCodes = [
     'env.remoteExtensionHost',
@@ -63,5 +65,5 @@ export interface DiagnosticsTarget {
      * check, under the whole-run timeout and the run's cancellation. `undefined` means the connection
      * no longer exists.
      */
-    getCredentials(read: DiagnosticCredentialRead): Promise<EphemeralClusterCredentials | undefined>;
+    getCredentials(read: DiagnosticCredentialRead): Promise<DiagnosticClusterCredentials | undefined>;
 }

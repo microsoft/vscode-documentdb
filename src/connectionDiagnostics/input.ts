@@ -10,7 +10,10 @@ import { buildAuthConnectionTarget } from '../documentdb/auth/authConnectionTarg
 import { getSrvFallbackMode } from '../documentdb/srv/prepareDriverConnectionString';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { addAuthenticationDataToConnectionString } from '../documentdb/utils/connectionStringHelpers';
-import { type EphemeralClusterCredentials } from '../tree/documentdb/ClusterItemBase';
+import {
+    type CredentialReadIssue,
+    type DiagnosticClusterCredentials,
+} from '../tree/documentdb/diagnosticCredentialRead';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 
 /** Host-only, transient input. Never include this object in results, events or telemetry. */
@@ -18,6 +21,7 @@ export interface DiagnosticsSetup {
     readonly input: DiagnosticsInput;
     readonly chosenAuthMethod: AuthMethodId | undefined;
     readonly credentialState: 'available' | 'noMethod' | 'passwordMissing';
+    readonly passwordReadIssue?: CredentialReadIssue;
     readonly connectionProperties: Record<string, unknown> | undefined;
     readonly transientCredentials: CachedClusterCredentials | undefined;
 }
@@ -48,7 +52,7 @@ export function unresolvedDiagnosticsInput(): DiagnosticsInput {
 }
 
 /** Builds the run's host-only setup from the target's resolved, non-empty connection details. */
-export function buildDiagnosticsSetup(clusterId: string, credentials: EphemeralClusterCredentials): DiagnosticsSetup {
+export function buildDiagnosticsSetup(clusterId: string, credentials: DiagnosticClusterCredentials): DiagnosticsSetup {
     const cached = CredentialCache.getCredentials(clusterId);
     const chosenAuthMethod = credentials.selectedAuthMethod ?? cached?.authMechanism;
     let identitySource: 'target' | 'cache' | undefined;
@@ -140,6 +144,9 @@ export function buildDiagnosticsSetup(clusterId: string, credentials: EphemeralC
         },
         chosenAuthMethod,
         credentialState,
+        ...(credentialState === 'passwordMissing' && credentials.credentialReadIssue
+            ? { passwordReadIssue: credentials.credentialReadIssue }
+            : {}),
         connectionProperties: credentials.connectionProperties,
         transientCredentials,
     };

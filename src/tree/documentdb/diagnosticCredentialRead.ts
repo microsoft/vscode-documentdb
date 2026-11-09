@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type EphemeralClusterCredentials } from './ClusterItemBase';
+
 /**
  * The diagnostic-intent read of a cluster node's connection details, used by connection
  * diagnostics (design §4.3, §5.3).
@@ -33,6 +35,15 @@ export interface DiagnosticCredentialRead {
 
 /** Where a node reads its connection details from. Bounded; safe for reports and telemetry. */
 export type ConnectionDetailsSource = 'savedConnection' | 'azure' | 'kubernetes' | 'atlas' | 'other';
+
+export interface CredentialReadIssue {
+    readonly source: ConnectionDetailsSource;
+    readonly reason: 'accessDenied' | 'notFound';
+}
+
+export interface DiagnosticClusterCredentials extends EphemeralClusterCredentials {
+    readonly credentialReadIssue?: CredentialReadIssue;
+}
 
 /** The source holding the connection details (Azure, the Kubernetes API, Atlas) could not be read. */
 export class ConnectionSourceUnavailableError extends Error {

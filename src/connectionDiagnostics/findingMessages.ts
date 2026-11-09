@@ -64,6 +64,30 @@ function missingCredentialsMessage(data: FindingData): FindingMessage {
                 ),
             };
         case 'password':
+            if (stringField(data, 'passwordSource') === 'kubernetes') {
+                switch (stringField(data, 'passwordReadIssue')) {
+                    case 'accessDenied':
+                        return {
+                            title: vscode.l10n.t('Kubernetes Secret password unreadable'),
+                            explanation: vscode.l10n.t(
+                                'Access to the Kubernetes Secret holding the password was denied. Network checks can still run.',
+                            ),
+                            nextStep: vscode.l10n.t(
+                                'Check that the kubeconfig context can read the credential Secret in Kubernetes, then run the diagnosis again.',
+                            ),
+                        };
+                    case 'notFound':
+                        return {
+                            title: vscode.l10n.t('Kubernetes Secret password not found'),
+                            explanation: vscode.l10n.t(
+                                'The Kubernetes Secret holding the password was not found. Network checks can still run.',
+                            ),
+                            nextStep: vscode.l10n.t(
+                                'Check that the credential Secret exists in the service namespace in Kubernetes, then run the diagnosis again.',
+                            ),
+                        };
+                }
+            }
             return {
                 title: vscode.l10n.t('Stored password unavailable'),
                 explanation: vscode.l10n.t('No stored password is available. Network checks can still run.'),

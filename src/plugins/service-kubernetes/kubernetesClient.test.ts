@@ -1722,6 +1722,123 @@ describe('kubernetesClient', () => {
         });
     });
 
+    describe('strict diagnostic credential reads', () => {
+        const listResources = vi.fn();
+        const readSecret = vi.fn<CoreV1Api['readNamespacedSecret']>();
+        const coreApi = createPartialMock<CoreV1Api>({ readNamespacedSecret: readSecret });
+        const kubeConfig = createPartialMock<KubeConfig>({
+            makeApiClient: vi.fn().mockReturnValue({ listNamespacedCustomObject: listResources }),
+        });
+
+        beforeEach(() => {
+            listResources.mockReset().mockResolvedValue({
+                items: [{ metadata: { name: 'mydb' }, spec: { documentDbCredentialSecret: 'my-secret' } }],
+            });
+            readSecret.mockReset().mockResolvedValue({
+                data: {
+                    username: Buffer.from('admin').toString('base64'),
+                    password: Buffer.from('private-password').toString('base64'),
+                },
+            });
+        });
+
+        function read(
+            kind: 'dko' | 'generic',
+            strict: boolean,
+        ): ReturnType<typeof resolveGenericServiceCredentials> {
+            if (kind === 'dko') {
+                return strict
+                    ? resolveDocumentDBCredentials(coreApi, kubeConfig, 'default', 'documentdb-service-mydb', {
+                          strict: true,
+                      })
+                    : resolveDocumentDBCredentials(coreApi, kubeConfig, 'default', 'documentdb-service-mydb');
+            }
+            return strict
+                ? resolveGenericServiceCredentials(coreApi, 'default', 'my-secret', { strict: true })
+                : resolveGenericServiceCredentials(coreApi, 'default', 'my-secret');
+        }
+
+        it.each([false, true])('treats a DKO list 404 as no CRD with strict=%s', async (strict) => {
+            listResources.mockRejectedValue(createApiExceptionLike(404, 'private-resource'));
+            await expect(read('dko', strict)).resolves.toBeUndefined();
+            expect(readSecret).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            createApiExceptionLike(403, 'private-resource'),
+            createApiExceptionLike(401, 'private-resource'),
+            createApiExceptionLike(500, 'private-resource'),
+            Object.assign(new Error('private-network-error'), { code: 'ECONNREFUSED' }),
+        ])('rethrows the original DKO list failure only for diagnostic reads: %s', async (error) => {
+            listResources.mockRejectedValue(error);
+            await expect(read('dko', false)).resolves.toBeUndefined();
+            await expect(read('dko', true)).rejects.toBe(error);
+            expect(readSecret).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            [403, true],
+            [404, true],
+            [401, false],
+            [500, false],
+            ['ECONNRESET', false],
+        ] as const)('limits the generic DKO-list exception to 403 (and benign 404): %s', async (code, ignored) => {
+            const error = Object.assign(new Error('private-list-error'), { code });
+            listResources.mockRejectedValue(error);
+            const result = resolveDocumentDBCredentials(coreApi, kubeConfig, 'default', 'documentdb-service-mydb', {
+                strict: true,
+                ignoreDkoAccessDenied: true,
+            });
+            if (ignored) {
+                await expect(result).resolves.toBeUndefined();
+            } else {
+                await expect(result).rejects.toBe(error);
+            }
+            expect(readSecret).not.toHaveBeenCalled();
+        });
+
+        it.each(['dko', 'generic'] as const)('returns credentials on a successful strict %s read', async (kind) => {
+            await expect(read(kind, true)).resolves.toMatchObject({
+                username: 'admin',
+                password: 'private-password',
+            });
+            expect(readSecret).toHaveBeenCalledExactlyOnceWith({ name: 'my-secret', namespace: 'default' });
+        });
+
+        it.each([
+            ['dko', 403, 'accessDenied'],
+            ['dko', 404, 'notFound'],
+            ['generic', 403, 'accessDenied'],
+            ['generic', 404, 'notFound'],
+        ] as const)('reports a bounded %s Secret %s issue only for diagnostics', async (kind, status, reason) => {
+            readSecret.mockRejectedValue(createApiExceptionLike(status, 'private-secret private-namespace'));
+            await expect(read(kind, false)).resolves.toBeUndefined();
+            await expect(read(kind, true)).resolves.toEqual({
+                credentialReadIssue: { source: 'kubernetes', reason },
+            });
+        });
+
+        it.each(['dko', 'generic'] as const)(
+            'preserves original %s Secret network errors for diagnostics and suppresses ordinary failures',
+            async (kind) => {
+                const error = Object.assign(new Error('private-secret-network-error'), { code: 'ETIMEDOUT' });
+                readSecret.mockRejectedValue(error);
+                await expect(read(kind, false)).resolves.toBeUndefined();
+                await expect(read(kind, true)).rejects.toBe(error);
+            },
+        );
+
+        it.each([
+            ['dko', 'username'],
+            ['dko', 'password'],
+            ['generic', 'username'],
+            ['generic', 'password'],
+        ] as const)('retains the ordinary missing-password result for a %s Secret lacking %s', async (kind, key) => {
+            readSecret.mockResolvedValue({ data: { [key]: Buffer.from('private-value').toString('base64') } });
+            await expect(read(kind, true)).resolves.toBeUndefined();
+        });
+    });
+
     // -------------------------------------------------------------------------
     // isValidKubernetesSecretName
     // -------------------------------------------------------------------------

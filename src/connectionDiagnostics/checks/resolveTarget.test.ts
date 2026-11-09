@@ -97,6 +97,22 @@ describe('resolveTarget check (review R2, option A)', (): void => {
         expect(onResolved).toHaveBeenCalledExactlyOnceWith(credentials);
     });
 
+    it('passes Secret-read metadata to setup without putting it into resolution facts', async (): Promise<void> => {
+        const credentials = {
+            connectionString: 'mongodb://private.example/',
+            availableAuthMethods: [],
+            credentialReadIssue: { source: 'kubernetes', reason: 'accessDenied' } as const,
+        };
+        const onResolved = vi.fn();
+        const result = await createResolveTargetCheck(
+            target(async () => credentials),
+            onResolved,
+            vi.fn(),
+        ).run({} as RunContext, new AbortController().signal);
+        expect(result).toEqual({ status: 'pass', facts: {}, findings: [] });
+        expect(onResolved).toHaveBeenCalledExactlyOnceWith(credentials);
+    });
+
     it('performs nothing when the read settles after the run signal aborted', async (): Promise<void> => {
         const controller = new AbortController();
         const onResolved = vi.fn();

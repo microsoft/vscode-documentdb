@@ -37,7 +37,7 @@ import { containsRetryNode, createRetryNode } from '../api/retryNode';
 import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { DatabaseItem } from './DatabaseItem';
-import { type DiagnosticCredentialRead } from './diagnosticCredentialRead';
+import { type DiagnosticClusterCredentials, type DiagnosticCredentialRead } from './diagnosticCredentialRead';
 
 /**
  * Full connection details for a DocumentDB cluster used at runtime during service discovery.
@@ -190,7 +190,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      */
     public getCredentialsForDiagnostics(
         _read: DiagnosticCredentialRead,
-    ): Promise<EphemeralClusterCredentials | undefined> {
+    ): Promise<DiagnosticClusterCredentials | undefined> {
         return this.getCredentials();
     }
 
