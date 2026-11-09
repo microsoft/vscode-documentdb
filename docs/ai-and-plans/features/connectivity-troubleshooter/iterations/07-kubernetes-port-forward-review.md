@@ -31,6 +31,29 @@ the leader selected Opus's recommended narrow exception: only generic services i
 403 and continue to their annotated Secret; network failures still propagate, and DKO services
 remain strict. This changes diagnostic failure handling only, not ordinary connections or permissions.
 
+### Verification and handoff
+
+Six implementation/documentation items are committed. WI-V1 remains a manual workbench gap,
+not a passing outage experiment. WI-K5 is excluded and WI-K6 is deferred.
+
+**Case 1:** `npm run build` passed; the focused Vitest run across the extension diagnostics,
+Kubernetes plugin, reachability service, classification utility and package passed
+69 files / 2,117 tests.
+
+**Case 2:** all required commands ran: `npm run l10n`, `npm run prettier-fix`,
+`npm run l10n:check`, `npm run lint`, `npm run build`, `npm run typecheck:tests`,
+`npx vitest run`, and `npm run package`. All passed after the type-only WI-K2 lint follow-up
+`2fd30d49`; it replaced an inline import type and annotated the caught error as `unknown`,
+without changing behavior. The full runtime suite passed 384 files / 7,829 tests, with one
+skipped test. The exact strict package-test type-check script passed separately.
+The lint follow-up also passed 99 focused tests and `npx tsc --noEmit -p .`.
+Generated localization and formatter output are committed separately as `0c54e890`.
+
+The AI pre-review is this committed iteration and the item-specific Opus approvals recorded
+below: eight completed advisor consultations plus one interrupted initial planning attempt.
+All blocking verdicts were followed; optional broader changes were not added. The operator's
+push instruction is authorized; final CI results will be reported against the pushed SHA.
+
 ## Scope and provenance
 
 - **Issue:** [#1069](https://github.com/microsoft/vscode-documentdb/issues/1069), "Connection
@@ -536,7 +559,8 @@ applies per commit.
   copy and save keep the best-effort behavior.
 - Strict mode, DKO list: a 404 (CRD not installed) still means "no DKO resources"; any other failure
   throws, so the existing wrapper reports `target.sourceInaccessible` (unreachable, access denied,
-  sign-in required) under Connection settings.
+  sign-in required) under Connection settings. The recorded option-2 exception allows a generic
+  service's DKO-list 403 to continue to its annotated Secret; DKO services stay strict.
 - Strict mode, Secret read: a network failure throws as above. A 403 or 404 does **not** stop the run
   (the real connect would prompt for the password, so network checks are still meaningful); it returns
   credentials without a password plus a bounded `credentialReadIssue` (`accessDenied`, `notFound`), and
@@ -555,6 +579,8 @@ applies per commit.
 > the verification batch. Added 53 focused tests; seven files, 169 tests passed, and
 > `npx tsc --noEmit -p .` passed. Kept ordinary-connect call assertions; diagnostic intent
 > assertions now require `verifyEndpoint: true`. K3 owns the localized finding/trace mapping.
+> The later type-only lint follow-up is `2fd30d49`; lint, 99 focused tests and the production
+> type-check passed afterward, with no behavioral rework or new technical decision.
 
 - Add `verifyEndpoint?: boolean` to `ConnectionReachabilityIntent` ("confirm what the provider can
   cheaply confirm before reporting success"); the `prepare` check sets it. A separate flag keeps the
