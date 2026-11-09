@@ -74,7 +74,7 @@ export function createPrepareCheck(
                     getSetup().connectionProperties,
                     target.clusterId,
                     observer,
-                    { interactive: false, signal },
+                    { interactive: false, verifyEndpoint: true, signal },
                 );
             } catch (error) {
                 errorName = safeErrorName(error);

@@ -5,7 +5,11 @@
 
 import { type RunContext } from '@documentdb-js/connection-diagnostics';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ConnectionReachabilityService, LocalPortInUseError } from '../../services/connectionReachabilityService';
+import {
+    ConnectionPreparationError,
+    ConnectionReachabilityService,
+    LocalPortInUseError,
+} from '../../services/connectionReachabilityService';
 import { type DiagnosticsSetup } from '../input';
 import { type DiagnosticsTarget } from '../types';
 import { createPrepareCheck } from './prepare';
@@ -56,7 +60,7 @@ describe('prepare check', (): void => {
                 onProviderCompleted: expect.any(Function),
                 onProviderFailed: expect.any(Function),
             }),
-            { interactive: false, signal: expect.any(AbortSignal) },
+            { interactive: false, verifyEndpoint: true, signal: expect.any(AbortSignal) },
         );
     });
 
@@ -78,6 +82,7 @@ describe('prepare check', (): void => {
         });
         expect(ensure).toHaveBeenCalledWith(properties, 'stable-id', {
             interactive: false,
+            verifyEndpoint: true,
             signal: expect.any(AbortSignal),
         });
     });
@@ -111,7 +116,11 @@ describe('prepare check', (): void => {
                 id: 'kubernetes-port-forward',
                 appliesTo: (): boolean => true,
                 ensureReachable: async (_properties, _clusterId, intent): Promise<void> => {
-                    expect(intent).toEqual({ interactive: false, signal: expect.any(AbortSignal) });
+                    expect(intent).toEqual({
+                        interactive: false,
+                        verifyEndpoint: true,
+                        signal: expect.any(AbortSignal),
+                    });
                     throw new LocalPortInUseError(27017, holder, 'Port 27017 is already in use.');
                 },
             });
@@ -187,6 +196,26 @@ describe('prepare check', (): void => {
             new AbortController().signal,
         );
         expect(result.facts.errorName).toBe('unknown');
+    });
+
+    it('never copies host-only preparation evidence into the result', async (): Promise<void> => {
+        const sourceError = Object.assign(new Error('secret-password on private-api'), {
+            code: 403,
+            body: { message: 'private-service in private-namespace' },
+        });
+        ConnectionReachabilityService.registerProvider({
+            id: 'kubernetes-port-forward',
+            appliesTo: (): boolean => true,
+            ensureReachable: async (): Promise<void> => {
+                throw new ConnectionPreparationError('accessDenied', sourceError, 403);
+            },
+        });
+        const result = await createPrepareCheck(target, (): DiagnosticsSetup => setup).run(
+            context,
+            new AbortController().signal,
+        );
+        expect(result.status).toBe('fail');
+        expect(JSON.stringify(result)).not.toMatch(/secret-password|private-|sourceError|body/);
     });
 
     it('does not register cleanup that could close a shared tunnel on cancellation', async (): Promise<void> => {

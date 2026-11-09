@@ -56,7 +56,7 @@ describe('KubernetesReachabilityProvider', () => {
 
     it('forwards the diagnostics intent and reports the shared tunnel outcome', async () => {
         mockEnsureKubernetesPortForward.mockResolvedValue({ outcome: 'reused' });
-        const intent = { interactive: false, signal: new AbortController().signal };
+        const intent = { interactive: false, verifyEndpoint: true, signal: new AbortController().signal };
 
         await expect(
             provider.ensureReachable({ [KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]: validMetadata }, 'cluster', intent),

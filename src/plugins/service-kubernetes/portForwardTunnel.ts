@@ -61,6 +61,19 @@ interface TunnelWebSocket {
     close(): void;
 }
 
+export class KubernetesNoReadyBackendError extends Error {
+    constructor(serviceName: string, namespace: string) {
+        super(
+            vscode.l10n.t(
+                'No ready pods found backing service "{0}" in namespace "{1}". Check that the service has running pods.',
+                serviceName,
+                namespace,
+            ),
+        );
+        this.name = 'KubernetesNoReadyBackendError';
+    }
+}
+
 /**
  * Resolves a Service to a ready backend pod and the actual target port
  * using the core Endpoints API (available on all K8s versions).
@@ -99,13 +112,7 @@ export async function resolveServiceBackend(
         }
     }
 
-    throw new Error(
-        vscode.l10n.t(
-            'No ready pods found backing service "{0}" in namespace "{1}". Check that the service has running pods.',
-            serviceName,
-            namespace,
-        ),
-    );
+    throw new KubernetesNoReadyBackendError(serviceName, namespace);
 }
 
 /**

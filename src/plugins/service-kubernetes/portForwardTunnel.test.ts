@@ -34,8 +34,23 @@ vi.mock('@kubernetes/client-node', () => ({
 
 // Import after mocks are set up
 import { ext } from '../../extensionVariables';
-import { LocalPortInUseError } from '../../services/connectionReachabilityService';
-import { PortForwardTunnelManager, resolveServiceBackend } from './portForwardTunnel';
+import { ConnectionPreparationError, LocalPortInUseError } from '../../services/connectionReachabilityService';
+import { ensureKubernetesPortForward } from './ensureKubernetesPortForward';
+import {
+    KubernetesNoReadyBackendError,
+    PortForwardTunnelManager,
+    resolveServiceBackend,
+} from './portForwardTunnel';
+
+const mockLoadConfiguredKubeConfig = vi.fn();
+const mockCreateCoreApi = vi.fn();
+vi.mock('./sources/sourceStore', () => ({
+    getSource: vi.fn().mockResolvedValue({ id: 'default', kind: 'default', label: 'Default kubeconfig' }),
+}));
+vi.mock('./kubernetesClient', () => ({
+    loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
+    createCoreApi: (...args: unknown[]) => mockCreateCoreApi(...args),
+}));
 
 // ---------------------------------------------------------------------------
 // resolveServiceBackend
@@ -251,6 +266,100 @@ describe('resolveServiceBackend', () => {
 
         await resolveServiceBackend(coreApi, 'my-ns', 'my-svc', 10260);
         expect(mockRead).toHaveBeenCalledWith({ name: 'my-svc', namespace: 'my-ns' });
+    });
+
+    it('identifies no ready backend with a typed error and preserves the ordinary message', async (): Promise<void> => {
+        const coreApi = { readNamespacedEndpoints: vi.fn().mockResolvedValue({ subsets: [] }) } as never;
+        const failure = resolveServiceBackend(coreApi, 'private-namespace', 'private-service', 27017);
+        await expect(failure).rejects.toBeInstanceOf(KubernetesNoReadyBackendError);
+        await expect(failure).rejects.toThrow(
+            'No ready pods found backing service "private-service" in namespace "private-namespace". Check that the service has running pods.',
+        );
+    });
+});
+
+describe('diagnostic verification with shared tunnels', (): void => {
+    let manager: PortForwardTunnelManager;
+
+    beforeEach((): void => {
+        PortForwardTunnelManager.getInstance().dispose();
+        manager = PortForwardTunnelManager.getInstance();
+        mockLoadConfiguredKubeConfig.mockResolvedValue({});
+    });
+
+    afterEach((): void => {
+        vi.restoreAllMocks();
+        manager.dispose();
+    });
+
+    it('does not request the API when an ordinary connect starts or reuses a tunnel', async (): Promise<void> => {
+        const read = vi.fn();
+        mockCreateCoreApi.mockResolvedValue({ readNamespacedEndpoints: read });
+        const metadata = {
+            kind: 'kubernetesClusterIpPortForward' as const,
+            sourceId: 'default',
+            contextName: 'test-ctx',
+            namespace: 'default',
+            serviceName: 'test-svc',
+            servicePort: 27017,
+            localPort: 0,
+        };
+        await expect(ensureKubernetesPortForward(metadata)).resolves.toEqual({ outcome: 'started' });
+        await expect(ensureKubernetesPortForward(metadata)).resolves.toEqual({ outcome: 'reused' });
+        expect(read).not.toHaveBeenCalled();
+        expect(manager.listTunnels()).toHaveLength(1);
+    });
+
+    it.each([
+        ['fresh', 'apiDown'],
+        ['fresh', 'noReadyBackend'],
+        ['existing', 'apiDown'],
+        ['existing', 'noReadyBackend'],
+    ] as const)('leaves a %s tunnel unchanged when verification finds %s', async (tunnel, failure): Promise<void> => {
+        const read = vi.fn().mockResolvedValue({
+            subsets: [
+                {
+                    addresses: [{ targetRef: { kind: 'Pod', name: 'ready-pod' } }],
+                    ports: [{ port: 27017 }],
+                },
+            ],
+        });
+        mockCreateCoreApi.mockResolvedValue({ readNamespacedEndpoints: read });
+        const metadata = {
+            kind: 'kubernetesClusterIpPortForward' as const,
+            sourceId: 'default',
+            contextName: 'test-ctx',
+            namespace: 'default',
+            serviceName: 'test-svc',
+            servicePort: 27017,
+            localPort: 0,
+        };
+        if (tunnel === 'existing') {
+            await expect(ensureKubernetesPortForward(metadata)).resolves.toEqual({ outcome: 'started' });
+        }
+        expect(read).not.toHaveBeenCalled();
+        const tunnelsBefore = manager.listTunnels();
+        const start = vi.spyOn(manager, 'startTunnel');
+        const stop = vi.spyOn(manager, 'stopTunnel');
+        const stopAll = vi.spyOn(manager, 'stopAll');
+        const stopSource = vi.spyOn(manager, 'stopTunnelsForSource');
+        if (failure === 'apiDown') {
+            read.mockRejectedValue(Object.assign(new Error('private-api'), { name: 'FetchError', code: 'ECONNREFUSED' }));
+        } else {
+            read.mockResolvedValue({ subsets: [] });
+        }
+
+        const result = ensureKubernetesPortForward(metadata, { interactive: false, verifyEndpoint: true });
+        await expect(result).rejects.toBeInstanceOf(ConnectionPreparationError);
+        await expect(result).rejects.toMatchObject({
+            reason: failure === 'apiDown' ? 'sourceUnreachable' : 'noReadyBackend',
+        });
+        expect(read).toHaveBeenCalledExactlyOnceWith({ name: 'test-svc', namespace: 'default' });
+        expect(start).not.toHaveBeenCalled();
+        expect(stop).not.toHaveBeenCalled();
+        expect(stopAll).not.toHaveBeenCalled();
+        expect(stopSource).not.toHaveBeenCalled();
+        expect(manager.listTunnels()).toEqual(tunnelsBefore);
     });
 });
 

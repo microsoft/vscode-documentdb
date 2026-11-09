@@ -234,7 +234,7 @@ describe('ConnectionReachabilityService', () => {
     it('forwards a non-interactive intent and reports what the provider observed', async (): Promise<void> => {
         const ensure = vi.fn().mockResolvedValue({ sharedTunnel: 'reused' });
         const observer = { onProviderCompleted: vi.fn() };
-        const intent = { interactive: false, signal: new AbortController().signal };
+        const intent = { interactive: false, verifyEndpoint: true, signal: new AbortController().signal };
         ConnectionReachabilityService.registerProvider(makeProvider('applies', () => true, ensure));
 
         await ConnectionReachabilityService.ensureReachable({ a: 1 }, 'cluster-42', observer, intent);

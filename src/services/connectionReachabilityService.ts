@@ -60,6 +60,8 @@ export interface ConnectionReachabilityIntent {
      * and fails with a typed error (such as {@link LocalPortInUseError}) where it would otherwise ask.
      */
     readonly interactive?: boolean;
+    /** Confirm the source's backend before reporting the endpoint ready. */
+    readonly verifyEndpoint?: boolean;
     /** Checked by providers before a side effect, such as starting a tunnel. */
     readonly signal?: AbortSignal;
 }
@@ -71,6 +73,26 @@ export interface ConnectionReachabilityResult {
      * open after it, like the tunnel an ordinary connect sets up.
      */
     readonly sharedTunnel?: 'started' | 'reused' | 'externalAssumed';
+}
+
+export type ConnectionPreparationReason =
+    | 'sourceUnreachable'
+    | 'accessDenied'
+    | 'targetNotFound'
+    | 'noReadyBackend'
+    | 'sourceMissing'
+    | 'other';
+
+export class ConnectionPreparationError extends Error {
+    constructor(
+        public readonly reason: ConnectionPreparationReason,
+        /** Host-only evidence. Never copy this error into diagnostic results or reports. */
+        public readonly sourceError: unknown,
+        public readonly statusCode?: number,
+    ) {
+        super('Connection preparation failed');
+        this.name = 'ConnectionPreparationError';
+    }
 }
 
 /** A provider needed a local port that another program or another tunnel already holds. */

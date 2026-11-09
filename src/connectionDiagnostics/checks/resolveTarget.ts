@@ -11,23 +11,12 @@ import {
     ConnectionSourceUnavailableError,
     type ConnectionDetailsSource,
 } from '../../tree/documentdb/diagnosticCredentialRead';
+import { httpStatus, networkCode } from '../../utils/connectionErrorClassification';
 import { safeErrorName } from '../outputTrace';
 import { type DiagnosticsTarget, type FindingCode } from '../types';
 
 /** Why a source that holds the connection details could not be read. Bounded; safe for reports. */
 export type SourceInaccessibleReason = 'signInRequired' | 'accessDenied' | 'unreachable' | 'notConnectable' | 'other';
-
-const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set([
-    'ENOTFOUND',
-    'EAI_AGAIN',
-    'ECONNREFUSED',
-    'ECONNRESET',
-    'ETIMEDOUT',
-    'EHOSTUNREACH',
-    'ENETUNREACH',
-    'REQUEST_SEND_ERROR',
-    'UND_ERR_CONNECT_TIMEOUT',
-]);
 
 const SIGN_IN_ERROR_NAMES: ReadonlySet<string> = new Set([
     'AuthenticationError',
@@ -35,37 +24,6 @@ const SIGN_IN_ERROR_NAMES: ReadonlySet<string> = new Set([
     'CredentialUnavailableError',
     'NotSignedInError',
 ]);
-
-function field(value: unknown, key: string): unknown {
-    return typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[key] : undefined;
-}
-
-/** An HTTP status from Azure SDK (`statusCode`), Kubernetes client (`code`) or fetch-style (`status`) errors. */
-function httpStatus(error: unknown): number | undefined {
-    for (const candidate of [error, field(error, 'response')]) {
-        for (const key of ['statusCode', 'status', 'code']) {
-            const value = field(candidate, key);
-            if (typeof value === 'number' && Number.isInteger(value) && value >= 100 && value < 600) {
-                return value;
-            }
-        }
-    }
-    return undefined;
-}
-
-function networkCode(error: unknown): boolean {
-    for (
-        let current = error, depth = 0;
-        current !== undefined && depth < 3;
-        current = field(current, 'cause'), depth++
-    ) {
-        const code = field(current, 'code');
-        if (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) {
-            return true;
-        }
-    }
-    return false;
-}
 
 function finding(code: FindingCode, data: Readonly<Record<string, unknown>>, text: string): Finding<FindingCode> {
     return { code, severity: 'error', data, detail: { language: 'en', text } };
