@@ -315,8 +315,10 @@ interface SettingItem {
 function planItems(): readonly PlanItem[] {
     return [
         {
-            label: l10n.t('Verify your Docker setup'),
-            detail: l10n.t('Confirms Docker is installed and can run containers on this machine.'),
+            label: l10n.t('Check your container engine'),
+            detail: l10n.t(
+                'Confirms Docker or Podman is installed and can run Linux containers on this machine. Docker is used when both are installed.',
+            ),
         },
         {
             label: l10n.t('Download the official image'),
@@ -1696,7 +1698,7 @@ export const LocalQuickStart = (): JSX.Element => {
         <ContainerHeader
             media={<RocketRegular aria-hidden />}
             title={l10n.t('DocumentDB Local')}
-            subtitle={l10n.t('Set up DocumentDB locally for development and testing with Docker.')}
+            subtitle={l10n.t('Set up DocumentDB locally for development and testing with Docker or Podman.')}
             action={
                 configuration.feedbackPermitted === true ? (
                     <Button

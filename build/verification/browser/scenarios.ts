@@ -153,7 +153,17 @@ export const scenarios = {
         introduction: {
             config: base.config,
             rpc: base.rpc,
-            readiness: { content: ['Develop and test locally', 'Continue'], selectors: ['h2'], noProgressbar: true },
+            readiness: {
+                content: [
+                    'Develop and test locally',
+                    'Set up DocumentDB locally for development and testing with Docker or Podman.',
+                    'Check your container engine',
+                    'Confirms Docker or Podman is installed and can run Linux containers on this machine. Docker is used when both are installed.',
+                    'Continue',
+                ],
+                selectors: ['h2'],
+                noProgressbar: true,
+            },
         },
         configure: {
             config: base.config,
