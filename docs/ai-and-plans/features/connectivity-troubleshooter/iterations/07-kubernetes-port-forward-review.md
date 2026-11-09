@@ -30,6 +30,8 @@ and "Keep working autonomously until the task is truly finished." Under that lat
 the leader selected Opus's recommended narrow exception: only generic services ignore a DKO-list
 403 and continue to their annotated Secret; network failures still propagate, and DKO services
 remain strict. This changes diagnostic failure handling only, not ordinary connections or permissions.
+After implementation, the operator confirmed the choice explicitly: "option 2 is selected by the
+operator."
 
 ### Verification and handoff
 
@@ -543,6 +545,9 @@ applies per commit.
 > their subsequent autonomous-resolution instruction superseded the pause. The leader selected
 > option 2 (Opus recommendation, high confidence), with the narrow generic-service exception
 > described above. No broader lookup-order or permission change is authorized.
+>
+> **Operator decision (2026-11-09):** "option 2 is selected by the operator." The implemented
+> behavior in `bc124a25` already matches; no code change was needed.
 >
 > **Done (2026-11-09), commit `bc124a25`:** `gpt-6.1-sol` preserved original strict API errors,
 > propagated bounded Secret-read issues through diagnostic-only credentials, and retained cached

@@ -65,7 +65,7 @@ updated: 2026-11-09
 | 0050 | Each row shows its duration in a squared badge; the list shades the row under the pointer   | Accepted                  | Operator chose the layout from mocks                               | 2026-11-04 | —   |
 | 0051 | Internal names follow the feature: connection diagnostics                                   | Accepted                  | Operator: full rename now; vocabulary and explanation-layer rename | 2026-11-05 | —   |
 | 0052 | Authentication Details show the sign-in and cluster clouds                                  | Accepted                  | Operator chose O1.B, in Details (review 05)                        | 2026-11-06 | —   |
-| 0053 | Diagnostics verify Kubernetes backends; loopback failures get local guidance                | Accepted (O1+O6)          | Leader selected generic DKO-list 403 option 2                      | 2026-11-09 | —   |
+| 0053 | Diagnostics verify Kubernetes backends; loopback failures get local guidance                | Accepted (O1+O6)          | Operator selected generic DKO-list 403 option 2                    | 2026-11-09 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -2061,8 +2061,8 @@ Implemented in commit `1047d7a1` ([review 05, UX-6 done note](./iterations/05-ux
 
 ## 0053 — Diagnostics verify Kubernetes backends; loopback failures get local guidance
 
-**Status:** O1+O6 accepted; generic-service DKO-list 403 behavior leader-selected under later
-autonomous instruction · **Date:** 2026-11-09 · **Raised by:** issue #1069 review; operator direction
+**Status:** O1+O6 accepted; generic-service DKO-list 403 behavior: operator selected option 2
+· **Date:** 2026-11-09 · **Raised by:** issue #1069 review; operator direction
 
 **Context:** the #1069 review found that a Kubernetes ClusterIP port-forward can bind locally before
 the backend is known to be ready, making subsequent transport failures look like a server or
@@ -2113,8 +2113,8 @@ the advisor's options, and paused the work. After the options were presented, th
 "make good decisions and keep working" and "Keep working autonomously until the task is truly
 finished." Under that later instruction, the leader selected option 2, the high-confidence
 recommendation from Opus: ignore only the generic-service diagnostic DKO-list 403 so an annotated
-Secret can still be tried. This was the leader's selection under the later instruction, not an
-explicit operator selection; no further rationale is attributed to the operator.
+Secret can still be tried. After implementation, the operator confirmed it explicitly: "option 2
+is selected by the operator." No further rationale is attributed to the operator.
 
 Implemented in WI-K1 (`bc124a25`), WI-K2 (`0168783a`), WI-K3 (`b1c184a9`) and WI-G1
 (`1cd90a0f`).
