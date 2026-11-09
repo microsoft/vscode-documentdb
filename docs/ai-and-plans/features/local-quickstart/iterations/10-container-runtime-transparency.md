@@ -279,6 +279,34 @@ Each item is a separate commit. Record progress inline under each item as it lan
 | W8  | **H:** **Start Podman machine** button (macOS and Windows) and **Start Podman service** (Linux, setup 2)     | W1, W2     | `DockerProviderLauncher.test.ts`: offered only with positive Podman evidence, a stopped machine and `daemonUnavailable`; no machine → no button and `init` guidance; never offered on a readiness check without a click; already-running stderr → `started`; cancel leaves the process running. L2 scenario `podmanMachineStopped` shows the button |
 | W9  | **G:** user manual; feature README timeline row; `decisions.md` entries (see below)                          | W1–W8      | none; docs only                                                                                                                                                                                                                                                                                                                                     |
 
+### Execution status (2026-11-09)
+
+Opus 5.5 advised W1, then W2, then parallel W3, W4→W5, W6 and W7; W8 after its
+dependencies; W9 last. Recommendations were W1/W2/W3/W8 on gpt-6.1-sol, W4/W5/W6 on
+gpt-6.1-terra, and W7/W9 on gpt-6-luna. Advisor confidence was 84% for W2 contracts and
+82% overall; leader scheduling confidence was 99%, not a technical decision. The operator
+was unavailable to approve the always-ask gates, so W1 and W8 are parked; source items
+W2–W7 are treated as accepted under /lead's operator-unavailable rule and proceed without
+changing those gates. The shim label remains exactly "Podman (through the Docker CLI)", as
+specified in the source plan; no new label decision is recorded.
+
+- **W1 — Deferred, escalated (2026-11-09):** Adding the optional CLI field to persisted
+  provider memory requires operator approval of migration/retention. Old records would be
+  treated as Docker. Options: ignore mismatched records (advisor recommendation), or revise
+  the migration. No decision is approved.
+- **W8 — Deferred, escalated (2026-11-09):** (a) Linux socket-down state has only inferred
+  evidence, conflicting with the positive-evidence rule and draft 0009’s stopped-machine
+  condition. Options: defer the Linux button and retain copy guidance (advisor
+  recommendation), allow a button only with retained positive evidence, or revise the
+  design. (b) `Default: true` identifies the default CONNECTION, while bare machine start
+  targets the literal `podman-machine-default`. Options: select a stopped, non-starting
+  `Default: true` machine and launch by explicit name (advisor recommendation), or retain the
+  literal default target. No decision is approved.
+
+All nine source work items remain; W1 and W8 are deferred, not done. Case 1
+(`npm run build` plus focused tests) is required before each code item's commit. Run full
+Case 2 once at the end, including `l10n` and the dedicated browser configuration.
+
 Validation per commit (Case 1): `npm run build` plus the touched tests. The full Case 2 list
 runs once at hand-over. Run `npm run l10n` there, because W4 to W6 and W8 change many
 `l10n.t()` strings.
