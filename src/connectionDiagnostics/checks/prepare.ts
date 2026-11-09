@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Check, type CheckOutcome, type Finding, type RunContext } from '@documentdb-js/connection-diagnostics';
+import { getKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
 import {
     ConnectionPreparationError,
     ConnectionReachabilityService,
@@ -11,7 +12,6 @@ import {
     type ConnectionReachabilityObserver,
     type ConnectionReachabilityResult,
 } from '../../services/connectionReachabilityService';
-import { getKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
 import { httpStatus } from '../../utils/connectionErrorClassification';
 import { type PrepareFailedData } from '../findingData';
 import { type DiagnosticsSetup } from '../input';

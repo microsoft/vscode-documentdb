@@ -1033,9 +1033,7 @@ export const findingMessages: {
         }
         return {
             title: vscode.l10n.t('Kubernetes port forward status unknown'),
-            explanation: vscode.l10n.t(
-                'The status of the Kubernetes port forward is not available.',
-            ),
+            explanation: vscode.l10n.t('The status of the Kubernetes port forward is not available.'),
         };
     },
     'hello.advertisedMembersUnreachable': (data): FindingMessage => {

@@ -416,54 +416,101 @@ describe('panel row details (WI-18 prototype)', () => {
         expect(JSON.stringify(output)).not.toContain('S3cret-value');
     });
 
-    it.each(['started', 'reused'] as const)('shows the verified Kubernetes %s tunnel in Connection settings', (tunnel): void => {
-        const results = [
-            result('connectionString', { facts: { scheme: 'mongodb', hosts: [{ host: '127.0.0.1', port: 10260 }] } }),
-            result('prepare', { facts: {
-                providerId: 'kubernetes-port-forward', tunnel,
-                providerIdentifiers: { kubeContext: 'private-context', namespace: 'private-ns', service: 'private-svc' },
-                servicePort: 10261, localPort: 10260, readyPodFound: true,
-            } }),
-        ];
-        const settings = details(withRowDetails(rows(), results, describeFinding), 'connectionSettings');
-        expect(settings?.evidence[0]).toMatchObject({
-            kind: 'connectionSettings', hosts: ['127.0.0.1:10260'],
-            kubernetesPortForward: {
-                context: 'private-context', namespace: 'private-ns', service: 'private-svc',
-                servicePort: 10261, localPort: 10260, tunnel, readyPodFound: true,
-            },
-        });
-    });
+    it.each(['started', 'reused'] as const)(
+        'shows the verified Kubernetes %s tunnel in Connection settings',
+        (tunnel): void => {
+            const results = [
+                result('connectionString', {
+                    facts: { scheme: 'mongodb', hosts: [{ host: '127.0.0.1', port: 10260 }] },
+                }),
+                result('prepare', {
+                    facts: {
+                        providerId: 'kubernetes-port-forward',
+                        tunnel,
+                        providerIdentifiers: {
+                            kubeContext: 'private-context',
+                            namespace: 'private-ns',
+                            service: 'private-svc',
+                        },
+                        servicePort: 10261,
+                        localPort: 10260,
+                        readyPodFound: true,
+                    },
+                }),
+            ];
+            const settings = details(withRowDetails(rows(), results, describeFinding), 'connectionSettings');
+            expect(settings?.evidence[0]).toMatchObject({
+                kind: 'connectionSettings',
+                hosts: ['127.0.0.1:10260'],
+                kubernetesPortForward: {
+                    context: 'private-context',
+                    namespace: 'private-ns',
+                    service: 'private-svc',
+                    servicePort: 10261,
+                    localPort: 10260,
+                    tunnel,
+                    readyPodFound: true,
+                },
+            });
+        },
+    );
 
     it.each([
-        { status: 'fail' }, { status: 'skipped' }, { providerId: 'other' },
-        { tunnel: 'externalAssumed' }, { tunnel: 'unknown' }, { providerIdentifiers: {} },
-        { servicePort: 0 }, { localPort: 65536 },
+        { status: 'fail' },
+        { status: 'skipped' },
+        { providerId: 'other' },
+        { tunnel: 'externalAssumed' },
+        { tunnel: 'unknown' },
+        { providerIdentifiers: {} },
+        { servicePort: 0 },
+        { localPort: 65536 },
     ])('omits unsupported Kubernetes details: %j', (override: Readonly<Record<string, unknown>>): void => {
         const { status, ...facts } = override;
-        const built = buildRowDetails('connectionSettings', 'done', [
-            result('connectionString', { facts: { hosts: [{ host: '127.0.0.1', port: 10260 }] } }),
-            result('prepare', {
-                status: status === 'fail' || status === 'skipped' ? status : 'pass',
-                facts: {
-                    providerId: 'kubernetes-port-forward', tunnel: 'started',
-                    providerIdentifiers: { kubeContext: 'private-context', namespace: 'private-ns', service: 'private-svc' },
-                    servicePort: 10260, localPort: 10260, readyPodFound: true, ...facts,
-                },
-            }),
-        ], describeFinding);
+        const built = buildRowDetails(
+            'connectionSettings',
+            'done',
+            [
+                result('connectionString', { facts: { hosts: [{ host: '127.0.0.1', port: 10260 }] } }),
+                result('prepare', {
+                    status: status === 'fail' || status === 'skipped' ? status : 'pass',
+                    facts: {
+                        providerId: 'kubernetes-port-forward',
+                        tunnel: 'started',
+                        providerIdentifiers: {
+                            kubeContext: 'private-context',
+                            namespace: 'private-ns',
+                            service: 'private-svc',
+                        },
+                        servicePort: 10260,
+                        localPort: 10260,
+                        readyPodFound: true,
+                        ...facts,
+                    },
+                }),
+            ],
+            describeFinding,
+        );
         expect(built?.evidence[0]).not.toHaveProperty('kubernetesPortForward');
     });
 
     it('does not infer ready-pod evidence from tunnel status alone', (): void => {
-        const built = buildRowDetails('connectionSettings', 'done', [
-            result('connectionString', { facts: { hosts: [] } }),
-            result('prepare', { facts: {
-                providerId: 'kubernetes-port-forward', tunnel: 'reused',
-                providerIdentifiers: { kubeContext: 'ctx', namespace: 'ns', service: 'svc' },
-                servicePort: 10260, localPort: 10260,
-            } }),
-        ], describeFinding);
+        const built = buildRowDetails(
+            'connectionSettings',
+            'done',
+            [
+                result('connectionString', { facts: { hosts: [] } }),
+                result('prepare', {
+                    facts: {
+                        providerId: 'kubernetes-port-forward',
+                        tunnel: 'reused',
+                        providerIdentifiers: { kubeContext: 'ctx', namespace: 'ns', service: 'svc' },
+                        servicePort: 10260,
+                        localPort: 10260,
+                    },
+                }),
+            ],
+            describeFinding,
+        );
         expect(built?.evidence[0]).toMatchObject({ kubernetesPortForward: { readyPodFound: false } });
     });
 

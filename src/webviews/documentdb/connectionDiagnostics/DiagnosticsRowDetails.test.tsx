@@ -19,12 +19,22 @@ const mounted: { host: HTMLElement; root: Root }[] = [];
 
 function settings(tunnel: 'started' | 'reused'): Settings & { kubernetesPortForward: PanelKubernetesPortForward } {
     return {
-        kind: 'connectionSettings', scheme: 'mongodb', hosts: ['127.0.0.1:10260'], user: 'db-user',
-        passwordPresent: true, authMethod: 'native', authSource: { value: 'admin', origin: 'uri' }, options: [],
+        kind: 'connectionSettings',
+        scheme: 'mongodb',
+        hosts: ['127.0.0.1:10260'],
+        user: 'db-user',
+        passwordPresent: true,
+        authMethod: 'native',
+        authSource: { value: 'admin', origin: 'uri' },
+        options: [],
         kubernetesPortForward: {
             context: 'arn:aws:eks:us-east-1:123456789012:cluster/private-cluster',
-            namespace: 'private-ns', service: 'private-svc', servicePort: 10261, localPort: 10260,
-            tunnel, readyPodFound: true,
+            namespace: 'private-ns',
+            service: 'private-svc',
+            servicePort: 10261,
+            localPort: 10260,
+            tunnel,
+            readyPodFound: true,
         },
     };
 }
@@ -42,7 +52,8 @@ async function render(evidence: Settings): Promise<HTMLElement> {
 
 function rows(host: HTMLElement): [string, string][] {
     return [...host.querySelectorAll('dt')].map((term): [string, string] => [
-        term.textContent ?? '', term.nextElementSibling?.textContent ?? '',
+        term.textContent ?? '',
+        term.nextElementSibling?.textContent ?? '',
     ]);
 }
 
@@ -54,25 +65,32 @@ afterEach(async (): Promise<void> => {
 });
 
 describe('DiagnosticsRowDetails Kubernetes port forward', (): void => {
-    it.each(['started', 'reused'] as const)('renders the %s tunnel as compact term/description rows', async (tunnel): Promise<void> => {
-        const host = await render(settings(tunnel));
-        expect(rows(host)).toEqual([
-            ['Scheme', 'mongodb'],
-            ['Host', '127.0.0.1:10260 (local end of the Kubernetes port forward)'],
-            ['User', 'db-user'], ['Password', '(hidden)'],
-            ['Authentication method', 'Username and password'], ['Authentication database', 'admin'],
-            ['Options', 'None'],
-            ['Kubernetes context', 'arn:aws:eks:us-east-1:123456789012:cluster/private-cluster'],
-            ['Namespace', 'private-ns'], ['Service', 'private-svc:10261'], ['Local port', '10260'],
-            ['Port forward', tunnel === 'started' ? 'Started by this check' : 'Already open (reused)'],
-            ['Backend', 'Ready pod found at check time'],
-        ]);
-        const annotation = [...host.querySelectorAll('span')].find((span): boolean =>
-            span.textContent?.trim() === '(local end of the Kubernetes port forward)',
-        );
-        expect(annotation?.textContent).not.toMatch(/arn:|123456789012|private-/);
-        expect(host.textContent).toContain('Kubernetes port forward');
-    });
+    it.each(['started', 'reused'] as const)(
+        'renders the %s tunnel as compact term/description rows',
+        async (tunnel): Promise<void> => {
+            const host = await render(settings(tunnel));
+            expect(rows(host)).toEqual([
+                ['Scheme', 'mongodb'],
+                ['Host', '127.0.0.1:10260 (local end of the Kubernetes port forward)'],
+                ['User', 'db-user'],
+                ['Password', '(hidden)'],
+                ['Authentication method', 'Username and password'],
+                ['Authentication database', 'admin'],
+                ['Options', 'None'],
+                ['Kubernetes context', 'arn:aws:eks:us-east-1:123456789012:cluster/private-cluster'],
+                ['Namespace', 'private-ns'],
+                ['Service', 'private-svc:10261'],
+                ['Local port', '10260'],
+                ['Port forward', tunnel === 'started' ? 'Started by this check' : 'Already open (reused)'],
+                ['Backend', 'Ready pod found at check time'],
+            ]);
+            const annotation = [...host.querySelectorAll('span')].find(
+                (span): boolean => span.textContent?.trim() === '(local end of the Kubernetes port forward)',
+            );
+            expect(annotation?.textContent).not.toMatch(/arn:|123456789012|private-/);
+            expect(host.textContent).toContain('Kubernetes port forward');
+        },
+    );
 
     it('does not imply a port forward for an ordinary loopback connection', async (): Promise<void> => {
         const { kubernetesPortForward, ...ordinary } = settings('started');

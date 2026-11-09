@@ -5,13 +5,13 @@
 
 import { type RunContext } from '@documentdb-js/connection-diagnostics';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
 import {
     ConnectionPreparationError,
     ConnectionReachabilityService,
     LocalPortInUseError,
     type ConnectionReachabilityResult,
 } from '../../services/connectionReachabilityService';
-import { createKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
 import { type DiagnosticsSetup } from '../input';
 import { type DiagnosticsTarget } from '../types';
 import { createPrepareCheck } from './prepare';
@@ -142,10 +142,13 @@ describe('prepare check', (): void => {
                     'private-source-label',
                 ),
             };
-            const result = await createPrepareCheck(target, (): DiagnosticsSetup => ({
-                ...setup,
-                connectionProperties,
-            })).run(context, new AbortController().signal);
+            const result = await createPrepareCheck(
+                target,
+                (): DiagnosticsSetup => ({
+                    ...setup,
+                    connectionProperties,
+                }),
+            ).run(context, new AbortController().signal);
             expect(result.facts).toEqual({
                 providerId: 'kubernetes-port-forward',
                 elapsedMs: expect.any(Number),
@@ -183,10 +186,13 @@ describe('prepare check', (): void => {
                     10260,
                 ),
             };
-            const result = await createPrepareCheck(target, (): DiagnosticsSetup => ({
-                ...setup,
-                connectionProperties,
-            })).run(context, new AbortController().signal);
+            const result = await createPrepareCheck(
+                target,
+                (): DiagnosticsSetup => ({
+                    ...setup,
+                    connectionProperties,
+                }),
+            ).run(context, new AbortController().signal);
             expect(result.facts).not.toHaveProperty('providerIdentifiers');
             expect(result.facts).not.toHaveProperty('readyPodFound');
             expect(JSON.stringify(result)).not.toMatch(/private-context|private-ns|private-svc/);

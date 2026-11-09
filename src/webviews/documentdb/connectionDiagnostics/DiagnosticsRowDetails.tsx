@@ -247,23 +247,29 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
                 <>
                     <StatusListDetailsFacts
                         items={[
-                            evidence.scheme !== undefined && { term: l10n.t('Scheme'), value: evidence.scheme, mono: true },
+                            evidence.scheme !== undefined && {
+                                term: l10n.t('Scheme'),
+                                value: evidence.scheme,
+                                mono: true,
+                            },
                             evidence.hosts.length > 0 && {
                                 term: evidence.hosts.length === 1 ? l10n.t('Host') : l10n.t('Hosts'),
                                 value: (
                                     <ValueList
                                         styles={styles}
-                                        values={evidence.hosts.map((host): ReactNode => (
-                                            <>
-                                                {code(host)}
-                                                {portForward && host === `127.0.0.1:${portForward.localPort}` && (
-                                                    <span className={styles.muted}>
-                                                        {' '}
-                                                        {l10n.t('(local end of the Kubernetes port forward)')}
-                                                    </span>
-                                                )}
-                                            </>
-                                        ))}
+                                        values={evidence.hosts.map(
+                                            (host): ReactNode => (
+                                                <>
+                                                    {code(host)}
+                                                    {portForward && host === `127.0.0.1:${portForward.localPort}` && (
+                                                        <span className={styles.muted}>
+                                                            {' '}
+                                                            {l10n.t('(local end of the Kubernetes port forward)')}
+                                                        </span>
+                                                    )}
+                                                </>
+                                            ),
+                                        )}
                                     />
                                 ),
                             },

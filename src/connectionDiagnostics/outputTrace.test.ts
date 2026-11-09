@@ -69,15 +69,29 @@ describe('DiagnosticsOutputTrace', (): void => {
 
     it('omits Kubernetes preparation facts just as it omits host and user facts', (): void => {
         const trace = new DiagnosticsOutputTrace('run-id');
-        trace.onEvent({ type: 'checkFinished', runId: 'run-id', at: 0, result: {
-            checkId: 'prepare', status: 'pass', durationMs: 1,
-            facts: {
-                providerId: 'kubernetes-port-forward', tunnel: 'started',
-                providerIdentifiers: { kubeContext: 'private-context', namespace: 'private-ns', service: 'private-svc' },
-                servicePort: 10260, localPort: 10260, readyPodFound: true,
+        trace.onEvent({
+            type: 'checkFinished',
+            runId: 'run-id',
+            at: 0,
+            result: {
+                checkId: 'prepare',
+                status: 'pass',
+                durationMs: 1,
+                facts: {
+                    providerId: 'kubernetes-port-forward',
+                    tunnel: 'started',
+                    providerIdentifiers: {
+                        kubeContext: 'private-context',
+                        namespace: 'private-ns',
+                        service: 'private-svc',
+                    },
+                    servicePort: 10260,
+                    localPort: 10260,
+                    readyPodFound: true,
+                },
+                findings: [{ code: 'prepare.sharedTunnel', severity: 'info', detail: { language: 'en', text: '' } }],
             },
-            findings: [{ code: 'prepare.sharedTunnel', severity: 'info', detail: { language: 'en', text: '' } }],
-        } });
+        });
         expect(ext.outputChannel.info).toHaveBeenCalledExactlyOnceWith(
             '[Connection diagnosis] run=run-id check=prepare status=pass durationMs=1 codes=prepare.sharedTunnel',
         );
