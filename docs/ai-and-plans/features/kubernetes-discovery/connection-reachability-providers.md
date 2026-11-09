@@ -46,7 +46,7 @@ This mirrors the established singleton-registry pattern already used by `Discove
 | `ConnectionReachabilityProvider` (interface) + `ConnectionReachabilityService` (singleton) | `src/services/connectionReachabilityService.ts`                     | Generic, source-agnostic registry. Lives in `services/` beside `discoveryServices.ts`. |
 | `KubernetesReachabilityProvider`                                                           | `src/plugins/service-kubernetes/KubernetesReachabilityProvider.ts`  | Kubernetes-specific implementation. Lives in the plugin that owns the behavior.        |
 | Registration                                                                               | `src/documentdb/ClustersExtension.ts` (`registerDiscoveryServices`) | Wires the provider at activation, next to the discovery-provider registrations.        |
-| Consumption                                                                                | `src/tree/connections-view/DocumentDBClusterItem.ts`                | Delegates stored properties and the stable cluster ID before connecting.                |
+| Consumption                                                                                | `src/tree/connections-view/DocumentDBClusterItem.ts`                | Delegates stored properties and the stable cluster ID before connecting.               |
 
 ### Interface
 

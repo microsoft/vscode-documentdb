@@ -1742,10 +1742,7 @@ describe('kubernetesClient', () => {
             });
         });
 
-        function read(
-            kind: 'dko' | 'generic',
-            strict: boolean,
-        ): ReturnType<typeof resolveGenericServiceCredentials> {
+        function read(kind: 'dko' | 'generic', strict: boolean): ReturnType<typeof resolveGenericServiceCredentials> {
             if (kind === 'dko') {
                 return strict
                     ? resolveDocumentDBCredentials(coreApi, kubeConfig, 'default', 'documentdb-service-mydb', {

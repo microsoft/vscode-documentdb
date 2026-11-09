@@ -5,8 +5,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import { type CoreV1Api, type KubeConfig } from '@kubernetes/client-node';
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { classifyResolutionFailure } from '../../../../connectionDiagnostics/checks/resolveTarget';
 import { ext } from '../../../../extensionVariables';
@@ -14,8 +14,8 @@ import {
     ConnectionEndpointUnavailableError,
     ConnectionSourceUnavailableError,
 } from '../../../../tree/documentdb/diagnosticCredentialRead';
-import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY } from '../../portForwardMetadata';
 import type * as KubernetesClient from '../../kubernetesClient';
+import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY } from '../../portForwardMetadata';
 import { KubernetesResourceItem } from './KubernetesResourceItem';
 
 const mockHasCredentials = vi.fn();
@@ -1001,37 +1001,40 @@ describe('KubernetesResourceItem', () => {
                 ['generic', 'list'],
                 ['dko', 'secret'],
                 ['generic', 'secret'],
-            ] as const)('classifies a real %s %s request network failure as source-inaccessible', async (kind, stage) => {
-                const error = Object.assign(new Error('private-secret private-service private-namespace'), {
-                    code: 'ECONNREFUSED',
-                });
-                if (kind === 'generic') {
-                    listResources.mockResolvedValue({ items: [] });
-                }
-                if (stage === 'list') {
-                    listResources.mockRejectedValue(error);
-                } else {
-                    readSecret.mockRejectedValue(error);
-                }
-                let caught: unknown;
-                try {
-                    await item(kind).getCredentialsForDiagnostics(read());
-                } catch (failure) {
-                    caught = failure;
-                }
-                expect(caught).toBeInstanceOf(ConnectionSourceUnavailableError);
-                expect(caught).toMatchObject({ source: 'kubernetes', sourceError: error });
-                expect((caught as ConnectionSourceUnavailableError).sourceError).toBe(error);
-                const finding = classifyResolutionFailure(caught);
-                expect(finding).toMatchObject({
-                    code: 'target.sourceInaccessible',
-                    data: { source: 'kubernetes', reason: 'unreachable', errorName: 'Error' },
-                });
-                expect(JSON.stringify(finding)).not.toContain('private-');
-                expect(listResources).toHaveBeenCalledOnce();
-                expect(readSecret).toHaveBeenCalledTimes(stage === 'secret' ? 1 : 0);
-                expectSilent();
-            });
+            ] as const)(
+                'classifies a real %s %s request network failure as source-inaccessible',
+                async (kind, stage) => {
+                    const error = Object.assign(new Error('private-secret private-service private-namespace'), {
+                        code: 'ECONNREFUSED',
+                    });
+                    if (kind === 'generic') {
+                        listResources.mockResolvedValue({ items: [] });
+                    }
+                    if (stage === 'list') {
+                        listResources.mockRejectedValue(error);
+                    } else {
+                        readSecret.mockRejectedValue(error);
+                    }
+                    let caught: unknown;
+                    try {
+                        await item(kind).getCredentialsForDiagnostics(read());
+                    } catch (failure) {
+                        caught = failure;
+                    }
+                    expect(caught).toBeInstanceOf(ConnectionSourceUnavailableError);
+                    expect(caught).toMatchObject({ source: 'kubernetes', sourceError: error });
+                    expect((caught as ConnectionSourceUnavailableError).sourceError).toBe(error);
+                    const finding = classifyResolutionFailure(caught);
+                    expect(finding).toMatchObject({
+                        code: 'target.sourceInaccessible',
+                        data: { source: 'kubernetes', reason: 'unreachable', errorName: 'Error' },
+                    });
+                    expect(JSON.stringify(finding)).not.toContain('private-');
+                    expect(listResources).toHaveBeenCalledOnce();
+                    expect(readSecret).toHaveBeenCalledTimes(stage === 'secret' ? 1 : 0);
+                    expectSilent();
+                },
+            );
 
             it('keeps DKO-list 403 strict for DKO targets and preserves its original status', async () => {
                 const error = Object.assign(new Error('private-permissions'), { code: 403 });
@@ -1045,7 +1048,11 @@ describe('KubernetesResourceItem', () => {
                     });
                 });
                 expect(mockResolveDocumentDBCredentials).toHaveBeenCalledWith(
-                    coreApi, kubeConfig, 'default', 'documentdb-service-diag', { strict: true },
+                    coreApi,
+                    kubeConfig,
+                    'default',
+                    'documentdb-service-diag',
+                    { strict: true },
                 );
                 expect(readSecret).not.toHaveBeenCalled();
                 expectSilent();
@@ -1061,11 +1068,17 @@ describe('KubernetesResourceItem', () => {
                 expect(credentials).not.toHaveProperty('credentialReadIssue');
                 expect(readSecret).toHaveBeenCalledExactlyOnceWith({ name: 'annotated-secret', namespace: 'default' });
                 expect(mockResolveDocumentDBCredentials).toHaveBeenCalledWith(
-                    coreApi, kubeConfig, 'default', 'documentdb-service-diag',
+                    coreApi,
+                    kubeConfig,
+                    'default',
+                    'documentdb-service-diag',
                     { strict: true, ignoreDkoAccessDenied: true },
                 );
                 expect(mockResolveGenericServiceCredentials).toHaveBeenCalledWith(
-                    coreApi, 'default', 'annotated-secret', { strict: true },
+                    coreApi,
+                    'default',
+                    'annotated-secret',
+                    { strict: true },
                 );
                 expectSilent();
             });
@@ -1102,16 +1115,20 @@ describe('KubernetesResourceItem', () => {
                 expectSilent();
             });
 
-            it.each([403, 404])('does not fall back to an annotated Secret after a known DKO Secret %s issue', async (code) => {
-                readSecret.mockRejectedValue(Object.assign(new Error('private-secret'), { code }));
-                const credentials = await item('generic').getCredentialsForDiagnostics(read());
-                expect(credentials?.credentialReadIssue).toEqual({
-                    source: 'kubernetes', reason: code === 403 ? 'accessDenied' : 'notFound',
-                });
-                expect(readSecret).toHaveBeenCalledExactlyOnceWith({ name: 'dko-secret', namespace: 'default' });
-                expect(mockResolveGenericServiceCredentials).not.toHaveBeenCalled();
-                expectSilent();
-            });
+            it.each([403, 404])(
+                'does not fall back to an annotated Secret after a known DKO Secret %s issue',
+                async (code) => {
+                    readSecret.mockRejectedValue(Object.assign(new Error('private-secret'), { code }));
+                    const credentials = await item('generic').getCredentialsForDiagnostics(read());
+                    expect(credentials?.credentialReadIssue).toEqual({
+                        source: 'kubernetes',
+                        reason: code === 403 ? 'accessDenied' : 'notFound',
+                    });
+                    expect(readSecret).toHaveBeenCalledExactlyOnceWith({ name: 'dko-secret', namespace: 'default' });
+                    expect(mockResolveGenericServiceCredentials).not.toHaveBeenCalled();
+                    expectSilent();
+                },
+            );
         });
     });
 

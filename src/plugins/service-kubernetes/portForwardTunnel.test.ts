@@ -36,11 +36,7 @@ vi.mock('@kubernetes/client-node', () => ({
 import { ext } from '../../extensionVariables';
 import { ConnectionPreparationError, LocalPortInUseError } from '../../services/connectionReachabilityService';
 import { ensureKubernetesPortForward } from './ensureKubernetesPortForward';
-import {
-    KubernetesNoReadyBackendError,
-    PortForwardTunnelManager,
-    resolveServiceBackend,
-} from './portForwardTunnel';
+import { KubernetesNoReadyBackendError, PortForwardTunnelManager, resolveServiceBackend } from './portForwardTunnel';
 
 const mockLoadConfiguredKubeConfig = vi.fn();
 const mockCreateCoreApi = vi.fn();
@@ -344,7 +340,9 @@ describe('diagnostic verification with shared tunnels', (): void => {
         const stopAll = vi.spyOn(manager, 'stopAll');
         const stopSource = vi.spyOn(manager, 'stopTunnelsForSource');
         if (failure === 'apiDown') {
-            read.mockRejectedValue(Object.assign(new Error('private-api'), { name: 'FetchError', code: 'ECONNREFUSED' }));
+            read.mockRejectedValue(
+                Object.assign(new Error('private-api'), { name: 'FetchError', code: 'ECONNREFUSED' }),
+            );
         } else {
             read.mockResolvedValue({ subsets: [] });
         }

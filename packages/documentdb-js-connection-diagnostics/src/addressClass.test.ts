@@ -26,9 +26,12 @@ describe('shared address classification', (): void => {
         { address: '203.0.113.4', family: 4 as const, classification: 'public' },
         { address: '2001:0db8:0:0:0:0:0:1', family: 6 as const, classification: 'public' },
         { address: '::ffff:203.0.113.4', family: 6 as const, classification: 'public' },
-    ])('classifies $address as $classification without changing its spelling', ({ address, family, classification }): void => {
-        expect(addressFact({ address, family })).toEqual({ address, family, class: classification });
-    });
+    ])(
+        'classifies $address as $classification without changing its spelling',
+        ({ address, family, classification }): void => {
+            expect(addressFact({ address, family })).toEqual({ address, family, class: classification });
+        },
+    );
 
     it.each([
         { address: 'localhost', family: 4 as const },

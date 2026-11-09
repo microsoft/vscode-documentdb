@@ -322,8 +322,9 @@ describe('prepare check', (): void => {
                 throw new ConnectionPreparationError('sourceUnreachable', new Error('private-service'));
             },
         });
-        await expect(createPrepareCheck(target, (): DiagnosticsSetup => setup).run(context, controller.signal)).rejects
-            .toThrow();
+        await expect(
+            createPrepareCheck(target, (): DiagnosticsSetup => setup).run(context, controller.signal),
+        ).rejects.toThrow();
     });
 
     it('does not register cleanup that could close a shared tunnel on cancellation', async (): Promise<void> => {

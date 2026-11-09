@@ -310,49 +310,58 @@ describe('verification-first TLS probe', (): void => {
         { address: '10.0.0.4', family: 4 as const, addressClass: 'private' },
         { address: 'fe80::1', family: 6 as const, addressClass: 'linkLocal' },
         { address: 'unknown', family: 4 as const, addressClass: undefined },
-    ])('classifies the connected address $address rather than the host name', async ({ address, family, addressClass }): Promise<void> => {
-        const connectTls = vi.fn<NetIo['connectTls']>(async (): Promise<never> => {
-            throw Object.assign(new Error('private error'), { code: 'EPIPE' });
-        });
-        const result = await runTls(27017, {
-            addresses: [{ address, family }],
-            net: {
-                connect: async (): Promise<net.Socket> => new net.Socket(),
-                connectTls,
-            },
-        });
-        expect(connectTls.mock.calls[0][0].host).toBe(address);
-        expect(result.findings[0]).toMatchObject({
-            code: 'tls.handshakeRejectedByServer',
-            detail: { text: 'The connection closed during the TLS handshake before a certificate arrived.' },
-        });
-        if (addressClass === undefined) {
-            expect(result.findings[0].data).not.toHaveProperty('addressClass');
-        } else {
-            expect(result.findings[0].data?.addressClass).toBe(addressClass);
-        }
-    });
+    ])(
+        'classifies the connected address $address rather than the host name',
+        async ({ address, family, addressClass }): Promise<void> => {
+            const connectTls = vi.fn<NetIo['connectTls']>(async (): Promise<never> => {
+                throw Object.assign(new Error('private error'), { code: 'EPIPE' });
+            });
+            const result = await runTls(27017, {
+                addresses: [{ address, family }],
+                net: {
+                    connect: async (): Promise<net.Socket> => new net.Socket(),
+                    connectTls,
+                },
+            });
+            expect(connectTls.mock.calls[0][0].host).toBe(address);
+            expect(result.findings[0]).toMatchObject({
+                code: 'tls.handshakeRejectedByServer',
+                detail: { text: 'The connection closed during the TLS handshake before a certificate arrived.' },
+            });
+            if (addressClass === undefined) {
+                expect(result.findings[0].data).not.toHaveProperty('addressClass');
+            } else {
+                expect(result.findings[0].data?.addressClass).toBe(addressClass);
+            }
+        },
+    );
 
     it.each([
         ['127.0.0.1', '203.0.113.4', 'public'],
         ['203.0.113.4', '127.0.0.1', 'loopback'],
-    ])('uses only the successful address when DNS returned %s and %s', async (failed, connected, addressClass): Promise<void> => {
-        const result = await runTls(27017, {
-            addresses: [{ address: failed, family: 4 }, { address: connected, family: 4 }],
-            net: {
-                connect: async ({ host }): Promise<net.Socket> => {
-                    if (host === failed) {
-                        throw Object.assign(new Error('refused'), { code: 'ECONNREFUSED' });
-                    }
-                    return new net.Socket();
+    ])(
+        'uses only the successful address when DNS returned %s and %s',
+        async (failed, connected, addressClass): Promise<void> => {
+            const result = await runTls(27017, {
+                addresses: [
+                    { address: failed, family: 4 },
+                    { address: connected, family: 4 },
+                ],
+                net: {
+                    connect: async ({ host }): Promise<net.Socket> => {
+                        if (host === failed) {
+                            throw Object.assign(new Error('refused'), { code: 'ECONNREFUSED' });
+                        }
+                        return new net.Socket();
+                    },
+                    connectTls: async (): Promise<never> => {
+                        throw Object.assign(new Error('closed'), { code: 'ECONNRESET' });
+                    },
                 },
-                connectTls: async (): Promise<never> => {
-                    throw Object.assign(new Error('closed'), { code: 'ECONNRESET' });
-                },
-            },
-        });
-        expect(result.findings[0].data).toEqual({ errorCode: 'ECONNRESET', addressClass });
-    });
+            });
+            expect(result.findings[0].data).toEqual({ errorCode: 'ECONNRESET', addressClass });
+        },
+    );
 
     it('skips without performing a TLS handshake when TLS is off', async (): Promise<void> => {
         const port = await listen(net.createServer());

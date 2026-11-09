@@ -65,7 +65,7 @@ updated: 2026-11-09
 | 0050 | Each row shows its duration in a squared badge; the list shades the row under the pointer   | Accepted                  | Operator chose the layout from mocks                               | 2026-11-04 | —   |
 | 0051 | Internal names follow the feature: connection diagnostics                                   | Accepted                  | Operator: full rename now; vocabulary and explanation-layer rename | 2026-11-05 | —   |
 | 0052 | Authentication Details show the sign-in and cluster clouds                                  | Accepted                  | Operator chose O1.B, in Details (review 05)                        | 2026-11-06 | —   |
-| 0053 | Diagnostics verify Kubernetes backends; loopback failures get local guidance                 | Accepted (O1+O6)           | Leader selected generic DKO-list 403 option 2                          | 2026-11-09 | — |
+| 0053 | Diagnostics verify Kubernetes backends; loopback failures get local guidance                | Accepted (O1+O6)          | Leader selected generic DKO-list 403 option 2                      | 2026-11-09 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once

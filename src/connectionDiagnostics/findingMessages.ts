@@ -838,7 +838,9 @@ export const findingMessages: {
                       'Check that the local database, container or tunnel accepts MongoDB API connections, then try a longer timeout.',
                   )
                 : firewallAdvice(
-                      vscode.l10n.t('Confirm that the endpoint accepts MongoDB API connections and try a longer timeout.'),
+                      vscode.l10n.t(
+                          'Confirm that the endpoint accepts MongoDB API connections and try a longer timeout.',
+                      ),
                   ),
     }),
     'hello.notWireProtocol': (): FindingMessage => ({

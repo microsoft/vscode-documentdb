@@ -124,9 +124,7 @@ describe('localized finding messages', () => {
                         ? 'Kubernetes Secret password unreadable'
                         : 'Kubernetes Secret password not found',
                 );
-                expect(message.explanation).toContain(
-                    reason === 'accessDenied' ? 'was denied' : 'was not found',
-                );
+                expect(message.explanation).toContain(reason === 'accessDenied' ? 'was denied' : 'was not found');
                 expect(message.explanation).toContain('Network checks can still run.');
                 expect(message.nextStep).toContain(
                     reason === 'accessDenied' ? 'can read the credential Secret' : 'credential Secret exists',

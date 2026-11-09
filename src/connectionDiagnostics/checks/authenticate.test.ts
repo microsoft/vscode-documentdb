@@ -30,7 +30,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { AuthInputUnavailableError } from '../../documentdb/auth/createAuthHandler';
-import { NativeAuthHandler } from '../../documentdb/auth/NativeAuthHandler';
 import type * as documentdbTokenResource from '../../documentdb/auth/documentdbTokenResource';
 import { type TokenResourceResolverDeps } from '../../documentdb/auth/documentdbTokenResource';
 import type * as entraTokenFailures from '../../documentdb/auth/entraErrors/entraTokenFailures';
@@ -40,6 +39,7 @@ import {
     resetEntraTokenFailuresForTests,
 } from '../../documentdb/auth/entraErrors/entraTokenFailures';
 import { getTokenResourceForCloud } from '../../documentdb/auth/entraScopes';
+import { NativeAuthHandler } from '../../documentdb/auth/NativeAuthHandler';
 import { CredentialCache, type CachedClusterCredentials } from '../../documentdb/CredentialCache';
 import { ext } from '../../extensionVariables';
 import { createRunOwnedClient, type RunOwnedClient } from '../auth/runOwnedClient';

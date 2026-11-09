@@ -19,10 +19,7 @@ import {
     type KubernetesPortForwardMetadata,
 } from '../plugins/service-kubernetes/portForwardMetadata';
 import { PortForwardTunnelManager } from '../plugins/service-kubernetes/portForwardTunnel';
-import {
-    addInlineSource,
-    resetSourceStoreCacheForMigration,
-} from '../plugins/service-kubernetes/sources/sourceStore';
+import { addInlineSource, resetSourceStoreCacheForMigration } from '../plugins/service-kubernetes/sources/sourceStore';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { StorageService } from '../services/storageService';
 import { describeFinding } from './findingMessages';
