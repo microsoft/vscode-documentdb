@@ -38,7 +38,7 @@ The extension host matters. In a local VS Code window, the container engine and 
 
 The instance tooltip names an engine only when positive evidence identifies it. When evidence identifies a Podman engine reached through the Docker CLI, the tooltip reports **Podman (through the Docker CLI)**. It shows the server version, not the CLI version. Some host error messages use neutral container-engine wording.
 
-The setup stage heading still reads **Checking Docker**, and its detail line still uses the raw CLI version output. The neutral heading, redesigned findings, and engine-specific guides have not shipped yet.
+The first setup stage heading reads **Checking container engine**, and its detail line still uses the raw CLI version output. Redesigned findings and engine-specific guides have not shipped yet.
 
 The setup view shows pull, create, start, and connection-readiness progress. Container-engine command output is written to the **DocumentDB Local Setup** output channel.
 

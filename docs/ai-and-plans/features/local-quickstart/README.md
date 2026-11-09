@@ -55,10 +55,9 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   key for the container, the volume, the port reservation, the credentials in SecretStorage, and the
   cluster cache lookups. Never key a cache on the tree id.
 - **Engine readiness is a setup stage, not a separate concept.** The wizard runs
-  `Introduction → Configure → Set up → Done`; the current stage 1 heading is still `Checking Docker`
-  ([0003](./decisions.md#0003--concept-f-docker-verified-as-the-first-setup-stage)). Neutral stage
-  wording, redesigned findings, and engine-specific guides are pending W5; the detail still shows
-  raw CLI version output.
+  `Introduction → Configure → Set up → Done`; the stage 1 heading is `Checking container engine`
+  ([0003](./decisions.md#0003--concept-f-docker-verified-as-the-first-setup-stage)). Redesigned
+  findings and engine-specific guides are pending W5; the detail still shows raw CLI version output.
 - **Docker is preferred; Podman is the fallback.** Docker Engine and Docker Desktop are supported.
   The extension uses Docker when its CLI is available, and falls back to Podman only when it is
   not; there is no preference setting. Engine identification uses positive evidence. When evidence

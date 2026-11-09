@@ -33,8 +33,9 @@ code:
 - **Builds on:** [#1065](https://github.com/microsoft/vscode-documentdb/pull/1065) ·
   `dev/guanzhousong/quickstart-podman-fallback`
 - **Status:** partial implementation; W2 (`8087eb30`), W3 (`1da29012`), W4 (`fb06ae0d`),
-  W6 (`2c8deb28`), and W7 (`31775c89`) complete (5/9); W1, W5, and W8 deferred; W9 is
-  partial documentation maintenance. Remaining items are not complete.
+  W6 (`2c8deb28`), and W7 (`31775c89`) complete (5/9); W1 and W8 deferred, W5 partial
+  with heading-only W5a (`cbc573ba`) complete and the rest parked, and W9 partial
+  documentation maintenance. Remaining items are not complete.
 
 ## Why
 
@@ -342,8 +343,18 @@ CLI)", as specified in the source plan; no new label decision is recorded.
 - **W5 — Deferred, escalated (2026-11-09):** At 80% confidence, the advisor identified
   always-ask choices about hiding a stale Docker Desktop start label when Podman has positive
   evidence, new guide URLs/labels, neutral unknown-engine sentences, and exact evidence
-  notes. The operator was unavailable; no W5 UI was implemented. Options: approve the
+  notes. The operator was unavailable; those W5 changes remain parked. Options: approve the
   bounded completions (advisor recommendation, not approved) or review the exact wording.
+  The operator subsequently requested the heading-only W5a fix: stage 1 now always reads
+  `Checking container engine`. W5 remains partial; the rest is parked.
+- **W5a — Done (2026-11-09), commit `cbc573ba`:** The operator explicitly requested the
+  neutral first-stage heading. Terra (`gpt-6.1-terra`) changed the shared label, without
+  detection-dependent wording or lifecycle changes. Leader review confidence was 99%:
+  the wording implements B.1 exactly, so no additional advisor decision was needed.
+  Added seven regression cases covering the existing setup scenarios; build and all
+  22 focused scenario tests passed. All 30 existing browser routes passed across three
+  themes, plus direct first-row checks in dark, light and high-contrast. The remaining
+  W5 choices are unchanged and parked.
 - **W8 — Deferred, escalated (2026-11-09):** (a) Linux socket-down state has only inferred
   evidence, conflicting with the positive-evidence rule and draft 0009’s stopped-machine
   condition. Options: defer the Linux button and retain copy guidance (advisor
@@ -358,10 +369,10 @@ CLI)", as specified in the source plan; no new label decision is recorded.
   gates remain unresolved; W9 is not complete. Tooling commit `65c58751` contains generated
   localization and formatting only.
 
-All nine source work items remain: W2, W3, W4, W6, and W7 are done; W1, W5, and W8 are
-deferred; W9 is partial. Case 1 (`npm run build` plus focused tests) is required before each
-code item's commit. Run full Case 2 once at the end, including `l10n` and the dedicated
-browser configuration.
+All nine source work items remain: W2, W3, W4, W6, and W7 are done; W1 and W8 are
+deferred; W5 and W9 are partial, with heading-only W5a done and the rest of W5 parked.
+Case 1 (`npm run build` plus focused tests) is required before each code item's commit.
+Run full Case 2 once at the end, including `l10n` and the dedicated browser configuration.
 
 Validation per commit (Case 1): `npm run build` plus the touched tests. The full Case 2 list
 runs once at hand-over. Run `npm run l10n` there, because W4 to W6 and W8 change many
@@ -433,14 +444,15 @@ Operator answers, 2026-11-09:
 
 W9 remains partial. No 0008/0009 decision entries were recorded while W5/W8 remain blocked.
 
-Case 1 passed for each completed code item (W2, W3, W4, W6, W7). Browser verification passed
-for all 30 existing Local Quick Start routes (10 each in dark, light, and high-contrast),
+Before the W5a heading follow-up, Case 1 passed for each completed code item (W2, W3, W4, W6, W7).
+Browser verification passed for all 30 existing Local Quick Start routes (10 each in dark, light, and high-contrast),
 with 15 assertions and zero errors or failures. W4's exact Introduction content passed in all
 three themes. The first browser attempt failed because the browser-tool host did not provide
 `setTimeout`; rerunning the unchanged helper with `setTimeout` bound to `page.waitForTimeout`
 passed.
 
-All eight Case 2 commands and the additional browser-harness command exited 0:
+Before the W5a heading follow-up, all eight Case 2 commands and the additional browser-harness
+command exited 0:
 
 | Command                                                               | Result                                     |
 | --------------------------------------------------------------------- | ------------------------------------------ |
@@ -453,6 +465,13 @@ All eight Case 2 commands and the additional browser-harness command exited 0:
 | `npx vitest run`                                                      | Passed: 324 files, 5,776 passed, 1 skipped |
 | `npm run package`                                                     | Passed: 202 files, 8.55 MB VSIX            |
 | `npx vitest run --config build/verification/browser/vitest.config.ts` | Passed: 6 files, 79 passed                 |
+
+W5a's fresh Case 1 `npm run build` passed, and the focused browser scenario test passed
+(1 file, 22 tests). Rendered verification passed all 30 existing browser routes with
+15 assertions, including the neutral heading in all setup scenarios. Direct first-row
+checks also confirmed the exact heading and absence of `Checking Docker` in all three
+themes. Localization regeneration and full Case 2 were deferred for this working change;
+the Case 2 results above predate W5a.
 
 The command-runner spans total 6m50; first-turn elapsed time was 8m02. Individual
 `prettier-fix` and package durations were not reported.
