@@ -79,24 +79,24 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Timeline
 
-| Date       | PR    | What changed                                                 | Docs                                                                                              |
-| ---------- | ----- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| 2026-06-15 | #653  | Initial design, benchmarked against the PostgreSQL extension | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                              |
-| 2026-06-22 | —     | POC scope, plan, and 5-agent review                          | [iterations/02-poc/](./iterations/02-poc/)                                                        |
-| 2026-06-25 | —     | Instance model locked to one instance                        | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)               |
-| 2026-06-26 | —     | v1 production-readiness gap analysis                         | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                                    |
-| 2026-07-06 | —     | Single → multi instance reversal                             | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed)          |
-| 2026-08-02 | —     | Provider-neutral Docker readiness                            | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                        |
-| 2026-08-04 | #798  | UI redesign shipped (Concept F)                              | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                        |
-| 2026-08-09 | #876  | State sync + infrastructure error translation                | [iterations/05-error-translation.md](./iterations/05-error-translation.md)                        |
-| 2026-09-23 | #958  | Setup never wipes a data volume before it can succeed (#946) | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)                  |
-| 2026-09-24 | #954  | Setup failures show Docker's error, not an exit code         | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                              |
-| 2026-09-24 | #953  | Reject credentials and ports setup can't honor (#949)        | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                          |
-| 2026-09-24 | #955  | Tree and wizard stop showing a stale instance (#950)         | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                              |
-| 2026-09-29 | #979  | Restore missing credentials from the container               | [decisions.md#0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container) |
-| 2026-09-29 | #979  | Wizard journey telemetry and correlation ids                 | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)           |
-| 2026-10-15 | #1018 | Image usage telemetry follows VS Code's setting              | [decisions.md#0007](./decisions.md#0007---image-usage-telemetry-follows-vs-codes-setting)         |
-| 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md) |
+| Date       | PR    | What changed                                                 | Docs                                                                                                                                                           |
+| ---------- | ----- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-06-15 | #653  | Initial design, benchmarked against the PostgreSQL extension | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                                                                                           |
+| 2026-06-22 | —     | POC scope, plan, and 5-agent review                          | [iterations/02-poc/](./iterations/02-poc/)                                                                                                                     |
+| 2026-06-25 | —     | Instance model locked to one instance                        | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)                                                                            |
+| 2026-06-26 | —     | v1 production-readiness gap analysis                         | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                                                                                                 |
+| 2026-07-06 | —     | Single → multi instance reversal                             | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed)                                                                       |
+| 2026-08-02 | —     | Provider-neutral Docker readiness                            | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                     |
+| 2026-08-04 | #798  | UI redesign shipped (Concept F)                              | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                                                                                     |
+| 2026-08-09 | #876  | State sync + infrastructure error translation                | [iterations/05-error-translation.md](./iterations/05-error-translation.md)                                                                                     |
+| 2026-09-23 | #958  | Setup never wipes a data volume before it can succeed (#946) | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)                                                                               |
+| 2026-09-24 | #954  | Setup failures show Docker's error, not an exit code         | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                                                                                           |
+| 2026-09-24 | #953  | Reject credentials and ports setup can't honor (#949)        | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                                                                                       |
+| 2026-09-24 | #955  | Tree and wizard stop showing a stale instance (#950)         | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                                                                                           |
+| 2026-09-29 | #979  | Restore missing credentials from the container               | [decisions.md#0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)                                                              |
+| 2026-09-29 | #979  | Wizard journey telemetry and correlation ids                 | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)                                                                        |
+| 2026-10-15 | #1018 | Image usage telemetry follows VS Code's setting              | [decisions.md#0007](./decisions.md#0007---image-usage-telemetry-follows-vs-codes-setting)                                                                      |
+| 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending     | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md) |
 
 ## Decisions
 

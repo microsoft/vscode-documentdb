@@ -179,9 +179,10 @@ function isDockerDesktopOperatingSystem(operatingSystem: string | undefined): bo
     return operatingSystem !== undefined && /(?:^|\s)docker desktop(?:\s|$)/i.test(operatingSystem);
 }
 
-export function classifyContainerEngine(
-    input: ContainerEngineInput,
-): { engine: ContainerEngine; engineEvidence: ContainerEngineEvidence } {
+export function classifyContainerEngine(input: ContainerEngineInput): {
+    engine: ContainerEngine;
+    engineEvidence: ContainerEngineEvidence;
+} {
     if (input.cli === 'podman' && input.cliInstalled) {
         return { engine: 'podman', engineEvidence: 'selectedCli' };
     }

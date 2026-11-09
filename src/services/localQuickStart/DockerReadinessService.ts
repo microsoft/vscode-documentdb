@@ -312,9 +312,12 @@ export class DockerReadinessService {
     private async runAndMemoize(request: DockerReadinessRequest): Promise<DockerReadiness> {
         const client = this.dependencies.getClient();
         const cli = client.id === PodmanClient.ClientId ? 'podman' : 'docker';
-        const check = this.runReadiness(client, cli, request.cancellationToken, request.suppressCommandEcho === true).then(
-            (readiness): DockerReadiness => ({ ...readiness, cli }),
-        );
+        const check = this.runReadiness(
+            client,
+            cli,
+            request.cancellationToken,
+            request.suppressCommandEcho === true,
+        ).then((readiness): DockerReadiness => ({ ...readiness, cli }));
         this.inFlight = check;
         try {
             const result = await check;

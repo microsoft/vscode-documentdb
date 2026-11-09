@@ -267,7 +267,9 @@ function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.Mar
         tooltip.appendMarkdown('---\n\n');
         tooltip.appendMarkdown(`**${l10n.t('Container engine')}:** ${dockerProviderLabel(readiness)}\n\n`);
         if (readiness.serverVersion?.trim()) {
-            tooltip.appendMarkdown(`**${l10n.t('Engine version')}:** ${escapeMarkdown(readiness.serverVersion.trim())}\n\n`);
+            tooltip.appendMarkdown(
+                `**${l10n.t('Engine version')}:** ${escapeMarkdown(readiness.serverVersion.trim())}\n\n`,
+            );
         }
         if (readiness.daemonArchitecture) {
             tooltip.appendMarkdown(

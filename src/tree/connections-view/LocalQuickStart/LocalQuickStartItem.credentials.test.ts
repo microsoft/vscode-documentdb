@@ -383,41 +383,41 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         ['docker', 'docker', 'unknown', 'Docker'],
         ['unknown', 'docker', 'dockerDesktop', 'Container engine'],
         [undefined, 'docker', 'dockerDesktop', 'Container engine'],
-    ] as const)(
-        'shows the actual %s engine with %s CLI and %s provider',
-        async (engine, cli, provider, expected) => {
-            vi.spyOn(QuickStartService, 'getDockerReadinessSnapshot').mockReturnValue({
-                engine,
-                cli,
-                provider,
-                cliVersion: 'raw CLI output',
-                serverVersion: '  5.8.3  ',
-                endpointKind: 'unixSocket',
-            } as DockerReadiness);
-
-            const tooltip = (await getClusterItem()).getTreeItem().tooltip as vscode.MarkdownString;
-
-            expect(tooltip.value).toContain(`**Container engine:** ${expected}\n`);
-            expect(tooltip.value).toContain('**Engine version:** 5.8.3');
-            expect(tooltip.value).not.toContain('raw CLI output');
-        },
-    );
-
-    it.each([undefined, '', '  '])('omits empty server version %j instead of showing the CLI', async (serverVersion) => {
+    ] as const)('shows the actual %s engine with %s CLI and %s provider', async (engine, cli, provider, expected) => {
         vi.spyOn(QuickStartService, 'getDockerReadinessSnapshot').mockReturnValue({
-            engine: 'podman',
-            cli: 'podman',
-            provider: 'podman',
+            engine,
+            cli,
+            provider,
             cliVersion: 'raw CLI output',
-            serverVersion,
+            serverVersion: '  5.8.3  ',
             endpointKind: 'unixSocket',
         } as DockerReadiness);
 
         const tooltip = (await getClusterItem()).getTreeItem().tooltip as vscode.MarkdownString;
 
-        expect(tooltip.value).not.toContain('Engine version');
+        expect(tooltip.value).toContain(`**Container engine:** ${expected}\n`);
+        expect(tooltip.value).toContain('**Engine version:** 5.8.3');
         expect(tooltip.value).not.toContain('raw CLI output');
     });
+
+    it.each([undefined, '', '  '])(
+        'omits empty server version %j instead of showing the CLI',
+        async (serverVersion) => {
+            vi.spyOn(QuickStartService, 'getDockerReadinessSnapshot').mockReturnValue({
+                engine: 'podman',
+                cli: 'podman',
+                provider: 'podman',
+                cliVersion: 'raw CLI output',
+                serverVersion,
+                endpointKind: 'unixSocket',
+            } as DockerReadiness);
+
+            const tooltip = (await getClusterItem()).getTreeItem().tooltip as vscode.MarkdownString;
+
+            expect(tooltip.value).not.toContain('Engine version');
+            expect(tooltip.value).not.toContain('raw CLI output');
+        },
+    );
 
     it('returns no credentials and no client when the secret is gone', async () => {
         vi.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(undefined);

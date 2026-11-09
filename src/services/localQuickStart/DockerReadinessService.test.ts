@@ -156,8 +156,9 @@ describe('DockerReadinessService', () => {
         { name: 'malformed info', stdout: 'not json' },
     ])('skips server version after $name', async ({ exitCode, stdout }) => {
         const version = vi.fn();
-        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
-            evidence(options.probe, options.probe === 'info' ? { exitCode, stdout } : { stdout: '[]' }),
+        const runProbe = vi.fn(
+            async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
+                evidence(options.probe, options.probe === 'info' ? { exitCode, stdout } : { stdout: '[]' }),
         );
         const service = new DockerReadinessService({
             client: { ...createClient(), version },
@@ -355,53 +356,62 @@ describe('DockerReadinessService', () => {
         expect(writeProviderMemory).not.toHaveBeenCalled();
     });
 
-    it.each([false, true])('keeps failed server-version stdout private with suppressCommandEcho=%s', async (suppress) => {
-        const onCommand = vi.fn();
-        const stdout: string[] = [];
-        const stderr: string[] = [];
-        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
-            options.onCommand?.(`docker ${options.probe}`);
-            if (options.probe === 'info') {
-                return evidence('info', { stdout: '{"OSType":"linux"}' });
-            }
-            if (options.probe === 'serverVersion') {
-                expect(options.stdOutPipe).toBeUndefined();
-                return evidence('serverVersion', { exitCode: 1, stdout: 'private version JSON', stderr: 'version failed' });
-            }
-            return evidence(options.probe);
-        });
-        const service = new DockerReadinessService({
-            client: createClient(),
-            shellProvider: new Bash(),
-            platform: 'linux',
-            environmentVariables: {},
-            runProbe,
-            resolveDockerSocketTarget: async () => ({}),
-            writeProviderMemory: async () => undefined,
-            createProbeOutput: () => ({
-                onCommand,
-                stdOutPipe: new Writable({
-                    write: (chunk, _encoding, callback): void => {
-                        stdout.push(String(chunk));
-                        callback();
-                    },
+    it.each([false, true])(
+        'keeps failed server-version stdout private with suppressCommandEcho=%s',
+        async (suppress) => {
+            const onCommand = vi.fn();
+            const stdout: string[] = [];
+            const stderr: string[] = [];
+            const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+                options.onCommand?.(`docker ${options.probe}`);
+                if (options.probe === 'info') {
+                    return evidence('info', { stdout: '{"OSType":"linux"}' });
+                }
+                if (options.probe === 'serverVersion') {
+                    expect(options.stdOutPipe).toBeUndefined();
+                    return evidence('serverVersion', {
+                        exitCode: 1,
+                        stdout: 'private version JSON',
+                        stderr: 'version failed',
+                    });
+                }
+                return evidence(options.probe);
+            });
+            const service = new DockerReadinessService({
+                client: createClient(),
+                shellProvider: new Bash(),
+                platform: 'linux',
+                environmentVariables: {},
+                runProbe,
+                resolveDockerSocketTarget: async () => ({}),
+                writeProviderMemory: async () => undefined,
+                createProbeOutput: () => ({
+                    onCommand,
+                    stdOutPipe: new Writable({
+                        write: (chunk, _encoding, callback): void => {
+                            stdout.push(String(chunk));
+                            callback();
+                        },
+                    }),
+                    stdErrPipe: new Writable({
+                        write: (chunk, _encoding, callback): void => {
+                            stderr.push(String(chunk));
+                            callback();
+                        },
+                    }),
                 }),
-                stdErrPipe: new Writable({
-                    write: (chunk, _encoding, callback): void => {
-                        stderr.push(String(chunk));
-                        callback();
-                    },
-                }),
-            }),
-        });
+            });
 
-        await expect(service.getReadiness({ suppressCommandEcho: suppress })).resolves.toMatchObject({ outcome: 'ready' });
-        expect(stdout).toEqual([]);
-        expect(onCommand).toHaveBeenCalledWith('docker serverVersion');
-        if (suppress) {
-            expect(stderr).toEqual(['version failed']);
-        }
-    });
+            await expect(service.getReadiness({ suppressCommandEcho: suppress })).resolves.toMatchObject({
+                outcome: 'ready',
+            });
+            expect(stdout).toEqual([]);
+            expect(onCommand).toHaveBeenCalledWith('docker serverVersion');
+            if (suppress) {
+                expect(stderr).toEqual(['version failed']);
+            }
+        },
+    );
 
     it.each([
         { target: '/run/user/1000/podman/podman.sock', engineEvidence: 'dockerSocketLink' },
@@ -415,9 +425,14 @@ describe('DockerReadinessService', () => {
             shellProvider: new Bash(),
             platform: 'darwin',
             environmentVariables: { DOCKER_HOST: 'unix:///var/run/docker.sock' },
-            runProbe: async (options) => evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
+            runProbe: async (options) =>
+                evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
             resolveDockerSocketTarget,
-            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ENOENT' }),
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'ENOENT',
+            }),
             getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
             readProviderMemory: () => undefined,
             createProbeOutput: () => ({ appendDiagnostic }),
@@ -446,9 +461,14 @@ describe('DockerReadinessService', () => {
             shellProvider: new Bash(),
             platform: 'linux',
             environmentVariables: { DOCKER_HOST: 'unix:///var/run/docker.sock' },
-            runProbe: async (options) => evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
+            runProbe: async (options) =>
+                evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
             resolveDockerSocketTarget: async () => ({ errorCode: 'EACCES' }),
-            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ENOENT' }),
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'ENOENT',
+            }),
             getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
             readProviderMemory: () => undefined,
             createProbeOutput: () => ({ appendDiagnostic }),
@@ -483,9 +503,14 @@ describe('DockerReadinessService', () => {
             shellProvider: new Bash(),
             platform,
             environmentVariables: { DOCKER_HOST: dockerHost },
-            runProbe: async (options) => evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
+            runProbe: async (options) =>
+                evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
             resolveDockerSocketTarget,
-            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ENOENT' }),
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'ENOENT',
+            }),
             getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
             readProviderMemory: () => undefined,
         });
