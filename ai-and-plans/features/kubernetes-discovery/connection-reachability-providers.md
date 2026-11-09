@@ -6,7 +6,7 @@ prs: [621]
 created: 2026-06-10
 code:
     - src/plugins/service-kubernetes/**
-verified: 2026-08-14
+verified: 2026-11-09
 ---
 
 # Connection Reachability Providers
@@ -46,7 +46,7 @@ This mirrors the established singleton-registry pattern already used by `Discove
 | `ConnectionReachabilityProvider` (interface) + `ConnectionReachabilityService` (singleton) | `src/services/connectionReachabilityService.ts`                     | Generic, source-agnostic registry. Lives in `services/` beside `discoveryServices.ts`. |
 | `KubernetesReachabilityProvider`                                                           | `src/plugins/service-kubernetes/KubernetesReachabilityProvider.ts`  | Kubernetes-specific implementation. Lives in the plugin that owns the behavior.        |
 | Registration                                                                               | `src/documentdb/ClustersExtension.ts` (`registerDiscoveryServices`) | Wires the provider at activation, next to the discovery-provider registrations.        |
-| Consumption                                                                                | `src/tree/connections-view/DocumentDBClusterItem.ts`                | Calls `ConnectionReachabilityService.ensureReachable(properties)` before connecting.   |
+| Consumption                                                                                | `src/tree/connections-view/DocumentDBClusterItem.ts`                | Delegates stored properties and the stable cluster ID before connecting.               |
 
 ### Interface
 
@@ -56,17 +56,39 @@ export interface ConnectionReachabilityProvider {
   // Cheap, side-effect-free check against the stored connection properties.
   appliesTo(connectionProperties: Record<string, unknown> | undefined): boolean;
   // Runs the preparation step (e.g. re-open a tunnel). Only called when appliesTo is true.
-  ensureReachable(connectionProperties: Record<string, unknown>): Promise<void>;
+  ensureReachable(
+    connectionProperties: Record<string, unknown>,
+    clusterId?: string,
+    intent?: ConnectionReachabilityIntent,
+  ): Promise<void | ConnectionReachabilityResult>;
+}
+
+export interface ConnectionReachabilityIntent {
+  readonly interactive?: boolean;
+  readonly verifyEndpoint?: boolean;
+  readonly signal?: AbortSignal;
+}
+
+export interface ConnectionReachabilityResult {
+  readonly sharedTunnel?: 'started' | 'reused' | 'externalAssumed';
 }
 ```
 
 `DocumentDBClusterItem` now keeps a single thin wrapper:
 
 ```ts
-private async ensureConnectionReachable(connectionProperties: Record<string, unknown> | undefined) {
-    await ConnectionReachabilityService.ensureReachable(connectionProperties);
+private async ensureConnectionReachable(
+    connectionProperties: Record<string, unknown> | undefined,
+    clusterId?: string,
+): Promise<void> {
+    await ConnectionReachabilityService.ensureReachable(connectionProperties, clusterId);
 }
 ```
+
+`verifyEndpoint` is an opt-in preparation intent. Connection diagnosis sets it in its existing
+`prepare` check so the Kubernetes provider verifies a ready service backend before starting or
+reusing a tunnel. Ordinary connect callers omit the intent and keep their existing behavior; no new
+provider-registration or check-insertion API is involved.
 
 ## Why this placement
 
@@ -85,12 +107,14 @@ Connections-view load path. That property is kept:
 - `KubernetesReachabilityProvider` statically imports only `portForwardMetadata` (dependency-light).
 - The heavy `ensureKubernetesPortForward` (which pulls in `@kubernetes/client-node`) is still imported
   **lazily inside `ensureReachable()`**, so it loads only when a Kubernetes port-forward connection is
-  actually opened — not at activation and not for non-Kubernetes connections.
+  being prepared for a connect or diagnostic run — not at activation and not for non-Kubernetes
+  connections.
 
 ## Behavior & safety
 
-- **No behavior change** for users. Non-Kubernetes connections hit a no-op (no provider applies). Kubernetes
-  ClusterIP connections re-establish the tunnel exactly as before.
+- **Ordinary connects are unchanged.** Non-Kubernetes connections hit a no-op (no provider applies).
+  Kubernetes ClusterIP connections re-establish the tunnel as before. The separate diagnostic
+  intent can request endpoint verification without changing that ordinary connect path.
 - **Re-reads on every connect.** `ensureReachable` is invoked with the freshly loaded stored properties on
   each connect attempt, so there is no stale state (this is why a metadata-driven check was preferred over a
   subclass fixed at construction time — see "Alternatives").
