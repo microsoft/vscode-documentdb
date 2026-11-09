@@ -13,6 +13,8 @@ import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegi
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
 import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
+import { type ConnectionDiagnosticsConfiguration } from '../../../src/webviews/documentdb/connectionDiagnostics/connectionDiagnosticsTypes';
+import { panelRowIds } from '../../../src/webviews/documentdb/connectionDiagnostics/panelTypes';
 import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
 import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';
@@ -20,6 +22,11 @@ import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtu
 type Inputs = FixtureInputs;
 type Outputs = FixtureOutputs;
 type CollectionOutputs = Outputs['mongoClusters']['collectionView'];
+// The router's serialized stream item: what the fake host can send, with tRPC's mutable arrays.
+export type DiagnosticsRunUpdate =
+    Outputs['connectionDiagnostics']['run'] extends AsyncIterable<infer Update> ? Update : never;
+export type DiagnosticsRow = Extract<DiagnosticsRunUpdate, { type: 'started' }>['rows'][number];
+export type DiagnosticsCard = Extract<DiagnosticsRunUpdate, { type: 'finished' }>['result'];
 
 export interface ViewFixture {
     readonly config: unknown;
@@ -82,6 +89,350 @@ const quickStartConfig: LocalQuickStartConfigurationType = {
     initialInstanceState: InstanceState.NotInstalled,
 };
 const atlasConfig: AtlasCredentialsWebviewConfig = { mode: 'add', authMethod: 'apikey' };
+const diagnosticsConfig: ConnectionDiagnosticsConfiguration = {
+    connectionName: 'Stage 0 fixture connection',
+    diagnosticsSessionId: 'stage0-diagnostics-session',
+    feedbackPermitted: true,
+    // Static states render at once, so layout assertions see the final state; `paced-run` paces (0043).
+    stepPacing: { stepMs: 0, jitterMs: 0 },
+};
+export const diagnosticsStartedAt = 1790884800000;
+export const diagnosticsPendingRows: DiagnosticsRow[] = panelRowIds.map(
+    (id): DiagnosticsRow => ({ id, status: 'pending', segments: [] }),
+);
+export const diagnosticsHost = 'c-stage0.mongocluster.cosmos.azure.com';
+
+// WI-18 prototype: expandable row details. Fixture data only; the live host builds the same shape.
+// The panel always shows full identifiers; Hide identifiers applies to the report only (WI-19).
+export type DiagnosticsDetails = NonNullable<DiagnosticsRow['details']>;
+export type DiagnosticsFinding = DiagnosticsDetails['findings'][number];
+export type DiagnosticsEvidence = DiagnosticsDetails['evidence'][number];
+
+/** A row's details, as the host sends them. */
+export function diagnosticsDetails(
+    findings: DiagnosticsFinding[],
+    evidence: DiagnosticsEvidence[] = [],
+): DiagnosticsDetails {
+    return { findings, evidence };
+}
+
+/** A finding the host would send, with no identifiers in it. */
+export function diagnosticsFinding(
+    severity: DiagnosticsFinding['severity'],
+    title: string,
+    explanation: string,
+    nextStep?: string,
+    targets?: string[],
+): DiagnosticsFinding {
+    return { severity, title, explanation, ...(nextStep ? { nextStep } : {}), ...(targets ? { targets } : {}) };
+}
+
+/** `fc-0123456789ab-00N.<cluster>`: the SRV target names Azure DocumentDB returns, fixture-safe. */
+export const diagnosticsSrvTargets = [0, 1, 2].map((index): string => `fc-0123456789ab-00${index}.${diagnosticsHost}`);
+export const diagnosticsPrivateLinkAlias = 'fc-0123456789ab-000.privatelink.mongocluster.cosmos.azure.com';
+export const diagnosticsPublicAliasTitle = 'Public address for this Azure host name';
+export const diagnosticsPublicAliasExplanation =
+    "The name goes through Azure's private-link alias and resolves to a public address. That is normal outside the cluster's private network.";
+export const diagnosticsPrivateAccessHint =
+    'This name resolved to a public address. If the cluster allows only private access, connect from its virtual network or a network that resolves the private endpoint (VPN, peering or a private DNS zone).';
+const diagnosticsDnsServer = '172.20.192.1';
+
+interface HealthyRunShape {
+    readonly hosts: readonly string[];
+    readonly addresses: readonly string[];
+    readonly cnameChains?: readonly (readonly string[])[];
+    readonly dnsFindings?: DiagnosticsFinding[];
+    readonly pingMs: number;
+    readonly databaseCount: number;
+    /** An address the first host refused before its own connected, so its Details compare two attempts. */
+    readonly firstHostRefused?: string;
+}
+
+/**
+ * The details a healthy DocumentDB run sends for rows 2 to 8.
+ */
+export function diagnosticsHealthyDetails(
+    shape: HealthyRunShape,
+): Record<
+    | 'connectionSettings'
+    | 'serverAddress'
+    | 'networkConnection'
+    | 'secureConnection'
+    | 'serverResponse'
+    | 'authentication'
+    | 'databaseAccess',
+    DiagnosticsDetails
+> {
+    const query = `_mongodb._tcp.${diagnosticsHost}`;
+    const certificate = `*.${diagnosticsHost}`;
+    // Each host's check time, sent only when a row has two or more hosts (decision 0050, WI-33); host
+    // checks run in parallel, so the row's badge is the longest of them, not their sum.
+    const hostTime = (times: readonly number[], index: number): { durationMs?: number } =>
+        shape.hosts.length >= 2 ? { durationMs: times[index % times.length] } : {};
+    const address = (index: number): DiagnosticsEvidence & { kind: 'dnsHost' } => {
+        const answer = [{ address: shape.addresses[index], family: 4 as const, addressClass: 'public' as const }];
+        return {
+            kind: 'dnsHost',
+            host: shape.hosts[index],
+            cnameChain: [...(shape.cnameChains?.[index] ?? [])],
+            system: answer,
+            direct: answer,
+            systemFailed: false,
+            directFailed: false,
+            agree: true,
+            ...hostTime([1.6, 0.9, 1.2], index),
+        };
+    };
+    return {
+        connectionSettings: diagnosticsDetails(
+            [],
+            [
+                {
+                    kind: 'connectionSettings',
+                    scheme: 'mongodb+srv',
+                    hosts: [diagnosticsHost],
+                    user: 'stage0user',
+                    passwordPresent: false,
+                    authMethod: 'native',
+                    authSource: { value: 'admin', origin: 'dns' },
+                    options: [
+                        { name: 'tls', value: 'true', hidden: false, source: 'uri' },
+                        { name: 'appName', value: 'stage0-fixture', hidden: false, source: 'uri' },
+                        { name: 'authSource', value: 'admin', hidden: false, source: 'dns' },
+                    ],
+                },
+            ],
+        ),
+        serverAddress: diagnosticsDetails(shape.dnsFindings ?? [], [
+            {
+                kind: 'srv',
+                query,
+                targets: shape.hosts.map((name): string => `${name}:10260`),
+                omittedTargets: 0,
+                resolver: 'system',
+                dnsServers: [diagnosticsDnsServer],
+                txtOptions: [{ name: 'authSource', value: 'admin' }],
+                failed: false,
+            },
+            ...shape.hosts.map((_name, index) => address(index)),
+        ]),
+        networkConnection: diagnosticsDetails(
+            [],
+            shape.hosts.map(
+                (name, index): DiagnosticsEvidence => ({
+                    kind: 'tcpHost',
+                    host: name,
+                    port: 10260,
+                    connectedAddress: shape.addresses[index],
+                    // Connect times only for a host that made two or more attempts (WI-33).
+                    ...(index === 0 && shape.firstHostRefused !== undefined
+                        ? { connectMs: 31, failedAddresses: [{ address: shape.firstHostRefused, connectMs: 2 }] }
+                        : { failedAddresses: [] }),
+                    ...hostTime([34, 105, 48], index),
+                }),
+            ),
+        ),
+        secureConnection: diagnosticsDetails(
+            [],
+            shape.hosts.map(
+                (name, index): DiagnosticsEvidence => ({
+                    kind: 'tlsHost',
+                    host: name,
+                    protocol: 'TLSv1.3',
+                    subject: certificate,
+                    issuer: 'Microsoft Azure RSA TLS Issuing CA 03',
+                    validTo: '2027-03-01T00:00:00.000Z',
+                    trusted: true,
+                    hostNameMatched: true,
+                    ...hostTime([612, 761, 540], index),
+                }),
+            ),
+        ),
+        serverResponse: diagnosticsDetails(
+            [],
+            shape.hosts.map(
+                (name, index): DiagnosticsEvidence => ({
+                    kind: 'serverHost',
+                    host: name,
+                    topology: 'documentdbGateway',
+                    documentdbVersion: '0.107.0',
+                    command: 'hello',
+                    maxWireVersion: 21,
+                    passwordMechanisms: ['SCRAM-SHA-256'],
+                    ...hostTime([71, 88, 64], index),
+                }),
+            ),
+        ),
+        authentication: diagnosticsDetails(
+            [],
+            [
+                {
+                    kind: 'auth',
+                    method: 'native',
+                    mechanism: 'SCRAM-SHA-256',
+                    mechanismNegotiated: true,
+                    user: 'stage0user',
+                    authSource: { value: 'admin', origin: 'default' },
+                    stages: [{ stage: 'sendPassword', outcome: 'done' }],
+                },
+            ],
+        ),
+        databaseAccess: diagnosticsDetails(
+            [],
+            [
+                {
+                    kind: 'access',
+                    commands: [
+                        { command: 'ping', outcome: 'ok' },
+                        { command: 'connectionStatus', outcome: 'ok' },
+                        { command: 'listDatabases', outcome: 'ok' },
+                        { command: 'buildInfo', outcome: 'ok' },
+                        { command: 'hello', outcome: 'ok' },
+                    ],
+                    pingMs: shape.pingMs,
+                    databaseCount: shape.databaseCount,
+                    serverVersion: '7.0.0',
+                },
+            ],
+        ),
+    };
+}
+
+const diagnosticsConnectedDetails = diagnosticsHealthyDetails({
+    hosts: diagnosticsSrvTargets,
+    addresses: ['203.0.113.10', '203.0.113.11', '203.0.113.12'],
+    pingMs: 12,
+    databaseCount: 5,
+    firstHostRefused: '2001:db8::10',
+});
+
+/** A healthy DocumentDB connection, with evidence on every row the host fills today. */
+export const diagnosticsConnectedRows: DiagnosticsRow[] = [
+    {
+        id: 'setup',
+        status: 'done',
+        durationMs: 0.4,
+        segments: [
+            { kind: 'location', remoteKind: 'local' },
+            { kind: 'platform', platform: 'linux' },
+            { kind: 'arch', arch: 'x64' },
+        ],
+    },
+    {
+        id: 'connectionSettings',
+        status: 'done',
+        durationMs: 147,
+        segments: [
+            { kind: 'scheme', scheme: 'mongodb+srv' },
+            { kind: 'user', userName: 'stage0user' },
+            { kind: 'optionCount', count: 2 },
+        ],
+        details: diagnosticsConnectedDetails.connectionSettings,
+    },
+    {
+        id: 'serverAddress',
+        status: 'done',
+        durationMs: 2,
+        segments: [
+            { kind: 'srvHosts', count: 3 },
+            { kind: 'resolved', resolved: 3, total: 3 },
+        ],
+        details: diagnosticsConnectedDetails.serverAddress,
+    },
+    {
+        id: 'networkConnection',
+        status: 'done',
+        durationMs: 105,
+        segments: [
+            { kind: 'reachable', reachable: 3, total: 3 },
+            { kind: 'port', port: 10260 },
+        ],
+        details: diagnosticsConnectedDetails.networkConnection,
+    },
+    {
+        id: 'secureConnection',
+        status: 'done',
+        durationMs: 761,
+        segments: [{ kind: 'certificateTrusted' }, { kind: 'validUntil', date: '2027-03-01T00:00:00.000Z' }],
+        details: diagnosticsConnectedDetails.secureConnection,
+    },
+    {
+        id: 'serverResponse',
+        status: 'done',
+        durationMs: 88,
+        segments: [{ kind: 'topology', topology: 'documentdbGateway' }, { kind: 'answeredBeforeSignIn' }],
+        details: diagnosticsConnectedDetails.serverResponse,
+    },
+    {
+        id: 'authentication',
+        status: 'done',
+        durationMs: 4378,
+        segments: [
+            { kind: 'authMethod', method: 'native' },
+            { kind: 'authMechanism', mechanism: 'SCRAM-SHA-256' },
+            { kind: 'account', label: 'stage0user' },
+        ],
+        details: diagnosticsConnectedDetails.authentication,
+    },
+    {
+        id: 'databaseAccess',
+        status: 'done',
+        durationMs: 692,
+        segments: [
+            { kind: 'ping', ms: 12 },
+            { kind: 'databasesVisible', count: 5 },
+        ],
+        details: diagnosticsConnectedDetails.databaseAccess,
+    },
+];
+/** The result card data for a run; every flag is off unless the scenario sets it. */
+export function diagnosticsCard(
+    outcome: DiagnosticsCard['outcome'],
+    extra: Partial<Omit<DiagnosticsCard, 'outcome'>> = {},
+): DiagnosticsCard {
+    return {
+        outcome,
+        firewallHint: false,
+        earlierSignInFailure: false,
+        runTimeoutBeforeAttempt: false,
+        authenticated: outcome === 'connected',
+        ...extra,
+    };
+}
+export const diagnosticsConnectedCard = diagnosticsCard('connected', {
+    serverLine: { engineVersion: '0.107.0', apiVersion: '7.0', host: diagnosticsHost, pingMs: 12 },
+});
+/** The card's sentence for a clean, signed-in connection; server facts live in the rows' Details (decision 0041). */
+export const diagnosticsConnectedSummary = 'All checks passed. Sign-in succeeded and the database answered.';
+export const diagnosticsFullCoverage = { limited: false, retryWouldHelp: false, connectionTimeoutLimited: false };
+const diagnosticsConnectedRun: DiagnosticsRunUpdate[] = [
+    {
+        type: 'started',
+        runId: 'stage0-run-connected',
+        startedAt: diagnosticsStartedAt,
+        rows: diagnosticsPendingRows,
+    },
+    {
+        type: 'finished',
+        runId: 'stage0-run-connected',
+        finishedAt: diagnosticsStartedAt + 4000,
+        rows: diagnosticsConnectedRows,
+        outcome: 'connected',
+        result: diagnosticsConnectedCard,
+        coverage: diagnosticsFullCoverage,
+    },
+];
+/** The fixed row labels, in order; spelled out so the scenarios check the view's own strings. */
+export const diagnosticsRowLabels = [
+    'Diagnosis setup',
+    'Connection settings',
+    'Server address (DNS)',
+    'Network connection (TCP)',
+    'Secure connection (TLS)',
+    'Server greeting (hello)',
+    'Authentication',
+    'Database access',
+] as const;
 interface FixtureTableRow {
     readonly id: string;
     readonly 'x-objectid': string;
@@ -243,6 +594,30 @@ export const fixtures = {
             'localQuickStart.checkPassword': reply<Outputs['localQuickStart']['checkPassword']>('query', 'ok'),
             'localQuickStart.reportStepChange': reply<void>('mutation', undefined),
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
+        },
+    },
+    connectionDiagnostics: {
+        config: diagnosticsConfig,
+        monaco: false,
+        content: [
+            ...diagnosticsRowLabels,
+            'Connection successful',
+            'Running on this computer',
+            diagnosticsConnectedSummary,
+        ],
+        styles: [{ selector: '#connectivity-checks', property: 'display', expected: 'flex' }],
+        rpc: {
+            ...common,
+            'connectionDiagnostics.run': { type: 'subscription', results: diagnosticsConnectedRun },
+            'connectionDiagnostics.panelEvents': { type: 'subscription', results: [], keepOpen: true },
+            'connectionDiagnostics.cancel': reply<void>('mutation', undefined),
+            'connectionDiagnostics.showDiagnostics': reply<boolean>('mutation', true),
+            'connectionDiagnostics.setReportIdentifiers': reply<boolean>('mutation', false),
+            'connectionDiagnostics.copyReport': reply<void>('mutation', undefined),
+            'connectionDiagnostics.saveReport': reply<void>('mutation', undefined),
+            'common.openFeedback': reply<void>('mutation', undefined),
+            // The share warning before a copy or save with identifiers; the fixture always continues.
+            'common.confirm': reply<{ confirmed: boolean }>('mutation', { confirmed: true }),
         },
     },
     atlasCredentials: {

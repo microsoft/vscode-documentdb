@@ -201,7 +201,7 @@ describe('sovereign authentication with real audience resolvers', () => {
             tokenResourceReason: 'setting',
             configuredCloud: cloud.cloud,
             hostCloud: cloud.cloud,
-            errorKind: 'none',
+            entraFailureKind: 'none',
         });
         expect(JSON.stringify(startupProperties)).not.toMatch(/private|https|authority/);
     });
@@ -282,7 +282,7 @@ describe('sovereign authentication with real audience resolvers', () => {
                     cloudCategory: 'usgov',
                     tokenResourceReason: authMethod === AuthMethodId.ManagedIdentity ? 'host' : 'setting',
                     hostCloud: 'AzureUSGovernment',
-                    errorKind: 'none',
+                    entraFailureKind: 'none',
                 });
                 expect(JSON.stringify(startup)).not.toMatch(/private|https|authority/);
             } finally {
@@ -383,7 +383,9 @@ describe('sovereign authentication with real audience resolvers', () => {
             expect(postedMessages).toContainEqual({
                 type: 'tokenError',
                 requestId: 'failed-resolution',
-                error: expect.stringContaining(authMethod === AuthMethodId.ManagedIdentity ? 'HTTPS' : 'signed in'),
+                error: expect.stringContaining(
+                    authMethod === AuthMethodId.ManagedIdentity ? 'HTTPS' : 'sign-in is set to',
+                ),
             });
             expect(provider).not.toHaveBeenCalled();
             expect(getRecentEntraTokenFailure(clusterId)).toBeUndefined();

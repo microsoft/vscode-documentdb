@@ -31,6 +31,8 @@ import { getThemeAgnosticIconPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
 import { type AzureClusterModel } from '../../azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
+import { type DiagnosticCredentialRead } from '../../documentdb/diagnosticCredentialRead';
+import { readCredentialsForDiagnostics } from '../../documentdb/readCredentialsForDiagnostics';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 
 export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
@@ -44,20 +46,33 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.AzureResourcesView;
-            context.telemetry.properties.branch = 'documentdb';
+        return callWithTelemetryAndErrorHandling('getCredentials', (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            // Retrieve and validate cluster information (throws if invalid)
-            const clusterInformation = await getClusterInformationFromAzure(
-                context,
-                this.subscription,
-                this.cluster.resourceGroup!,
-                this.cluster.name,
-            );
+    /** Same Azure Resource Manager read, without error UI; typed failures reach connection diagnostics. */
+    public override getCredentialsForDiagnostics(
+        read: DiagnosticCredentialRead,
+    ): Promise<EphemeralClusterCredentials | undefined> {
+        return readCredentialsForDiagnostics('getCredentials', 'azure', read, (context: IActionContext) =>
+            this.readCredentials(context),
+        );
+    }
 
-            return extractCredentialsFromCluster(context, clusterInformation, this.subscription);
-        });
+    private async readCredentials(context: IActionContext): Promise<EphemeralClusterCredentials> {
+        context.telemetry.properties.view = Views.AzureResourcesView;
+        context.telemetry.properties.branch = 'documentdb';
+
+        // Retrieve and validate cluster information (throws if invalid)
+        const clusterInformation = await getClusterInformationFromAzure(
+            context,
+            this.subscription,
+            this.cluster.resourceGroup!,
+            this.cluster.name,
+        );
+
+        return extractCredentialsFromCluster(context, clusterInformation, this.subscription);
     }
 
     /**

@@ -44,7 +44,12 @@
  *     per-view routers and the controller share a single import location.
  */
 
-import { callWithTelemetryAndErrorHandling, parseError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    isUserCancelledError,
+    parseError,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import { initWebviewTrpc, type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import { getInvocationSignal, telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
 import { WEBVIEW_CONFIG } from './configuration';
@@ -94,6 +99,18 @@ export interface RpcEnrichment {
  */
 export type WithTelemetry<T> = T & RpcEnrichment;
 
+/** tRPC wraps a procedure's thrown error in a `TRPCError`; the original is its `cause`. */
+function isUserCancellation(error: unknown): boolean {
+    let current = error;
+    for (let depth = 0; depth < 5 && typeof current === 'object' && current !== null; depth++) {
+        if (isUserCancelledError(current)) {
+            return true;
+        }
+        current = (current as { cause?: unknown }).cause;
+    }
+    return false;
+}
+
 /**
  * DocumentDB telemetry adapter for the framework's `telemetryMiddlewareBody`.
  *
@@ -108,8 +125,9 @@ export type WithTelemetry<T> = T & RpcEnrichment;
  * than a throw, so this runner translates that: it records `Failed` with
  * `parseError`-derived `error` / `errorMessage` / `errorStack` / `errorCause`
  * (so non-enumerable Error fields are read correctly and circular `cause`
- * chains never throw). Aborted calls are left as `Canceled` with no error
- * fields so a cancellation is never counted as a failure (R766-C01 / R766-C02).
+ * chains never throw). Aborted calls and procedures that throw a
+ * `UserCancelledError` (a dismissed dialog) are left as `Canceled` with no
+ * error fields so a cancellation is never counted as a failure (R766-C01 / R766-C02).
  */
 const documentDbTelemetryRunner: TelemetryRunner<RpcEnrichment> = {
     async run(eventId, invocation, invoke) {
@@ -121,6 +139,9 @@ const documentDbTelemetryRunner: TelemetryRunner<RpcEnrichment> = {
             const aborted = getInvocationSignal(invocation.ctx)?.aborted ?? false;
             if (aborted) {
                 actionContext.telemetry.properties.aborted = 'true';
+                actionContext.telemetry.properties.result = 'Canceled';
+            } else if (!middlewareResult.ok && isUserCancellation(middlewareResult.error)) {
+                // A dismissed dialog inside a procedure is a choice, not a failure.
                 actionContext.telemetry.properties.result = 'Canceled';
             } else if (!middlewareResult.ok && middlewareResult.error) {
                 const parsed = parseError(middlewareResult.error);
