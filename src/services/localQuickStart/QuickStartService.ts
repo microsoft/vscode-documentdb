@@ -1481,7 +1481,7 @@ export class QuickStartServiceImpl {
                 entry.pendingReadiness = pending;
                 void vscode.window.showErrorMessage(
                     l10n.t(
-                        'Start over did not finish because Docker could not remove the DocumentDB Local container. Try again once Docker responds.',
+                        'Start over did not finish because your container engine (Docker or Podman) could not remove the DocumentDB Local container. Try again once your container engine responds.',
                     ),
                 );
                 return false;
@@ -1494,7 +1494,7 @@ export class QuickStartServiceImpl {
                         meterQuickStartSilentCatch('discardTimedOut_removeVolume');
                         void vscode.window.showWarningMessage(
                             l10n.t(
-                                'Start over removed the DocumentDB Local container but could not remove its data volume. The next setup will ask you to start fresh, or you can remove the volume with Docker.',
+                                'Start over removed the DocumentDB Local container but could not remove its data volume. The next setup will ask you to start fresh, or you can remove the volume with your container engine (Docker or Podman).',
                             ),
                         );
                     });
@@ -2023,7 +2023,7 @@ export class QuickStartServiceImpl {
             // removal as a second line of defense.
             void vscode.window.showWarningMessage(
                 l10n.t(
-                    'The DocumentDB Local container can no longer be managed because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                    'The DocumentDB Local container can no longer be managed because it was created outside the extension. Remove it with your container engine (Docker or Podman) if you no longer need it.',
                 ),
             );
             return false;
@@ -2088,7 +2088,7 @@ export class QuickStartServiceImpl {
             case 'foreign':
                 void vscode.window.showWarningMessage(
                     l10n.t(
-                        'The DocumentDB Local container can no longer be opened because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                        'The DocumentDB Local container can no longer be opened because it was created outside the extension. Remove it with your container engine (Docker or Podman) if you no longer need it.',
                     ),
                 );
                 break;
@@ -2277,7 +2277,7 @@ export class QuickStartServiceImpl {
                     if (inspected && !this.isOwnedContainer(inspected, alias)) {
                         void vscode.window.showWarningMessage(
                             l10n.t(
-                                'The DocumentDB Local container was not removed because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                                'The DocumentDB Local container was not removed because it was created outside the extension. Remove it with your container engine (Docker or Podman) if you no longer need it.',
                             ),
                         );
                         return 'refused';

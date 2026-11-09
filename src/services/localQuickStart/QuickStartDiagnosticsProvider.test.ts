@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { QuickStartDiagnosticsProvider } from './QuickStartDiagnosticsProvider';
 import { QuickStartService } from './QuickStartService';
-import { InstanceState, type InstanceStatus } from './quickStartTypes';
+import { InstanceState, type DockerReadiness, type InstanceStatus } from './quickStartTypes';
 
 function status(clusterId: string, alias = 'default'): InstanceStatus {
     return {
@@ -43,7 +43,7 @@ describe('QuickStartDiagnosticsProvider', () => {
         ['missing', 'cannot find the DocumentDB Local container'],
         ['foreign', 'not created by this extension'],
         ['unavailable', 'cannot reach DocumentDB Local'],
-        ['dockerUnreachable', 'Docker does not appear to be running'],
+        ['dockerUnreachable', 'container engine does not appear to be running'],
     ] as const)('explains a %s container', async (verdict, expected) => {
         vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
         vi.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue(verdict);
@@ -54,6 +54,30 @@ describe('QuickStartDiagnosticsProvider', () => {
         });
 
         expect(result).toContain(expected);
+    });
+
+    it.each([
+        ['docker', 'Docker'],
+        ['podman', 'Podman'],
+        ['unknown', 'The container engine'],
+        [undefined, 'The container engine'],
+    ] as const)('uses the snapshot engine %s for unreachable diagnostics', async (engine, label) => {
+        vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
+        const inspect = vi.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue('dockerUnreachable');
+        const snapshot = vi
+            .spyOn(QuickStartService, 'getDockerReadinessSnapshot')
+            .mockReturnValue(engine === undefined ? undefined : ({ engine } as DockerReadiness));
+
+        const result = await new QuickStartDiagnosticsProvider().explain({
+            clusterId: 'quickstart-cluster',
+            error: new Error('boom'),
+        });
+
+        expect(result).toBe(
+            `${label} does not appear to be running, so DocumentDB Local cannot be reached. Start it, then try again.`,
+        );
+        expect(inspect).toHaveBeenCalledTimes(1);
+        expect(snapshot).toHaveBeenCalledTimes(1);
     });
 
     it.each(['ready', 'busy'] as const)('stays silent when the container is %s', async (verdict) => {

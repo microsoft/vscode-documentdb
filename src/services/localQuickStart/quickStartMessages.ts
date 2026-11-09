@@ -41,16 +41,16 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
             return l10n.t('Docker or Podman is installed, but its engine is not reachable. Start it and retry.');
         case 'dockerUnavailableDuringSetup':
             return detail
-                ? l10n.t('Docker became unavailable during setup: {0}', detail)
-                : l10n.t('Docker became unavailable during setup.');
+                ? l10n.t('The container engine became unavailable during setup: {0}', detail)
+                : l10n.t('The container engine became unavailable during setup.');
         case 'imageNotFound':
             return l10n.t(
-                'Docker could not find the image {0}. Go back to Configure and check the image tag, or leave it empty to use the latest version.',
+                'The container engine could not find the image {0}. Go back to Configure and check the image tag, or leave it empty to use the latest version.',
                 message.image ?? '',
             );
         case 'createTimedOut':
             return l10n.t(
-                'Docker did not finish creating the container in time. Try again, or go back to Configure and choose a different port. If it keeps happening, restart Docker.',
+                'The container engine did not finish creating the container in time. Try again, or go back to Configure and choose a different port. If it keeps happening, restart Docker or the Podman machine.',
             );
         case 'containerExited':
             return formatContainerExited(message.exitCode, detail);

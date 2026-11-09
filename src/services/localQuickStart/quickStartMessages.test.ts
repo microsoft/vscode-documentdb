@@ -71,8 +71,23 @@ describe('formatQuickStartMessage', () => {
     });
 
     it('names the image that could not be found', () => {
-        expect(formatQuickStartMessage({ key: 'imageNotFound', image: 'repo/local:0.117.0-nope' })).toContain(
-            'repo/local:0.117.0-nope',
+        expect(formatQuickStartMessage({ key: 'imageNotFound', image: 'repo/local:0.117.0-nope' })).toBe(
+            'The container engine could not find the image repo/local:0.117.0-nope. Go back to Configure and check the image tag, or leave it empty to use the latest version.',
+        );
+    });
+
+    it('reports an unavailable engine with optional detail', () => {
+        expect(formatQuickStartMessage({ key: 'dockerUnavailableDuringSetup' })).toBe(
+            'The container engine became unavailable during setup.',
+        );
+        expect(formatQuickStartMessage({ key: 'dockerUnavailableDuringSetup', detail: '  connection lost  ' })).toBe(
+            'The container engine became unavailable during setup: connection lost',
+        );
+    });
+
+    it('keeps actionable creation timeout guidance for either engine', () => {
+        expect(formatQuickStartMessage({ key: 'createTimedOut' })).toBe(
+            'The container engine did not finish creating the container in time. Try again, or go back to Configure and choose a different port. If it keeps happening, restart Docker or the Podman machine.',
         );
     });
 

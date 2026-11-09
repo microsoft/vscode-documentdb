@@ -118,7 +118,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                 createQuickStartAction(
                     parentId,
                     'preflight/reviewDocker',
-                    l10n.t('Review Docker setup'),
+                    l10n.t('Review container engine setup'),
                     'tools',
                     open,
                     'treePreflightReviewDockerRow',
@@ -194,15 +194,19 @@ function shortenContainerId(containerId: string): string {
 }
 
 function dockerProviderLabel(readiness: DockerReadiness): string {
+    if (readiness.engine === 'podman') {
+        return readiness.cli === 'docker' ? l10n.t('Podman (through the Docker CLI)') : 'Podman';
+    }
+    if (readiness.engine !== 'docker') {
+        return l10n.t('Container engine');
+    }
     switch (readiness.provider) {
         case 'dockerDesktop':
             return l10n.t('Docker Desktop');
         case 'dockerEngine':
             return l10n.t('Docker Engine');
-        case 'podman':
-            return 'Podman';
         default:
-            return l10n.t('Unknown');
+            return 'Docker';
     }
 }
 
@@ -231,7 +235,7 @@ function buildEmptyStateTooltip(): vscode.MarkdownString {
     tooltip.isTrusted = false;
     tooltip.appendMarkdown(`${l10n.t('A local DocumentDB instance, set up for you. No configuration required.')}\n\n`);
     tooltip.appendMarkdown(`- ${l10n.t('Ready in a couple of clicks')}\n`);
-    tooltip.appendMarkdown(`- ${l10n.t('Runs in Docker')}\n`);
+    tooltip.appendMarkdown(`- ${l10n.t('Runs in Docker or Podman')}\n`);
     tooltip.appendMarkdown(`- ${l10n.t('Safe to reset or delete at any time')}\n`);
     return tooltip;
 }
@@ -261,9 +265,9 @@ function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.Mar
 
     if (readiness) {
         tooltip.appendMarkdown('---\n\n');
-        tooltip.appendMarkdown(`**${l10n.t('Docker provider')}:** ${dockerProviderLabel(readiness)}\n\n`);
-        if (readiness.cliVersion) {
-            tooltip.appendMarkdown(`**${l10n.t('Docker version')}:** ${escapeMarkdown(readiness.cliVersion)}\n\n`);
+        tooltip.appendMarkdown(`**${l10n.t('Container engine')}:** ${dockerProviderLabel(readiness)}\n\n`);
+        if (readiness.serverVersion?.trim()) {
+            tooltip.appendMarkdown(`**${l10n.t('Engine version')}:** ${escapeMarkdown(readiness.serverVersion.trim())}\n\n`);
         }
         if (readiness.daemonArchitecture) {
             tooltip.appendMarkdown(
@@ -274,7 +278,7 @@ function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.Mar
             tooltip.appendMarkdown(`**${l10n.t('Container OS')}:** ${containerOsLabel(readiness.osType)}\n\n`);
         }
         tooltip.appendMarkdown(`**${l10n.t('Execution target')}:** ${executionTargetLabel(readiness)}\n\n`);
-        tooltip.appendMarkdown(`**${l10n.t('Docker endpoint')}:** ${dockerEndpointLabel(readiness)}\n\n`);
+        tooltip.appendMarkdown(`**${l10n.t('Engine endpoint')}:** ${dockerEndpointLabel(readiness)}\n\n`);
     }
 
     return tooltip;
