@@ -29,6 +29,18 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it.each([
+        'provisioning',
+        'success',
+        'failed-port-in-use',
+        'failed-timeout',
+        'docker-missing-windows',
+        'docker-missing-mac',
+        'docker-missing-linux',
+    ] as const)('expects the fixed container-engine heading in %s', (scenario): void => {
+        expect(scenarios.localQuickStart[scenario].readiness.content).toContain('Checking container engine');
+    });
+
+    it.each([
         '/unknown/default/dark',
         '/localQuickStart/missing/dark',
         '/localQuickStart/introduction/blue',

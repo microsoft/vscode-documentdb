@@ -275,7 +275,7 @@ const useStyles = makeStyles({
 // it avoids freezing strings if the module is imported before configuration elsewhere.
 function stageLabels(): Record<ProvisionStage, string> {
     return {
-        checking: l10n.t('Checking Docker'),
+        checking: l10n.t('Checking container engine'),
         pulling: l10n.t('Pulling official image'),
         creating: l10n.t('Creating container'),
         starting: l10n.t('Starting container'),
@@ -834,9 +834,9 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.reportStepChange.mutate({ to: phase, trigger }).catch(() => undefined);
     }, [phase, trpcClient]);
     /**
-     * Readiness backing the `Checking Docker` stage: its detail line in both directions, and its
-     * remediation when that stage failed. Loaded in the background while the user reads the
-     * Introduction — nothing about it is rendered before the Set up step.
+     * Readiness backing the `Checking container engine` stage: its detail line in both
+     * directions, and its remediation when that stage failed. Loaded in the background while the
+     * user reads the Introduction — nothing about it is rendered before the Set up step.
      */
     const [checkReadiness, setCheckReadiness] = useState<DockerReadiness | undefined>(undefined);
     /** A Docker problem reported by a later stage (pull / run), backing that stage's remediation. */
@@ -1082,9 +1082,9 @@ export const LocalQuickStart = (): JSX.Element => {
     }, []);
 
     /**
-     * Refresh the Docker facts backing the `Checking Docker` stage. The host memoizes readiness
-     * briefly, so a call made right after that stage settles returns exactly the result the
-     * service acted on rather than probing Docker a second time.
+     * Refresh the Docker facts backing the `Checking container engine` stage. The host memoizes
+     * readiness briefly, so a call made right after that stage settles returns exactly the result
+     * the service acted on rather than probing Docker a second time.
      */
     const syncDockerStatus = useCallback(
         async (request?: {
