@@ -106,6 +106,43 @@ function assertPlainMessage(message: FindingMessage): void {
 }
 
 describe('localized finding messages', () => {
+    it.each([
+        [
+            { tunnel: 'started' },
+            'Kubernetes port forward stays open',
+            "This check started a Kubernetes port forward to reach this service's database through a local port. It is shared with other connections to this service and stays open after the check.",
+        ],
+        [
+            { tunnel: 'reused' },
+            'Kubernetes port forward stays open',
+            'This check used a Kubernetes port forward that was already open. It stays open after the check.',
+        ],
+        [
+            { tunnel: 'externalAssumed' },
+            'Kubernetes port forward may be in use',
+            'The local port was already in use by another program. It may be a Kubernetes port forward, but the extension did not verify it.',
+        ],
+        [
+            {},
+            'Kubernetes port forward status unknown',
+            'The status of the Kubernetes port forward is not available.',
+        ],
+        [
+            { tunnel: 'unknown' },
+            'Kubernetes port forward status unknown',
+            'The status of the Kubernetes port forward is not available.',
+        ],
+    ])('describes shared tunnel outcome %j with closure advice only for managed tunnels', (data, title, explanation): void => {
+        const message = findingMessages['prepare.sharedTunnel'](data);
+        const managed = 'tunnel' in data && (data.tunnel === 'started' || data.tunnel === 'reused');
+        expect(message).toEqual({
+            title,
+            explanation,
+            ...(managed ? { nextStep: 'It closes when you close or reload the VS Code window.' } : {}),
+        });
+        assertPlainMessage(message);
+    });
+
     it.each(['cs.credentialsMissing', 'auth.credentialsUnavailable'] as const)(
         'explains bounded Kubernetes Secret read issues in %s without asking for a password',
         (code): void => {

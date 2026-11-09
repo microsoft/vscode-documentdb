@@ -13,6 +13,17 @@ import {
 } from './formatEvidence';
 import { type EvidenceSegment } from './panelTypes';
 
+describe('connection preparation evidence formatting', (): void => {
+    it.each([
+        [{ kind: 'preparedBy', providerId: 'kubernetes-port-forward' }, 'Using port forward'],
+        [{ kind: 'preparedBy', providerId: 'other' }, 'Prepared'],
+        [{ kind: 'preparationFailed', providerId: 'kubernetes-port-forward' }, 'Port forward failed'],
+        [{ kind: 'preparationFailed', providerId: 'other' }, 'Preparation failed'],
+    ] as readonly (readonly [EvidenceSegment, string])[])('formats %j', (segment, expected): void => {
+        expect(formatEvidenceSegment(segment)).toBe(expected);
+    });
+});
+
 describe('authentication and database evidence formatting', (): void => {
     const cases: readonly (readonly [EvidenceSegment, string])[] = [
         [{ kind: 'authMethod', method: 'native' }, 'Username and password'],

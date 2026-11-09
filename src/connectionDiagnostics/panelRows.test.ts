@@ -245,7 +245,7 @@ describe('PanelRowProjector', (): void => {
         expect(row(projector, 'connectionSettings').status).toBe('active');
         complete(projector, 'credentials');
         expect(row(projector, 'connectionSettings').status).toBe('active');
-        complete(projector, 'prepare', { facts: { providerId: 'kubernetes' } });
+        complete(projector, 'prepare', { facts: { providerId: 'kubernetes-port-forward' } });
         expect(row(projector, 'connectionSettings')).toEqual({
             id: 'connectionSettings',
             status: 'done',
@@ -253,7 +253,7 @@ describe('PanelRowProjector', (): void => {
                 { kind: 'scheme', scheme: 'mongodb+srv' },
                 { kind: 'user', userName: 'alice' },
                 { kind: 'optionCount', count: 2 },
-                { kind: 'preparedBy', providerId: 'kubernetes' },
+                { kind: 'preparedBy', providerId: 'kubernetes-port-forward' },
             ],
             durationMs: 12345,
         });

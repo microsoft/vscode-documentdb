@@ -239,7 +239,7 @@ export function formatEvidenceSegment(segment: EvidenceSegment): string | undefi
             return segment.count === 1 ? l10n.t('1 option') : l10n.t('{0} options', segment.count);
         case 'preparedBy':
             return segment.providerId === KUBERNETES_PORT_FORWARD_PROVIDER_ID
-                ? l10n.t('Port forward ready')
+                ? l10n.t('Using port forward')
                 : l10n.t('Prepared');
         case 'preparationFailed':
             return segment.providerId === KUBERNETES_PORT_FORWARD_PROVIDER_ID

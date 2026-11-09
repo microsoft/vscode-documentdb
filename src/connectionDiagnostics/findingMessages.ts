@@ -1003,17 +1003,41 @@ export const findingMessages: {
             ),
         };
     },
-    'prepare.sharedTunnel': (data): FindingMessage => ({
-        title: vscode.l10n.t('Port-forward tunnel stays open'),
-        explanation:
-            stringField(data, 'tunnel') === 'started'
-                ? vscode.l10n.t(
-                      'This check started a port-forward tunnel. It is shared with other connections to this service and stays open after the check.',
-                  )
-                : vscode.l10n.t(
-                      'This check used a port-forward tunnel that was already open. It stays open after the check.',
-                  ),
-    }),
+    'prepare.sharedTunnel': (data): FindingMessage => {
+        const tunnel = stringField(data, 'tunnel');
+        if (tunnel === 'started') {
+            return {
+                title: vscode.l10n.t('Kubernetes port forward stays open'),
+                explanation: vscode.l10n.t(
+                    "This check started a Kubernetes port forward to reach this service's database through a local port. It is shared with other connections to this service and stays open after the check.",
+                ),
+                nextStep: vscode.l10n.t('It closes when you close or reload the VS Code window.'),
+            };
+        }
+        if (tunnel === 'reused') {
+            return {
+                title: vscode.l10n.t('Kubernetes port forward stays open'),
+                explanation: vscode.l10n.t(
+                    'This check used a Kubernetes port forward that was already open. It stays open after the check.',
+                ),
+                nextStep: vscode.l10n.t('It closes when you close or reload the VS Code window.'),
+            };
+        }
+        if (tunnel === 'externalAssumed') {
+            return {
+                title: vscode.l10n.t('Kubernetes port forward may be in use'),
+                explanation: vscode.l10n.t(
+                    'The local port was already in use by another program. It may be a Kubernetes port forward, but the extension did not verify it.',
+                ),
+            };
+        }
+        return {
+            title: vscode.l10n.t('Kubernetes port forward status unknown'),
+            explanation: vscode.l10n.t(
+                'The status of the Kubernetes port forward is not available.',
+            ),
+        };
+    },
     'hello.advertisedMembersUnreachable': (data): FindingMessage => {
         const count = numberField(data, 'unreachableCount');
         return {
