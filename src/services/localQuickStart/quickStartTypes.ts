@@ -336,8 +336,10 @@ export type DockerPermissionDetail = 'notInGroup' | 'pendingSessionRestart' | 'u
 
 export type DockerServiceManager = 'systemd' | 'service' | 'unknown';
 
+export type DockerProbeKind = 'cliVersion' | 'info' | 'contexts' | 'serverVersion';
+
 export interface DockerProbeEvidence {
-    readonly probe: 'cliVersion' | 'info' | 'contexts';
+    readonly probe: DockerProbeKind;
     readonly exitCode?: number;
     readonly spawnErrorCode?: string;
     readonly stdout: string;

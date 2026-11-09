@@ -31,6 +31,7 @@ function createClient(): NonNullable<DockerReadinessServiceDependencies['client'
     return {
         checkInstall: async () => commandResponse(['-v'], (output) => output),
         info: async () => commandResponse(['info'], (output) => JSON.parse(output) as unknown),
+        version: async () => commandResponse(['version', '--format', '{{json .}}'], () => undefined),
         listContexts: async () =>
             commandResponse<ListContextItem[]>(['context', 'ls'], (output) => JSON.parse(output) as ListContextItem[]),
     };
@@ -51,6 +52,448 @@ function evidence(
 }
 
 describe('DockerReadinessService', () => {
+    it.each([
+        {
+            name: 'Podman component behind the Docker CLI',
+            stdout: '{"Server":{"Components":[{"Name":"Podman Engine"}]}}',
+            engine: 'podman',
+            engineEvidence: 'serverComponents',
+            provider: 'podman',
+        },
+        {
+            name: 'positive Docker engine component',
+            stdout: '{"Server":{"Components":[{"Name":"Engine"}]}}',
+            engine: 'docker',
+            engineEvidence: 'serverComponents',
+            provider: 'dockerEngine',
+        },
+        {
+            name: 'differently cased Podman component',
+            stdout: '{"Server":{"Components":[{"Name":"podman engine"}]}}',
+            engine: 'unknown',
+            engineEvidence: 'none',
+            provider: 'dockerEngine',
+        },
+        {
+            name: 'unknown component',
+            stdout: '{"Server":{"Components":[{"Name":"containerd"}]}}',
+            engine: 'unknown',
+            engineEvidence: 'none',
+            provider: 'dockerEngine',
+        },
+        {
+            name: 'malformed JSON',
+            stdout: '{"Server":',
+            engine: 'unknown',
+            engineEvidence: 'none',
+            provider: 'dockerEngine',
+        },
+        {
+            name: 'partially malformed component list',
+            stdout: '{"Server":{"Components":[{"Name":"Podman Engine"},{}]}}',
+            engine: 'unknown',
+            engineEvidence: 'none',
+            provider: 'dockerEngine',
+        },
+        {
+            name: 'no version output',
+            stdout: '',
+            engine: 'unknown',
+            engineEvidence: 'none',
+            provider: 'dockerEngine',
+        },
+    ])('uses raw server-version evidence for $name', async ({ stdout, engine, engineEvidence, provider }) => {
+        const parse = vi.fn().mockRejectedValue(new Error('library parser discards components'));
+        const version = vi.fn(async () => ({ ...commandResponse(['version'], () => undefined), parse }));
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', {
+                    stdout: JSON.stringify({
+                        OSType: 'linux',
+                        OperatingSystem: 'Ubuntu 24.04',
+                        ServerVersion: '6.0.2',
+                    }),
+                });
+            }
+            return evidence(options.probe, {
+                stdout: options.probe === 'serverVersion' ? stdout : 'Docker version 28.1.1',
+            });
+        });
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+        const resolveDockerSocketTarget = vi.fn().mockResolvedValue({});
+        const service = new DockerReadinessService({
+            client: { ...createClient(), version },
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            resolveDockerSocketTarget,
+            writeProviderMemory,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            outcome: 'ready',
+            cli: 'docker',
+            cliVersion: 'Docker version 28.1.1',
+            serverVersion: '6.0.2',
+            daemonReachable: true,
+            engine,
+            engineEvidence,
+            provider,
+        });
+        expect(runProbe.mock.calls.map(([options]) => options.probe)).toEqual(['cliVersion', 'info', 'serverVersion']);
+        expect(version).toHaveBeenCalledExactlyOnceWith({});
+        expect(parse).not.toHaveBeenCalled();
+        expect(resolveDockerSocketTarget).not.toHaveBeenCalled();
+        expect(writeProviderMemory).toHaveBeenCalledWith(
+            expect.objectContaining({ provider: provider === 'podman' ? 'unknown' : provider }),
+        );
+    });
+
+    it.each([
+        { name: 'nonzero info exit', exitCode: 1, stdout: '{"OSType":"linux"}' },
+        { name: 'server errors', stdout: '{"ServerErrors":["cannot connect to the Docker daemon"]}' },
+        { name: 'malformed info', stdout: 'not json' },
+    ])('skips server version after $name', async ({ exitCode, stdout }) => {
+        const version = vi.fn();
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
+            evidence(options.probe, options.probe === 'info' ? { exitCode, stdout } : { stdout: '[]' }),
+        );
+        const service = new DockerReadinessService({
+            client: { ...createClient(), version },
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: { DOCKER_HOST: 'unix:///var/run/docker.sock' },
+            runProbe,
+            resolveDockerSocketTarget: async () => ({}),
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+            readProviderMemory: () => undefined,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({ daemonReachable: false });
+        expect(version).not.toHaveBeenCalled();
+        expect(runProbe).not.toHaveBeenCalledWith(expect.objectContaining({ probe: 'serverVersion' }));
+    });
+
+    it.each(['command rejection', 'probe rejection', 'nonzero exit', 'spawn error'] as const)(
+        'keeps a healthy daemon ready after an optional server-version %s',
+        async (failure) => {
+            const appendDiagnostic = vi.fn();
+            const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+                if (options.probe === 'info') {
+                    return evidence('info', { stdout: '{"OSType":"linux","OperatingSystem":"Docker Desktop"}' });
+                }
+                if (options.probe === 'serverVersion') {
+                    if (failure === 'probe rejection') {
+                        throw new Error('version failed');
+                    }
+                    return evidence('serverVersion', {
+                        stdout: '{"Server":{"Components":[{"Name":"Podman Engine"}]}}',
+                        ...(failure === 'spawn error' ? { spawnErrorCode: 'ENOENT' } : { exitCode: 1 }),
+                    });
+                }
+                return evidence(options.probe);
+            });
+            const service = new DockerReadinessService({
+                client: {
+                    ...createClient(),
+                    ...(failure === 'command rejection'
+                        ? { version: async () => Promise.reject(new Error('unsupported version command')) }
+                        : {}),
+                },
+                shellProvider: new Bash(),
+                platform: 'linux',
+                environmentVariables: {},
+                runProbe,
+                resolveDockerSocketTarget: async () => ({}),
+                writeProviderMemory: async () => undefined,
+                createProbeOutput: () => ({ appendDiagnostic }),
+            });
+
+            await expect(service.getReadiness()).resolves.toMatchObject({
+                outcome: 'ready',
+                daemonReachable: true,
+                engine: 'docker',
+                engineEvidence: 'dockerDesktopInfo',
+                provider: 'dockerDesktop',
+            });
+            if (failure === 'nonzero exit' || failure === 'spawn error') {
+                expect(appendDiagnostic).not.toHaveBeenCalledWith(
+                    expect.stringContaining('[readiness] serverVersion=unavailable'),
+                );
+            }
+        },
+    );
+
+    it.each([
+        {
+            source: 'command',
+            error: Object.assign(new Error('W3_PRIVATE_VERSION_COMMAND_MESSAGE'), { code: 'E_VERSION_COMMAND' }),
+            code: 'E_VERSION_COMMAND',
+        },
+        {
+            source: 'probe',
+            error: Object.assign(new Error('W3_PRIVATE_VERSION_PROBE_MESSAGE'), { code: 'E_VERSION_PROBE' }),
+            code: 'E_VERSION_PROBE',
+        },
+        {
+            source: 'command',
+            error: new Error('W3_PRIVATE_VERSION_NO_CODE_MESSAGE'),
+            code: 'unknown',
+        },
+    ])('logs only code $code for a rejected $source even when echo is suppressed', async ({ source, error, code }) => {
+        const appendDiagnostic = vi.fn();
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'serverVersion' && source === 'probe') {
+                throw error;
+            }
+            return evidence(options.probe, { stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '' });
+        });
+        const service = new DockerReadinessService({
+            client: {
+                ...createClient(),
+                ...(source === 'command'
+                    ? {
+                          version: async (): Promise<PromiseCommandResponse<unknown>> => {
+                              throw error;
+                          },
+                      }
+                    : {}),
+            },
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            resolveDockerSocketTarget: async () => ({}),
+            writeProviderMemory: async () => undefined,
+            createProbeOutput: () => ({ appendDiagnostic }),
+        });
+
+        await expect(service.getReadiness({ suppressCommandEcho: true })).resolves.toMatchObject({
+            outcome: 'ready',
+            daemonReachable: true,
+        });
+        expect(appendDiagnostic.mock.calls).toEqual([[`[readiness] serverVersion=unavailable code=${code}`]]);
+        expect(appendDiagnostic.mock.calls.flat().join('\n')).not.toContain(error.message);
+    });
+
+    it('does not downgrade healthy info when the optional server-version probe reaches the shared deadline', async () => {
+        const runProbe = vi.fn((options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'serverVersion') {
+                return new Promise((resolve) => {
+                    options.cancellationToken?.onCancellationRequested(() => {
+                        expect(options.didDeadlineExpire?.()).toBe(true);
+                        resolve(evidence('serverVersion', { endedBy: 'deadline' }));
+                    });
+                });
+            }
+            return Promise.resolve(
+                evidence(options.probe, { stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '' }),
+            );
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            deadlineMs: 5,
+            runProbe,
+            resolveDockerSocketTarget: async () => ({}),
+            writeProviderMemory: async () => undefined,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            outcome: 'ready',
+            daemonReachable: true,
+            engine: 'unknown',
+            canContinueAnyway: false,
+        });
+        expect(runProbe).toHaveBeenCalledTimes(3);
+    });
+
+    it('preserves caller cancellation during the optional server-version await', async () => {
+        let cancelCaller: (() => void) | undefined;
+        const callerToken = {
+            isCancellationRequested: false,
+            onCancellationRequested(listener: () => void): vscode.Disposable {
+                cancelCaller = listener;
+                return { dispose: () => undefined };
+            },
+        } as vscode.CancellationToken;
+        let optionalProbeStarted = false;
+        const runProbe = vi.fn((options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'serverVersion') {
+                optionalProbeStarted = true;
+                return new Promise((resolve) => {
+                    options.cancellationToken?.onCancellationRequested(() => {
+                        resolve(evidence('serverVersion', { endedBy: 'cancellation' }));
+                    });
+                });
+            }
+            return Promise.resolve(
+                evidence(options.probe, { stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '' }),
+            );
+        });
+        const writeProviderMemory = vi.fn();
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            resolveDockerSocketTarget: async () => ({}),
+            writeProviderMemory,
+        });
+
+        const readiness = service.getReadiness({ cancellationToken: callerToken });
+        await vi.waitFor(() => expect(optionalProbeStarted).toBe(true));
+        cancelCaller?.();
+
+        await expect(readiness).rejects.toBeDefined();
+        expect(runProbe).toHaveBeenCalledTimes(3);
+        expect(writeProviderMemory).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])('keeps failed server-version stdout private with suppressCommandEcho=%s', async (suppress) => {
+        const onCommand = vi.fn();
+        const stdout: string[] = [];
+        const stderr: string[] = [];
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            options.onCommand?.(`docker ${options.probe}`);
+            if (options.probe === 'info') {
+                return evidence('info', { stdout: '{"OSType":"linux"}' });
+            }
+            if (options.probe === 'serverVersion') {
+                expect(options.stdOutPipe).toBeUndefined();
+                return evidence('serverVersion', { exitCode: 1, stdout: 'private version JSON', stderr: 'version failed' });
+            }
+            return evidence(options.probe);
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            resolveDockerSocketTarget: async () => ({}),
+            writeProviderMemory: async () => undefined,
+            createProbeOutput: () => ({
+                onCommand,
+                stdOutPipe: new Writable({
+                    write: (chunk, _encoding, callback): void => {
+                        stdout.push(String(chunk));
+                        callback();
+                    },
+                }),
+                stdErrPipe: new Writable({
+                    write: (chunk, _encoding, callback): void => {
+                        stderr.push(String(chunk));
+                        callback();
+                    },
+                }),
+            }),
+        });
+
+        await expect(service.getReadiness({ suppressCommandEcho: suppress })).resolves.toMatchObject({ outcome: 'ready' });
+        expect(stdout).toEqual([]);
+        expect(onCommand).toHaveBeenCalledWith('docker serverVersion');
+        if (suppress) {
+            expect(stderr).toEqual(['version failed']);
+        }
+    });
+
+    it.each([
+        { target: '/run/user/1000/podman/podman.sock', engineEvidence: 'dockerSocketLink' },
+        { target: '/run/docker.sock', engineEvidence: 'none' },
+        { target: undefined, engineEvidence: 'none' },
+    ])('treats a compatibility socket target $target as inference only', async ({ target, engineEvidence }) => {
+        const appendDiagnostic = vi.fn();
+        const resolveDockerSocketTarget = vi.fn().mockResolvedValue(target ? { target } : {});
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'darwin',
+            environmentVariables: { DOCKER_HOST: 'unix:///var/run/docker.sock' },
+            runProbe: async (options) => evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
+            resolveDockerSocketTarget,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ENOENT' }),
+            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+            readProviderMemory: () => undefined,
+            createProbeOutput: () => ({ appendDiagnostic }),
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            outcome: 'diagnosed',
+            failureKind: 'daemonUnavailable',
+            daemonReachable: false,
+            engine: 'unknown',
+            engineEvidence,
+            provider: 'unknown',
+        });
+        expect(resolveDockerSocketTarget).toHaveBeenCalledExactlyOnceWith('/var/run/docker.sock');
+        expect(appendDiagnostic.mock.calls.map(([line]) => line)).toEqual([
+            '[readiness] failureKind=daemonUnavailable outcome=diagnosed',
+            '[readiness] environment=macos endpoint=unixSocket source=dockerHostEnv',
+            '[readiness] provider=unknown evidence=none',
+        ]);
+    });
+
+    it('logs only an unexpected socket resolution error code without claiming an engine', async () => {
+        const appendDiagnostic = vi.fn();
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: { DOCKER_HOST: 'unix:///var/run/docker.sock' },
+            runProbe: async (options) => evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
+            resolveDockerSocketTarget: async () => ({ errorCode: 'EACCES' }),
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ENOENT' }),
+            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+            readProviderMemory: () => undefined,
+            createProbeOutput: () => ({ appendDiagnostic }),
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            outcome: 'diagnosed',
+            failureKind: 'daemonUnavailable',
+            daemonReachable: false,
+            engine: 'unknown',
+            engineEvidence: 'none',
+            provider: 'unknown',
+        });
+        expect(appendDiagnostic.mock.calls).toEqual([
+            ['[readiness] socketLink=unavailable code=EACCES'],
+            ['[readiness] failureKind=daemonUnavailable outcome=diagnosed'],
+            ['[readiness] environment=linux endpoint=unixSocket source=dockerHostEnv'],
+            ['[readiness] provider=unknown evidence=none'],
+        ]);
+    });
+
+    it.each([
+        ['win32', 'unix:///var/run/docker.sock'],
+        ['win32', 'npipe:////./pipe/docker_engine'],
+        ['linux', 'unix:///run/podman/podman.sock'],
+        ['linux', 'tcp://localhost:2375'],
+        ['darwin', 'ssh://private-host'],
+    ] as const)('does not resolve a compatibility socket for %s / %s', async (platform, dockerHost) => {
+        const resolveDockerSocketTarget = vi.fn().mockResolvedValue({ target: '/run/podman/podman.sock' });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform,
+            environmentVariables: { DOCKER_HOST: dockerHost },
+            runProbe: async (options) => evidence(options.probe, { exitCode: options.probe === 'info' ? 1 : undefined }),
+            resolveDockerSocketTarget,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ENOENT' }),
+            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+            readProviderMemory: () => undefined,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({ daemonReachable: false });
+        expect(resolveDockerSocketTarget).not.toHaveBeenCalled();
+    });
+
     it.each([
         {
             name: 'selected Podman CLI',
@@ -169,7 +612,7 @@ describe('DockerReadinessService', () => {
             outcome: 'diagnosed',
         },
     ] as const)(
-        'reports engine facts for $name without extra probes or a new memory schema',
+        'reports engine facts for $name without redundant probes or a new memory schema',
         async ({
             cli,
             versionStdout,
@@ -191,6 +634,7 @@ describe('DockerReadinessService', () => {
             const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
             const probeEndpoint = vi.fn();
             const service = new DockerReadinessService({
+                resolveDockerSocketTarget: async () => ({}),
                 client: { ...createClient(), id: cli === 'podman' ? PodmanClient.ClientId : undefined },
                 shellProvider: new Bash(),
                 platform: 'linux',
@@ -212,7 +656,7 @@ describe('DockerReadinessService', () => {
                 cliVersion: versionStdout,
                 daemonReachable: true,
             });
-            expect(runProbe).toHaveBeenCalledTimes(2);
+            expect(runProbe).toHaveBeenCalledTimes(engine === 'podman' ? 2 : 3);
             expect(probeEndpoint).not.toHaveBeenCalled();
             expect(writeProviderMemory.mock.calls).toEqual([
                 [
@@ -235,6 +679,7 @@ describe('DockerReadinessService', () => {
                 evidence(options.probe, { spawnErrorCode: 'ENOENT' }),
         );
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: { ...createClient(), id: PodmanClient.ClientId },
             shellProvider: new Bash(),
             platform: state === 'unsupported' ? 'aix' : 'linux',
@@ -261,6 +706,7 @@ describe('DockerReadinessService', () => {
         });
         const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: { ...createClient(), id: PodmanClient.ClientId },
             shellProvider: new Bash(),
             platform: 'linux',
@@ -298,6 +744,7 @@ describe('DockerReadinessService', () => {
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -338,9 +785,12 @@ describe('DockerReadinessService', () => {
                             },
                         ]),
                     });
+                case 'serverVersion':
+                    return evidence('serverVersion');
             }
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -385,6 +835,7 @@ describe('DockerReadinessService', () => {
                     : evidence(options.probe, { stdout: 'podman version 6.0.2' }),
         );
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             getClient: () => ({
                 ...createClient(),
                 id: PodmanClient.ClientId,
@@ -434,6 +885,8 @@ describe('DockerReadinessService', () => {
                             },
                         ]),
                     });
+                case 'serverVersion':
+                    return evidence('serverVersion');
             }
         });
         const probeSocketGroup = vi.fn().mockResolvedValue({
@@ -442,6 +895,7 @@ describe('DockerReadinessService', () => {
             userIsGroupMember: true,
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -474,6 +928,7 @@ describe('DockerReadinessService', () => {
         });
         const probeSocketGroup = vi.fn();
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'win32',
@@ -492,13 +947,14 @@ describe('DockerReadinessService', () => {
         expect(probeSocketGroup).not.toHaveBeenCalled();
     });
 
-    it('runs version and info once for concurrent callers', async () => {
+    it('runs CLI version, info and server version once for concurrent callers', async () => {
         const resolvers = new Map<DockerProbeEvidence['probe'], (value: DockerProbeEvidence) => void>();
         const runProbe = vi.fn(
             (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
                 new Promise((resolve) => resolvers.set(options.probe, resolve)),
         );
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -516,9 +972,12 @@ describe('DockerReadinessService', () => {
             }),
         );
 
+        await vi.waitFor(() => expect(resolvers.has('serverVersion')).toBe(true));
+        resolvers.get('serverVersion')?.(evidence('serverVersion'));
+
         await expect(first).resolves.toMatchObject({ outcome: 'ready', daemonArchitecture: 'amd64' });
         await expect(second).resolves.toMatchObject({ outcome: 'ready', daemonArchitecture: 'amd64' });
-        expect(runProbe).toHaveBeenCalledTimes(2);
+        expect(runProbe).toHaveBeenCalledTimes(3);
     });
 
     it('treats a zero-exit info body with ServerErrors as not ready', async () => {
@@ -536,9 +995,12 @@ describe('DockerReadinessService', () => {
                     });
                 case 'contexts':
                     return evidence('contexts', { stdout: '[]' });
+                case 'serverVersion':
+                    return evidence('serverVersion');
             }
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -573,6 +1035,7 @@ describe('DockerReadinessService', () => {
                 }),
         );
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -614,6 +1077,7 @@ describe('DockerReadinessService', () => {
                 }),
         );
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -639,6 +1103,7 @@ describe('DockerReadinessService', () => {
             return evidence(options.probe, { stdout: 'Docker version 27.5.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -648,15 +1113,16 @@ describe('DockerReadinessService', () => {
 
         await service.getReadiness();
         await service.getReadiness();
-        expect(runProbe).toHaveBeenCalledTimes(2);
+        expect(runProbe).toHaveBeenCalledTimes(3);
 
         await service.getReadiness({ forceRefresh: true });
-        expect(runProbe).toHaveBeenCalledTimes(4);
+        expect(runProbe).toHaveBeenCalledTimes(6);
     });
 
     it('returns unsupportedHost without spawning Docker on an unsupported host', async () => {
         const runProbe = vi.fn();
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'aix',
@@ -681,6 +1147,7 @@ describe('DockerReadinessService', () => {
         });
         const probeEndpoint = vi.fn();
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -702,6 +1169,7 @@ describe('DockerReadinessService', () => {
         );
         const probeEndpoint = vi.fn();
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -729,6 +1197,7 @@ describe('DockerReadinessService', () => {
             return evidence('contexts', { stdout: '[]' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -755,6 +1224,7 @@ describe('DockerReadinessService', () => {
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -789,6 +1259,7 @@ describe('DockerReadinessService', () => {
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -831,6 +1302,7 @@ describe('DockerReadinessService', () => {
             return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'darwin',
@@ -878,6 +1350,7 @@ describe('DockerReadinessService', () => {
             return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -909,6 +1382,7 @@ describe('DockerReadinessService', () => {
                     : evidence(options.probe, { stdout: 'Docker version 28.1.1' }),
         );
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -937,6 +1411,7 @@ describe('DockerReadinessService', () => {
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -965,6 +1440,7 @@ describe('DockerReadinessService', () => {
             return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'win32',
@@ -1003,6 +1479,7 @@ describe('DockerReadinessService', () => {
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -1038,6 +1515,7 @@ describe('DockerReadinessService', () => {
             startAction: 'startDockerDesktopWindows',
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'win32',
@@ -1121,6 +1599,7 @@ describe('DockerReadinessService', () => {
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform,
@@ -1146,6 +1625,7 @@ describe('DockerReadinessService', () => {
     it('preserves remembered state during a forced refresh', async () => {
         const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -1170,6 +1650,7 @@ describe('DockerReadinessService', () => {
             return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -1200,6 +1681,7 @@ describe('DockerReadinessService', () => {
             return Promise.resolve(evidence(options.probe, { stdout: 'Docker version 28.1.1' }));
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',
@@ -1221,7 +1703,7 @@ describe('DockerReadinessService', () => {
         await expect(initial).resolves.toMatchObject({ outcome: 'ready' });
         await expect(firstRefresh).resolves.toMatchObject({ outcome: 'ready' });
         await expect(secondRefresh).resolves.toMatchObject({ outcome: 'ready' });
-        expect(runProbe).toHaveBeenCalledTimes(4);
+        expect(runProbe).toHaveBeenCalledTimes(6);
     });
 
     it.each(['notAvailable', 'failed'] as const)('clears remembered state after a %s launch', async (result) => {
@@ -1248,6 +1730,7 @@ describe('DockerReadinessService', () => {
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
         const service = new DockerReadinessService({
+            resolveDockerSocketTarget: async () => ({}),
             client: createClient(),
             shellProvider: new Bash(),
             platform: 'linux',

@@ -16,10 +16,13 @@ import { ext } from '../../extensionVariables';
 import { getDockerShellProvider } from './dockerCommand';
 import {
     detectDockerServiceManager,
+    getErrorCode,
     normalizeDaemonArchitecture,
     parseDockerInfoFacts,
+    parseDockerServerComponentNames,
     probeDockerEndpoint,
     probeDockerSocketGroup,
+    resolveDockerSocketTarget,
     runDockerProbe,
     type ResolvedDockerEndpoint,
     type RunDockerProbeOptions,
@@ -55,6 +58,7 @@ interface DockerReadinessClient {
     readonly id?: string;
     checkInstall(options: object): Promise<PromiseCommandResponse<string>>;
     info(options: object): Promise<PromiseCommandResponse<unknown>>;
+    version(options: object): Promise<PromiseCommandResponse<unknown>>;
     listContexts(options: object): Promise<PromiseCommandResponse<ListContextItem[]>>;
 }
 
@@ -80,6 +84,7 @@ export interface DockerReadinessServiceDependencies {
     readonly runProbe?: (options: RunDockerProbeOptions) => Promise<DockerProbeEvidence>;
     readonly probeEndpoint?: typeof probeDockerEndpoint;
     readonly probeSocketGroup?: typeof probeDockerSocketGroup;
+    readonly resolveDockerSocketTarget?: typeof resolveDockerSocketTarget;
     readonly detectServiceManager?: typeof detectDockerServiceManager;
     readonly getStartCapability?: typeof getDockerStartCapability;
     readonly readProviderMemory?: () => DockerProviderMemory | undefined;
@@ -100,6 +105,7 @@ interface ResolvedDependencies {
     readonly runProbe: (options: RunDockerProbeOptions) => Promise<DockerProbeEvidence>;
     readonly probeEndpoint: typeof probeDockerEndpoint;
     readonly probeSocketGroup: typeof probeDockerSocketGroup;
+    readonly resolveDockerSocketTarget: typeof resolveDockerSocketTarget;
     readonly detectServiceManager: typeof detectDockerServiceManager;
     readonly getStartCapability: typeof getDockerStartCapability;
     readonly readProviderMemory: () => DockerProviderMemory | undefined;
@@ -251,6 +257,7 @@ export class DockerReadinessService {
             runProbe: dependencies.runProbe ?? runDockerProbe,
             probeEndpoint: dependencies.probeEndpoint ?? probeDockerEndpoint,
             probeSocketGroup: dependencies.probeSocketGroup ?? probeDockerSocketGroup,
+            resolveDockerSocketTarget: dependencies.resolveDockerSocketTarget ?? resolveDockerSocketTarget,
             detectServiceManager: dependencies.detectServiceManager ?? detectDockerServiceManager,
             getStartCapability: dependencies.getStartCapability ?? getDockerStartCapability,
             readProviderMemory: dependencies.readProviderMemory ?? readDefaultProviderMemory,
@@ -328,9 +335,8 @@ export class DockerReadinessService {
         suppressCommandEcho: boolean,
     ): Promise<DockerProbeEvidence> {
         const output = suppressCommandEcho ? undefined : this.dependencies.createProbeOutput?.();
-        // Noise, not secrets: `docker info` JSON is hundreds of lines, so runReadiness logs a summary
-        // instead. Secret-bearing output is handled by ContainerRuntime's parsing runner.
-        const echoStdout = probe !== 'info';
+        // Raw daemon JSON stays out of the channel; runReadiness logs the info summary instead.
+        const echoStdout = probe !== 'info' && probe !== 'serverVersion';
         let commandText: string | undefined;
         return this.dependencies
             .runProbe({
@@ -499,7 +505,35 @@ export class DockerReadinessService {
             const hasServerErrors = (infoFacts?.serverErrors.length ?? 0) > 0;
             if (infoSucceeded && !hasServerErrors) {
                 const configuredEndpoint = this.dependencies.environmentVariables['DOCKER_HOST'];
-                const engine = classifyContainerEngine({ ...engineInput, endpointAddress: configuredEndpoint });
+                let engine = classifyContainerEngine({ ...engineInput, endpointAddress: configuredEndpoint });
+                if (cli === 'docker' && engine.engine !== 'podman') {
+                    try {
+                        const response = await client.version({});
+                        const serverVersionProbe = await this.runProbe(
+                            'serverVersion',
+                            response,
+                            cancellationToken,
+                            didDeadlineExpire,
+                            suppressCommandEcho,
+                        );
+                        if (isSuccessfulProbe(serverVersionProbe)) {
+                            engine = classifyContainerEngine({
+                                ...engineInput,
+                                endpointAddress: configuredEndpoint,
+                                serverComponentNames: parseDockerServerComponentNames(serverVersionProbe.stdout),
+                            });
+                        }
+                    } catch (error) {
+                        this.dependencies
+                            .createProbeOutput?.()
+                            ?.appendDiagnostic?.(
+                                `[readiness] serverVersion=unavailable code=${getErrorCode(error) ?? 'unknown'}`,
+                            );
+                    }
+                    if (callerCancelled) {
+                        throw new vscode.CancellationError();
+                    }
+                }
                 const endpointKind: DockerEndpointKind = configuredEndpoint
                     ? endpointFromValue(configuredEndpoint, 'dockerHostEnv').kind
                     : 'unknown';
@@ -595,6 +629,24 @@ export class DockerReadinessService {
                 throw new vscode.CancellationError();
             }
 
+            let dockerSocketTarget: string | undefined;
+            if (
+                this.dependencies.platform !== 'win32' &&
+                endpoint.kind === 'unixSocket' &&
+                endpoint.address === '/var/run/docker.sock'
+            ) {
+                const socketTarget = await this.dependencies.resolveDockerSocketTarget(endpoint.address);
+                dockerSocketTarget = socketTarget.target;
+                if (socketTarget.errorCode) {
+                    this.dependencies
+                        .createProbeOutput?.()
+                        ?.appendDiagnostic?.(`[readiness] socketLink=unavailable code=${socketTarget.errorCode}`);
+                }
+                if (callerCancelled) {
+                    throw new vscode.CancellationError();
+                }
+            }
+
             const requestedContext = this.dependencies.environmentVariables['DOCKER_CONTEXT'];
             const contextUnavailable =
                 !!requestedContext &&
@@ -654,7 +706,7 @@ export class DockerReadinessService {
                     : 'unknown';
             const failureResult = {
                 environment,
-                ...classifyContainerEngine({ ...engineInput, endpointAddress: endpoint.address }),
+                ...classifyContainerEngine({ ...engineInput, endpointAddress: endpoint.address, dockerSocketTarget }),
                 endpointKind: endpoint.kind,
                 endpointSource: endpoint.source,
                 ...startCapability,
