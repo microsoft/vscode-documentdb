@@ -90,6 +90,10 @@ not a configuration or permissions audit.
   duplicated in the card
   ([0029](./decisions.md#0029--the-outcome-is-a-card-below-a-fixed-eight-row-list),
   [0041](./decisions.md#0041--the-panel-never-names-dns-libraries-and-the-result-card-is-a-short-outcome-summary)).
+- **Kubernetes preparation details.** A verified started or reused shared tunnel adds the kubeconfig
+  context, namespace, service and ports to Connection settings details, marks the local Host, and
+  reports ready-pod evidence at check time. Hide identifiers also hides context, namespace and service
+  names in the report; the panel keeps them visible. The tunnel closes with the VS Code window.
 - **Plain DNS wording.** The panel never names Node.js's DNS libraries; it says whether your
   system's lookup and a direct DNS query disagree, or that the extension works around a known DNS
   issue. The report keeps the technical names for support

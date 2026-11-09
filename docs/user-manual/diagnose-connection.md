@@ -130,14 +130,18 @@ if preparation finds no ready backend, it reports that instead and does not star
 Check the service's selected pods and their readiness. If no cached password takes precedence, a 403
 or 404 while reading a credential Secret is shown as the reason **Authentication** is skipped;
 network checks can still run, and the check does not prompt for a password. Missing credential
-fields keep the existing missing-password behavior.
+fields keep the existing missing-password behavior. After a successful preparation, expand
+**Connection settings** for the Kubernetes context, namespace, service and service port, local port,
+and whether the port forward was started or reused. The Host is marked as the local end of the
+port forward; ready-pod evidence describes what Kubernetes reported at check time.
 
 The check never asks for a port. If the suggested local port is in use, **Connection settings**
 names it and does not use a port held by another program or Kubernetes tunnel. Free the port, or for
 a service in the Discovery view set
 `documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy` to `autoSelect` to choose a
-free port, then run the diagnosis again. A tunnel the check started or used is shared with your
-other connections to that service and stays open after the check; the report says so.
+free port, then run the diagnosis again. A Kubernetes port forward the check started or reused is
+shared with your other connections to that service and stays open after the check; it closes when
+you close or reload the VS Code window. The report says so.
 
 ## Read the result
 
@@ -253,7 +257,7 @@ Passwords, tokens and proxy credentials never appear in the panel, the report, t
 telemetry.
 
 The report does include identifiers: host names and addresses, user and account names, tenant IDs,
-replica set names, certificate subjects, database names, and Kubernetes service and namespace names.
+replica set names, certificate subjects, database names, and Kubernetes context, service and namespace names.
 Before you share a report outside your organization, select **Hide identifiers in the report** in the
 footer's info text. The inline link changes to **Show identifiers in the report** so you can switch
 back. Hiding replaces those values with placeholders such as `host-1` and `user-1`, consistently

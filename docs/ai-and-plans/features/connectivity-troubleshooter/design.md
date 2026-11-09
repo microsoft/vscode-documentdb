@@ -452,7 +452,15 @@ reusing the normal shared tunnel. A failure is represented by
 `prepare.failed` contains only `providerId`, `reason`, an allow-listed `errorName`, and optional
 `statusCode`; it never includes the raw error or its message. A preparation failure skips dependent
 probes and authentication, but failed DNS/TCP/TLS/`hello` probes do not by themselves suppress
-authentication. A tunnel started or reused is shared and stays open after the run.
+authentication. A tunnel started or reused is shared and stays open after the run; it closes when
+the VS Code window closes or reloads.
+
+For a passing Kubernetes preparation with a started or reused tunnel, facts copy only the kubeconfig
+context, namespace, service, service port and local port from the saved port-forward metadata; no
+additional Kubernetes query is made. Connection settings details show these fields and the tunnel
+outcome, and annotate the matching loopback Host as the local end of the port forward. Ready-pod
+evidence is explicitly at check time: `verifyEndpoint` completes before `startTunnel`, including
+its reuse paths. External-assumed or unknown outcomes do not show these details.
 
 Ordinary connections omit the diagnostic verification intent and keep their existing behavior.
 The Kubernetes provider remains registered at activation through the existing
@@ -1047,7 +1055,7 @@ the Timings table ([0050](./decisions.md#0050--each-row-shows-its-duration-in-a-
   | #   | Label (illustrative)     | Checks behind it              | Evidence line (illustrative)                                                                                                                                                                                           | When it does not apply                                |
   | --- | ------------------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
   | 1   | Diagnosis setup          | environment                   | "Running on this computer · Windows 11 · x64" or "Running on remote host WSL: Ubuntu-24.04, not this computer"                                                                                                         | always applies                                        |
-  | 2   | Connection settings      | connectionString, prepare     | "mongodb+srv · User alice · 2 options"; Kubernetes adds "· Port forward ready"; on failure "Unknown option sslCert · Did you mean tlsCertificateKeyFile?"                                                              | always applies                                        |
+  | 2   | Connection settings      | connectionString, prepare     | "mongodb+srv · User alice · 2 options"; Kubernetes adds "· Using port forward"; on failure "Unknown option sslCert · Did you mean tlsCertificateKeyFile?"                                                              | always applies                                        |
   | 3   | Server address (DNS)     | srv, dns                      | "SRV record lists 3 hosts · All resolve · Private endpoint"                                                                                                                                                            | `skipped`: "Not needed: the host is an IP address"    |
   | 4   | Network connection (TCP) | tcp                           | "3 of 3 hosts reachable · Port 10260"; "host-b refused the connection · 2 of 3 reachable"                                                                                                                              | —                                                     |
   | 5   | Secure connection (TLS)  | tls                           | "Certificate trusted · Valid until 1 Mar 2027" (no TLS version: Details has it, 0050)                                                                                                                                  | `skipped`: "Not used: TLS is off for this connection" |
@@ -1461,10 +1469,13 @@ Redaction replaces, with stable placeholders consistent across one report (`host
 `tenant-1`, …): connection display name, host names and addresses, user and account names, tenant
 IDs, managed identity client IDs, custom cloud endpoints (`ossrdbmsEndpoint`, Resource Manager
 endpoint, hostname suffix), proxy hosts, replica set and member names, certificate subjects and SANs,
-database names, custom role names, and the Kubernetes service and namespace names a context hint
-names (the provider returns them as structured identifiers). It keeps cloud categories, well-known resources, public CA
-names, versions, timings, codes, classifier rule IDs and match results. It applies to Show
-diagnostics, Copy and Save alike.
+database names, custom role names, and Kubernetes context, service and namespace names from preparation
+or context hints (structured `providerIdentifiers`). Kubeconfig contexts use the `kubeContext` kind
+and `context-1` placeholders, including contexts containing account or cluster identifiers such as
+EKS ARNs. Ports are not identifiers. The Host annotation contains no identifiers. Redaction keeps
+cloud categories, well-known resources, public CA names, versions, timings, codes, classifier rule IDs
+and match results. It applies to Show diagnostics, Copy and Save alike. New preparation facts follow
+the existing trace/telemetry boundary: neither surface copies facts.
 
 > **Changed:** the draft redacted hosts and user names only. Authentication and server facts add
 > tenant, account, client ID, custom cloud and role identifiers, and a toggle that misses them
