@@ -10,6 +10,27 @@ updated: 2026-11-09
 
 # Diagnose connection: Kubernetes port-forward review (#1069)
 
+## Implementation run (2026-11-09)
+
+The operator approved the recommended O1 + O6 paths with `/lead`, explicitly excluded
+WI-K5/O7, and requested Case 1 and Case 2 verification followed by a push and green CI.
+WI-K6/O2 remains deferred under the recommendation below. Advisor: `claude-opus-5.5`.
+The original review below records the assessed pre-implementation behavior.
+
+The advisor recommends `gpt-6.1-sol` for WI-K1, WI-K2, WI-K4, WI-G1 and WI-V1
+(cross-module or lifecycle impact), `gpt-6.1-terra` for WI-K3 (bounded finding mapping),
+and `gpt-6-luna` for WI-D1 (documentation). Execution is serial because several items
+share finding messages and fixtures. The existing uncommitted feature README link addition
+will be preserved and integrated with WI-D1.
+
+An operator decision was requested about generic-service DKO-list 403 handling; the operator
+was initially unavailable. Work paused when the operator requested the advisor's options.
+After those options were presented, the operator directed: "make good decisions and keep working"
+and "Keep working autonomously until the task is truly finished." Under that later instruction,
+the leader selected Opus's recommended narrow exception: only generic services ignore a DKO-list
+403 and continue to their annotated Secret; network failures still propagate, and DKO services
+remain strict. This changes diagnostic failure handling only, not ordinary connections or permissions.
+
 ## Scope and provenance
 
 - **Issue:** [#1069](https://github.com/microsoft/vscode-documentdb/issues/1069), "Connection
@@ -485,6 +506,31 @@ applies per commit.
 
 ### WI-K1. Strict diagnostic credential read
 
+> **Deferred, escalated (2026-11-09):** Opus 5.5 found that every service, including a generic
+> service with an annotated Secret, first lists DKO resources. The specified strict DKO-list
+> 403 behavior would stop diagnosis even when that generic service can read its Secret and
+> connect. Options: retain the literal strict rule, or ignore only DKO-list 403 for generic
+> services while still propagating network failures and retaining strict DKO-service behavior.
+> Recommendation: the narrow generic-service exception, recorded in `decisions.md` with operator
+> approval. Advisor confidence: high; the source path is `KubernetesResourceItem.resolveClusterCredentials`.
+> The operator could not answer the permission-boundary question, so no option was implemented.
+> Missing Secret keys should otherwise retain the existing password-missing behavior.
+>
+> **Resumed (2026-11-09):** after the operator requested and received the advisor's three options,
+> their subsequent autonomous-resolution instruction superseded the pause. The leader selected
+> option 2 (Opus recommendation, high confidence), with the narrow generic-service exception
+> described above. No broader lookup-order or permission change is authorized.
+>
+> **Done (2026-11-09), commit `bc124a25`:** `gpt-6.1-sol` preserved original strict API errors,
+> propagated bounded Secret-read issues through diagnostic-only credentials, and retained cached
+> password precedence and ordinary best-effort callers. Decisions: leader selected Opus's narrow
+> generic-service DKO-list 403 exception under the operator's later autonomous-resolution instruction;
+> advised (`claude-opus-5.5`), approval confidence 85%, based on error identity, type propagation and
+> credential-boundary review. A known DKO Secret-read issue stops credential fallback for that
+> diagnostic read rather than hiding the observed failure; ordinary fallback remains unchanged.
+> Added 57 tests; 559 focused tests and `npx tsc --noEmit -p .` passed. One stale preparation
+> intent assertion introduced by WI-K2 remains for WI-K4; the full batch is not yet green.
+
 - `resolveDocumentDBCredentials` and `resolveGenericServiceCredentials` take an option (for example
   `{ strict: true }`) used only by the diagnostic read in `KubernetesResourceItem`. Ordinary connect,
   copy and save keep the best-effort behavior.
@@ -499,6 +545,16 @@ applies per commit.
   `findingMessages.test.ts`.
 
 ### WI-K2. `prepare` verifies the Kubernetes backend
+
+> **Done (2026-11-09), commit `0168783a`:** `gpt-6.1-sol` added opt-in backend verification
+> before tunnel start/reuse, a bounded preparation error, and shared HTTP/network classification.
+> Ordinary connects retain their request count and messages; existing tunnels remain open.
+> Decisions: operator-approved O1 and explicit flag carried out; advised (`claude-opus-5.5`),
+> approval confidence 88%, based on the installed client error shapes and cancellation paths.
+> Leader coordination confidence 99%: serialize overlapping files and defer the full build to
+> the verification batch. Added 53 focused tests; seven files, 169 tests passed, and
+> `npx tsc --noEmit -p .` passed. Kept ordinary-connect call assertions; diagnostic intent
+> assertions now require `verifyEndpoint: true`. K3 owns the localized finding/trace mapping.
 
 - Add `verifyEndpoint?: boolean` to `ConnectionReachabilityIntent` ("confirm what the provider can
   cheaply confirm before reporting success"); the `prepare` check sets it. A separate flag keeps the
@@ -519,6 +575,17 @@ applies per commit.
 
 ### WI-K3. Safe preparation-failure finding
 
+> **Done (2026-11-09), commit `b1c184a9`; generated localization `60ccb72a`:**
+> `gpt-6.1-terra` mapped typed and generic preparation failures to safe findings, localized
+> Kubernetes reasons, and added the trace allow-list entry. No raw messages or infrastructure
+> identifiers enter results. Decisions: operator-approved O1 carried out; advised
+> (`claude-opus-5.5`), approval confidence 88%, based on error-boundary and report/panel review.
+> Leader coordination confidence 99%: generated localization is a separate chore commit.
+> Added 32 tests; 406 focused tests and `npx tsc --noEmit -p .` passed; `npm run l10n`
+> completed. Existing precedence and eight-row behavior were preserved. Run-level dependency
+> coverage belongs to WI-K4; the generic-provider numeric-code/status ambiguity is a
+> non-blocking advisor risk, not an observed Kubernetes failure.
+
 - New extension finding `prepare.failed` with `{ providerId, reason, errorName, statusCode? }`, mapped
   from `ConnectionPreparationError` in the [`prepare` check](../../../../../src/connectionDiagnostics/checks/prepare.ts#L87).
   Any other provider error gets `reason: 'other'` and generic wording, which also closes
@@ -534,6 +601,21 @@ applies per commit.
 
 ### WI-K4. Regression tests for the #1069 scenarios
 
+> **Done (2026-11-09), commit `e9a8ae9e`:** `gpt-6.1-sol` added three
+> `TDD: Kubernetes diagnosis` contracts with the real runner, provider, tunnel manager and loopback
+> sockets. They cover API-down preparation with fresh/existing tunnels and no ready backend,
+> assert the absence of TLS/firewall/password headlines, and verify shared-listener survival
+> and cleanup. The discovery credential regression now fails an actual API request.
+> Decisions: operator-approved regression scope carried out; advised (`claude-opus-5.5`),
+> approval confidence 88%, based on real request/runner/socket evidence. Leader coordination
+> confidence 99%: update the incidental diagnostic intent and provider-ID assertions to the
+> accepted K2/K3 contracts, retaining cluster/properties/signal, elapsed time and failure checks.
+> Five focused files, 174 tests passed; the production type-check passed. Transitive dependent
+> skips correctly retain the runner's `dependencySkipped`, rather than fabricating a uniform
+> `dependencyFailed` value. The DKO discovery resolution failure is covered by the real
+> credential-reader test plus the target-resolution tests; the three socket runs use saved
+> credentials and specifically cover preparation, not that entire discovery path.
+
 - One run-level test per issue scenario (API down with a fresh tunnel, API down with an existing tunnel,
   no ready pods), using the real tunnel manager and real loopback sockets as in this review's isolated
   checks. Each asserts the outcome **and** the absence of the wrong answer: no `tls.*` headline, no
@@ -543,6 +625,18 @@ applies per commit.
 - Name the suites `TDD: Kubernetes diagnosis` so later changes must ask before editing them.
 
 ### WI-G1. Loopback-aware transport wording and firewall hint
+
+> **Done (2026-11-09), commit `1cd90a0f`:** `gpt-6.1-sol` shared the existing DNS address
+> classifier with transport probes, added observed address classes, neutralized TLS-close wording,
+> and suppressed firewall advice only for proven all-loopback transport failures. Public,
+> mixed and unknown address evidence remains conservative; driver authentication is unchanged.
+> Decisions: operator-approved O6 carried out; advised (`claude-opus-5.5`), approval confidence
+> 85%, based on actual attempted/connected addresses and aggregate result review. Leader
+> coordination confidence 99%: rebuild the package before extension tests. Added 85 tests;
+> 644 focused tests in ten files, the package build and `npx tsc --noEmit -p .` passed.
+> The removed TLS IP-access-list assertion pinned wording the operator explicitly approved
+> replacing; the public/mixed/unknown firewall and authentication assertions remain.
+> Case 2 must regenerate localization for the changed product strings.
 
 - **Package:** add `addressClass` to the data of `tcp.*`, `tls.handshakeRejectedByServer` and
   `hello.noReply` findings (computed with the existing DNS classification); make the English details
@@ -556,6 +650,17 @@ applies per commit.
 
 ### WI-D1. Documentation and decision record
 
+> **Done (2026-11-09), commit `99a34497`:** `gpt-6-luna` updated the manual, active feature
+> README/design, reachability-provider contract and decision 0053, with factual addenda to
+> 0033/0036. The operator's existing README link addition was preserved. Decision provenance
+> distinguishes the operator's O1+O6 approval from the leader's later selection of the
+> advisor-recommended generic-service exception under the autonomous-resolution instruction;
+> no operator rationale is invented. Leader review confidence 95%: documentation follows the
+> committed contracts and clearly distinguishes known observations from missing evidence.
+> Documentation-only: `git diff --check` passed; no tests added. Historical S4 below incorrectly
+> claims all generic services make no API request until preparation; active docs correctly state
+> that generic services also attempt DKO lookup during target resolution.
+
 - [User manual](../../../../user-manual/diagnose-connection.md#sign-in-is-never-prompted): add "no ready
   pods" and the Secret read case to the Kubernetes paragraph; describe local-port wording.
 - [design.md §4.3](../design.md#43-prepare-extension): providers verify under `verifyEndpoint`;
@@ -566,6 +671,18 @@ applies per commit.
   and the rejected options (O3, O4, O5), once the operator has chosen.
 
 ### WI-V1. Manual verification
+
+> **Deferred, escalated (2026-11-09):** `gpt-6.1-sol` performed read-only feasibility checks:
+> the existing kind control plane was running, `/readyz` returned `ok`, and the database pod and
+> service EndpointSlice were ready. No cluster, container, settings, credentials or selector was
+> changed. Actual Diagnose workbench runs are **unverified**: no controlled workbench automation
+> surface was available, and inducing outages or patching this shared lab would be unsafe.
+> Leader decision confidence 99%: preserve shared infrastructure and report the gap rather than
+> treating automated tests as a manual outage experiment. Before relying on the release, use an
+> isolated lab to try S3 (API down, fresh/existing tunnel), S5 (no ready pods), S7 (Secret denied),
+> S9 (stopped local container) and S1/S2 (direct blocked/working connection), restoring the lab
+> after each case. The operator requested autonomous pushing after green automated checks;
+> this manual gap remains explicit rather than being represented as a passing verification.
 
 On the kind lab from `scripts/k8s-test-setup.sh`, re-run the issue's three cases and check S3 to S5:
 
@@ -580,12 +697,16 @@ On the kind lab from `scripts/k8s-test-setup.sh`, re-run the issue's three cases
 
 ### WI-K5. (Optional) The tunnel remembers its last backend failure
 
+> **Excluded (2026-11-09), operator decision:** "don't do wi-k5 (o7)". No implementation.
+
 - `PortForwardTunnelManager` stores `{ reason, at }` per tunnel key on resolution failure and clears it on
   success; `KubernetesErrorExplainer` uses it before its text signatures, only if it is newer than the
   failing operation.
 - **Tests:** `portForwardTunnel.test.ts`, `KubernetesErrorExplainer.test.ts`.
 
 ### WI-K6. (Optional) Provider sub-steps in the report
+
+> **Deferred (2026-11-09):** O2 is optional and not part of the accepted recommended O1+O6 path.
 
 As described in [O2](#o2-provider-reported-sub-steps-inside-prepare-optional-add-on-to-o1).
 
