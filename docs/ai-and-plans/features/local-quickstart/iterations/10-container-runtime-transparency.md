@@ -32,7 +32,8 @@ code:
 
 - **Builds on:** [#1065](https://github.com/microsoft/vscode-documentdb/pull/1065) ·
   `dev/guanzhousong/quickstart-podman-fallback`
-- **Status:** plan only, with no code changes yet
+- **Status:** partial implementation; W2 (`8087eb30`) and W7 (`31775c89`) complete; W1 and
+  W8 deferred; remaining items are not complete.
 
 ## Why
 
@@ -290,6 +291,23 @@ W2–W7 are treated as accepted under /lead's operator-unavailable rule and proc
 changing those gates. The shim label remains exactly "Podman (through the Docker CLI)", as
 specified in the source plan; no new label decision is recorded.
 
+- **W2 — Done (2026-11-09), commit `8087eb30`:** Added the positive-evidence classifier,
+  optional engine/evidence/serverVersion facts, strict Podman info parsing, and
+  provider-union/map exhaustiveness. The existing persisted shape and probe counts are
+  preserved; W1 and W3 remain separate. The source item was treated as accepted under
+  /lead's operator-unavailable rule. Opus 5.5 advised the interface (84%) and reviewed the
+  logic (87%); leader coordination confidence was 99% and selected Sol for cross-module
+  impact. Added 48 tests; `npm run build` passed; focused tests passed across five root
+  files (157 tests: classifier, probes, readiness service, integration, and tree item).
+- **W7 — Done (2026-11-09), commit `31775c89`:** Added bounded `containerCli` (omitted if
+  absent), `containerEngine` (default `unknown`), and `containerEngineEvidence` (default
+  `none`), retaining existing `docker*` properties and fingerprint semantics. The source
+  item was treated as accepted under /lead's operator-unavailable rule. Leader confidence
+  was 99% in classifying the mapping as mechanical, with no advisor logic gate because no
+  lifecycle, public API, or schema changed; Luna was chosen for the mechanical work. Added
+  2 tests covering 5 CLI/engine/absence combinations; all 4 tests passed. `npm run build`
+  passed, as did
+  `npx vitest run src/webviews/documentdb/localQuickStart/dockerReadinessTelemetry.test.ts`.
 - **W1 — Deferred, escalated (2026-11-09):** Adding the optional CLI field to persisted
   provider memory requires operator approval of migration/retention. Old records would be
   treated as Docker. Options: ignore mismatched records (advisor recommendation), or revise
