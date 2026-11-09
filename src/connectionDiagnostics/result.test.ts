@@ -50,6 +50,95 @@ function rejectCredentials(): CheckResult<FindingCode> {
 
 describe('deriveResult', (): void => {
     it.each([
+        ['tcp', 'tcp.refused'],
+        ['tcp', 'tcp.timeout'],
+        ['tcp', 'tcp.unreachable'],
+        ['tcp', 'tcp.reset'],
+        ['tls', 'tls.handshakeRejectedByServer'],
+        ['hello', 'hello.noReply'],
+    ] as const)('omits the firewall hint when %s/%s proves a local failure', (checkId, code): void => {
+        const result = derive([
+            check(checkId, {
+                status: 'fail',
+                target: '127.0.0.1:10260',
+                findings: [finding(code, { addressClass: 'loopback' })],
+            }),
+            check('authenticate', { status: 'fail', findings: [finding('auth.serverSelectionTimeout')] }),
+        ]);
+        expect(result).toMatchObject({
+            outcome: 'failed',
+            headline: { code },
+            supporting: { corroboration: 'serverSelection' },
+            firewallHint: false,
+        });
+        expect(result.headline?.nextStep).not.toMatch(/firewall|allowlist/i);
+    });
+
+    it('requires every failing finding and target to prove loopback, not just the headline', (): void => {
+        const local = check('tcp', {
+            status: 'fail',
+            target: '127.0.0.1:10260',
+            findings: [finding('tcp.refused', { addressClass: 'loopback' })],
+        });
+        const auth = check('authenticate', { status: 'fail', findings: [finding('auth.serverSelectionTimeout')] });
+        expect(derive([local, { ...local, target: '[::1]:10260' }, auth]).firewallHint).toBe(false);
+        for (const addressClass of ['public', 'private', 'linkLocal', 'mixed', undefined]) {
+            const other = check('tcp', {
+                status: 'fail',
+                target: 'other.test:27017',
+                findings: [finding('tcp.timeout', { addressClass })],
+            });
+            expect(derive([local, other, auth]).firewallHint).toBe(true);
+            expect(derive([{ ...local, findings: [...local.findings, ...other.findings] }, auth]).firewallHint).toBe(
+                true,
+            );
+        }
+        expect(derive([local, check('tcp', { status: 'fail', target: 'unknown.test:27017' }), auth]).firewallHint).toBe(
+            true,
+        );
+        expect(
+            derive([
+                local,
+                check('hello', { status: 'fail', findings: [finding('check.timeout', { operation: 'hello' })] }),
+                auth,
+            ]).firewallHint,
+        ).toBe(true);
+    });
+
+    it.each(['public', 'private', 'linkLocal', 'mixed', undefined])(
+        'retains the hint for %s transport evidence even on a loopback-looking target',
+        (addressClass): void => {
+            const result = derive([
+                check('tls', {
+                    status: 'fail',
+                    target: '127.0.0.1:10260',
+                    findings: [finding('tls.handshakeRejectedByServer', { addressClass })],
+                }),
+                check('authenticate', { status: 'fail', findings: [finding('auth.serverSelectionTimeout')] }),
+            ]);
+            expect(result.firewallHint).toBe(true);
+            expect(result.headline?.nextStep).toContain('A firewall or IP allowlist');
+        },
+    );
+
+    it('does not infer loopback for an isolated driver timeout or discard a real authentication failure', (): void => {
+        expect(
+            derive([check('authenticate', { status: 'fail', findings: [finding('auth.serverSelectionTimeout')] })])
+                .firewallHint,
+        ).toBe(true);
+        const local = check('tcp', {
+            status: 'fail',
+            findings: [finding('tcp.refused', { addressClass: 'loopback' })],
+        });
+        expect(derive([local, connected])).toMatchObject({ outcome: 'connected', firewallHint: false });
+        expect(derive([local, rejectCredentials()])).toMatchObject({
+            outcome: 'failed',
+            headline: { code: 'auth.failed' },
+            firewallHint: false,
+        });
+    });
+
+    it.each([
         ['sourceUnreachable', 'Kubernetes API unreachable'],
         ['noReadyBackend', 'No ready pods behind the service'],
     ])('stops at preparation for %s without a network or authentication headline', (reason, title): void => {

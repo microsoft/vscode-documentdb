@@ -5,17 +5,13 @@
 
 import { isIP } from 'node:net';
 
+import { addressFact, type Address, type AddressClass } from '../addressClass.js';
 import { nodeNet } from '../io/nodeNet.js';
 import { resolveNetworkOptions } from '../networkOptions.js';
 
 import { type Socket } from 'node:net';
 import { type BuiltInFindingCode } from '../findingCodes.js';
 import { type Check, type CheckOutcome, type Finding, type FindingSeverity, type RunContext } from '../types.js';
-
-interface Address {
-    readonly address: string;
-    readonly family: 4 | 6;
-}
 
 interface Attempt extends Address {
     readonly outcome: 'connected' | 'failed';
@@ -157,9 +153,15 @@ export function createTcpCheck(): Check<RunContext, BuiltInFindingCode> {
             }
             const findings: Finding<BuiltInFindingCode>[] = [];
             if (!connectedAddress) {
+                const classes = attempts.map((attempt): AddressClass | undefined => addressFact(attempt).class);
+                const addressClass =
+                    classes.length > 0 && classes.every((value): boolean => value === classes[0])
+                        ? classes[0]
+                        : undefined;
                 for (const code of new Set(attempts.map((attempt): string | undefined => attempt.errorCode))) {
                     const data = {
                         errorCode: code,
+                        ...(addressClass === undefined ? {} : { addressClass }),
                         ...(code === 'ETIMEDOUT' && connectionTimeoutExpired ? { source: 'connection' } : {}),
                     };
                     switch (code) {
@@ -169,7 +171,9 @@ export function createTcpCheck(): Check<RunContext, BuiltInFindingCode> {
                                     'tcp.refused',
                                     'error',
                                     data,
-                                    'The connection was refused; check the port, that the service is running, and the local firewall.',
+                                    addressClass === 'loopback'
+                                        ? 'Nothing accepted the connection on this port on this computer; start the local database, container or tunnel that should listen there.'
+                                        : 'The connection was refused; check the port, that the service is running, and the local firewall.',
                                 ),
                             );
                             break;
@@ -179,7 +183,9 @@ export function createTcpCheck(): Check<RunContext, BuiltInFindingCode> {
                                     'tcp.timeout',
                                     'error',
                                     data,
-                                    'The connection timed out. A firewall or IP allowlist may be blocking it.',
+                                    addressClass === 'loopback'
+                                        ? 'The connection on this computer timed out; check the local database, container or tunnel.'
+                                        : 'The connection timed out. A firewall or IP allowlist may be blocking it.',
                                 ),
                             );
                             break;
@@ -190,12 +196,23 @@ export function createTcpCheck(): Check<RunContext, BuiltInFindingCode> {
                                     'tcp.unreachable',
                                     'error',
                                     data,
-                                    'The network route is unavailable; check routing and the VPN connection.',
+                                    addressClass === 'loopback'
+                                        ? 'The local address could not be reached; check the local database, container or tunnel.'
+                                        : 'The network route is unavailable; check routing and the VPN connection.',
                                 ),
                             );
                             break;
                         case 'ECONNRESET':
-                            findings.push(finding('tcp.reset', 'error', data, 'The server reset the connection.'));
+                            findings.push(
+                                finding(
+                                    'tcp.reset',
+                                    'error',
+                                    data,
+                                    addressClass === 'loopback'
+                                        ? 'The connection on this computer was reset; check the local database, container or tunnel.'
+                                        : 'The server reset the connection.',
+                                ),
+                            );
                             break;
                     }
                 }

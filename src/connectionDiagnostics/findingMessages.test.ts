@@ -107,6 +107,70 @@ function assertPlainMessage(message: FindingMessage): void {
 
 describe('localized finding messages', () => {
     it.each([
+        'tcp.refused',
+        'tcp.timeout',
+        'tcp.unreachable',
+        'tcp.reset',
+        'tls.handshakeRejectedByServer',
+        'hello.noReply',
+    ] as const)('uses local guidance without firewall advice for loopback %s', (code): void => {
+        const message = findingMessages[code]({ ...representativeData[code], addressClass: 'loopback' });
+        expect(message.nextStep).toMatch(/local database, container or tunnel|local tunnel or proxy/);
+        expect(JSON.stringify(message)).not.toMatch(/firewall|allowlist|VPN|remote host|network path/i);
+        assertPlainMessage(message);
+    });
+
+    it.each([
+        'tcp.refused',
+        'tcp.timeout',
+        'tcp.unreachable',
+        'tcp.reset',
+        'tls.handshakeRejectedByServer',
+        'hello.noReply',
+    ] as const)('retains conservative firewall advice for public, mixed or unknown %s', (code): void => {
+        for (const addressClass of ['public', 'private', 'linkLocal', 'mixed', undefined, null]) {
+            const message = findingMessages[code]({ ...representativeData[code], addressClass });
+            expect(message.nextStep).toContain(firewall);
+            expect(message).toEqual(findingMessages[code](representativeData[code]));
+        }
+    });
+
+    it('says nothing accepted a local connection and names what to start', (): void => {
+        expect(findingMessages['tcp.refused']({ addressClass: 'loopback' })).toEqual({
+            title: 'Network connection refused',
+            explanation: 'Nothing accepted the connection on this port on this computer.',
+            nextStep: 'Start the local database, container or tunnel that should listen on this port.',
+        });
+    });
+
+    it('describes a local handshake closure without blaming a server or firewall', (): void => {
+        const message = findingMessages['tls.handshakeRejectedByServer']({ addressClass: 'loopback' });
+        expect(message.explanation).toBe(
+            'The connection on this computer was accepted, then closed during the secure handshake, before a certificate arrived.',
+        );
+        expect(message.nextStep).toBe(
+            'Check that the local database is running. If you use a local tunnel or proxy, check that it can reach its destination.',
+        );
+    });
+
+    it.each(['public', 'private', 'linkLocal', undefined])(
+        'describes TLS closure neutrally for address class %s',
+        (addressClass): void => {
+            expect(findingMessages['tls.handshakeRejectedByServer']({ addressClass }).explanation).toBe(
+                'The connection closed during the secure handshake, before a certificate arrived.',
+            );
+        },
+    );
+
+    it('leaves the driver server-selection timeout wording unchanged for local connections', (): void => {
+        const data = representativeData['auth.serverSelectionTimeout'];
+        expect(findingMessages['auth.serverSelectionTimeout']({ ...data, addressClass: 'loopback' })).toEqual(
+            findingMessages['auth.serverSelectionTimeout'](data),
+        );
+        expect(findingMessages['auth.serverSelectionTimeout'](data).nextStep).toContain(firewall);
+    });
+
+    it.each([
         ['sourceUnreachable', 'Kubernetes API unreachable'],
         ['accessDenied', 'Kubernetes access denied'],
         ['targetNotFound', 'Kubernetes service not found'],

@@ -684,31 +684,58 @@ export const findingMessages: {
             ),
         };
     },
-    'tcp.refused': (): FindingMessage => ({
+    'tcp.refused': (data): FindingMessage => ({
         title: vscode.l10n.t('Network connection refused'),
-        explanation: vscode.l10n.t(
-            'The TCP connection was refused. The service may be stopped or listening on a different port.',
-        ),
-        nextStep: firewallAdvice(vscode.l10n.t('Check the port and that the database service or tunnel is running.')),
+        explanation:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t('Nothing accepted the connection on this port on this computer.')
+                : vscode.l10n.t(
+                      'The TCP connection was refused. The service may be stopped or listening on a different port.',
+                  ),
+        nextStep:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t('Start the local database, container or tunnel that should listen on this port.')
+                : firewallAdvice(vscode.l10n.t('Check the port and that the database service or tunnel is running.')),
     }),
-    'tcp.timeout': (): FindingMessage => ({
+    'tcp.timeout': (data): FindingMessage => ({
         title: vscode.l10n.t('Network connection timed out'),
         explanation: vscode.l10n.t(
             'The TCP connection attempt timed out without connecting. This does not identify what blocked it.',
         ),
-        nextStep: firewallAdvice(vscode.l10n.t('Check the endpoint and network path, then run the diagnosis again.')),
+        nextStep:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t(
+                      'Check the local database, container or tunnel on this computer, then run the diagnosis again.',
+                  )
+                : firewallAdvice(vscode.l10n.t('Check the endpoint and network path, then run the diagnosis again.')),
     }),
-    'tcp.unreachable': (): FindingMessage => ({
+    'tcp.unreachable': (data): FindingMessage => ({
         title: vscode.l10n.t('Network route unavailable'),
-        explanation: vscode.l10n.t('The host or its network could not be reached through the current route.'),
-        nextStep: firewallAdvice(
-            vscode.l10n.t('Check routing and whether the required VPN or private network is connected.'),
-        ),
+        explanation:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t('The local address could not be reached on this computer.')
+                : vscode.l10n.t('The host or its network could not be reached through the current route.'),
+        nextStep:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t(
+                      'Check the local database, container or tunnel on this computer, then run the diagnosis again.',
+                  )
+                : firewallAdvice(
+                      vscode.l10n.t('Check routing and whether the required VPN or private network is connected.'),
+                  ),
     }),
-    'tcp.reset': (): FindingMessage => ({
+    'tcp.reset': (data): FindingMessage => ({
         title: vscode.l10n.t('Network connection reset'),
-        explanation: vscode.l10n.t('The TCP connection was reset by the peer or something on the network path.'),
-        nextStep: firewallAdvice(vscode.l10n.t('Check that the endpoint and port accept database connections.')),
+        explanation:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t('The TCP connection on this computer was reset.')
+                : vscode.l10n.t('The TCP connection was reset by the peer or something on the network path.'),
+        nextStep:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t(
+                      'Check the local database, container or tunnel on this computer, then run the diagnosis again.',
+                  )
+                : firewallAdvice(vscode.l10n.t('Check that the endpoint and port accept database connections.')),
     }),
     'tls.notTlsServer': (): FindingMessage => ({
         title: vscode.l10n.t('Endpoint did not speak TLS'),
@@ -717,10 +744,20 @@ export const findingMessages: {
             'Check the endpoint, port and TLS requirements. Use the secure endpoint supplied by the cluster administrator.',
         ),
     }),
-    'tls.handshakeRejectedByServer': (): FindingMessage => ({
+    'tls.handshakeRejectedByServer': (data): FindingMessage => ({
         title: vscode.l10n.t('Secure handshake closed'),
-        explanation: vscode.l10n.t('The server closed the TLS handshake before sending a certificate.'),
-        nextStep: firewallAdvice(vscode.l10n.t('Check the endpoint and its secure connection requirements.')),
+        explanation:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t(
+                      'The connection on this computer was accepted, then closed during the secure handshake, before a certificate arrived.',
+                  )
+                : vscode.l10n.t('The connection closed during the secure handshake, before a certificate arrived.'),
+        nextStep:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t(
+                      'Check that the local database is running. If you use a local tunnel or proxy, check that it can reach its destination.',
+                  )
+                : firewallAdvice(vscode.l10n.t('Check the endpoint and its secure connection requirements.')),
     }),
     'tls.selfSigned': (): FindingMessage => ({
         title: vscode.l10n.t('Self-signed certificate detected'),
@@ -766,14 +803,19 @@ export const findingMessages: {
             'Correct the certificate or trust configuration, then remove the verification exception.',
         ),
     }),
-    'hello.noReply': (): FindingMessage => ({
+    'hello.noReply': (data): FindingMessage => ({
         title: vscode.l10n.t('No server response'),
         explanation: vscode.l10n.t(
             'No handshake reply arrived before the reply deadline. This alone does not show that the server is unreachable.',
         ),
-        nextStep: firewallAdvice(
-            vscode.l10n.t('Confirm that the endpoint accepts MongoDB API connections and try a longer timeout.'),
-        ),
+        nextStep:
+            data.addressClass === 'loopback'
+                ? vscode.l10n.t(
+                      'Check that the local database, container or tunnel accepts MongoDB API connections, then try a longer timeout.',
+                  )
+                : firewallAdvice(
+                      vscode.l10n.t('Confirm that the endpoint accepts MongoDB API connections and try a longer timeout.'),
+                  ),
     }),
     'hello.notWireProtocol': (): FindingMessage => ({
         title: vscode.l10n.t('Unexpected server protocol'),

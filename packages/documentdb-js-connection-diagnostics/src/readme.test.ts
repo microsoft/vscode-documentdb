@@ -39,6 +39,21 @@ describe('package README catalogue', (): void => {
         expect(firstColumnCodes(section('Skip reasons'))).toEqual([...skipReasons]);
     });
 
+    it('documents optional addressClass only on the six transport findings that emit it', (): void => {
+        const catalogue = section('Finding codes');
+        const rows = catalogue.split('\n').filter((line): boolean => line.includes('`addressClass?: AddressClass`'));
+        expect(firstColumnCodes(rows.join('\n'))).toEqual([
+            'tcp.refused',
+            'tcp.timeout',
+            'tcp.unreachable',
+            'tcp.reset',
+            'tls.handshakeRejectedByServer',
+            'hello.noReply',
+        ]);
+        expect(catalogue).toContain("`AddressClass` is `'public' | 'private' | 'loopback' | 'linkLocal'`");
+        expect(catalogue).toContain('absent for mixed or unknown classes');
+    });
+
     it('documents each default timeout in the timeouts table', (): void => {
         const table = section('Timeouts and retry profiles')
             .split('\n')

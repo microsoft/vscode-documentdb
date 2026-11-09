@@ -44,6 +44,7 @@ interface ProbeOptions {
     readonly clock?: DiagnosticsClock;
     readonly timeout?: number | null;
     readonly readFile?: (path: string) => Promise<Uint8Array>;
+    readonly connectedAddress?: { readonly address: string; readonly family: 4 | 6 };
 }
 
 function context(options: ProbeOptions = {}): RunContext {
@@ -71,7 +72,7 @@ function context(options: ProbeOptions = {}): RunContext {
                       status: 'pass',
                       durationMs: 0,
                       findings: [],
-                      facts: { connectedAddress: { address: '127.0.0.1', family: 4 } },
+                      facts: { connectedAddress: options.connectedAddress ?? { address: '127.0.0.1', family: 4 } },
                   }
                 : undefined,
     };
@@ -455,6 +456,34 @@ describe('unauthenticated MongoDB API handshake', (): void => {
             expect(vi.getTimerCount()).toBe(0);
         },
     );
+
+    it.each([
+        { address: '127.0.0.1', family: 4 as const, addressClass: 'loopback' },
+        { address: '0:0:0:0:0:0:0:1', family: 6 as const, addressClass: 'loopback' },
+        { address: '::ffff:127.0.0.1', family: 6 as const, addressClass: 'loopback' },
+        { address: '203.0.113.4', family: 4 as const, addressClass: 'public' },
+        { address: '10.0.0.4', family: 4 as const, addressClass: 'private' },
+        { address: 'fe80::1', family: 6 as const, addressClass: 'linkLocal' },
+        { address: 'unknown', family: 4 as const, addressClass: undefined },
+    ])('classifies no reply from connected address $address, not the host label', async ({ address, family, addressClass }): Promise<void> => {
+        vi.useFakeTimers();
+        const pending = runHello({
+            connectedAddress: { address, family },
+            net: fakeResponder((): void => {}).io,
+        });
+        await vi.advanceTimersByTimeAsync(750);
+        const result = await pending;
+        expect(result.findings[0]).toMatchObject({ code: 'hello.noReply', data: { waitedMs: 750 } });
+        if (addressClass === undefined) {
+            expect(result.findings[0].data).not.toHaveProperty('addressClass');
+        } else {
+            expect(result.findings[0].data?.addressClass).toBe(addressClass);
+        }
+        if (addressClass === 'loopback') {
+            expect(result.findings[0].detail.text).toContain('local database, container or tunnel');
+            expect(result.findings[0].detail.text).not.toMatch(/firewall|allowlist|VPN|server/i);
+        }
+    });
 
     it('measures the deadline from check start, including connection time', async (): Promise<void> => {
         vi.useFakeTimers();

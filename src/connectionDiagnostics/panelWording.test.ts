@@ -194,6 +194,52 @@ const authOutcomes: readonly AuthOutcome[] = [
 ];
 
 describe('Panel wording (design §4.9.2 and §5.2)', (): void => {
+    it.each([
+        ['tcp', 'tcp.refused'],
+        ['tcp', 'tcp.timeout'],
+        ['tcp', 'tcp.unreachable'],
+        ['tcp', 'tcp.reset'],
+        ['tls', 'tls.handshakeRejectedByServer'],
+        ['hello', 'hello.noReply'],
+    ] as const)('keeps %s/%s advice local only when the address class proves it', (checkId, code): void => {
+        for (const addressClass of ['loopback', 'public', undefined]) {
+            const target = addressClass === 'public' ? `${host}:27017` : '127.0.0.1:10260';
+            const probe = checkResult(checkId, {
+                status: 'fail',
+                target,
+                findings: [finding(code, { addressClass })],
+            });
+            const auth = checkResult('authenticate', {
+                status: 'fail',
+                facts: { authMethod: 'NoAuth', authenticated: false },
+                findings: [finding('auth.serverSelectionTimeout')],
+            });
+            const view = outputs(fixtureRun([probe, auth]));
+            expect(view.result).toMatchObject({
+                outcome: 'failed',
+                headline: { code, target },
+                supporting: { corroboration: 'serverSelection' },
+                firewallHint: addressClass !== 'loopback',
+            });
+            const text = cardText(view.result);
+            assertPlain(text);
+            if (addressClass === 'loopback') {
+                expect(text).toContain('local');
+                expect(text).not.toMatch(/firewall|allowlist|VPN|remote host|network path/i);
+            } else {
+                expect(text).toContain('A firewall or IP allowlist may be blocking this connection.');
+            }
+            if (code === 'tls.handshakeRejectedByServer') {
+                expect(view.result.headline?.title).toBe('Secure handshake closed');
+                expect(view.result.headline?.explanation).not.toMatch(/server|firewall/i);
+            }
+            const row = withRowDetails(view.projector.rows(), [probe, auth], describeFinding).find(
+                (item): boolean => item.id === rowForCheck(checkId),
+            );
+            expect(JSON.stringify(row?.details)).not.toContain(detailSentinel);
+        }
+    });
+
     it.each(codes)('keeps %s in the report, not in the rendered panel evidence', (code): void => {
         const checkId = checkFor(code);
         expect(rowForCheck(checkId)).toBeDefined();

@@ -7,6 +7,7 @@ import { deserialize, serialize } from 'bson';
 import * as connectionStringUrl from 'mongodb-connection-string-url';
 import { randomInt } from 'node:crypto';
 
+import { addressFact } from '../addressClass.js';
 import { nodeNet, readFile } from '../io/nodeNet.js';
 import { resolveNetworkOptions } from '../networkOptions.js';
 import { SAFETY_LIMITS } from '../timeouts.js';
@@ -462,6 +463,7 @@ export function createHelloCheck(): Check<RunContext, BuiltInFindingCode> {
             const { host, port } = target;
             const address = connected.address;
             const family = connected.family;
+            const addressClass = addressFact({ address, family }).class;
             signal.throwIfAborted();
             const controller = new AbortController();
             let rejectAbort: (reason: unknown) => void = (): void => {};
@@ -546,8 +548,13 @@ export function createHelloCheck(): Check<RunContext, BuiltInFindingCode> {
                                                   : finding(
                                                         'hello.noReply',
                                                         'error',
-                                                        { waitedMs },
-                                                        'The server sent no handshake reply before the reply deadline.',
+                                                        {
+                                                            waitedMs,
+                                                            ...(addressClass === undefined ? {} : { addressClass }),
+                                                        },
+                                                        addressClass === 'loopback'
+                                                            ? 'No handshake reply arrived from the local endpoint before the reply deadline; check the local database, container or tunnel.'
+                                                            : 'The server sent no handshake reply before the reply deadline.',
                                                     ),
                                           ],
                                       });

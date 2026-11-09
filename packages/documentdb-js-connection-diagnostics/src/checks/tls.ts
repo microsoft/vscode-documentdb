@@ -5,6 +5,7 @@
 
 import * as tls from 'node:tls';
 
+import { addressFact } from '../addressClass.js';
 import { nodeNet, readFile } from '../io/nodeNet.js';
 import { resolveNetworkOptions } from '../networkOptions.js';
 import {
@@ -211,6 +212,7 @@ export function createTlsCheck(): Check<RunContext, BuiltInFindingCode> {
                 return { status: 'skipped', skippedBecause: { reason: 'inputUnavailable' }, findings: [], facts: {} };
             }
             signal.throwIfAborted();
+            const addressClass = addressFact({ address: connected.address, family: connected.family }).class;
             const facts: Record<string, unknown> = {
                 protocol: null,
                 cipher: null,
@@ -352,8 +354,8 @@ export function createTlsCheck(): Check<RunContext, BuiltInFindingCode> {
                         finding(
                             'tls.handshakeRejectedByServer',
                             'error',
-                            { errorCode: code },
-                            'The server closed the TLS handshake before a certificate arrived; an IP access list is one possible cause.',
+                            { errorCode: code, ...(addressClass === undefined ? {} : { addressClass }) },
+                            'The connection closed during the TLS handshake before a certificate arrived.',
                         ),
                     );
                 }

@@ -269,6 +269,16 @@ export function deriveResult(
         typeof access?.facts.pingMs === 'number' && Number.isFinite(access.facts.pingMs)
             ? access.facts.pingMs
             : undefined;
+    // The driver's timeout can corroborate a local probe failure without identifying another address.
+    const failingTransportResults = results.filter(
+        (result): boolean => result.status === 'fail' && ['dns', 'tcp', 'tls', 'hello'].includes(result.checkId),
+    );
+    const onlyLoopbackFailures =
+        failingTransportResults.length > 0 &&
+        failingTransportResults.every((result): boolean => {
+            const errors = result.findings.filter((finding): boolean => finding.severity === 'error');
+            return errors.length > 0 && errors.every((finding): boolean => finding.data?.addressClass === 'loopback');
+        });
     return {
         outcome,
         ...(stoppedAtRow ? { stoppedAtRow } : {}),
@@ -300,7 +310,8 @@ export function deriveResult(
             : {}),
         providerHint,
         learnMore,
-        firewallHint: outcome === 'failed' && (isTransport(headline) || isTransport(supporting)),
+        firewallHint:
+            outcome === 'failed' && (isTransport(headline) || isTransport(supporting)) && !onlyLoopbackFailures,
         earlierSignInFailure:
             authenticate?.facts.earlierInSession !== undefined && authenticate.facts.earlierInSession !== null,
         runTimeoutBeforeAttempt,

@@ -132,7 +132,7 @@ describe('per-host TCP probe', (): void => {
         await close(server);
         expect(await runTcp({ port })).toMatchObject({
             status: 'fail',
-            findings: [{ code: 'tcp.refused', severity: 'error' }],
+            findings: [{ code: 'tcp.refused', severity: 'error', data: { addressClass: 'loopback' } }],
             facts: { connectedAddress: null, attempts: [{ errorCode: 'ECONNREFUSED', outcome: 'failed' }] },
         });
     });
@@ -150,10 +150,60 @@ describe('per-host TCP probe', (): void => {
         });
         expect(result).toMatchObject({
             status: 'fail',
-            findings: [{ code: findingCode, severity: 'error' }],
+            findings: [{ code: findingCode, severity: 'error', data: { addressClass: 'loopback' } }],
             facts: { attempts: [{ errorCode: code }] },
         });
         expect(JSON.stringify(result)).not.toContain('secret');
+        expect(result.findings[0].detail.text).not.toMatch(/firewall|allowlist|VPN|server/i);
+    });
+
+    it.each([
+        ['127.0.0.1', 'loopback'],
+        ['[::1]', 'loopback'],
+        ['[::ffff:127.0.0.1]', 'loopback'],
+        ['203.0.113.4', 'public'],
+    ])('classifies attempted IP literal %s even though DNS was skipped', async (host, addressClass): Promise<void> => {
+        const connect = vi.fn<NetIo['connect']>(async (): Promise<never> => {
+            throw socketError('ECONNREFUSED');
+        });
+        const result = await runTcp({ host, net: fakeNet(connect) });
+        expect(result.findings[0].data).toEqual({ errorCode: 'ECONNREFUSED', addressClass });
+        expect(connect).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+        { addresses: ['::1', '127.0.0.1'], addressClass: 'loopback' },
+        { addresses: ['203.0.113.4', '2001:db8::1'], addressClass: 'public' },
+        { addresses: ['10.0.0.4', 'fc00::1'], addressClass: 'private' },
+        { addresses: ['169.254.1.1', 'fe80::1'], addressClass: 'linkLocal' },
+        { addresses: ['127.0.0.1', '203.0.113.4'], addressClass: undefined },
+        { addresses: ['127.0.0.1', 'unknown'], addressClass: undefined },
+    ])('aggregates all attempted addresses ($addresses) for every finding', async ({ addresses, addressClass }): Promise<void> => {
+        const result = await runTcp({
+            host: 'db.test',
+            addresses: addresses.map((address): { address: string; family: 4 | 6 } => ({
+                address,
+                family: address.includes(':') ? 6 : 4,
+            })),
+            net: fakeNet(async ({ host }): Promise<never> => {
+                throw socketError(host === addresses[0] ? 'ECONNREFUSED' : 'ETIMEDOUT');
+            }),
+        });
+        expect(result.findings).toHaveLength(2);
+        for (const finding of result.findings) {
+            if (addressClass === undefined) {
+                expect(finding.data).not.toHaveProperty('addressClass');
+            } else {
+                expect(finding.data?.addressClass).toBe(addressClass);
+            }
+        }
+        if (addressClass === 'loopback') {
+            expect(result.findings.map((finding): string => finding.detail.text).join(' ')).not.toMatch(
+                /firewall|allowlist|VPN|server/i,
+            );
+        } else {
+            expect(result.findings[1].detail.text).toContain('A firewall or IP allowlist may be blocking it.');
+        }
     });
 
     it('retains failed IPv6 evidence but passes when IPv4 succeeds and destroys the socket', async (): Promise<void> => {
@@ -276,10 +326,12 @@ describe('per-host TCP probe', (): void => {
         );
         const pending = runTcp({ net: io, probeTimeoutMs: 50, network: { connectTimeoutMS: 100 } });
         await vi.advanceTimersByTimeAsync(50);
-        expect(await pending).toMatchObject({
+        const result = await pending;
+        expect(result).toMatchObject({
             status: 'fail',
             findings: [{ code: 'check.timeout', data: { source: 'check', timeoutMs: 50 } }],
         });
+        expect(result.findings[0].data).not.toHaveProperty('addressClass');
         expect(socket.destroyed).toBe(true);
         expect(vi.getTimerCount()).toBe(0);
     });
