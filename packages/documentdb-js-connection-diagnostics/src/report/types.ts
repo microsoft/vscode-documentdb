@@ -33,7 +33,8 @@ export type IdentifierKind =
     | 'connectionName'
     | 'proxyHost'
     | 'service'
-    | 'namespace';
+    | 'namespace'
+    | 'kubeContext';
 
 export interface ClockOffsetSummary {
     readonly target: string;

@@ -18,8 +18,14 @@ import {
 import * as os from 'os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { ConnectionPreparationError, ConnectionReachabilityService } from '../services/connectionReachabilityService';
+import { createKubernetesPortForwardMetadata } from '../plugins/service-kubernetes/portForwardMetadata';
+import {
+    ConnectionPreparationError,
+    ConnectionReachabilityService,
+    type ConnectionReachabilityResult,
+} from '../services/connectionReachabilityService';
 import { createPrepareCheck } from './checks/prepare';
+import { diagnosticsIdentifierKeys } from './identifierKeys';
 import { type DiagnosticsSetup } from './input';
 import { createExtensionReportAttribution, createExtensionReportText, renderExtensionReportFooter } from './reportText';
 import { type FindingCode } from './types';
@@ -100,6 +106,51 @@ function fixtureMarkdown(run: DiagnosticsRun<FindingCode> = fixtureRun()): strin
 }
 
 describe('localized connectivity report text', () => {
+    it.each(['started', 'reused'] as const)('redacts the %s Kubernetes tunnel identifiers in Markdown and JSON', async (tunnel): Promise<void> => {
+        const contextName = 'arn:aws:eks:us-east-1:123456789012:cluster/private-cluster';
+        ConnectionReachabilityService.registerProvider({
+            id: 'kubernetes-port-forward', appliesTo: (): boolean => true,
+            ensureReachable: async (): Promise<ConnectionReachabilityResult> => ({ sharedTunnel: tunnel }),
+        });
+        try {
+            const setup: DiagnosticsSetup = {
+                input: { connectionString: 'mongodb://127.0.0.1:10260/' },
+                chosenAuthMethod: undefined, credentialState: 'noMethod', transientCredentials: undefined,
+                connectionProperties: { kubernetesPortForward: createKubernetesPortForwardMetadata(
+                    'source-id', contextName, { namespace: 'private-ns', serviceName: 'private-svc', port: 10261 }, 10260,
+                ) },
+            };
+            const outcome = await createPrepareCheck({
+                clusterId: 'fixture', displayName: 'fixture', sourceView: 'connections',
+                getCredentials: async (): Promise<undefined> => undefined,
+            }, (): DiagnosticsSetup => setup).run({} as RunContext, new AbortController().signal);
+            const report = buildReport({
+                ...fixtureRun(), targets: [], results: [
+                    { checkId: 'connectionString', status: 'pass', durationMs: 1, findings: [], facts: {
+                        scheme: 'mongodb', hosts: [{ host: '127.0.0.1', port: 10260 }],
+                    } },
+                    { ...outcome, checkId: 'prepare', durationMs: 1 },
+                ],
+            }, { identifierKeys: diagnosticsIdentifierKeys });
+            const markdown = renderMarkdown(report, { text: createExtensionReportText(), redact: true });
+            const json = renderJson(report, { redact: true });
+            for (const rendered of [markdown, json]) {
+                expect(rendered).not.toMatch(/arn:aws:eks|123456789012|private-cluster|private-ns|private-svc|127\.0\.0\.1/);
+                const plain = rendered.replaceAll('\\', '');
+                expect(plain).toContain('context-1');
+                expect(plain).toContain('namespace-1');
+                expect(plain).toContain('service-1');
+                expect(plain).toContain('10260');
+                expect(plain).toContain('10261');
+            }
+            expect(markdown.replaceAll('\\', '')).toContain('| providerIdentifiers.kubeContext | context-1 |');
+            expect(markdown.replaceAll('\\', '')).toContain('It closes when you close or reload the VS Code window.');
+            expect(renderMarkdown(report, { text: createExtensionReportText(), redact: false })).toContain('123456789012');
+        } finally {
+            ConnectionReachabilityService.resetForTests();
+        }
+    });
+
     it.each([
         [false, 'kubernetes-port-forward', 'Kubernetes access denied'],
         [true, 'kubernetes-port-forward', 'Kubernetes access denied'],

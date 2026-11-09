@@ -190,6 +190,39 @@ function customReport(
 }
 
 describe('identifier redaction and JSON rendering', (): void => {
+    it.each(['team-context', 'arn:aws:eks:us-east-1:123456789012:cluster/private-cluster'])(
+        'redacts kubeconfig context %s consistently in facts and prose',
+        (context): void => {
+            const report = customReport(
+                {
+                    providerIdentifiers: { kubeContext: context, namespace: 'private-ns', service: 'private-svc' },
+                    localPort: 10260,
+                },
+                {
+                    'providerIdentifiers.kubeContext': 'kubeContext',
+                    'providerIdentifiers.namespace': 'namespace',
+                    'providerIdentifiers.service': 'service',
+                },
+                `Context ${context}, namespace private-ns, service private-svc`,
+            );
+            expect(redactReport(report).results[0]?.facts.providerIdentifiers).toEqual({
+                kubeContext: 'context-1',
+                namespace: 'namespace-1',
+                service: 'service-1',
+            });
+            for (const rendered of [
+                renderJson(report, { redact: true }),
+                renderMarkdown(report, { text: englishReportText, redact: true }),
+            ]) {
+                expect(rendered).not.toContain(context);
+                expect(rendered).not.toMatch(/private-ns|private-svc|123456789012|private-cluster/);
+                expect(rendered.replaceAll('\\', '')).toContain('context-1');
+                expect(rendered).toContain('10260');
+            }
+            expect(renderJson(report, { redact: false })).toContain(context);
+        },
+    );
+
     it('redacts a complete real check run consistently in facts, targets and prose', async (): Promise<void> => {
         const report = await fixture();
         const redacted = redactReport(report);

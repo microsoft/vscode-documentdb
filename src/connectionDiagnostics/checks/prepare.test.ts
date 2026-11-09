@@ -9,7 +9,9 @@ import {
     ConnectionPreparationError,
     ConnectionReachabilityService,
     LocalPortInUseError,
+    type ConnectionReachabilityResult,
 } from '../../services/connectionReachabilityService';
+import { createKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
 import { type DiagnosticsSetup } from '../input';
 import { type DiagnosticsTarget } from '../types';
 import { createPrepareCheck } from './prepare';
@@ -87,8 +89,8 @@ describe('prepare check', (): void => {
         });
     });
 
-    it.each(['started', 'reused'] as const)(
-        'reports a %s shared tunnel as an info finding that outlives the run',
+    it.each(['started', 'reused', 'externalAssumed'] as const)(
+        'reports a %s shared tunnel outcome as an info finding',
         async (tunnel): Promise<void> => {
             ConnectionReachabilityService.registerProvider({
                 id: 'kubernetes-port-forward',
@@ -103,9 +105,91 @@ describe('prepare check', (): void => {
                 status: 'pass',
                 facts: { providerId: 'kubernetes-port-forward', elapsedMs: expect.any(Number), tunnel },
                 findings: [
-                    expect.objectContaining({ code: 'prepare.sharedTunnel', severity: 'info', data: { tunnel } }),
+                    {
+                        code: 'prepare.sharedTunnel',
+                        severity: 'info',
+                        data: { tunnel },
+                        detail: {
+                            language: 'en',
+                            text:
+                                tunnel === 'externalAssumed'
+                                    ? 'The local port is in use by another program, which may be a Kubernetes port forward.'
+                                    : 'The Kubernetes port forward is shared and stays open after this run.',
+                        },
+                    },
                 ],
             });
+        },
+    );
+
+    it.each(['started', 'reused'] as const)(
+        'records only the verified %s tunnel metadata, including ready-pod evidence',
+        async (tunnel): Promise<void> => {
+            ConnectionReachabilityService.registerProvider({
+                id: 'kubernetes-port-forward',
+                appliesTo: (): boolean => true,
+                ensureReachable: async (_properties, _clusterId, intent): Promise<ConnectionReachabilityResult> => {
+                    expect(intent?.verifyEndpoint).toBe(true);
+                    return { sharedTunnel: tunnel };
+                },
+            });
+            const connectionProperties = {
+                kubernetesPortForward: createKubernetesPortForwardMetadata(
+                    'private-source-id',
+                    'arn:aws:eks:region:123456789012:cluster/private-cluster',
+                    { namespace: 'private-ns', serviceName: 'private-svc', port: 10260, portName: 'private-port' },
+                    10261,
+                    'private-source-label',
+                ),
+            };
+            const result = await createPrepareCheck(target, (): DiagnosticsSetup => ({
+                ...setup,
+                connectionProperties,
+            })).run(context, new AbortController().signal);
+            expect(result.facts).toEqual({
+                providerId: 'kubernetes-port-forward',
+                elapsedMs: expect.any(Number),
+                tunnel,
+                providerIdentifiers: {
+                    kubeContext: 'arn:aws:eks:region:123456789012:cluster/private-cluster',
+                    namespace: 'private-ns',
+                    service: 'private-svc',
+                },
+                servicePort: 10260,
+                localPort: 10261,
+                readyPodFound: true,
+            });
+            expect(JSON.stringify(result)).not.toMatch(/private-source|private-port/);
+        },
+    );
+
+    it.each([
+        ['other', 'started'],
+        ['kubernetes-port-forward', 'externalAssumed'],
+        ['kubernetes-port-forward', undefined],
+    ] as const)(
+        'omits metadata and ready-pod claims for provider %s and outcome %s',
+        async (id, tunnel): Promise<void> => {
+            ConnectionReachabilityService.registerProvider({
+                id,
+                appliesTo: (): boolean => true,
+                ensureReachable: async (): Promise<ConnectionReachabilityResult> => ({ sharedTunnel: tunnel }),
+            });
+            const connectionProperties = {
+                kubernetesPortForward: createKubernetesPortForwardMetadata(
+                    'source',
+                    'private-context',
+                    { namespace: 'private-ns', serviceName: 'private-svc', port: 10260 },
+                    10260,
+                ),
+            };
+            const result = await createPrepareCheck(target, (): DiagnosticsSetup => ({
+                ...setup,
+                connectionProperties,
+            })).run(context, new AbortController().signal);
+            expect(result.facts).not.toHaveProperty('providerIdentifiers');
+            expect(result.facts).not.toHaveProperty('readyPodFound');
+            expect(JSON.stringify(result)).not.toMatch(/private-context|private-ns|private-svc/);
         },
     );
 

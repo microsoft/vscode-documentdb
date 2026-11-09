@@ -18,6 +18,7 @@ export const diagnosticsIdentifierKeys: Readonly<Record<string, IdentifierKind>>
     'roles.db': 'database',
     answeredBy: 'host',
     seedHosts: 'host',
+    'providerIdentifiers.kubeContext': 'kubeContext',
     'providerIdentifiers.service': 'service',
     'providerIdentifiers.namespace': 'namespace',
 });

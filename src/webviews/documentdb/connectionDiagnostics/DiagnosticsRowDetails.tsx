@@ -241,57 +241,102 @@ function EvidenceView({ evidence, styles }: { evidence: PanelEvidenceDetail; sty
     switch (evidence.kind) {
         case 'connectionSettings': {
             const hiddenValue = <span className={styles.muted}>{l10n.t('(hidden)')}</span>;
+            const portForward = evidence.kubernetesPortForward;
             const sourceNote = evidence.authSource && authSourceNote(evidence.authSource.origin);
             return (
-                <StatusListDetailsFacts
-                    items={[
-                        evidence.scheme !== undefined && { term: l10n.t('Scheme'), value: evidence.scheme, mono: true },
-                        evidence.hosts.length > 0 && {
-                            term: evidence.hosts.length === 1 ? l10n.t('Host') : l10n.t('Hosts'),
-                            value: <ValueList styles={styles} values={evidence.hosts.map(code)} />,
-                        },
-                        evidence.user !== undefined && { term: l10n.t('User'), value: evidence.user, mono: true },
-                        evidence.passwordPresent && { term: l10n.t('Password'), value: hiddenValue },
-                        evidence.authMethod !== undefined && {
-                            term: l10n.t('Authentication method'),
-                            value: authMethodText(evidence.authMethod),
-                        },
-                        evidence.authSource !== undefined && {
-                            term: l10n.t('Authentication database'),
-                            value: (
-                                <>
-                                    {code(evidence.authSource.value)}
-                                    {sourceNote && <span className={styles.muted}> {sourceNote}</span>}
-                                </>
-                            ),
-                        },
-                        {
-                            term: l10n.t('Options'),
-                            value:
-                                evidence.options.length > 0 ? (
+                <>
+                    <StatusListDetailsFacts
+                        items={[
+                            evidence.scheme !== undefined && { term: l10n.t('Scheme'), value: evidence.scheme, mono: true },
+                            evidence.hosts.length > 0 && {
+                                term: evidence.hosts.length === 1 ? l10n.t('Host') : l10n.t('Hosts'),
+                                value: (
                                     <ValueList
                                         styles={styles}
-                                        values={evidence.options.map((option) => (
+                                        values={evidence.hosts.map((host): ReactNode => (
                                             <>
-                                                {code(`${option.name} = `)}
-                                                {option.hidden || option.value === undefined
-                                                    ? hiddenValue
-                                                    : code(option.value)}
-                                                {option.source === 'dns' && (
+                                                {code(host)}
+                                                {portForward && host === `127.0.0.1:${portForward.localPort}` && (
                                                     <span className={styles.muted}>
                                                         {' '}
-                                                        {l10n.t('(from DNS TXT record)')}
+                                                        {l10n.t('(local end of the Kubernetes port forward)')}
                                                     </span>
                                                 )}
                                             </>
                                         ))}
                                     />
-                                ) : (
-                                    <span className={styles.muted}>{l10n.t('None')}</span>
                                 ),
-                        },
-                    ]}
-                />
+                            },
+                            evidence.user !== undefined && { term: l10n.t('User'), value: evidence.user, mono: true },
+                            evidence.passwordPresent && { term: l10n.t('Password'), value: hiddenValue },
+                            evidence.authMethod !== undefined && {
+                                term: l10n.t('Authentication method'),
+                                value: authMethodText(evidence.authMethod),
+                            },
+                            evidence.authSource !== undefined && {
+                                term: l10n.t('Authentication database'),
+                                value: (
+                                    <>
+                                        {code(evidence.authSource.value)}
+                                        {sourceNote && <span className={styles.muted}> {sourceNote}</span>}
+                                    </>
+                                ),
+                            },
+                            {
+                                term: l10n.t('Options'),
+                                value:
+                                    evidence.options.length > 0 ? (
+                                        <ValueList
+                                            styles={styles}
+                                            values={evidence.options.map((option) => (
+                                                <>
+                                                    {code(`${option.name} = `)}
+                                                    {option.hidden || option.value === undefined
+                                                        ? hiddenValue
+                                                        : code(option.value)}
+                                                    {option.source === 'dns' && (
+                                                        <span className={styles.muted}>
+                                                            {' '}
+                                                            {l10n.t('(from DNS TXT record)')}
+                                                        </span>
+                                                    )}
+                                                </>
+                                            ))}
+                                        />
+                                    ) : (
+                                        <span className={styles.muted}>{l10n.t('None')}</span>
+                                    ),
+                            },
+                        ]}
+                    />
+                    {portForward && (
+                        <StatusListDetailsSection title={l10n.t('Kubernetes port forward')}>
+                            <StatusListDetailsFacts
+                                items={[
+                                    { term: l10n.t('Kubernetes context'), value: portForward.context, mono: true },
+                                    { term: l10n.t('Namespace'), value: portForward.namespace, mono: true },
+                                    {
+                                        term: l10n.t('Service'),
+                                        value: `${portForward.service}:${portForward.servicePort}`,
+                                        mono: true,
+                                    },
+                                    { term: l10n.t('Local port'), value: String(portForward.localPort), mono: true },
+                                    {
+                                        term: l10n.t('Port forward'),
+                                        value:
+                                            portForward.tunnel === 'started'
+                                                ? l10n.t('Started by this check')
+                                                : l10n.t('Already open (reused)'),
+                                    },
+                                    portForward.readyPodFound && {
+                                        term: l10n.t('Backend'),
+                                        value: l10n.t('Ready pod found at check time'),
+                                    },
+                                ]}
+                            />
+                        </StatusListDetailsSection>
+                    )}
+                </>
             );
         }
         case 'setup':

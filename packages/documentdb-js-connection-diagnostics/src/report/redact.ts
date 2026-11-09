@@ -23,6 +23,7 @@ const prefixes: Readonly<Record<IdentifierKind, string>> = {
     proxyHost: 'proxy',
     service: 'service',
     namespace: 'namespace',
+    kubeContext: 'context',
 };
 const optionLists = new Set(['options', 'txtOptions', 'effectiveNetworkOptions']);
 const protectedKeys = new Set([

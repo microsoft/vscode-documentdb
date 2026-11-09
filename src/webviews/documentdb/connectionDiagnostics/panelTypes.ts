@@ -143,6 +143,16 @@ export interface PanelAuthSource {
     readonly origin: 'uri' | 'dns' | 'path' | 'default';
 }
 
+export interface PanelKubernetesPortForward {
+    readonly context: string;
+    readonly namespace: string;
+    readonly service: string;
+    readonly servicePort: number;
+    readonly localPort: number;
+    readonly tunnel: 'started' | 'reused';
+    readonly readyPodFound: boolean;
+}
+
 export type PanelEvidenceDetail =
     | {
           readonly kind: 'connectionSettings';
@@ -155,6 +165,7 @@ export type PanelEvidenceDetail =
           readonly authMethod?: PanelAuthMethod;
           readonly authSource?: PanelAuthSource;
           readonly options: readonly PanelConnectionOption[];
+          readonly kubernetesPortForward?: PanelKubernetesPortForward;
       }
     | {
           readonly kind: 'setup';

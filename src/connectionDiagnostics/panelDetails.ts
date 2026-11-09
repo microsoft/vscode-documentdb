@@ -23,6 +23,7 @@ import {
     type PanelConnectionOption,
     type PanelEvidenceDetail,
     type PanelFindingDetail,
+    type PanelKubernetesPortForward,
     type PanelRow,
     type PanelRowDetails,
     type PanelRowId,
@@ -388,6 +389,41 @@ function authSourceOf(parsed: CheckResult<FindingCode>, options: readonly PanelC
     return { value: 'admin', origin: 'default' };
 }
 
+function kubernetesPortForwardOf(results: readonly CheckResult<FindingCode>[]): PanelKubernetesPortForward | undefined {
+    const prepare = results.find((result): boolean => result.checkId === 'prepare');
+    if (prepare?.status !== 'pass' || prepare.facts.providerId !== 'kubernetes-port-forward') {
+        return undefined;
+    }
+    const { tunnel } = prepare.facts;
+    const identifiers = record(prepare.facts.providerIdentifiers);
+    const context = text(identifiers, 'kubeContext');
+    const namespace = text(identifiers, 'namespace');
+    const service = text(identifiers, 'service');
+    const servicePort = finiteNumber(prepare.facts, 'servicePort');
+    const localPort = finiteNumber(prepare.facts, 'localPort');
+    const validPort = (port: number | undefined): port is number =>
+        port !== undefined && Number.isInteger(port) && port > 0 && port <= 65535;
+    if (
+        (tunnel !== 'started' && tunnel !== 'reused') ||
+        !context ||
+        !namespace ||
+        !service ||
+        !validPort(servicePort) ||
+        !validPort(localPort)
+    ) {
+        return undefined;
+    }
+    return {
+        context,
+        namespace,
+        service,
+        servicePort,
+        localPort,
+        tunnel,
+        readyPodFound: prepare.facts.readyPodFound === true,
+    };
+}
+
 /**
  * The connection string as parsed by the package, plus TXT options from SRV (a later row) and the
  * chosen authentication method. Option values come only from options the package marks as not
@@ -417,12 +453,14 @@ function connectionSettingsEvidence(
     const credentials = results.find((result): boolean => result.checkId === 'credentials');
     const authMethod = knownAuthMethod(credentials?.facts.authMethod);
     const user = text(facts, 'userName');
+    const kubernetesPortForward = kubernetesPortForwardOf(results);
     return [
         {
             kind: 'connectionSettings',
             ...(scheme ? { scheme } : {}),
             hosts,
             ...(user ? { user } : {}),
+            ...(kubernetesPortForward ? { kubernetesPortForward } : {}),
             passwordPresent: facts.passwordPresent === true,
             ...(authMethod ? { authMethod } : {}),
             // Authentication without credentials has no source to look the user up in.

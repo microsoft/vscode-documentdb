@@ -72,6 +72,21 @@ describe('diagnostics telemetry boundaries', (): void => {
         expect(JSON.stringify(ctx.telemetry)).not.toContain('secret');
     });
 
+    it('does not copy Kubernetes preparation identifiers into telemetry', (): void => {
+        const ctx = context();
+        applyCheckTelemetry(ctx, [{
+            checkId: 'prepare', status: 'pass', durationMs: 1,
+            facts: {
+                providerId: 'kubernetes-port-forward', tunnel: 'reused',
+                providerIdentifiers: { kubeContext: 'private-context', namespace: 'private-ns', service: 'private-svc' },
+                servicePort: 10260, localPort: 10260, readyPodFound: true,
+            },
+            findings: [{ code: 'prepare.sharedTunnel', severity: 'info', data: { tunnel: 'reused' }, detail: { language: 'en', text: '' } }],
+        }], 1);
+        expect(ctx.telemetry.properties.findingCodes).toBe('prepare.sharedTunnel');
+        expect(JSON.stringify(ctx.telemetry)).not.toMatch(/private-|providerIdentifiers|kubeContext|namespace|servicePort|localPort|readyPodFound/);
+    });
+
     it('masks raw, parsed and encoded credentials without recording malformed parser errors', (): void => {
         const ctx = context();
         configureDiagnosticsTelemetry(ctx);

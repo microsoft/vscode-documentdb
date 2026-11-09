@@ -11,6 +11,7 @@ import {
     type ConnectionReachabilityObserver,
     type ConnectionReachabilityResult,
 } from '../../services/connectionReachabilityService';
+import { getKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
 import { httpStatus } from '../../utils/connectionErrorClassification';
 import { type PrepareFailedData } from '../findingData';
 import { type DiagnosticsSetup } from '../input';
@@ -31,7 +32,13 @@ function sharedTunnel(outcome: NonNullable<ConnectionReachabilityResult['sharedT
         code: 'prepare.sharedTunnel',
         severity: 'info',
         data: { tunnel: outcome },
-        detail: { language: 'en', text: 'The port-forward tunnel is shared and stays open after this run.' },
+        detail: {
+            language: 'en',
+            text:
+                outcome === 'externalAssumed'
+                    ? 'The local port is in use by another program, which may be a Kubernetes port forward.'
+                    : 'The Kubernetes port forward is shared and stays open after this run.',
+        },
     };
 }
 
@@ -70,9 +77,10 @@ export function createPrepareCheck(
                 },
             };
             signal.throwIfAborted();
+            const setup = getSetup();
             try {
                 await ConnectionReachabilityService.ensureReachable(
-                    getSetup().connectionProperties,
+                    setup.connectionProperties,
                     target.clusterId,
                     observer,
                     { interactive: false, verifyEndpoint: true, signal },
@@ -119,9 +127,30 @@ export function createPrepareCheck(
                 return { status: 'skipped', skippedBecause: { reason: 'notApplicable' }, facts: {}, findings: [] };
             }
             const tunnel = result?.sharedTunnel;
+            const metadata =
+                providerId === 'kubernetes-port-forward' && (tunnel === 'started' || tunnel === 'reused')
+                    ? getKubernetesPortForwardMetadata(setup.connectionProperties)
+                    : undefined;
             return {
                 status: 'pass',
-                facts: { providerId, elapsedMs, ...(tunnel === undefined ? {} : { tunnel }) },
+                facts: {
+                    providerId,
+                    elapsedMs,
+                    ...(tunnel === undefined ? {} : { tunnel }),
+                    ...(metadata === undefined
+                        ? {}
+                        : {
+                              providerIdentifiers: {
+                                  kubeContext: metadata.contextName,
+                                  namespace: metadata.namespace,
+                                  service: metadata.serviceName,
+                              },
+                              servicePort: metadata.servicePort,
+                              localPort: metadata.localPort,
+                              // verifyEndpoint runs before startTunnel, including its reuse paths.
+                              readyPodFound: true,
+                          }),
+                },
                 findings: tunnel === undefined ? [] : [sharedTunnel(tunnel)],
             };
         },
