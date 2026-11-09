@@ -18,7 +18,12 @@ export function getDockerReadinessTelemetryProperties(readiness: DockerReadiness
         dockerOsType: readiness.osType ?? 'unknown',
         dockerCanContinueAnyway: readiness.canContinueAnyway ? 'true' : 'false',
         dockerDaemonReachable: readiness.daemonReachable ? 'true' : 'false',
+        containerEngine: readiness.engine ?? 'unknown',
+        containerEngineEvidence: readiness.engineEvidence ?? 'none',
     };
+    if (readiness.cli) {
+        properties.containerCli = readiness.cli;
+    }
     if (readiness.failureKind === 'unknown' && readiness.diagnosticFingerprint) {
         properties.dockerDiagnosticFingerprint = readiness.diagnosticFingerprint;
     }

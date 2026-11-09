@@ -40,7 +40,61 @@ describe('getDockerReadinessTelemetryProperties', () => {
             dockerOsType: 'unknown',
             dockerCanContinueAnyway: 'true',
             dockerDaemonReachable: 'false',
+            containerEngine: 'unknown',
+            containerEngineEvidence: 'none',
             dockerDiagnosticFingerprint: '0123456789abcdef',
+        });
+    });
+
+    it('records the selected CLI independently from the detected engine', () => {
+        const dockerCliReadiness: DockerReadiness = {
+            ...unknownReadiness(),
+            cli: 'docker',
+            engine: 'docker',
+            engineEvidence: 'selectedCli',
+        };
+        const podmanCliReadiness: DockerReadiness = {
+            ...unknownReadiness(),
+            cli: 'podman',
+            engine: 'podman',
+            engineEvidence: 'selectedCli',
+        };
+        const dockerCliOnPodmanReadiness: DockerReadiness = {
+            ...unknownReadiness(),
+            cli: 'docker',
+            engine: 'podman',
+            engineEvidence: 'serverComponents',
+        };
+
+        expect(getDockerReadinessTelemetryProperties(dockerCliReadiness)).toMatchObject({
+            containerCli: 'docker',
+            containerEngine: 'docker',
+            containerEngineEvidence: 'selectedCli',
+        });
+        expect(getDockerReadinessTelemetryProperties(podmanCliReadiness)).toMatchObject({
+            containerCli: 'podman',
+            containerEngine: 'podman',
+            containerEngineEvidence: 'selectedCli',
+        });
+        expect(getDockerReadinessTelemetryProperties(dockerCliOnPodmanReadiness)).toMatchObject({
+            containerCli: 'docker',
+            containerEngine: 'podman',
+            containerEngineEvidence: 'serverComponents',
+        });
+    });
+
+    it('keeps endpoint-only evidence inferred and the engine unknown', () => {
+        const readiness: DockerReadiness = {
+            ...unknownReadiness(),
+            cli: 'docker',
+            engine: 'unknown',
+            engineEvidence: 'endpointPath',
+        };
+
+        expect(getDockerReadinessTelemetryProperties(readiness)).toMatchObject({
+            containerCli: 'docker',
+            containerEngine: 'unknown',
+            containerEngineEvidence: 'endpointPath',
         });
     });
 
