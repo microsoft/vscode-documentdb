@@ -32,8 +32,9 @@ code:
 
 - **Builds on:** [#1065](https://github.com/microsoft/vscode-documentdb/pull/1065) ·
   `dev/guanzhousong/quickstart-podman-fallback`
-- **Status:** partial implementation; W2 (`8087eb30`), W4 (`fb06ae0d`), and W7 (`31775c89`)
-  complete; W1 and W8 deferred; remaining items are not complete.
+- **Status:** partial implementation; W2 (`8087eb30`), W3 (`1da29012`), W4 (`fb06ae0d`),
+  W6 (`2c8deb28`), and W7 (`31775c89`) complete (5/9); W1, W5, and W8 deferred; W9 is
+  partial documentation maintenance. Remaining items are not complete.
 
 ## Why
 
@@ -286,10 +287,10 @@ Opus 5.5 advised W1, then W2, then parallel W3, W4→W5, W6 and W7; W8 after its
 dependencies; W9 last. Recommendations were W1/W2/W3/W8 on gpt-6.1-sol, W4/W5/W6 on
 gpt-6.1-terra, and W7/W9 on gpt-6-luna. Advisor confidence was 84% for W2 contracts and
 82% overall; leader scheduling confidence was 99%, not a technical decision. The operator
-was unavailable to approve the always-ask gates, so W1 and W8 are parked; source items
-W2–W7 are treated as accepted under /lead's operator-unavailable rule and proceed without
-changing those gates. The shim label remains exactly "Podman (through the Docker CLI)", as
-specified in the source plan; no new label decision is recorded.
+was unavailable to approve the always-ask gates, so W1, W5, and W8 are parked; source items
+W2–W4 and W6–W7 are treated as accepted under /lead's operator-unavailable rule and proceed
+without changing those gates. The shim label remains exactly "Podman (through the Docker
+CLI)", as specified in the source plan; no new label decision is recorded.
 
 - **W2 — Done (2026-11-09), commit `8087eb30`:** Added the positive-evidence classifier,
   optional engine/evidence/serverVersion facts, strict Podman info parsing, and
@@ -299,6 +300,14 @@ specified in the source plan; no new label decision is recorded.
   logic (87%); leader coordination confidence was 99% and selected Sol for cross-module
   impact. Added 48 tests; `npm run build` passed; focused tests passed across five root
   files (157 tests: classifier, probes, readiness service, integration, and tree item).
+- **W3 — Done (2026-11-09), commit `1da29012`:** Sol (`gpt-6.1-sol`) added the
+  reachable-only raw server-components probe and inference-only socket-target resolver.
+  Inference does not claim a platform. Unexpected probe failures produce code-only
+  diagnostics; ordinary optional-probe errors preserve readiness, while caller cancellation
+  propagates. Opus 5.5 confidence: design 86%, core logic 90%, error-logging rework 88%, final
+  review 92%. Added 63 tests (30 service, 33 probes); 210 focused tests across four files and
+  `npm run build` passed. Incidental call counts, mocks, and deferred-probe expectations were
+  updated; intent, outcome/cancel, memory, and stdout assertions remain.
 - **W4 — Done (2026-11-09), commit `fb06ae0d`:** Applied the three Introduction strings
   exactly as specified in source A, keeping the presentation static and updating matching
   browser content assertions; no calls, order, or timing changed. The source item was
@@ -309,6 +318,12 @@ specified in the source plan; no new label decision is recorded.
   declaration check only, rendered UI not yet tested). Pre-existing observation, not a W4
   behavior change: the mount `getDockerStatus` call can probe readiness while Introduction
   is visible; this was not changed and is out of scope.
+- **W6 — Done (2026-11-09), commit `2c8deb28`:** Terra localized neutral host messages and
+  added engine-fact diagnostics/tree tooltips using server version only; no ID, credential,
+  or control-flow changes. The source item was treated as accepted under /lead's
+  operator-unavailable rule. Opus 5.5 review confidence was about 85%. Terra was chosen for
+  the bounded UI/message work. Added 16 cases; 93 focused tests across four files and
+  `npm run build` passed. An initial nested-test failure was corrected.
 - **W7 — Done (2026-11-09), commit `31775c89`:** Added bounded `containerCli` (omitted if
   absent), `containerEngine` (default `unknown`), and `containerEngineEvidence` (default
   `none`), retaining existing `docker*` properties and fingerprint semantics. The source
@@ -322,6 +337,11 @@ specified in the source plan; no new label decision is recorded.
   provider memory requires operator approval of migration/retention. Old records would be
   treated as Docker. Options: ignore mismatched records (advisor recommendation), or revise
   the migration. No decision is approved.
+- **W5 — Deferred, escalated (2026-11-09):** At 80% confidence, the advisor identified
+  always-ask choices about hiding a stale Docker Desktop start label when Podman has positive
+  evidence, new guide URLs/labels, neutral unknown-engine sentences, and exact evidence
+  notes. The operator was unavailable; no W5 UI was implemented. Options: approve the
+  bounded completions (advisor recommendation, not approved) or review the exact wording.
 - **W8 — Deferred, escalated (2026-11-09):** (a) Linux socket-down state has only inferred
   evidence, conflicting with the positive-evidence rule and draft 0009’s stopped-machine
   condition. Options: defer the Linux button and retain copy guidance (advisor
@@ -331,9 +351,14 @@ specified in the source plan; no new label decision is recorded.
   `Default: true` machine and launch by explicit name (advisor recommendation), or retain the
   literal default target. No decision is approved.
 
-All nine source work items remain; W1 and W8 are deferred, not done. Case 1
-(`npm run build` plus focused tests) is required before each code item's commit. Run full
-Case 2 once at the end, including `l10n` and the dedicated browser configuration.
+- **W9 — Partial (2026-11-09):** The user manual and feature README document the implemented
+  subset only. No decision entries were added while the W5/W8 gates remain unresolved; W9
+  is not complete.
+
+All nine source work items remain: W2, W3, W4, W6, and W7 are done; W1, W5, and W8 are
+deferred; W9 is partial. Case 1 (`npm run build` plus focused tests) is required before each
+code item's commit. Run full Case 2 once at the end, including `l10n` and the dedicated
+browser configuration.
 
 Validation per commit (Case 1): `npm run build` plus the touched tests. The full Case 2 list
 runs once at hand-over. Run `npm run l10n` there, because W4 to W6 and W8 change many
@@ -403,4 +428,16 @@ Operator answers, 2026-11-09:
 
 ## Outcome
 
-_To be written at hand-over: what was verified, and just as plainly, what was not._
+W9 remains partial. No 0008/0009 decision entries were recorded while W5/W8 remain blocked.
+
+Case 1 passed for each completed code item (W2, W3, W4, W6, W7). Browser verification passed
+for all 30 existing Local Quick Start routes (10 each in dark, light, and high-contrast),
+with 15 assertions and zero errors or failures. W4's exact Introduction content passed in all
+three themes. The first browser attempt failed because `HOST.setTimeout` was undefined in the
+harness; rerunning the unchanged helper with `setTimeout` bound to `page.waitForTimeout`
+passed. The existing port-18080 server (PID 1830173) was workspace-owned and reused after
+verifying its cwd and W4 source; it was not stopped. The agent's `npm run watch:views` attempt
+could not start because the port was occupied; no agent-started server remains.
+
+Full Case 2 has not run. Live Podman machine start/cancel behavior remains unverified; W1, W5,
+and W8 are still deferred.
