@@ -307,7 +307,9 @@ CLI)", as specified in the source plan; no new label decision is recorded.
   propagates. Opus 5.5 confidence: design 86%, core logic 90%, error-logging rework 88%, final
   review 92%. Added 63 tests (30 service, 33 probes); 210 focused tests across four files and
   `npm run build` passed. Incidental call counts, mocks, and deferred-probe expectations were
-  updated; intent, outcome/cancel, memory, and stdout assertions remain.
+  updated; intent, outcome/cancel, memory, and stdout assertions remain. The initial
+  silent-catch advice was strengthened with the same advisor's approval; there were no other
+  contrary technical verdicts.
 - **W4 — Done (2026-11-09), commit `fb06ae0d`:** Applied the three Introduction strings
   exactly as specified in source A, keeping the presentation static and updating matching
   browser content assertions; no calls, order, or timing changed. The source item was
@@ -351,9 +353,10 @@ CLI)", as specified in the source plan; no new label decision is recorded.
   `Default: true` machine and launch by explicit name (advisor recommendation), or retain the
   literal default target. No decision is approved.
 
-- **W9 — Partial (2026-11-09):** The user manual and feature README document the implemented
-  subset only. No decision entries were added while the W5/W8 gates remain unresolved; W9
-  is not complete.
+- **W9 — Partial (2026-11-09), docs commit `8c2daa71`:** The user manual and feature README
+  document the implemented subset only. No decision entries were added while the W5/W8
+  gates remain unresolved; W9 is not complete. Tooling commit `65c58751` contains generated
+  localization and formatting only.
 
 All nine source work items remain: W2, W3, W4, W6, and W7 are done; W1, W5, and W8 are
 deferred; W9 is partial. Case 1 (`npm run build` plus focused tests) is required before each
@@ -433,11 +436,35 @@ W9 remains partial. No 0008/0009 decision entries were recorded while W5/W8 rema
 Case 1 passed for each completed code item (W2, W3, W4, W6, W7). Browser verification passed
 for all 30 existing Local Quick Start routes (10 each in dark, light, and high-contrast),
 with 15 assertions and zero errors or failures. W4's exact Introduction content passed in all
-three themes. The first browser attempt failed because `HOST.setTimeout` was undefined in the
-harness; rerunning the unchanged helper with `setTimeout` bound to `page.waitForTimeout`
-passed. The existing port-18080 server (PID 1830173) was workspace-owned and reused after
-verifying its cwd and W4 source; it was not stopped. The agent's `npm run watch:views` attempt
-could not start because the port was occupied; no agent-started server remains.
+three themes. The first browser attempt failed because the browser-tool host did not provide
+`setTimeout`; rerunning the unchanged helper with `setTimeout` bound to `page.waitForTimeout`
+passed.
 
-Full Case 2 has not run. Live Podman machine start/cancel behavior remains unverified; W1, W5,
-and W8 are still deferred.
+All eight Case 2 commands and the additional browser-harness command exited 0:
+
+| Command                                                               | Result                                     |
+| --------------------------------------------------------------------- | ------------------------------------------ |
+| `npm run l10n`                                                        | Passed                                     |
+| `npm run prettier-fix`                                                | Passed                                     |
+| `npm run l10n:check`                                                  | Passed                                     |
+| `npm run lint`                                                        | Passed                                     |
+| `npm run build`                                                       | Passed                                     |
+| `npm run typecheck:tests`                                             | Passed                                     |
+| `npx vitest run`                                                      | Passed: 324 files, 5,776 passed, 1 skipped |
+| `npm run package`                                                     | Passed: 202 files, 8.55 MB VSIX            |
+| `npx vitest run --config build/verification/browser/vitest.config.ts` | Passed: 6 files, 79 passed                 |
+
+The command-runner spans total 6m50; first-turn elapsed time was 8m02. Individual
+`prettier-fix` and package durations were not reported.
+
+Models: W2/W3 used gpt-6.1-sol, W4/W6 gpt-6.1-terra, and W7/W9 gpt-6-luna; Opus 5.5 was
+the advisor. Reported summed model time/AIU: W2 2m59/50.2; W3 3m45 cumulative/54.6; W4 1m05/10.6;
+W6 2m00/15.3; W7 1m14/1.2. No W9 or final aggregate is reported here. The advisor
+consultation covered 5 agents and 11 turns: plan (3), W2 review (1), W3 design/review (5),
+W5 design (1), and W6 review (1).
+
+This is not ready for review: W1, W5, and W8 remain parked, W9 is partial, and the full
+four-stage AI pre-review required by `CONTRIBUTING.md` has not been completed and committed.
+Live Podman 5.x/6.x testing on Windows, macOS, and Linux also remains unverified; the
+operator should test those environments before pushing. The button-driven machine-start/cancel
+checks require W8 to be implemented first.
