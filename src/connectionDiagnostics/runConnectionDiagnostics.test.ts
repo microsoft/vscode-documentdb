@@ -576,12 +576,13 @@ describe('runConnectionDiagnostics', (): void => {
             'stable-id',
             {
                 interactive: false,
+                verifyEndpoint: true,
                 signal: expect.any(AbortSignal),
             },
         );
         expect(run.results.find((result): boolean => result.checkId === 'prepare')).toMatchObject({
             status: 'fail',
-            facts: { providerId: 'tunnel', errorName: 'Error' },
+            facts: { providerId: 'other', errorName: 'Error' },
         });
         for (const id of ['srv', 'dns']) {
             expect(run.results.find((result): boolean => result.checkId === id)).toMatchObject({

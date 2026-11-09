@@ -908,14 +908,26 @@ describe('KubernetesResourceItem', () => {
             expectSilent();
         });
 
-        it('wraps an unreachable Kubernetes API as a typed source failure', async () => {
+        it('wraps an unreachable Kubernetes API request as a typed source failure', async () => {
             const apiError = Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:6443'), { code: 'ECONNREFUSED' });
-            mockCreateCoreApi.mockRejectedValue(apiError);
+            const listResources = vi.fn().mockRejectedValue(apiError);
+            const actual = await vi.importActual<typeof KubernetesClient>('../../kubernetesClient');
+            mockLoadConfiguredKubeConfig.mockResolvedValue({
+                makeApiClient: vi.fn().mockReturnValue({ listNamespacedCustomObject: listResources }),
+            });
+            mockResolveDocumentDBCredentials.mockImplementationOnce(actual.resolveDocumentDBCredentials);
 
             const pending = clusterIpItem().getCredentialsForDiagnostics(read());
 
             await expect(pending).rejects.toBeInstanceOf(ConnectionSourceUnavailableError);
             await expect(pending).rejects.toMatchObject({ source: 'kubernetes', sourceError: apiError });
+            expect(mockCreateCoreApi).toHaveBeenCalledExactlyOnceWith(expect.anything(), 'my-ctx');
+            expect(listResources).toHaveBeenCalledExactlyOnceWith({
+                group: 'documentdb.io',
+                version: 'preview',
+                namespace: 'default',
+                plural: 'dbs',
+            });
             expectSilent();
         });
 
