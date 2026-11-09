@@ -5,6 +5,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PortForwardTunnelModule from './portForwardTunnel';
+
 const mockGetSource = vi.fn();
 const mockLoadConfiguredKubeConfig = vi.fn();
 const mockCreateCoreApi = vi.fn();
@@ -33,7 +35,7 @@ vi.mock('../../extensionVariables', () => ({
 }));
 
 vi.mock('./portForwardTunnel', async (importOriginal) => {
-    const original = await importOriginal<typeof import('./portForwardTunnel')>();
+    const original = await importOriginal<typeof PortForwardTunnelModule>();
     return {
         ...original,
         PortForwardTunnelManager: {

@@ -71,7 +71,7 @@ export async function ensureKubernetesPortForward(
             },
             { interactive: intent?.interactive !== false },
         );
-    } catch (error) {
+    } catch (error: unknown) {
         intent?.signal?.throwIfAborted();
         if (
             intent?.interactive !== false ||
