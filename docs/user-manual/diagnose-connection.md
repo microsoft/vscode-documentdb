@@ -123,12 +123,21 @@ data does not include the DocumentDB port, so the extension asks for it, as when
 already entered the port for that VM in this session, it is used without asking. If you close the
 prompt, the result says **Connection not tested**; **Cancel** also closes it.
 
-For a Kubernetes service reached through port forwarding, the check uses the port-forward tunnel that
-is already running for the service, or starts one on the local port the extension would suggest when
-you connect. It never asks for a port. If that local port is used by another program, the
-**Connection settings** step names the port instead of offering to use it. A tunnel the check started
-or used is shared with your other connections to that service and stays open after the check; the
-report says so.
+For a Kubernetes service reached through port forwarding, the check verifies that Kubernetes reports
+a ready pod behind the service before it starts or reuses the tunnel. If the API cannot be read while
+the connection details are being resolved, the **Connection settings** step reports that and stops;
+if preparation finds no ready backend, it reports that instead and does not start or reuse the tunnel.
+Check the service's selected pods and their readiness. If no cached password takes precedence, a 403
+or 404 while reading a credential Secret is shown as the reason **Authentication** is skipped;
+network checks can still run, and the check does not prompt for a password. Missing credential
+fields keep the existing missing-password behavior.
+
+The check never asks for a port. If the suggested local port is in use, **Connection settings**
+names it and does not use a port held by another program or Kubernetes tunnel. Free the port, or for
+a service in the Discovery view set
+`documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy` to `autoSelect` to choose a
+free port, then run the diagnosis again. A tunnel the check started or used is shared with your
+other connections to that service and stays open after the check; the report says so.
 
 ## Read the result
 
@@ -195,11 +204,13 @@ still apply, and so do the diagnostic size limits (16 hosts, 8 addresses per hos
 
 ## Firewalls and IP allowlists
 
-When a connection is refused, times out or cannot be routed, the result says that a firewall or IP
-allowlist may be blocking it, and asks you to check access from the computer or remote host where the
-checks ran, including VPN and network rules. This is a possibility, not a confirmed cause: connection diagnosis
-does not inspect cloud firewall rules. It does not add this hint to a certificate problem or a rejected
-password.
+When a diagnosis fails and its transport evidence is not all explicitly loopback-classified, the
+result may say that a firewall or IP allowlist is blocking it and ask you to check access from the
+computer or remote host where the checks ran, including VPN and network rules. This is a possibility,
+not a confirmed cause: connection diagnosis does not inspect cloud firewall rules. When every error
+finding in failed transport checks is explicitly loopback-classified, the result instead points to
+the local database, container or tunnel and omits the generic firewall hint. An isolated certificate
+problem or rejected password does not get this hint.
 
 An Azure private-link alias resolving to a public address is information, not a warning: it is normal
 outside the cluster's private network and does not prove a private endpoint exists. If the connection

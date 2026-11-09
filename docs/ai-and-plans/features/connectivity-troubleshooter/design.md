@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: design
 status: active
 created: 2026-10-27
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # Diagnose connection: design
@@ -198,9 +198,13 @@ Rules the API is built around:
 
 ### 3.1 Order and dependencies
 
-The extension supplies this order: environment, connection string, prepare, SRV/TXT, the per-host
-DNS → TCP → TLS → `hello` chain, authenticate, connection access, server facts, context hints. The
-result card (4.13) is derived from these results; it is not a check and performs no I/O.
+The package supplies environment, connection string, SRV/TXT, and the per-host DNS → TCP → TLS →
+`hello` chain. The extension composes `extensionEnvironment` after package `environment`, inserts
+`resolveTarget` before `connectionString`, and adds `credentials` and `prepare` after
+`connectionString`; it adds `authenticate` after `hello`, then connection access, server facts and
+context hints. This is the existing check composition, not a provider-check registration API. No
+check is inserted within DNS → TCP → TLS → `hello`. The result card (4.13) is derived from these
+results; it is not a check and performs no I/O.
 
 `dependsOn` lists **required inputs**, not every earlier step:
 
@@ -422,45 +426,42 @@ effective non-secret option and where it came from (URI, TXT record, auth handle
 
 ### 4.3 Prepare (extension)
 
-Runs `ConnectionReachabilityService.ensureReachable` (the Kubernetes port-forward and any future
-provider) before any probe uses the endpoint. Add an optional observer argument to the service that
-reports provider started, completed or failed, with the provider ID and elapsed time. Its
-`Promise<void>` contract and existing callers stay unchanged.
+The existing extension composition reads the target in `resolveTarget`, checks the connection
+string, and adds `credentials` and `prepare` after it on the **Connection settings** row.
+`extensionEnvironment` is added at the start, after package `environment`. The diagnostic read is
+silent and does not start or reuse a tunnel; only `prepare` calls
+`ConnectionReachabilityService.ensureReachable`, under the 15-second preparation timeout.
 
-Stored-connection credential reads opt out of `DocumentDBClusterItem`'s normal reachability hook;
-only this check prepares the endpoint, under the 15-second preparation timeout. Other callers keep
-their existing credential-read behavior.
+Kubernetes target resolution can itself contact the API before `prepare`. DKO and generic Kubernetes
+services first try the DKO credential lookup, which lists DKO resources; a generic service may then
+read its annotated Secret. In diagnostic mode only, a DKO-list 403 for a generic service is ignored
+so that Secret lookup can proceed. A DKO service's DKO-list 403 remains strict, and network failures
+still propagate for both service kinds.
+A Secret 403 or 404 is preserved as a bounded credential-read issue so network checks can continue;
+an observed DKO Secret-read issue stops further diagnostic credential fallback. Ordinary credential
+reads retain their existing best-effort behavior. Consequently, Kubernetes API failures may surface
+in `resolveTarget` or in `prepare`, depending on which operation encounters them; backend
+verification in `prepare` is still required.
 
-No provider claimed the connection: `skipped/notApplicable`. A provider failure fails this check
-and skips the probes that need the prepared endpoint. The report states only what was observed: it
-does not claim a tunnel was newly created rather than reused. A tunnel set up here is the normal
-shared tunnel an ordinary connect would set up; cancellation never closes it.
+The diagnostic call passes `{ interactive: false, verifyEndpoint: true, signal }`. Within diagnosis,
+only `prepare` calls `ConnectionReachabilityService.ensureReachable`. For a Kubernetes ClusterIP,
+the provider checks the service's Endpoints for a ready pod on the service port before starting or
+reusing the normal shared tunnel. A failure is represented by
+`ConnectionPreparationError`, whose bounded reason is `sourceUnreachable`, `accessDenied`,
+`targetNotFound`, `noReadyBackend`, `sourceMissing` or `other`. Its raw `sourceError` is host-only.
+`prepare.failed` contains only `providerId`, `reason`, an allow-listed `errorName`, and optional
+`statusCode`; it never includes the raw error or its message. A preparation failure skips dependent
+probes and authentication, but failed DNS/TCP/TLS/`hello` probes do not by themselves suppress
+authentication. A tunnel started or reused is shared and stays open after the run.
 
-> **Changed:** the service returns no outcome today, so the draft's "reports what it did" could
-> not be implemented. A narrow observer makes it observable without changing what providers do.
+Ordinary connections omit the diagnostic verification intent and keep their existing behavior.
+The Kubernetes provider remains registered at activation through the existing
+`ConnectionReachabilityService`; there is no new registration or check-insertion API.
 
-> **Implemented** (WI-07a) in `2656cd33`: `ConnectionReachabilityService.ensureReachable` takes an optional
-> `ConnectionReachabilityObserver`. The prepare check itself comes in WI-08.
-
-> **Implemented** (WI-08a) in `a5a47fe0`: `src/connectionDiagnostics/checks/prepare.ts`. The SRV and DNS checks
-> depend on `prepare`, which is `notApplicable` when no provider claims the connection.
-
-> **Implemented** (WI-16, pre-review R1/R2 option A,
-> [0036](./decisions.md#0036--the-troubleshooter-reads-connection-details-silently-and-prepares-kubernetes-tunnels-only-in-prepare))
-> in `f0ea55e6`, `d032c9f0`, `1ac3714d`. "Only this check prepares the endpoint" now holds for every
-> node type, not only stored connections: the command reads each node through
-> `getCredentialsForDiagnostics()`, and a Kubernetes ClusterIP discovery node returns the localhost
-> endpoint plus port-forward metadata instead of prompting and starting a tunnel itself. The target is
-> read by a run-scope check, `resolveTarget`, on this row and before the connection-string check, under
-> the whole-run timeout and Cancel. `prepare` calls the providers with
-> `{ interactive: false, signal }`: an occupied local port is `prepare.localPortInUse`, never the
-> tunnel manager's "Use existing" dialog.
-
-> **Changed** (WI-16): providers may now report what they observed, so the report does say whether
-> the shared tunnel was `started` or `reused` (`prepare.sharedTunnel`, info, also in the Output trace's
-> codes). It still stays open after the run. Tests: `checks/prepare.test.ts`,
-> `checks/resolveTarget.test.ts`, `runConnectionDiagnostics.test.ts`, `KubernetesResourceItem.test.ts`,
-> `portForwardTunnel.test.ts`, `src/tree/documentdb/diagnosticCredentialRead.test.ts`.
+> **Implemented:** WI-K2 (`0168783a`) verifies the Kubernetes backend before tunnel start/reuse;
+> WI-K3 (`b1c184a9`) maps preparation errors to bounded findings; WI-K1 (`bc124a25`) preserves
+> diagnostic credential-read failures. The source/API-read order above reflects the current code,
+> including the generic-service DKO-list exception.
 
 ### 4.4 SRV and TXT
 
@@ -538,15 +539,20 @@ No separate "is this machine online" step, and no lookup of an unrelated public 
 | ------- | ------------------- | -------------------------------------------------------------- |
 | package | DNS failed for host | each attempted address and family, outcome and connect latency |
 
-Findings, each with its own next step: `tcp.refused` (nothing listening: wrong port, service stopped,
-local firewall), `tcp.timeout` (dropped silently: firewall, security group, IP allowlist, VPN),
-`tcp.unreachable` (`EHOSTUNREACH`/`ENETUNREACH`: routing, VPN), `tcp.reset`.
+Findings: `tcp.refused`, `tcp.timeout`, `tcp.unreachable` and `tcp.reset`. For loopback-classified
+errors, their next steps point to the local database, container or tunnel and omit generic firewall
+advice. Non-loopback, mixed or unknown address evidence keeps conservative network guidance.
 
 A failed IPv6 attempt does not fail the host if IPv4 succeeds, or the reverse. TLS and `hello` use the
 address that answered, keeping the original host name for SNI and certificate checks. A probe
 socket is not evidence of which address the driver later used. If the effective configuration
 needs a transport the probe cannot reproduce (a proxy option), the probe is
 `skipped/inputUnavailable` with that reason; it never silently tests a direct connection instead.
+
+Transport findings carry the additive `addressClass` (`public`, `private`, `loopback` or `linkLocal`)
+when it is known. TCP classifies the addresses actually attempted and omits the field for mixed or
+unknown attempts; TLS and `hello` classify the address that actually connected, not the host label
+or an unconnected DNS answer.
 
 > **Implemented** (WI-04a) in `e9c164df`: `src/checks/tcp.ts` with injectable sockets (`io.net`).
 > Tests: `src/checks/tcp.test.ts`.
@@ -572,8 +578,9 @@ When the chosen configuration allows a certificate exception, a trust problem is
 failure.
 
 Findings: `tls.notTlsServer` (only on positive evidence of a plaintext reply),
-`tls.handshakeRejectedByServer` (the server closed the handshake; an Atlas IP access list is one
-possible cause, named as such), `tls.selfSigned`, `tls.untrustedIssuer` (missing CA bundle, corporate
+`tls.handshakeRejectedByServer` (the handshake closed before a certificate arrived; the finding does
+not attribute the close to a remote server without evidence, and uses local-endpoint guidance when
+the connected address is loopback), `tls.selfSigned`, `tls.untrustedIssuer` (missing CA bundle, corporate
 TLS inspection), `tls.hostnameMismatch`, `tls.expired`, `tls.notYetValid` (with the local clock and,
 when measured, the clock offset from 4.8 as supporting evidence), `tls.verificationBypassed` (info).
 
@@ -866,11 +873,14 @@ A command timeout produces `check.timeout` and warning status, with the next com
 When the run observed a failure, ask `ErrorExplanationService` about it. Its providers answer in
 registration order (`ClustersExtension.ts`): Local Quick Start, Kubernetes, Atlas, SRV DNS and
 Entra sign-in (#1050); the first answer wins. The explanation is sanitized before it enters a
-result, because provider text may name a target. Platform next steps already supported by providers are added from the facts, such as an Atlas IP
-access list or an Amazon DocumentDB CA bundle. The first release also gives generic firewall,
-IP allowlist, VPN and routing guidance for network failures; it does not inspect cloud firewall
-configuration or claim that a firewall caused the failure. Cloud-platform-specific firewall
-configuration helpers are planned for the next iteration (9).
+result, because provider text may name a target. Platform next steps already supported by providers
+are added from the facts, such as an Atlas IP access list or an Amazon DocumentDB CA bundle. The
+first release also gives generic firewall, IP allowlist, VPN and routing guidance for network
+failures; it does not inspect cloud firewall configuration or claim that a firewall caused the
+failure. When every error finding in the failed transport checks is explicitly loopback-classified,
+the final card suppresses the generic firewall hint and the transport findings point to the local
+endpoint. Non-loopback, mixed or unknown address evidence retains conservative network guidance.
+Cloud-platform-specific firewall configuration helpers are planned for the next iteration (9).
 
 `explain` has telemetry side effects: the service sends `errorExplanation.explained`, and the
 Entra provider sends `entraSignIn.classified` and writes an `[Authentication]` line. Add an optional
@@ -909,12 +919,16 @@ from the check results and performs no I/O.
   If a timeout limited coverage, also show the retry actions from 3.2, including for a Connected
   run with incomplete diagnostic coverage.
 - **Possible firewall cause:** for transport failures, server-selection timeouts or an otherwise
-  unexplained inability to reach the server, the final card and report next steps include:
+  unexplained inability to reach the server, the final card and report next steps include this
+  guidance unless every error finding in the failed transport checks is explicitly
+  loopback-classified:
   "A firewall or IP allowlist may be blocking this connection. Check access from the computer or
   remote host where these checks ran, including VPN and network rules." This is a possibility,
   never a diagnosis. Keep any more specific observed cause first; do not attach this hint to
   an isolated parse error, certificate validation error or explicit credential rejection with no
-  network-failure evidence. Cloud-specific firewall helpers come in the next iteration
+  network-failure evidence. Loopback-only failures instead point to the local database, container
+  or tunnel; non-loopback, mixed or unknown evidence keeps the conservative hint. Cloud-specific firewall
+  helpers come in the next iteration
   ([0033](./decisions.md#0033--network-failures-mention-possible-firewall-blocking-cloud-helpers-come-next)).
 - **Cancelled:** "Check cancelled. The results so far are kept." No report actions.
 
@@ -1642,9 +1656,11 @@ backend. Existing `TDD:` contracts are respected.
 8. A DNS or `hello` probe that takes seven seconds can pass under defaults. A whole-run timeout
    before authentication says **Connection not tested**, not "server unreachable"; the user can
    retry with longer or no diagnostic timeouts and gets a new report without altering the old one.
-9. A blocked or silently dropped connection names a firewall or IP allowlist as a possible cause
-   and directs the user to the network of the actual extension host, without claiming inspection
-   of cloud firewall rules.
+9. A blocked or silently dropped connection with non-loopback, mixed or unknown evidence may name a
+   firewall or IP allowlist as a possible cause and direct the user to the network of the actual
+   extension host, without claiming inspection of cloud firewall rules. When every error finding in
+   failed transport checks is explicitly loopback-classified, the guidance instead points to the
+   local endpoint and omits the generic firewall hint.
 10. Every finding exposes a stable code and `{ language: 'en', text: '...' }` detail in the API;
     the extension's visible wording comes only from its localized code/data message table.
 11. A connection string with `compressors=snappy` to a MongoDB server that accepts snappy is flagged

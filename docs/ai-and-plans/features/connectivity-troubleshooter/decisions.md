@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: decisions
 status: active
 created: 2026-10-27
-updated: 2026-11-06
+updated: 2026-11-09
 ---
 
 # Connectivity troubleshooter: decisions
@@ -65,6 +65,7 @@ updated: 2026-11-06
 | 0050 | Each row shows its duration in a squared badge; the list shades the row under the pointer   | Accepted                  | Operator chose the layout from mocks                               | 2026-11-04 | —   |
 | 0051 | Internal names follow the feature: connection diagnostics                                   | Accepted                  | Operator: full rename now; vocabulary and explanation-layer rename | 2026-11-05 | —   |
 | 0052 | Authentication Details show the sign-in and cluster clouds                                  | Accepted                  | Operator chose O1.B, in Details (review 05)                        | 2026-11-06 | —   |
+| 0053 | Diagnostics verify Kubernetes backends; loopback failures get local guidance                 | Accepted (O1+O6)           | Leader selected generic DKO-list 403 option 2                          | 2026-11-09 | — |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -998,6 +999,12 @@ configuration inspection the first release does not perform.
 - **Include new cloud firewall helpers in the first release.** The operator placed them in the
   next iteration.
 
+**Implementation addendum (2026-11-09; [0053](#0053--diagnostics-verify-kubernetes-backends-loopback-failures-get-local-guidance)):**
+the possible-firewall guidance remains for non-loopback, mixed or unknown address evidence. When all
+errors in failed transport checks are explicitly loopback-classified, the result instead points to
+the local endpoint and omits the generic firewall hint. No cloud firewall inspection or automatic
+rule changes were added.
+
 ---
 
 ## 0034 — Compression and clock offset come from the handshake; DocumentDB answers as a gateway
@@ -1182,6 +1189,14 @@ fixed: a diagnosis may wait for an ordinary connect's **Use existing** prompt un
 timeout or Cancel ends it. An ordinary connect that joins a diagnostic start inherits the accurate
 "port in use" error and misses the **Use existing** offer for that one attempt. The status of point 3
 as a whole is unchanged (Proposed). Commit: `ef7de528`.
+
+**Implementation addendum (2026-11-09; [0053](#0053--diagnostics-verify-kubernetes-backends-loopback-failures-get-local-guidance)):**
+diagnostic preparation now verifies the Kubernetes service backend before starting or reusing its
+shared tunnel. This uses the existing reachability provider and check composition; ordinary
+connections keep their behavior. Kubernetes API access can also fail during target resolution:
+DKO and generic services attempt DKO credential lookup there, and a generic service's DKO-list 403
+exception is limited to that diagnostic lookup path. See [0053](#0053--diagnostics-verify-kubernetes-backends-loopback-failures-get-local-guidance)
+for the selected behavior and provenance.
 
 ## 0037 — The panel borrows the wizard chrome but has no steps
 
@@ -2041,3 +2056,65 @@ Implemented in commit `1047d7a1` ([review 05, UX-6 done note](./iterations/05-ux
   cannot sign in.
 - **C. Mirror the whole report.** No context switch, but overwhelming, and it exposes internal keys.
 - **B on the collapsed line.** Not chosen: the operator placed the facts in Details.
+
+---
+
+## 0053 — Diagnostics verify Kubernetes backends; loopback failures get local guidance
+
+**Status:** O1+O6 accepted; generic-service DKO-list 403 behavior leader-selected under later
+autonomous instruction · **Date:** 2026-11-09 · **Raised by:** issue #1069 review; operator direction
+
+**Context:** the #1069 review found that a Kubernetes ClusterIP port-forward can bind locally before
+the backend is known to be ready, making subsequent transport failures look like a server or
+firewall problem. The credential read also needed to distinguish source failures from an absent
+password. The review recommended O1 (use the existing `prepare` step) and O6 (loopback-aware
+transport guidance).
+
+### Decision
+
+1. **O1 — verify Kubernetes preparation in the existing step.** Connection diagnosis passes
+   `verifyEndpoint: true` in its existing `prepare` check. For a Kubernetes ClusterIP, the provider
+   checks the service's Endpoints for a ready pod on the service port before starting or reusing the
+   tunnel. No check slot, package-runner change or insertion into DNS → TCP → TLS → `hello` is added.
+   The existing `extensionEnvironment` and `prepare` composition points remain in the extension
+   runner. A preparation failure skips dependent probes and authentication; an earlier DNS, TCP,
+   TLS or `hello` failure alone does not suppress authentication. Ordinary connections do not request
+   endpoint verification and retain their behavior. A started or reused tunnel remains shared and
+   open after diagnosis.
+2. **Bounded preparation evidence.** `ConnectionPreparationError` uses the reasons
+   `sourceUnreachable`, `accessDenied`, `targetNotFound`, `noReadyBackend`, `sourceMissing` and
+   `other`. Its raw `sourceError` is host-only. A `prepare.failed` finding carries only
+   `providerId`, `reason`, an allow-listed `errorName` and optional `statusCode`; raw messages are
+   not included in diagnostic results or reports.
+3. **Diagnostic credential reads.** They preserve source failures instead of treating them as a
+   missing password. Kubernetes DKO and generic services attempt DKO credential lookup during
+   target resolution; generic services may then read their annotated Secret. Only a generic
+   service's diagnostic DKO-list 403 is ignored to allow that Secret lookup. A DKO service's
+   DKO-list 403 remains strict, and network failures propagate for both service kinds. Secret
+   403/404 issues can be reported while network checks continue; an observed DKO Secret-read issue
+   stops further diagnostic credential fallback. Missing Secret fields retain the existing
+   missing-password behavior, an already cached password wins, and ordinary credential fallback is
+   unchanged.
+4. **O6 — loopback-aware transport guidance.** Package transport findings add
+   `addressClass` (`public`, `private`, `loopback` or `linkLocal`) when known. TCP derives it from
+   the actual attempted addresses and omits it for mixed or unknown attempts; TLS and `hello` use
+   the address that actually connected. When all errors in failed transport checks are explicitly
+   loopback-classified, local endpoint guidance replaces the generic firewall hint. Non-loopback,
+   mixed or unknown evidence keeps conservative network guidance.
+
+### Scope and provenance
+
+The operator approved O1+O6 and excluded O7/K5. O2/K6 remains an optional deferred enhancement.
+O3 (registered check slots) is not now; O4 (numeric priorities) and O5 (a Kubernetes branch in the
+generic runner) are rejected.
+
+For the generic-service DKO-list 403 question, the operator was initially unavailable, requested
+the advisor's options, and paused the work. After the options were presented, the operator said
+"make good decisions and keep working" and "Keep working autonomously until the task is truly
+finished." Under that later instruction, the leader selected option 2, the high-confidence
+recommendation from Opus: ignore only the generic-service diagnostic DKO-list 403 so an annotated
+Secret can still be tried. This was the leader's selection under the later instruction, not an
+explicit operator selection; no further rationale is attributed to the operator.
+
+Implemented in WI-K1 (`bc124a25`), WI-K2 (`0168783a`), WI-K3 (`b1c184a9`) and WI-G1
+(`1cd90a0f`).

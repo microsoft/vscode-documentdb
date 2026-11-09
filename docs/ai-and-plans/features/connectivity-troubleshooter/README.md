@@ -3,7 +3,7 @@ feature: connectivity-troubleshooter
 kind: notes
 status: active
 created: 2026-10-27
-updated: 2026-11-06
+updated: 2026-11-09
 code:
   - packages/documentdb-js-connection-diagnostics/**
   - src/connectionDiagnostics/**
@@ -96,8 +96,12 @@ not a configuration or permissions audit.
   ([0041](./decisions.md#0041--the-panel-never-names-dns-libraries-and-the-result-card-is-a-short-outcome-summary)).
 - **Firewall guidance without a false diagnosis.** A network failure's final card and report say
   a firewall or IP allowlist may be blocking the connection, and name the network where the checks
-  ran. Cloud-platform-specific firewall configuration helpers are for the next iteration, not
-  this release ([0033](./decisions.md#0033--network-failures-mention-possible-firewall-blocking-cloud-helpers-come-next)).
+  ran, unless all error findings in failed transport checks are explicitly loopback-classified;
+  then the advice points to the local endpoint and omits the generic firewall hint. Non-loopback,
+  mixed or unknown address evidence keeps the conservative network guidance. Cloud-platform-specific
+  firewall configuration helpers are for the next iteration, not this release
+  ([0033](./decisions.md#0033--network-failures-mention-possible-firewall-blocking-cloud-helpers-come-next),
+  [0053](./decisions.md#0053--diagnostics-verify-kubernetes-backends-loopback-failures-get-local-guidance)).
 - **Says where it ran.** The first step, "Diagnosis setup", names this computer or the remote
   host ([0014](./decisions.md#0014--the-first-step-says-where-the-checks-run)).
 - **Readable diagnostics.** Show report opens a Markdown report in VS Code's preview; the
@@ -296,7 +300,9 @@ None in the design. Known limits:
 - US Government sign-in cannot be verified until the service-side preauthorization rolls out
   (sovereign-clouds D1).
 - Cloud-platform-specific firewall configuration helpers are planned for the next iteration; the
-  first release only explains possible blocking and existing provider hints.
+  first release gives conservative possible-blocking guidance for non-loopback, mixed or unknown
+  network evidence, and local endpoint guidance when all error findings in failed transport checks
+  are explicitly loopback-classified.
 - **Still to check (operator, 2026-11-02):** whether the Authentication row's Microsoft Entra ID
   details should show sovereign-cloud information: selected cloud, the cluster's cloud, the
   requested token resource and how it was chosen (design 4.9.2, "Sign-in configuration").
@@ -310,5 +316,9 @@ None in the design. Known limits:
    expanded Details, hard-to-reproduce cloud/SRV scenarios, and inline language suggestions.
 5. [GitHub Copilot feedback assessment](./iterations/06-copilot-review.md) for the four comments
    posted on 2026-11-06, their severity, evidence, and recommended solutions with alternatives.
-6. History only when needed: [iterations/](./iterations/) (the implementation review and the
+6. [Kubernetes port-forward review](./iterations/07-kubernetes-port-forward-review.md) for issue
+   [#1069](https://github.com/microsoft/vscode-documentdb/issues/1069): the reproduced failures,
+   option analysis and implementation history; [decision 0053](./decisions.md#0053--diagnostics-verify-kubernetes-backends-loopback-failures-get-local-guidance)
+   records the selected scope.
+7. History only when needed: [iterations/](./iterations/) (the implementation review and the
    work-item log).
