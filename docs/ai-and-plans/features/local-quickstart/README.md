@@ -62,8 +62,8 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   and Done and have concise factual summaries; explanations and recovery actions remain in the
   failure block. Full image and container IDs are available through mouse and keyboard tooltips.
   Checking reports which Docker and Podman executables are on PATH but probes only the selected engine, without
-  explanatory notes in its Details. Active pulling shows the known image and origin, and the latest
-  bounded engine-output line when available, not an estimated percentage. Sample-data loading
+  explanatory notes in its Details. Active pulling uses one non-wrapping summary line: known image
+  and origin initially, replaced by bounded engine output when available, not an estimated percentage. Sample-data loading
   failure is also called out on success. No step durations are recorded
   ([0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did)).
 - **Docker is preferred; Podman is the fallback.** Docker Engine and Docker Desktop are supported.

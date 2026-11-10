@@ -40,9 +40,10 @@ The instance tooltip names an engine only when positive evidence identifies it. 
 
 The first setup stage heading reads **Checking container engine**, and its detail line still uses the raw CLI version output. Redesigned findings and engine-specific guides have not shipped yet.
 
-The setup view shows pull, create, start, and connection-readiness progress. While pulling, it shows
-the known image and custom or reused origin, plus the latest engine-output line when available.
-This line reports activity, not a completion estimate. Container-engine command output is also
+The setup view shows pull, create, start, and connection-readiness progress. While pulling, one
+status line shows the known image and origin until engine output is available, then shows that
+output instead. Long text is ellipsized to prevent layout shifts; hover to see the full line.
+This reports activity, not a completion estimate. Container-engine command output is also
 written to the **DocumentDB Local Setup** output channel.
 
 Select **Details** on a completed or failed setup stage to see the facts available for that stage.

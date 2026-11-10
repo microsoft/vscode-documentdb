@@ -268,3 +268,37 @@ or hiding controls; this fix reserves one normal detail line, not arbitrary
 future wrapped height. No new wording, persisted data, timing or telemetry was
 introduced. Case 2 remains deferred while the PR is draft; the complete suite
 passed for the preceding follow-up. The temporary scenario helper was stopped.
+
+## Active engine-output layout correction — 2026-11-10
+
+**Done, commit `5f9d7f46`:** the operator clarified that the shifting content was
+the engine output stacked below the image, not the Creating container summary.
+They explicitly allowed dropping the already-selected image from that status
+line. The active pull now shows exactly one non-wrapping line: image and origin
+before output, then literal engine output instead. Long text is ellipsized
+visually while the full text remains in the DOM, title and setup log. The width
+constraint applies only to active pulling; no settled Details controls are clipped.
+The earlier row-reservation fix remains useful for completed stage summaries.
+
+Advised (Opus 5.5, medium-high confidence): approved the replacement design.
+The implementation review found no concrete issue in the renderer, single-line
+styles or changed assertions (85% confidence); its tool budget ended before
+reviewing the row wrapper. The leader completed that small CSS scope review
+(95% confidence: active-only copy growth and span max-width, with no lifecycle
+changes) and measured the actual browser behavior rather than assuming it.
+Terra implemented the change; the existing announcement, telemetry, controls,
+cleanup and escaping assertions were retained. One regression was added and the
+old stacking-specific expectations were updated to the operator's new requirement.
+
+Case 1 verification: build and root type check passed; all **261 webview tests**
+and **31 browser scenario contract tests** passed. All **45 live Local Quick Start
+routes** passed. Across dark, light and high contrast at **440, 600, 900 and
+1280 px** viewports, the active pull stayed **37 px** high for a long image
+fallback, short output and 160-character output; the following row moved **0 px**.
+The full title was retained, output remained on one line within the row, the
+image was absent once output appeared, and polite announcements were unchanged.
+No localization key, host streaming behavior or telemetry changed.
+
+The temporary scenario helper was stopped after verification. The PR remains
+draft; Case 2 formatting, localization, lint and packaging are deferred until
+ready for review, rather than rerun for this scoped correction.

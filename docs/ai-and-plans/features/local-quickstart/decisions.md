@@ -479,3 +479,9 @@ Long image and container IDs retain full values in mouse and keyboard tooltips, 
 the previous image ID when already available. Active pulling shows the known image and origin and
 the latest bounded engine-output line when available, without an invented completion estimate.
 The decision to omit durations remains unchanged.
+
+The operator later clarified that stacking engine output below the image caused the layout shift.
+Active pulling therefore uses one non-wrapping line: image and origin before output arrives, then
+engine output instead of the already-selected image. Long text is ellipsized visually, not removed
+from the DOM; its full value remains in the title and setup log. This supersedes the earlier
+two-line active-pull presentation.

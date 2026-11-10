@@ -236,9 +236,11 @@ or active, so adding its summary does not move the following rows. Longer conten
 naturally in narrow panels. Checking reports PATH presence for both CLI
 executables but probes only the selected engine; its Details omit explanatory notes. Long image
 and container IDs are shortened visually and their full values are available via mouse and keyboard
-tooltips. An updated image includes its previous ID when already known. While pulling, the known
-image and custom or reused origin appear with the latest bounded engine-output line when available;
-this is literal activity, not an estimated completion percentage. A failed stage does not expand automatically: the
+tooltips. An updated image includes its previous ID when already known. While pulling, one summary
+line initially shows the known image and origin; the latest bounded engine output replaces it once
+available. This active line never wraps: long text is ellipsized visually, with the full value in its
+title and the setup log. It reports literal activity, not an estimated completion percentage.
+A failed stage does not expand automatically: the
 explanation and recovery actions remain visible in the message block below the list. The checking
 row retains its last-checked time and re-check action; its Details replaces the old Docker-check
 accordion. See [0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did).
