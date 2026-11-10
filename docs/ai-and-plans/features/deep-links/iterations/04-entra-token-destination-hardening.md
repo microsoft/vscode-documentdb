@@ -7,9 +7,19 @@ code:
     - src/documentdb/auth/oidcAllowedHosts.ts
     - src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts
     - src/documentdb/auth/ManagedIdentityAuthHandler.ts
+    - src/documentdb/auth/documentdbTokenResource.ts
+    - src/documentdb/utils/tlsException.ts
     - src/documentdb/playground/WorkerSessionManager.ts
     - src/documentdb/playground/playgroundWorker.ts
+    - src/documentdb/playground/PlaygroundEvaluator.ts
+    - src/documentdb/shell/ShellSessionManager.ts
     - src/documentdb/wizards/authenticate/ChooseAuthMethodStep.ts
+    - src/commands/newConnection/PromptConnectionStringStep.ts
+    - src/commands/newConnection/PromptAuthMethodStep.ts
+    - src/commands/updateCredentials/updateCredentials.ts
+    - src/commands/updateCredentials/PromptAuthMethodStep.ts
+    - src/commands/updateConnectionString/ExecuteStep.ts
+    - src/tree/connections-view/DocumentDBClusterItem.ts
     - src/vscodeUriHandler.ts
 ---
 
@@ -17,14 +27,26 @@ code:
 
 > **Status:** proposed for review; not approved or implemented.
 > This file records the proposal, not a claim that the vulnerability has been fixed.
+>
+> **Extended 2026-11-10** with endpoint-inventory and driver-enforcement research
+> ([Research findings](#research-findings-2026-11-10)). Those findings found two further ways a
+> token can reach an unapproved or unauthenticated server: a URI `ENVIRONMENT` property disables the
+> driver's host check, and URI TLS-bypass parameters survive into Entra connections. They also
+> identify a supported per-connection enforcement point. The design, work items and acceptance
+> matrix below were revised accordingly.
 
 ## Goal
 
 Prevent an externally supplied connection from causing the DocumentDB extension to send an Entra
 database access token to an untrusted server. Enforce the same destination policy for URL links,
-pasted connection strings, saved connections, managed identity, and shell/playground sessions.
+pasted connection strings, edited connection strings, saved connections, managed identity, and
+shell/playground sessions.
 
-Related intent: [deep links](../README.md) and [sovereign clouds](../../sovereign-clouds/README.md).
+Related intent: [deep links](../README.md), [sovereign clouds](../../sovereign-clouds/README.md),
+[managed identities](../../managed-identities/README.md) and [SRV DNS fallback](../../srv-dns-fallback/README.md).
+The connectivity troubleshooter's private-endpoint DNS work (not yet on this branch:
+`docs/ai-and-plans/features/connectivity-troubleshooter/` on `dev/tnaum/connectivity-troubleshooter`)
+supplied the private-link host forms in [R6](#r6-endpoint-inventory-wi1-evidence).
 
 ## Problem and existing defenses
 
@@ -40,22 +62,292 @@ subsequently fails. This is not a zero-click attack.
 
 The credential at risk is a database-audience access token, not a password or refresh token, and not
 automatically an ARM or Microsoft Graph token. It is not bound to the particular database hostname
-in the link. Replay is constrained by audience, identity permissions, expiry, policies, and network
-access.
+in the link. Its audience, `https://ossrdbms-aad.database.windows.net` (with per-cloud equivalents),
+is the shared Azure OSS RDBMS resource, not a DocumentDB-only one ([R5](#r5-the-token-audience-is-shared-with-other-azure-database-services)).
+Replay is therefore possible against any DocumentDB cluster **or Azure Database for PostgreSQL or
+MySQL server** where the identity holds a database role and the attacker has network access. It is
+still constrained by expiry, Conditional Access policies and network access.
 
-Retain the existing defenses:
+Retain the existing defenses, with the limits found in the research:
 
 - Mandatory confirmation before a link adds a new connection.
 - Removal of URL-supplied certificate-validation bypasses, with the existing loopback exception.
-- Driver validation of OIDC destinations after initial SRV resolution.
+  **Links only:** pasted and saved strings keep bypass parameters for public hosts, and Entra uses
+  them ([R3](#r3-certificate-validation-bypass-survives-into-entra-connections)).
+- Driver validation of OIDC destinations after initial SRV resolution. **Seed hosts only, once,
+  and skipped entirely when `ENVIRONMENT` is present** ([R1](#r1-what-the-driver-actually-enforces)).
 - Extension-controlled token audiences and removal of competing URI authentication properties.
+  **Main-thread handlers and managed-identity paste only:** links and the shell/playground worker
+  keep them ([R2](#r2-competing-uri-authentication-properties-survive-on-two-paths)).
 - ARM-derived endpoints for `/connect/azure`, rather than a URL-supplied database endpoint.
+- For interactive sign-in, the host/cloud mismatch check (`documentdbTokenResource.ts:156`). It
+  already stops a Government- or China-signed-in user from requesting a token for a public-cloud
+  host ([R7](#r7-customer-controlled-names-inside-todays-wildcards)).
 
 The preceding read-only review demonstrated the broad-allowlist path with the real authentication
 handler and installed driver, mocked authentication, blocked networking, and a dummy token delivered
 to an in-memory authentication sink. It reported 350 passing targeted tests. No real credential or
 live replay was used. Those results establish the starting concern; they are not verification of
 this proposed fix.
+
+## Research findings (2026-11-10)
+
+Read-only research against the installed driver (`mongodb` 7.2.0), the extension code on this
+branch, Microsoft documentation, and the sovereign-cloud, SRV-fallback and connectivity-troubleshooter
+records. Driver probes ran offline: they used loopback or unresolvable hosts and a dummy token.
+No real credential or live cloud was involved.
+
+### R1. What the driver actually enforces
+
+`MongoClient.connect()` checks every seed host against `ALLOWED_HOSTS` after the initial SRV
+lookup and before the topology opens (`node_modules/mongodb/lib/mongo_client.js:236-247`). Its
+limits are:
+
+- **Once only.** Hosts added later are not re-checked. These include replica-set members learned
+  from `hello` (`hosts`, `passives`, `primary`), SRV polling results and reconnects to new members.
+  Pool connections to such members still authenticate through the OIDC callback, either with
+  speculative authentication or with `saslStart`.
+- **Skipped when `ENVIRONMENT` is set.** `isServiceAuth` (line 240) skips the whole check if the
+  merged mechanism properties contain `ENVIRONMENT`, even when our `OIDC_CALLBACK` is also set.
+  `getWorkflow` (`mongo_client_auth_providers.js:64`) still prefers `OIDC_CALLBACK`, so the VS Code
+  session token goes to an unchecked host. Offline probe: with the URI property
+  `authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:x` and
+  `ALLOWED_HOSTS: ['*.mongocluster.cosmos.azure.com']`, `mongodb://evil.example.com:27999/`
+  reached server selection and failed only with `ENOTFOUND`. Without the property it failed at
+  once with `Host '…' is not valid for OIDC authentication`.
+- **String matching only.** A host matches when it equals the pattern or ends with `.` plus the
+  suffix (`utils.js:78`); `HostAddress` lowercases hosts (`utils.js:717-722`). A trailing-dot FQDN
+  does not match, which fails closed. Our own predicate must reach the same result.
+- **Hostname, not identity.** The check says nothing about who answers the name unless certificate
+  validation is also enforced ([R3](#r3-certificate-validation-bypass-survives-into-entra-connections)).
+- The extension's SRV fallback (`prepareDriverConnectionString`) may rewrite `mongodb+srv://` to
+  `mongodb://` before the driver sees it. It keeps the driver's parent-domain rule
+  (`packages/documentdb-js-srv-resolver/src/srvUriRewrite.ts:127`) and its TXT allowlist
+  (`authSource`, `replicaSet`, `loadBalanced`), so it does not widen destinations. It does,
+  however, turn SRV polling off for that connection. An extension-side pre-token check must
+  therefore inspect the same resolved host list that the driver will check.
+
+### R2. Competing URI authentication properties survive on two paths
+
+- The main-thread Entra and managed-identity handlers delete `authMechanism` and
+  `authMechanismProperties` (`MicrosoftEntraIDAuthHandler.ts:98-99`,
+  `ManagedIdentityAuthHandler.ts:79-80`).
+- A pasted connection string loses them only when it declares `MONGODB-OIDC` with
+  `ENVIRONMENT:azure` (`PromptConnectionStringStep.ts:75-79`).
+- The link import strips TLS-bypass parameters (`vscodeUriHandler.ts:555`) but not authentication
+  properties, so `authMechanismProperties=ENVIRONMENT:azure,…` can be saved from a link.
+- The shell and playground worker receive the saved string (`ShellSessionManager.buildInitMessage`,
+  `WorkerSessionManager.initializeWorker`). The worker adds its own `ALLOWED_HOSTS` and
+  `OIDC_CALLBACK` (`playgroundWorker.ts:149-152`) without stripping URI properties. Under R1, a
+  saved `ENVIRONMENT` therefore disables the host check for shell and playground sessions.
+
+Reachability today: a shell or playground needs cached credentials from a successful tree connection
+(`openInteractiveShell.ts:63`). That connection goes through the stripped main-thread path, so this
+gap cannot be reached on its own for a host that the main path rejects. It is a **latent bypass**
+that matters as soon as the allowlist is narrowed: if the main path rejects a host but the worker
+cannot, the worker becomes the weaker path. Fix it within this work.
+
+### R3. Certificate-validation bypass survives into Entra connections
+
+`tlsException.ts` deliberately leaves bypass parameters in saved strings for public hosts, so that
+self-hosted servers keep working (`tlsException.ts:33-38`, `:146-158`). The OIDC handlers delete
+only `tls` (`MicrosoftEntraIDAuthHandler.ts:100`, `ManagedIdentityAuthHandler.ts:81`). Offline
+`parseOptions` with `tls: true` and OIDC options gave these results:
+
+| URI parameter                      | Effective driver option                        |
+| ---------------------------------- | ---------------------------------------------- |
+| `tlsInsecure=true`                 | `rejectUnauthorized: false`                    |
+| `tlsAllowInvalidCertificates=true` | `rejectUnauthorized: false`                    |
+| `tlsAllowInvalidHostnames=true`    | no-op `checkServerIdentity` (no object option) |
+
+A pasted or saved Entra connection that carries one of these parameters sends the token to whoever
+answers the allowlisted name. That could be a DNS spoofer, a hostile network, a hosts-file entry or
+a TLS-intercepting proxy. A hostname allowlist protects only when certificate validation is also on,
+so this belongs to the same invariant rather than a separate hardening item. Links are not affected:
+their bypass parameters are stripped, and only loopback hosts get the exception.
+
+### R4. A supported per-connection enforcement point exists
+
+The OIDC callback cannot enforce destinations: `OIDCCallbackParams` carries no host. The driver
+does, however, pass `checkServerIdentity` and an SNI `servername` (the host, for non-IP hosts) to
+every TLS socket, for both monitoring and pool connections (`cmap/connect.js:191-263`). Node calls
+`checkServerIdentity` during the handshake, before the driver writes any application data.
+
+Offline loopback harness: self-signed CA, `tls: true`, `MONGODB-OIDC` with a dummy callback, and a
+`checkServerIdentity` that always rejects:
+
+| Variant                             | TLS sessions completed | Bytes the server received | Hook calls | Token callbacks |
+| ----------------------------------- | ---------------------- | ------------------------- | ---------- | --------------- |
+| Hook only                           | 0                      | 0                         | 3          | 0               |
+| URI `tlsInsecure=true`              | 1                      | 320 (driver handshake)    | 1          | 0               |
+| URI `tlsAllowInvalidHostnames=true` | 0                      | 0                         | 3          | 0               |
+
+Conclusions:
+
+- A destination-policy check composed into `checkServerIdentity` (policy first, then
+  `tls.checkServerIdentity`) covers SRV polling, topology-discovered members, reconnects and token
+  refresh, without event-listener races.
+- It works **only while certificate validation stays on**. Node ignores a `checkServerIdentity`
+  failure when `rejectUnauthorized` is false (row 2), which makes R3 a hard prerequisite.
+- The object option overrode the URI's no-op hostname check (row 3). Pin this precedence with a test
+  rather than rely on it.
+- Still to verify: TLS session resumption skips the callback (the driver does not share sessions
+  across hosts today, so pin that with a test). IP-literal hosts get no SNI and must be rejected by
+  policy anyway. Saved data must never be able to supply `servername` or `checkServerIdentity`;
+  only object options can set them today, so keep it that way.
+
+### R5. The token audience is shared with other Azure database services
+
+The audiences in `entraScopes.ts:17-21` (plus Bleu and Delos in `documentdbTokenResource.ts:96-102`)
+are each cloud's `ossrDbmsResourceId` from ARM metadata, the resource behind Azure CLI's
+`--resource-type oss-rdbms`. Azure Database for PostgreSQL and Azure Database for MySQL Flexible
+Server use the same audience for Entra authentication. A captured token can therefore also be
+replayed against those servers, wherever the identity has a role and the attacker has network access.
+Update the impact statement and severity rating to reflect this. Binding the audience to
+DocumentDB alone would be a service change outside this work; record it as a request to the service
+team.
+
+### R6. Endpoint inventory (WI1 evidence)
+
+Every Azure DocumentDB host form found sits under `mongocluster.cosmos.<azure TLD>`:
+
+| Form                                 | Public                                                                                                                 | US Government                                                                                                 | China                                           | Evidence                                                                                                                                                                                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cluster (SRV) host                   | `<cluster>.mongocluster.cosmos.azure.com`                                                                              | `<cluster>.mongocluster.cosmos.azure.us` (assumed)                                                            | `<cluster>.mongocluster.cosmos.azure.cn`        | Learn; [China Entra how-to](https://docs.azure.cn/en-us/documentdb/how-to-connect-role-based-access-control); Government confirmed by the operator but not publicly documented ([research](../../sovereign-clouds/research-findings.md)) |
+| Global read-write (replication) host | `<cluster>.global.mongocluster.cosmos.azure.com`                                                                       | unverified                                                                                                    | `<cluster>.global.mongocluster.cosmos.azure.cn` | China how-to; SRV-fallback incident (`_mongodb._tcp.<cluster>.global.mongocluster.cosmos.azure.com`)                                                                                                                                     |
+| SRV targets and node hosts           | `fc-<hash>-000.<cluster>.mongocluster.cosmos.azure.com` (children of the SRV host, as the parent-domain rule requires) | unverified                                                                                                    | `<node-hostname>.mongocluster.cosmos.azure.cn`  | Troubleshooter fixtures (`panelDetails.test.ts`); Learn private-link page                                                                                                                                                                |
+| Private endpoint zone (CNAME target) | `privatelink.mongocluster.cosmos.azure.com`, for example `fc-<hash>-000.privatelink.mongocluster.cosmos.azure.com`     | **Not listed:** the Private Endpoint DNS reference lists only the RU zone `privatelink.mongo.cosmos.azure.us` | `privatelink.mongocluster.cosmos.azure.cn`      | [Private Endpoint DNS zone values](https://learn.microsoft.com/azure/private-link/private-endpoint-dns) (fetched 2026-11-10); [China private link](https://docs.azure.cn/en-us/documentdb/how-to-private-link)                           |
+| Legacy prefix                        | `c-<cluster>.mongocluster.cosmos.azure.com`                                                                            | —                                                                                                             | —                                               | Troubleshooter fixtures                                                                                                                                                                                                                  |
+| Port                                 | 10260                                                                                                                  | 10260 (assumed)                                                                                               | 10260 (assumed)                                 | Troubleshooter reports                                                                                                                                                                                                                   |
+
+Notes:
+
+- A private endpoint is a DNS CNAME. The driver and TLS see the name in the connection string, not
+  the CNAME target. A user who types the `privatelink.` FQDN directly stays under the same suffix;
+  whether the service certificate covers that name is unverified, and is the service's concern.
+- **Not Entra destinations:** RU accounts, `<account>.mongo.cosmos.azure.{com,us,cn}` and legacy
+  `<account>.documents.azure.{com,us,cn}:10255`. Their MongoDB API documents only key and SCRAM
+  authentication, and a [Microsoft Q&A thread (October 2025)](https://learn.microsoft.com/answers/questions/5599871/is-mongo-oidc-available-on-azure-cosmosdb-for-mong)
+  found no `MONGODB-OIDC` support. They are Microsoft-operated, so including them would not leak
+  tokens to customers, but there is no reason to send a token there. Exclude them, and revisit if
+  RU adds OIDC.
+- **Other clouds:** Bleu (`sovcloud-api.fr`), Delos (`sovcloud-api.de`) and the air-gapped
+  Government Secret and Top Secret clouds publish no DocumentDB host suffix. They are reachable only
+  through `documentDB.customEnvironment.hostnameSuffix`.
+
+### R7. Customer-controlled names inside today's wildcards
+
+The exploit needs a name the attacker can point at a raw-TCP endpoint where the attacker terminates
+TLS with a publicly trusted certificate.
+
+| Cloud         | Current allowlist | Known customer-controlled raw-TCP names                                                                                                                                                                                                                            | Inside the allowlist?        |
+| ------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| Public        | `*.azure.com`     | Public IP DNS labels `<label>.<region>.cloudapp.azure.com`, including the hashed-scope form `<label>.<hash>.<region>.cloudapp.azure.com`. They serve VMs, load balancers, Application Gateway and AKS LoadBalancer services. ACME CAs issue certificates for them. | **Yes: the reviewed vector** |
+| US Government | `*.azure.us`      | Public IP labels are `<label>.<region>.cloudapp.usgovcloudapi.net` ([Compare Azure Government and global Azure](https://learn.microsoft.com/azure/azure-government/compare-azure-government-global-azure))                                                         | No                           |
+| China         | `*.azure.cn`      | Public IP labels are `<label>.<region>.cloudapp.chinacloudapi.cn` ([China public IP addresses](https://docs.azure.cn/en-us/virtual-network/ip-services/public-ip-addresses))                                                                                       | No                           |
+
+- The reviewed vector is specific to the public cloud. `*.azure.us` and `*.azure.cn` are still
+  cloud-wide namespaces whose customer-controllable names have not been inventoried, and new ones
+  can appear at any time. Narrow all three; do not argue that the sovereign wildcards are safe.
+- Interactive sign-in is partly protected across clouds: when the host's cloud differs from the
+  signed-in cloud, audience resolution fails before any token is requested
+  (`documentdbTokenResource.ts:156`). Managed identity derives its cloud from the host instead and
+  has no such guard. Hosts with no Azure evidence (custom names, IP addresses) skip the mismatch
+  check and get the configured cloud's audience. Today they are rejected only because they cannot
+  match `*.azure.com`.
+- HTTP-only multi-tenant front ends under `azure.com`, such as Azure Machine Learning online
+  endpoints, cannot speak the wire protocol. With a service-specific suffix, the fix does not depend
+  on keeping this inventory complete.
+
+### R8. Compatibility cost is small: unrecognized Entra destinations already fail
+
+Today an Entra or managed-identity host must match `*.azure.<tld>` or the custom suffix, and
+certificate validation is on unless the user added a bypass parameter. Under the narrowed policy:
+
+| Scenario                                                                   | Today                                                                        | After                                                                                                                      |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Service FQDN, public access or private endpoint with private DNS           | Works                                                                        | Works                                                                                                                      |
+| `privatelink.` FQDN typed directly                                         | Works if the certificate covers it                                           | Same                                                                                                                       |
+| Custom DNS alias (for example `db.contoso.internal` CNAME to private link) | Fails, unless a custom suffix is set **and** hostname validation is bypassed | Fails: the bypass is no longer honored for Entra ([R3](#r3-certificate-validation-bypass-survives-into-entra-connections)) |
+| IP literal, `localhost` SSH tunnel, `kubectl port-forward`                 | Fails (`*.azure.com` does not match)                                         | Fails; Entra stays unsupported here                                                                                        |
+| Other Azure hosts (`*.cloudapp.azure.com`, RU accounts, other services)    | Token sent                                                                   | Rejected before token acquisition                                                                                          |
+
+- The only legitimate population that loses anything is a self-hosted server on an Azure name that
+  validates `ossrdbms` tokens itself. This is expected to be zero; confirm it with telemetry.
+- `PromptConnectionStringStep.ts:120` offers managed identity whenever the string declares
+  `MONGODB-OIDC`, even for unrecognized hosts ("private endpoint or CNAME"). Under the new policy
+  that choice would always fail, so it should explain why instead.
+- The existing `entraCloud.resolved` trace details (`hostCloud`, `hostsOutsideAzure`) do not
+  distinguish `mongocluster` hosts from other `azure.com` hosts. Add a bounded
+  `entraDestinationClass` value (`documentdbService` | `customSuffix` | `otherAzure` | `other`)
+  so the cost can be measured before enforcement.
+
+### R9. Other host classifiers must not become security predicates
+
+- `AzureDomains`, `hasAzureDomain` and `hasDomainSuffix` (`connectionStringHelpers.ts:84-103`)
+  drive cluster metadata, RU detection during import, and SRV telemetry. They know only the public
+  cloud.
+- `getAzureHostSuffix` also gates the extension `appName` (`ClustersClient.ts:368`). It classifies
+  the cloud; it does not authorize.
+- `hasDocumentDBHost` uses `some()`, which suits recognition. The authorization predicate needs
+  `every()`.
+- The connectivity troubleshooter treats `privatelink.` CNAME chains and address classes only as
+  evidence. Its decision log records that "DNS resolution and access control are independent", and
+  that the alias does not even prove a private endpoint exists. The destination policy must never
+  trust resolved CNAMEs or private/public address classes: for a name the attacker controls, the
+  attacker controls those answers too.
+
+### R10. Token acquisition sites
+
+- **Before the driver's host check.** Interactive Entra tokens are acquired at
+  `MicrosoftEntraIDAuthHandler.ts:58`, and for worker `tokenRequest` messages at
+  `ShellSessionManager.ts:436` and `PlaygroundEvaluator.ts:452`.
+- **At the callback or worker relay.** Managed identity acquires at the driver callback
+  (`ManagedIdentityAuthHandler.ts:88`) and at the worker relays in `ShellSessionManager` and
+  `PlaygroundEvaluator`.
+- **Required at every site:** check the policy before acquiring a token. A worker relay must check
+  against the connection the worker was started for, never against a host named in the worker's
+  message.
+
+### R11. Manually created and edited connections
+
+The same attack works without a link. The attacker gives the victim a connection string (in a chat,
+a README or a support thread), or asks them to edit an existing connection. This is a more targeted
+attack, because the victim has to take more steps. It also skips the link's **Add and open**
+confirmation, so the destination policy is the only control.
+
+| Entry point                                                                             | Entra offered for any host today?                                                                                                                                                                                                                                               | After saving                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **New Connection** (paste a string)                                                     | **Yes.** `newConnection/PromptAuthMethodStep` builds its items with `createAuthMethodQuickPickItemsWithSupportInfo`, which lists every method, whatever `availableAuthenticationMethods` says (`AuthMethod.ts:162-168`). It is skipped only when detection preselects a method. | `selectedAuthMethod` is stored                                                                                                                                                            |
+| **Update Credentials** (context menu, or the recovery action under a failed connection) | **Yes.** `shouldPrompt()` always returns `true`, and the same helper lists every method. `hasDocumentDBHost` only changes which methods are flagged as supported (`updateCredentials.ts:77`).                                                                                   | `selectedAuthMethod` is stored                                                                                                                                                            |
+| **Update Connection String**                                                            | Not asked. The method is kept.                                                                                                                                                                                                                                                  | **The hosts change, and the stored Entra or managed-identity method and `availableAuthMethods` stay as they were** (`updateConnectionString/ExecuteStep.ts:40-67`); nothing is re-checked |
+| **First open of a link-created connection**                                             | **Yes.** The link stores `availableAuthMethods: []` (`vscodeUriHandler.ts:705`), so `ChooseAuthMethodStep` finds no family and shows every method                                                                                                                               | `selectedAuthMethod` is stored if the user saves credentials                                                                                                                              |
+| Add from Azure Resources or Discovery (`addConnectionFromRegistry`)                     | Methods come from the provider. Azure hosts come from ARM, but other providers (Kubernetes, Atlas, custom registries) supply their own hosts.                                                                                                                                   | Provider's method is stored                                                                                                                                                               |
+
+Once `selectedAuthMethod` is Entra or managed identity, expanding the connection in the tree
+connects **without any prompt** (`DocumentDBClusterItem.ts:111-127`): the picker runs only when
+no method is stored, or when native credentials are missing. Shell, playground, Collection View and
+dashboard reuse the cached credentials. A connection's trust is therefore decided once and reused
+silently on every later connect, reconnect, VS Code restart and token refresh.
+
+The most targeted variant follows from that. The victim already has a working Entra connection to
+a real cluster. The attacker says "we migrated the cluster, update your connection string to …",
+and the victim runs **Update Connection String**. The next expand sends a token to the new host
+with no prompt, because the method and stored `availableAuthMethods` came from the old,
+legitimate host.
+
+What cannot happen without code already running on the victim's machine:
+
+- Connections and secrets live in `globalState` and `SecretStorage`; no key is registered with
+  `setKeysForSync`, so Settings Sync does not carry connections between machines.
+- `documentDB.customEnvironment.hostnameSuffix` is machine-scoped, so a workspace cannot set it.
+- The public extension API (`api/src/extensionApi.ts`) exposes the migration API, not a way to add
+  connections.
+
+Conclusion: the destination policy must be evaluated **at connect time, for every connection,
+every time**, from the current hosts and current settings. Never store a decision at save time or
+derive it from stored `availableAuthMethods`. The UI checks below are for UX and explanation; the
+handler check is the security control.
 
 ## Proposed design
 
@@ -65,19 +357,27 @@ Evolve [oidcAllowedHosts.ts](../../../../../src/documentdb/auth/oidcAllowedHosts
 source of destination trust rather than adding a URL-handler-only check.
 
 - Replace built-in cloud-wide patterns with a curated set of verified database-service suffixes.
-  The existing `*.mongocluster.cosmos.azure.com` recognition is a starting point, not a verified
-  complete inventory.
-- Establish the public, Government, China, private-endpoint, and SRV target forms before choosing
-  the final patterns. Record supporting service documentation or sanitized endpoint evidence.
+  Proposed built-ins, from [R6](#r6-endpoint-inventory-wi1-evidence):
+  `*.mongocluster.cosmos.azure.com`, `*.mongocluster.cosmos.azure.cn` and
+  `*.mongocluster.cosmos.azure.us`. The Government entry rests on operator confirmation, not
+  published documentation; keep it only if the review accepts that or the service team confirms it.
+  These patterns cover cluster, `global.`, node and SRV-target, `privatelink.` and legacy `c-` names.
+  Exclude RU accounts and every other Azure service.
+- Close the remaining sovereign and private-endpoint gaps in R6 with service-owner confirmation or
+  sanitized endpoint evidence: the Government cluster, `global.` and private-link forms.
 - Reject malformed or unrecognized Entra destinations explicitly. Remove the fallback to
   `*.azure.com`; failure to classify a destination must not broaden trust.
 - Check every seed host. Do not reuse `hasDocumentDBHost()` unchanged as the security predicate:
   its current `some()` semantics are appropriate for recognition, not authorization of a
   multi-host connection.
 - Normalize hostnames consistently and match DNS label boundaries, not substrings. Cover ports,
-  case, lookalikes, IP literals, and trailing-dot handling explicitly.
+  case, lookalikes (`xmongocluster.cosmos.azure.com`, `mongocluster.cosmos.azure.com.evil.com`,
+  unknown TLDs such as `azure.tk`), IP literals, punycode and non-ASCII names, and trailing dots.
+  Make the trailing-dot decision identical in our predicate and in the input the driver sees
+  ([R1](#r1-what-the-driver-actually-enforces)).
 - Keep cloud classification separate from destination authorization. A host can provide evidence
-  about an Azure cloud without being an approved token recipient.
+  about an Azure cloud without being an approved token recipient. Never use resolved CNAMEs or IP
+  address classes as trust signals ([R9](#r9-other-host-classifiers-must-not-become-security-predicates)).
 - Preserve the existing audience-resolution and cloud-mismatch checks; do not infer a new audience
   from a link or an arbitrary server response.
 
@@ -95,24 +395,53 @@ Parse connection -> validate destination policy -> resolve audience
 In [MicrosoftEntraIDAuthHandler.ts](../../../../../src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts),
 move destination validation ahead of `getSessionFromVSCode`. Prefer acquiring the token at the
 driver callback after its destination checks, while preserving account selection, error handling,
-and connection timing behavior.
+and connection timing behavior. Apply the same rule at every acquisition site listed in
+[R10](#r10-token-acquisition-sites).
 
 Use the same policy in:
 
 - [ManagedIdentityAuthHandler.ts](../../../../../src/documentdb/auth/ManagedIdentityAuthHandler.ts).
 - [WorkerSessionManager.ts](../../../../../src/documentdb/playground/WorkerSessionManager.ts) and
   [playgroundWorker.ts](../../../../../src/documentdb/playground/playgroundWorker.ts), which serve
-  shell and playground sessions.
+  shell and playground sessions, and the token relays in
+  [ShellSessionManager.ts](../../../../../src/documentdb/shell/ShellSessionManager.ts) and
+  [PlaygroundEvaluator.ts](../../../../../src/documentdb/playground/PlaygroundEvaluator.ts).
 - Connections reopened from storage and subsequent reconnects, not just new connections or links.
+
+#### One OIDC options builder for every path
+
+Build OIDC client options in one shared function that the main-thread handlers and the worker
+both use. It must:
+
+- Clear the username and password, and remove `authMechanism` and `authMechanismProperties` from
+  the URI, so that `ENVIRONMENT` can never reach the driver
+  ([R1](#r1-what-the-driver-actually-enforces), [R2](#r2-competing-uri-authentication-properties-survive-on-two-paths)).
+- Remove `tls` and every TLS-bypass parameter: `tlsInsecure`, `tlsAllowInvalidCertificates`,
+  `tlsAllowInvalidHostnames`, their `ssl*` aliases and `rejectUnauthorized`. Never set
+  `tlsAllowInvalidCertificates` for OIDC. **OIDC never runs with certificate or hostname validation
+  disabled.** No loopback exception is needed, because loopback is never an approved Entra
+  destination. Do not strip these parameters from the saved string: native-auth users of the same
+  connection may depend on them. Strip them only from the OIDC client options.
+- Set `ALLOWED_HOSTS` to the narrowed patterns.
+- Set `checkServerIdentity` to a function that runs the destination policy on the hostname first
+  and then delegates to `tls.checkServerIdentity`. This is the per-connection enforcement point
+  ([R4](#r4-a-supported-per-connection-enforcement-point-exists)), and it covers topology-discovered
+  members, SRV polling, reconnects and token refresh.
+
+Layers, in order: policy check before token acquisition, then driver `ALLOWED_HOSTS` on resolved
+seeds, then `checkServerIdentity` on every TLS connection, all under enforced certificate
+validation. Each layer must be independently tested; none replaces another.
 
 Continue supplying the narrowed `ALLOWED_HOSTS` to the driver. Initial seed validation alone is
 not the complete invariant: SRV results, topology-discovered members, reconnects, and token refresh
 must not introduce a recipient outside the policy.
 
-Verify the installed driver's behavior with an offline protocol-level harness. Do not assume the
-OIDC callback itself has enough destination context to enforce this. If driver behavior leaves a
-gap, resolve it with a supported enforcement mechanism or a reviewed driver fix before claiming
-coverage. Do not use a timeout, event-listener race, or a broad wildcard as a workaround.
+Verify the installed driver's behavior with an offline protocol-level harness. The OIDC callback
+has no destination context (`OIDCCallbackParams` carries no host), so per-connection enforcement
+relies on `checkServerIdentity`. If the harness shows a gap, close it with a supported mechanism or
+a reviewed driver fix before claiming coverage. Do not use a timeout, an event-listener race or a
+broad wildcard as a workaround. Consider reporting upstream that `ENVIRONMENT` disables the
+`ALLOWED_HOSTS` check even when `OIDC_CALLBACK` is set.
 
 Policy failures must surface through the existing localized authentication error flow. Do not
 silently fall back to another authentication method or log tokens/full connection strings.
@@ -121,11 +450,40 @@ silently fall back to another authentication method or log tokens/full connectio
 
 In [ChooseAuthMethodStep.ts](../../../../../src/documentdb/wizards/authenticate/ChooseAuthMethodStep.ts),
 do not offer interactive Entra or managed identity for a destination rejected by the shared policy.
+Apply the same gating where authentication methods are computed:
+[PromptConnectionStringStep.ts](../../../../../src/commands/newConnection/PromptConnectionStringStep.ts)
+currently adds managed identity for any string that declares `MONGODB-OIDC`, even for unrecognized
+hosts, and [updateCredentials.ts](../../../../../src/commands/updateCredentials/updateCredentials.ts)
+uses `hasDocumentDBHost`. When a string declares `MONGODB-OIDC` for a rejected host, say why and
+point to the service FQDN or the custom-suffix setting
+([R8](#r8-compatibility-cost-is-small-unrecognized-entra-destinations-already-fail)).
 Keep enforcement in the handlers even when the picker is skipped or credentials were saved earlier.
 
-Suggested explanatory copy, subject to UX/localization review:
+Every place that offers or keeps an authentication method must consult the same policy
+([R11](#r11-manually-created-and-edited-connections)):
 
-> Microsoft Entra ID authentication is not permitted for this server.
+- **New Connection and Update Credentials pickers.** Today both list every method, whatever was
+  detected. Show Entra and managed identity only when the current hosts pass the policy; otherwise
+  explain why they are missing.
+- **First open of a link-created connection.** `availableAuthMethods: []` must not mean "offer
+  everything". Compute the methods from the policy, as the picker does.
+- **Update Connection String.** When the stored method is Entra or managed identity and the edited
+  hosts fail the policy, do not keep the method. Clear `selectedAuthMethod`, so the next connect
+  prompts and offers only the permitted methods, and say why in the confirmation. When the hosts
+  still pass, keep it: renaming a cluster or adding a replica is legitimate. Recompute
+  `availableAuthMethods` from the edited hosts in both cases.
+- **Connect from storage.** Saved Entra and managed-identity connections connect without a prompt,
+  so a rejected destination must fail with the localized explanation and a recovery action
+  (**Update Credentials** or **Update Connection String**). It must never fall back silently to
+  another method.
+
+None of these replaces the connect-time check. They exist so that users find out before connecting
+rather than from an authentication error.
+
+Suggested explanatory copy, subject to UX/localization review. The full set of strings, with length
+budgets, is in [Proposed user experience](#proposed-user-experience):
+
+> Microsoft Entra ID isn't allowed for this server.
 
 In [vscodeUriHandler.ts](../../../../../src/vscodeUriHandler.ts), retain the mandatory new-connection
 confirmation and ensure the actual destination hostname is visible, not only a friendly label.
@@ -138,7 +496,10 @@ Do not add a one-click "send the token anyway" override to the link flow. A user
 
 Retain machine-scoped `documentDB.customEnvironment.hostnameSuffix` as an explicit trust input.
 Explain that it authorizes matching servers to receive database access tokens, and recommend the
-narrowest service-specific suffix. Preserve existing configuration validation.
+narrowest service-specific suffix. Preserve existing configuration validation. Destinations
+admitted by the suffix get the same every-host check, `checkServerIdentity` enforcement and mandatory
+certificate validation as built-in ones. The suffix is also the only route for Bleu, Delos and
+air-gapped clouds ([R6](#r6-endpoint-inventory-wi1-evidence)).
 
 A link, a link's `source` label, workspace settings, or a host's private-network address must not
 grant this trust. The built-in allowlist must not widen to accommodate an unrecognized endpoint.
@@ -149,39 +510,284 @@ For Azure integrations that can supply an ARM resource ID, prefer `/connect/azur
 ARM lookup for every connection: legitimate users may have database permissions without management
 permissions. ARM-derived connections must still use the common authentication policy.
 
+## Proposed user experience
+
+This is the walkthrough discussed with the operator on 2026-11-10. It assumes the plan is
+implemented. All wording is proposed, pending UX and localization review (review decision 3).
+Legend: 🆕 new, ✏️ changed; anything unmarked works as it does today.
+
+### Length limits for the new strings
+
+These strings appear in VS Code surfaces with hard layout limits. Keep each explanation to one
+short sentence, and put the background (why, the setting name, how to verify a host) on the
+documentation page behind **Learn More**.
+
+| Surface                              | Constraint                                                                                                                                                                                           | Budget used here                         |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Quick-pick item `label` and `detail` | One line each, cut off with an ellipsis at the picker width; no wrapping                                                                                                                             | label ≤ 40 characters, detail ≤ 70       |
+| Quick-pick `placeHolder` and `title` | One line                                                                                                                                                                                             | ≤ 70                                     |
+| Non-modal notification               | Cut to 1,000 characters, and line breaks become spaces (`NotificationViewItem.MAX_MESSAGE_LENGTH`, `src/vs/workbench/common/notifications.ts`); the collapsed toast shows only the first line or two | ≤ 120, one or two sentences, no layout   |
+| Modal message (title)                | Shown as the heading; on Windows and Linux it can wrap, but long headings read badly                                                                                                                 | ≤ 60                                     |
+| Modal `detail`                       | Multi-line; several short lines are fine                                                                                                                                                             | ≤ 4 short lines                          |
+| Host names inside any string         | A multi-host seed list can be long                                                                                                                                                                   | Show the first host, then "and {n} more" |
+
+Every target language must fit the same budget, and German or French often runs 30-40% longer than
+English. Leave room for that, so not every English string should use its full budget. Setting IDs
+such as `documentDB.customEnvironment.hostnameSuffix` (43 characters) do not fit a picker item or a
+toast; they belong in modal details or in the documentation.
+
+### Opening a link
+
+**Link to an Azure DocumentDB cluster.** The **Add and open connection?** dialog is unchanged. Its
+`Connection:` line already shows the real host (`user@host1,host2`).
+
+On first open:
+
+```
+Select an authentication method for "mycluster…"
+  Username and Password
+  Microsoft Entra ID                ✏️ offered because the policy allows this host
+  No Authentication
+```
+
+- ✏️ The method list comes from the destination policy. Today the link saves
+  `availableAuthMethods: []`, which shows every method.
+- Sign-in, identity and tenant prompts work as today.
+- 🆕 Nothing visible: URI authentication properties and certificate-check bypass parameters are
+  left out of the Entra connection options.
+- `/connect/azure` links behave the same way.
+
+**Link to a rejected host** (for example `x.eastus.cloudapp.azure.com`). The confirmation dialog is
+unchanged, including the existing line about an ignored certificate-validation request. On first open:
+
+```
+Select an authentication method for "x.eastus.cloudapp.azure.com"
+  Username and Password
+  No Authentication
+  🆕 Microsoft Entra ID: not available                     (33 characters)
+     Entra ID is used only with Azure DocumentDB clusters.  (53 characters)
+```
+
+- 🆕 Entra and managed identity are not offered. Decision 3 settles whether the explanation is a
+  non-selectable row (for example a separator) or an item that opens **Learn More**.
+- If only one method is left, the picker is skipped, as today.
+- There is no "use Entra anyway" option.
+
+**Link that matches an existing saved Entra connection.** The connection is reused and connects
+without a prompt, as today. ✏️ The destination check runs again at connect time; a rejected host
+gets the connect error below.
+
+### Adding a connection by hand (New Connection, then Connection String)
+
+1. **How do you want to connect?**, the connection-string input and the certificate-check step for
+   local hosts: unchanged.
+2. ✏️ **Authentication method picker.** For an allowed host (Azure DocumentDB, or a trusted custom
+   suffix) it is the same as today. For any other host it matches the link picker above, without
+   Entra and managed identity.
+3. 🆕 For a string that declares `authMechanism=MONGODB-OIDC` and targets a rejected host, managed
+   identity is no longer preselected. The picker opens with this `placeHolder`:
+   **"This server can't use Microsoft Entra ID. Choose another method."** (64 characters)
+4. Tenant, identity and username steps: unchanged.
+5. 🆕 Connect: for Entra connections, certificate and hostname checks are always on, even if the
+   string contains `tlsInsecure` or `tlsAllowInvalidCertificates`. No dialog appears, so a server
+   with an invalid certificate shows the usual certificate error. Write one line to the output
+   channel so that error can be explained:
+   `[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.`
+   Native connections that use the same parameters work as today.
+
+### 🆕 Connecting a saved Entra connection whose host is rejected
+
+This applies to expanding the connection in the tree, opening the shell, playground or dashboard,
+or a reconnect. Failed expands are explained in a modal, and the node's children are recovery
+actions:
+
+```
+┌─ Microsoft Entra ID isn't allowed for this server ─────────────┐   (title: 48 characters)
+│ Entra ID tokens are sent only to Azure DocumentDB clusters and │
+│ to servers you trust in settings.                               │
+│                                                                 │
+│ Server: x.eastus.cloudapp.azure.com                             │
+│                                           [Learn More]   [OK]   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+- Recovery children: **Update Credentials** (offers only the allowed methods) and
+  **Update Connection String**.
+- No token is requested, and the extension never switches to another method on its own.
+- **Learn More** opens documentation. It must not write any setting
+  ([Self-service override](#self-service-override-for-endpoints-the-extension-does-not-recognize)).
+
+### 🆕 Editing an existing Entra connection (Update Connection String)
+
+If the hosts are changed to ones the policy rejects, a non-modal notification appears (117
+characters):
+
+> Connection updated. Microsoft Entra ID isn't available for the new server, so choose another
+> method when you connect.
+
+If the new hosts are still allowed, the existing **"Connection updated successfully."** appears and
+the method is kept. See review decision 6 for the alternatives.
+
+### Update Credentials
+
+✏️ The picker offers only the methods the policy allows, with the same explanation row.
+
+**Net effect:** users of real Azure DocumentDB clusters see no new dialogs. New text appears only
+when someone tries to use Entra with a host outside the policy, and nothing offers to send the token
+anyway.
+
+## Self-service override for endpoints the extension does not recognize
+
+**Scenario.** The service adds a legitimate endpoint form, for example a new regional or
+private-link name or a new domain, and this extension ships without it. Entra users of that
+endpoint are blocked until a release adds it. How can they unblock themselves without reopening
+the attack this plan closes?
+
+### What other tools do
+
+| Tool                                     | Override                                                                                                                                                                                                                                   | Scope                                                                                   | Can it come from the connection string?                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| MongoDB Node.js driver (installed 7.2.0) | `ALLOWED_HOSTS` mechanism property                                                                                                                                                                                                         | Per client                                                                              | **No.** The driver rejects it: "Auth mechanism property ALLOWED_HOSTS is not allowed in the connection string" (`connection_string.js:243`) |
+| MongoDB Compass                          | "Consider Target Endpoint Trusted" checkbox ([docs](https://www.mongodb.com/docs/compass/connect/advanced-connection-options/authentication-connection/))                                                                                  | Per connection, in advanced options, "only … when connecting to servers that you trust" | No                                                                                                                                          |
+| mongosh                                  | `--oidcTrustedEndpoint` ([docs](https://www.mongodb.com/docs/mongodb-shell/reference/options/))                                                                                                                                            | Per invocation                                                                          | No (command-line flag)                                                                                                                      |
+| MongoDB MCP Server                       | `MDB_MCP_OIDC_TRUSTED_ENDPOINT` ([docs](https://www.mongodb.com/docs/mcp-server/local-mcp/security/connect-with-oidc/))                                                                                                                    | Per process environment                                                                 | No                                                                                                                                          |
+| Azure Key Vault SDKs                     | `disableChallengeResourceVerification` / `DisableChallengeResourceVerification`, default `false` ([.NET](https://learn.microsoft.com/dotnet/api/azure.security.keyvault.secrets.secretclientoptions.disablechallengeresourceverification)) | Per client, set by the developer in code                                                | No                                                                                                                                          |
+
+Common practice across all of these:
+
+- **The default denies; trust is added explicitly.** None of them ships a global "send tokens
+  anywhere" switch for end users. Key Vault's opt-out is per client and is set by the developer in
+  code.
+- **Trust never comes from the input being judged.** The driver refuses `ALLOWED_HOSTS` from the
+  URI, and the MongoDB tools keep the flag outside the connection string. Here, that means a link,
+  a pasted string, a workspace, Settings Sync or a discovery provider must not be able to set it.
+- **The narrowest scope that works:** one connection or one host suffix, not every connection.
+- **Clear consequence wording:** "only … when connecting to servers that you trust".
+
+VS Code adds two platform rules. A `machine`-scoped setting cannot be set by a workspace and is not
+carried by Settings Sync. A setting can also be restricted in untrusted workspaces.
+
+### Options considered
+
+| Option                                                                                                                                      | Self-service                                                                    | Attack surface                                                                                                                                                                                                        | Verdict                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Global kill switch** (`documentDB.entra.allowAnyHost: true`)                                                                           | Fully self-serve                                                                | Reopens the vulnerability for every connection, every link and every edit, for as long as it stays on, and it usually does. A one-sentence social-engineering instruction ("set X to true") defeats it. No precedent. | **Reject**                                                                                                                                    |
+| **B. The existing machine-scoped `documentDB.customEnvironment.hostnameSuffix`, hardened**                                                  | Yes: add the new endpoint's service suffix, such as `.newform.cosmos.azure.com` | Limited to hosts under a suffix the user typed. It is still a social-engineering target, but the attacker must make the user type a specific suffix, and that can be validated (below)                                | **Recommend.** It already exists, already authorizes token recipients, and needs no new concept                                               |
+| **C. Per-connection "trust this server" option** (the Compass pattern)                                                                      | Yes, for one connection                                                         | Exactly what the R11 attacker would ask the victim to tick. It is narrower than A, but it adds a one-checkbox bypass to every connection                                                                              | **Not now.** Revisit only if telemetry shows B is not enough. If adopted, apply the guardrails below                                          |
+| **D. Trust the host Azure Resource Manager reports for the user's `mongoClusters` resource** (Azure Resources, Discovery, `/connect/azure`) | Automatic for users with ARM read access; no setting needed                     | The host comes from Microsoft, not from the user. The risk is forged provenance, so only the ARM code path may set the flag, and any host edit clears it                                                              | **Worth evaluating as a follow-up.** It covers new endpoint forms for most Azure users without any trust input. Not every user has ARM access |
+| **E. Remote allowlist updates** (fetched at run time)                                                                                       | Automatic                                                                       | A new network trust dependency; a compromised or spoofed feed widens trust for everyone                                                                                                                               | **Reject.** Ship list updates as releases, with a patch release (`release/X.Y.Z`) when urgent                                                 |
+
+### Recommendation
+
+There is no global switch. The self-service route is option B, hardened:
+
+1. **Keep `hostnameSuffix` machine-scoped.** Workspaces, Settings Sync, links, connection strings
+   and discovery providers cannot set it. Consider accepting a list, so one machine can trust a
+   custom cloud and a new public endpoint form together; if so, keep the old key as an alias.
+2. **Reject suffixes that would undo the fix**, using the existing validation path:
+   - the cloud-wide domains `azure.com`, `azure.us` and `azure.cn`;
+   - any suffix that equals or contains a known customer-hosting label (`cloudapp`, and
+     `cloudapp.usgovcloudapi.net` / `cloudapp.chinacloudapi.cn`);
+   - suffixes broader than a built-in service suffix, such as `cosmos.azure.com`.
+
+   This deny list is defense in depth, not a complete inventory. The setting description must still
+   say that the suffix authorizes token recipients.
+
+3. **Make the consequence explicit** in the setting description, staying within the length budget:
+   "Microsoft Entra ID tokens are sent to servers ending with this suffix. Add only a suffix you
+   have confirmed belongs to Azure DocumentDB." Link to the documentation page.
+4. **Do not offer a shortcut from an error.** The rejection modal offers **Learn More**, which opens
+   documentation. That page explains how to confirm the host belongs to your cluster (compare it
+   with the connection string shown in the Azure portal), how to report a missing endpoint form on
+   GitHub, and only then how to add the suffix. No button writes the setting or opens it pre-filled.
+   Opening Settings without a value is acceptable if UX prefers it.
+5. **Make it visible and auditable.**
+   - Log each connection that a custom suffix admitted to the output channel. Log the suffix only,
+     never tokens or connection strings.
+   - Record a bounded `entraDestinationClass=customSuffix` value in telemetry.
+6. **Detect missing endpoints early.** When a destination is rejected, record bounded classes only,
+   never hostnames:
+   - whether the host's registrable domain is a Microsoft cloud domain (`azure.com`, `azure.us`,
+     `azure.cn`, `usgovcloudapi.net`, `chinacloudapi.cn`, `windows.net`);
+   - whether the host contains a `mongocluster` or `documentdb` label.
+
+   A rise in rejected hosts with such labels in Microsoft domains is the signal to ship a list update.
+
+7. **Remember the existing fallback.** Native authentication still works wherever the cluster
+   allows it.
+
+**If option C is ever adopted**, it needs these guardrails:
+
+- Set it only from the Update Credentials or advanced-settings UI, never from a link, connection
+  string, workspace or provider.
+- Bind it to the exact host list; Update Connection String clears it.
+- Show the exact host names and the consequence in a modal before saving.
+- Never offer it from the rejection error, and log it as described above.
+
 ## Work items and dependencies
 
-| Work item                                  | Deliverable                                                                                                                 | Prerequisite |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| WI1: Endpoint inventory                    | Evidence-backed service suffixes, SRV/private endpoint examples, sovereign-cloud verification limits                        | None         |
-| WI2: Shared destination policy             | Fail-closed validation of all hosts, narrow driver allowlist, custom-service handling, unit tests                           | WI1          |
-| WI3: Authentication and worker integration | Pre-token enforcement across interactive Entra, managed identity, saved connections, shell/playground; protocol-level tests | WI2          |
-| WI4: Connection UX                         | Policy-aware authentication choices and clear target/error presentation without bypass                                      | WI2          |
-| WI5: Verification and documentation        | Acceptance matrix results and approved intent documented in both affected features                                          | WI3, WI4     |
+| Work item                                            | Deliverable                                                                                                                                                                                                                                                                                                                                                                                  | Prerequisite                   |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| WI0: Measurement                                     | Bounded `entraDestinationClass` value in auth telemetry, and a query sizing the population in [R8](#r8-compatibility-cost-is-small-unrecognized-entra-destinations-already-fail)                                                                                                                                                                                                             | None; can ship ahead           |
+| WI1: Endpoint inventory                              | [R6](#r6-endpoint-inventory-wi1-evidence) confirmed: Government cluster, `global.` and private-link forms from the service team; RU `MONGODB-OIDC` status; certificate coverage of `privatelink.` names                                                                                                                                                                                      | None                           |
+| WI2: Shared destination policy                       | Fail-closed validation of all hosts, narrow built-in suffixes, custom-suffix handling, normalization (case, trailing dot, punycode, IP), unit tests                                                                                                                                                                                                                                          | WI1                            |
+| WI3: OIDC options builder                            | One builder for main-thread and worker paths: strips URI auth properties and TLS bypasses from OIDC options, forces certificate validation; tests for `ENVIRONMENT` and every bypass alias ([R2](#r2-competing-uri-authentication-properties-survive-on-two-paths), [R3](#r3-certificate-validation-bypass-survives-into-entra-connections))                                                 | None; can land first           |
+| WI4: Per-connection enforcement                      | Narrowed `ALLOWED_HOSTS` plus composed `checkServerIdentity`; protocol harness proving no token reaches discovered, polled or reconnect destinations outside policy ([R4](#r4-a-supported-per-connection-enforcement-point-exists))                                                                                                                                                          | WI2, WI3                       |
+| WI5: Token acquisition ordering                      | Policy check before every acquisition site in [R10](#r10-token-acquisition-sites), including worker relays bound to the worker's own connection                                                                                                                                                                                                                                              | WI2                            |
+| WI6: Connection UX                                   | Policy-aware authentication choices in the New Connection and Update Credentials pickers and on first open of a link-created connection; Update Connection String resets a disallowed Entra or managed-identity method; clear target and error presentation, with no bypass ([R11](#r11-manually-created-and-edited-connections))                                                            | WI2                            |
+| WI7: Verification and documentation                  | Acceptance matrix results; corrected replay impact ([R5](#r5-the-token-audience-is-shared-with-other-azure-database-services)); approved intent in the deep-links, sovereign-clouds and managed-identities docs; `hostnameSuffix` setting description                                                                                                                                        | WI4, WI5, WI6                  |
+| WI8: Self-service override                           | Hardened `hostnameSuffix`: deny list of cloud-wide and customer-hosting suffixes, an optional list form with an alias for the old key, consequence wording, output-channel record of admitted connections; rejection telemetry classes for detecting missing endpoints; **Learn More** page ([Self-service override](#self-service-override-for-endpoints-the-extension-does-not-recognize)) | WI2; ship with the enforcement |
+| WI9 (follow-up, optional): ARM-attested destinations | Evaluate option D: a provenance flag that only the ARM paths can set, cleared on any host edit                                                                                                                                                                                                                                                                                               | WI2                            |
 
-Implement WI2-WI4 together for the security fix. A picker-only or URL-handler-only change is not
-an acceptable substitute.
+Implement WI2, WI4-WI6 and WI8 together for the security fix. Shipping enforcement without the
+self-service route (WI8) would leave users of a newly added endpoint form with nothing but native
+authentication until the next release. A picker-only or URL-handler-only change
+is not an acceptable substitute. WI3 removes two independent bypasses at no compatibility cost:
+user-configured TLS bypasses for Entra are already unsafe, and no supported scenario needs
+`ENVIRONMENT` at runtime. It can ship as a standalone fix ahead of the policy change. WI0 should
+reach users at least one release before enforcement, if the release schedule allows.
 
 ## Acceptance tests
 
 Use dummy tokens and controlled local/in-memory infrastructure; no real user token should be sent
 to a test sink. Assert token-provider calls and captured authentication payloads, not only errors.
 
-| Scenario                                                               | Required result                                                       |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Customer-controlled `*.cloudapp.azure.com` destination                 | Rejected before token acquisition; no token sent                      |
-| Unrelated domain, deceptive suffix, malformed connection               | Explicit rejection, with no permissive fallback                       |
-| Mixed approved and unapproved seed hosts, in either order              | Entire Entra attempt rejected before token acquisition                |
-| Supported service endpoints in each supported cloud                    | Authentication reaches the intended server using the correct audience |
-| Legitimate SRV and private-endpoint forms                              | Continue to work with certificate validation enabled                  |
-| Initial SRV results outside policy                                     | Rejected before requesting or transmitting a token                    |
-| Unapproved topology member, reconnect destination, or later SRV result | No cached or newly acquired token transmitted to that destination     |
-| Saved credentials or authentication picker skipped                     | Same destination policy enforced                                      |
-| Interactive Entra, managed identity, shell, playground                 | Equivalent destination protection                                     |
-| Explicit trusted custom service                                        | Works without widening the built-in policy                            |
-| Link-supplied audience/authentication properties or purported source   | Cannot change audience or establish destination trust                 |
-| New-connection confirmation canceled                                   | No connection created and no token requested                          |
-| Non-Entra native/password connection                                   | Existing supported behavior preserved                                 |
+| Scenario                                                                                                                                                                  | Required result                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer-controlled `*.cloudapp.azure.com` destination                                                                                                                    | Rejected before token acquisition; no token sent                                                                                      |
+| Unrelated domain, deceptive suffix, malformed connection                                                                                                                  | Explicit rejection, with no permissive fallback                                                                                       |
+| Mixed approved and unapproved seed hosts, in either order                                                                                                                 | Entire Entra attempt rejected before token acquisition                                                                                |
+| Supported service endpoints in each supported cloud                                                                                                                       | Authentication reaches the intended server using the correct audience                                                                 |
+| Legitimate SRV and private-endpoint forms                                                                                                                                 | Continue to work with certificate validation enabled                                                                                  |
+| Initial SRV results outside policy                                                                                                                                        | Rejected before requesting or transmitting a token                                                                                    |
+| Unapproved topology member, reconnect destination, or later SRV result                                                                                                    | No cached or newly acquired token transmitted to that destination                                                                     |
+| Saved credentials or authentication picker skipped                                                                                                                        | Same destination policy enforced                                                                                                      |
+| Interactive Entra, managed identity, shell, playground                                                                                                                    | Equivalent destination protection                                                                                                     |
+| Explicit trusted custom service                                                                                                                                           | Works without widening the built-in policy                                                                                            |
+| Link-supplied audience/authentication properties or purported source                                                                                                      | Cannot change audience or establish destination trust                                                                                 |
+| New-connection confirmation canceled                                                                                                                                      | No connection created and no token requested                                                                                          |
+| Non-Entra native/password connection                                                                                                                                      | Existing supported behavior preserved                                                                                                 |
+| Saved `authMechanismProperties=ENVIRONMENT:azure,…` (from a link or paste), opened in the tree, shell and playground                                                      | Property removed from the OIDC options; driver host check active; no token to an unapproved host                                      |
+| Entra or managed identity with `tlsInsecure`, `tlsAllowInvalidCertificates`, `tlsAllowInvalidHostnames`, `ssl*` aliases or `rejectUnauthorized=false` in the saved string | Certificate and hostname validation stay on; no token over an unvalidated connection; native auth on the same saved string unaffected |
+| Approved seed whose `hello` lists an unapproved member                                                                                                                    | `checkServerIdentity` rejects the member before any application data; no token sent                                                   |
+| Host forms from [R6](#r6-endpoint-inventory-wi1-evidence): `global.`, `fc-…-000` node, `privatelink.`, legacy `c-`, port 10260, mixed case                                | Accepted in each supported cloud                                                                                                      |
+| `xmongocluster.cosmos.azure.com`, `mongocluster.cosmos.azure.com.evil.com`, `….azure.tk`, punycode lookalike, trailing dot, IP literal                                    | Rejected before token acquisition, with the same outcome in our predicate and in the driver                                           |
+| RU account (`*.mongo.cosmos.azure.*`, `*.documents.azure.*`) with Entra                                                                                                   | Rejected with an explanation; native auth unaffected                                                                                  |
+| Government- or China-signed-in user, public `*.cloudapp.azure.com` host                                                                                                   | Still stopped by the cloud-mismatch check before token acquisition (regression)                                                       |
+| Managed identity, public `*.cloudapp.azure.com` host                                                                                                                      | Rejected before the IMDS request                                                                                                      |
+| String declares `MONGODB-OIDC` for an unrecognized host                                                                                                                   | Entra and managed identity not offered; explanation shown                                                                             |
+| Worker `tokenRequest` while the worker's connection targets a rejected host                                                                                               | Relay refuses before token acquisition                                                                                                |
+| Pasted `*.cloudapp.azure.com` string in New Connection, with and without `authMechanism=MONGODB-OIDC`                                                                     | Entra and managed identity not offered; if forced through stored state, rejected before token acquisition                             |
+| Update Credentials on a connection to a rejected host                                                                                                                     | Entra and managed identity not offered                                                                                                |
+| Existing approved Entra connection; Update Connection String to a rejected host; then expand                                                                              | Stored method cleared, with an explanation; next connect prompts without Entra; no token sent                                         |
+| Existing approved Entra connection; Update Connection String to another approved host                                                                                     | Method kept; connects as before                                                                                                       |
+| Saved Entra connection whose host became disallowed (built-in list narrowed, or custom suffix removed)                                                                    | Expand fails with the localized explanation and recovery actions; no token, no silent method fallback                                 |
+| First open of a link-created connection to a rejected host                                                                                                                | Picker does not offer Entra or managed identity                                                                                       |
+| `hostnameSuffix` set to `azure.com`, `cloudapp.azure.com`, `eastus.cloudapp.azure.com`, `cosmos.azure.com` or a sovereign `cloudapp` domain                               | Rejected by validation; built-in policy unchanged                                                                                     |
+| `hostnameSuffix` set to a narrow new service suffix                                                                                                                       | Matching hosts accepted, with every-host, `checkServerIdentity` and certificate enforcement; the admitted connection is logged        |
+| `hostnameSuffix` in workspace settings, or arriving through Settings Sync                                                                                                 | Ignored (machine scope)                                                                                                               |
+| Rejection modal **Learn More**                                                                                                                                            | Opens documentation; no setting written or pre-filled                                                                                 |
+| New strings in every shipped locale                                                                                                                                       | Picker label and detail, placeholder, toast and modal title fit the [length budgets](#length-limits-for-the-new-strings)              |
 
 Extend the existing policy, authentication-handler, sovereign integration, authentication-picker,
 worker-manager, and URI-handler suites; add the smallest protocol harness needed to prove token
@@ -198,16 +804,37 @@ If a `TDD:` contract fails, stop for operator approval rather than changing the 
 Before implementation approval, settle:
 
 1. The authoritative built-in suffix inventory and which sovereign/private endpoint cases still
-   need service-owner or live-environment verification.
+   need service-owner or live-environment verification. In particular, whether
+   `*.mongocluster.cosmos.azure.us` ships on operator confirmation alone; it is not publicly
+   documented, and the Private Endpoint DNS reference lists no Government `mongocluster` zone.
 2. The compatibility policy for previously accepted but unrecognized Entra destinations, and any
-   new limits on explicit custom suffixes.
+   new limits on explicit custom suffixes. Recommended: custom DNS aliases, IP literals and tunnels
+   stay unsupported for Entra ([R8](#r8-compatibility-cost-is-small-unrecognized-entra-destinations-already-fail)).
 3. The exact UI treatment of unavailable Entra choices and the user-facing explanation.
+4. Whether WI3 (options builder: `ENVIRONMENT` and TLS-bypass removal) ships ahead of the policy
+   change as a standalone fix.
+5. Whether to ask the service team about a DocumentDB-specific token audience, since the shared
+   OSS RDBMS audience widens replay ([R5](#r5-the-token-audience-is-shared-with-other-azure-database-services)),
+   and whether to report the `ENVIRONMENT` and `ALLOWED_HOSTS` interaction to the driver maintainers.
+6. What Update Connection String does when an Entra or managed-identity connection is edited to a
+   rejected host. Proposed: save the string, clear the method and explain why. Alternatives: refuse
+   to save until the user picks another method, or save and leave the error to the next connect.
+   The last option is the least clear, but it is still safe, because connect-time enforcement holds
+   ([R11](#r11-manually-created-and-edited-connections)).
+7. The self-service override ([analysis](#self-service-override-for-endpoints-the-extension-does-not-recognize)).
+   Recommended: no global switch; harden the existing machine-scoped `hostnameSuffix` (option B);
+   do not add a per-connection trust checkbox for now (option C); evaluate ARM-attested destinations
+   as a follow-up (option D). Also decide whether `hostnameSuffix` becomes a list.
 
 Before declaring the fix complete:
 
 - Demonstrate that the driver and extension together enforce the invariant for all connection
   destinations, including discovered hosts and reconnects.
-- Complete the acceptance matrix and explicitly identify unverified live-cloud behavior.
+- Complete the acceptance matrix and explicitly identify unverified live-cloud behavior. Government
+  host forms and audience acceptance stay unverified until tested against a live Government cluster
+  or confirmed by the service team.
+- Re-run the R1 and R4 driver probes after any `mongodb` driver upgrade. Both the
+  `ENVIRONMENT` skip and the `checkServerIdentity` forwarding are driver internals.
 - After approval, update the active deep-links and sovereign-cloud documentation, related user
   configuration guidance, and misleading "safe default" comments alongside the implementation.
 - Record approved security/compatibility decisions and the operator's rationale in the relevant
