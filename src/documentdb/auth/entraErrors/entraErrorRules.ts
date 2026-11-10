@@ -137,8 +137,8 @@ export const entraErrorRules: readonly EntraErrorRule[] = [
         pattern: /^Host '[^'\r\n]+' is not valid for OIDC authentication with ALLOWED_HOSTS of '[^'\r\n]*'$/m,
         explain: (): string =>
             l10n.t(
-                'The driver does not appear to allow this cluster host for Microsoft Entra ID authentication. For a custom DNS endpoint, verify the trusted DocumentDB service hostname suffix with your cloud administrator and set "documentDB.customEnvironment.hostnameSuffix" in user settings. Only trust your service\'s domain, then connect again. See {link}',
-                { link: Links.SovereignClouds },
+                'The driver does not appear to allow this server for Microsoft Entra ID authentication. Microsoft Entra ID is available only for Azure DocumentDB or trusted servers. Learn More: {link}',
+                { link: Links.EntraTrustedServers },
             ),
     },
     {

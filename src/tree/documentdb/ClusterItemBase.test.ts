@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { EntraDestinationRejectedError } from '../../documentdb/auth/oidcAllowedHosts';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
@@ -433,6 +434,48 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         expect(listDatabases).not.toHaveBeenCalled();
     });
 
+    it('uses the trusted-server modal and preserves action-only recovery for a cached rejection', async (): Promise<void> => {
+        ClustersClientMock.getClient.mockRejectedValue(
+            new EntraDestinationRejectedError({ firstHost: 'other.example.com:27017', hostCount: 2 }),
+        );
+        const cluster = makeCluster();
+        cluster.treeId = 'connectionsView/folder/cluster-1';
+        const item = new TestClusterItem(cluster, null);
+
+        const children = await item.getChildren();
+
+        expect(ClustersClientMock.getClient).toHaveBeenCalledWith('cluster-1', expect.anything(), expect.any(Function));
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+            "Microsoft Entra ID isn't allowed for this server.",
+            {
+                modal: true,
+                detail: 'Microsoft Entra ID is available only for Azure DocumentDB\nor servers allowed by the trusted-server setting.\nServer: other.example.com and 1 more',
+            },
+            'Learn More',
+        );
+        expect(item.lastConnectionFailureReason).toBe('entraDestinationRejected');
+        expect(children).toHaveLength(1);
+        expect(children[0].id).toBe('connectionsView/folder/cluster-1/retry');
+        expect((children[0] as TreeElement & { commandId: string }).commandId).toBe(
+            'vscode-documentdb.command.internal.retry',
+        );
+    });
+
+    it('clears the destination rejection reason after a successful cached retry', async (): Promise<void> => {
+        const item = new TestClusterItem(makeCluster(), null);
+        ClustersClientMock.getClient.mockRejectedValueOnce(
+            new EntraDestinationRejectedError({ firstHost: 'other.example.com', hostCount: 1 }),
+        );
+        await item.getChildren();
+        expect(item.lastConnectionFailureReason).toBe('entraDestinationRejected');
+        ClustersClientMock.getClient.mockResolvedValueOnce(makeClient(vi.fn().mockResolvedValue([])));
+
+        await item.getChildren();
+
+        expect(item.lastConnectionFailureReason).toBeUndefined();
+        expect(item.lastConnectionOutcome).toBe('connected');
+    });
+
     it('surfaces a modal and records telemetry with failurePhase=cachedClientConnect', async () => {
         (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
 
@@ -610,6 +653,24 @@ describe('ClusterItemBase.connect', () => {
 
         // Only cancellation is swallowed; a real failure must not look like a quiet abort.
         await expect(item.connect()).rejects.toThrow('server down');
+    });
+
+    it('reports a cached destination rejection through the same modal without reauthenticating', async (): Promise<void> => {
+        mockHasCredentials.mockReturnValue(true);
+        ClustersClientMock.getClient.mockRejectedValue(
+            new EntraDestinationRejectedError({ firstHost: 'other.example.com', hostCount: 1 }),
+        );
+        const item = new ConnectTestClusterItem(makeMovedCluster(), null);
+
+        await expect(item.connect()).resolves.toBeNull();
+
+        expect(item.lastConnectionFailureReason).toBe('entraDestinationRejected');
+        expect(item.authenticateCalls).toBe(0);
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+            "Microsoft Entra ID isn't allowed for this server.",
+            expect.objectContaining({ modal: true }),
+            'Learn More',
+        );
     });
 
     it.each(['connected', 'canceled', 'failed'] as const)(

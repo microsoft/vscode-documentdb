@@ -6,7 +6,9 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { Links } from '../constants';
 import { ErrorExplanationService } from '../services/errorExplanationService';
+import { isEntraDestinationRejectedError } from './auth/oidcAllowedHosts';
 
 export interface ShowClusterConnectFailureOptions {
     /** Stable cluster ID (never treeId); the diagnostics service and its providers key on it. */
@@ -34,6 +36,33 @@ export async function showClusterConnectFailure(
     options: ShowClusterConnectFailureOptions,
 ): Promise<string | undefined> {
     const { clusterId, clusterName, fallbackHeading, error, context, extraDetail, buttons } = options;
+    if (isEntraDestinationRejectedError(error)) {
+        context.telemetry.properties.diagnosisProviderId = 'none';
+        let detail = l10n.t(
+            'Microsoft Entra ID is available only for Azure DocumentDB\nor servers allowed by the trusted-server setting.',
+        );
+        if (error.firstHost) {
+            detail +=
+                '\n' +
+                (error.additionalHostCount > 0
+                    ? l10n.t('Server: {host} and {count} more', {
+                          host: error.firstHost,
+                          count: error.additionalHostCount,
+                      })
+                    : l10n.t('Server: {host}', { host: error.firstHost }));
+        }
+        const learnMore = l10n.t('Learn More');
+        const selected = await vscode.window.showErrorMessage(
+            l10n.t("Microsoft Entra ID isn't allowed for this server."),
+            { modal: true, detail },
+            learnMore,
+        );
+        if (selected === learnMore) {
+            await vscode.env.openExternal(vscode.Uri.parse(Links.EntraTrustedServers));
+        }
+        return selected;
+    }
+
     const diagnosis = await ErrorExplanationService.explain({ clusterId, error });
     context.telemetry.properties.diagnosisProviderId = diagnosis?.providerId ?? 'none';
 

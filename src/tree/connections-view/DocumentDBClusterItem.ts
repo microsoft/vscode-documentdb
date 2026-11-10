@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
 import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
 import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/auth/urlEncodedPassword';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -141,6 +142,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             if (!authMethod || needsNativeCredentials) {
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
+                    connectionString: connectionCredentials.secrets.connectionString,
+                    entraDestinationAllowed: evaluateEntraDestinationFromSettings(
+                        connectionCredentials.secrets.connectionString,
+                    ).allowed,
                     availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
                     selectedAuthMethod: authMethod,
 
