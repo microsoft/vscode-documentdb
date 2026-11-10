@@ -375,3 +375,26 @@ Implementation turns took 4m06s plus the narrow note-colour refinement; the fina
 check agent took 1m15s. The snapshot reports leader 277.1 AIU and subagents 81.4 AIU.
 Monetary cost was not reported. Reporting and publishing after the snapshot are
 not included.
+
+## Shared row highlighting — 2026-11-10
+
+**Done, commit `e24789a4`:** the operator requested the same hover tracking as
+Diagnose connection. Both the Set up and Done StatusList instances now enable
+the package's existing `highlightRowsOnHover` property. This explicitly supersedes
+the original plan's choice to leave it off. No local hover CSS, package changes,
+new interaction logic or wording was added.
+
+Luna implemented the two-property enablement. The leader carried out the accepted
+decision without an additional advisor gate (100% confidence: the package's
+existing documented property is the exact requested behavior). Case 1 build
+passed and all 53 focused disclosure tests passed.
+
+Live checks on both screens in dark, light and high contrast confirmed pointer
+hover and keyboard-visible-focus highlighting, with 0 px row or following-row
+movement. The remote browser's transition timing initially produced transient
+computed colours; the final check finished the existing CSS transitions before
+sampling their end state, without changing application styles. The existing
+shared preview server was left untouched.
+
+The PR remains draft; Case 2, including formatting, localization validation, lint
+and packaging, is deferred until ready for review.

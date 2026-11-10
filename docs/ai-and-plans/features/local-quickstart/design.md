@@ -230,6 +230,9 @@ After **Start DocumentDB Local**, Set up shows five stages: checking the contain
 the image, creating and starting the container, and waiting for DocumentDB to accept connections.
 Command output is available through **View setup log**.
 
+Both Set up and Done enable the shared StatusList row highlight for pointer hover and
+keyboard-visible focus, including its high-contrast outline and reduced-motion behavior.
+
 A settled row with facts offers **Details** alongside a concise factual summary. It starts collapsed
 and shows available evidence, not step durations. Every stage reserves one summary line while pending
 or active, so adding its summary does not move the following rows. Longer content can still wrap
