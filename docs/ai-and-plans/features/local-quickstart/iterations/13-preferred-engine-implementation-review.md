@@ -2,7 +2,7 @@
 feature: local-quickstart
 kind: review
 status: active
-prs: []
+prs: [1076]
 created: 2026-11-10
 code:
   - src/services/localQuickStart/**
@@ -17,6 +17,7 @@ code:
 
 Implementation of the approved [iteration 12](./12-preferred-engine-and-podman-start.md),
 stacked on `dev/tnaum/quickstart-setup-stage-details-pr` (#1072), not `main`.
+Implementation PR: **#1076** (draft, milestone 1.1.0).
 
 The leader used the lead workflow from #1073. Opus 5.5 planned the interfaces and reviewed
 the risky logic after each phase. A fresh `gpt-6.1-sol` code-review agent then performed

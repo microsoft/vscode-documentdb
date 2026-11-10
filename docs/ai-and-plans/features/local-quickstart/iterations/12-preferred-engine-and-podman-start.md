@@ -2,7 +2,7 @@
 feature: local-quickstart
 kind: plan
 status: active
-prs: []
+prs: [1076]
 created: 2026-11-10
 code:
   - src/services/localQuickStart/containerCli.ts
@@ -321,6 +321,7 @@ The operator requested implementation with the lead workflow from #1073 and Opus
 advisor. Work is on `dev/tnaum/preferred-engine-podman-start`, stacked on
 `dev/tnaum/quickstart-setup-stage-details-pr` (#1072), not `main`. The attached iteration 12
 document is the task source; iteration 11 is the existing stage-Details implementation.
+Implementation PR: **#1076**, draft, milestone **1.1.0**.
 
 Opus 5.5 prepared the work breakdown and approved the P1–P4 interfaces at 82% confidence.
 P5 requires verification against Podman 5.x/6.x source before implementation. The approved

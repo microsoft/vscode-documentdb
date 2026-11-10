@@ -19,8 +19,8 @@ verified: 2026-08-14
 | 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                 | 2026-09-29 | #979  |
 | 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                             | 2026-10-15 | #1018 |
 | 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface             | 2026-11-10 | —     |
-| 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | —     |
-| 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | —     |
+| 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | #1076 |
+| 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | #1076 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -508,7 +508,7 @@ No evidence, disclosure controls, full-ID tooltips or severity semantics are rem
 
 ## 0009 — Preferred engine and instance ownership
 
-**Status:** Accepted · **Date:** 2026-11-10 · **PR:** —
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** #1076
 
 **Evidence:** [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) §§3.1–3.4, Q1–Q5 and Q7
 
@@ -546,7 +546,7 @@ options and trade-offs in [iteration 12](./iterations/12-preferred-engine-and-po
 
 ## 0010 — Platform-gated Podman machine startup
 
-**Status:** Accepted · **Date:** 2026-11-10 · **PR:** —
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** #1076
 
 **Evidence:** [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) §§3.5–3.6, Q5–Q6
 
