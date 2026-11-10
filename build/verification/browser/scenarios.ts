@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type StageEvent } from '../../../src/services/localQuickStart/quickStartTypes';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
 import {
     type FixtureAtPath,
@@ -221,6 +222,73 @@ const completedStages = [
     { stage: 'starting', status: 'done' },
 ] as const;
 
+const detailedStages = [
+    { stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10260, portFree: true } },
+    {
+        stage: 'pulling',
+        status: 'done',
+        facts: {
+            kind: 'pulling',
+            imageRef: 'ghcr.io/documentdb/documentdb-local:latest',
+            imageOrigin: 'default',
+            result: 'upToDate',
+            imageId: 'sha256:4a341daca1234567890123456789012345678901234567890123456789012345',
+            digest: 'sha256:4a341daca1234567890123456789012345678901234567890123456789012345',
+            imageVersion: '1.0.0',
+            createdAtMs: 1790884800000,
+        },
+    },
+    {
+        stage: 'creating',
+        status: 'done',
+        facts: {
+            kind: 'creating',
+            containerName: 'vscode-documentdb-local',
+            containerId: '123456789abc123456789abc',
+            hostPort: 10260,
+            containerPort: 10260,
+            volumeName: 'vscode-documentdb-local-data',
+            dataPath: '/data/documentdb',
+            volume: 'new',
+            username: 'documentdb',
+        },
+    },
+    {
+        stage: 'starting',
+        status: 'done',
+        facts: {
+            kind: 'starting',
+            running: true,
+            startedAtMs: 1790884800000,
+            boundPort: 10260,
+            boundPortReported: true,
+        },
+    },
+    {
+        stage: 'waiting',
+        status: 'done',
+        facts: {
+            kind: 'waiting',
+            port: 10260,
+            attempts: 2,
+            maxWireVersion: 21,
+            sampleData: 'loaded',
+            displayName: 'DocumentDB Local',
+        },
+    },
+    { stage: 'done', status: 'done', message: { key: 'instanceRunning', port: 10260 }, boundPort: 10260 },
+] as const satisfies readonly StageEvent[];
+
+const quickStartRows = [
+    'Checking container engine',
+    'Pulling official image',
+    'Creating container',
+    'Starting container',
+    'Waiting for DocumentDB to accept connections',
+] as const;
+
+const privateDetails = ['fixture-password', 'mongodb(?:\\+srv)?://', 'DOCUMENTDB_PASSWORD', 'DOCUMENTDB_USAGE_TELEMETRY'];
+
 const missingReadiness = {
     outcome: 'diagnosed',
     environment: 'windows',
@@ -263,11 +331,40 @@ function dockerMissing(
         } as const satisfies TypedRpcFixtures,
         steps: setupSteps,
         readiness: {
-            content: ['Checking container engine', 'Docker or Podman CLI not found', label],
+            content: ['Checking container engine', 'Docker or Podman CLI not found', 'Retry setup', label],
             selectors: ['[role="button"], button'],
             noProgressbar: true,
         },
         assertions: [
+            {
+                kind: 'text',
+                name: 'The failure remains visible without the old accordion',
+                selector: 'body',
+                includes: ['Docker or Podman CLI not found', 'Retry setup', label],
+                excludes: ['What the Docker check found'],
+            },
+            {
+                kind: 'attribute',
+                name: 'The checking Details starts collapsed',
+                selector: '[aria-label="Details for Checking container engine"]',
+                attribute: 'aria-expanded',
+                expected: 'false',
+            },
+            {
+                kind: 'attribute',
+                name: 'The checking Details expands',
+                selector: '[aria-label="Details for Checking container engine"]',
+                attribute: 'aria-expanded',
+                expected: 'true',
+                steps: [{ action: 'click', role: 'button', name: 'Details for Checking container engine' }],
+            },
+            {
+                kind: 'text',
+                name: 'The checking Details contains evidence rather than the recovery actions',
+                selector: '[aria-label="Setup progress"] [role="listitem"]:nth-child(1) [role="region"]',
+                includes: ['Check result', 'A specific problem was identified', 'Docker CLI', 'Not found'],
+                excludes: [label, ...privateDetails],
+            },
             {
                 kind: 'calls',
                 name: `${label} opens the platform install guide exactly once`,
@@ -2318,6 +2415,109 @@ export const scenarios = {
                 selectors: ['h2'],
                 noProgressbar: true,
             },
+        },
+        'success-details': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.startQuickStart': { type: 'subscription', results: detailedStages },
+            },
+            steps: setupSteps,
+            readiness: {
+                content: ['DocumentDB Local is ready', 'All set', ...quickStartRows],
+                noProgressbar: true,
+            },
+            assertions: [
+                ...quickStartRows.map((label): ScenarioAssertion => ({
+                    kind: 'attribute',
+                    name: `${label} Details starts collapsed`,
+                    selector: `[aria-label="Details for ${label}"]`,
+                    attribute: 'aria-expanded',
+                    expected: 'false',
+                })),
+                ...quickStartRows.flatMap((label, index): ScenarioAssertion[] => [
+                    {
+                        kind: 'attribute',
+                        name: `${label} Details expands`,
+                        selector: `[aria-label="Details for ${label}"]`,
+                        attribute: 'aria-expanded',
+                        expected: 'true',
+                        steps: [{ action: 'click', role: 'button', name: `Details for ${label}` }],
+                    },
+                    {
+                        kind: 'text',
+                        name: `${label} shows its evidence`,
+                        selector: `[aria-label="Completed setup steps"] [role="listitem"]:nth-child(${index + 1}) [role="region"][aria-labelledby]`,
+                        includes: [
+                            ['Docker is ready', 'Docker Engine', '27.0.0', 'Port', '10260', 'Free on 127.0.0.1'],
+                            ['Image', 'ghcr.io/documentdb/documentdb-local:latest', 'Already up to date', 'Digest', '1.0.0'],
+                            ['vscode-documentdb-local', '123456789abc', 'localhost:10260', 'vscode-documentdb-local-data', 'documentdb', '(hidden)'],
+                            ['State', 'Running', 'Bound port', '10260', 'Streaming to the setup log'],
+                            ['Endpoint', 'localhost:10260', '2 attempts', 'wire 21', 'Sample data', 'Loaded', 'DocumentDB Local'],
+                        ][index],
+                        excludes: [...privateDetails, ...(index === 4 ? ['DocumentDB version', 'Image version'] : [])],
+                    },
+                ]),
+                {
+                    kind: 'text',
+                    name: 'The expanded setup contains no credentials, URI or environment values',
+                    selector: 'body',
+                    includes: ['All set'],
+                    excludes: privateDetails,
+                },
+            ],
+        },
+        'failed-check-details': dockerMissing(
+            { ...missingReadiness, environment: 'linux', endpointKind: 'unixSocket' },
+            'Open Docker install guide',
+            'https://docs.docker.com/engine/install/',
+        ),
+        'success-sample-data-not-loaded': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [
+                        ...detailedStages.slice(0, 4),
+                        {
+                            stage: 'waiting',
+                            status: 'done',
+                            facts: { kind: 'waiting', port: 10260, attempts: 2, sampleData: 'failed' },
+                        },
+                        detailedStages[5],
+                    ],
+                },
+            },
+            steps: setupSteps,
+            readiness: {
+                content: ['DocumentDB Local is ready', 'All set', 'Sample data was not loaded. View the setup log for the reason.'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'attribute',
+                    name: 'Waiting Details starts collapsed',
+                    selector: '[aria-label="Details for Waiting for DocumentDB to accept connections"]',
+                    attribute: 'aria-expanded',
+                    expected: 'false',
+                },
+                {
+                    kind: 'attribute',
+                    name: 'Waiting Details expands',
+                    selector: '[aria-label="Details for Waiting for DocumentDB to accept connections"]',
+                    attribute: 'aria-expanded',
+                    expected: 'true',
+                    steps: [{ action: 'click', role: 'button', name: 'Details for Waiting for DocumentDB to accept connections' }],
+                },
+                {
+                    kind: 'text',
+                    name: 'Waiting Details explains the sample data result',
+                    selector: '[aria-label="Completed setup steps"] [role="listitem"]:nth-child(5) [role="region"][aria-labelledby]',
+                    includes: ['Info:', 'Sample data was not loaded', 'The instance is ready to use without sample data.', 'View setup log', 'Not loaded'],
+                    excludes: [...privateDetails, 'Server'],
+                },
+            ],
         },
         'failed-port-in-use': {
             config: base.config,

@@ -6,7 +6,7 @@
 // @vitest-environment jsdom
 
 import { SSRProvider } from '@fluentui/react-components';
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InstanceState, type DockerReadiness, type StageEvent } from '../../../services/localQuickStart/quickStartTypes';
@@ -35,7 +35,7 @@ const client = vi.hoisted(() => {
     return {
         streams,
         trpc: {
-            common: { openUrl: mutation(), openFeedback: mutation() },
+            common: { openUrl: mutation(), openFeedback: mutation(), reportError: mutation(), reportEvent: mutation() },
             localQuickStart: {
                 getDockerStatus: { query: vi.fn() },
                 checkPort: { query: vi.fn(async () => 'available') },
@@ -44,6 +44,7 @@ const client = vi.hoisted(() => {
                 waitLonger: { subscribe },
                 discardTimedOut: { mutate: vi.fn(async () => true) },
                 reportStepChange: mutation(),
+                reportDetailsOpened: mutation(),
                 closePanel: mutation(),
                 showOutput: mutation(),
                 openConnection: mutation(),
@@ -121,6 +122,9 @@ describe('Local Quick Start stage details', () => {
             return selector === ':modal' ? false : matches.call(this, selector);
         });
         client.streams.length = 0;
+        client.trpc.localQuickStart.reportDetailsOpened.mutate.mockReset().mockResolvedValue(undefined);
+        client.trpc.common.reportError.mutate.mockClear();
+        client.trpc.common.reportEvent.mutate.mockClear();
         client.trpc.localQuickStart.getDockerStatus.query.mockReset().mockResolvedValue(status(ready));
         host = document.createElement('div');
         document.body.appendChild(host);
@@ -133,6 +137,49 @@ describe('Local Quick Start stage details', () => {
         host.remove();
         vi.restoreAllMocks();
     });
+
+    it('reports only openings, once each in StrictMode, including reopenings on Done', async () => {
+        await act(async () => root.render(<SSRProvider><StrictMode><LocalQuickStart /></StrictMode></SSRProvider>));
+        await start();
+        await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10333, portFree: true } });
+        const report = client.trpc.localQuickStart.reportDetailsOpened.mutate;
+        expect(report).not.toHaveBeenCalled();
+
+        await click(toggle('Checking container engine')!);
+        expect(report).toHaveBeenCalledExactlyOnceWith({ stage: 'checking' });
+        await click(toggle('Checking container engine')!);
+        expect(report).toHaveBeenCalledTimes(1);
+        await click(toggle('Checking container engine')!);
+        expect(report).toHaveBeenCalledTimes(2);
+        await event({ stage: 'done', status: 'done' });
+        expect(report).toHaveBeenCalledTimes(2);
+        await click(toggle('Checking container engine')!);
+        expect(report).toHaveBeenCalledTimes(2);
+        await click(toggle('Checking container engine')!);
+        expect(report.mock.calls).toEqual([
+            [{ stage: 'checking' }],
+            [{ stage: 'checking' }],
+            [{ stage: 'checking' }],
+        ]);
+        expect(client.trpc.common.reportEvent.mutate).not.toHaveBeenCalled();
+    });
+
+    it.each([new Error('Disclosure reporting failed'), 'Disclosure reporting failed'])(
+        'reports a failed disclosure mutation without preventing expansion (%s)',
+        async (error) => {
+            client.trpc.localQuickStart.reportDetailsOpened.mutate.mockRejectedValueOnce(error);
+            await start();
+            await event({ stage: 'checking', status: 'done' });
+
+            await click(toggle('Checking container engine')!);
+
+            expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('true');
+            expect(client.trpc.common.reportError.mutate).toHaveBeenCalledExactlyOnceWith({
+                message: 'Disclosure reporting failed',
+                stack: error instanceof Error ? error.stack : '',
+            });
+        },
+    );
 
     it('shows collapsed details only for a settled checking row and carries them to Done', async () => {
         await start();
@@ -190,6 +237,11 @@ describe('Local Quick Start stage details', () => {
         expect(button('Retry setup').getAttribute('aria-disabled')).toBe('true');
         await act(async () => resolveRecheck(status(failed)));
         expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('false');
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledExactlyOnceWith({
+            stage: 'checking',
+        });
+        await click(toggle('Checking container engine')!);
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledTimes(2);
     });
 
     it('moves focus from the recheck action to the footer while checking Docker again', async () => {
@@ -222,6 +274,12 @@ describe('Local Quick Start stage details', () => {
         expect(toggle('Checking container engine')).toBeNull();
         await event({ stage: 'checking', status: 'done' });
         expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('false');
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledTimes(1);
+        await click(toggle('Checking container engine')!);
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate.mock.calls).toEqual([
+            [{ stage: 'checking' }],
+            [{ stage: 'checking' }],
+        ]);
     });
 
     it('clears open rows when waiting longer and starting over', async () => {
@@ -239,6 +297,13 @@ describe('Local Quick Start stage details', () => {
         await start();
         await event({ stage: 'checking', status: 'done' });
         expect(toggle('Checking container engine')?.getAttribute('aria-expanded')).toBe('false');
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate).toHaveBeenCalledTimes(2);
+        await click(toggle('Checking container engine')!);
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate.mock.calls).toEqual([
+            [{ stage: 'checking' }],
+            [{ stage: 'checking' }],
+            [{ stage: 'checking' }],
+        ]);
     });
 
     it('shows each non-readiness stage table in Set up and Done, using code and the existing log action', async () => {
@@ -286,11 +351,20 @@ describe('Local Quick Start stage details', () => {
         expect(logLink).toBeDefined();
         await click(logLink!);
         expect(client.trpc.localQuickStart.showOutput.mutate).toHaveBeenCalledTimes(calls + 1);
-        await event({ stage: 'waiting', status: 'done' });
+        await event({ stage: 'waiting', status: 'done', facts: { kind: 'waiting', port: 10273 } });
         await event({ stage: 'done', status: 'done' });
         expect(host.textContent).toContain('official:test-tag');
         expect(host.textContent).toContain('test-volume');
         expect(host.textContent).toContain('10273');
+        await click(toggle('Waiting for DocumentDB to accept connections')!);
+        expect(client.trpc.localQuickStart.reportDetailsOpened.mutate.mock.calls).toEqual([
+            [{ stage: 'checking' }],
+            [{ stage: 'pulling' }],
+            [{ stage: 'creating' }],
+            [{ stage: 'starting' }],
+            [{ stage: 'waiting' }],
+        ]);
+        expect(client.trpc.common.reportEvent.mutate).not.toHaveBeenCalled();
     });
 
     it('stores terminal error facts by kind rather than the error event stage', async () => {

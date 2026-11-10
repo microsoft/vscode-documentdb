@@ -593,6 +593,7 @@ export const fixtures = {
             'localQuickStart.checkPort': reply<Outputs['localQuickStart']['checkPort']>('query', 'available'),
             'localQuickStart.checkPassword': reply<Outputs['localQuickStart']['checkPassword']>('query', 'ok'),
             'localQuickStart.reportStepChange': reply<void>('mutation', undefined),
+            'localQuickStart.reportDetailsOpened': reply<void>('mutation', undefined),
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
         },
     },

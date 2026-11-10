@@ -606,17 +606,30 @@ export const LocalQuickStart = (): JSX.Element => {
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
     const [facts, setFacts] = useState<Record<ProvisionStage, StageFacts | undefined>>(emptyStageFacts);
     const [expandedStages, setExpandedStages] = useState<ReadonlySet<ProvisionStage>>(() => new Set());
-    const handleExpandedChange = useCallback((stage: ProvisionStage, expanded: boolean): void => {
-        setExpandedStages((previous) => {
-            const next = new Set(previous);
-            if (expanded) {
-                next.add(stage);
-            } else {
-                next.delete(stage);
+    const handleExpandedChange = useCallback(
+        (stage: ProvisionStage, expanded: boolean): void => {
+            if (expanded && !expandedStages.has(stage) && stage !== 'done' && stage !== 'error') {
+                void trpcClient.localQuickStart.reportDetailsOpened.mutate({ stage }).catch((error: unknown) => {
+                    void trpcClient.common.reportError
+                        .mutate({
+                            message: error instanceof Error ? error.message : String(error),
+                            stack: error instanceof Error ? (error.stack ?? '') : '',
+                        })
+                        .catch(() => undefined);
+                });
             }
-            return next;
-        });
-    }, []);
+            setExpandedStages((previous) => {
+                const next = new Set(previous);
+                if (expanded) {
+                    next.add(stage);
+                } else {
+                    next.delete(stage);
+                }
+                return next;
+            });
+        },
+        [expandedStages, trpcClient],
+    );
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
