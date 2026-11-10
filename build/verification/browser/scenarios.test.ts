@@ -249,16 +249,18 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('settles the preference submission back in Configure instead of leaving its readiness marker behind', (): void => {
         const scenario = scenarios.localQuickStart['configure-engine-choice'];
-        expect(scenario.assertions).toContainEqual(expect.objectContaining({
-            kind: 'calls',
-            path: 'localQuickStart.startQuickStart',
-            input: { preferredEngine: 'podman', port: 10260 },
-            count: 1,
-            steps: [
-                { action: 'click', role: 'button', name: 'Start DocumentDB Local' },
-                { action: 'click', role: 'button', name: 'Cancel' },
-            ],
-        }));
+        expect(scenario.assertions).toContainEqual(
+            expect.objectContaining({
+                kind: 'calls',
+                path: 'localQuickStart.startQuickStart',
+                input: { preferredEngine: 'podman', port: 10260 },
+                count: 1,
+                steps: [
+                    { action: 'click', role: 'button', name: 'Start DocumentDB Local' },
+                    { action: 'click', role: 'button', name: 'Cancel' },
+                ],
+            }),
+        );
         expect(scenario.readiness.content).toContain('Configure setup');
     });
 
@@ -273,9 +275,7 @@ describe('L2-dev manifest and routes', (): void => {
                 cli: 'podman',
                 daemonReachable: true,
             });
-            expect(scenario.readiness.content).toEqual([
-                'Ready to set up', 'Continue setup', 'Podman CLI 6.0.2 found',
-            ]);
+            expect(scenario.readiness.content).toEqual(['Ready to set up', 'Continue setup', 'Podman CLI 6.0.2 found']);
             expect(scenario.readiness.noProgressbar).toBe(true);
             if (name === 'podman-machine-stopped-mac') {
                 expect(scenario.steps?.slice(-3)).toEqual([

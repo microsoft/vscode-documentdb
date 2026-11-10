@@ -282,7 +282,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 const retry = service.provision(new AbortController().signal, { preferredEngine });
                 try {
                     expect((await retry.next()).value).toMatchObject({ stage: 'checking', status: 'active' });
-                    expect(runtime.resolveCli).toHaveBeenLastCalledWith({ kind: 'preferred', preferred: preferredEngine });
+                    expect(runtime.resolveCli).toHaveBeenLastCalledWith({
+                        kind: 'preferred',
+                        preferred: preferredEngine,
+                    });
                     vi.mocked(runtime.inspectContainer).mockResolvedValue({
                         id: 'c1',
                         name: DEFAULT_ALIAS,
@@ -300,7 +303,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                         raw: '{}',
                     });
                     await collect(retry);
-                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: preferredEngine });
+                    expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                        phase: 'ready',
+                        engineCli: preferredEngine,
+                    });
                 } finally {
                     await retry.return(undefined);
                 }

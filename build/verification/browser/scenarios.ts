@@ -3081,7 +3081,12 @@ export const scenarios = {
                     name: 'Cancel stops waiting without claiming the machine was stopped',
                     selector: 'body',
                     includes: ['Ready to set up', 'Continue setup', 'Podman CLI 6.0.2 found'],
-                    excludes: ['Waiting 00:', 'Podman could not be started', 'Podman machine was stopped', 'Start Docker Desktop'],
+                    excludes: [
+                        'Waiting 00:',
+                        'Podman could not be started',
+                        'Podman machine was stopped',
+                        'Start Docker Desktop',
+                    ],
                 },
             ],
         },
