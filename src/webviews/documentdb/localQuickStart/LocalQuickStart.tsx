@@ -2108,6 +2108,9 @@ export const LocalQuickStart = (): JSX.Element => {
             </StatusList>
             <MessageBlock intent="success" title={l10n.t('All set')}>
                 {l10n.t('The instance is ready in the Connections view as “DocumentDB Local”.')}
+                {facts.waiting?.kind === 'waiting' && facts.waiting.sampleData === 'failed' && (
+                    <> {l10n.t('Sample data was not loaded. View the setup log for the reason.')}</>
+                )}
             </MessageBlock>
             <div className={styles.nextSteps}>
                 <Text size={300} weight="regular">

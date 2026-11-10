@@ -311,6 +311,60 @@ describe('Local Quick Start stage details', () => {
         expect(host.textContent).not.toContain('official:failed-tag');
     });
 
+    it.each(['loaded', 'notRequested', 'keptExisting', 'failed'] as const)(
+        'keeps waiting done and shows a visible sample-data sentence only for failed loading (%s)',
+        async (sampleData) => {
+            await start();
+            await event({
+                stage: 'waiting',
+                status: 'done',
+                facts: { kind: 'waiting', port: 10333, attempts: 3, sampleData, displayName: 'DocumentDB Local' },
+            });
+            await event({ stage: 'done', status: 'done' });
+            const waiting = toggle('Waiting for DocumentDB to accept connections');
+            expect(waiting?.getAttribute('aria-expanded')).toBe('false');
+            const sentence = 'Sample data was not loaded. View the setup log for the reason.';
+            expect(host.textContent?.includes(sentence)).toBe(sampleData === 'failed');
+            await click(waiting!);
+            expect(host.textContent).toContain('localhost:10333');
+            expect(host.textContent).toContain('ping on admin answered after 3 attempts');
+            expect(host.textContent).toContain('Credentials in VS Code secret storage');
+            if (sampleData === 'failed') {
+                const region = host.querySelector(`[aria-labelledby="${waiting!.id}"]`);
+                expect(region?.textContent).toContain('Info: Sample data was not loaded');
+                expect(region?.textContent).toContain('The instance is ready to use without sample data.');
+                expect(region?.textContent).toContain('Next: View setup log');
+                const calls = client.trpc.localQuickStart.showOutput.mutate.mock.calls.length;
+                const link = [...region!.querySelectorAll<HTMLElement>('a, button')].find(
+                    (element) => element.textContent === 'View setup log',
+                );
+                expect(link).toBeDefined();
+                await click(link!);
+                expect(client.trpc.localQuickStart.showOutput.mutate).toHaveBeenCalledTimes(calls + 1);
+            } else {
+                expect(host.textContent).not.toContain('Sample data was not loaded');
+            }
+        },
+    );
+
+    it('shows failed readiness evidence without a success claim and clears it on Wait longer', async () => {
+        await start();
+        await event({ stage: 'waiting', status: 'active' });
+        await event({
+            stage: 'waiting', status: 'error', timedOut: true,
+            facts: { kind: 'waiting', port: 10333, attempts: 4, lastProbeError: 'masked ***', exitCode: 1, lastLogLine: 'fatal ***' },
+        });
+        await click(toggle('Waiting for DocumentDB to accept connections')!);
+        expect(host.textContent).toContain('4 attempts');
+        expect(host.textContent).toContain('masked ***');
+        expect(host.textContent).toContain('fatal ***');
+        expect(host.textContent).not.toContain('ping on admin answered');
+        expect(host.textContent).not.toContain('Credentials in VS Code secret storage');
+        await click(button('Wait longer'));
+        expect(toggle('Waiting for DocumentDB to accept connections')).toBeNull();
+        expect(host.textContent).not.toContain('masked ***');
+    });
+
     it('does not claim logs started streaming when starting failed before log following', async () => {
         await start();
         await event({ stage: 'starting', status: 'active' });

@@ -51,6 +51,12 @@ import {
 
 /** Called on every readiness/sample-data probe, so a test can observe the world mid-provision. */
 let onProbe: () => void | Promise<void> = () => undefined;
+let onHello: () => unknown = () => ({ ok: 1 });
+const probeCommand = vi.fn(async (command: { ping?: number; hello?: number }): Promise<unknown> =>
+    command.hello ? await onHello() : { ok: 1 },
+);
+const closeProbe = vi.fn(async (): Promise<void> => undefined);
+const connectProbe = vi.fn();
 
 // Real fs, with `rm` and `writeFile` spyable so a test can fail one env-file write or delete.
 vi.mock('fs/promises', async () => {
@@ -61,17 +67,18 @@ vi.mock('fs/promises', async () => {
 vi.mock('mongodb', () => ({
     MongoClient: class {
         public async connect(): Promise<unknown> {
+            connectProbe();
             // Awaited so a hook can read the durable store, which is async since I3-1.
             await onProbe();
             return this;
         }
         public db(): unknown {
             return {
-                command: () => Promise.resolve({ ok: 1 }),
+                command: probeCommand,
             };
         }
         public close(): Promise<void> {
-            return Promise.resolve();
+            return closeProbe();
         }
     },
 }));
@@ -217,16 +224,21 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         ext.secretStorage = secretStorage;
         ext.context = fakeContext(globalState);
         onProbe = () => undefined;
+        onHello = () => ({ ok: 1 });
+        probeCommand.mockClear();
+        connectProbe.mockClear();
+        closeProbe.mockClear();
     });
 
     afterEach(() => {
         ext.secretStorage = originalSecretStorage;
         ext.context = originalContext;
         onProbe = () => undefined;
+        onHello = () => ({ ok: 1 });
     });
 
     describe('setup stage facts', () => {
-        it('emits allow-listed facts on every non-readiness done stage without credentials or env', async () => {
+        it('emits allow-listed facts on every done stage without credentials or env', async () => {
             const password = 'private-password-123';
             const runtime = runtimeFor({
                 overrides: {
@@ -286,6 +298,15 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     startedAtMs: Date.parse('2026-10-28T10:42:17Z'),
                     boundPort: 10273,
                     boundPortReported: true,
+                },
+                {
+                    kind: 'waiting',
+                    port: 10273,
+                    attempts: 1,
+                    documentdbVersions: undefined,
+                    maxWireVersion: undefined,
+                    displayName: 'DocumentDB Local',
+                    sampleData: 'loaded',
                 },
             ]);
             expect(events.at(-1)?.stage).toBe('done');
@@ -734,10 +755,12 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
 
-            await collect(service.provision(new AbortController().signal, { loadSampleData: false }));
+            const events = await collect(service.provision(new AbortController().signal, { loadSampleData: false }));
 
             expect(runtime.execShellInContainer).not.toHaveBeenCalled();
             expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
+                .toMatchObject({ sampleData: 'notRequested' });
         });
 
         // #946 DATA-4: a reused volume already had its first setup; re-seeding would bring back
@@ -761,10 +784,12 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = runtimeFor({ volumeExists });
             const service = new QuickStartServiceImpl(runtime);
 
-            await collect(service.provision(new AbortController().signal));
+            const events = await collect(service.provision(new AbortController().signal));
 
             expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
             expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
+                .toMatchObject({ sampleData: volumeExists ? 'keptExisting' : 'loaded' });
         });
 
         it('keeps the database usable without retrying a failed sample load', async () => {
@@ -777,6 +802,122 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(runtime.execShellInContainer).toHaveBeenCalledTimes(1);
             expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
             expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
+                .toMatchObject({ sampleData: 'failed' });
+        });
+    });
+
+    describe('readiness evidence', () => {
+        it('keeps the first two retry delays at 500ms and 750ms while counting every attempt', async () => {
+            vi.useFakeTimers();
+            try {
+                let enteredProbe: () => void = () => undefined;
+                const entered = new Promise<void>((resolve) => { enteredProbe = resolve; });
+                onProbe = () => {
+                    enteredProbe();
+                    if (connectProbe.mock.calls.length < 3) throw new Error('not ready');
+                };
+                const eventsPromise = collect(new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal));
+                await entered;
+                await vi.advanceTimersByTimeAsync(0);
+                expect(connectProbe).toHaveBeenCalledTimes(1);
+                await vi.advanceTimersByTimeAsync(499);
+                expect(connectProbe).toHaveBeenCalledTimes(1);
+                await vi.advanceTimersByTimeAsync(1);
+                expect(connectProbe).toHaveBeenCalledTimes(2);
+                await vi.advanceTimersByTimeAsync(749);
+                expect(connectProbe).toHaveBeenCalledTimes(2);
+                await vi.advanceTimersByTimeAsync(1);
+                const events = await eventsPromise;
+                expect(connectProbe).toHaveBeenCalledTimes(3);
+                expect(closeProbe).toHaveBeenCalledTimes(3);
+                expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
+                    .toMatchObject({ kind: 'waiting', attempts: 3 });
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('counts the successful attempt and reads hello once on the same client', async () => {
+            let attempts = 0;
+            onProbe = () => {
+                if (++attempts < 2) throw new Error('not ready');
+            };
+            onHello = () => ({
+                internal: { documentdb_versions: ['0.116.0', '0.115.0'] },
+                maxWireVersion: 21,
+                password: 'must-not-copy',
+                environmentVariables: { PASSWORD: 'must-not-copy' },
+            });
+            const runtime = runtimeFor();
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal));
+            const facts = events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts;
+            expect(facts).toEqual({
+                kind: 'waiting',
+                port: QUICK_START_PORT,
+                attempts: 2,
+                documentdbVersions: ['0.116.0', '0.115.0'],
+                maxWireVersion: 21,
+                displayName: 'DocumentDB Local',
+                sampleData: 'loaded',
+            });
+            expect(connectProbe).toHaveBeenCalledTimes(2);
+            expect(probeCommand.mock.calls).toEqual([[{ ping: 1 }], [{ hello: 1 }]]);
+            expect(closeProbe).toHaveBeenCalledTimes(2);
+            expect(JSON.stringify(facts)).not.toContain('must-not-copy');
+        });
+
+        it.each([
+            [{ maxWireVersion: 21 }, undefined, 21],
+            [{ version: '7.0', internal: { documentdb_versions: ['0.116.0', 7] }, maxWireVersion: -1 }, undefined, undefined],
+            [{ internal: { documentdb_versions: '0.116.0' }, maxWireVersion: Number.POSITIVE_INFINITY }, undefined, undefined],
+            [{ internal: { documentdb_versions: Array.from({ length: 10 }, (_, index) => String(index)) }, maxWireVersion: 1.5 },
+                Array.from({ length: 8 }, (_, index) => String(index)), undefined],
+        ])('omits unestablished server facts and bounds version evidence (%j)', async (hello, versions, wire) => {
+            onHello = () => hello;
+            const events = await collect(new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal));
+            const facts = events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts;
+            expect(facts).toMatchObject({ attempts: 1, documentdbVersions: versions, maxWireVersion: wire });
+            expect(closeProbe).toHaveBeenCalledTimes(1);
+        });
+
+        it('does not retry a successful ping when hello rejects', async () => {
+            onHello = () => Promise.reject(new Error('hello unavailable'));
+            const events = await collect(new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal));
+            expect(events.at(-1)?.stage).toBe('done');
+            const facts = events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts;
+            expect(facts).toMatchObject({ attempts: 1 });
+            if (facts?.kind !== 'waiting') throw new Error('Missing waiting facts');
+            expect(facts.documentdbVersions).toBeUndefined();
+            expect(facts.maxWireVersion).toBeUndefined();
+            expect(connectProbe).toHaveBeenCalledTimes(1);
+            expect(probeCommand.mock.calls).toEqual([[{ ping: 1 }], [{ hello: 1 }]]);
+            expect(closeProbe).toHaveBeenCalledTimes(1);
+        });
+
+        it.each([false, true])('cleans up a hung hello on timeout or cancellation (cancel=%s)', async (cancel) => {
+            vi.useFakeTimers();
+            try {
+                let enteredHello: () => void = () => undefined;
+                const entered = new Promise<void>((resolve) => { enteredHello = resolve; });
+                onHello = () => {
+                    enteredHello();
+                    return new Promise<never>(() => undefined);
+                };
+                const controller = new AbortController();
+                const eventsPromise = collect(new QuickStartServiceImpl(runtimeFor()).provision(controller.signal));
+                await entered;
+                if (cancel) controller.abort();
+                else await vi.advanceTimersByTimeAsync(2000);
+                const events = await eventsPromise;
+                expect(events.at(-1)?.stage).toBe(cancel ? 'error' : 'done');
+                expect(connectProbe).toHaveBeenCalledTimes(1);
+                expect(probeCommand.mock.calls).toEqual([[{ ping: 1 }], [{ hello: 1 }]]);
+                expect(closeProbe).toHaveBeenCalledTimes(1);
+                expect(vi.getTimerCount()).toBe(0);
+            } finally {
+                vi.useRealTimers();
+            }
         });
     });
 
@@ -975,6 +1116,37 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             // A dead container is discarded like any failed attempt, not kept for "Wait longer".
             expect(runtime.removeContainer).toHaveBeenCalledWith('c1', undefined, undefined);
             expect(service.getStatus().canResumeReadiness).toBe(false);
+            expect(events.at(-1)?.facts).toMatchObject({
+                kind: 'waiting',
+                port: QUICK_START_PORT,
+                attempts: 1,
+                lastProbeError: 'connect ECONNREFUSED 127.0.0.1:10260',
+                exitCode: 1,
+                lastLogLine: "username 'documentdb' uses reserved prefix 'documentdb'.",
+            });
+        });
+
+        it('masks and bounds failed probe and exited-container evidence without copying URIs', async () => {
+            const password = 'private-password-123';
+            onProbe = () => {
+                throw new Error(`probe failed mongodb://test:${password}@localhost:10260/ ${password}`);
+            };
+            const runtime = exitedContainerRuntime(
+                `Error: ${password} mongodb://test:${password}@localhost:10260/ ${'x'.repeat(1500)}`,
+            );
+            const events = await collect(new QuickStartServiceImpl(runtime).provision(
+                new AbortController().signal, { username: 'test', password },
+            ));
+            const facts = events.at(-1)?.facts;
+            expect(facts).toMatchObject({ kind: 'waiting', attempts: 1, exitCode: 1 });
+            expect(JSON.stringify(facts)).not.toContain(password);
+            expect(JSON.stringify(facts)).not.toContain('mongodb://');
+            if (facts?.kind !== 'waiting') throw new Error('Missing waiting facts');
+            expect(facts.lastProbeError).toContain('***');
+            expect(facts.lastLogLine).toContain('***');
+            expect(facts.lastLogLine).toHaveLength(1000);
+            expect(facts.displayName).toBeUndefined();
+            expect(facts.sampleData).toBeUndefined();
         });
 
         // A healthy gateway logs timestamped ERROR lines too; they must not pose as the exit reason.
@@ -1013,6 +1185,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 key: 'credentialsRejected',
                 detail: 'Invalid account: User details not found in the database',
             });
+            expect(events.at(-1)?.facts).toMatchObject({ kind: 'waiting', attempts: 2 });
             expect(runtime.removeContainer).toHaveBeenCalledWith('c1', undefined, undefined);
         });
 
@@ -1340,6 +1513,47 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(events.at(-1)).toMatchObject({ stage: 'waiting', status: 'error', timedOut: true });
             expect(service.getStatus().canResumeReadiness).toBe(true);
         }
+
+        it.each([
+            [false, true, false, 'loaded', 1],
+            [false, false, false, 'notRequested', 0],
+            [true, true, false, 'keptExisting', 0],
+            [true, false, false, 'keptExisting', 0],
+            [false, true, true, 'failed', 1],
+        ] as const)('reports fresh attempt counts and sample outcome on resume (reuse=%s, requested=%s, failed=%s)', async (reuse, requested, seedFails, outcome, seedCalls) => {
+            if (reuse) {
+                await upsertInstance({
+                    alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT, phase: 'ready',
+                });
+                await writeConnectionString(DEFAULT_ALIAS, `mongodb://test:stored-password@localhost:${QUICK_START_PORT}/`, {
+                    displayName: 'DocumentDB Local', port: QUICK_START_PORT,
+                });
+            }
+            const runtime = runtimeFor({ volumeExists: reuse });
+            if (seedFails) vi.mocked(runtime.execShellInContainer).mockRejectedValue(new Error('seed failed'));
+            const service = new QuickStartServiceImpl(runtime);
+            const first = await collect(service.provision(new AbortController().signal, { loadSampleData: requested }));
+            expect(first.at(-1)?.facts).toMatchObject({
+                kind: 'waiting', port: QUICK_START_PORT, attempts: 1, lastProbeError: 'connect ECONNREFUSED',
+            });
+            expect(runtime.execShellInContainer).not.toHaveBeenCalled();
+            const repeat = await collect(service.resumeReadiness(new AbortController().signal));
+            expect(repeat.at(-1)?.facts).toMatchObject({ kind: 'waiting', attempts: 1 });
+            expect(repeat.at(-1)?.timedOut).toBe(true);
+            let attempts = 0;
+            onProbe = () => {
+                if (++attempts < 2) throw new Error('not ready yet');
+            };
+            const resumed = await collect(service.resumeReadiness(new AbortController().signal));
+            expect(resumed.at(-1)?.stage).toBe('done');
+            expect(resumed.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
+                .toMatchObject({ kind: 'waiting', port: QUICK_START_PORT, attempts: 2, sampleData: outcome, displayName: 'DocumentDB Local' });
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
+            expect((await collect(service.resumeReadiness(new AbortController().signal))).at(-1)?.message?.key)
+                .toBe('nothingToResume');
+            expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
+        });
 
         it('Start over drops a fresh attempt entirely: credentials, lease and data', async () => {
             const removeVolume = vi.fn().mockResolvedValue(undefined);
@@ -1706,8 +1920,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             };
             const service = new QuickStartServiceImpl(runtimeFor());
 
+            let events: StageEvent[] = [];
             try {
-                await collect(
+                events = await collect(
                     service.provision(new AbortController().signal, { username: 'admin', password: PASSWORD }),
                 );
             } finally {
@@ -1717,6 +1932,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const lines = appendLine.mock.calls.map(([line]) => String(line));
             expect(lines.some((line) => line.startsWith('[readiness-timeout]') && line.includes('***'))).toBe(true);
             expect(lines.join('\n')).not.toContain(PASSWORD);
+            expect(events.at(-1)?.facts).toMatchObject({ kind: 'waiting', attempts: 1 });
+            expect(JSON.stringify(events.at(-1)?.facts)).not.toContain(PASSWORD);
+            expect(JSON.stringify(events.at(-1)?.facts)).not.toContain('mongodb://');
         });
     });
 });

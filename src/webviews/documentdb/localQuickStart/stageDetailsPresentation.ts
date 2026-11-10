@@ -16,6 +16,7 @@ import {
     type DockerReadinessOutcome,
     type StageFacts,
 } from '../../../services/localQuickStart/quickStartTypes';
+import { apiCompatibilityText } from '../connectionDiagnostics/formatEvidence';
 import {
     getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
@@ -28,6 +29,7 @@ export interface StageDetailFact {
     readonly note?: string;
     readonly code?: boolean;
     readonly action?: 'showOutput';
+    readonly message?: 'info';
 }
 
 export function buildStageDetailRows(facts: StageFacts | undefined): readonly StageDetailFact[] {
@@ -138,8 +140,69 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
                 { label: l10n.t('Logs'), value: l10n.t('Streaming to the setup log'), action: 'showOutput' },
             );
             break;
-        case 'waiting':
+        case 'waiting': {
+            rows.push({
+                label: l10n.t('Endpoint'),
+                value: `localhost:${facts.port}`,
+                code: true,
+                note: l10n.t('TLS (self-signed certificate accepted)'),
+            });
+            if (facts.attempts !== undefined) {
+                let probe = facts.attempts === 1 ? l10n.t('1 attempt') : l10n.t('{0} attempts', facts.attempts);
+                if (facts.sampleData !== undefined) {
+                    probe = facts.attempts === 1
+                        ? l10n.t('ping on admin answered after 1 attempt')
+                        : l10n.t('ping on admin answered after {0} attempts', facts.attempts);
+                }
+                rows.push({
+                    label: l10n.t('Probe'),
+                    value: probe,
+                });
+            }
+            const server = [
+                facts.documentdbVersions?.length
+                    ? l10n.t('DocumentDB {0}', facts.documentdbVersions.join(', '))
+                    : undefined,
+                facts.maxWireVersion !== undefined ? apiCompatibilityText(facts.maxWireVersion) : undefined,
+            ]
+                .filter((value) => value !== undefined)
+                .join(' · ');
+            if (server) rows.push({ label: l10n.t('Server'), value: server });
+            if (facts.sampleData !== undefined) {
+                const outcomes = {
+                    loaded: l10n.t('Loaded'),
+                    notRequested: l10n.t('Not requested'),
+                    keptExisting: l10n.t('Not loaded, existing data kept'),
+                    failed: l10n.t('Not loaded'),
+                };
+                rows.push({ label: l10n.t('Sample data'), value: outcomes[facts.sampleData] });
+                if (facts.sampleData === 'failed') {
+                    rows.push({
+                        label: l10n.t('Sample data was not loaded'),
+                        value: l10n.t('The instance is ready to use without sample data.'),
+                        message: 'info',
+                        action: 'showOutput',
+                    });
+                }
+            }
+            if (facts.displayName) {
+                rows.push({
+                    label: l10n.t('Saved as'),
+                    value: l10n.t('“{0}” in the Connections view', facts.displayName),
+                    note: l10n.t('Credentials in VS Code secret storage'),
+                });
+            }
+            if (facts.lastProbeError) {
+                rows.push({ label: l10n.t('Last probe error'), value: facts.lastProbeError, code: true });
+            }
+            if (facts.exitCode !== undefined) {
+                rows.push({ label: l10n.t('Exit code'), value: String(facts.exitCode), code: true });
+            }
+            if (facts.lastLogLine) {
+                rows.push({ label: l10n.t('Last log line'), value: facts.lastLogLine, code: true });
+            }
             break;
+        }
     }
     return rows;
 }

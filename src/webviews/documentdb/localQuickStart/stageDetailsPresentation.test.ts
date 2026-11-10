@@ -94,9 +94,75 @@ describe('buildStageDetailRows', () => {
         username: 'docuser',
     };
 
-    it('does not disclose empty evidence or readiness evidence deferred to P3', () => {
+    it('omits empty evidence and unknown readiness facts', () => {
         expect(buildStageDetailRows(undefined)).toEqual([]);
-        expect(buildStageDetailRows({ kind: 'waiting', port: 10273 })).toEqual([]);
+        expect(buildStageDetailRows({ kind: 'waiting', port: 10273 })).toEqual([{
+            label: 'Endpoint', value: 'localhost:10273', code: true, note: 'TLS (self-signed certificate accepted)',
+        }]);
+    });
+
+    it('shows established readiness and saved-connection evidence without copying credentials', () => {
+        const rows = buildStageDetailRows({
+            kind: 'waiting',
+            port: 10333,
+            attempts: 7,
+            documentdbVersions: ['0.116.0', '0.115.0'],
+            maxWireVersion: 21,
+            sampleData: 'loaded',
+            displayName: 'DocumentDB Local',
+            ...{ password: 'private-password', connectionString: 'mongodb://private-uri', environmentVariables: ['private-env'] },
+        });
+        expect(rows.find((row) => row.label === 'Probe')?.value).toBe('ping on admin answered after 7 attempts');
+        expect(rows.find((row) => row.label === 'Server')?.value)
+            .toBe('DocumentDB 0.116.0, 0.115.0 · MongoDB API 7.0 (wire 21)');
+        expect(rows.find((row) => row.label === 'Saved as')).toEqual({
+            label: 'Saved as', value: '“DocumentDB Local” in the Connections view', note: 'Credentials in VS Code secret storage',
+        });
+        for (const secret of ['private-password', 'mongodb://', 'private-env']) {
+            expect(JSON.stringify(rows)).not.toContain(secret);
+        }
+    });
+
+    it('does not describe wire compatibility as a DocumentDB product version', () => {
+        const rows = buildStageDetailRows({ kind: 'waiting', port: 10260, maxWireVersion: 21 });
+        expect(rows.find((row) => row.label === 'Server')?.value).toBe('MongoDB API 7.0 (wire 21)');
+    });
+
+    it('uses the singular for a successful first probe', () => {
+        const rows = buildStageDetailRows({ kind: 'waiting', port: 10260, attempts: 1, sampleData: 'loaded' });
+        expect(rows.find((row) => row.label === 'Probe')?.value).toBe('ping on admin answered after 1 attempt');
+    });
+
+    it('uses the singular for one unsuccessful probe', () => {
+        const rows = buildStageDetailRows({ kind: 'waiting', port: 10260, attempts: 1, lastProbeError: 'not ready' });
+        expect(rows.find((row) => row.label === 'Probe')?.value).toBe('1 attempt');
+    });
+
+    it.each([
+        ['loaded', 'Loaded'],
+        ['notRequested', 'Not requested'],
+        ['keptExisting', 'Not loaded, existing data kept'],
+        ['failed', 'Not loaded'],
+    ] as const)('shows sample-data outcome %s and a finding only for failed loading', (sampleData, value) => {
+        const rows = buildStageDetailRows({ kind: 'waiting', port: 10260, sampleData });
+        expect(rows.find((row) => row.label === 'Sample data')?.value).toBe(value);
+        expect(rows.filter((row) => row.message)).toEqual(sampleData === 'failed' ? [{
+            label: 'Sample data was not loaded',
+            value: 'The instance is ready to use without sample data.',
+            message: 'info',
+            action: 'showOutput',
+        }] : []);
+    });
+
+    it('shows failure evidence without claiming a successful ping or saved credentials', () => {
+        const rows = buildStageDetailRows({
+            kind: 'waiting', port: 10273, attempts: 2, lastProbeError: 'masked ***', exitCode: 0, lastLogLine: 'fatal ***',
+        });
+        expect(rows.find((row) => row.label === 'Probe')?.value).toBe('2 attempts');
+        expect(rows.find((row) => row.label === 'Last probe error')?.value).toBe('masked ***');
+        expect(rows.find((row) => row.label === 'Exit code')?.value).toBe('0');
+        expect(rows.find((row) => row.label === 'Last log line')?.value).toBe('fatal ***');
+        expect(rows.some((row) => row.label === 'Server' || row.label === 'Saved as' || row.label === 'Sample data')).toBe(false);
     });
 
     it.each([true, false])('shows only a probed port and a confirmed removal (portFree=%s)', (portFree) => {

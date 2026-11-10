@@ -95,6 +95,7 @@ import {
     resolveQuickStartImage,
     type StageEvent,
     type StageFacts,
+    type WaitingStageFacts,
     volumeName,
 } from './quickStartTypes';
 
@@ -199,6 +200,7 @@ const READINESS_TIMEOUT_MS = 180_000;
 const EXITED_CONTAINER_LOG_LINES = 20;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
+const READINESS_HELLO_TIMEOUT_MS = 2_000;
 /**
  * The image ships a native init script + sample-data directory (see
  * `Dockerfile_documentdb_local`). We run that script ONCE via `docker exec` after
@@ -262,7 +264,11 @@ function meterQuickStartSilentCatch(location: string): undefined {
  * than tearing everything down like a pull/create/start failure.
  */
 class ReadinessTimeoutError extends Error {
-    constructor(message: string) {
+    constructor(
+        message: string,
+        readonly attempts: number,
+        readonly lastError: unknown,
+    ) {
         super(message);
         this.name = 'ReadinessTimeoutError';
     }
@@ -274,10 +280,40 @@ class ReadinessTimeoutError extends Error {
  * because it can quote a custom username and error messages reach telemetry.
  */
 class ReadinessFailedError extends Error {
-    constructor(readonly reason: QuickStartMessage) {
+    constructor(
+        readonly reason: QuickStartMessage,
+        readonly attempts: number,
+        readonly lastError: unknown,
+    ) {
         super(reason.key);
         this.name = 'ReadinessFailedError';
     }
+}
+
+interface ReadinessResult {
+    readonly attempts: number;
+    readonly documentdbVersions?: readonly string[];
+    readonly maxWireVersion?: number;
+}
+
+function readinessFailureFacts(
+    error: ReadinessTimeoutError | ReadinessFailedError,
+    port: number,
+    secrets: readonly string[],
+): WaitingStageFacts {
+    const masked = (value: string): string =>
+        maskSecrets(value, secrets)
+            .replace(/mongodb(?:\+srv)?:\/\/[^\s]+/gi, '(hidden)')
+            .slice(0, 1000);
+    const reason = error instanceof ReadinessFailedError ? error.reason : undefined;
+    return {
+        kind: 'waiting',
+        port,
+        attempts: error.attempts,
+        lastProbeError: error.lastError === undefined ? undefined : masked(errMessage(error.lastError)),
+        exitCode: reason?.exitCode,
+        lastLogLine: reason?.key === 'containerExited' && reason.detail ? masked(reason.detail) : undefined,
+    };
 }
 
 /**
@@ -1142,14 +1178,22 @@ export class QuickStartServiceImpl {
                 await this.renewProvisioningLease(alias, operationId, boundPort);
             }
             await this.runProvisionStage('waiting', provisionCorrelationId, async () => {
-                await this.waitForReadiness(connectionString, provisionedContainerId, secrets, signal, cts.token);
+                const readiness = await this.waitForReadiness(
+                    connectionString,
+                    provisionedContainerId,
+                    secrets,
+                    signal,
+                    cts.token,
+                );
+                facts = { kind: 'waiting', port: boundPort, ...readiness };
                 this.throwIfAborted(signal);
 
                 // --- success (seed sample data, store creds, adopt as Running) ---
-                await this.finalizeReadyInstance(pending, cts.token, signal);
+                const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
+                facts = { ...facts, displayName: pending.displayName, sampleData };
             });
             success = true;
-            yield stageEvent('waiting', 'done');
+            yield { ...stageEvent('waiting', 'done'), facts };
             yield stageEvent('done', 'done', { key: 'instanceRunning', port: boundPort }, boundPort);
         } catch (error) {
             const aborted = signal.aborted;
@@ -1158,6 +1202,13 @@ export class QuickStartServiceImpl {
                 !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
             const detail = errMessage(error);
+            if (error instanceof ReadinessTimeoutError || error instanceof ReadinessFailedError) {
+                facts = readinessFailureFacts(
+                    error,
+                    this.stateFor(alias).pendingReadiness?.boundPort ?? chosenPort,
+                    secrets,
+                );
+            }
             let message: QuickStartMessage = aborted ? { key: 'setupCancelled' } : { key: 'unexpectedFailure', detail };
             if (!aborted && error instanceof DockerNotReadyError) {
                 this.stateFor(alias).pendingReadiness = undefined;
@@ -1341,13 +1392,17 @@ export class QuickStartServiceImpl {
         pending: PendingReadiness,
         token: vscode.CancellationToken,
         signal: AbortSignal,
-    ): Promise<void> {
+    ): Promise<NonNullable<WaitingStageFacts['sampleData']>> {
         // Seed the image's built-in sample data ONCE — only when requested (Advanced "Load
         // sample data", default on) and only into a fresh volume. A reused volume already had its
         // first setup; seeding it again would restore documents the user deleted (#946). Best-effort.
-        if (pending.sampleDataRequested && !pending.reusing) {
-            await this.seedSampleData(pending.containerId, secretVariants(pending.password), token);
-        }
+        const sampleData = pending.reusing
+            ? 'keptExisting'
+            : !pending.sampleDataRequested
+              ? 'notRequested'
+              : await this.seedSampleData(pending.containerId, secretVariants(pending.password), token)
+                ? 'loaded'
+                : 'failed';
         this.throwIfAborted(signal);
         // One write covers the credentials, the image the volume was created with (so a recreate
         // after a window reload keeps it) and the ready phase the tree and reconcile enumerate.
@@ -1384,6 +1439,7 @@ export class QuickStartServiceImpl {
         );
         this.stateFor(pending.alias).pendingReadiness = undefined;
         this.stateFor(pending.alias).credentialsRestored = false;
+        return sampleData;
     }
 
     /**
@@ -1418,6 +1474,7 @@ export class QuickStartServiceImpl {
         let finalized = false;
         let terminalEvent: StageEvent | undefined;
         let resumeResult: 'success' | 'timeout' | 'cancelled' | 'error' = 'error';
+        let facts: WaitingStageFacts | undefined;
         try {
             this.setStatus(alias, InstanceState.Provisioning, undefined, undefined);
             yield stageEvent('waiting', 'active');
@@ -1425,19 +1482,21 @@ export class QuickStartServiceImpl {
             // startup rather than only the stale first-attempt output (opus-4.8).
             void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
             await this.runProvisionStage('waiting', pending.provisionCorrelationId, async () => {
-                await this.waitForReadiness(
+                const readiness = await this.waitForReadiness(
                     pending.connectionString,
                     pending.containerId,
                     secretVariants(pending.password),
                     signal,
                     cts.token,
                 );
+                facts = { kind: 'waiting', port: pending.boundPort, ...readiness };
                 this.throwIfAborted(signal);
-                await this.finalizeReadyInstance(pending, cts.token, signal);
+                const sampleData = await this.finalizeReadyInstance(pending, cts.token, signal);
+                facts = { ...facts, displayName: pending.displayName, sampleData };
             });
             finalized = true;
             resumeResult = 'success';
-            yield stageEvent('waiting', 'done');
+            yield { ...stageEvent('waiting', 'done'), facts };
             terminalEvent = stageEvent(
                 'done',
                 'done',
@@ -1452,6 +1511,9 @@ export class QuickStartServiceImpl {
             // (transport-impossible) case of a throw after adoption already succeeded.
             const aborted = signal.aborted;
             const isTimeout = error instanceof ReadinessTimeoutError;
+            if (isTimeout || error instanceof ReadinessFailedError) {
+                facts = readinessFailureFacts(error, pending.boundPort, secretVariants(pending.password));
+            }
             const timedOut = !finalized && (isTimeout || aborted);
             resumeResult = aborted ? 'cancelled' : isTimeout ? 'timeout' : 'error';
             // A repeat timeout is the same situation as the first one, so it earns the same
@@ -1473,7 +1535,7 @@ export class QuickStartServiceImpl {
             if (!timedOut) {
                 this.stateFor(alias).pendingReadiness = undefined;
             }
-            terminalEvent = stageEvent('waiting', 'error', message, undefined, timedOut);
+            terminalEvent = { ...stageEvent('waiting', 'error', message, undefined, timedOut), facts };
         } finally {
             signal.removeEventListener('abort', onAbort);
             // Stop the followLogs stream (started with cts.token) before disposing.
@@ -1597,7 +1659,7 @@ export class QuickStartServiceImpl {
         secrets: ReadonlyArray<string>,
         signal: AbortSignal,
         token: vscode.CancellationToken,
-    ): Promise<void> {
+    ): Promise<ReadinessResult> {
         const deadline = Date.now() + READINESS_TIMEOUT_MS;
         let attempt = 0;
         let lastError: unknown;
@@ -1610,30 +1672,77 @@ export class QuickStartServiceImpl {
                 serverSelectionTimeoutMS: PROBE_SERVER_SELECTION_TIMEOUT_MS,
                 tlsAllowInvalidCertificates: true,
             });
+            attempt += 1;
             try {
                 await client.connect();
                 await client.db('admin').command({ ping: 1 });
-                return;
+                let helloTimer: ReturnType<typeof setTimeout> | undefined;
+                let onAbort: (() => void) | undefined;
+                try {
+                    this.throwIfAborted(signal);
+                    const hello: unknown = await Promise.race([
+                        client.db('admin').command({ hello: 1 }),
+                        new Promise<never>((_resolve, reject) => {
+                            helloTimer = setTimeout(
+                                () => reject(new Error('hello timed out')),
+                                READINESS_HELLO_TIMEOUT_MS,
+                            );
+                            onAbort = (): void => reject(new Error('aborted'));
+                            signal.addEventListener('abort', onAbort, { once: true });
+                        }),
+                    ]);
+                    if (hello && typeof hello === 'object') {
+                        const internal = 'internal' in hello ? hello.internal : undefined;
+                        const versions =
+                            internal && typeof internal === 'object' && 'documentdb_versions' in internal
+                                ? internal.documentdb_versions
+                                : undefined;
+                        const maxWireVersion = 'maxWireVersion' in hello ? hello.maxWireVersion : undefined;
+                        return {
+                            attempts: attempt,
+                            documentdbVersions:
+                                Array.isArray(versions) &&
+                                versions.every((version): version is string => typeof version === 'string')
+                                    ? versions.slice(0, 8)
+                                    : undefined,
+                            maxWireVersion:
+                                typeof maxWireVersion === 'number' &&
+                                Number.isInteger(maxWireVersion) &&
+                                maxWireVersion >= 0
+                                    ? maxWireVersion
+                                    : undefined,
+                        };
+                    }
+                } catch {
+                    meterQuickStartSilentCatch('readiness_hello');
+                } finally {
+                    clearTimeout(helloTimer);
+                    if (onAbort) signal.removeEventListener('abort', onAbort);
+                }
+                this.throwIfAborted(signal);
+                return { attempts: attempt };
             } catch (error) {
+                this.throwIfAborted(signal);
                 const rejection = describeCredentialRejection(error);
                 // SASLprep fails on this machine and cannot change; a server refusal has to repeat,
                 // in case an image starts its gateway before the user exists.
                 if (rejection && (rejection.key === 'passwordNotSupported' || rejectedLastAttempt)) {
-                    throw new ReadinessFailedError(rejection);
+                    throw new ReadinessFailedError(rejection, attempt, error);
                 }
                 rejectedLastAttempt = rejection !== undefined;
                 lastError = error;
             } finally {
-                await client.close().catch(() => undefined);
+                await client.close().catch(() => meterQuickStartSilentCatch('readiness_closeClient'));
             }
-            await this.throwIfContainerExited(containerId, secrets, token);
-            attempt += 1;
-            const backoff = Math.min(3000, 500 + attempt * 250);
+            await this.throwIfContainerExited(containerId, secrets, token, attempt, lastError);
+            const backoff = Math.min(3000, 500 + (attempt - 1) * 250);
             await delay(backoff, signal);
         }
-        await this.throwIfContainerExited(containerId, secrets, token);
+        await this.throwIfContainerExited(containerId, secrets, token, attempt, lastError);
         throw new ReadinessTimeoutError(
             `Timed out waiting for DocumentDB to accept connections.${lastError ? ` (${errMessage(lastError)})` : ''}`,
+            attempt,
+            lastError,
         );
     }
 
@@ -1641,6 +1750,8 @@ export class QuickStartServiceImpl {
         containerId: string,
         secrets: ReadonlyArray<string>,
         token: vscode.CancellationToken,
+        attempts: number,
+        lastError: unknown,
     ): Promise<void> {
         const inspected = await this.runtime.inspectContainer(containerId, { quiet: true, token });
         // An inspect that failed says nothing about the container, so keep waiting.
@@ -1653,11 +1764,15 @@ export class QuickStartServiceImpl {
                 meterQuickStartSilentCatch('readiness_readExitedContainerLogs');
                 return '';
             });
-        throw new ReadinessFailedError({
-            key: 'containerExited',
-            exitCode: getExitCode(inspected),
-            detail: lastContainerErrorLine(logs),
-        });
+        throw new ReadinessFailedError(
+            {
+                key: 'containerExited',
+                exitCode: getExitCode(inspected),
+                detail: lastContainerErrorLine(logs),
+            },
+            attempts,
+            lastError,
+        );
     }
 
     /**
@@ -1681,11 +1796,14 @@ export class QuickStartServiceImpl {
         containerId: string,
         secrets: ReadonlyArray<string>,
         token: vscode.CancellationToken,
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
             await this.runtime.execShellInContainer(containerId, buildSampleDataSeedScript(), secrets, token);
+            return true;
         } catch (error) {
+            meterQuickStartSilentCatch('seedSampleData');
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
+            return false;
         }
     }
 
