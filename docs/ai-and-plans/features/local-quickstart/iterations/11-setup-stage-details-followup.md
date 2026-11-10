@@ -18,7 +18,7 @@ The run began at 09:22:28 UTC. Advisor: Opus 5.5; leader: Sol.
 
 | Item | Operator requests | Implementation | Model | Status |
 | ---- | ----------------- | -------------- | ----- | ------ |
-| F1 | 2, 4, 6 | Discover both CLI executables without changing engine preference; carry previous image ID when already inspected; emit known image facts at pull start | Sol: host/readiness contract spans modules | Queued |
+| F1 | 2, 4, 6 | Discover both CLI executables without changing engine preference; carry previous image ID when already inspected; emit known image facts at pull start | Sol: host/readiness contract spans modules | Done `40056c79` |
 | F2 | 1, 2, 3, 4, 5, 6, 7 | Capitalized evidence segments, truthful CLI labels, full-ID tooltips, previous image identity, concise summaries and active image facts; remove checking explanation notes | Terra: bounded presentation work | Queued |
 | F3 | 8 | Stream the latest bounded, masked engine-output line during pull, with coalescing and cancellation cleanup | Sol: command streaming and generator lifecycle | Queued |
 | F4 | All | Browser coverage in all themes, accessible ID tooltips and progress checks; update related design/docs | Terra: isolated fixtures/scenarios and docs | Queued |
@@ -98,3 +98,13 @@ not in scope. No operator decisions or rationales beyond the request are invente
 Implementation, advisor verdicts, commits and measured costs are recorded below
 as each item completes. Workbench-only layout and actual screen-reader speech
 remain operator checks; browser-computed names are not spoken-output proof.
+
+**F1 Done (2026-11-10), commit `40056c79`:** Sol added both PATH-presence flags,
+preserving Docker preference and all existing command/probe counts, plus the
+free previous-image identity and initial active image facts. Leader scheduling
+decision: sequential ownership (100% confidence, shared files). Advised (Opus 5.5,
+90% confidence): approved; snapshot flags immediately after client refresh and
+never persist discovery facts. Fifteen tests added; all 565 service tests and
+root type check passed. Nineteen existing exact probe/version assertions retained.
+Remaining risk is the normal executable-disappears-after-lookup race, not a new
+claim that the unselected engine was probed.
