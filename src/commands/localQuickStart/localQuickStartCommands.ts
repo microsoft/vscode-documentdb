@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { ContainerRuntime, getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
+import { getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
 import { secretVariants } from '../../services/localQuickStart/quickStartCredentials';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState, type OpenLocalQuickStartOptions } from '../../services/localQuickStart/quickStartTypes';
@@ -259,5 +259,5 @@ export function viewQuickStartLogs(_context: IActionContext): void {
     } catch {
         password = '';
     }
-    void ContainerRuntime.followLogs(metadata.containerId, secretVariants(password), token);
+    void QuickStartService.followLogs(metadata.alias, secretVariants(password), token);
 }

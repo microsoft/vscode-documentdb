@@ -8,12 +8,21 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState } from '../../services/localQuickStart/quickStartTypes';
+import { getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { buildQuickStartCopyCredentials, deleteQuickStartInstance } from './localQuickStartCommands';
+import {
+    buildQuickStartCopyCredentials,
+    deleteQuickStartInstance,
+    disposeQuickStartLogFollow,
+    viewQuickStartLogs,
+} from './localQuickStartCommands';
 
 vi.mock('../../services/localQuickStart/QuickStartService', () => ({
-    QuickStartService: { getStatus: vi.fn(), deleteContainer: vi.fn() },
+    QuickStartService: { getStatus: vi.fn(), deleteContainer: vi.fn(), followLogs: vi.fn() },
+}));
+vi.mock('../../services/localQuickStart/ContainerRuntime', () => ({
+    getQuickStartOutputChannel: vi.fn(() => ({ show: vi.fn(), appendLine: vi.fn() })),
 }));
 vi.mock('../../utils/dialogs/getConfirmation', () => ({ getConfirmationAsInSettings: vi.fn() }));
 vi.mock('../../utils/dialogs/showConfirmation', () => ({ showConfirmationAsInSettings: vi.fn() }));
@@ -36,6 +45,47 @@ describe('buildQuickStartCopyCredentials (UX review #7)', () => {
         expect(credentials?.nativeAuthConfig?.connectionPassword).toBe('s3cr3tPass');
         expect(credentials?.nativeAuthConfig?.connectionUser).toBe('admin');
         expect(credentials?.selectedAuthMethod).toBe(AuthMethodId.NativeAuth);
+    });
+
+    describe('viewQuickStartLogs', () => {
+        beforeEach(() => {
+            disposeQuickStartLogFollow();
+            vi.clearAllMocks();
+            vi.mocked(QuickStartService.followLogs).mockResolvedValue(undefined);
+        });
+
+        it('follows through the service using the instance alias and password masking', () => {
+            vi.mocked(QuickStartService.getStatus).mockReturnValue({
+                state: InstanceState.Running,
+                metadata: {
+                    alias: 'owned-instance',
+                    containerId: 'podman-container',
+                    connectionString: 'mongodb://admin:private-password@localhost:10260',
+                },
+            } as ReturnType<typeof QuickStartService.getStatus>);
+            const context = {} as Parameters<typeof viewQuickStartLogs>[0];
+
+            viewQuickStartLogs(context);
+
+            expect(QuickStartService.followLogs).toHaveBeenCalledWith(
+                'owned-instance',
+                expect.arrayContaining(['private-password']),
+                expect.objectContaining({ isCancellationRequested: false }),
+            );
+            const token = vi.mocked(QuickStartService.followLogs).mock.calls[0][2];
+            viewQuickStartLogs(context);
+            expect(token?.isCancellationRequested).toBe(true);
+            disposeQuickStartLogFollow();
+        });
+
+        it('shows the setup log but starts no follow without an instance', () => {
+            vi.mocked(QuickStartService.getStatus).mockReturnValue({ state: InstanceState.NotInstalled });
+
+            viewQuickStartLogs({} as Parameters<typeof viewQuickStartLogs>[0]);
+
+            expect(getQuickStartOutputChannel).toHaveBeenCalled();
+            expect(QuickStartService.followLogs).not.toHaveBeenCalled();
+        });
     });
 
     it('handles a password-free connection string (no prompt path)', () => {

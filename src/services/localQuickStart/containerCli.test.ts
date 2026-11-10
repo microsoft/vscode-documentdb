@@ -5,7 +5,7 @@
 
 import { DockerClient, PodmanClient } from '@microsoft/vscode-container-client';
 import { describe, expect, it, vi } from 'vitest';
-import { createContainerClient, findOnPath, resolveContainerCli } from './containerCli';
+import { createContainerClient, findOnPath, resolveContainerCli, resolvePinnedContainerCli } from './containerCli';
 
 function lookup(present: ReadonlyArray<string>, platform: NodeJS.Platform = 'darwin', env?: NodeJS.ProcessEnv) {
     return {
@@ -102,5 +102,34 @@ describe('createContainerClient', () => {
         const podman = createContainerClient({ cli: 'podman', executable: 'C:\\tools\\podman.CMD' });
         expect(podman).toBeInstanceOf(PodmanClient);
         expect(podman.commandName).toBe('C:\\tools\\podman.CMD');
+    });
+
+    describe('resolvePinnedContainerCli', () => {
+        it('keeps Podman when Docker is also installed', () => {
+            expect(
+                resolvePinnedContainerCli('podman', lookup(['/usr/local/bin/docker', '/opt/podman/bin/podman'])),
+            ).toEqual({
+                cli: 'podman',
+                executable: 'podman',
+                onPath: { docker: false, podman: true },
+            });
+        });
+
+        it('does not fall back to installed Docker when pinned Podman is missing', () => {
+            expect(resolvePinnedContainerCli('podman', lookup(['/usr/local/bin/docker']))).toEqual({
+                cli: 'podman',
+                executable: 'podman',
+                onPath: { docker: false, podman: false },
+            });
+        });
+
+        it('uses the pinned absolute executable on Windows', () => {
+            expect(
+                resolvePinnedContainerCli(
+                    'podman',
+                    lookup(['C:\\tools\\podman.CMD'], 'win32', windowsEnv),
+                ),
+            ).toMatchObject({ cli: 'podman', executable: 'C:\\tools\\podman.CMD' });
+        });
     });
 });

@@ -41,6 +41,7 @@ const PASSWORD = 'hunter2-generated-password';
 const STDOUT_WITH_ENV = JSON.stringify({ Config: { Env: ['USERNAME=admin', `PASSWORD=${PASSWORD}`] } });
 
 const IMAGE_REF = 'ghcr.io/documentdb/documentdb/documentdb-local:latest';
+const engine = ContainerRuntime.forCli({ cli: 'docker', executable: 'docker' });
 function imageItem(raw: unknown): ContainerClient.InspectImagesItem {
     return {
         id: 'sha256:image-id',
@@ -90,7 +91,7 @@ describe('ContainerRuntime output channel', () => {
     });
 
     it('never echoes inspect stdout, which carries the container env', async () => {
-        await ContainerRuntime.inspectContainer('c1');
+        await engine.inspectContainer('c1');
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(lines).toContain('$ docker …');
@@ -115,7 +116,7 @@ describe('ContainerRuntime output channel', () => {
             return undefined;
         });
 
-        await ContainerRuntime.pullImage(IMAGE_REF, cts.token, progress);
+        await engine.pullImage(IMAGE_REF, cts.token, progress);
 
         expect(progress.mock.calls.map(([line]) => line)).toEqual(['Pulling image', 'Checking digest', 'Downloaded']);
         expect(lines).toEqual(['Pulling image', 'Checking digest', 'Downloaded']);
@@ -131,7 +132,7 @@ describe('ContainerRuntime output channel', () => {
             return undefined;
         });
 
-        await ContainerRuntime.createAndRunContainer(
+        await engine.createAndRunContainer(
             { imageRef: IMAGE_REF, name: 'c1', labels: {}, hostPort: 10260, containerPort: 10260 },
             [PASSWORD],
         );
@@ -149,7 +150,7 @@ describe('ContainerRuntime output channel', () => {
             throw failure;
         });
 
-        await expect(ContainerRuntime.pullImage(IMAGE_REF, undefined, progress)).rejects.toBe(failure);
+        await expect(engine.pullImage(IMAGE_REF, undefined, progress)).rejects.toBe(failure);
         expect(progress).toHaveBeenCalledExactlyOnceWith('Registry unavailable');
         expect(lines).toEqual(['Registry unavailable']);
     });
@@ -193,6 +194,24 @@ describe('ContainerRuntime output channel', () => {
         }
     });
 
+    it('keeps engine operation views bound to their own clients when calls interleave', async () => {
+        const commands: string[] = [];
+        vi.mocked(runDockerCommand).mockImplementation(async (command) => {
+            const resolved = await (typeof command === 'function' ? command() : command);
+            commands.push(resolved.command);
+            return undefined;
+        });
+        const docker = ContainerRuntime.forCli({ cli: 'docker', executable: 'owning-docker' });
+        const podman = ContainerRuntime.forCli({ cli: 'podman', executable: 'owning-podman' });
+
+        await Promise.all([podman.pullImage(IMAGE_REF), docker.pullImage(IMAGE_REF)]);
+        await podman.pullImage(IMAGE_REF);
+
+        expect(commands).toEqual(['owning-podman', 'owning-docker', 'owning-podman']);
+        expect(ContainerRuntime.forCli({ cli: 'podman', executable: 'owning-podman' })).toBe(podman);
+        expect(ContainerRuntime.forCli({ cli: 'podman', executable: 'moved-podman' })).not.toBe(podman);
+    });
+
     it.each([
         ['Docker', { Id: 'sha256:image-id', Created: '2026-10-28T00:00:00Z' }],
         [
@@ -205,7 +224,7 @@ describe('ContainerRuntime output channel', () => {
     ])('allow-lists %s image evidence without echoing commands, output, labels or env', async (_name, raw) => {
         vi.mocked(runDockerCommand).mockResolvedValueOnce([imageItem(raw)]);
         const cts = new vscode.CancellationTokenSource();
-        const facts = await ContainerRuntime.inspectImage(IMAGE_REF, cts.token);
+        const facts = await engine.inspectImage(IMAGE_REF, cts.token);
         expect(facts).toEqual({
             id: 'sha256:image-id',
             digest: 'sha256:right',
@@ -226,7 +245,7 @@ describe('ContainerRuntime output channel', () => {
         'omits a missing or invalid source creation date (%s), never the client synthesized date',
         async (created) => {
             vi.mocked(runDockerCommand).mockResolvedValueOnce([imageItem({ Id: 'sha256:image-id', Created: created })]);
-            expect(await ContainerRuntime.inspectImage(IMAGE_REF)).toMatchObject({
+            expect(await engine.inspectImage(IMAGE_REF)).toMatchObject({
                 id: 'sha256:image-id',
                 createdAtMs: undefined,
             });
@@ -237,7 +256,7 @@ describe('ContainerRuntime output channel', () => {
         'does not use an unmatched raw record for the image date',
         async (raw) => {
             vi.mocked(runDockerCommand).mockResolvedValueOnce([imageItem(raw)]);
-            expect(await ContainerRuntime.inspectImage(IMAGE_REF)).toMatchObject({ createdAtMs: undefined });
+            expect(await engine.inspectImage(IMAGE_REF)).toMatchObject({ createdAtMs: undefined });
         },
     );
 
@@ -249,7 +268,7 @@ describe('ContainerRuntime output channel', () => {
                 labels: { 'org.opencontainers.image.version': 'a'.repeat(65) },
             },
         ]);
-        expect(await ContainerRuntime.inspectImage(IMAGE_REF)).toEqual({
+        expect(await engine.inspectImage(IMAGE_REF)).toEqual({
             id: 'sha256:image-id',
             digest: undefined,
             version: undefined,
@@ -259,7 +278,7 @@ describe('ContainerRuntime output channel', () => {
 
     it('proves absence only with an empty strict reference-filtered listing', async () => {
         vi.mocked(runDockerCommand).mockRejectedValueOnce(new Error('missing')).mockResolvedValueOnce([]);
-        expect(await ContainerRuntime.inspectImage(IMAGE_REF)).toBe('absent');
+        expect(await engine.inspectImage(IMAGE_REF)).toBe('absent');
         const commandLike = vi.mocked(runDockerCommand).mock.calls[1][0];
         const command = typeof commandLike === 'function' ? await commandLike() : await commandLike;
         expect(command.args).toContainEqual(expect.objectContaining({ value: `reference=${IMAGE_REF}` }));
@@ -271,22 +290,22 @@ describe('ContainerRuntime output channel', () => {
         ['listing could not answer', undefined],
     ])('does not confuse %s with absence', async (_name, listing) => {
         vi.mocked(runDockerCommand).mockRejectedValueOnce(new Error('inspect failed')).mockResolvedValueOnce(listing);
-        expect(await ContainerRuntime.inspectImage(IMAGE_REF)).toBeUndefined();
+        expect(await engine.inspectImage(IMAGE_REF)).toBeUndefined();
     });
 
     it('returns unknown when both inspect and strict listing fail', async () => {
         vi.mocked(runDockerCommand).mockRejectedValue(new Error('daemon unavailable'));
-        expect(await ContainerRuntime.inspectImage(IMAGE_REF)).toBeUndefined();
+        expect(await engine.inspectImage(IMAGE_REF)).toBeUndefined();
     });
 
     it('does not infer digest-reference absence from a zero-result reference filter', async () => {
         vi.mocked(runDockerCommand).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-        expect(await ContainerRuntime.inspectImage(IMAGE_REF.split(':')[0] + '@sha256:abc')).toBeUndefined();
+        expect(await engine.inspectImage(IMAGE_REF.split(':')[0] + '@sha256:abc')).toBeUndefined();
     });
 
     it.each([
-        ['listByLabel', () => ContainerRuntime.listByLabel({ label: 'x' })],
-        ['removeContainer', () => ContainerRuntime.removeContainer('c1')],
+        ['listByLabel', () => engine.listByLabel({ label: 'x' })],
+        ['removeContainer', () => engine.removeContainer('c1')],
     ])('%s still echoes its stdout', async (_name, run) => {
         stdout = 'c1';
         await run();

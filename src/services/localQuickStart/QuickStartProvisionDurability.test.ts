@@ -28,7 +28,12 @@ import * as fsPromises from 'fs/promises';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
-import { disposeQuickStartOutputChannel, SETUP_CLEANUP_TIMEOUT_MS, type IContainerRuntime } from './ContainerRuntime';
+import {
+    disposeQuickStartOutputChannel,
+    SETUP_CLEANUP_TIMEOUT_MS,
+    type IContainerEngineOps,
+    type IContainerRuntime as ContainerRuntimeHost,
+} from './ContainerRuntime';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
 import { QuickStartServiceImpl } from './QuickStartService';
 import {
@@ -127,6 +132,8 @@ function fakeSecretStorage(seed: Record<string, string> = {}): vscode.SecretStor
     } as unknown as vscode.SecretStorage & { snapshot: () => Record<string, string> };
 }
 
+interface IContainerRuntime extends ContainerRuntimeHost, IContainerEngineOps {}
+
 interface RuntimeOptions {
     readonly portFree?: boolean;
     readonly containers?: Array<{ id: string; labels?: Record<string, string> }>;
@@ -137,7 +144,13 @@ interface RuntimeOptions {
 }
 
 function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
-    return {
+    const runtime: IContainerRuntime = {
+        resolveCli: vi.fn((request: Parameters<ContainerRuntimeHost['resolveCli']>[0]) => ({
+            cli: request.kind === 'pinned' ? request.cli : 'docker',
+            executable: request.kind === 'pinned' ? request.cli : 'docker',
+            onPath: { docker: true, podman: true },
+        })),
+        forCli: vi.fn(() => runtime),
         isDockerReady: vi.fn().mockResolvedValue({
             outcome: 'ready',
             environment: 'linux',
@@ -167,6 +180,7 @@ function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
         readRecentLogs: vi.fn().mockResolvedValue(''),
         ...options.overrides,
     } as unknown as IContainerRuntime;
+    return runtime;
 }
 
 async function collect(generator: AsyncGenerator<StageEvent>): Promise<StageEvent[]> {
@@ -236,6 +250,284 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         ext.context = originalContext;
         onProbe = () => undefined;
         onHello = () => ({ ok: 1 });
+    });
+
+    describe('instance engine ownership', () => {
+        const stored = 'mongodb://admin:stored-password@localhost:10260/?tls=true';
+
+        it('persists the selected engine on the lease and record without switching during provision', async () => {
+            const runtime = runtimeFor();
+            const podman = runtimeFor();
+            let preferred: 'docker' | 'podman' = 'podman';
+            vi.mocked(runtime.resolveCli).mockImplementation((request) => {
+                const cli = request.kind === 'pinned' ? request.cli : preferred;
+                return { cli, executable: cli, onPath: { docker: preferred === 'docker', podman: true } };
+            });
+            vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
+            vi.mocked(runtime.isDockerReady).mockImplementation(async () => {
+                // Docker appears before the existing-instance guard and lease write.
+                preferred = 'docker';
+                return {
+                    outcome: 'ready',
+                    environment: 'linux',
+                    endpointKind: 'unixSocket',
+                    canContinueAnyway: false,
+                    checkedAtMs: Date.now(),
+                    cliInstalled: true,
+                    daemonReachable: true,
+                    provider: 'podman',
+                    providerEvidence: 'liveDaemon',
+                    executionTarget: 'local',
+                };
+            });
+            vi.mocked(podman.pullImage).mockImplementation(async () => {
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                    phase: 'provisioning',
+                    engineCli: 'podman',
+                });
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(podman.pullImage).toHaveBeenCalledOnce();
+            expect(podman.createAndRunContainer).toHaveBeenCalledOnce();
+            expect(podman.followLogs).toHaveBeenCalledOnce();
+            expect(podman.execShellInContainer).toHaveBeenCalledOnce();
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            expect(runtime.listByLabel).not.toHaveBeenCalled();
+            expect(runtime.forCli).toHaveBeenCalledWith(expect.objectContaining({ cli: 'podman' }));
+        });
+
+        it.each([false, true])('re-resolves an unowned alias after Podman is installed with initial listing failure=%s', async (listingFails) => {
+            let podmanInstalled = false;
+            const runtime = runtimeFor();
+            const podman = runtimeFor();
+            vi.mocked(runtime.resolveCli).mockImplementation((request) => {
+                const cli = request.kind === 'pinned' ? request.cli : podmanInstalled ? 'podman' : 'docker';
+                return { cli, executable: cli, onPath: { docker: false, podman: podmanInstalled } };
+            });
+            vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
+            if (listingFails) {
+                vi.mocked(runtime.listByLabel).mockRejectedValue(new Error('Docker CLI missing'));
+            }
+            const ready = await runtime.isDockerReady();
+            vi.mocked(runtime.isDockerReady).mockImplementation(async (request) => {
+                const cli = request?.engine?.kind === 'pinned' ? request.engine.cli : 'docker';
+                return podmanInstalled && cli === 'podman'
+                    ? { ...ready, cli }
+                    : {
+                        ...ready,
+                        cli,
+                        outcome: 'diagnosed',
+                        canContinueAnyway: false,
+                        failureKind: 'cliMissing',
+                        cliInstalled: false,
+                        daemonReachable: false,
+                    };
+            });
+            vi.mocked(podman.pullImage).mockImplementation(async () => {
+                expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({
+                    phase: 'provisioning',
+                    engineCli: 'podman',
+                });
+            });
+            const service = new QuickStartServiceImpl(runtime);
+            if (listingFails) {
+                await expect(service.ensureHydrated()).rejects.toThrow('Docker CLI missing');
+            } else {
+                await service.ensureHydrated();
+            }
+            const first = await collect(service.provision(new AbortController().signal));
+            expect(first.at(-1)).toMatchObject({ status: 'error', message: { key: 'dockerCliMissing' } });
+            expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+
+            podmanInstalled = true;
+            await service.reconcile();
+            const retried = await collect(service.provision(new AbortController().signal));
+
+            expect(retried.at(-1)).toMatchObject({ stage: 'done' });
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
+            expect(podman.createAndRunContainer).toHaveBeenCalledOnce();
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+        });
+
+        it.each([false, true])('keeps Podman for recreate with startFresh=%s when Docker is installed', async (startFresh) => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT,
+                phase: 'ready', engineCli: 'podman',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'DocumentDB Local', port: QUICK_START_PORT });
+            const runtime = runtimeFor();
+            const podman = runtimeFor({ volumeExists: true });
+            vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal, { startFresh }));
+
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli: 'podman', phase: 'ready' });
+            expect(runtime.resolveCli).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'preferred' }));
+            expect(runtime.isDockerReady).toHaveBeenCalledWith({
+                engine: { kind: 'pinned', cli: 'podman' },
+            });
+            expect(podman.createAndRunContainer).toHaveBeenCalledOnce();
+            expect(podman.removeVolume).toHaveBeenCalledTimes(startFresh ? 1 : 0);
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            expect(runtime.volumeExists).not.toHaveBeenCalled();
+        });
+
+        it('uses the persisted owning engine ahead of previously cached ownership', async () => {
+            const record = {
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready' as const,
+                engineCli: 'docker' as const,
+            };
+            await upsertInstance(record);
+            const runtime = runtimeFor();
+            const podman = runtimeFor();
+            vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
+            const service = new QuickStartServiceImpl(runtime);
+            await service.reconcile();
+            await upsertInstance({ ...record, engineCli: 'podman' });
+
+            await collect(service.provision(new AbortController().signal, { startFresh: true }));
+
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(podman.createAndRunContainer).toHaveBeenCalledOnce();
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ phase: 'ready', engineCli: 'podman' });
+        });
+
+        it('resolves a legacy record to Podman at execution on a Podman-only host', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT, phase: 'ready',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'DocumentDB Local', port: QUICK_START_PORT });
+            const runtime = runtimeFor({ volumeExists: true });
+            vi.mocked(runtime.resolveCli).mockImplementation((request) => {
+                const cli = request.kind === 'pinned' ? request.cli : 'podman';
+                return { cli, executable: cli, onPath: { docker: false, podman: true } };
+            });
+            const service = new QuickStartServiceImpl(runtime);
+            expect(runtime.resolveCli).not.toHaveBeenCalled();
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'preferred', preferred: 'docker' });
+            expect(runtime.forCli).toHaveBeenCalledWith(expect.objectContaining({ cli: 'podman' }));
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli: 'podman', phase: 'ready' });
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+        });
+
+        it('does not fall back to Docker when an existing instance has lost its Podman CLI', async () => {
+            const record = {
+                alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT,
+                phase: 'ready' as const, engineCli: 'podman' as const,
+            };
+            await upsertInstance(record);
+            const runtime = runtimeFor();
+            const podman = runtimeFor();
+            vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
+            vi.mocked(runtime.isDockerReady).mockResolvedValue({
+                outcome: 'diagnosed', cli: 'podman', failureKind: 'cliMissing',
+                cliInstalled: false, daemonReachable: false, checkedAtMs: Date.now(),
+                environment: 'linux', endpointKind: 'unknown', canContinueAnyway: false,
+                provider: 'unknown', providerEvidence: 'none', executionTarget: 'local',
+            });
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal, { startFresh: true }));
+
+            expect(events.at(-1)).toMatchObject({ status: 'error', message: { key: 'dockerCliMissing' } });
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject(record);
+            expect(runtime.isDockerReady).toHaveBeenCalledWith({ engine: { kind: 'pinned', cli: 'podman' } });
+            expect(runtime.pullImage).not.toHaveBeenCalled();
+            expect(podman.pullImage).not.toHaveBeenCalled();
+            expect(runtime.forCli).not.toHaveBeenCalledWith(expect.objectContaining({ cli: 'docker' }));
+        });
+
+        it('routes lifecycle, connection preflight, logs and delete to pinned Podman', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT,
+                phase: 'ready', engineCli: 'podman',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, stored, { displayName: 'DocumentDB Local', port: QUICK_START_PORT });
+            const runtime = runtimeFor();
+            const podman = runtimeFor({ containers: [{ id: 'p1', labels: { [QUICK_START_LABEL_KEY]: '1' } }] });
+            let running = false;
+            vi.mocked(podman.inspectContainer).mockImplementation(async () => ({
+                id: 'p1', status: running ? 'running' : 'exited',
+                labels: { [QUICK_START_LABEL_KEY]: '1' },
+                ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
+            }) as unknown as Awaited<ReturnType<IContainerEngineOps['inspectContainer']>>);
+            vi.mocked(podman.startContainer).mockImplementation(async () => { running = true; });
+            vi.mocked(podman.stopContainer).mockImplementation(async () => { running = false; });
+            vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
+            const service = new QuickStartServiceImpl(runtime);
+            await service.reconcile();
+            expect(podman.listByLabel).toHaveBeenCalledOnce();
+            expect(runtime.listByLabel).not.toHaveBeenCalled();
+            expect(await service.prepareForConnection()).toBe('stopped');
+
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            try {
+                const starting = service.start();
+                await vi.advanceTimersByTimeAsync(5_000);
+                await starting;
+                expect(service.getStatus().state).toBe(InstanceState.Running);
+                expect(await service.prepareForConnection()).toBe('ready');
+                const restarting = service.restart();
+                await vi.advanceTimersByTimeAsync(5_000);
+                await restarting;
+                await service.stop();
+                expect(service.getStatus().state).toBe(InstanceState.Stopped);
+            } finally {
+                vi.useRealTimers();
+            }
+            const cts = new vscode.CancellationTokenSource();
+            await service.followLogs(DEFAULT_ALIAS, ['stored-password'], cts.token);
+            expect(podman.followLogs).toHaveBeenCalledWith('p1', ['stored-password'], cts.token);
+            cts.dispose();
+            expect(await service.deleteContainer()).toBe('deleted');
+            expect(podman.startContainer).toHaveBeenCalledTimes(2);
+            expect(podman.stopContainer).toHaveBeenCalledTimes(2);
+            expect(podman.removeContainer).toHaveBeenCalledWith('p1');
+            expect(podman.removeVolume).toHaveBeenCalledOnce();
+            expect(runtime.inspectContainer).not.toHaveBeenCalled();
+            expect(runtime.startContainer).not.toHaveBeenCalled();
+            expect(runtime.stopContainer).not.toHaveBeenCalled();
+            expect(runtime.removeContainer).not.toHaveBeenCalled();
+            expect(runtime.followLogs).not.toHaveBeenCalled();
+        });
+
+        it('restores credentials from the owning engine rather than Docker', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT,
+                phase: 'ready', engineCli: 'podman',
+            });
+            const runtime = runtimeFor();
+            const podman = runtimeFor({ containers: [{ id: 'p1' }] });
+            vi.mocked(podman.inspectContainer).mockResolvedValue({
+                id: 'p1', status: 'running', ports: [],
+                environmentVariables: { USERNAME: 'admin', PASSWORD: 'podman-password' },
+            } as unknown as Awaited<ReturnType<IContainerEngineOps['inspectContainer']>>);
+            vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
+            const service = new QuickStartServiceImpl(runtime);
+
+            await service.reconcile();
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toContain('admin:podman-password@');
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(runtime.inspectContainer).not.toHaveBeenCalled();
+        });
     });
 
     describe('pull progress', () => {

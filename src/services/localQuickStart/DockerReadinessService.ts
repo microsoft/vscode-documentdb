@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    DockerClient,
     PodmanClient,
     type ListContextItem,
     type PromiseCommandResponse,
@@ -13,6 +12,12 @@ import { CancellationTokenLike, type Shell } from '@microsoft/vscode-processutil
 import { type Writable } from 'stream';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import {
+    createContainerClient,
+    resolveContainerCli,
+    resolvePinnedContainerCli,
+    type ResolvedContainerCli,
+} from './containerCli';
 import { getDockerShellProvider } from './dockerCommand';
 import {
     detectDockerServiceManager,
@@ -73,8 +78,8 @@ export interface DockerProbeOutput {
 export interface DockerReadinessServiceDependencies {
     readonly client?: DockerReadinessClient;
     /** Called once per check, so a CLI installed or removed since the last one is picked up. */
-    readonly getClient?: () => DockerReadinessClient;
-    readonly getCliOnPath?: () => ContainerCliPresence | undefined;
+    readonly getClient?: (resolved: ResolvedContainerCli) => DockerReadinessClient;
+    readonly getCliOnPath?: (resolved: ResolvedContainerCli) => ContainerCliPresence | undefined;
     readonly shellProvider?: Shell;
     readonly platform?: NodeJS.Platform;
     readonly arch?: string;
@@ -95,8 +100,8 @@ export interface DockerReadinessServiceDependencies {
 }
 
 interface ResolvedDependencies {
-    readonly getClient: () => DockerReadinessClient;
-    readonly getCliOnPath: () => ContainerCliPresence | undefined;
+    readonly getClient: (resolved: ResolvedContainerCli) => DockerReadinessClient;
+    readonly getCliOnPath: (resolved: ResolvedContainerCli) => ContainerCliPresence | undefined;
     readonly shellProvider: Shell;
     readonly platform: NodeJS.Platform;
     readonly arch: string;
@@ -238,17 +243,23 @@ function isProviderMemoryCurrent(
     return memory.endpointKind === 'unknown' || endpointKind === 'unknown' || memory.endpointKind === endpointKind;
 }
 
+interface ReadinessCheckState {
+    inFlight?: Promise<DockerReadiness>;
+    forcedRefresh?: Promise<DockerReadiness>;
+    memoized?: DockerReadiness;
+}
+
 export class DockerReadinessService {
     private readonly dependencies: ResolvedDependencies;
-    private inFlight: Promise<DockerReadiness> | undefined;
-    private forcedRefresh: Promise<DockerReadiness> | undefined;
-    private memoized: DockerReadiness | undefined;
+    private readonly checks = new Map<string, ReadinessCheckState>();
+    private readonly suppliedClient: DockerReadinessClient | undefined;
 
     public constructor(dependencies: DockerReadinessServiceDependencies = {}) {
         const platform = dependencies.platform ?? process.platform;
-        const client = dependencies.client ?? new DockerClient();
+        const client = dependencies.client;
+        this.suppliedClient = dependencies.client;
         this.dependencies = {
-            getClient: dependencies.getClient ?? (() => client),
+            getClient: dependencies.getClient ?? (client ? () => client : createContainerClient),
             getCliOnPath: dependencies.getCliOnPath ?? (() => undefined),
             shellProvider: dependencies.shellProvider ?? getDockerShellProvider(platform),
             platform,
@@ -271,52 +282,72 @@ export class DockerReadinessService {
     }
 
     public async getReadiness(request: DockerReadinessRequest = {}): Promise<DockerReadiness> {
+        const resolved =
+            request.engine?.kind === 'pinned'
+                ? resolvePinnedContainerCli(request.engine.cli)
+                : this.suppliedClient && !request.engine
+                  ? resolvePinnedContainerCli(this.suppliedClient.id === PodmanClient.ClientId ? 'podman' : 'docker')
+                  : resolveContainerCli();
+        const key = `${resolved.cli}|${resolved.executable}`;
+        let state = this.checks.get(key);
+        if (!state) {
+            state = {};
+            this.checks.set(key, state);
+        }
         if (request.forceRefresh) {
-            if (this.forcedRefresh) {
-                return this.forcedRefresh;
+            if (state.forcedRefresh) {
+                return state.forcedRefresh;
             }
-            const refresh = this.runForcedRefresh(request);
-            this.forcedRefresh = refresh;
+            const refresh = this.runForcedRefresh(request, resolved, state);
+            state.forcedRefresh = refresh;
             try {
                 return await refresh;
             } finally {
-                if (this.forcedRefresh === refresh) {
-                    this.forcedRefresh = undefined;
+                if (state.forcedRefresh === refresh) {
+                    state.forcedRefresh = undefined;
                 }
             }
         }
 
-        if (this.inFlight) {
-            return this.inFlight;
+        if (state.inFlight) {
+            return state.inFlight;
         }
 
         const now = this.dependencies.now();
-        if (this.memoized && now - this.memoized.checkedAtMs < this.dependencies.memoTtlMs) {
-            return this.memoized;
+        if (state.memoized && now - state.memoized.checkedAtMs < this.dependencies.memoTtlMs) {
+            return state.memoized;
         }
 
-        return this.runAndMemoize(request);
+        return this.runAndMemoize(request, resolved, state);
     }
 
-    private async runForcedRefresh(request: DockerReadinessRequest): Promise<DockerReadiness> {
-        if (this.inFlight) {
+    private async runForcedRefresh(
+        request: DockerReadinessRequest,
+        resolved: ResolvedContainerCli,
+        state: ReadinessCheckState,
+    ): Promise<DockerReadiness> {
+        if (state.inFlight) {
             try {
-                await this.inFlight;
+                await state.inFlight;
             } catch {
                 // A forced refresh supersedes a canceled or failed prior check.
             }
         }
-        this.memoized = undefined;
+        state.memoized = undefined;
         if (request.resetProviderMemory) {
             await this.dependencies.writeProviderMemory(undefined);
         }
-        return this.runAndMemoize(request);
+        return this.runAndMemoize(request, resolved, state);
     }
 
-    private async runAndMemoize(request: DockerReadinessRequest): Promise<DockerReadiness> {
-        const client = this.dependencies.getClient();
-        const cliOnPath = this.dependencies.getCliOnPath();
-        const cli = client.id === PodmanClient.ClientId ? 'podman' : 'docker';
+    private async runAndMemoize(
+        request: DockerReadinessRequest,
+        resolved: ResolvedContainerCli,
+        state: ReadinessCheckState,
+    ): Promise<DockerReadiness> {
+        const client = this.dependencies.getClient(resolved);
+        const cliOnPath = this.dependencies.getCliOnPath(resolved);
+        const cli = resolved.cli;
         const check = this.runReadiness(
             client,
             cli,
@@ -329,14 +360,14 @@ export class DockerReadinessService {
                 ...(cliOnPath !== undefined ? { cliOnPath } : {}),
             }),
         );
-        this.inFlight = check;
+        state.inFlight = check;
         try {
             const result = await check;
-            this.memoized = result;
+            state.memoized = result;
             return result;
         } finally {
-            if (this.inFlight === check) {
-                this.inFlight = undefined;
+            if (state.inFlight === check) {
+                state.inFlight = undefined;
             }
         }
     }
@@ -416,7 +447,9 @@ export class DockerReadinessService {
 
     public async recordLaunchResult(result: DockerLaunchResult): Promise<void> {
         if (result === 'notAvailable' || result === 'failed') {
-            this.memoized = undefined;
+            for (const state of this.checks.values()) {
+                state.memoized = undefined;
+            }
             await this.dependencies.writeProviderMemory(undefined);
         }
     }

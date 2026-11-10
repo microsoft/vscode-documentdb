@@ -10,6 +10,10 @@ import { type ContainerCliPresence } from './quickStartTypes';
 
 export type ContainerCli = 'docker' | 'podman';
 
+export type ContainerEngineRequest =
+    | { readonly kind: 'preferred'; readonly preferred: ContainerCli }
+    | { readonly kind: 'pinned'; readonly cli: ContainerCli };
+
 export interface ContainerCliLookup {
     readonly platform?: NodeJS.Platform;
     readonly environmentVariables?: NodeJS.ProcessEnv;
@@ -68,6 +72,17 @@ export function resolveContainerCli(lookup: ContainerCliLookup = {}): ResolvedCo
     // lifetime, so a CLI that moved would keep failing; an absolute path skips that cache.
     const executable = (lookup.platform ?? process.platform) === 'win32' && found ? found : cli;
     return { cli, executable, onPath: { docker: !!docker, podman: !!podman } };
+}
+
+/** An instance's owning engine must never fall back to another engine. */
+export function resolvePinnedContainerCli(cli: ContainerCli, lookup: ContainerCliLookup = {}): ResolvedContainerCli {
+    const found = findOnPath(cli, lookup);
+    const executable = (lookup.platform ?? process.platform) === 'win32' && found ? found : cli;
+    return {
+        cli,
+        executable,
+        onPath: { docker: cli === 'docker' && !!found, podman: cli === 'podman' && !!found },
+    };
 }
 
 export function createContainerClient({

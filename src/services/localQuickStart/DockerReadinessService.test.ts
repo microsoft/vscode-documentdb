@@ -1000,7 +1000,7 @@ describe('DockerReadinessService', () => {
             writeProviderMemory: async () => undefined,
         });
 
-        const result = await service.getReadiness();
+        const result = await service.getReadiness({ engine: { kind: 'pinned', cli: 'podman' } });
 
         expect(runProbe).not.toHaveBeenCalledWith(expect.objectContaining({ probe: 'contexts' }));
         expect(result).toMatchObject({
@@ -1121,6 +1121,65 @@ describe('DockerReadinessService', () => {
         await expect(first).resolves.toMatchObject({ outcome: 'ready', daemonArchitecture: 'amd64' });
         await expect(second).resolves.toMatchObject({ outcome: 'ready', daemonArchitecture: 'amd64' });
         expect(runProbe).toHaveBeenCalledTimes(3);
+    });
+
+    it('isolates concurrent engine clients, in-flight checks and forced-refresh memoization', async () => {
+        let releaseDocker!: () => void;
+        const dockerGate = new Promise<void>((resolve) => { releaseDocker = resolve; });
+        const clients: string[] = [];
+        const service = new DockerReadinessService({
+            getClient: ({ cli }) => {
+                clients.push(cli);
+                return {
+                    ...createClient(),
+                    checkInstall: async () => ({ ...commandResponse(['-v'], (output) => output), command: cli }),
+                    info: async () => ({
+                        ...commandResponse(['info'], (output) => JSON.parse(output) as unknown), command: cli,
+                    }),
+                    version: async () => ({ ...commandResponse(['version'], () => undefined), command: cli }),
+                };
+            },
+            getCliOnPath: (resolved) => resolved.onPath,
+            platform: 'linux',
+            arch: 'x64',
+            environmentVariables: {},
+            writeProviderMemory: async () => undefined,
+            runProbe: async (options) => {
+                const command = await (typeof options.command === 'function' ? options.command() : options.command);
+                if (command.command === 'docker') {
+                    await dockerGate;
+                }
+                return evidence(options.probe, {
+                    stdout: options.probe === 'info'
+                        ? JSON.stringify({
+                            OSType: 'linux',
+                            Architecture: command.command === 'podman' ? 'aarch64' : 'x86_64',
+                        })
+                        : '',
+                });
+            },
+        });
+        const dockerRequest = { engine: { kind: 'pinned', cli: 'docker' } } as const;
+        const podmanRequest = { engine: { kind: 'pinned', cli: 'podman' } } as const;
+        let dockerFinished = false;
+        const docker = service.getReadiness(dockerRequest);
+        void docker.then(() => { dockerFinished = true; });
+        const duplicateDocker = service.getReadiness(dockerRequest);
+
+        const podman = await service.getReadiness(podmanRequest);
+        expect(podman).toMatchObject({ cli: 'podman', daemonArchitecture: 'arm64', outcome: 'ready' });
+        expect(dockerFinished).toBe(false);
+        expect(await service.getReadiness(podmanRequest)).toBe(podman);
+        const refreshedPodman = await service.getReadiness({ ...podmanRequest, forceRefresh: true });
+        expect(refreshedPodman).not.toBe(podman);
+        expect(clients).toEqual(['docker', 'podman', 'podman']);
+
+        releaseDocker();
+        const dockerResult = await docker;
+        expect(dockerResult).toMatchObject({ cli: 'docker', daemonArchitecture: 'amd64', outcome: 'ready' });
+        expect(await duplicateDocker).toBe(dockerResult);
+        expect(await service.getReadiness(dockerRequest)).toBe(dockerResult);
+        expect(await service.getReadiness(podmanRequest)).toBe(refreshedPodman);
     });
 
     it('treats a zero-exit info body with ServerErrors as not ready', async () => {

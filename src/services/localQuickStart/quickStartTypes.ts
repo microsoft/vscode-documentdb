@@ -11,6 +11,7 @@
  */
 
 import { type CancellationToken } from 'vscode';
+import { type ContainerEngineRequest } from './containerCli';
 
 /** Official DocumentDB local image (github.com/microsoft/documentdb README). */
 export const QUICK_START_IMAGE_REPOSITORY = 'ghcr.io/documentdb/documentdb/documentdb-local';
@@ -440,6 +441,7 @@ export interface DockerProviderMemory {
 }
 
 export interface DockerReadinessRequest {
+    readonly engine?: ContainerEngineRequest;
     readonly forceRefresh?: boolean;
     readonly resetProviderMemory?: boolean;
     readonly suppressCommandEcho?: boolean;
