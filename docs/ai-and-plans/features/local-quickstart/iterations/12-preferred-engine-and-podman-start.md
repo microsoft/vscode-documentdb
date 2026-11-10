@@ -22,7 +22,7 @@ code:
 
 # 12 — Preferred container engine, and starting Podman from a button
 
-> **Approved with the Configure-stage amendment, 2026-11-10; not implemented.** This replaces
+> **Implemented and verified, 2026-11-10, from the approved Configure-stage amendment.** This replaces
 > the parked **W1** and **W8** of [iteration 10](./10-container-runtime-transparency.md).
 > Configure gets a **Container engine** preference, Docker or Podman, defaulting to Docker
 > without any checks. Only execution detects both CLIs, uses the preferred one if installed,
@@ -54,18 +54,18 @@ The operator approved the proposal with this simpler Configure stage. This **ame
 draft engine-choice decision ("there is no setting to change this"). That draft's number 0008
 is not the accepted stage-Details decision now recorded as 0008 in [decisions.md](../decisions.md).
 
-## 2. How it works today
+## 2. Baseline before this implementation
 
-| Area | Today | Source |
-| --- | --- | --- |
-| CLI choice | `resolveContainerCli`: Docker if `docker` is on PATH, else Podman if `podman` is, else Docker, so readiness can report a missing CLI. Both PATH results are already returned as `onPath`. It is re-resolved on every readiness check. | `containerCli.ts` |
-| Which client runs commands | `ContainerRuntimeImpl` holds **one** `client`. `refreshClient()` replaces it during readiness, and pull, run, inspect, start, stop, remove, volume, exec and logs all use whichever client was last resolved. | `ContainerRuntime.ts` |
-| Instance record | `alias`, `displayName`, `port`, `phase`, `imageRef`. It does **not** record which engine holds the container and its data volume. | `quickStartStore.ts` |
-| Provider memory | `globalState` key `DOCKER_PROVIDER_MEMORY_KEY`. It is written on every reachable check, for **any** CLI: Podman writes `provider: 'unknown'` over a Docker record. It is read while the daemon is down, to classify `rememberedProvider`, `daemonStarting` and the Docker Desktop start action on Linux. | `DockerReadinessService.ts` (`runReadiness`) |
-| The W1 leak | With the Podman CLI and the daemon down, a remembered `dockerDesktop`, or Docker Desktop installed on disk (`installedApplication`), can make the panel offer **Start Docker Desktop** to a Podman user. | `classifyDockerProvider`, `getDockerStartCapability` |
-| Start actions | Docker Desktop (Windows, macOS, Linux, Windows from WSL) and rootless Docker Engine (Linux). There is no Podman action yet. | `DockerProviderLauncher.ts` |
-| Platform signal | `detectDockerHostEnvironment` returns `windows`, `macos`, `linux`, `wsl`, `ssh`, `devContainer`, `codespaces`, `otherRemote` or `unsupported`. | `DockerReadinessService.ts` |
-| Introduction copy (W4) | Plan step 1 says "…Docker is used when both are installed." | `LocalQuickStart.tsx`, `build/verification/browser/scenarios.ts` |
+| Area                       | Today                                                                                                                                                                                                                                                                                                    | Source                                                           |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| CLI choice                 | `resolveContainerCli`: Docker if `docker` is on PATH, else Podman if `podman` is, else Docker, so readiness can report a missing CLI. Both PATH results are already returned as `onPath`. It is re-resolved on every readiness check.                                                                    | `containerCli.ts`                                                |
+| Which client runs commands | `ContainerRuntimeImpl` holds **one** `client`. `refreshClient()` replaces it during readiness, and pull, run, inspect, start, stop, remove, volume, exec and logs all use whichever client was last resolved.                                                                                            | `ContainerRuntime.ts`                                            |
+| Instance record            | `alias`, `displayName`, `port`, `phase`, `imageRef`. It does **not** record which engine holds the container and its data volume.                                                                                                                                                                        | `quickStartStore.ts`                                             |
+| Provider memory            | `globalState` key `DOCKER_PROVIDER_MEMORY_KEY`. It is written on every reachable check, for **any** CLI: Podman writes `provider: 'unknown'` over a Docker record. It is read while the daemon is down, to classify `rememberedProvider`, `daemonStarting` and the Docker Desktop start action on Linux. | `DockerReadinessService.ts` (`runReadiness`)                     |
+| The W1 leak                | With the Podman CLI and the daemon down, a remembered `dockerDesktop`, or Docker Desktop installed on disk (`installedApplication`), can make the panel offer **Start Docker Desktop** to a Podman user.                                                                                                 | `classifyDockerProvider`, `getDockerStartCapability`             |
+| Start actions              | Docker Desktop (Windows, macOS, Linux, Windows from WSL) and rootless Docker Engine (Linux). There is no Podman action yet.                                                                                                                                                                              | `DockerProviderLauncher.ts`                                      |
+| Platform signal            | `detectDockerHostEnvironment` returns `windows`, `macos`, `linux`, `wsl`, `ssh`, `devContainer`, `codespaces`, `otherRemote` or `unsupported`.                                                                                                                                                           | `DockerReadinessService.ts`                                      |
+| Introduction copy (W4)     | Plan step 1 says "…Docker is used when both are installed."                                                                                                                                                                                                                                              | `LocalQuickStart.tsx`, `build/verification/browser/scenarios.ts` |
 
 **A gap this plan must close first.** With a preference, Docker and Podman can both be installed
 and the instance can live in Podman. Lifecycle commands from the tree (Start, Stop, Delete,
@@ -111,11 +111,11 @@ export function resolveContainerCli(preferred: ContainerCli = 'docker', lookup?:
 A new row in the existing settings table (`SettingItem`), placed first, because it decides where
 everything else runs:
 
-| State | Summary value | Editor |
-| --- | --- | --- |
-| Fresh setup, untouched | `Docker` | Radio group: **Docker** · **Podman**, with Docker selected regardless of what is installed. |
-| Fresh setup, user chooses Podman | `Podman` | Same radio group. No availability badges or detection results. |
-| Recreate onto existing data | `Podman · kept from the existing instance` (read-only example) | None. The stored instance's engine owns its data volume (§3.3); this is not an environment-derived preference default. |
+| State                            | Summary value                                                  | Editor                                                                                                                 |
+| -------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Fresh setup, untouched           | `Docker`                                                       | Radio group: **Docker** · **Podman**, with Docker selected regardless of what is installed.                            |
+| Fresh setup, user chooses Podman | `Podman`                                                       | Same radio group. No availability badges or detection results.                                                         |
+| Recreate onto existing data      | `Podman · kept from the existing instance` (read-only example) | None. The stored instance's engine owns its data volume (§3.3); this is not an environment-derived preference default. |
 
 - **Configure performs no engine checks and does not wait for them.** Do not call
   `getDockerStatus`, the CLI resolver, platform detection or readiness from wizard mount,
@@ -176,14 +176,14 @@ everything else runs:
 The button is chosen for the **engine this run selected** (preference, then fallback), from
 execution-time evidence:
 
-| Run's engine | Platform (`environment`) | Live evidence at check time | Button |
-| --- | --- | --- | --- |
-| Docker | any | as today (Docker Desktop installed, active context, rootless socket) | as today |
-| Podman CLI | `macos`, `windows` | `daemonUnavailable`, and `podman machine list` shows a stopped target machine (§3.6) | **Start Podman machine** |
-| Podman CLI | `macos`, `windows` | no machine | none. Guidance: run `podman machine init`, with Copy |
-| Podman CLI | `linux`, `wsl` | any | none. Copy command `systemctl --user start podman.socket` |
-| Docker CLI connected to Podman (shim, positive) | `macos`, `windows` | as for the Podman CLI, using the `podman` executable when it is on PATH | **Start Podman machine** |
-| any | `ssh`, `devContainer`, `codespaces`, `otherRemote` | any | none (the engine is not on this machine) |
+| Run's engine                                    | Platform (`environment`)                           | Live evidence at check time                                                          | Button                                                    |
+| ----------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Docker                                          | any                                                | as today (Docker Desktop installed, active context, rootless socket)                 | as today                                                  |
+| Podman CLI                                      | `macos`, `windows`                                 | `daemonUnavailable`, and `podman machine list` shows a stopped target machine (§3.6) | **Start Podman machine**                                  |
+| Podman CLI                                      | `macos`, `windows`                                 | no machine                                                                           | none. Guidance: run `podman machine init`, with Copy      |
+| Podman CLI                                      | `linux`, `wsl`                                     | any                                                                                  | none. Copy command `systemctl --user start podman.socket` |
+| Docker CLI connected to Podman (shim, positive) | `macos`, `windows`                                 | as for the Podman CLI, using the `podman` executable when it is on PATH              | **Start Podman machine**                                  |
+| any                                             | `ssh`, `devContainer`, `codespaces`, `otherRemote` | any                                                                                  | none (the engine is not on this machine)                  |
 
 - **Platform gate (W8).** Only `macos` and `windows` run Podman in a machine. On Linux and in WSL,
   Podman runs natively, so there is no machine to start, and a socket-down state has only inferred
@@ -303,6 +303,18 @@ This documentation-only approval does not start those implementation checks.
    startup. Use the next available decision numbers; iteration 10's draft numbers must not
    overwrite the accepted stage-Details decision 0008.
 
+   **Done (2026-11-10), code commit `2ccb3eb86`:** Sol added truthful fallback summaries,
+   execution-derived preference facts and bounded readiness/provision telemetry. Final
+   independent review and Opus validation led to captured checking-event snapshots,
+   per-execution evidence, lease-safe ownership caching and metadata-only ownership
+   updates across windows. Unknown telemetry is omitted rather than guessed. The final
+   ownership corrections were reproduced before implementation and approved by Opus at
+   85% confidence. Added 79 P6/revision regressions and three scenario-fixture regressions;
+   the final build and 1,191 focused tests passed. Browser harness: 121 tests passed;
+   the three corrected new scenarios passed nine real-browser theme routes. Luna updated
+   the user manual, current feature docs and accepted decisions 0009/0010; those docs are
+   committed separately as `7f4d203a9`. Full final verification results follow in iteration 13.
+
 ### Execution record — 2026-11-10
 
 The operator requested implementation with the lead workflow from #1073 and Opus 5.5 as
@@ -316,14 +328,14 @@ instance ownership rule also governs Start fresh: deleting and recreating existi
 must not silently change engines. Opening the wizard includes metadata hydration only;
 live engine status remains unknown until execution.
 
-| Item | Assigned model | Reason | State |
-| --- | --- | --- | --- |
-| P1 | `gpt-6.1-sol` | Persisted ownership, lifecycle and concurrent runtime isolation | Done: `deecc32f` |
-| P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | Done: `7f5ad767` |
-| P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | Done: `346dc9cd` |
-| P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | Done: `00fd6724` |
-| P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Done: `165bc3d1f` |
-| P6 | `gpt-6.1-sol` | Evidence, telemetry and scenario integration | Backend in progress; docs drafted by `gpt-6-luna` |
+| Item | Assigned model  | Reason                                                          | State                                   |
+| ---- | --------------- | --------------------------------------------------------------- | --------------------------------------- |
+| P1   | `gpt-6.1-sol`   | Persisted ownership, lifecycle and concurrent runtime isolation | Done: `deecc32f`                        |
+| P2   | `gpt-6.1-sol`   | Resolver, readiness and execution interfaces cross modules      | Done: `7f5ad767`                        |
+| P3   | `gpt-6.1-sol`   | Check-free behavior spans command, service, router and webview  | Done: `346dc9cd`                        |
+| P4   | `gpt-6.1-terra` | Bounded provider-evidence isolation                             | Done: `00fd6724`                        |
+| P5   | `gpt-6.1-sol`   | Platform detection and long-running process lifecycle           | Done: `165bc3d1f`                       |
+| P6   | `gpt-6.1-sol`   | Evidence, telemetry and scenario integration                    | Done: `2ccb3eb86`; docs by `gpt-6-luna` |
 
 P1's first worker stopped after the runtime split exposed a command log consumer outside
 its initial file list. The leader authorized that necessary consumer migration; no
@@ -374,6 +386,93 @@ machine instead. Opus identified this separate wording gap. Connection-specific 
 guidance is not silently added to this implementation; the approved no-machine-button
 platform gate is unchanged.
 
+### Final review and verification loop
+
+The independent whole-feature sweep found four valid cross-phase defects: a rolled-back
+lease retaining an engine pin, post-check refresh losing captured selection evidence,
+checking evidence surviving into another execution, and Configure ownership not tracking
+instance changes. Opus validated the findings at 88–92% confidence; they are being corrected
+within P1/P3/P6's existing scope. The review and dispositions are recorded in
+[iteration 13](./13-preferred-engine-implementation-review.md).
+
+First full verification round: Case 1 build and 1,164 focused tests passed. Case 2
+localization generation/check, formatting, build, strict package-test typecheck, all
+8,493 runtime tests (one skipped), and packaging passed. Lint found five unsafe assignments
+in touched files, which the coding worker corrected. The second Case 1 build and 1,183
+focused tests passed, followed by regeneration and formatting. A later round caught three
+remaining unsafe accesses in a scenario assertion; an explicit scenario type fixed them
+without changing assertions or production behavior (`214f694d4`).
+
+**Final round 3: all ten Case 1 + Case 2 commands passed on the same application/test
+revision.** Case 1: build and 1,191 focused tests, 30 files. Case 2: localization generation,
+formatting, localization check, lint, build, strict `typecheck:tests`, all 8,520 runtime
+tests (one skipped), 388 files, and packaging. The final round took about nine minutes;
+this is local verification time, not CI time or model-request time.
+
+A fresh task-owned browser page ran all 66 Local Quick Start routes across dark, light
+and high-contrast: 240 assertions, zero errors. The eight critical scenarios also passed
+a focused 24-route run. Earlier attempts exposed fixture errors, a missing external timer
+in the browser-tool sandbox and a lost page handle; those results are not presented as
+product passes. The scenario runner itself was not changed. The temporary server was stopped.
+
+The final current-source Podman lifecycle rerun passed in 44.11 seconds, including captured
+checking evidence and independently confirmed cleanup. Native Windows/macOS machine startup
+remains a manual check. The PR remains draft for human review; full Case 2 was explicitly
+requested and ran, not deferred because of draft status.
+
+### Lead usage snapshot
+
+Window: 2026-11-10 13:36:04 UTC through the host's 16:35 UTC snapshot, about 2h59m wall time.
+The tables are copied from #1073's `agent-stats.mjs`, with explicit roles for all 19
+Opus advisor consultations, the independent review and the checks. They include partial
+attempts and review-driven rework. Publication/report-finalization and the final response
+after the snapshot are excluded. Summed model-request time is about 147 minutes; it is
+not wall time, and overlapping model, tool and check spans must not be added together.
+Browser elapsed time was not reported by the host. No CI timing is claimed.
+
+| Model           | Role    | Requests | Model time |    AIU | AIU share |
+| --------------- | ------- | -------: | ---------: | -----: | --------: |
+| claude-opus-5.5 | advisor |      294 |     29m18s | 1129.8 |     42.4% |
+| gpt-5.6-luna    | checks  |       18 |      1m44s |    2.7 |      0.1% |
+| gpt-6-luna      | coding  |       34 |      6m56s |    5.9 |      0.2% |
+| gpt-6.1-sol     | leader  |      157 |     34m44s |  444.2 |     16.7% |
+| gpt-6.1-sol     | coding  |      334 |     63m41s |  930.1 |     34.9% |
+| gpt-6.1-sol     | review  |       28 |      4m34s |   66.3 |      2.5% |
+| gpt-6.1-sol     | checks  |       28 |      3m58s |   68.5 |      2.6% |
+| gpt-6.1-terra   | coding  |       22 |      2m07s |   17.8 |      0.7% |
+
+| Role    | Requests | Model time |    AIU | AIU share |
+| ------- | -------: | ---------: | -----: | --------: |
+| leader  |      157 |     34m44s |  444.2 |     16.7% |
+| coding  |      390 |     72m43s |  953.8 |     35.8% |
+| advisor |      294 |     29m18s | 1129.8 |     42.4% |
+| review  |       28 |      4m34s |   66.3 |      2.5% |
+| checks  |       46 |      5m42s |   71.2 |      2.7% |
+
+| Model           | Role    |      Input |  Output | Cache read | Cache write | Reasoning |
+| --------------- | ------- | ---------: | ------: | ---------: | ----------: | --------: |
+| claude-opus-5.5 | advisor | 17,034,260 | 166,197 | 16,082,625 |     951,009 |    87,594 |
+| gpt-5.6-luna    | checks  |    355,612 |   7,352 |    309,254 |      46,304 |     4,553 |
+| gpt-6-luna      | coding  |  2,775,191 |  38,331 |  2,671,358 |     103,731 |    26,254 |
+| gpt-6.1-sol     | leader  | 23,825,301 |  91,971 | 23,350,443 |     474,387 |    41,773 |
+| gpt-6.1-sol     | coding  | 42,179,957 | 233,589 | 41,035,230 |   1,143,725 |    87,053 |
+| gpt-6.1-sol     | review  |  2,163,946 |  12,954 |  2,031,719 |     132,143 |     6,006 |
+| gpt-6.1-sol     | checks  |  1,883,631 |  18,085 |  1,752,018 |     131,529 |     2,810 |
+| gpt-6.1-terra   | coding  |  1,155,282 |   8,018 |  1,088,196 |      67,020 |     1,230 |
+
+Totals: leader **444.2 AIU**, subagents **2221.1 AIU**, run **2665.2 AIU**.
+AIU are not dollars. Displayed totals have independent rounding. Cache and reasoning
+counts can overlap input/output and are not an additive token total; none is inferred
+from model pricing.
+
+**Optimization note:** advising was the largest measured category (42.4%). The initial broad
+planning read, separate phase reviews and repeated corrections added context and review
+overhead; repeated full checks also added wall time. Future runs could specify captured
+checking-event evidence and transient-lease ownership upfront, lint typed scenario fixtures
+before expensive full rounds, retain a background advisor for same-item follow-ups, and use
+a dedicated browser page. These are workflow suggestions, not a silent change to this
+run's approved model assignments. There were no model substitutions.
+
 ## 5. Tests
 
 - `containerCli.test.ts`: every combination of preference × {docker, podman, both, neither} on
@@ -415,15 +514,15 @@ platform gate is unchanged.
 The operator approved the recommended choices below, with Q4 and Q7 amended so Configure
 does not check availability and always defaults to Docker for a fresh preference.
 
-| # | Question | Approved resolution |
-| --- | --- | --- |
-| Q1 | What happens to provider memory? | **A.** None for Podman runs; Docker's memory unchanged |
-| Q2 | When does setup fall back to the other engine? | **A.** During execution, only when the preferred CLI is not found |
-| Q3 | Does the instance record its engine? | **A.** Yes, `engineCli` on the record |
-| Q4 | Is the preference itself persisted? | **A, amended.** No; a fresh Configure form always defaults to Docker, without detection |
-| Q5 | When the selected engine is down, is the other engine offered? | **A.** No; one button, for the selected engine only |
-| Q6 | Which Podman machine does the button start? | **A.** The `Default: true` machine by name; the only machine if just one; else no button |
-| Q7 | Where does the Configure row appear? | **A, amended.** Always, first in the table, with static choices and no availability hints |
+| #   | Question                                                       | Approved resolution                                                                       |
+| --- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Q1  | What happens to provider memory?                               | **A.** None for Podman runs; Docker's memory unchanged                                    |
+| Q2  | When does setup fall back to the other engine?                 | **A.** During execution, only when the preferred CLI is not found                         |
+| Q3  | Does the instance record its engine?                           | **A.** Yes, `engineCli` on the record                                                     |
+| Q4  | Is the preference itself persisted?                            | **A, amended.** No; a fresh Configure form always defaults to Docker, without detection   |
+| Q5  | When the selected engine is down, is the other engine offered? | **A.** No; one button, for the selected engine only                                       |
+| Q6  | Which Podman machine does the button start?                    | **A.** The `Default: true` machine by name; the only machine if just one; else no button  |
+| Q7  | Where does the Configure row appear?                           | **A, amended.** Always, first in the table, with static choices and no availability hints |
 
 ### Q1 — What happens to provider memory?
 
