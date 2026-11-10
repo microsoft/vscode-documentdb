@@ -222,17 +222,16 @@ export async function getDockerStartCapability(
 ): Promise<DockerStartCapability> {
     const dependencies = resolveDependencies(dependencyOverrides);
     if (input.provider === 'podman') {
-        if (
-            !input.podmanExecutable ||
-            (input.environment !== 'macos' && input.environment !== 'windows')
-        ) {
+        if (!input.podmanExecutable || (input.environment !== 'macos' && input.environment !== 'windows')) {
             return unchangedCapability(input);
         }
         if (
             input.environment === 'windows' &&
             (!path.win32.isAbsolute(input.podmanExecutable) || /\.(?:cmd|bat)$/i.test(input.podmanExecutable))
         ) {
-            dependencies.onOutput('[readiness] podmanMachine=unknown: an absolute non-batch Podman executable is required');
+            dependencies.onOutput(
+                '[readiness] podmanMachine=unknown: an absolute non-batch Podman executable is required',
+            );
             return { ...unchangedCapability(input), podmanMachine: { kind: 'unknown' } };
         }
         try {
@@ -243,7 +242,9 @@ export async function getDockerStartCapability(
             );
             const machines = result.exitCode === 0 ? parsePodmanMachineList(result.stdout) : undefined;
             if (!machines) {
-                dependencies.onOutput('[readiness] podmanMachine=unknown: machine list failed or returned invalid JSON');
+                dependencies.onOutput(
+                    '[readiness] podmanMachine=unknown: machine list failed or returned invalid JSON',
+                );
                 return { ...unchangedCapability(input), podmanMachine: { kind: 'unknown' } };
             }
             const podmanMachine = classifyPodmanMachineState(machines);
@@ -388,8 +389,11 @@ export async function startDockerProvider(
             const completion = process.exit.then((result): DockerLaunchResult => {
                 const alreadyRunning = result.stderr
                     .split(/\r?\n/)
-                    .some((line) => line === `Error: unable to start "${name}": already running` ||
-                        line === `unable to start "${name}": already running`);
+                    .some(
+                        (line) =>
+                            line === `Error: unable to start "${name}": already running` ||
+                            line === `unable to start "${name}": already running`,
+                    );
                 const launchResult = result.exitCode === 0 || alreadyRunning ? 'started' : 'failed';
                 dependencies.onOutput(
                     `[startup] podman machine "${name}" ${launchResult} (exit=${result.exitCode ?? 'unknown'})${result.stderr ? `\n${result.stderr}` : ''}`,

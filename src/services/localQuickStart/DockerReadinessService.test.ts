@@ -9,6 +9,13 @@ import { PodmanClient, type ListContextItem, type PromiseCommandResponse } from 
 import { Bash } from '@microsoft/vscode-processutils';
 import { Writable } from 'stream';
 import type * as vscode from 'vscode';
+import * as containerCli from './containerCli';
+import { type RunDockerProbeOptions } from './dockerProbes';
+import {
+    getDockerStartCapability,
+    type DockerProviderLauncherDependencies,
+    type DockerStartCapabilityInput,
+} from './DockerProviderLauncher';
 import {
     detectDockerHostEnvironment,
     DockerReadinessService,
@@ -16,14 +23,7 @@ import {
     resolveDockerPermissionDetail,
     type DockerReadinessServiceDependencies,
 } from './DockerReadinessService';
-import { type RunDockerProbeOptions } from './dockerProbes';
 import { type ContainerCliPresence, type DockerProbeEvidence, type DockerProviderMemory } from './quickStartTypes';
-import * as containerCli from './containerCli';
-import {
-    getDockerStartCapability,
-    type DockerProviderLauncherDependencies,
-    type DockerStartCapabilityInput,
-} from './DockerProviderLauncher';
 
 function commandResponse<T>(args: string[], parse: (output: string) => T): PromiseCommandResponse<T> {
     return {
@@ -72,12 +72,14 @@ describe('live Podman machine readiness', () => {
         capability: ReturnType<typeof vi.fn>;
     } {
         const list = vi.fn().mockResolvedValue({ exitCode: 0, stdout });
-        const capability = vi.fn((
-            input: DockerStartCapabilityInput,
-            dependencies: DockerProviderLauncherDependencies = {},
-        ) => getDockerStartCapability(input, {
-            ...dependencies, runProcess: list, pathExists: async () => true,
-        }));
+        const capability = vi.fn(
+            (input: DockerStartCapabilityInput, dependencies: DockerProviderLauncherDependencies = {}) =>
+                getDockerStartCapability(input, {
+                    ...dependencies,
+                    runProcess: list,
+                    pathExists: async () => true,
+                }),
+        );
         return {
             list,
             capability,
@@ -86,11 +88,17 @@ describe('live Podman machine readiness', () => {
                 shellProvider: new Bash(),
                 platform: 'darwin',
                 environmentVariables: { DOCKER_HOST: 'unix:///run/podman.sock' },
-                runProbe: async (options) => evidence(options.probe, options.probe === 'info'
-                    ? { exitCode: 1, stderr: 'Cannot connect to Podman' }
-                    : { stdout: 'podman version 6.0.2' }),
+                runProbe: async (options) =>
+                    evidence(
+                        options.probe,
+                        options.probe === 'info'
+                            ? { exitCode: 1, stderr: 'Cannot connect to Podman' }
+                            : { stdout: 'podman version 6.0.2' },
+                    ),
                 probeEndpoint: async (endpoint) => ({
-                    kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ECONNREFUSED',
+                    kind: endpoint.kind,
+                    source: endpoint.source,
+                    accessErrorCode: 'ECONNREFUSED',
                 }),
                 getStartCapability: capability,
                 readProviderMemory: () => undefined,
@@ -100,25 +108,52 @@ describe('live Podman machine readiness', () => {
         };
     }
 
-    it.each(['darwin', 'win32'] as const)('discovers and offers the selected Podman machine on %s', async (platform) => {
-        const executable = platform === 'win32' ? 'C:\\Podman\\podman.exe' : '/usr/local/bin/podman';
-        vi.mocked(containerCli.findOnPath).mockReturnValue(executable);
-        const { service, list } = machineService({ platform });
-        expect(await service.getReadiness()).toMatchObject({
-            cli: 'podman', failureKind: 'daemonUnavailable', startAction: 'startPodmanMachine',
-            podmanMachine: { kind: 'stopped', name: 'custom-vm' },
-        });
-        expect(list).toHaveBeenCalledExactlyOnceWith(
-            executable, ['machine', 'list', '--format', 'json'], expect.any(Object),
-        );
-    });
+    it.each(['darwin', 'win32'] as const)(
+        'discovers and offers the selected Podman machine on %s',
+        async (platform) => {
+            const executable = platform === 'win32' ? 'C:\\Podman\\podman.exe' : '/usr/local/bin/podman';
+            vi.mocked(containerCli.findOnPath).mockReturnValue(executable);
+            const { service, list } = machineService({ platform });
+            expect(await service.getReadiness()).toMatchObject({
+                cli: 'podman',
+                failureKind: 'daemonUnavailable',
+                startAction: 'startPodmanMachine',
+                podmanMachine: { kind: 'stopped', name: 'custom-vm' },
+            });
+            expect(list).toHaveBeenCalledExactlyOnceWith(
+                executable,
+                ['machine', 'list', '--format', 'json'],
+                expect.any(Object),
+            );
+        },
+    );
 
     it.each([
         { stdout: '[]', machine: { kind: 'none' }, failure: 'daemonUnavailable', recovery: 'podmanMachineInit' },
-        { stdout: '[{"Name":"vm","Default":true,"Running":false,"Starting":true}]', machine: { kind: 'starting', name: 'vm' }, failure: 'daemonStarting', recovery: undefined },
-        { stdout: '[{"Name":"vm","Default":true,"Running":true,"Starting":false}]', machine: { kind: 'running', name: 'vm' }, failure: 'daemonUnavailable', recovery: undefined },
-        { stdout: '[{"Name":"a","Default":false,"Running":false,"Starting":false},{"Name":"b","Default":false,"Running":false,"Starting":false}]', machine: { kind: 'ambiguous', names: ['a', 'b'] }, failure: 'daemonUnavailable', recovery: undefined },
-        { stdout: '[{"Name":"a","Default":true,"Running":false,"Starting":false},{"Name":"b","Default":false,"Running":true,"Starting":false}]', machine: { kind: 'otherActive', active: 'b' }, failure: 'daemonUnavailable', recovery: undefined },
+        {
+            stdout: '[{"Name":"vm","Default":true,"Running":false,"Starting":true}]',
+            machine: { kind: 'starting', name: 'vm' },
+            failure: 'daemonStarting',
+            recovery: undefined,
+        },
+        {
+            stdout: '[{"Name":"vm","Default":true,"Running":true,"Starting":false}]',
+            machine: { kind: 'running', name: 'vm' },
+            failure: 'daemonUnavailable',
+            recovery: undefined,
+        },
+        {
+            stdout: '[{"Name":"a","Default":false,"Running":false,"Starting":false},{"Name":"b","Default":false,"Running":false,"Starting":false}]',
+            machine: { kind: 'ambiguous', names: ['a', 'b'] },
+            failure: 'daemonUnavailable',
+            recovery: undefined,
+        },
+        {
+            stdout: '[{"Name":"a","Default":true,"Running":false,"Starting":false},{"Name":"b","Default":false,"Running":true,"Starting":false}]',
+            machine: { kind: 'otherActive', active: 'b' },
+            failure: 'daemonUnavailable',
+            recovery: undefined,
+        },
         { stdout: 'bad json', machine: { kind: 'unknown' }, failure: 'daemonUnavailable', recovery: undefined },
     ])('carries live $machine.kind facts without a start button', async ({ stdout, machine, failure, recovery }) => {
         const { service } = machineService({}, stdout);
@@ -148,9 +183,10 @@ describe('live Podman machine readiness', () => {
     it.each(['podman', 'docker'] as const)('does not perform healthy machine lookups for %s', async (cli) => {
         const { service, list, capability } = machineService({
             client: { ...createClient(), id: cli === 'podman' ? PodmanClient.ClientId : undefined },
-            runProbe: async (options) => evidence(options.probe, {
-                stdout: options.probe === 'info' ? '{"OSType":"linux"}' : 'podman version 6.0.2',
-            }),
+            runProbe: async (options) =>
+                evidence(options.probe, {
+                    stdout: options.probe === 'info' ? '{"OSType":"linux"}' : 'podman version 6.0.2',
+                }),
         });
         expect(await service.getReadiness()).toMatchObject({ outcome: 'ready' });
         expect(list).not.toHaveBeenCalled();
@@ -161,7 +197,9 @@ describe('live Podman machine readiness', () => {
     it('does not perform a machine lookup for a permission failure', async () => {
         const { service, list } = machineService({
             probeEndpoint: async (endpoint) => ({
-                kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'EACCES',
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'EACCES',
             }),
         });
         expect(await service.getReadiness()).toMatchObject({ failureKind: 'permissionDenied' });
@@ -181,9 +219,13 @@ describe('live Podman machine readiness', () => {
     it('never promotes an inferred Podman endpoint into machine evidence', async () => {
         const { service, list } = machineService({
             client: createClient(),
-            runProbe: async (options) => evidence(options.probe, options.probe === 'info'
-                ? { exitCode: 1, stderr: 'Cannot connect to the Docker daemon' }
-                : { stdout: 'Docker version 28.1.1' }),
+            runProbe: async (options) =>
+                evidence(
+                    options.probe,
+                    options.probe === 'info'
+                        ? { exitCode: 1, stderr: 'Cannot connect to the Docker daemon' }
+                        : { stdout: 'Docker version 28.1.1' },
+                ),
         });
         const result = await service.getReadiness();
         expect(result).toMatchObject({ engine: 'unknown', engineEvidence: 'endpointPath' });
@@ -218,12 +260,15 @@ describe('DockerReadinessService', () => {
                 platform: 'linux',
                 arch: 'x64',
                 environmentVariables: {},
-                runProbe: async (options) => evidence(options.probe, {
-                    stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '[]',
-                }),
+                runProbe: async (options) =>
+                    evidence(options.probe, {
+                        stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '[]',
+                    }),
                 resolveDockerSocketTarget: async () => ({}),
                 probeEndpoint: async (endpoint) => ({
-                    kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ECONNREFUSED',
+                    kind: endpoint.kind,
+                    source: endpoint.source,
+                    accessErrorCode: 'ECONNREFUSED',
                 }),
                 getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
                 readProviderMemory: () => undefined,
@@ -232,44 +277,59 @@ describe('DockerReadinessService', () => {
             });
         }
 
-        it.each(['docker', 'podman'] as const)('does not fall back when installed preferred %s is stopped', async (preferred) => {
-            const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
-                cli: preferred, executable: preferred, preferred, fellBack: false,
-                onPath: { docker: true, podman: true },
-            });
-            const getClient = vi.fn((resolved: containerCli.ResolvedContainerCli) => ({
-                ...createClient(),
-                info: async () => ({
-                    ...commandResponse(['info'], (output) => JSON.parse(output) as unknown),
-                    command: resolved.cli,
-                }),
-            }));
-            const service = createService({
-                getClient,
-                runProbe: async (options) => {
-                    const command = await (typeof options.command === 'function' ? options.command() : options.command);
-                    return evidence(
-                        options.probe,
-                        options.probe === 'info' && command.command === preferred
-                            ? { exitCode: 1, stderr: 'Cannot connect to the engine' }
-                            : { stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '[]' },
-                    );
-                },
-            });
+        it.each(['docker', 'podman'] as const)(
+            'does not fall back when installed preferred %s is stopped',
+            async (preferred) => {
+                const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
+                    cli: preferred,
+                    executable: preferred,
+                    preferred,
+                    fellBack: false,
+                    onPath: { docker: true, podman: true },
+                });
+                const getClient = vi.fn((resolved: containerCli.ResolvedContainerCli) => ({
+                    ...createClient(),
+                    info: async () => ({
+                        ...commandResponse(['info'], (output) => JSON.parse(output) as unknown),
+                        command: resolved.cli,
+                    }),
+                }));
+                const service = createService({
+                    getClient,
+                    runProbe: async (options) => {
+                        const command = await (typeof options.command === 'function'
+                            ? options.command()
+                            : options.command);
+                        return evidence(
+                            options.probe,
+                            options.probe === 'info' && command.command === preferred
+                                ? { exitCode: 1, stderr: 'Cannot connect to the engine' }
+                                : { stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '[]' },
+                        );
+                    },
+                });
 
-            const result = await service.getReadiness({ engine: { kind: 'preferred', preferred } });
+                const result = await service.getReadiness({ engine: { kind: 'preferred', preferred } });
 
-            expect(resolve).toHaveBeenCalledExactlyOnceWith(preferred);
-            expect(result).toMatchObject({
-                cli: preferred, preferredEngine: preferred, cliFallback: false,
-                cliInstalled: true, daemonReachable: false, outcome: 'diagnosed',
-            });
-            expect(getClient).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ cli: preferred }));
-        });
+                expect(resolve).toHaveBeenCalledExactlyOnceWith(preferred);
+                expect(result).toMatchObject({
+                    cli: preferred,
+                    preferredEngine: preferred,
+                    cliFallback: false,
+                    cliInstalled: true,
+                    daemonReachable: false,
+                    outcome: 'diagnosed',
+                });
+                expect(getClient).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ cli: preferred }));
+            },
+        );
 
         it('returns fallback evidence from this execution and re-resolves before a memo hit', async () => {
             const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
-                cli: 'docker', executable: 'docker', preferred: 'podman', fellBack: true,
+                cli: 'docker',
+                executable: 'docker',
+                preferred: 'podman',
+                fellBack: true,
                 onPath: { docker: true, podman: false },
             });
             const getClient = vi.fn(() => createClient());
@@ -282,11 +342,16 @@ describe('DockerReadinessService', () => {
             expect(getClient).toHaveBeenCalledTimes(1);
 
             resolve.mockReturnValue({
-                cli: 'podman', executable: 'podman', preferred: 'podman', fellBack: false,
+                cli: 'podman',
+                executable: 'podman',
+                preferred: 'podman',
+                fellBack: false,
                 onPath: { docker: true, podman: true },
             });
             expect(await service.getReadiness(request)).toMatchObject({
-                cli: 'podman', preferredEngine: 'podman', cliFallback: false,
+                cli: 'podman',
+                preferredEngine: 'podman',
+                cliFallback: false,
                 cliOnPath: { docker: true, podman: true },
             });
             expect(getClient).toHaveBeenCalledTimes(2);
@@ -295,56 +360,77 @@ describe('DockerReadinessService', () => {
         it.each([
             { preferred: 'docker', cli: 'podman', expectReset: false },
             { preferred: 'podman', cli: 'docker', expectReset: true },
-        ] as const)('uses the resolved CLI rather than $preferred preference when resetting memory', async ({ preferred, cli, expectReset }) => {
-            vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
-                cli, executable: cli, preferred, fellBack: true,
-                onPath: { docker: cli === 'docker', podman: cli === 'podman' },
-            });
-            const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
-            const service = createService({ writeProviderMemory });
+        ] as const)(
+            'uses the resolved CLI rather than $preferred preference when resetting memory',
+            async ({ preferred, cli, expectReset }) => {
+                vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
+                    cli,
+                    executable: cli,
+                    preferred,
+                    fellBack: true,
+                    onPath: { docker: cli === 'docker', podman: cli === 'podman' },
+                });
+                const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+                const service = createService({ writeProviderMemory });
 
-            await service.getReadiness({
-                engine: { kind: 'preferred', preferred }, forceRefresh: true, resetProviderMemory: true,
-            });
+                await service.getReadiness({
+                    engine: { kind: 'preferred', preferred },
+                    forceRefresh: true,
+                    resetProviderMemory: true,
+                });
 
-            expect(writeProviderMemory.mock.calls.some(([value]) => value === undefined)).toBe(expectReset);
-        });
+                expect(writeProviderMemory.mock.calls.some(([value]) => value === undefined)).toBe(expectReset);
+            },
+        );
 
-        it.each(['executable', 'preferred', 'onPath'] as const)('keys readiness memoization by %s evidence', async (field) => {
-            const original: containerCli.ResolvedContainerCli = {
-                cli: 'docker', executable: 'docker', preferred: 'docker', fellBack: false,
-                onPath: { docker: true, podman: false },
-            };
-            const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue(original);
-            const getClient = vi.fn(() => createClient());
-            const service = createService({ getClient });
-            const first = await service.getReadiness();
-            expect(await service.getReadiness()).toBe(first);
-            const changed: containerCli.ResolvedContainerCli = {
-                ...original,
-                ...(field === 'executable' ? { executable: '/new/docker' } : {}),
-                ...(field === 'preferred' ? { preferred: 'podman', fellBack: true } : {}),
-                ...(field === 'onPath' ? { onPath: { docker: true, podman: true } } : {}),
-            };
-            resolve.mockReturnValue(changed);
+        it.each(['executable', 'preferred', 'onPath'] as const)(
+            'keys readiness memoization by %s evidence',
+            async (field) => {
+                const original: containerCli.ResolvedContainerCli = {
+                    cli: 'docker',
+                    executable: 'docker',
+                    preferred: 'docker',
+                    fellBack: false,
+                    onPath: { docker: true, podman: false },
+                };
+                const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue(original);
+                const getClient = vi.fn(() => createClient());
+                const service = createService({ getClient });
+                const first = await service.getReadiness();
+                expect(await service.getReadiness()).toBe(first);
+                const changed: containerCli.ResolvedContainerCli = {
+                    ...original,
+                    ...(field === 'executable' ? { executable: '/new/docker' } : {}),
+                    ...(field === 'preferred' ? { preferred: 'podman', fellBack: true } : {}),
+                    ...(field === 'onPath' ? { onPath: { docker: true, podman: true } } : {}),
+                };
+                resolve.mockReturnValue(changed);
 
-            const second = await service.getReadiness({
-                engine: { kind: 'preferred', preferred: changed.preferred },
-            });
-            expect(second).not.toBe(first);
-            expect(getClient).toHaveBeenCalledTimes(2);
-            expect(second).toMatchObject({
-                preferredEngine: changed.preferred, cliFallback: changed.fellBack, cliOnPath: changed.onPath,
-            });
-        });
+                const second = await service.getReadiness({
+                    engine: { kind: 'preferred', preferred: changed.preferred },
+                });
+                expect(second).not.toBe(first);
+                expect(getClient).toHaveBeenCalledTimes(2);
+                expect(second).toMatchObject({
+                    preferredEngine: changed.preferred,
+                    cliFallback: changed.fellBack,
+                    cliOnPath: changed.onPath,
+                });
+            },
+        );
 
         it('isolates forced and in-flight checks with different preferences for the same selected CLI', async () => {
             vi.spyOn(containerCli, 'resolveContainerCli').mockImplementation((preferred = 'docker') => ({
-                cli: 'docker', executable: 'docker', preferred, fellBack: preferred !== 'docker',
+                cli: 'docker',
+                executable: 'docker',
+                preferred,
+                fellBack: preferred !== 'docker',
                 onPath: { docker: true, podman: false },
             }));
             let release!: () => void;
-            const gate = new Promise<void>((resolve) => { release = resolve; });
+            const gate = new Promise<void>((resolve) => {
+                release = resolve;
+            });
             const getClient = vi.fn(() => createClient());
             const service = createService({
                 getClient,
@@ -357,10 +443,12 @@ describe('DockerReadinessService', () => {
             });
             const docker = service.getReadiness({ engine: { kind: 'preferred', preferred: 'docker' } });
             const podman = service.getReadiness({
-                engine: { kind: 'preferred', preferred: 'podman' }, forceRefresh: true,
+                engine: { kind: 'preferred', preferred: 'podman' },
+                forceRefresh: true,
             });
             const duplicate = service.getReadiness({
-                engine: { kind: 'preferred', preferred: 'podman' }, forceRefresh: true,
+                engine: { kind: 'preferred', preferred: 'podman' },
+                forceRefresh: true,
             });
             expect(getClient).toHaveBeenCalledTimes(2);
             release();
@@ -1170,12 +1258,14 @@ describe('DockerReadinessService', () => {
             }
             return evidence('cliVersion', { stdout: 'podman version 6.0.2' });
         });
-        const readProviderMemory = vi.fn((): DockerProviderMemory => ({
-            provider: 'dockerDesktop',
-            endpointKind: 'unixSocket',
-            hostEnvironment: 'linux',
-            recordedAtMs: 500,
-        }));
+        const readProviderMemory = vi.fn(
+            (): DockerProviderMemory => ({
+                provider: 'dockerDesktop',
+                endpointKind: 'unixSocket',
+                hostEnvironment: 'linux',
+                recordedAtMs: 500,
+            }),
+        );
         const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
         const getStartCapability = vi.fn().mockResolvedValue({
             provider: 'dockerDesktop',
@@ -1216,19 +1306,42 @@ describe('DockerReadinessService', () => {
     it.each([
         { name: 'healthy', platform: 'linux', host: 'unix:///var/run/docker.sock', failure: undefined },
         { name: 'stopped Linux', platform: 'linux', host: 'unix:///var/run/docker.sock', failure: 'ECONNREFUSED' },
-        { name: 'stopped WSL', platform: 'linux', host: 'unix:///var/run/docker.sock', failure: 'ECONNREFUSED', remoteName: 'wsl' },
-        { name: 'Desktop endpoint', platform: 'darwin', host: 'unix:///Users/user/.docker/run/docker.sock', failure: 'ECONNREFUSED' },
-        { name: 'rootless endpoint', platform: 'linux', host: 'unix:///run/user/1000/docker.sock', failure: 'ECONNREFUSED' },
+        {
+            name: 'stopped WSL',
+            platform: 'linux',
+            host: 'unix:///var/run/docker.sock',
+            failure: 'ECONNREFUSED',
+            remoteName: 'wsl',
+        },
+        {
+            name: 'Desktop endpoint',
+            platform: 'darwin',
+            host: 'unix:///Users/user/.docker/run/docker.sock',
+            failure: 'ECONNREFUSED',
+        },
+        {
+            name: 'rootless endpoint',
+            platform: 'linux',
+            host: 'unix:///run/user/1000/docker.sock',
+            failure: 'ECONNREFUSED',
+        },
         { name: 'permission denied', platform: 'linux', host: 'unix:///var/run/docker.sock', failure: 'EACCES' },
-        { name: 'Windows Desktop installed', platform: 'win32', host: 'npipe:////./pipe/docker_engine', failure: 'ENOENT' },
+        {
+            name: 'Windows Desktop installed',
+            platform: 'win32',
+            host: 'npipe:////./pipe/docker_engine',
+            failure: 'ENOENT',
+        },
     ] as const)('does not use Docker memory or actions for $name Podman, even on reset', async (scenario) => {
         const { platform, host, failure } = scenario;
-        const readProviderMemory = vi.fn((): DockerProviderMemory => ({
-            provider: 'dockerDesktop',
-            endpointKind: platform === 'win32' ? 'namedPipe' : 'unixSocket',
-            hostEnvironment: platform === 'win32' ? 'windows' : platform === 'darwin' ? 'macos' : 'linux',
-            recordedAtMs: 500,
-        }));
+        const readProviderMemory = vi.fn(
+            (): DockerProviderMemory => ({
+                provider: 'dockerDesktop',
+                endpointKind: platform === 'win32' ? 'namedPipe' : 'unixSocket',
+                hostEnvironment: platform === 'win32' ? 'windows' : platform === 'darwin' ? 'macos' : 'linux',
+                recordedAtMs: 500,
+            }),
+        );
         const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
         const getStartCapability = vi.fn().mockResolvedValue({
             provider: 'dockerDesktop',
@@ -1246,8 +1359,14 @@ describe('DockerReadinessService', () => {
             runProbe: async (options) =>
                 options.probe === 'info' && failure
                     ? evidence('info', { exitCode: 1, stderr: 'Cannot connect to Podman' })
-                    : evidence(options.probe, { stdout: options.probe === 'info' ? '{"OSType":"linux"}' : 'podman version 6.0.2' }),
-            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source, accessErrorCode: failure }),
+                    : evidence(options.probe, {
+                          stdout: options.probe === 'info' ? '{"OSType":"linux"}' : 'podman version 6.0.2',
+                      }),
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: failure,
+            }),
             resolveDockerSocketTarget: async () => ({}),
             readProviderMemory,
             writeProviderMemory,
@@ -1264,7 +1383,9 @@ describe('DockerReadinessService', () => {
             engineEvidence: 'selectedCli',
             provider: failure ? 'unknown' : 'podman',
             providerEvidence: failure ? 'none' : 'liveDaemon',
-            ...(failure ? { failureKind: failure === 'EACCES' ? 'permissionDenied' : 'daemonUnavailable' } : { outcome: 'ready' }),
+            ...(failure
+                ? { failureKind: failure === 'EACCES' ? 'permissionDenied' : 'daemonUnavailable' }
+                : { outcome: 'ready' }),
         });
         expect(result.startAction).toBeUndefined();
         if (failure === 'ECONNREFUSED' && platform === 'linux') {
@@ -1525,7 +1646,9 @@ describe('DockerReadinessService', () => {
 
     it('isolates concurrent engine clients, in-flight checks and forced-refresh memoization', async () => {
         let releaseDocker!: () => void;
-        const dockerGate = new Promise<void>((resolve) => { releaseDocker = resolve; });
+        const dockerGate = new Promise<void>((resolve) => {
+            releaseDocker = resolve;
+        });
         const clients: string[] = [];
         const service = new DockerReadinessService({
             getClient: ({ cli }) => {
@@ -1534,7 +1657,8 @@ describe('DockerReadinessService', () => {
                     ...createClient(),
                     checkInstall: async () => ({ ...commandResponse(['-v'], (output) => output), command: cli }),
                     info: async () => ({
-                        ...commandResponse(['info'], (output) => JSON.parse(output) as unknown), command: cli,
+                        ...commandResponse(['info'], (output) => JSON.parse(output) as unknown),
+                        command: cli,
                     }),
                     version: async () => ({ ...commandResponse(['version'], () => undefined), command: cli }),
                 };
@@ -1550,12 +1674,13 @@ describe('DockerReadinessService', () => {
                     await dockerGate;
                 }
                 return evidence(options.probe, {
-                    stdout: options.probe === 'info'
-                        ? JSON.stringify({
-                            OSType: 'linux',
-                            Architecture: command.command === 'podman' ? 'aarch64' : 'x86_64',
-                        })
-                        : '',
+                    stdout:
+                        options.probe === 'info'
+                            ? JSON.stringify({
+                                  OSType: 'linux',
+                                  Architecture: command.command === 'podman' ? 'aarch64' : 'x86_64',
+                              })
+                            : '',
                 });
             },
         });
@@ -1563,7 +1688,9 @@ describe('DockerReadinessService', () => {
         const podmanRequest = { engine: { kind: 'pinned', cli: 'podman' } } as const;
         let dockerFinished = false;
         const docker = service.getReadiness(dockerRequest);
-        void docker.then(() => { dockerFinished = true; });
+        void docker.then(() => {
+            dockerFinished = true;
+        });
         const duplicateDocker = service.getReadiness(dockerRequest);
 
         const podman = await service.getReadiness(podmanRequest);

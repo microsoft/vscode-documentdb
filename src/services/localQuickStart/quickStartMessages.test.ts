@@ -70,12 +70,15 @@ describe('formatQuickStartMessage', () => {
         expect(formatQuickStartMessage({ key: 'instanceRunning', port: 10333 })).toContain('10333');
     });
 
-    it.each(['docker', 'podman'] as const)('names the missing owning %s CLI rather than claiming neither is installed', (engineCli) => {
-        const engine = engineCli === 'docker' ? 'Docker' : 'Podman';
-        expect(formatQuickStartMessage({ key: 'dockerCliMissing', engineCli })).toBe(
-            `${engine} was not found on your PATH. Install it to use the existing instance and retry.`,
-        );
-    });
+    it.each(['docker', 'podman'] as const)(
+        'names the missing owning %s CLI rather than claiming neither is installed',
+        (engineCli) => {
+            const engine = engineCli === 'docker' ? 'Docker' : 'Podman';
+            expect(formatQuickStartMessage({ key: 'dockerCliMissing', engineCli })).toBe(
+                `${engine} was not found on your PATH. Install it to use the existing instance and retry.`,
+            );
+        },
+    );
 
     it('names the image that could not be found', () => {
         expect(formatQuickStartMessage({ key: 'imageNotFound', image: 'repo/local:0.117.0-nope' })).toBe(

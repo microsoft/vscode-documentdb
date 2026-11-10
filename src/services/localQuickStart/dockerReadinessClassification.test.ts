@@ -21,13 +21,21 @@ import { type DockerEndpointProbe, type DockerHostEnvironment, type DockerProbeE
 
 describe('Podman machine facts', () => {
     it('parses the strict public JSON fields without altering the machine name', () => {
-        expect(parsePodmanMachineList('[{"Name":"custom machine","Default":true,"Running":false,"Starting":false,"VMType":"qemu"}]'))
-            .toEqual([{ name: 'custom machine', isDefault: true, running: false, starting: false }]);
+        expect(
+            parsePodmanMachineList(
+                '[{"Name":"custom machine","Default":true,"Running":false,"Starting":false,"VMType":"qemu"}]',
+            ),
+        ).toEqual([{ name: 'custom machine', isDefault: true, running: false, starting: false }]);
         expect(parsePodmanMachineList('[]')).toEqual([]);
     });
 
     it.each([
-        'not json', 'null', '{}', '[null]', '[true]', '[[]]',
+        'not json',
+        'null',
+        '{}',
+        '[null]',
+        '[true]',
+        '[[]]',
         '[{"Name":"","Default":true,"Running":false,"Starting":false}]',
         '[{"Name":"   ","Default":true,"Running":false,"Starting":false}]',
         '[{"Name":1,"Default":true,"Running":false,"Starting":false}]',
@@ -44,13 +52,40 @@ describe('Podman machine facts', () => {
     it.each([
         { machines: [], expected: { kind: 'none' } },
         { machines: [stopped], expected: { kind: 'stopped', name: 'custom-vm' } },
-        { machines: [stopped, { ...stopped, name: 'default-vm', isDefault: true }], expected: { kind: 'stopped', name: 'default-vm' } },
-        { machines: [stopped, { ...stopped, name: 'other' }], expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] } },
-        { machines: [{ ...stopped, starting: true, running: true }], expected: { kind: 'starting', name: 'custom-vm' } },
+        {
+            machines: [stopped, { ...stopped, name: 'default-vm', isDefault: true }],
+            expected: { kind: 'stopped', name: 'default-vm' },
+        },
+        {
+            machines: [stopped, { ...stopped, name: 'other' }],
+            expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] },
+        },
+        {
+            machines: [{ ...stopped, starting: true, running: true }],
+            expected: { kind: 'starting', name: 'custom-vm' },
+        },
         { machines: [{ ...stopped, running: true }], expected: { kind: 'running', name: 'custom-vm' } },
-        { machines: [{ ...stopped, isDefault: true }, { ...stopped, name: 'busy', running: true }], expected: { kind: 'otherActive', active: 'busy' } },
-        { machines: [{ ...stopped, isDefault: true }, { ...stopped, name: 'busy', starting: true }], expected: { kind: 'otherActive', active: 'busy' } },
-        { machines: [{ ...stopped, isDefault: true }, { ...stopped, name: 'other', isDefault: true }], expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] } },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'busy', running: true },
+            ],
+            expected: { kind: 'otherActive', active: 'busy' },
+        },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'busy', starting: true },
+            ],
+            expected: { kind: 'otherActive', active: 'busy' },
+        },
+        {
+            machines: [
+                { ...stopped, isDefault: true },
+                { ...stopped, name: 'other', isDefault: true },
+            ],
+            expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] },
+        },
     ])('selects live machine state $expected.kind', ({ machines, expected }) => {
         expect(classifyPodmanMachineState(machines)).toEqual(expected);
     });

@@ -6,9 +6,9 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState } from '../../services/localQuickStart/quickStartTypes';
-import { getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import {

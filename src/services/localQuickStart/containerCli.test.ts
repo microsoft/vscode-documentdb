@@ -25,8 +25,9 @@ const windowsEnv = { Path: 'C:\\Windows;C:\\Program Files\\RedHat\\Podman;C:\\to
 
 describe('resolveContainerCli', () => {
     it('defaults the preference to Docker', () => {
-        expect(resolveContainerCli(undefined, lookup(['/usr/local/bin/docker', '/opt/podman/bin/podman'])))
-            .toMatchObject({ cli: 'docker', preferred: 'docker', fellBack: false });
+        expect(
+            resolveContainerCli(undefined, lookup(['/usr/local/bin/docker', '/opt/podman/bin/podman'])),
+        ).toMatchObject({ cli: 'docker', preferred: 'docker', fellBack: false });
     });
 
     it('prefers docker when both are on PATH', () => {
@@ -61,7 +62,10 @@ describe('resolveContainerCli', () => {
 
     it('runs the absolute podman.exe path on Windows, found through Path and PATHEXT', () => {
         expect(
-            resolveContainerCli('docker', lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', windowsEnv)),
+            resolveContainerCli(
+                'docker',
+                lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', windowsEnv),
+            ),
         ).toEqual({
             cli: 'podman',
             executable: 'C:\\Program Files\\RedHat\\Podman\\podman.EXE',
@@ -79,7 +83,9 @@ describe('resolveContainerCli', () => {
 
     it('reads a quoted Windows PATH entry', () => {
         const env = { Path: '"C:\\Program Files\\RedHat\\Podman";C:\\Windows', PATHEXT: '.EXE' };
-        expect(resolveContainerCli('docker', lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', env))).toEqual({
+        expect(
+            resolveContainerCli('docker', lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', env)),
+        ).toEqual({
             cli: 'podman',
             executable: 'C:\\Program Files\\RedHat\\Podman\\podman.EXE',
             onPath: { docker: false, podman: true },
@@ -131,7 +137,11 @@ describe('resolveContainerCli', () => {
                 const onPath = { docker, podman };
                 const cli: ContainerCli = onPath[preferred] || !onPath[other] ? preferred : other;
                 expect(resolveContainerCli(preferred, lookup(present))).toEqual({
-                    cli, executable: cli, onPath, preferred, fellBack: cli !== preferred,
+                    cli,
+                    executable: cli,
+                    onPath,
+                    preferred,
+                    fellBack: cli !== preferred,
                 });
             }
         }
@@ -140,7 +150,9 @@ describe('resolveContainerCli', () => {
     it('checks both CLIs even when the preferred Podman is found', () => {
         const isExecutable = vi.fn(() => true);
         resolveContainerCli('podman', {
-            platform: 'linux', environmentVariables: { PATH: '/usr/bin' }, isExecutable,
+            platform: 'linux',
+            environmentVariables: { PATH: '/usr/bin' },
+            isExecutable,
         });
         expect(isExecutable.mock.calls).toEqual([['/usr/bin/docker'], ['/usr/bin/podman']]);
     });
@@ -154,10 +166,20 @@ describe('resolveContainerCli', () => {
     });
 
     it('preserves the preferred Windows executable and PATHEXT order', () => {
-        expect(resolveContainerCli('podman', lookup([
-            'C:\\tools\\docker.EXE', 'C:\\tools\\podman.COM', 'C:\\tools\\podman.EXE',
-        ], 'win32', windowsEnv))).toMatchObject({
-            cli: 'podman', executable: 'C:\\tools\\podman.COM', preferred: 'podman', fellBack: false,
+        expect(
+            resolveContainerCli(
+                'podman',
+                lookup(
+                    ['C:\\tools\\docker.EXE', 'C:\\tools\\podman.COM', 'C:\\tools\\podman.EXE'],
+                    'win32',
+                    windowsEnv,
+                ),
+            ),
+        ).toMatchObject({
+            cli: 'podman',
+            executable: 'C:\\tools\\podman.COM',
+            preferred: 'podman',
+            fellBack: false,
         });
     });
 });
@@ -195,10 +217,7 @@ describe('createContainerClient', () => {
 
         it('uses the pinned absolute executable on Windows', () => {
             expect(
-                resolvePinnedContainerCli(
-                    'podman',
-                    lookup(['C:\\tools\\podman.CMD'], 'win32', windowsEnv),
-                ),
+                resolvePinnedContainerCli('podman', lookup(['C:\\tools\\podman.CMD'], 'win32', windowsEnv)),
             ).toMatchObject({ cli: 'podman', executable: 'C:\\tools\\podman.CMD' });
         });
     });

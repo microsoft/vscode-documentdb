@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    PodmanClient,
-    type ListContextItem,
-    type PromiseCommandResponse,
-} from '@microsoft/vscode-container-client';
+import { PodmanClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { CancellationTokenLike, type Shell } from '@microsoft/vscode-processutils';
 import { type Writable } from 'stream';
 import * as vscode from 'vscode';
@@ -720,18 +716,21 @@ export class DockerReadinessService {
                 rememberedProvider = undefined;
                 await this.dependencies.writeProviderMemory(undefined);
             }
-            const engine = classifyContainerEngine({ ...engineInput, endpointAddress: endpoint.address, dockerSocketTarget });
+            const engine = classifyContainerEngine({
+                ...engineInput,
+                endpointAddress: endpoint.address,
+                dockerSocketTarget,
+            });
             const isPodman = cli === 'podman' || engine.engineEvidence === 'podmanShim';
-            const provider =
-                !isPodman
-                    ? classifyDockerProvider({
-                          environment,
-                          daemonReachable: false,
-                          contexts,
-                          activeEndpoint: endpoint,
-                          rememberedProvider,
-                      })
-                    : { provider: 'unknown' as const, providerEvidence: 'none' as const };
+            const provider = !isPodman
+                ? classifyDockerProvider({
+                      environment,
+                      daemonReachable: false,
+                      contexts,
+                      activeEndpoint: endpoint,
+                      rememberedProvider,
+                  })
+                : { provider: 'unknown' as const, providerEvidence: 'none' as const };
             if (
                 rememberedProvider &&
                 provider.providerEvidence === 'activeContext' &&
@@ -784,11 +783,7 @@ export class DockerReadinessService {
                 });
             }
             let permissionDetail: DockerPermissionDetail | undefined;
-            if (
-                !isPodman &&
-                classification.failureKind === 'permissionDenied' &&
-                endpoint.kind === 'unixSocket'
-            ) {
+            if (!isPodman && classification.failureKind === 'permissionDenied' && endpoint.kind === 'unixSocket') {
                 const groupFacts = await this.dependencies.probeSocketGroup(endpoint.address);
                 permissionDetail = resolveDockerPermissionDetail(groupFacts);
             }

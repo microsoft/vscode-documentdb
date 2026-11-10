@@ -61,12 +61,22 @@ describe('getDockerStartCapability', () => {
         };
 
         function machineList(overrides: object = {}): string {
-            return JSON.stringify([{
-                Name: 'custom-vm', Default: true, Running: false, Starting: false, ...overrides,
-            }]);
+            return JSON.stringify([
+                {
+                    Name: 'custom-vm',
+                    Default: true,
+                    Running: false,
+                    Starting: false,
+                    ...overrides,
+                },
+            ]);
         }
 
-        function fakeChild(): EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: ReturnType<typeof vi.fn> } {
+        function fakeChild(): EventEmitter & {
+            stdout: PassThrough;
+            stderr: PassThrough;
+            kill: ReturnType<typeof vi.fn>;
+        } {
             const child = Object.assign(new EventEmitter(), {
                 stdout: new PassThrough(),
                 stderr: new PassThrough(),
@@ -80,23 +90,31 @@ describe('getDockerStartCapability', () => {
             it('uses the absolute executable and explicit default machine name without starting anything', async () => {
                 const runProcess = vi.fn().mockResolvedValue({ exitCode: 0, stdout: machineList() });
                 const startLongRunning = vi.fn();
-                const result = await getDockerStartCapability(podmanInput, dependencies({ runProcess, startLongRunning }));
+                const result = await getDockerStartCapability(
+                    podmanInput,
+                    dependencies({ runProcess, startLongRunning }),
+                );
 
                 expect(runProcess).toHaveBeenCalledExactlyOnceWith(
-                    podmanInput.podmanExecutable, ['machine', 'list', '--format', 'json'], undefined,
+                    podmanInput.podmanExecutable,
+                    ['machine', 'list', '--format', 'json'],
+                    undefined,
                 );
                 expect(result).toMatchObject({
-                    provider: 'podman', startAction: 'startPodmanMachine',
+                    provider: 'podman',
+                    startAction: 'startPodmanMachine',
                     podmanMachine: { kind: 'stopped', name: 'custom-vm' },
                 });
                 expect(startLongRunning).not.toHaveBeenCalled();
             });
 
             it.each(['linux', 'wsl', 'ssh', 'devContainer', 'codespaces', 'otherRemote', 'unsupported'] as const)(
-                'never discovers a machine on %s', async (environment) => {
+                'never discovers a machine on %s',
+                async (environment) => {
                     const runProcess = vi.fn();
-                    expect(await getDockerStartCapability({ ...podmanInput, environment }, dependencies({ runProcess })))
-                        .toEqual({ provider: 'podman', providerEvidence: 'none' });
+                    expect(
+                        await getDockerStartCapability({ ...podmanInput, environment }, dependencies({ runProcess })),
+                    ).toEqual({ provider: 'podman', providerEvidence: 'none' });
                     expect(runProcess).not.toHaveBeenCalled();
                 },
             );
@@ -109,21 +127,30 @@ describe('getDockerStartCapability', () => {
                 { name: 'missing fields', stdout: '[{"Name":"custom-vm"}]', kind: 'unknown' },
             ])('does not offer start for $name', async ({ stdout, kind }) => {
                 const onOutput = vi.fn();
-                const result = await getDockerStartCapability(podmanInput, dependencies({
-                    runProcess: async () => ({ exitCode: 0, stdout }), onOutput,
-                }));
+                const result = await getDockerStartCapability(
+                    podmanInput,
+                    dependencies({
+                        runProcess: async () => ({ exitCode: 0, stdout }),
+                        onOutput,
+                    }),
+                );
                 expect(result.podmanMachine?.kind).toBe(kind);
                 expect(result.startAction).toBeUndefined();
                 expect(onOutput).toHaveBeenCalledTimes(kind === 'unknown' ? 1 : 0);
             });
 
             it.each(['podman', 'C:\\Podman\\podman.cmd', 'C:\\Podman\\podman.BAT'])(
-                'explicitly rejects unsupported Windows executable %s', async (podmanExecutable) => {
+                'explicitly rejects unsupported Windows executable %s',
+                async (podmanExecutable) => {
                     const runProcess = vi.fn();
                     const onOutput = vi.fn();
-                    const result = await getDockerStartCapability({ ...podmanInput, podmanExecutable }, dependencies({
-                        runProcess, onOutput,
-                    }));
+                    const result = await getDockerStartCapability(
+                        { ...podmanInput, podmanExecutable },
+                        dependencies({
+                            runProcess,
+                            onOutput,
+                        }),
+                    );
                     expect(result.podmanMachine).toEqual({ kind: 'unknown' });
                     expect(onOutput).toHaveBeenCalledWith(expect.stringContaining('absolute non-batch'));
                     expect(runProcess).not.toHaveBeenCalled();
@@ -135,17 +162,35 @@ describe('getDockerStartCapability', () => {
                 { exitCode: undefined, stdout: '' },
             ])('reports a failed machine list as unknown, never absent', async (result) => {
                 const onOutput = vi.fn();
-                expect((await getDockerStartCapability(podmanInput, dependencies({
-                    runProcess: async () => result, onOutput,
-                }))).podmanMachine).toEqual({ kind: 'unknown' });
+                expect(
+                    (
+                        await getDockerStartCapability(
+                            podmanInput,
+                            dependencies({
+                                runProcess: async () => result,
+                                onOutput,
+                            }),
+                        )
+                    ).podmanMachine,
+                ).toEqual({ kind: 'unknown' });
                 expect(onOutput).toHaveBeenCalledWith(expect.stringContaining('podmanMachine=unknown'));
             });
 
             it('reports process rejection as logged unknown', async () => {
                 const onOutput = vi.fn();
-                expect((await getDockerStartCapability(podmanInput, dependencies({
-                    runProcess: async () => { throw new Error('spawn failure'); }, onOutput,
-                }))).podmanMachine).toEqual({ kind: 'unknown' });
+                expect(
+                    (
+                        await getDockerStartCapability(
+                            podmanInput,
+                            dependencies({
+                                runProcess: async () => {
+                                    throw new Error('spawn failure');
+                                },
+                                onOutput,
+                            }),
+                        )
+                    ).podmanMachine,
+                ).toEqual({ kind: 'unknown' });
                 expect(onOutput).toHaveBeenCalledWith(expect.stringContaining('spawn failure'));
             });
 
@@ -178,7 +223,9 @@ describe('getDockerStartCapability', () => {
                 const cancellationToken: vscode.CancellationToken = {
                     isCancellationRequested: false,
                     onCancellationRequested: (listener) => {
-                        cancel = (): void => { listener(undefined); };
+                        cancel = (): void => {
+                            listener(undefined);
+                        };
                         return { dispose: (): void => undefined };
                     },
                 };
@@ -195,19 +242,33 @@ describe('getDockerStartCapability', () => {
                 { exitCode: 125, stderr: 'Error: unable to start "custom-vm": already running\n', expected: 'started' },
                 { exitCode: 125, stderr: 'unable to start "custom-vm": already running', expected: 'started' },
                 { exitCode: 125, stderr: 'Error: unable to start "another-vm": already running', expected: 'failed' },
-                { exitCode: 125, stderr: 'another machine "busy-vm" is already starting or running', expected: 'failed' },
+                {
+                    exitCode: 125,
+                    stderr: 'another machine "busy-vm" is already starting or running',
+                    expected: 'failed',
+                },
                 { exitCode: 1, stderr: 'machine startup failed', expected: 'failed' },
             ])('maps exit $exitCode and exact stderr to $expected', async ({ exitCode, stderr, expected }) => {
                 const onOutput = vi.fn();
                 const startLongRunning = vi.fn().mockReturnValue({
-                    spawned: Promise.resolve(true), exit: Promise.resolve({ exitCode, stderr }),
+                    spawned: Promise.resolve(true),
+                    exit: Promise.resolve({ exitCode, stderr }),
                 });
-                expect(await startDockerProvider('startPodmanMachine', dependencies({
-                    runProcess: async () => ({ exitCode: 0, stdout: machineList() }),
-                    startLongRunning, onOutput,
-                }), podmanInput)).toBe(expected);
+                expect(
+                    await startDockerProvider(
+                        'startPodmanMachine',
+                        dependencies({
+                            runProcess: async () => ({ exitCode: 0, stdout: machineList() }),
+                            startLongRunning,
+                            onOutput,
+                        }),
+                        podmanInput,
+                    ),
+                ).toBe(expected);
                 expect(startLongRunning).toHaveBeenCalledExactlyOnceWith(
-                    podmanInput.podmanExecutable, ['machine', 'start', 'custom-vm'], onOutput,
+                    podmanInput.podmanExecutable,
+                    ['machine', 'start', 'custom-vm'],
+                    onOutput,
                 );
                 expect(onOutput).toHaveBeenCalledWith(expect.stringContaining(expected));
                 if (stderr) {
@@ -216,11 +277,15 @@ describe('getDockerStartCapability', () => {
             });
 
             it.each(['linux', 'wsl', 'ssh', 'devContainer', 'codespaces', 'otherRemote'] as const)(
-                'never starts a machine on %s', async (environment) => {
+                'never starts a machine on %s',
+                async (environment) => {
                     const startLongRunning = vi.fn();
-                    expect(await startDockerProvider('startPodmanMachine', dependencies({ startLongRunning }), {
-                        ...podmanInput, environment,
-                    })).toBe('notAvailable');
+                    expect(
+                        await startDockerProvider('startPodmanMachine', dependencies({ startLongRunning }), {
+                            ...podmanInput,
+                            environment,
+                        }),
+                    ).toBe('notAvailable');
                     expect(startLongRunning).not.toHaveBeenCalled();
                 },
             );
@@ -230,62 +295,101 @@ describe('getDockerStartCapability', () => {
                 ['running', 'started'],
                 ['starting', 'launchAttempted'],
                 ['none', 'notAvailable'],
-            ] as const)(
-                'does not launch a stale target after the state changes to %s', async (kind, expected) => {
+            ] as const)('does not launch a stale target after the state changes to %s', async (kind, expected) => {
+                const startLongRunning = vi.fn();
+                const stdout =
+                    kind === 'none'
+                        ? '[]'
+                        : machineList({
+                              Running: kind === 'running',
+                              Starting: kind === 'starting',
+                          });
+                expect(
+                    await startDockerProvider(
+                        'startPodmanMachine',
+                        dependencies({
+                            runProcess: async () => ({ exitCode: 0, stdout }),
+                            startLongRunning,
+                        }),
+                        kind === undefined ? undefined : podmanInput,
+                    ),
+                ).toBe(expected);
+                expect(startLongRunning).not.toHaveBeenCalled();
+            });
+
+            it('starts the current default by name rather than a stale discovery result', async () => {
+                const startLongRunning = vi.fn().mockReturnValue({
+                    spawned: Promise.resolve(true),
+                    exit: Promise.resolve({ exitCode: 0, stderr: '' }),
+                });
+                expect(
+                    await startDockerProvider(
+                        'startPodmanMachine',
+                        dependencies({
+                            runProcess: async () => ({ exitCode: 0, stdout: machineList({ Name: 'new-default' }) }),
+                            startLongRunning,
+                        }),
+                        podmanInput,
+                    ),
+                ).toBe('started');
+                expect(startLongRunning).toHaveBeenCalledWith(
+                    podmanInput.podmanExecutable,
+                    ['machine', 'start', 'new-default'],
+                    expect.any(Function),
+                );
+            });
+
+            it.each([false, true])(
+                'does not launch when another machine becomes active (running=%s)',
+                async (running) => {
                     const startLongRunning = vi.fn();
-                    const stdout = kind === 'none' ? '[]' : machineList({
-                        Running: kind === 'running', Starting: kind === 'starting',
-                    });
-                    expect(await startDockerProvider('startPodmanMachine', dependencies({
-                        runProcess: async () => ({ exitCode: 0, stdout }), startLongRunning,
-                    }), kind === undefined ? undefined : podmanInput)).toBe(expected);
+                    expect(
+                        await startDockerProvider(
+                            'startPodmanMachine',
+                            dependencies({
+                                runProcess: async () => ({
+                                    exitCode: 0,
+                                    stdout: JSON.stringify([
+                                        { Name: 'custom-vm', Default: true, Running: false, Starting: false },
+                                        { Name: 'busy-vm', Default: false, Running: running, Starting: !running },
+                                    ]),
+                                }),
+                                startLongRunning,
+                            }),
+                            podmanInput,
+                        ),
+                    ).toBe('notAvailable');
                     expect(startLongRunning).not.toHaveBeenCalled();
                 },
             );
 
-            it('starts the current default by name rather than a stale discovery result', async () => {
-                const startLongRunning = vi.fn().mockReturnValue({
-                    spawned: Promise.resolve(true), exit: Promise.resolve({ exitCode: 0, stderr: '' }),
-                });
-                expect(await startDockerProvider('startPodmanMachine', dependencies({
-                    runProcess: async () => ({ exitCode: 0, stdout: machineList({ Name: 'new-default' }) }),
-                    startLongRunning,
-                }), podmanInput)).toBe('started');
-                expect(startLongRunning).toHaveBeenCalledWith(
-                    podmanInput.podmanExecutable, ['machine', 'start', 'new-default'], expect.any(Function),
-                );
-            });
-
-            it.each([false, true])('does not launch when another machine becomes active (running=%s)', async (running) => {
-                const startLongRunning = vi.fn();
-                expect(await startDockerProvider('startPodmanMachine', dependencies({
-                    runProcess: async () => ({
-                        exitCode: 0,
-                        stdout: JSON.stringify([
-                            { Name: 'custom-vm', Default: true, Running: false, Starting: false },
-                            { Name: 'busy-vm', Default: false, Running: running, Starting: !running },
-                        ]),
-                    }),
-                    startLongRunning,
-                }), podmanInput)).toBe('notAvailable');
-                expect(startLongRunning).not.toHaveBeenCalled();
-            });
-
             it('returns failed when the startup process does not spawn', async () => {
-                expect(await startDockerProvider('startPodmanMachine', dependencies({
-                    runProcess: async () => ({ exitCode: 0, stdout: machineList() }),
-                    startLongRunning: () => ({
-                        spawned: Promise.resolve(false), exit: Promise.resolve({ stderr: 'ENOENT' }),
-                    }),
-                }), podmanInput)).toBe('failed');
+                expect(
+                    await startDockerProvider(
+                        'startPodmanMachine',
+                        dependencies({
+                            runProcess: async () => ({ exitCode: 0, stdout: machineList() }),
+                            startLongRunning: () => ({
+                                spawned: Promise.resolve(false),
+                                exit: Promise.resolve({ stderr: 'ENOENT' }),
+                            }),
+                        }),
+                        podmanInput,
+                    ),
+                ).toBe('failed');
             });
 
             it('logs a native process spawn error and returns failed', async () => {
                 const child = fakeChild();
                 const onOutput = vi.fn();
-                const pending = startDockerProvider('startPodmanMachine', dependencies({
-                    runProcess: async () => ({ exitCode: 0, stdout: machineList() }), onOutput,
-                }), podmanInput);
+                const pending = startDockerProvider(
+                    'startPodmanMachine',
+                    dependencies({
+                        runProcess: async () => ({ exitCode: 0, stdout: machineList() }),
+                        onOutput,
+                    }),
+                    podmanInput,
+                );
                 await new Promise((resolve) => setImmediate(resolve));
                 child.emit('error', new Error('spawn ENOENT'));
                 expect(await pending).toBe('failed');
@@ -298,9 +402,14 @@ describe('getDockerStartCapability', () => {
                 const child = fakeChild();
                 const onOutput = vi.fn();
                 const cts = new vscode.CancellationTokenSource();
-                const pending = startDockerProvider('startPodmanMachine', dependencies({
-                    runProcess: async () => ({ exitCode: 0, stdout: machineList() }), onOutput,
-                }), { ...podmanInput, cancellationToken: cts.token });
+                const pending = startDockerProvider(
+                    'startPodmanMachine',
+                    dependencies({
+                        runProcess: async () => ({ exitCode: 0, stdout: machineList() }),
+                        onOutput,
+                    }),
+                    { ...podmanInput, cancellationToken: cts.token },
+                );
                 await vi.advanceTimersByTimeAsync(0);
                 child.emit('spawn');
                 child.stdout.write('booting\n');
@@ -316,13 +425,13 @@ describe('getDockerStartCapability', () => {
                 expect(onOutput).toHaveBeenCalledWith(expect.stringContaining('failed (exit=1)'));
                 expect(child.kill).not.toHaveBeenCalled();
                 expect(spawn).toHaveBeenCalledExactlyOnceWith(
-                    podmanInput.podmanExecutable, ['machine', 'start', 'custom-vm'],
+                    podmanInput.podmanExecutable,
+                    ['machine', 'start', 'custom-vm'],
                     { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
                 );
                 cts.dispose();
             });
         });
-
     });
 
     it('does not let an installed Windows application override positive Engine evidence', async () => {

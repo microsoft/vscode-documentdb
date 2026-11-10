@@ -37,8 +37,8 @@ import {
     createContainerClient,
     findOnPath,
     resolveContainerCli,
-    resolvePinnedContainerCli,
     type ResolvedContainerCli,
+    resolvePinnedContainerCli,
 } from './containerCli';
 import { type DockerCommandResponse, getDockerShellProvider, runDockerCommand } from './dockerCommand';
 import { CapturingTeeWritable } from './dockerProbes';

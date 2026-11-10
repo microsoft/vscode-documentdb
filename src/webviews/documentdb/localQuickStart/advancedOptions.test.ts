@@ -73,11 +73,22 @@ describe('buildAdvancedOptions', () => {
     it('sends only non-default choices', () => {
         expect(
             buildAdvancedOptions({ ...defaults, imageTag: ' 0.116.0 ', loadSampleData: false, startFresh: true }),
-        ).toEqual({ port: 10261, preferredEngine: 'docker', imageTag: '0.116.0', loadSampleData: false, startFresh: true });
+        ).toEqual({
+            port: 10261,
+            preferredEngine: 'docker',
+            imageTag: '0.116.0',
+            loadSampleData: false,
+            startFresh: true,
+        });
     });
 
-    it.each(['docker', 'podman'] as const)('always sends the requested %s preference, including recreates', (preferredEngine) => {
-        expect(buildAdvancedOptions({ ...defaults, preferredEngine }).preferredEngine).toBe(preferredEngine);
-        expect(buildAdvancedOptions({ ...defaults, preferredEngine, isRecreate: true }).preferredEngine).toBe(preferredEngine);
-    });
+    it.each(['docker', 'podman'] as const)(
+        'always sends the requested %s preference, including recreates',
+        (preferredEngine) => {
+            expect(buildAdvancedOptions({ ...defaults, preferredEngine }).preferredEngine).toBe(preferredEngine);
+            expect(buildAdvancedOptions({ ...defaults, preferredEngine, isRecreate: true }).preferredEngine).toBe(
+                preferredEngine,
+            );
+        },
+    );
 });
