@@ -1,7 +1,7 @@
 ---
 feature: deep-links
 kind: plan
-status: in-progress
+status: complete
 created: 2026-11-10
 prs: [1077]
 ---
@@ -185,17 +185,17 @@ Next: commit active documentation and completion notes, then run all Case 2 comm
 The full list ran, but this was **not a green handoff**. Source code, strict package-test types
 and packaging passed; four lint violations and four stale protocol-fixture expectations remain.
 
-| Command | Result | Duration |
-| --- | --- | --- |
-| `npm run l10n` | Passed; generated short title verified | Not captured |
-| `npm run prettier-fix` | Passed | 59.418s |
-| `npm run l10n:check` | Passed | 54.454s |
-| `npm run lint` | Failed: three forbidden inline import types and one redundant assertion | 107.233s |
-| `npm run build` | Passed | 36.541s |
-| `npm run typecheck:tests` | Passed | 12.645s |
-| `npx vitest run` | 350 files passed, one failed; 6,413 tests passed, four failed, one skipped | 91.361s |
-| `npm run package` | Passed; VSIX 8,973,700 bytes | 25.572s |
-| `git diff --check` | Passed | 0.043s |
+| Command                   | Result                                                                     | Duration     |
+| ------------------------- | -------------------------------------------------------------------------- | ------------ |
+| `npm run l10n`            | Passed; generated short title verified                                     | Not captured |
+| `npm run prettier-fix`    | Passed                                                                     | 59.418s      |
+| `npm run l10n:check`      | Passed                                                                     | 54.454s      |
+| `npm run lint`            | Failed: three forbidden inline import types and one redundant assertion    | 107.233s     |
+| `npm run build`           | Passed                                                                     | 36.541s      |
+| `npm run typecheck:tests` | Passed                                                                     | 12.645s      |
+| `npx vitest run`          | 350 files passed, one failed; 6,413 tests passed, four failed, one skipped | 91.361s      |
+| `npm run package`         | Passed; VSIX 8,973,700 bytes                                               | 25.572s      |
+| `git diff --check`        | Passed                                                                     | 0.043s       |
 
 The runtime failures all assert the removed `oidcCustomHostnameSuffix` field in the Government
 shell/playground initialization fixture. WI-1's owner will assert the replacement policy payload,
@@ -255,3 +255,109 @@ WI-2 aggregate worker snapshot: 51.9 AIU, 23 requests (3m46s summed), 2m49s tool
 1.7M input (1.7M cache read, 79k cache write), 16k output.
 Snapshot totals: leader 101.0 AIU; subagents 1024.1 AIU; run 1125.1 AIU.
 Next: rerun every Case 2 command against the corrected final source.
+
+## Final report
+
+### Workbench checks still unverified
+
+Try these before pushing; automated local success is not a claim of live-workbench verification:
+
+1. Select the unavailable Entra row. Check the shorter title, two-line detail, Back/Escape,
+   restored picker focus and Learn More. Simulate browser-launch refusal/rejection and check the warning.
+2. Expand a rejected saved connection, edit to a valid URI and Retry. Verify stale recovery
+   actions disappear and authentication uses the corrected saved connection.
+3. In a shell/playground using a confirmed custom suffix, change/remove that suffix. New
+   sockets/token requests must fail; restart the session after confirming the intended setting.
+4. Government/China/private-link endpoint acceptance and per-OS localized dialog layouts remain
+   live/manual checks; no real credentials, production telemetry query or service-owner confirmation
+   was used in this follow-up.
+
+### Outcome and commits
+
+All eight Copilot findings were addressed; none was dismissed or left unresolved in local code.
+No new scope was added, no production rework followed advisor approval, and no item is parked.
+GitHub threads remain unchanged because no external write/push was authorized.
+
+| Item | Status | Recommended / actual model                                                                               | Commits                                                                                     |
+| ---- | ------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| WI-1 | Done   | `gpt-6.1-sol` / `gpt-6.1-sol`                                                                            | `9d54bf86d`; fixture correction `1d096b9b8`                                                 |
+| WI-2 | Done   | `gpt-6.1-sol` / `gpt-6.1-sol`                                                                            | `9bb8e7772`; typing correction `4877f701f`                                                  |
+| WI-3 | Done   | Mechanical `gpt-6-luna` suggested; leader integration explicitly assigned and performed by `gpt-6.1-sol` | Docs `8e1dd8d8d`; generated/formatting `89ecc82ce`; completion records in docs-only commits |
+
+**Done (2026-11-10), WI-3:** active README/user documentation describe current revocation,
+recovery and navigation. Historical wording/results remain attributed and explicitly superseded.
+The generated bundle contains `Microsoft Entra ID unavailable` and not the obsolete title.
+No separate mechanical worker was launched because Astra assigned integration to the leader.
+
+Decisions: the operator requested implementation and a shorter title; Astra selected the exact
+title and the original/current policy plus shared-latch design, then approved both logic items
+with high confidence. The leader made only ownership/scheduling/commit decisions (95% confidence).
+The initial leader-proposed namespace typing was rejected by lint, escalated, and replaced with
+Astra's high-confidence named-type shape; runtime exports and cancellation assertions remain intact.
+No operator rationale was invented, no lint/test exemption added, and no TDD contract weakened.
+
+Advisor consultations: **four substantive rounds** (planning/all eight findings, WI-1 logic review,
+WI-2 logic review, lint-type blocker), plus one inline scope clarification to the WI-1 worker.
+Two Astra agent contexts were used. All advisor recommendations were followed. Two Sol coding
+agents were reused only for their own check repairs; no failed launch, model substitution or
+authorization retry occurred. The one rejected typing approach caused a bounded repair round.
+
+### Final verification
+
+Case 1 passed: `npm run build`, then **577 tests in 19 files**.
+The first full Case 2 exposed four lint violations and four stale protocol expectations;
+the bounded fixes above were committed and **every Case 2 command was rerun**:
+
+| Command                   | Final result                                      | Duration |
+| ------------------------- | ------------------------------------------------- | -------- |
+| `npm run l10n`            | Passed                                            | 49.095s  |
+| `npm run prettier-fix`    | Passed                                            | 49.757s  |
+| `npm run l10n:check`      | Passed                                            | 49.243s  |
+| `npm run lint`            | Passed                                            | 97.907s  |
+| `npm run build`           | Passed                                            | 32.902s  |
+| `npm run typecheck:tests` | Passed separately, exact workspace script         | 12.616s  |
+| `npx vitest run`          | 351 files passed; 6,417 tests passed, one skipped | 85.356s  |
+| `npm run package`         | Passed; VSIX 8,973,700 bytes                      | 22.780s  |
+| `git diff --check`        | Passed                                            | 0.022s   |
+
+The final sequential command durations total 6m39.678s, excluding agent/tool overhead.
+The same checker executed both full runs. Its final formatting-only change was to this report;
+the report's final documentation edits are formatted/committed separately from the verified source.
+AI pre-review evidence is committed here and in the preceding iteration-5 review; this is not
+human author sign-off. No PR state, base branch, review thread or remote branch was modified.
+
+### Usage and cost optimization
+
+Window: **2026-11-10 19:38:56 UTC to the 20:24 UTC snapshot**, about 45 minutes wall-clock.
+These host-log figures exclude subsequent report writing/commit and the final response.
+Model-request spans sum to **38m11s**, not wall time; model/tool/check spans overlap and are
+not additive. AIU are not dollars.
+
+| Model          | Role    | Requests | Summed model time |   AIU | Share |
+| -------------- | ------- | -------: | ----------------: | ----: | ----: |
+| `gpt-5.6-luna` | Checks  |       30 |             1m52s |   3.2 |  0.3% |
+| `gpt-6-astra`  | Advisor |       49 |            16m01s | 839.4 | 73.9% |
+| `gpt-6.1-sol`  | Leader  |       55 |             9m00s | 110.1 |  9.7% |
+| `gpt-6.1-sol`  | Coding  |       75 |            11m18s | 182.5 | 16.1% |
+
+Role totals equal the rows above: leader **110.1 AIU**, coding **182.5**, advisor **839.4**,
+checks **3.2**. Subagents **1025.1 AIU**; complete run snapshot **1135.2 AIU**.
+Leading and coding remain separate despite using the same model.
+
+| Model          | Role    |     Input | Output | Cache read | Cache write | Reasoning |
+| -------------- | ------- | --------: | -----: | ---------: | ----------: | --------: |
+| `gpt-5.6-luna` | Checks  |   705,849 |  8,485 |    674,076 |      31,683 |     4,758 |
+| `gpt-6-astra`  | Advisor | 3,359,935 | 34,821 |  3,073,535 |     286,253 |    12,396 |
+| `gpt-6.1-sol`  | Leader  | 4,740,236 | 27,907 |  4,595,404 |     144,667 |     4,980 |
+| `gpt-6.1-sol`  | Coding  | 6,295,098 | 45,203 |  5,985,147 |     309,726 |    10,077 |
+
+Cache and reasoning fields may overlap input/output; they must not be added into a purported
+token total. The helper reported no partial-coverage marker in this snapshot. Earlier checkpoints
+retain their original rounded figures rather than being retroactively reconciled.
+
+The largest measured category is advising (73.9%), including the requested source-backed
+assessment and two independent logic reviews. A future run can keep advisor packets more tightly
+bounded to affected hunks and dependency evidence while retaining the required trust/lifecycle
+review. This is a cost observation, not a model-quality comparison across unlike assignments.
+
+Open implementation questions: **none**. Remaining human work is the manual checks listed first.
