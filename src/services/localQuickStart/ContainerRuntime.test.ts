@@ -68,11 +68,13 @@ describe('ContainerRuntime output channel', () => {
                 },
             } as unknown as ShellStreamCommandRunnerFactory<ShellStreamCommandRunnerOptions>;
         });
-        vi.mocked(runDockerCommand).mockReset().mockImplementation(async (_command, options: DockerCommandOptions) => {
-            options.onCommand?.('docker …');
-            options.stdOutPipe?.end(stdout + '\n');
-            return undefined;
-        });
+        vi.mocked(runDockerCommand)
+            .mockReset()
+            .mockImplementation(async (_command, options: DockerCommandOptions) => {
+                options.onCommand?.('docker …');
+                options.stdOutPipe?.end(stdout + '\n');
+                return undefined;
+            });
     });
 
     afterEach(() => {
@@ -90,10 +92,13 @@ describe('ContainerRuntime output channel', () => {
 
     it.each([
         ['Docker', { Id: 'sha256:image-id', Created: '2026-10-28T00:00:00Z' }],
-        ['Podman', [
-            { Id: 'other', Created: '2025-01-01T00:00:00Z' },
-            { Id: 'sha256:image-id', Created: '2026-10-28T00:00:00Z' },
-        ]],
+        [
+            'Podman',
+            [
+                { Id: 'other', Created: '2025-01-01T00:00:00Z' },
+                { Id: 'sha256:image-id', Created: '2026-10-28T00:00:00Z' },
+            ],
+        ],
     ])('allow-lists %s image evidence without echoing commands, output, labels or env', async (_name, raw) => {
         vi.mocked(runDockerCommand).mockResolvedValueOnce([imageItem(raw)]);
         const cts = new vscode.CancellationTokenSource();
@@ -134,11 +139,13 @@ describe('ContainerRuntime output channel', () => {
     );
 
     it('omits unrelated digests and overlong OCI version labels', async () => {
-        vi.mocked(runDockerCommand).mockResolvedValueOnce([{
-            ...imageItem({ Id: 'sha256:image-id' }),
-            repoDigests: ['other/repository@sha256:wrong'],
-            labels: { 'org.opencontainers.image.version': 'a'.repeat(65) },
-        }]);
+        vi.mocked(runDockerCommand).mockResolvedValueOnce([
+            {
+                ...imageItem({ Id: 'sha256:image-id' }),
+                repoDigests: ['other/repository@sha256:wrong'],
+                labels: { 'org.opencontainers.image.version': 'a'.repeat(65) },
+            },
+        ]);
         expect(await ContainerRuntime.inspectImage(IMAGE_REF)).toEqual({
             id: 'sha256:image-id',
             digest: undefined,

@@ -9,7 +9,11 @@ import { SSRProvider } from '@fluentui/react-components';
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InstanceState, type DockerReadiness, type StageEvent } from '../../../services/localQuickStart/quickStartTypes';
+import {
+    InstanceState,
+    type DockerReadiness,
+    type StageEvent,
+} from '../../../services/localQuickStart/quickStartTypes';
 import { LocalQuickStart } from './LocalQuickStart';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -119,7 +123,7 @@ describe('Local Quick Start stage details', () => {
     beforeEach(async () => {
         const matches = Element.prototype.matches;
         vi.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, selector: string): boolean {
-            return selector === ':modal' ? false : matches.call(this, selector);
+            return selector === ':modal' ? false : matches.call(this, selector) === true;
         });
         client.streams.length = 0;
         client.trpc.localQuickStart.reportDetailsOpened.mutate.mockReset().mockResolvedValue(undefined);
@@ -129,7 +133,13 @@ describe('Local Quick Start stage details', () => {
         host = document.createElement('div');
         document.body.appendChild(host);
         root = createRoot(host);
-        await act(async () => root.render(<SSRProvider><LocalQuickStart /></SSRProvider>));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <LocalQuickStart />
+                </SSRProvider>,
+            ),
+        );
     });
 
     afterEach(async () => {
@@ -139,7 +149,15 @@ describe('Local Quick Start stage details', () => {
     });
 
     it('reports only openings, once each in StrictMode, including reopenings on Done', async () => {
-        await act(async () => root.render(<SSRProvider><StrictMode><LocalQuickStart /></StrictMode></SSRProvider>));
+        await act(async () =>
+            root.render(
+                <SSRProvider>
+                    <StrictMode>
+                        <LocalQuickStart />
+                    </StrictMode>
+                </SSRProvider>,
+            ),
+        );
         await start();
         await event({ stage: 'checking', status: 'done', facts: { kind: 'checking', port: 10333, portFree: true } });
         const report = client.trpc.localQuickStart.reportDetailsOpened.mutate;
@@ -156,11 +174,7 @@ describe('Local Quick Start stage details', () => {
         await click(toggle('Checking container engine')!);
         expect(report).toHaveBeenCalledTimes(2);
         await click(toggle('Checking container engine')!);
-        expect(report.mock.calls).toEqual([
-            [{ stage: 'checking' }],
-            [{ stage: 'checking' }],
-            [{ stage: 'checking' }],
-        ]);
+        expect(report.mock.calls).toEqual([[{ stage: 'checking' }], [{ stage: 'checking' }], [{ stage: 'checking' }]]);
         expect(client.trpc.common.reportEvent.mutate).not.toHaveBeenCalled();
     });
 
@@ -336,7 +350,12 @@ describe('Local Quick Start stage details', () => {
             status: 'done',
             facts: { kind: 'starting', running: true, boundPort: 10273, boundPortReported: true },
         });
-        for (const stage of ['Checking container engine', 'Pulling official image', 'Creating container', 'Starting container']) {
+        for (const stage of [
+            'Checking container engine',
+            'Pulling official image',
+            'Creating container',
+            'Starting container',
+        ]) {
             expect(toggle(stage)?.getAttribute('aria-expanded')).toBe('false');
             await click(toggle(stage)!);
         }
@@ -425,8 +444,17 @@ describe('Local Quick Start stage details', () => {
         await start();
         await event({ stage: 'waiting', status: 'active' });
         await event({
-            stage: 'waiting', status: 'error', timedOut: true,
-            facts: { kind: 'waiting', port: 10333, attempts: 4, lastProbeError: 'masked ***', exitCode: 1, lastLogLine: 'fatal ***' },
+            stage: 'waiting',
+            status: 'error',
+            timedOut: true,
+            facts: {
+                kind: 'waiting',
+                port: 10333,
+                attempts: 4,
+                lastProbeError: 'masked ***',
+                exitCode: 1,
+                lastLogLine: 'fatal ***',
+            },
         });
         await click(toggle('Waiting for DocumentDB to accept connections')!);
         expect(host.textContent).toContain('4 attempts');

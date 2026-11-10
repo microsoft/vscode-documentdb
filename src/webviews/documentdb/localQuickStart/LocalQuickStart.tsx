@@ -87,7 +87,7 @@ import {
     type DockerReadinessPresentation,
     type DockerRecoveryNoteKey,
     type DockerStartLabelKey,
-    getDockerExecutionTargetKey,
+    type getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
 } from './dockerReadinessPresentation';
 import { getExistingInstanceGuard, guardBlocksSetup } from './existingInstanceGuard';

@@ -287,7 +287,12 @@ const quickStartRows = [
     'Waiting for DocumentDB to accept connections',
 ] as const;
 
-const privateDetails = ['fixture-password', 'mongodb(?:\\+srv)?://', 'DOCUMENTDB_PASSWORD', 'DOCUMENTDB_USAGE_TELEMETRY'];
+const privateDetails = [
+    'fixture-password',
+    'mongodb(?:\\+srv)?://',
+    'DOCUMENTDB_PASSWORD',
+    'DOCUMENTDB_USAGE_TELEMETRY',
+];
 
 const missingReadiness = {
     outcome: 'diagnosed',
@@ -2428,13 +2433,15 @@ export const scenarios = {
                 noProgressbar: true,
             },
             assertions: [
-                ...quickStartRows.map((label): ScenarioAssertion => ({
-                    kind: 'attribute',
-                    name: `${label} Details starts collapsed`,
-                    selector: `[aria-label="Details for ${label}"]`,
-                    attribute: 'aria-expanded',
-                    expected: 'false',
-                })),
+                ...quickStartRows.map(
+                    (label): ScenarioAssertion => ({
+                        kind: 'attribute',
+                        name: `${label} Details starts collapsed`,
+                        selector: `[aria-label="Details for ${label}"]`,
+                        attribute: 'aria-expanded',
+                        expected: 'false',
+                    }),
+                ),
                 ...quickStartRows.flatMap((label, index): ScenarioAssertion[] => [
                     {
                         kind: 'attribute',
@@ -2450,10 +2457,31 @@ export const scenarios = {
                         selector: `[aria-label="Completed setup steps"] [role="listitem"]:nth-child(${index + 1}) [role="region"][aria-labelledby]`,
                         includes: [
                             ['Docker is ready', 'Docker Engine', '27.0.0', 'Port', '10260', 'Free on 127.0.0.1'],
-                            ['Image', 'ghcr.io/documentdb/documentdb-local:latest', 'Already up to date', 'Digest', '1.0.0'],
-                            ['vscode-documentdb-local', '123456789abc', 'localhost:10260', 'vscode-documentdb-local-data', 'documentdb', '(hidden)'],
+                            [
+                                'Image',
+                                'ghcr.io/documentdb/documentdb-local:latest',
+                                'Already up to date',
+                                'Digest',
+                                '1.0.0',
+                            ],
+                            [
+                                'vscode-documentdb-local',
+                                '123456789abc',
+                                'localhost:10260',
+                                'vscode-documentdb-local-data',
+                                'documentdb',
+                                '(hidden)',
+                            ],
                             ['State', 'Running', 'Bound port', '10260', 'Streaming to the setup log'],
-                            ['Endpoint', 'localhost:10260', '2 attempts', 'wire 21', 'Sample data', 'Loaded', 'DocumentDB Local'],
+                            [
+                                'Endpoint',
+                                'localhost:10260',
+                                '2 attempts',
+                                'wire 21',
+                                'Sample data',
+                                'Loaded',
+                                'DocumentDB Local',
+                            ],
                         ][index],
                         excludes: [...privateDetails, ...(index === 4 ? ['DocumentDB version', 'Image version'] : [])],
                     },
@@ -2491,7 +2519,11 @@ export const scenarios = {
             },
             steps: setupSteps,
             readiness: {
-                content: ['DocumentDB Local is ready', 'All set', 'Sample data was not loaded. View the setup log for the reason.'],
+                content: [
+                    'DocumentDB Local is ready',
+                    'All set',
+                    'Sample data was not loaded. View the setup log for the reason.',
+                ],
                 noProgressbar: true,
             },
             assertions: [
@@ -2508,13 +2540,26 @@ export const scenarios = {
                     selector: '[aria-label="Details for Waiting for DocumentDB to accept connections"]',
                     attribute: 'aria-expanded',
                     expected: 'true',
-                    steps: [{ action: 'click', role: 'button', name: 'Details for Waiting for DocumentDB to accept connections' }],
+                    steps: [
+                        {
+                            action: 'click',
+                            role: 'button',
+                            name: 'Details for Waiting for DocumentDB to accept connections',
+                        },
+                    ],
                 },
                 {
                     kind: 'text',
                     name: 'Waiting Details explains the sample data result',
-                    selector: '[aria-label="Completed setup steps"] [role="listitem"]:nth-child(5) [role="region"][aria-labelledby]',
-                    includes: ['Info:', 'Sample data was not loaded', 'The instance is ready to use without sample data.', 'View setup log', 'Not loaded'],
+                    selector:
+                        '[aria-label="Completed setup steps"] [role="listitem"]:nth-child(5) [role="region"][aria-labelledby]',
+                    includes: [
+                        'Info:',
+                        'Sample data was not loaded',
+                        'The instance is ready to use without sample data.',
+                        'View setup log',
+                        'Not loaded',
+                    ],
                     excludes: [...privateDetails, 'Server'],
                 },
             ],

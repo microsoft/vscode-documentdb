@@ -40,8 +40,7 @@ export const SetupStageDetails = ({
                         nextStep={
                             fact.action === 'showOutput' ? (
                                 <>
-                                    {l10n.t('Next:')}{' '}
-                                    <Link onClick={onShowOutput}>{l10n.t('View setup log')}</Link>
+                                    {l10n.t('Next:')} <Link onClick={onShowOutput}>{l10n.t('View setup log')}</Link>
                                 </>
                             ) : undefined
                         }
@@ -51,26 +50,28 @@ export const SetupStageDetails = ({
                 ))}
             <StatusListDetailsSection>
                 <StatusListDetailsFacts
-                    items={facts.filter((fact) => !fact.message).map((fact) => ({
-                        term: fact.label,
-                        value: (
-                            <>
-                                {fact.code ? <code>{fact.value}</code> : fact.value}
-                                {fact.action === 'showOutput' && (
-                                    <>
-                                        {' · '}
-                                        <Link onClick={onShowOutput}>{l10n.t('View setup log')}</Link>
-                                    </>
-                                )}
-                                {fact.note && (
-                                    <span className={mutedClassName}>
-                                        {' · '}
-                                        {fact.note}
-                                    </span>
-                                )}
-                            </>
-                        ),
-                    }))}
+                    items={facts
+                        .filter((fact) => !fact.message)
+                        .map((fact) => ({
+                            term: fact.label,
+                            value: (
+                                <>
+                                    {fact.code ? <code>{fact.value}</code> : fact.value}
+                                    {fact.action === 'showOutput' && (
+                                        <>
+                                            {' · '}
+                                            <Link onClick={onShowOutput}>{l10n.t('View setup log')}</Link>
+                                        </>
+                                    )}
+                                    {fact.note && (
+                                        <span className={mutedClassName}>
+                                            {' · '}
+                                            {fact.note}
+                                        </span>
+                                    )}
+                                </>
+                            ),
+                        }))}
                 />
             </StatusListDetailsSection>
         </div>

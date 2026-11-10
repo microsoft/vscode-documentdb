@@ -235,12 +235,12 @@ plan, run Case 1 and Case 2 until green, and create a PR against the current
 2026-11-10 06:34:52 UTC on `dev/tnaum/quickstart-setup-stage-details`.
 The pre-existing untracked Podman archive is outside this work.
 
-| Item | Scope | Model and reason | Prerequisite | Status |
-| ---- | ----- | ---------------- | ------------ | ------ |
-| P1 | Shared checking-row disclosure, focus/reset behavior; remove accordion | Terra: self-contained webview migration | — | Done `fa4a4d69` |
-| P2 | Typed runtime image inspection, per-stage facts, non-readiness presentation | Sol: host/webview contract and runtime lifecycle | P1 | Done `1e018adc` |
-| P3 | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2 | Done `2c735f8a` |
-| P4 | Aggregate disclosure telemetry, browser scenarios, docs and decision record | Sol: telemetry; Terra: isolated scenarios/docs | P3 | Done `ac54c837` (docs separately) |
+| Item | Scope                                                                            | Model and reason                                   | Prerequisite | Status                            |
+| ---- | -------------------------------------------------------------------------------- | -------------------------------------------------- | ------------ | --------------------------------- |
+| P1   | Shared checking-row disclosure, focus/reset behavior; remove accordion           | Terra: self-contained webview migration            | —            | Done `fa4a4d69`                   |
+| P2   | Typed runtime image inspection, per-stage facts, non-readiness presentation      | Sol: host/webview contract and runtime lifecycle   | P1           | Done `1e018adc`                   |
+| P3   | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2           | Done `2c735f8a`                   |
+| P4   | Aggregate disclosure telemetry, browser scenarios, docs and decision record      | Sol: telemetry; Terra: isolated scenarios/docs     | P3           | Done `ac54c837` (docs separately) |
 
 Contract review advised by Opus 5.5 (high confidence): store terminal facts by
 `facts.kind`, not `event.stage`; preserve mid-setup Docker failure evidence on the

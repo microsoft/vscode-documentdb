@@ -52,8 +52,9 @@ import {
 /** Called on every readiness/sample-data probe, so a test can observe the world mid-provision. */
 let onProbe: () => void | Promise<void> = () => undefined;
 let onHello: () => unknown = () => ({ ok: 1 });
-const probeCommand = vi.fn(async (command: { ping?: number; hello?: number }): Promise<unknown> =>
-    command.hello ? await onHello() : { ok: 1 },
+const probeCommand = vi.fn(
+    async (command: { ping?: number; hello?: number }): Promise<unknown> =>
+        command.hello ? await onHello() : { ok: 1 },
 );
 const closeProbe = vi.fn(async (): Promise<void> => undefined);
 const connectProbe = vi.fn();
@@ -242,7 +243,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const password = 'private-password-123';
             const runtime = runtimeFor({
                 overrides: {
-                    inspectImage: vi.fn()
+                    inspectImage: vi
+                        .fn()
                         .mockResolvedValueOnce('absent')
                         .mockResolvedValueOnce({
                             id: 'sha256:image',
@@ -263,12 +265,16 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 },
             });
             const service = new QuickStartServiceImpl(runtime);
-            const events = await collect(service.provision(new AbortController().signal, {
-                username: 'testuser',
-                password,
-                port: 10273,
-            }));
-            const doneFacts = events.filter((event) => event.status === 'done' && event.facts).map((event) => event.facts);
+            const events = await collect(
+                service.provision(new AbortController().signal, {
+                    username: 'testuser',
+                    password,
+                    port: 10273,
+                }),
+            );
+            const doneFacts = events
+                .filter((event) => event.status === 'done' && event.facts)
+                .map((event) => event.facts);
             expect(doneFacts).toEqual([
                 { kind: 'checking', port: 10273, portFree: true, removedContainerId: undefined },
                 {
@@ -311,7 +317,14 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             ]);
             expect(events.at(-1)?.stage).toBe('done');
             const serialized = JSON.stringify(events);
-            for (const forbidden of [password, 'environmentVariables', 'PASSWORD', 'private-inspect-raw', 'private-container-raw', 'durationMs']) {
+            for (const forbidden of [
+                password,
+                'environmentVariables',
+                'PASSWORD',
+                'private-inspect-raw',
+                'private-container-raw',
+                'durationMs',
+            ]) {
                 expect(serialized).not.toContain(forbidden);
             }
             expect(JSON.stringify(await listInstances())).not.toContain('sha256:image');
@@ -340,14 +353,18 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 containers: [{ id: 'old-container' }],
                 portFree: false,
             });
-            const events = await collect(new QuickStartServiceImpl(runtime).provision(
-                new AbortController().signal,
-                { startFresh: true },
-            ));
+            const events = await collect(
+                new QuickStartServiceImpl(runtime).provision(new AbortController().signal, { startFresh: true }),
+            );
             expect(events.at(-1)).toMatchObject({
                 stage: 'checking',
                 status: 'error',
-                facts: { kind: 'checking', port: QUICK_START_PORT, portFree: false, removedContainerId: 'old-container' },
+                facts: {
+                    kind: 'checking',
+                    port: QUICK_START_PORT,
+                    portFree: false,
+                    removedContainerId: 'old-container',
+                },
             });
         });
 
@@ -357,31 +374,39 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 portFree: false,
                 overrides: { removeContainer: vi.fn().mockRejectedValue(new Error('remove failed')) },
             });
-            const events = await collect(new QuickStartServiceImpl(runtime).provision(
-                new AbortController().signal,
-                { startFresh: true },
-            ));
+            const events = await collect(
+                new QuickStartServiceImpl(runtime).provision(new AbortController().signal, { startFresh: true }),
+            );
             expect(events.at(-1)?.facts).toMatchObject({ kind: 'checking', removedContainerId: undefined });
             const notReady = runtimeFor({
-                overrides: { isDockerReady: vi.fn().mockResolvedValue({ cliInstalled: false, daemonReachable: false }) },
+                overrides: {
+                    isDockerReady: vi.fn().mockResolvedValue({ cliInstalled: false, daemonReachable: false }),
+                },
             });
-            const earlyEvents = await collect(new QuickStartServiceImpl(notReady).provision(new AbortController().signal));
+            const earlyEvents = await collect(
+                new QuickStartServiceImpl(notReady).provision(new AbortController().signal),
+            );
             expect(earlyEvents.at(-1)?.facts).toBeUndefined();
             expect(notReady.isPortFree).not.toHaveBeenCalled();
         });
 
-        it.each(['pulling', 'creating', 'starting'] as const)('retains known %s facts on a terminal error', async (stage) => {
-            const fail = vi.fn().mockRejectedValue(new Error('operation failed'));
-            const runtime = runtimeFor({
-                overrides: {
-                    ...(stage === 'pulling' ? { pullImage: fail } : {}),
-                    ...(stage === 'creating' ? { createAndRunContainer: fail } : {}),
-                    ...(stage === 'starting' ? { inspectContainer: fail } : {}),
-                },
-            });
-            const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal));
-            expect(events.at(-1)).toMatchObject({ stage: 'error', status: 'error', facts: { kind: stage } });
-        });
+        it.each(['pulling', 'creating', 'starting'] as const)(
+            'retains known %s facts on a terminal error',
+            async (stage) => {
+                const fail = vi.fn().mockRejectedValue(new Error('operation failed'));
+                const runtime = runtimeFor({
+                    overrides: {
+                        ...(stage === 'pulling' ? { pullImage: fail } : {}),
+                        ...(stage === 'creating' ? { createAndRunContainer: fail } : {}),
+                        ...(stage === 'starting' ? { inspectContainer: fail } : {}),
+                    },
+                });
+                const events = await collect(
+                    new QuickStartServiceImpl(runtime).provision(new AbortController().signal),
+                );
+                expect(events.at(-1)).toMatchObject({ stage: 'error', status: 'error', facts: { kind: stage } });
+            },
+        );
 
         it.each(['removal failure', 'cancellation'] as const)(
             'does not claim replacement when %s preserves the existing volume',
@@ -396,10 +421,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                         removeVolume: vi.fn().mockRejectedValue(new Error('volume is in use')),
                     },
                 });
-                const events = await collect(new QuickStartServiceImpl(runtime).provision(
-                    controller.signal,
-                    { startFresh: true },
-                ));
+                const events = await collect(
+                    new QuickStartServiceImpl(runtime).provision(controller.signal, { startFresh: true }),
+                );
                 expect(events.at(-1)).toMatchObject({
                     stage: 'error',
                     status: 'error',
@@ -421,10 +445,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 volumeExists: exists,
                 createAndRunContainer: vi.fn().mockRejectedValue(new Error('create failed')),
             });
-            const events = await collect(new QuickStartServiceImpl(runtime).provision(
-                new AbortController().signal,
-                { startFresh: exists },
-            ));
+            const events = await collect(
+                new QuickStartServiceImpl(runtime).provision(new AbortController().signal, { startFresh: exists }),
+            );
             expect(events.at(-1)).toMatchObject({
                 stage: 'error',
                 status: 'error',
@@ -487,13 +510,17 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = runtimeFor({
                 createAndRunContainer: vi.fn().mockResolvedValue(`container-${password}`),
                 overrides: {
-                    inspectImage: vi.fn().mockResolvedValue({ id: `image-${password}`, version: password, digest: password }),
+                    inspectImage: vi
+                        .fn()
+                        .mockResolvedValue({ id: `image-${password}`, version: password, digest: password }),
                 },
             });
-            const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal, {
-                username: `user-${password}`,
-                password,
-            }));
+            const events = await collect(
+                new QuickStartServiceImpl(runtime).provision(new AbortController().signal, {
+                    username: `user-${password}`,
+                    password,
+                }),
+            );
             expect(events.at(-1)?.stage).toBe('done');
             const serialized = JSON.stringify(events.map((event) => event.facts));
             expect(serialized).not.toContain(password);
@@ -504,28 +531,47 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             ['new', false, false, false, 'default'],
             ['replaced', false, true, true, 'default'],
             ['reused', true, true, false, 'reused'],
-        ] as const)('reports a %s volume and the actual image origin', async (volume, reuse, exists, startFresh, origin) => {
-            if (reuse) {
-                await upsertInstance({ alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT, phase: 'ready' });
-                await writeConnectionString(DEFAULT_ALIAS, `mongodb://admin:stored-pass@localhost:${QUICK_START_PORT}/`, {
-                    displayName: 'DocumentDB Local',
-                    port: QUICK_START_PORT,
-                });
-            }
-            const runtime = runtimeFor({ volumeExists: exists });
-            const events = await collect(new QuickStartServiceImpl(runtime).provision(
-                new AbortController().signal,
-                { startFresh, ...(reuse ? { imageTag: 'ignored-tag' } : {}) },
-            ));
-            expect(events.find((event) => event.stage === 'creating' && event.status === 'done')?.facts).toMatchObject({ volume });
-            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({ imageOrigin: origin });
-        });
+        ] as const)(
+            'reports a %s volume and the actual image origin',
+            async (volume, reuse, exists, startFresh, origin) => {
+                if (reuse) {
+                    await upsertInstance({
+                        alias: DEFAULT_ALIAS,
+                        displayName: 'DocumentDB Local',
+                        port: QUICK_START_PORT,
+                        phase: 'ready',
+                    });
+                    await writeConnectionString(
+                        DEFAULT_ALIAS,
+                        `mongodb://admin:stored-pass@localhost:${QUICK_START_PORT}/`,
+                        {
+                            displayName: 'DocumentDB Local',
+                            port: QUICK_START_PORT,
+                        },
+                    );
+                }
+                const runtime = runtimeFor({ volumeExists: exists });
+                const events = await collect(
+                    new QuickStartServiceImpl(runtime).provision(new AbortController().signal, {
+                        startFresh,
+                        ...(reuse ? { imageTag: 'ignored-tag' } : {}),
+                    }),
+                );
+                expect(
+                    events.find((event) => event.stage === 'creating' && event.status === 'done')?.facts,
+                ).toMatchObject({ volume });
+                expect(
+                    events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts,
+                ).toMatchObject({ imageOrigin: origin });
+            },
+        );
 
         it('identifies custom image tags without changing the configured reference', async () => {
-            const events = await collect(new QuickStartServiceImpl(runtimeFor()).provision(
-                new AbortController().signal,
-                { imageTag: '0.116.0' },
-            ));
+            const events = await collect(
+                new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal, {
+                    imageTag: '0.116.0',
+                }),
+            );
             expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
                 imageRef: `${QUICK_START_IMAGE_REPOSITORY}:0.116.0`,
                 imageOrigin: 'custom',
@@ -759,8 +805,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
             expect(runtime.execShellInContainer).not.toHaveBeenCalled();
             expect(service.getStatus().state).toBe(InstanceState.Running);
-            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
-                .toMatchObject({ sampleData: 'notRequested' });
+            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts).toMatchObject({
+                sampleData: 'notRequested',
+            });
         });
 
         // #946 DATA-4: a reused volume already had its first setup; re-seeding would bring back
@@ -788,8 +835,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
             expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
             expect(service.getStatus().state).toBe(InstanceState.Running);
-            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
-                .toMatchObject({ sampleData: volumeExists ? 'keptExisting' : 'loaded' });
+            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts).toMatchObject({
+                sampleData: volumeExists ? 'keptExisting' : 'loaded',
+            });
         });
 
         it('keeps the database usable without retrying a failed sample load', async () => {
@@ -802,8 +850,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(runtime.execShellInContainer).toHaveBeenCalledTimes(1);
             expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
             expect(service.getStatus().state).toBe(InstanceState.Running);
-            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
-                .toMatchObject({ sampleData: 'failed' });
+            expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts).toMatchObject({
+                sampleData: 'failed',
+            });
         });
     });
 
@@ -812,12 +861,16 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             vi.useFakeTimers();
             try {
                 let enteredProbe: () => void = () => undefined;
-                const entered = new Promise<void>((resolve) => { enteredProbe = resolve; });
+                const entered = new Promise<void>((resolve) => {
+                    enteredProbe = resolve;
+                });
                 onProbe = () => {
                     enteredProbe();
                     if (connectProbe.mock.calls.length < 3) throw new Error('not ready');
                 };
-                const eventsPromise = collect(new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal));
+                const eventsPromise = collect(
+                    new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal),
+                );
                 await entered;
                 await vi.advanceTimersByTimeAsync(0);
                 expect(connectProbe).toHaveBeenCalledTimes(1);
@@ -831,8 +884,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 const events = await eventsPromise;
                 expect(connectProbe).toHaveBeenCalledTimes(3);
                 expect(closeProbe).toHaveBeenCalledTimes(3);
-                expect(events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
-                    .toMatchObject({ kind: 'waiting', attempts: 3 });
+                expect(
+                    events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts,
+                ).toMatchObject({ kind: 'waiting', attempts: 3 });
             } finally {
                 vi.useRealTimers();
             }
@@ -869,13 +923,29 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         it.each([
             [{ maxWireVersion: 21 }, undefined, 21],
-            [{ version: '7.0', internal: { documentdb_versions: ['0.116.0', 7] }, maxWireVersion: -1 }, undefined, undefined],
-            [{ internal: { documentdb_versions: '0.116.0' }, maxWireVersion: Number.POSITIVE_INFINITY }, undefined, undefined],
-            [{ internal: { documentdb_versions: Array.from({ length: 10 }, (_, index) => String(index)) }, maxWireVersion: 1.5 },
-                Array.from({ length: 8 }, (_, index) => String(index)), undefined],
+            [
+                { version: '7.0', internal: { documentdb_versions: ['0.116.0', 7] }, maxWireVersion: -1 },
+                undefined,
+                undefined,
+            ],
+            [
+                { internal: { documentdb_versions: '0.116.0' }, maxWireVersion: Number.POSITIVE_INFINITY },
+                undefined,
+                undefined,
+            ],
+            [
+                {
+                    internal: { documentdb_versions: Array.from({ length: 10 }, (_, index) => String(index)) },
+                    maxWireVersion: 1.5,
+                },
+                Array.from({ length: 8 }, (_, index) => String(index)),
+                undefined,
+            ],
         ])('omits unestablished server facts and bounds version evidence (%j)', async (hello, versions, wire) => {
             onHello = () => hello;
-            const events = await collect(new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal));
+            const events = await collect(
+                new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal),
+            );
             const facts = events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts;
             expect(facts).toMatchObject({ attempts: 1, documentdbVersions: versions, maxWireVersion: wire });
             expect(closeProbe).toHaveBeenCalledTimes(1);
@@ -883,7 +953,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         it('does not retry a successful ping when hello rejects', async () => {
             onHello = () => Promise.reject(new Error('hello unavailable'));
-            const events = await collect(new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal));
+            const events = await collect(
+                new QuickStartServiceImpl(runtimeFor()).provision(new AbortController().signal),
+            );
             expect(events.at(-1)?.stage).toBe('done');
             const facts = events.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts;
             expect(facts).toMatchObject({ attempts: 1 });
@@ -899,7 +971,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             vi.useFakeTimers();
             try {
                 let enteredHello: () => void = () => undefined;
-                const entered = new Promise<void>((resolve) => { enteredHello = resolve; });
+                const entered = new Promise<void>((resolve) => {
+                    enteredHello = resolve;
+                });
                 onHello = () => {
                     enteredHello();
                     return new Promise<never>(() => undefined);
@@ -1134,9 +1208,12 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = exitedContainerRuntime(
                 `Error: ${password} mongodb://test:${password}@localhost:10260/ ${'x'.repeat(1500)}`,
             );
-            const events = await collect(new QuickStartServiceImpl(runtime).provision(
-                new AbortController().signal, { username: 'test', password },
-            ));
+            const events = await collect(
+                new QuickStartServiceImpl(runtime).provision(new AbortController().signal, {
+                    username: 'test',
+                    password,
+                }),
+            );
             const facts = events.at(-1)?.facts;
             expect(facts).toMatchObject({ kind: 'waiting', attempts: 1, exitCode: 1 });
             expect(JSON.stringify(facts)).not.toContain(password);
@@ -1520,40 +1597,64 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             [true, true, false, 'keptExisting', 0],
             [true, false, false, 'keptExisting', 0],
             [false, true, true, 'failed', 1],
-        ] as const)('reports fresh attempt counts and sample outcome on resume (reuse=%s, requested=%s, failed=%s)', async (reuse, requested, seedFails, outcome, seedCalls) => {
-            if (reuse) {
-                await upsertInstance({
-                    alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT, phase: 'ready',
+        ] as const)(
+            'reports fresh attempt counts and sample outcome on resume (reuse=%s, requested=%s, failed=%s)',
+            async (reuse, requested, seedFails, outcome, seedCalls) => {
+                if (reuse) {
+                    await upsertInstance({
+                        alias: DEFAULT_ALIAS,
+                        displayName: 'DocumentDB Local',
+                        port: QUICK_START_PORT,
+                        phase: 'ready',
+                    });
+                    await writeConnectionString(
+                        DEFAULT_ALIAS,
+                        `mongodb://test:stored-password@localhost:${QUICK_START_PORT}/`,
+                        {
+                            displayName: 'DocumentDB Local',
+                            port: QUICK_START_PORT,
+                        },
+                    );
+                }
+                const runtime = runtimeFor({ volumeExists: reuse });
+                if (seedFails) vi.mocked(runtime.execShellInContainer).mockRejectedValue(new Error('seed failed'));
+                const service = new QuickStartServiceImpl(runtime);
+                const first = await collect(
+                    service.provision(new AbortController().signal, { loadSampleData: requested }),
+                );
+                expect(first.at(-1)?.facts).toMatchObject({
+                    kind: 'waiting',
+                    port: QUICK_START_PORT,
+                    attempts: 1,
+                    lastProbeError: 'connect ECONNREFUSED',
                 });
-                await writeConnectionString(DEFAULT_ALIAS, `mongodb://test:stored-password@localhost:${QUICK_START_PORT}/`, {
-                    displayName: 'DocumentDB Local', port: QUICK_START_PORT,
+                expect(runtime.execShellInContainer).not.toHaveBeenCalled();
+                const repeat = await collect(service.resumeReadiness(new AbortController().signal));
+                expect(repeat.at(-1)?.facts).toMatchObject({ kind: 'waiting', attempts: 1 });
+                expect(repeat.at(-1)?.timedOut).toBe(true);
+                let attempts = 0;
+                onProbe = () => {
+                    if (++attempts < 2) throw new Error('not ready yet');
+                };
+                const resumed = await collect(service.resumeReadiness(new AbortController().signal));
+                expect(resumed.at(-1)?.stage).toBe('done');
+                expect(
+                    resumed.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts,
+                ).toMatchObject({
+                    kind: 'waiting',
+                    port: QUICK_START_PORT,
+                    attempts: 2,
+                    sampleData: outcome,
+                    displayName: 'DocumentDB Local',
                 });
-            }
-            const runtime = runtimeFor({ volumeExists: reuse });
-            if (seedFails) vi.mocked(runtime.execShellInContainer).mockRejectedValue(new Error('seed failed'));
-            const service = new QuickStartServiceImpl(runtime);
-            const first = await collect(service.provision(new AbortController().signal, { loadSampleData: requested }));
-            expect(first.at(-1)?.facts).toMatchObject({
-                kind: 'waiting', port: QUICK_START_PORT, attempts: 1, lastProbeError: 'connect ECONNREFUSED',
-            });
-            expect(runtime.execShellInContainer).not.toHaveBeenCalled();
-            const repeat = await collect(service.resumeReadiness(new AbortController().signal));
-            expect(repeat.at(-1)?.facts).toMatchObject({ kind: 'waiting', attempts: 1 });
-            expect(repeat.at(-1)?.timedOut).toBe(true);
-            let attempts = 0;
-            onProbe = () => {
-                if (++attempts < 2) throw new Error('not ready yet');
-            };
-            const resumed = await collect(service.resumeReadiness(new AbortController().signal));
-            expect(resumed.at(-1)?.stage).toBe('done');
-            expect(resumed.find((event) => event.stage === 'waiting' && event.status === 'done')?.facts)
-                .toMatchObject({ kind: 'waiting', port: QUICK_START_PORT, attempts: 2, sampleData: outcome, displayName: 'DocumentDB Local' });
-            expect(service.getStatus().state).toBe(InstanceState.Running);
-            expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
-            expect((await collect(service.resumeReadiness(new AbortController().signal))).at(-1)?.message?.key)
-                .toBe('nothingToResume');
-            expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
-        });
+                expect(service.getStatus().state).toBe(InstanceState.Running);
+                expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
+                expect(
+                    (await collect(service.resumeReadiness(new AbortController().signal))).at(-1)?.message?.key,
+                ).toBe('nothingToResume');
+                expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
+            },
+        );
 
         it('Start over drops a fresh attempt entirely: credentials, lease and data', async () => {
             const removeVolume = vi.fn().mockResolvedValue(undefined);

@@ -96,9 +96,14 @@ describe('buildStageDetailRows', () => {
 
     it('omits empty evidence and unknown readiness facts', () => {
         expect(buildStageDetailRows(undefined)).toEqual([]);
-        expect(buildStageDetailRows({ kind: 'waiting', port: 10273 })).toEqual([{
-            label: 'Endpoint', value: 'localhost:10273', code: true, note: 'TLS (self-signed certificate accepted)',
-        }]);
+        expect(buildStageDetailRows({ kind: 'waiting', port: 10273 })).toEqual([
+            {
+                label: 'Endpoint',
+                value: 'localhost:10273',
+                code: true,
+                note: 'TLS (self-signed certificate accepted)',
+            },
+        ]);
     });
 
     it('shows established readiness and saved-connection evidence without copying credentials', () => {
@@ -110,13 +115,20 @@ describe('buildStageDetailRows', () => {
             maxWireVersion: 21,
             sampleData: 'loaded',
             displayName: 'DocumentDB Local',
-            ...{ password: 'private-password', connectionString: 'mongodb://private-uri', environmentVariables: ['private-env'] },
+            ...{
+                password: 'private-password',
+                connectionString: 'mongodb://private-uri',
+                environmentVariables: ['private-env'],
+            },
         });
         expect(rows.find((row) => row.label === 'Probe')?.value).toBe('ping on admin answered after 7 attempts');
-        expect(rows.find((row) => row.label === 'Server')?.value)
-            .toBe('DocumentDB 0.116.0, 0.115.0 · MongoDB API 7.0 (wire 21)');
+        expect(rows.find((row) => row.label === 'Server')?.value).toBe(
+            'DocumentDB 0.116.0, 0.115.0 · MongoDB API 7.0 (wire 21)',
+        );
         expect(rows.find((row) => row.label === 'Saved as')).toEqual({
-            label: 'Saved as', value: '“DocumentDB Local” in the Connections view', note: 'Credentials in VS Code secret storage',
+            label: 'Saved as',
+            value: '“DocumentDB Local” in the Connections view',
+            note: 'Credentials in VS Code secret storage',
         });
         for (const secret of ['private-password', 'mongodb://', 'private-env']) {
             expect(JSON.stringify(rows)).not.toContain(secret);
@@ -146,33 +158,48 @@ describe('buildStageDetailRows', () => {
     ] as const)('shows sample-data outcome %s and a finding only for failed loading', (sampleData, value) => {
         const rows = buildStageDetailRows({ kind: 'waiting', port: 10260, sampleData });
         expect(rows.find((row) => row.label === 'Sample data')?.value).toBe(value);
-        expect(rows.filter((row) => row.message)).toEqual(sampleData === 'failed' ? [{
-            label: 'Sample data was not loaded',
-            value: 'The instance is ready to use without sample data.',
-            message: 'info',
-            action: 'showOutput',
-        }] : []);
+        expect(rows.filter((row) => row.message)).toEqual(
+            sampleData === 'failed'
+                ? [
+                      {
+                          label: 'Sample data was not loaded',
+                          value: 'The instance is ready to use without sample data.',
+                          message: 'info',
+                          action: 'showOutput',
+                      },
+                  ]
+                : [],
+        );
     });
 
     it('shows failure evidence without claiming a successful ping or saved credentials', () => {
         const rows = buildStageDetailRows({
-            kind: 'waiting', port: 10273, attempts: 2, lastProbeError: 'masked ***', exitCode: 0, lastLogLine: 'fatal ***',
+            kind: 'waiting',
+            port: 10273,
+            attempts: 2,
+            lastProbeError: 'masked ***',
+            exitCode: 0,
+            lastLogLine: 'fatal ***',
         });
         expect(rows.find((row) => row.label === 'Probe')?.value).toBe('2 attempts');
         expect(rows.find((row) => row.label === 'Last probe error')?.value).toBe('masked ***');
         expect(rows.find((row) => row.label === 'Exit code')?.value).toBe('0');
         expect(rows.find((row) => row.label === 'Last log line')?.value).toBe('fatal ***');
-        expect(rows.some((row) => row.label === 'Server' || row.label === 'Saved as' || row.label === 'Sample data')).toBe(false);
+        expect(
+            rows.some((row) => row.label === 'Server' || row.label === 'Saved as' || row.label === 'Sample data'),
+        ).toBe(false);
     });
 
     it.each([true, false])('shows only a probed port and a confirmed removal (portFree=%s)', (portFree) => {
         const rows = buildStageDetailRows({ kind: 'checking', port: 10273, portFree });
-        expect(rows).toEqual([{
-            label: 'Port',
-            value: '10273',
-            code: true,
-            note: portFree ? 'Free on 127.0.0.1' : 'In use on 127.0.0.1',
-        }]);
+        expect(rows).toEqual([
+            {
+                label: 'Port',
+                value: '10273',
+                code: true,
+                note: portFree ? 'Free on 127.0.0.1' : 'In use on 127.0.0.1',
+            },
+        ]);
         const removed = buildStageDetailRows({ kind: 'checking', port: 10273, portFree, removedContainerId: 'old-id' });
         expect(removed[1]).toMatchObject({ label: 'Previous container', value: 'old-id', code: true });
     });
@@ -182,9 +209,14 @@ describe('buildStageDetailRows', () => {
         ['custom', 'Custom tag'],
         ['reused', 'Kept from existing data'],
     ] as const)('shows %s image origin and omits unestablished image evidence', (imageOrigin, note) => {
-        expect(buildStageDetailRows({ kind: 'pulling', imageRef: 'official:tag', imageOrigin })).toEqual([{
-            label: 'Image', value: 'official:tag', code: true, note,
-        }]);
+        expect(buildStageDetailRows({ kind: 'pulling', imageRef: 'official:tag', imageOrigin })).toEqual([
+            {
+                label: 'Image',
+                value: 'official:tag',
+                code: true,
+                note,
+            },
+        ]);
     });
 
     it.each([
@@ -221,10 +253,21 @@ describe('buildStageDetailRows', () => {
         const rows = buildStageDetailRows({
             ...creating,
             volume,
-            ...{ password: 'password-secret', environmentVariables: { PASSWORD: 'env-secret' }, connectionString: 'connection-secret' },
+            ...{
+                password: 'password-secret',
+                environmentVariables: { PASSWORD: 'env-secret' },
+                connectionString: 'connection-secret',
+            },
         });
-        expect(rows.find((row) => row.label === 'Data volume')).toMatchObject({ value: 'local-instance-data at /data', note: expected, code: true });
-        expect(rows.find((row) => row.label === 'Port mapping')).toMatchObject({ value: 'localhost:10273 → 10260', code: true });
+        expect(rows.find((row) => row.label === 'Data volume')).toMatchObject({
+            value: 'local-instance-data at /data',
+            note: expected,
+            code: true,
+        });
+        expect(rows.find((row) => row.label === 'Port mapping')).toMatchObject({
+            value: 'localhost:10273 → 10260',
+            code: true,
+        });
         expect(rows.find((row) => row.label === 'User')).toMatchObject({ value: 'docuser', code: true });
         expect(rows.find((row) => row.label === 'Password')).toEqual({
             label: 'Password',
@@ -265,7 +308,13 @@ describe('buildStageDetailRows', () => {
 
     it.each([true, false])('shows the inspected running state (%s), time and reported port', (running) => {
         const startedAtMs = Date.UTC(2026, 9, 28, 10, 42, 17);
-        const rows = buildStageDetailRows({ kind: 'starting', running, startedAtMs, boundPort: 10273, boundPortReported: true });
+        const rows = buildStageDetailRows({
+            kind: 'starting',
+            running,
+            startedAtMs,
+            boundPort: 10273,
+            boundPortReported: true,
+        });
         expect(rows[0]).toEqual({ label: 'State', value: running ? 'Running' : 'Not running' });
         expect(rows[1]).toEqual({ label: 'Started', value: new Date(startedAtMs).toLocaleTimeString() });
         expect(rows[2]).toEqual({ label: 'Bound port', value: '10273', code: true, note: undefined });

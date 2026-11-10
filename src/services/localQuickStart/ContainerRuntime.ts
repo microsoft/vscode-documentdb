@@ -313,9 +313,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
                     version: version && version.length <= 64 ? version : undefined,
                     // The client turns a missing Created into today's date; only trust the source field.
                     createdAtMs:
-                        Number.isFinite(createdAtMs) && createdAtMs >= Date.UTC(2000, 0, 1)
-                            ? createdAtMs
-                            : undefined,
+                        Number.isFinite(createdAtMs) && createdAtMs >= Date.UTC(2000, 0, 1) ? createdAtMs : undefined,
                 };
             }
         } catch {

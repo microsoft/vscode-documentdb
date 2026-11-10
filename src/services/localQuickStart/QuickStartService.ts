@@ -95,8 +95,8 @@ import {
     resolveQuickStartImage,
     type StageEvent,
     type StageFacts,
-    type WaitingStageFacts,
     volumeName,
+    type WaitingStageFacts,
 } from './quickStartTypes';
 
 /** Stable cache key for CredentialCache / ClustersClient (the default instance). Ephemeral. */
@@ -1400,7 +1400,7 @@ export class QuickStartServiceImpl {
             ? 'keptExisting'
             : !pending.sampleDataRequested
               ? 'notRequested'
-              : await this.seedSampleData(pending.containerId, secretVariants(pending.password), token)
+              : (await this.seedSampleData(pending.containerId, secretVariants(pending.password), token))
                 ? 'loaded'
                 : 'failed';
         this.throwIfAborted(signal);

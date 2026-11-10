@@ -150,9 +150,10 @@ export function buildStageDetailRows(facts: StageFacts | undefined): readonly St
             if (facts.attempts !== undefined) {
                 let probe = facts.attempts === 1 ? l10n.t('1 attempt') : l10n.t('{0} attempts', facts.attempts);
                 if (facts.sampleData !== undefined) {
-                    probe = facts.attempts === 1
-                        ? l10n.t('ping on admin answered after 1 attempt')
-                        : l10n.t('ping on admin answered after {0} attempts', facts.attempts);
+                    probe =
+                        facts.attempts === 1
+                            ? l10n.t('ping on admin answered after 1 attempt')
+                            : l10n.t('ping on admin answered after {0} attempts', facts.attempts);
                 }
                 rows.push({
                     label: l10n.t('Probe'),
@@ -358,9 +359,7 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
     rows.push({
         label: l10n.t('Docker endpoint'),
         value: dockerEndpointKindValues()[readiness.endpointKind],
-        note: readiness.endpointSource
-            ? dockerEndpointSourceNotes()[readiness.endpointSource]
-            : undefined,
+        note: readiness.endpointSource ? dockerEndpointSourceNotes()[readiness.endpointSource] : undefined,
     });
     if (readiness.permissionDetail) {
         rows.push({
