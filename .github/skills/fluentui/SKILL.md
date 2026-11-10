@@ -1,6 +1,6 @@
 ---
 name: fluentui
-description: Patterns for FluentUI React v9 components in VS Code webviews. Use when working with any FluentUI component (Toolbar, Overflow, Menu, Button, Dialog, etc.), debugging layout or styling issues with FluentUI, implementing toolbar overflow (collapsing items into a "..." menu), or integrating FluentUI components in webview panels.
+description: Patterns for FluentUI React v9 components in VS Code webviews. Use when working with any FluentUI component (Toolbar, Overflow, Menu, Button, Dialog, MessageBar, etc.), choosing MessageBar icons or layout, debugging layout or styling issues with FluentUI, implementing toolbar overflow (collapsing items into a "..." menu), or integrating FluentUI components in webview panels.
 ---
 
 # FluentUI React v9 Patterns
@@ -41,6 +41,19 @@ This skill covers multiple FluentUI topics. Load the relevant reference when nee
 2. **Title above message:** `MessageBarTitle` is inline by default, even with `layout="multiline"`. Add a named body class with `display: flex`, `flexDirection: 'column'`, and an appropriate `gap` to put the message on the next line.
 
 For the default DocumentDB webview notice with a title and message, use **both**: `layout="multiline"` for the Fluent UI geometry and a named title-and-message body class for the vertical title/message layout. Use a separate generic stacked-body class only when the body contains controls, commands, or multiple content blocks rather than a simple title and message.
+
+## MessageBar Icons
+
+Fluent's default glyphs (a diamond for errors, a filled triangle for warnings) are not the house style. The product uses:
+
+| Intent    | Icon                |
+| --------- | ------------------- |
+| `error`   | `ErrorCircleFilled` |
+| `warning` | `WarningRegular`    |
+| `success` | Fluent default      |
+| `info`    | Fluent default      |
+
+`MessageBlock` (`src/webviews/components/MessageBlock.tsx`) applies these by default, so prefer it for in-flow notices and pass `icon` only to override. A raw `<MessageBar intent="error">` or `intent="warning"` must set `icon` explicitly to match.
 
 ## Critical Rule: Layout Constraints
 

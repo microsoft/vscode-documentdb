@@ -6,7 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 
 export interface ShowClusterConnectFailureOptions {
     /** Stable cluster ID (never treeId); the diagnostics service and its providers key on it. */
@@ -34,7 +34,7 @@ export async function showClusterConnectFailure(
     options: ShowClusterConnectFailureOptions,
 ): Promise<string | undefined> {
     const { clusterId, clusterName, fallbackHeading, error, context, extraDetail, buttons } = options;
-    const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error });
+    const diagnosis = await ErrorExplanationService.explain({ clusterId, error });
     context.telemetry.properties.diagnosisProviderId = diagnosis?.providerId ?? 'none';
 
     const errorMessage = error instanceof Error ? error.message : String(error);

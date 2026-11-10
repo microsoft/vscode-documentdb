@@ -1,6 +1,6 @@
 ---
 name: error-translation
-description: How infrastructure-caused database failures are turned into messages users can act on, via ConnectionDiagnosticsService. Use when adding a discovery plugin, a connection source, a reachability provider, a new tree view or webview surface, when a user reports a confusing or raw driver error, or when asked to improve error messages for Docker, Kubernetes, Atlas, Azure or any other infrastructure-backed connection.
+description: How infrastructure-caused database failures are turned into messages users can act on, via ErrorExplanationService. Use when adding a discovery plugin, a connection source, a reachability provider, a new tree view or webview surface, when a user reports a confusing or raw driver error, or when asked to improve error messages for Docker, Kubernetes, Atlas, Azure or any other infrastructure-backed connection.
 ---
 
 # Error Translation
@@ -10,7 +10,7 @@ stopped, a port-forward tunnel died, a service closed the TLS handshake. The dri
 as `ECONNREFUSED`, a server-selection timeout, or an OpenSSL alert, none of which tell the user
 what to do.
 
-`ConnectionDiagnosticsService` lets the source that owns the infrastructure explain the failure in
+`ErrorExplanationService` lets the source that owns the infrastructure explain the failure in
 its own words.
 
 ## The one rule
@@ -30,15 +30,15 @@ watching, whether the operation was a read or a write, and which surface is righ
 
 ## Adding a provider
 
-Implement `ConnectionDiagnosticsProvider` and register it in
+Implement `ErrorExplanationProvider` and register it in
 [ClustersExtension.registerDiscoveryServices](../../../src/documentdb/ClustersExtension.ts),
 next to the existing ones.
 
 ```ts
-export class MyDiagnosticsProvider implements ConnectionDiagnosticsProvider {
+export class MyErrorExplainer implements ErrorExplanationProvider {
     public readonly id = 'my-source';
 
-    public async explain({ clusterId, error }: ConnectionDiagnosticsRequest): Promise<string | undefined> {
+    public async explain({ clusterId, error }: ErrorExplanationRequest): Promise<string | undefined> {
         if (!isMine(clusterId)) {
             return undefined; // not ours: the caller shows the original error
         }
@@ -52,6 +52,11 @@ export class MyDiagnosticsProvider implements ConnectionDiagnosticsProvider {
 
 `undefined` is always the safe answer: it means "show the original error".
 
+If the text names an infrastructure identifier that is not in the connection string (for example a
+Kubernetes service or namespace), return `{ message, identifiers }` instead of a plain string and list
+each one with its kind. Connection diagnostics' "Hide identifiers" can only replace names it was told
+about.
+
 A provider may answer without inspecting the error at all. Cancellations are therefore filtered
 centrally: `explain()` returns `undefined` for a `UserCancelledError` before any provider is asked,
 so a wizard the user escaped is never reported as an infrastructure failure.
@@ -61,9 +66,9 @@ so a wizard the user escaped is never reported as an infrastructure failure.
 `explain()` runs on every foreground failure across the whole extension, so the common case must
 cost almost nothing. Order the checks so the fastest rejection happens first.
 
-- `QuickStartDiagnosticsProvider` scans an in-memory list of managed instances before touching Docker.
-- `AtlasDiagnosticsProvider` tests the error message shape before looking up any credentials.
-- `KubernetesDiagnosticsProvider` checks its in-memory map before importing the tunnel machinery.
+- `QuickStartErrorExplainer` scans an in-memory list of managed instances before touching Docker.
+- `AtlasErrorExplainer` tests the error message shape before looking up any credentials.
+- `KubernetesErrorExplainer` checks its in-memory map before importing the tunnel machinery.
 
 ### Do not cache verdicts
 
@@ -110,8 +115,8 @@ raw one and keep the raw text as detail. Rethrow the original error unchanged so
 every downstream check keep working.
 
 ```ts
-const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error });
-void vscode.window.showErrorMessage(diagnosis?.message ?? l10n.t('Failed to load ...'), {
+const explanation = await ErrorExplanationService.explain({ clusterId, error });
+void vscode.window.showErrorMessage(explanation?.message ?? l10n.t('Failed to load ...'), {
     modal: true,
     detail: error instanceof Error ? error.message : String(error),
 });
@@ -171,7 +176,7 @@ error's class or `code` cannot be served this way. Never wrap an error to smuggl
 - Say what the user can do next, and where.
 - Keep it to one paragraph. The message becomes the heading of a modal, where a bulleted block
   renders as several lines of bold text; the raw driver error already occupies the detail area.
-  `AtlasDiagnosticsProvider` returns `summarizeAtlasTlsHandshakeRejection()` for this reason, while
+  `AtlasErrorExplainer` returns `summarizeAtlasTlsHandshakeRejection()` for this reason, while
   the Discovery-view modal keeps the longer `describeAtlasTlsHandshakeRejection()` as its detail.
 - No em dashes or en dashes.
 - Wrap every string in `l10n.t()` and run `npm run l10n`.
@@ -186,7 +191,7 @@ l10n.t('The container was removed outside VS Code.')
 
 ## Related
 
-- [connectionDiagnosticsService.ts](../../../src/services/connectionDiagnosticsService.ts)
+- [errorExplanationService.ts](../../../src/services/errorExplanationService.ts)
 - [connectionReachabilityService.ts](../../../src/services/connectionReachabilityService.ts) prepares a connection _before_ connecting; this service explains a failure _afterwards_
 - [tree-cluster-architecture](../tree-cluster-architecture/SKILL.md) for `clusterId` versus `treeId`
 - [telemetry-instrumentation](../telemetry-instrumentation/SKILL.md)

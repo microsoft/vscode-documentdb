@@ -3,23 +3,27 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCallerFactory, publicProcedureWithTelemetry, router } from './trpc';
 
-const recordedContexts: IActionContext[] = [];
+const recordedContexts = vi.hoisted((): IActionContext[] => []);
 
-vi.mock('@microsoft/vscode-azext-utils', () => ({
-    parseError: (error: unknown) => ({
-        errorType: error instanceof Error ? error.name : 'NonError',
-        message: error instanceof Error ? error.message : String(error),
-    }),
-    callWithTelemetryAndErrorHandling: async (
+vi.mock('vscode', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    // `parseError` needs `CancellationError`, which the shared mock does not provide.
+    class CancellationError extends Error {}
+    return { ...actual, CancellationError, default: { ...(actual.default as object), CancellationError } };
+});
+
+vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    callWithTelemetryAndErrorHandling: async <T>(
         _eventId: string,
-        callback: (context: IActionContext) => Promise<unknown>,
-    ): Promise<unknown> => {
+        callback: (context: IActionContext) => Promise<T>,
+    ): Promise<T> => {
         const context: IActionContext = {
-            telemetry: { properties: {}, measurements: {} },
+            telemetry: { properties: { result: 'Succeeded' }, measurements: {} },
             errorHandling: { issueProperties: {} },
             valuesToMask: [],
             ui: {} as IActionContext['ui'],
@@ -63,5 +67,36 @@ describe('destination RPC attribution', () => {
         await createCallerFactory(testRouter)({}).load();
         expect(recordedContexts[0].telemetry.properties.activationSource).toBeUndefined();
         expect(recordedContexts[0].telemetry.properties.deepLinkCorrelationId).toBeUndefined();
+    });
+});
+
+const testRouter = router({
+    dismissed: publicProcedureWithTelemetry.mutation((): never => {
+        throw new UserCancelledError();
+    }),
+    broken: publicProcedureWithTelemetry.mutation((): never => {
+        throw new Error('broken');
+    }),
+});
+
+const createCaller = createCallerFactory(testRouter);
+
+function caller(): ReturnType<typeof createCaller> {
+    return createCaller({});
+}
+
+describe('publicProcedureWithTelemetry', (): void => {
+    it('records a procedure that throws UserCancelledError as Canceled, without error fields', async (): Promise<void> => {
+        await expect(caller().dismissed()).rejects.toMatchObject({ cause: expect.any(UserCancelledError) });
+        expect(recordedContexts).toHaveLength(1);
+        expect(recordedContexts[0].telemetry.properties.result).toBe('Canceled');
+        expect(recordedContexts[0].telemetry.properties.error).toBeUndefined();
+        expect(recordedContexts[0].telemetry.properties.errorMessage).toBeUndefined();
+    });
+
+    it('still records other thrown errors as Failed', async (): Promise<void> => {
+        await expect(caller().broken()).rejects.toBeDefined();
+        expect(recordedContexts[0].telemetry.properties.result).toBe('Failed');
+        expect(recordedContexts[0].telemetry.properties.errorMessage).toBe('broken');
     });
 });

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as dns from 'node:dns';
-import { FALLBACK_MAX_DEADLINE_MS } from './constants.js';
+import { FALLBACK_MAX_DEADLINE_MS, SRV_FALLBACK_ELIGIBLE_ERROR_CODES } from './constants.js';
 import { FallbackDnsError, resolveSrvFallback, resolveTxtFallback } from './fallbackDnsClient.js';
 import { getSrvLookupTarget, isSrvConnectionString, rewriteSrvUri, SrvRewriteError } from './srvUriRewrite.js';
 import { cancellationError, noopLogger, throwIfCancelled } from './types.js';
@@ -35,8 +35,6 @@ export interface ResolveSrvForDriverResult<T extends object = object> {
 }
 
 type MutableReport = { -readonly [K in keyof SrvResolutionReport]: SrvResolutionReport[K] };
-
-const eligibleCodes = new Set(['EBADRESP', 'EFORMERR', 'ECONNREFUSED']);
 
 function errorCode(error: unknown): string {
     if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
@@ -106,7 +104,7 @@ export async function resolveSrvForDriver<T extends object>(
             report.nodeErrorCode = errorCode(error);
         }
         report.nodeProbeDurationMs = Date.now() - probeStartedAt;
-        const eligible = eligibleCodes.has(report.nodeErrorCode);
+        const eligible = SRV_FALLBACK_ELIGIBLE_ERROR_CODES.has(report.nodeErrorCode);
         const runFallback = mode === 'force' || (mode === 'auto' && eligible);
         const next = runFallback ? 'running fallback' : 'original +srv handed to driver';
         trace(

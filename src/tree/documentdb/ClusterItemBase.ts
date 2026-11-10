@@ -24,7 +24,7 @@ import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import { settingsKeys } from '../../settingsKeys';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { withDelayedProgress } from '../../utils/withProgress';
@@ -38,6 +38,7 @@ import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel'
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { DatabaseItem } from './DatabaseItem';
 import { isAutoOpenDashboardSuppressed } from './autoOpenDashboardSuppression';
+import { type DiagnosticClusterCredentials, type DiagnosticCredentialRead } from './diagnosticCredentialRead';
 
 /**
  * Full connection details for a DocumentDB cluster used at runtime during service discovery.
@@ -186,6 +187,19 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     public abstract getCredentials(): Promise<EphemeralClusterCredentials | undefined>;
 
     /**
+     * Reads the connection details for connection diagnostics: no UI, no tunnels, typed
+     * failures (see `diagnosticCredentialRead.ts`). `undefined` means the connection no longer exists.
+     *
+     * The default suits nodes whose {@link getCredentials} only reads stored data. Override it when
+     * `getCredentials()` calls a service, shows UI, prompts, or prepares the endpoint.
+     */
+    public getCredentialsForDiagnostics(
+        _read: DiagnosticCredentialRead,
+    ): Promise<DiagnosticClusterCredentials | undefined> {
+        return this.getCredentials();
+    }
+
+    /**
      * Connects to the cluster using `ClustersClient.getClient()`, showing a cancellable
      * notification so the user can abort a long-running connection attempt.
      *
@@ -224,35 +238,39 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     /**
      * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
      *
-     * Always includes the canonical "retry" node (see {@link createRetryNode}); `hasRetryNode` and
-     * the provider detect the error state via that node. For post-authentication failures
-     * (`includeOpenShell`), an "open shell" node is added so the user can investigate the server
-     * directly. View-specific recovery actions (e.g. "update credentials") are added separately by
-     * the provider via `errorRecoveryActions`.
+     * Always includes the canonical "retry" node (see {@link createRetryNode}), a diagnosis
+     * action that opens diagnostics without connecting, and an "open shell" node. `hasRetryNode`
+     * and the provider detect the error state via the retry node. The shell is offered for every
+     * failure, including sign-in failures, so experts can investigate with the shell's own
+     * connection and error output. View-specific recovery actions (e.g. "update credentials") are
+     * added separately by the provider via `errorRecoveryActions`.
      *
      * Error-recovery nodes in this tree are produced by two layers:
-     * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "retry" (any failure) and, for
-     *   post-authentication failures, "open shell".
+     * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "retry", "diagnose" and
+     *   "open shell", for any failure.
      * - The PROVIDER layer (a BranchDataProvider) owns VIEW-SPECIFIC nodes (e.g. "update
      *   credentials") via `errorRecoveryActions`, gated by the failing element's contextValue.
      */
-    private createErrorRecoveryChildren(includeOpenShell: boolean): TreeElement[] {
-        const children: TreeElement[] = [createRetryNode(this.id, this)];
-
-        if (includeOpenShell) {
-            children.push(
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/open-shell`,
-                    label: vscode.l10n.t('Click here to open the shell'),
-                    iconPath: new vscode.ThemeIcon('terminal'),
-                    commandId: ShellCommandIds.open,
-                    commandArgs: [this],
-                }),
-            );
-        }
-
-        return children;
+    private createErrorRecoveryChildren(): TreeElement[] {
+        return [
+            createRetryNode(this.id, this),
+            createGenericElementWithContext({
+                contextValue: 'error',
+                id: `${this.id}/diagnose`,
+                label: vscode.l10n.t('Diagnose this connection…'),
+                iconPath: new vscode.ThemeIcon('debug-alt'),
+                commandId: 'vscode-documentdb.command.diagnoseConnection',
+                commandArgs: [this, undefined, 'errorNode'],
+            }),
+            createGenericElementWithContext({
+                contextValue: 'error',
+                id: `${this.id}/open-shell`,
+                label: vscode.l10n.t('Click here to open the shell'),
+                iconPath: new vscode.ThemeIcon('terminal'),
+                commandId: ShellCommandIds.open,
+                commandArgs: [this],
+            }),
+        ];
     }
 
     /**
@@ -313,7 +331,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 // the connection without forcing the user to re-enter credentials (the failure may
                 // be transient).
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                const diagnosis = await ConnectionDiagnosticsService.explain({
+                const explanation = await ErrorExplanationService.explain({
                     clusterId: this.cluster.clusterId,
                     error,
                 });
@@ -324,7 +342,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     telemetryContext.telemetry.properties.source = 'treeExpansion';
                     telemetryContext.telemetry.properties.experience = this.experience.api;
                     telemetryContext.telemetry.properties.failurePhase = 'cachedClientConnect';
-                    telemetryContext.telemetry.properties.diagnosisProviderId = diagnosis?.providerId ?? 'none';
+                    telemetryContext.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
                     throw error;
                 });
 
@@ -336,14 +354,14 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 );
 
                 void vscode.window.showErrorMessage(
-                    diagnosis?.message ?? vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name),
+                    explanation?.message ?? vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name),
                     {
                         modal: true,
                         detail: errorMessage,
                     },
                 );
 
-                return this.createErrorRecoveryChildren(false);
+                return this.createErrorRecoveryChildren();
             }
         } else {
             // Call to the abstract method to authenticate and connect to the cluster
@@ -354,7 +372,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         if (!clustersClient) {
             this.lastConnectionOutcome ??= 'failed';
             ext.outputChannel.appendLine(l10n.t('Could not connect to "{cluster}".', { cluster: this.cluster.name }));
-            return this.createErrorRecoveryChildren(false);
+            return this.createErrorRecoveryChildren();
         }
 
         // List the databases.
@@ -371,7 +389,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             databases = await clustersClient.listDatabases();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            const diagnosis = await ConnectionDiagnosticsService.explain({
+            const explanation = await ErrorExplanationService.explain({
                 clusterId: this.cluster.clusterId,
                 error,
             });
@@ -387,7 +405,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 telemetryContext.telemetry.properties.source = 'treeExpansion';
                 telemetryContext.telemetry.properties.experience = this.experience.api;
                 telemetryContext.telemetry.properties.failurePhase = 'listDatabases';
-                telemetryContext.telemetry.properties.diagnosisProviderId = diagnosis?.providerId ?? 'none';
+                telemetryContext.telemetry.properties.explanationProviderId = explanation?.providerId ?? 'none';
                 throw error;
             });
 
@@ -399,11 +417,11 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             );
 
             void vscode.window.showErrorMessage(
-                diagnosis?.message ?? vscode.l10n.t('Failed to load databases for "{0}"', this.cluster.name),
+                explanation?.message ?? vscode.l10n.t('Failed to load databases for "{0}"', this.cluster.name),
                 { modal: true, detail: errorMessage },
             );
 
-            return this.createErrorRecoveryChildren(true);
+            return this.createErrorRecoveryChildren();
         }
 
         if (

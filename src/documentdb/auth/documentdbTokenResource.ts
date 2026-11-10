@@ -156,7 +156,7 @@ export async function resolveInteractiveTokenResource(
     if (hostCloud && hostCloud !== audienceCloud) {
         throw resolutionError(
             l10n.t(
-                'This cluster is in {clusterCloud}, but VS Code is signed in to {signedInCloud}. Change the "{setting}" setting to the cloud of the cluster, then connect again.',
+                'This cluster is in {clusterCloud}, but VS Code sign-in is set to {signedInCloud}. Change the "{setting}" setting to the cloud of the cluster, then connect again.',
                 {
                     clusterCloud: getCloudDisplayName(hostCloud),
                     signedInCloud: audienceCloud ? getCloudDisplayName(audienceCloud) : l10n.t('a custom cloud'),
@@ -259,6 +259,19 @@ export function resolveTokenResourceForCopy(
     }
 
     return withDetails(fromBuiltInCloud('AzureCloud', 'copyDefault'), details);
+}
+
+/** Describes sign-in configuration without resolving a resource or contacting an identity service. */
+export function describeEntraSignInEnvironment(
+    deps: Pick<
+        TokenResourceResolverDeps,
+        'getSignInEnvironment' | 'getCustomHostnameSuffixSource' | 'getConfiguredCloud'
+    > = getDefaultDeps(),
+    customEnvironment: DocumentDBCustomEnvironment = getDefaultDeps().getCustomEnvironment(),
+): Readonly<Record<string, string | boolean>> {
+    const details = createResolutionDetails('diagnostics', customEnvironment, deps);
+    getConfiguredCloudForDetails(deps, details);
+    return details;
 }
 
 export function getCloudCategory(resource: string): CloudCategory {
@@ -443,7 +456,7 @@ function hostCloudConflictError(details: Record<string, string | boolean>): Toke
 }
 
 function createResolutionDetails(
-    flow: 'interactive' | 'managedIdentity' | 'copy',
+    flow: 'interactive' | 'managedIdentity' | 'copy' | 'diagnostics',
     customEnvironment: DocumentDBCustomEnvironment,
     deps: Pick<TokenResourceResolverDeps, 'getSignInEnvironment' | 'getCustomHostnameSuffixSource'>,
 ): Record<string, string | boolean> {

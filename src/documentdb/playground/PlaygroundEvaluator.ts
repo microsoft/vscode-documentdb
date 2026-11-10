@@ -428,7 +428,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                     ).accessToken;
                 } catch (error) {
                     if (traceContext?.startupProperties) {
-                        traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                     }
                     if (isCurrent()) {
                         recordEntraTokenFailure(clusterId, {
@@ -466,7 +466,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                     }
                 } catch (error) {
                     if (traceContext?.startupProperties) {
-                        traceContext.startupProperties.errorKind = 'tokenAcquisitionFailed';
+                        traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                     }
                     if (isCurrent()) {
                         recordEntraTokenFailure(clusterId, {

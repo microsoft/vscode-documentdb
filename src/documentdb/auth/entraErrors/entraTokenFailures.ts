@@ -9,6 +9,7 @@ import { type CloudCategory } from '../documentdbTokenResource';
 export interface EntraTokenFailureContext {
     readonly cloudCategory: CloudCategory;
     readonly authMethod: 'interactive' | 'managedIdentity';
+    readonly ruleId?: string;
 }
 
 export interface EntraTokenFailure extends EntraTokenFailureContext {
@@ -22,6 +23,7 @@ export function recordEntraTokenFailure(clusterId: string, context: EntraTokenFa
         cloudCategory: context.cloudCategory,
         authMethod: context.authMethod,
         timestamp: Date.now(),
+        ...(context.ruleId === undefined ? {} : { ruleId: context.ruleId }),
     });
 }
 

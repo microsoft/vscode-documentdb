@@ -7,15 +7,15 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../../services/errorExplanationService';
 import {
     showConnectionFailedAndMaybeOfferDecodedRetry,
     tryDecodeUrlEncodedPassword,
     UrlEncodedPasswordTelemetry,
 } from './urlEncodedPassword';
 
-vi.mock('../../services/connectionDiagnosticsService', () => ({
-    ConnectionDiagnosticsService: { explain: vi.fn() },
+vi.mock('../../services/errorExplanationService', () => ({
+    ErrorExplanationService: { explain: vi.fn() },
 }));
 
 function createMockContext(): IActionContext {
@@ -83,7 +83,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        vi.mocked(ConnectionDiagnosticsService.explain).mockResolvedValue(undefined);
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(undefined);
     });
 
     it('shows error dialog without retry button when password is not URL-encoded', async () => {
@@ -219,7 +219,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
     it('uses the diagnosis while retaining the decoded-password hint and retry button', async () => {
         const context = createMockContext();
         const originalError = new Error('auth failed');
-        vi.mocked(ConnectionDiagnosticsService.explain).mockResolvedValue({
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue({
             providerId: 'test-provider',
             message: 'Infrastructure explanation',
         });
@@ -234,7 +234,7 @@ describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
             context,
         });
 
-        expect(ConnectionDiagnosticsService.explain).toHaveBeenCalledWith({
+        expect(ErrorExplanationService.explain).toHaveBeenCalledWith({
             clusterId: 'stable-cluster-id',
             error: originalError,
         });

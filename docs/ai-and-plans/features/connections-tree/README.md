@@ -42,6 +42,12 @@ specific behaviors:
 
 - **Item counts on tree nodes** are opt-in and bounded. The UX rationale for where counts appear,
   and where they deliberately do not, is in the item-counting iteration.
+- **Failures are a modal plus action rows.** The tree holds actions, never error or information rows.
+  A failed expand shows the reason in a modal, and its children are recovery actions only (Retry,
+  Diagnose this connection…, Open shell, Update credentials…). WI-28 of the connectivity troubleshooter
+  (2026-11-02) replaced the modal with a "Sign-in required to list databases" row; the operator
+  rejected that because it breaks this rule, and it was reverted. The rule is in the
+  `tree-cluster-architecture` skill.
 - **Connection load is not a storage read per node.** The storage-load work separates what is
   wrapped in memory from what is read on demand, and says so explicitly, because the previous shape
   made the cost invisible.

@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
+import { ErrorExplanationService } from '../services/errorExplanationService';
 import { showClusterConnectFailure } from './showClusterConnectFailure';
 
 const { showErrorMessage } = vi.hoisted(() => ({
@@ -17,8 +17,8 @@ vi.mock('vscode', () => ({
     window: { showErrorMessage },
 }));
 
-vi.mock('../services/connectionDiagnosticsService', () => ({
-    ConnectionDiagnosticsService: { explain: vi.fn() },
+vi.mock('../services/errorExplanationService', () => ({
+    ErrorExplanationService: { explain: vi.fn() },
 }));
 
 function createMockContext(): IActionContext {
@@ -38,15 +38,15 @@ describe('showClusterConnectFailure', () => {
     it('shows the diagnosis with raw error detail and records its provider', async () => {
         const context = createMockContext();
         const error = new Error('raw driver error');
-        vi.mocked(ConnectionDiagnosticsService.explain).mockResolvedValue({
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue({
             providerId: 'test-provider',
             message: 'Infrastructure explanation',
         });
 
         await showClusterConnectFailure({ clusterId: 'stable-id', clusterName: 'Test Cluster', error, context });
 
-        expect(ConnectionDiagnosticsService.explain).toHaveBeenCalledWith({ clusterId: 'stable-id', error });
-        expect(vi.mocked(ConnectionDiagnosticsService.explain).mock.calls[0][0].error).toBe(error);
+        expect(ErrorExplanationService.explain).toHaveBeenCalledWith({ clusterId: 'stable-id', error });
+        expect(vi.mocked(ErrorExplanationService.explain).mock.calls[0][0].error).toBe(error);
         expect(showErrorMessage).toHaveBeenCalledWith('Infrastructure explanation', {
             modal: true,
             detail: 'raw driver error',
@@ -57,7 +57,7 @@ describe('showClusterConnectFailure', () => {
 
     it('keeps the generic fallback when there is no diagnosis', async () => {
         const context = createMockContext();
-        vi.mocked(ConnectionDiagnosticsService.explain).mockResolvedValue(undefined);
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(undefined);
 
         await showClusterConnectFailure({
             clusterId: 'stable-id',
@@ -75,7 +75,7 @@ describe('showClusterConnectFailure', () => {
 
     it('uses the supplied fallback heading when there is no diagnosis', async () => {
         const context = createMockContext();
-        vi.mocked(ConnectionDiagnosticsService.explain).mockResolvedValue(undefined);
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(undefined);
 
         await showClusterConnectFailure({
             clusterId: 'stable-id',
@@ -93,7 +93,7 @@ describe('showClusterConnectFailure', () => {
 
     it('stringifies non-Error failures without changing the diagnostics input', async () => {
         const context = createMockContext();
-        vi.mocked(ConnectionDiagnosticsService.explain).mockResolvedValue(undefined);
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(undefined);
 
         await showClusterConnectFailure({
             clusterId: 'stable-id',
@@ -102,7 +102,7 @@ describe('showClusterConnectFailure', () => {
             context,
         });
 
-        expect(ConnectionDiagnosticsService.explain).toHaveBeenCalledWith({
+        expect(ErrorExplanationService.explain).toHaveBeenCalledWith({
             clusterId: 'stable-id',
             error: 'string failure',
         });
@@ -114,7 +114,7 @@ describe('showClusterConnectFailure', () => {
 
     it.each([true, false])('appends extra detail when a diagnosis is present: %s', async (hasDiagnosis) => {
         const context = createMockContext();
-        vi.mocked(ConnectionDiagnosticsService.explain).mockResolvedValue(
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(
             hasDiagnosis ? { providerId: 'test-provider', message: 'Infrastructure explanation' } : undefined,
         );
 
@@ -137,7 +137,7 @@ describe('showClusterConnectFailure', () => {
 
     it('forwards extra buttons and returns the selected button', async () => {
         const context = createMockContext();
-        vi.mocked(ConnectionDiagnosticsService.explain).mockResolvedValue(undefined);
+        vi.mocked(ErrorExplanationService.explain).mockResolvedValue(undefined);
         showErrorMessage.mockResolvedValue('Retry');
 
         const selected = await showClusterConnectFailure({
@@ -160,7 +160,7 @@ describe('showClusterConnectFailure', () => {
     it('waits for diagnostics before showing the modal', async () => {
         const context = createMockContext();
         let finishDiagnosis: (() => void) | undefined;
-        vi.mocked(ConnectionDiagnosticsService.explain).mockImplementation(
+        vi.mocked(ErrorExplanationService.explain).mockImplementation(
             () =>
                 new Promise((resolve) => {
                     finishDiagnosis = (): void => resolve(undefined);

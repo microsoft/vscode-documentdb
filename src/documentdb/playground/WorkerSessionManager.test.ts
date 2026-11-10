@@ -980,7 +980,7 @@ describe('WorkerSessionManager', () => {
                     tokenResourceReason: 'setting',
                     configuredCloud: 'AzureChinaCloud',
                     hostCloud: 'AzureUSGovernment',
-                    errorKind: 'cloudMismatch',
+                    entraFailureKind: 'cloudMismatch',
                 });
                 expect(events[1].telemetry.properties.cloudCategory).toBeUndefined();
                 expect(JSON.stringify(events)).not.toMatch(/private-/);

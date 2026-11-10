@@ -5,11 +5,13 @@
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
+import { RETRY_NODE_ID_SUFFIX, containsRetryNode } from '../api/retryNode';
+import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { suppressAutoOpenDashboard } from './autoOpenDashboardSuppression';
@@ -115,6 +117,26 @@ class TestClusterItem extends ClusterItemBase {
     }
 }
 
+class TestRecoveryProvider extends BaseExtendedTreeDataProvider<TreeElement> {
+    public readonly context = {
+        telemetry: { properties: {}, measurements: {} },
+        errorHandling: {},
+    } as IActionContext;
+
+    public getChildren(element?: TreeElement): Promise<TreeElement[] | null | undefined> {
+        if (!element) {
+            return Promise.resolve([]);
+        }
+        return this.wrapGetChildrenWithErrorAndStateHandling(element, this.context, async () =>
+            element.getChildren?.(),
+        );
+    }
+
+    public async getTreeItem(element: TreeElement): Promise<vscode.TreeItem> {
+        return element.getTreeItem();
+    }
+}
+
 function makeCluster(): TreeCluster<BaseClusterModel> {
     return {
         treeId: 'cluster-1',
@@ -149,21 +171,74 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
 
-        expect(children).toHaveLength(2);
+        expect(children).toHaveLength(3);
         expect(children[0].id).toBe('cluster-1/retry');
         expect(children[0].contextValue).toBe('error');
         expect(children[0].commandId).toBe('vscode-documentdb.command.internal.retry');
         expect(children[0].commandArgs).toEqual([item]);
 
-        expect(children[1].id).toBe('cluster-1/open-shell');
-        expect(children[1].contextValue).toBe('error');
-        expect(children[1].label).toBe('Click here to open the shell');
-        expect(children[1].commandId).toBe(ShellCommandIds.open);
-        expect(children[1].commandArgs).toEqual([item]);
+        expect(children[1]).toMatchObject({
+            id: 'cluster-1/diagnose',
+            contextValue: 'error',
+            label: 'Diagnose this connection…',
+            iconPath: new vscode.ThemeIcon('debug-alt'),
+            commandId: 'vscode-documentdb.command.diagnoseConnection',
+            commandArgs: [item, undefined, 'errorNode'],
+        });
+        expect(children[1].id.endsWith(RETRY_NODE_ID_SUFFIX)).toBe(false);
+        expect(containsRetryNode([children[1]])).toBe(false);
+        expect(containsRetryNode(children)).toBe(true);
+        expect(children.filter((child) => child.id.endsWith(RETRY_NODE_ID_SUFFIX))).toHaveLength(1);
+
+        expect(children[2].id).toBe('cluster-1/open-shell');
+        expect(children[2].contextValue).toBe('error');
+        expect(children[2].label).toBe('Click here to open the shell');
+        expect(children[2].commandId).toBe(ShellCommandIds.open);
+        expect(children[2].commandArgs).toEqual([item]);
 
         // The branch data provider detects (and caches) the error state via hasRetryNode().
         expect(item.hasRetryNode(children)).toBe(true);
     });
+
+    it('offers the shell when connecting or signing in fails, not only after sign-in', async () => {
+        const item = new TestClusterItem(makeCluster(), null);
+
+        const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
+
+        expect(children.map((child) => child.id)).toEqual([
+            'cluster-1/retry',
+            'cluster-1/diagnose',
+            'cluster-1/open-shell',
+        ]);
+        expect(children[2]).toMatchObject({ commandId: ShellCommandIds.open, commandArgs: [item] });
+    });
+
+    it.each(['authentication', 'listDatabases'] as const)(
+        'keeps %s failures cached with the diagnosis child until an explicit retry',
+        async (failurePhase) => {
+            const listDatabases = vi.fn().mockRejectedValue(new Error('not authenticated'));
+            const cluster = { ...makeCluster(), treeId: 'connectionsView/folder/cluster-1' };
+            const item = new TestClusterItem(
+                cluster,
+                failurePhase === 'authentication' ? null : makeClient(listDatabases),
+            );
+            const fetchChildren = vi.spyOn(item, 'getChildren');
+            const provider = new TestRecoveryProvider();
+
+            const children = await provider.getChildren(item);
+            expect(children?.map((child) => child.id)).toContain(`${cluster.treeId}/diagnose`);
+            expect(containsRetryNode(children)).toBe(true);
+            expect(provider.hasNodeErrorState(item.id)).toBe(true);
+            expect(await provider.getChildren(item)).toBe(children);
+            expect(fetchChildren).toHaveBeenCalledTimes(1);
+            expect(provider.context.telemetry.properties.usedCachedErrorNode).toBe('true');
+
+            provider.resetNodeErrorState(item.id);
+            await provider.getChildren(item);
+            expect(fetchChildren).toHaveBeenCalledTimes(2);
+            provider.dispose();
+        },
+    );
 
     it('surfaces the failure as a modal dialog and suppresses the default non-modal notification', async () => {
         const listDatabases = vi.fn().mockRejectedValue(new Error('not authenticated'));
@@ -348,11 +423,12 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
 
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
 
-        expect(children).toHaveLength(1);
+        expect(children).toHaveLength(3);
         expect(children[0].id).toBe('cluster-1/retry');
         expect(children[0].contextValue).toBe('error');
         expect(children[0].commandId).toBe('vscode-documentdb.command.internal.retry');
         expect(children[0].commandArgs).toEqual([item]);
+        expect(children[2].id).toBe('cluster-1/open-shell');
         expect(item.hasRetryNode(children)).toBe(true);
         expect(listDatabases).not.toHaveBeenCalled();
     });
