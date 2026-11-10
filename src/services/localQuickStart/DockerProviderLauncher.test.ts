@@ -205,16 +205,116 @@ describe('getDockerStartCapability', () => {
                 expect(child.kill).not.toHaveBeenCalled();
             });
 
-            it('kills only the bounded machine list on its ten-second deadline', async () => {
+            it('kills a machine list at its ten-second deadline and offers start when the retry answers', async () => {
                 vi.useFakeTimers();
-                const child = fakeChild();
-                const pending = getDockerStartCapability(podmanInput, { onOutput: vi.fn() });
-                child.stdout.write('[]');
+                const slow = fakeChild();
+                const retry = fakeChild();
+                const onOutput = vi.fn();
+                const pending = getDockerStartCapability(podmanInput, { onOutput });
                 await vi.advanceTimersByTimeAsync(9_999);
-                expect(child.kill).not.toHaveBeenCalled();
+                expect(slow.kill).not.toHaveBeenCalled();
                 await vi.advanceTimersByTimeAsync(1);
-                expect(child.kill).toHaveBeenCalledOnce();
+                expect(slow.kill).toHaveBeenCalledOnce();
+                retry.stdout.write(machineList());
+                retry.emit('close', 0);
+                await expect(pending).resolves.toMatchObject({
+                    startAction: 'startPodmanMachine',
+                    podmanMachine: { kind: 'stopped', name: 'custom-vm' },
+                });
+                expect(retry.kill).not.toHaveBeenCalled();
+                expect(onOutput).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('retrying once'));
+            });
+
+            it('retries a timed-out machine list only once and logs the timeout with stderr', async () => {
+                vi.useFakeTimers();
+                const first = fakeChild();
+                const second = fakeChild();
+                const onOutput = vi.fn();
+                const pending = getDockerStartCapability(podmanInput, { onOutput });
+                await vi.advanceTimersByTimeAsync(10_000);
+                second.stderr.write('Error: wsl did not answer\n');
+                await vi.advanceTimersByTimeAsync(10_000);
                 await expect(pending).resolves.toMatchObject({ podmanMachine: { kind: 'unknown' } });
+                expect(first.kill).toHaveBeenCalledOnce();
+                expect(second.kill).toHaveBeenCalledOnce();
+                expect(spawn).toHaveBeenCalledTimes(2);
+                expect(onOutput).toHaveBeenLastCalledWith(
+                    '[readiness] podmanMachine=unknown: machine list timed out after 10 s\nError: wsl did not answer',
+                );
+            });
+
+            it.each([
+                {
+                    result: { exitCode: 125, stdout: '', stderr: 'Error: no provider\n' },
+                    logged: 'machine list exited with code 125\nError: no provider',
+                },
+                { result: { exitCode: 0, stdout: 'invalid' }, logged: 'machine list returned invalid JSON' },
+                { result: { exitCode: undefined, stdout: '' }, logged: 'machine list did not complete' },
+            ])('logs why the machine list failed without retrying: $logged', async ({ result, logged }) => {
+                const runProcess = vi.fn().mockResolvedValue(result);
+                const onOutput = vi.fn();
+                await getDockerStartCapability(podmanInput, dependencies({ runProcess, onOutput }));
+                expect(runProcess).toHaveBeenCalledOnce();
+                expect(onOutput).toHaveBeenCalledExactlyOnceWith(`[readiness] podmanMachine=unknown: ${logged}`);
+            });
+
+            it('does not retry a timed-out machine list after cancellation', async () => {
+                const runProcess = vi.fn().mockResolvedValue({ stdout: '', timedOut: true });
+                const cancellationToken: vscode.CancellationToken = {
+                    isCancellationRequested: true,
+                    onCancellationRequested: () => ({ dispose: (): void => undefined }),
+                };
+                await getDockerStartCapability(
+                    { ...podmanInput, cancellationToken },
+                    dependencies({ runProcess, onOutput: vi.fn() }),
+                );
+                expect(runProcess).toHaveBeenCalledOnce();
+            });
+
+            describe('with several machines and none flagged Default', () => {
+                const machines = JSON.stringify(
+                    ['custom-vm', 'other'].map((Name) => ({ Name, Default: false, Running: false, Starting: false })),
+                );
+                const connections = (defaultName: string): string =>
+                    JSON.stringify(
+                        ['custom-vm', 'custom-vm-root', 'other'].map((Name) => ({
+                            Name,
+                            Default: Name === defaultName,
+                        })),
+                    );
+
+                it('targets the rootful machine behind the default connection', async () => {
+                    const runProcess = vi
+                        .fn()
+                        .mockResolvedValueOnce({ exitCode: 0, stdout: machines })
+                        .mockResolvedValueOnce({ exitCode: 0, stdout: connections('custom-vm-root') });
+                    const result = await getDockerStartCapability(podmanInput, dependencies({ runProcess }));
+                    expect(runProcess).toHaveBeenLastCalledWith(
+                        podmanInput.podmanExecutable,
+                        ['system', 'connection', 'list', '--format', 'json'],
+                        undefined,
+                    );
+                    expect(result).toMatchObject({
+                        startAction: 'startPodmanMachine',
+                        podmanMachine: { kind: 'stopped', name: 'custom-vm' },
+                    });
+                });
+
+                it.each([
+                    { name: 'the connection list fails', connectionList: { exitCode: 125, stdout: '' } },
+                    {
+                        name: 'the default connection is not a machine',
+                        connectionList: { exitCode: 0, stdout: '[{"Name":"remote-host","Default":true}]' },
+                    },
+                ])('stays ambiguous when $name', async ({ connectionList }) => {
+                    const runProcess = vi
+                        .fn()
+                        .mockResolvedValueOnce({ exitCode: 0, stdout: machines })
+                        .mockResolvedValueOnce(connectionList);
+                    const result = await getDockerStartCapability(podmanInput, dependencies({ runProcess }));
+                    expect(result.podmanMachine).toEqual({ kind: 'ambiguous', names: ['custom-vm', 'other'] });
+                    expect(result.startAction).toBeUndefined();
+                });
             });
 
             it('kills a canceled machine list, not a startup process', async () => {

@@ -56,11 +56,41 @@ export function parsePodmanMachineList(output: string): readonly PodmanMachineFa
     }
 }
 
-export function classifyPodmanMachineState(machines: readonly PodmanMachineFact[]): PodmanMachineState {
+/** Name of the default connection in `podman system connection list --format json`. */
+export function parsePodmanDefaultConnection(output: string): string | undefined {
+    try {
+        const parsed: unknown = JSON.parse(output);
+        if (!Array.isArray(parsed)) {
+            return undefined;
+        }
+        for (const value of parsed as unknown[]) {
+            if (
+                typeof value === 'object' &&
+                value !== null &&
+                'Default' in value &&
+                value.Default === true &&
+                'Name' in value &&
+                typeof value.Name === 'string'
+            ) {
+                return value.Name;
+            }
+        }
+        return undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+export function classifyPodmanMachineState(
+    machines: readonly PodmanMachineFact[],
+    defaultConnection?: string,
+): PodmanMachineState {
     if (machines.length === 0) {
         return { kind: 'none' };
     }
-    const defaults = machines.filter((machine) => machine.isDefault);
+    const defaults = machines.filter(
+        (machine) => machine.isDefault || (!!defaultConnection && defaultConnection === `${machine.name}-root`),
+    );
     let target: PodmanMachineFact | undefined;
     if (defaults.length === 1) {
         target = defaults[0];

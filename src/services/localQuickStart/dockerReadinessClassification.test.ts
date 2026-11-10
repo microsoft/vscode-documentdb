@@ -14,6 +14,7 @@ import {
     classifyDockerProvider,
     classifyPodmanMachineState,
     getDockerDiagnosticFingerprint,
+    parsePodmanDefaultConnection,
     parsePodmanMachineList,
     type ContainerEngineInput,
 } from './dockerReadinessClassification';
@@ -88,6 +89,31 @@ describe('Podman machine facts', () => {
         },
     ])('selects live machine state $expected.kind', ({ machines, expected }) => {
         expect(classifyPodmanMachineState(machines)).toEqual(expected);
+    });
+
+    // Podman 6.1.4 on Windows, rootful machine: `machine list` reports Default false for it.
+    const rootfulConnections = JSON.stringify([
+        { Name: 'custom-vm', URI: 'ssh://user@127.0.0.1:65532/run/user/1000/podman/podman.sock', Default: false },
+        { Name: 'custom-vm-root', URI: 'ssh://root@127.0.0.1:65532/run/podman/podman.sock', Default: true },
+    ]);
+
+    it('reads the default connection name', () => {
+        expect(parsePodmanDefaultConnection(rootfulConnections)).toBe('custom-vm-root');
+    });
+
+    it.each(['not json', 'null', '{}', '[]', '[null]', '[{"Name":"vm","Default":false}]', '[{"Default":true}]'])(
+        'finds no default connection in %s',
+        (output) => {
+            expect(parsePodmanDefaultConnection(output)).toBeUndefined();
+        },
+    );
+
+    it.each([
+        { connection: 'custom-vm-root', expected: { kind: 'stopped', name: 'custom-vm' } },
+        { connection: 'elsewhere', expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] } },
+        { connection: undefined, expected: { kind: 'ambiguous', names: ['custom-vm', 'other'] } },
+    ])('targets the rootful machine behind default connection $connection', ({ connection, expected }) => {
+        expect(classifyPodmanMachineState([stopped, { ...stopped, name: 'other' }], connection)).toEqual(expected);
     });
 });
 

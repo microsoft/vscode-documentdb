@@ -44,6 +44,7 @@ export type DockerGuidanceKey =
     | 'podmanNotRunning'
     | 'podmanSocketNotRunning'
     | 'podmanMachineMissing'
+    | 'podmanMachineStopped'
     | 'podmanMachineAmbiguous'
     | 'podmanMachineOtherActive'
     | 'podmanMachineRunning'
@@ -288,6 +289,8 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
                 switch (readiness.podmanMachine?.kind) {
                     case 'none':
                         return 'podmanMachineMissing';
+                    case 'stopped':
+                        return 'podmanMachineStopped';
                     case 'ambiguous':
                         return 'podmanMachineAmbiguous';
                     case 'otherActive':
@@ -437,6 +440,11 @@ function getPlatformSegment(readiness: DockerReadiness): DockerDetailSegment | u
     return { kind: 'platform', osType: readiness.osType, architecture: readiness.daemonArchitecture };
 }
 
+/** `docker -v` and `podman -v` print "<program> version <number>[, build …]"; show only the number. */
+export function formatCliVersion(cliVersion: string): string {
+    return /\bversion\s+v?([^\s,]+)/i.exec(cliVersion)?.[1] ?? cliVersion;
+}
+
 function composeDetail(
     readiness: DockerReadiness,
     state: DockerReadinessPresentationState,
@@ -445,7 +453,7 @@ function composeDetail(
     const cliSegment: DockerDetailSegment = {
         kind: 'cli',
         cli: readiness.cli,
-        version: readiness.cliVersion,
+        version: readiness.cliVersion ? formatCliVersion(readiness.cliVersion) : undefined,
         ...(readiness.cliInstalled &&
         readiness.cliFallback === true &&
         readiness.preferredEngine &&

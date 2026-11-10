@@ -12,6 +12,7 @@ import {
     type DockerReadyReadiness,
 } from '../../../services/localQuickStart/quickStartTypes';
 import {
+    formatCliVersion,
     getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
     isDockerArchitectureCompatible,
@@ -264,6 +265,7 @@ describe('getDockerReadinessPresentation', () => {
             { machine: { kind: 'ambiguous', names: ['a', 'b'] }, guidance: 'podmanMachineAmbiguous' },
             { machine: { kind: 'otherActive', active: 'busy' }, guidance: 'podmanMachineOtherActive' },
             { machine: { kind: 'running', name: 'vm' }, guidance: 'podmanMachineRunning' },
+            { machine: { kind: 'stopped', name: 'vm' }, guidance: 'podmanMachineStopped' },
             { machine: { kind: 'unknown' }, guidance: 'podmanNotRunning' },
         ] as const)('presents $machine.kind Podman state without a launch', ({ machine, guidance }) => {
             expect(
@@ -324,8 +326,22 @@ describe('getDockerReadinessPresentation', () => {
                         podmanMachine: { kind: 'stopped', name: 'vm' },
                     }),
                 ),
-            ).toMatchObject({ guidance: 'podmanNotRunning', guide: 'podmanMachine', startLabel: 'startPodmanMachine' });
+            ).toMatchObject({
+                guidance: 'podmanMachineStopped',
+                guide: 'podmanMachine',
+                startLabel: 'startPodmanMachine',
+            });
         });
+    });
+
+    it.each([
+        ['podman.EXE version 6.1.4', '6.1.4'],
+        ['podman version 5.8.3', '5.8.3'],
+        ['Docker version 28.1.1, build 4eba377', '28.1.1'],
+        ['27.5.1', '27.5.1'],
+        ['raw CLI output', 'raw CLI output'],
+    ])('shows only the version number of %s', (cliVersion, expected) => {
+        expect(formatCliVersion(cliVersion)).toBe(expected);
     });
 
     it('keeps installed-application wording provider-neutral while naming the action', () => {

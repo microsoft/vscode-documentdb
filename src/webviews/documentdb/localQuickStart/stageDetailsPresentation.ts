@@ -16,6 +16,7 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { apiCompatibilityText } from '../connectionDiagnostics/formatEvidence';
 import {
+    formatCliVersion,
     getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
     type DockerReadinessPresentationState,
@@ -265,7 +266,7 @@ function dockerDaemonValues(): Readonly<Record<DockerReadinessPresentationState,
     };
 }
 
-export function dockerFailureLabels(): Readonly<Record<DockerFailureKind, string>> {
+function dockerFailureLabels(): Readonly<Record<DockerFailureKind, string>> {
     return {
         cliMissing: l10n.t('Docker or Podman CLI not found'),
         permissionDenied: l10n.t('Docker access denied'),
@@ -355,6 +356,13 @@ function executionTargetValues(): Readonly<Record<ReturnType<typeof getDockerExe
     };
 }
 
+/** Names Docker only when the check ran the Docker CLI against a Docker engine. */
+export function dockerFailureLabel(readiness: Pick<DockerReadiness, 'cli' | 'engine' | 'failureKind'>): string {
+    const labels =
+        readiness.cli === 'docker' && readiness.engine !== 'podman' ? dockerFailureLabels() : engineFailureLabels();
+    return labels[readiness.failureKind ?? 'unknown'];
+}
+
 /** Evidence from the readiness check only; do not copy the full host result into the view model. */
 export function buildDockerDetailRows(readiness: DockerReadiness): readonly StageDetailFact[] {
     const rows: StageDetailFact[] = [
@@ -365,9 +373,7 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
     ];
 
     if (readiness.outcome !== 'ready') {
-        const labels =
-            readiness.cli === 'docker' && readiness.engine !== 'podman' ? dockerFailureLabels() : engineFailureLabels();
-        rows.push({ label: l10n.t('Detected problem'), value: labels[readiness.failureKind] });
+        rows.push({ label: l10n.t('Detected problem'), value: dockerFailureLabel(readiness) });
     }
 
     if (readiness.preferredEngine) {
@@ -390,7 +396,7 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
             label: cliLabels[readiness.cli],
             value: readiness.cliInstalled
                 ? readiness.cliVersion
-                    ? l10n.t('Found, version {0}', readiness.cliVersion)
+                    ? l10n.t('Found, version {0}', formatCliVersion(readiness.cliVersion))
                     : l10n.t('Found, version not reported')
                 : l10n.t('Not found'),
         });
@@ -398,7 +404,7 @@ export function buildDockerDetailRows(readiness: DockerReadiness): readonly Stag
         rows.push({
             label: l10n.t('Container CLI'),
             value: readiness.cliVersion
-                ? l10n.t('Found, version {0}', readiness.cliVersion)
+                ? l10n.t('Found, version {0}', formatCliVersion(readiness.cliVersion))
                 : l10n.t('Found, version not reported'),
         });
     }

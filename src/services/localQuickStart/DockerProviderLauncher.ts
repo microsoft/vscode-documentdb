@@ -10,6 +10,7 @@ import { type CancellationToken } from 'vscode';
 import {
     classifyPodmanMachineState,
     isRootlessDockerEndpoint,
+    parsePodmanDefaultConnection,
     parsePodmanMachineList,
 } from './dockerReadinessClassification';
 import {
@@ -22,6 +23,7 @@ import {
 } from './quickStartTypes';
 
 const PROCESS_DEADLINE_MS = 10_000;
+const LOGGED_STDERR_MAX_LENGTH = 500;
 const STARTUP_OBSERVATION_MS = 3_000;
 const MACOS_DOCKER_APPLICATION = '/Applications/Docker.app';
 const WSL_DOCKER_DESKTOP_EXECUTABLE = '/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe';
@@ -31,6 +33,8 @@ const ROOTLESS_DOCKER_USER_SERVICE = 'docker.service';
 interface DockerLauncherProcessResult {
     readonly exitCode?: number;
     readonly stdout: string;
+    readonly stderr?: string;
+    readonly timedOut?: boolean;
 }
 
 interface DockerStartupExit {
@@ -126,26 +130,30 @@ function runBoundedProcess(
     cancellationToken?: CancellationToken,
 ): Promise<DockerLauncherProcessResult> {
     return new Promise((resolve) => {
-        const child = spawn(executable, [...args], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+        const child = spawn(executable, [...args], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
         let stdout = '';
+        let stderr = '';
         let settled = false;
-        const finish = (exitCode?: number): void => {
+        const finish = (exitCode?: number, timedOut = false): void => {
             if (settled) {
                 return;
             }
             settled = true;
             clearTimeout(deadline);
             cancellation?.dispose();
-            resolve({ exitCode, stdout });
+            resolve({ exitCode, stdout, stderr, timedOut });
         };
-        const cancel = (): void => {
+        const cancel = (timedOut = false): void => {
             child.kill();
-            finish();
+            finish(undefined, timedOut);
         };
-        const deadline = setTimeout(cancel, PROCESS_DEADLINE_MS);
-        const cancellation = cancellationToken?.onCancellationRequested(cancel);
+        const deadline = setTimeout(() => cancel(true), PROCESS_DEADLINE_MS);
+        const cancellation = cancellationToken?.onCancellationRequested(() => cancel());
         child.stdout.on('data', (chunk: unknown) => {
             stdout += String(chunk);
+        });
+        child.stderr.on('data', (chunk: unknown) => {
+            stderr += String(chunk);
         });
         child.once('error', () => finish());
         child.once('close', (code) => finish(code ?? undefined));
@@ -212,6 +220,19 @@ async function isUserServiceAvailable(
     return result.exitCode === 0 && loadState.length > 0 && loadState !== 'not-found';
 }
 
+function describeProcessFailure(result: DockerLauncherProcessResult): string {
+    let reason = 'returned invalid JSON';
+    if (result.timedOut) {
+        reason = `timed out after ${PROCESS_DEADLINE_MS / 1_000} s`;
+    } else if (result.exitCode === undefined) {
+        reason = 'did not complete';
+    } else if (result.exitCode !== 0) {
+        reason = `exited with code ${result.exitCode}`;
+    }
+    const stderr = result.stderr?.trim().slice(-LOGGED_STDERR_MAX_LENGTH);
+    return stderr ? `${reason}\n${stderr}` : reason;
+}
+
 function unchangedCapability(input: DockerStartCapabilityInput): DockerStartCapability {
     return { provider: input.provider, providerEvidence: input.providerEvidence };
 }
@@ -235,19 +256,31 @@ export async function getDockerStartCapability(
             return { ...unchangedCapability(input), podmanMachine: { kind: 'unknown' } };
         }
         try {
-            const result = await dependencies.runProcess(
-                input.podmanExecutable,
-                ['machine', 'list', '--format', 'json'],
-                input.cancellationToken,
-            );
+            const podmanExecutable = input.podmanExecutable;
+            const runPodman = (args: ReadonlyArray<string>): Promise<DockerLauncherProcessResult> =>
+                dependencies.runProcess(podmanExecutable, args, input.cancellationToken);
+            const listMachines = ['machine', 'list', '--format', 'json'];
+            let result = await runPodman(listMachines);
+            if (result.timedOut && !input.cancellationToken?.isCancellationRequested) {
+                // WSL blocks `machine list` for several seconds while it shuts down its idle VM; the next call is fast.
+                dependencies.onOutput('[readiness] podman machine list timed out; retrying once');
+                result = await runPodman(listMachines);
+            }
             const machines = result.exitCode === 0 ? parsePodmanMachineList(result.stdout) : undefined;
             if (!machines) {
                 dependencies.onOutput(
-                    '[readiness] podmanMachine=unknown: machine list failed or returned invalid JSON',
+                    `[readiness] podmanMachine=unknown: machine list ${describeProcessFailure(result)}`,
                 );
                 return { ...unchangedCapability(input), podmanMachine: { kind: 'unknown' } };
             }
-            const podmanMachine = classifyPodmanMachineState(machines);
+            let defaultConnection: string | undefined;
+            if (machines.length > 1 && !machines.some((machine) => machine.isDefault)) {
+                // `machine list` never flags a rootful machine as Default: its default connection is "<name>-root".
+                const connections = await runPodman(['system', 'connection', 'list', '--format', 'json']);
+                defaultConnection =
+                    connections.exitCode === 0 ? parsePodmanDefaultConnection(connections.stdout) : undefined;
+            }
+            const podmanMachine = classifyPodmanMachineState(machines, defaultConnection);
             return {
                 ...unchangedCapability(input),
                 podmanMachine,

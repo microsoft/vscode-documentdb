@@ -101,7 +101,7 @@ import {
     buildDockerDetailRows,
     buildStageDetailRows,
     buildStageSummary,
-    dockerFailureLabels,
+    dockerFailureLabel,
 } from './stageDetailsPresentation';
 
 /**
@@ -352,6 +352,10 @@ function dockerGuidance(podmanMachine?: PodmanMachineState): Readonly<Record<Doc
         ),
         podmanSocketNotRunning: l10n.t('Start the Podman user socket with this command, then check again.'),
         podmanMachineMissing: l10n.t('No Podman machine was found. Run this command to create one, then check again.'),
+        podmanMachineStopped: l10n.t(
+            'The Podman machine "{0}" is not running. Start it and wait until it is ready.',
+            podmanMachine?.kind === 'stopped' ? podmanMachine.name : '',
+        ),
         podmanMachineAmbiguous: l10n.t(
             'Several Podman machines were found without a unique default: {0}. Start the machine you want, then check again.',
             podmanMachine?.kind === 'ambiguous' ? podmanMachine.names.join(', ') : '',
@@ -857,7 +861,6 @@ export const LocalQuickStart = (): JSX.Element => {
     const stageLabelsMap = useMemo(() => stageLabels(), []);
     const stageStatusLabels = useMemo(() => stageStatusWords(), []);
     const planItemList = useMemo(() => planItems(), []);
-    const dockerFailureLabelMap = useMemo(() => dockerFailureLabels(), []);
     const dockerGuideMap = useMemo(() => dockerGuides(), []);
     const dockerStartLabelMap = useMemo(() => dockerStartLabels(), []);
     const dockerRecoveryNoteMap = useMemo(() => dockerRecoveryNotes(), []);
@@ -2035,7 +2038,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     <MessageBlock
                         intent="error"
                         icon={<ErrorCircleFilled />}
-                        title={dockerFailureLabelMap[shownDocker.problem.failureKind ?? 'unknown']}
+                        title={dockerFailureLabel(shownDocker.problem)}
                         actions={
                             <>
                                 {shownDocker.presentation.showInstall && (
@@ -2164,7 +2167,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     handleCheckDockerAgain();
                 }}
             >
-                {l10n.t('Check Docker again')}
+                {shownPodman ? l10n.t('Check Podman again') : l10n.t('Check Docker again')}
             </Link>
         );
     };
@@ -2218,9 +2221,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         detail={stageDetailNode(stage)}
                         facts={stageFactsFor(stage)}
                         failureTitle={
-                            stage === failedStage && dockerProblem
-                                ? dockerFailureLabelMap[dockerProblem.failureKind ?? 'unknown']
-                                : undefined
+                            stage === failedStage && dockerProblem ? dockerFailureLabel(dockerProblem) : undefined
                         }
                         expanded={expandedStages.has(stage)}
                         onExpandedChange={handleExpandedChange}
@@ -2440,10 +2441,10 @@ export const LocalQuickStart = (): JSX.Element => {
                       )
                     : canContinueSetup
                       ? l10n.t(
-                            'Continuing runs every setup step from the beginning, starting with the Docker check. Nothing has been created on your machine yet.',
+                            'Continuing runs every setup step from the beginning, starting with the container engine check. Nothing has been created on your machine yet.',
                         )
                       : l10n.t(
-                            'Retrying runs every setup step again from the beginning, starting with the Docker check.',
+                            'Retrying runs every setup step again from the beginning, starting with the container engine check.',
                         );
                 secondaryActions = (
                     <Button appearance="secondary" onClick={handleBackToConfigure}>

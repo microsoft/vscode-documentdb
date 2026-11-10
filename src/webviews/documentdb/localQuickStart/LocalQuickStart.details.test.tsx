@@ -364,7 +364,7 @@ describe('Local Quick Start stage details', () => {
             const count = client.trpc.localQuickStart.getDockerStatus.query.mock.calls.length;
             await act(async () => vi.advanceTimersByTimeAsync(10_000));
             expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count);
-            await click(button('Check Docker again'));
+            await click(button('Check Podman again'));
             await act(async () => vi.advanceTimersByTimeAsync(10_000));
             expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count + 1);
             expect(
@@ -426,6 +426,20 @@ describe('Local Quick Start stage details', () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    it('names Podman, not Docker, when a stopped Podman machine fails the check', async () => {
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+        expect(host.textContent).toContain('Engine unavailable');
+        expect(host.textContent).toContain(
+            'The Podman machine "custom-vm" is not running. Start it and wait until it is ready.',
+        );
+        expect(host.textContent).toContain('starting with the container engine check');
+        expect(button('Check Podman again')).toBeTruthy();
+        expect(host.textContent).not.toMatch(/Docker daemon|Check Docker|Docker check|Podman Desktop/);
     });
 
     it('starts the wait timer on click and cancels waiting without canceling a pending Podman start', async () => {
