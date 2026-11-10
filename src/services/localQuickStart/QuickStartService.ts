@@ -46,7 +46,7 @@ import {
     SETUP_CLEANUP_TIMEOUT_MS,
 } from './ContainerRuntime';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
-import { maskSecrets } from './outputMasking';
+import { maskSecrets, sanitizeOutput } from './outputMasking';
 import {
     composeConnectionString,
     generateCredentials,
@@ -836,7 +836,11 @@ export class QuickStartServiceImpl {
         const chosenPort = explicitPort ?? QUICK_START_PORT;
         const sampleDataRequested = options?.loadSampleData !== false;
         const cts = new vscode.CancellationTokenSource();
-        const onAbort = (): void => cts.cancel();
+        let wakePullOnAbort: (() => void) | undefined;
+        const onAbort = (): void => {
+            cts.cancel();
+            wakePullOnAbort?.();
+        };
         signal.addEventListener('abort', onAbort, { once: true });
         if (signal.aborted) {
             cts.cancel();
@@ -968,15 +972,77 @@ export class QuickStartServiceImpl {
             activeDockerStage = 'pulling';
             const imageBefore = await this.runtime.inspectImage(imageRef, cts.token);
             facts = pullingFacts(imageBefore);
-            await this.runProvisionStage(
+            const activePullFacts = facts;
+            // Keep only the latest line, waking on output or settlement rather than polling a quiet pull.
+            let latestProgress: string | undefined;
+            let lastProgressAt = -Infinity;
+            let pullSettled = false;
+            let wakePull: (() => void) | undefined;
+            let progressTimer: ReturnType<typeof setTimeout> | undefined;
+            const wake = (): void => {
+                clearTimeout(progressTimer);
+                progressTimer = undefined;
+                wakePull?.();
+                wakePull = undefined;
+            };
+            const onProgress = (line: string): void => {
+                if (pullSettled || cts.token.isCancellationRequested) {
+                    return;
+                }
+                const sanitized = sanitizeOutput(line, secrets);
+                const progress = sanitized
+                    .slice(sanitized.lastIndexOf('\r') + 1)
+                    .replace(/\p{Cc}/gu, '')
+                    .trim()
+                    .slice(0, 160);
+                if (progress) {
+                    latestProgress = progress;
+                    if (progressTimer === undefined) {
+                        wake();
+                    }
+                }
+            };
+            const pullPromise = this.runProvisionStage(
                 'pulling',
                 provisionCorrelationId,
                 async () => {
-                    await this.runtime.pullImage(imageRef, cts.token);
+                    await this.runtime.pullImage(imageRef, cts.token, onProgress);
                     this.throwIfAborted(signal);
                 },
                 [imageRef],
             );
+            const settle = (): void => {
+                pullSettled = true;
+                wake();
+            };
+            // Observe rejection immediately, including while the generator is suspended at a yield.
+            void pullPromise.then(settle, settle);
+            wakePullOnAbort = wake;
+            try {
+                while (!pullSettled && !cts.token.isCancellationRequested) {
+                    if (latestProgress !== undefined && Date.now() - lastProgressAt >= 250) {
+                        const progress = latestProgress;
+                        latestProgress = undefined;
+                        lastProgressAt = Date.now();
+                        yield { ...stageEvent('pulling', 'active'), facts: { ...activePullFacts, progress } };
+                        continue;
+                    }
+                    await new Promise<void>((resolve) => {
+                        wakePull = resolve;
+                        if (latestProgress !== undefined) {
+                            progressTimer = setTimeout(wake, Math.max(0, 250 - (Date.now() - lastProgressAt)));
+                        }
+                    });
+                }
+                await pullPromise;
+            } finally {
+                wakePullOnAbort = undefined;
+                wake();
+                latestProgress = undefined;
+                if (!pullSettled) {
+                    cts.cancel();
+                }
+            }
             const imageAfter = await this.runtime.inspectImage(imageRef, cts.token);
             const result =
                 imageBefore !== undefined && imageAfter && imageAfter !== 'absent'

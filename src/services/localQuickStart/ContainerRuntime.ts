@@ -92,9 +92,15 @@ export function disposeQuickStartOutputChannel(): void {
 class MaskedChannelWritable extends Writable {
     private readonly lineBuffer: MaskingLineBuffer;
 
-    constructor(channel: vscode.OutputChannel, secrets: ReadonlyArray<string>) {
+    constructor(channel: vscode.OutputChannel, secrets: ReadonlyArray<string>, onLine?: (line: string) => void) {
         super();
-        this.lineBuffer = new MaskingLineBuffer((line) => channel.appendLine(line), secrets);
+        this.lineBuffer = new MaskingLineBuffer(
+            (line) => {
+                channel.appendLine(line);
+                onLine?.(line);
+            },
+            secrets,
+        );
     }
 
     public override _write(chunk: unknown, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
@@ -139,7 +145,7 @@ export interface RuntimeImageFacts {
 export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
     isPortFree(port?: number): Promise<boolean>;
-    pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void>;
+    pullImage(imageRef: string, token?: vscode.CancellationToken, onProgress?: (line: string) => void): Promise<void>;
     inspectImage(imageRef: string, token?: vscode.CancellationToken): Promise<RuntimeImageFacts | 'absent' | undefined>;
     createAndRunContainer(
         options: CreateContainerOptions,
@@ -238,14 +244,15 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         secrets: ReadonlyArray<string> = [],
         token?: vscode.CancellationToken,
         timeoutMs?: number,
+        onLine?: (line: string) => void,
     ): Promise<T | undefined> {
         const channel = getQuickStartOutputChannel();
         return runDockerCommand(command, {
             shellProvider: SHELL_PROVIDER,
             secrets,
             onCommand: (commandLine: string) => channel.appendLine('$ ' + maskSecrets(commandLine, secrets)),
-            stdOutPipe: new MaskedChannelWritable(channel, secrets),
-            stdErrPipe: new MaskedChannelWritable(channel, secrets),
+            stdOutPipe: new MaskedChannelWritable(channel, secrets, onLine),
+            stdErrPipe: new MaskedChannelWritable(channel, secrets, onLine),
             cancellationToken: token,
             timeoutMs,
         });
@@ -276,8 +283,12 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         });
     }
 
-    public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void> {
-        await this.runCommand(this.client.pullImage({ imageRef }), [], token);
+    public async pullImage(
+        imageRef: string,
+        token?: vscode.CancellationToken,
+        onProgress?: (line: string) => void,
+    ): Promise<void> {
+        await this.runCommand(this.client.pullImage({ imageRef }), [], token, undefined, onProgress);
     }
 
     public async inspectImage(

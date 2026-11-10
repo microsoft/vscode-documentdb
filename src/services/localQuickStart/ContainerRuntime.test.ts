@@ -97,6 +97,63 @@ describe('ContainerRuntime output channel', () => {
         expect(lines.join('\n')).not.toContain(PASSWORD);
     });
 
+    it('streams complete sanitized pull lines from both pipes after logging, including trailing lines', async () => {
+        const progress = vi.fn((line: string): void => {
+            expect(lines.at(-1)).toBe(line);
+        });
+        const cts = new vscode.CancellationTokenSource();
+        vi.mocked(runDockerCommand).mockImplementationOnce(async (_command, options) => {
+            expect(options.cancellationToken).toBe(cts.token);
+            options.stdOutPipe?.write('\x1b[');
+            options.stdOutPipe?.write('32mPulling image');
+            expect(progress).not.toHaveBeenCalled();
+            options.stdOutPipe?.write('\x1b[0m\n');
+            options.stdErrPipe?.write('\x1b[');
+            expect(progress).toHaveBeenCalledExactlyOnceWith('Pulling image');
+            options.stdErrPipe?.end('33mChecking digest\x1b[0m');
+            options.stdOutPipe?.end('Downloaded');
+            return undefined;
+        });
+
+        await ContainerRuntime.pullImage(IMAGE_REF, cts.token, progress);
+
+        expect(progress.mock.calls.map(([line]) => line)).toEqual(['Pulling image', 'Checking digest', 'Downloaded']);
+        expect(lines).toEqual(['Pulling image', 'Checking digest', 'Downloaded']);
+        cts.dispose();
+    });
+
+    it('preserves constructor secret masking across stream chunks for other command callers', async () => {
+        vi.mocked(runDockerCommand).mockImplementationOnce(async (_command, options) => {
+            options.stdOutPipe?.write('\x1b[32m' + PASSWORD.slice(0, 8));
+            options.stdOutPipe?.end(PASSWORD.slice(8) + '\x1b[0m\n');
+            options.stdErrPipe?.write(PASSWORD.slice(0, 5));
+            options.stdErrPipe?.end(PASSWORD.slice(5));
+            return undefined;
+        });
+
+        await ContainerRuntime.createAndRunContainer(
+            { imageRef: IMAGE_REF, name: 'c1', labels: {}, hostPort: 10260, containerPort: 10260 },
+            [PASSWORD],
+        );
+
+        expect(lines).toEqual(['***', '***']);
+        expect(lines.join('\n')).not.toContain(PASSWORD);
+    });
+
+    it('propagates the original pull rejection after streaming output', async () => {
+        const failure = new Error('pull failed');
+        const progress = vi.fn();
+        vi.mocked(runDockerCommand).mockImplementationOnce(async (_command, options) => {
+            options.stdErrPipe?.end('Registry unavailable\n');
+            options.stdOutPipe?.end();
+            throw failure;
+        });
+
+        await expect(ContainerRuntime.pullImage(IMAGE_REF, undefined, progress)).rejects.toBe(failure);
+        expect(progress).toHaveBeenCalledExactlyOnceWith('Registry unavailable');
+        expect(lines).toEqual(['Registry unavailable']);
+    });
+
     it('refreshes PATH presence without recreating an unchanged selected client or probing the other CLI', async () => {
         vi.spyOn(containerCli, 'resolveContainerCli')
             .mockReturnValueOnce({

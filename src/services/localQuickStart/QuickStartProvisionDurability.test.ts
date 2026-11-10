@@ -238,6 +238,277 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         onHello = () => ({ ok: 1 });
     });
 
+    describe('pull progress', () => {
+        const password = 'private-progress-password';
+        let runtime: IContainerRuntime;
+        let service: QuickStartServiceImpl;
+        let controller: AbortController;
+        let generator: AsyncGenerator<StageEvent>;
+        let events: StageEvent[];
+        let pullStarted: Promise<void>;
+        let resolvePull: () => void;
+        let rejectPull: (error: Error) => void;
+        let emitProgress: (line: string) => void;
+        let token: vscode.CancellationToken | undefined;
+
+        beforeEach(() => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+            events = [];
+            token = undefined;
+            emitProgress = () => undefined;
+            let started!: () => void;
+            pullStarted = new Promise<void>((resolve) => {
+                started = resolve;
+            });
+            const pull = new Promise<void>((resolve, reject) => {
+                resolvePull = resolve;
+                rejectPull = reject;
+            });
+            runtime = runtimeFor({
+                overrides: {
+                    inspectImage: vi.fn().mockResolvedValueOnce({ id: 'before' }).mockResolvedValue({ id: 'after' }),
+                    pullImage: vi.fn((_imageRef, cancellationToken, onProgress): Promise<void> => {
+                        token = cancellationToken;
+                        emitProgress = onProgress ?? (() => undefined);
+                        started();
+                        return pull;
+                    }),
+                },
+            });
+            service = new QuickStartServiceImpl(runtime);
+            controller = new AbortController();
+            generator = service.provision(controller.signal, { username: 'testuser', password });
+        });
+
+        afterEach(async () => {
+            controller.abort();
+            resolvePull();
+            await generator.return(undefined);
+            vi.useRealTimers();
+        });
+
+        async function consume(): Promise<void> {
+            for await (const event of generator) {
+                events.push(event);
+            }
+        }
+
+        function progressLines(): string[] {
+            return events.flatMap((event) =>
+                event.status === 'active' && event.facts?.kind === 'pulling' && event.facts.progress
+                    ? [event.facts.progress]
+                    : [],
+            );
+        }
+
+        async function reachPull(): Promise<void> {
+            let event = await generator.next();
+            while (!event.done && event.value.stage !== 'pulling') {
+                event = await generator.next();
+            }
+            expect(event.value).toMatchObject({ stage: 'pulling', status: 'active' });
+        }
+
+        it('emits actual lines during the pending pull and coalesces a flood to one latest line per 250 ms', async () => {
+            const complete = consume();
+            await pullStarted;
+            emitProgress('Connecting to registry');
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(progressLines()).toEqual(['Connecting to registry']);
+            expect(runtime.inspectImage).toHaveBeenCalledTimes(1);
+            expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            expect(events.at(-1)).toMatchObject({
+                stage: 'pulling',
+                status: 'active',
+                facts: {
+                    kind: 'pulling',
+                    imageRef: `${QUICK_START_IMAGE_REPOSITORY}:latest`,
+                    imageOrigin: 'default',
+                    imageId: 'before',
+                    progress: 'Connecting to registry',
+                },
+            });
+
+            for (let index = 0; index < 10_000; index++) {
+                emitProgress(`Actual output ${index}`);
+            }
+            emitProgress('   ');
+            await vi.advanceTimersByTimeAsync(249);
+            expect(progressLines()).toEqual(['Connecting to registry']);
+            expect(vi.getTimerCount()).toBe(1);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(progressLines()).toEqual(['Connecting to registry', 'Actual output 9999']);
+            expect(vi.getTimerCount()).toBe(0);
+
+            emitProgress('Verifying digest');
+            await vi.advanceTimersByTimeAsync(250);
+            expect(progressLines()).toEqual(['Connecting to registry', 'Actual output 9999', 'Verifying digest']);
+            resolvePull();
+            await complete;
+
+            const done = events.find((event) => event.stage === 'pulling' && event.status === 'done');
+            expect(done?.facts).toMatchObject({ kind: 'pulling', result: 'updated', previousImageId: 'before' });
+            expect(done?.facts).not.toHaveProperty('progress');
+            expect(runtime.inspectImage).toHaveBeenCalledTimes(2);
+            expect(runtime.pullImage).toHaveBeenCalledTimes(1);
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it('strips controls and masks whole run secrets before taking the latest CR segment and 160 characters', async () => {
+            const complete = consume();
+            await pullStarted;
+            emitProgress('\x1b[32m\r \u0000 \x1b[0m');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(progressLines()).toEqual([]);
+            expect(vi.getTimerCount()).toBe(0);
+
+            emitProgress(
+                'Obsolete output\r  \u0000' +
+                    'x'.repeat(157) +
+                    password.slice(0, 8) +
+                    '\x1b[32m' +
+                    password.slice(8) +
+                    '\x1b[0m trailing text',
+            );
+            await vi.advanceTimersByTimeAsync(0);
+            expect(progressLines()).toEqual(['x'.repeat(157) + '***']);
+            expect(progressLines()[0]).toHaveLength(160);
+            expect(JSON.stringify(events)).not.toContain(password);
+            expect(JSON.stringify(events)).not.toContain(password.slice(0, 8));
+            resolvePull();
+            await complete;
+        });
+
+        it('does not poll a quiet pull and removes the existing abort listener on settlement', async () => {
+            const added = vi.spyOn(controller.signal, 'addEventListener');
+            const removed = vi.spyOn(controller.signal, 'removeEventListener');
+            const complete = consume();
+            await pullStarted;
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(vi.getTimerCount()).toBe(0);
+            expect(progressLines()).toEqual([]);
+            resolvePull();
+            await complete;
+
+            expect(events.filter((event) => event.stage === 'pulling' && event.status === 'active')).toHaveLength(1);
+            expect(events.at(-1)?.stage).toBe('done');
+            expect(removed).toHaveBeenCalledTimes(added.mock.calls.length);
+            for (const [event, listener] of added.mock.calls) {
+                expect(removed).toHaveBeenCalledWith(event, listener);
+            }
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it('drops throttled output on settlement without delaying completion or leaking it into the next run', async () => {
+            const complete = consume();
+            await pullStarted;
+            emitProgress('First run output');
+            await vi.advanceTimersByTimeAsync(0);
+            emitProgress('Do not replay after completion');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(vi.getTimerCount()).toBe(1);
+            resolvePull();
+            await complete;
+
+            expect(progressLines()).toEqual(['First run output']);
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).not.toHaveProperty(
+                'progress',
+            );
+            expect(vi.getTimerCount()).toBe(0);
+            vi.mocked(runtime.pullImage).mockResolvedValue(undefined);
+            const retry = await collect(service.provision(new AbortController().signal));
+            expect(retry.at(-1)?.stage).toBe('done');
+            expect(retry.every((event) => !event.facts || !('progress' in event.facts))).toBe(true);
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it('observes rejection while paused at progress and preserves the existing failure flow without stale output', async () => {
+            await reachPull();
+            const next = generator.next();
+            await pullStarted;
+            emitProgress('Contacting registry');
+            expect((await next).value).toMatchObject({ facts: { progress: 'Contacting registry' } });
+
+            const failure = new DockerCommandError(125, 'Registry refused the pull');
+            const unhandled = vi.fn();
+            process.on('unhandledRejection', unhandled);
+            try {
+                rejectPull(failure);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(unhandled).not.toHaveBeenCalled();
+                expect(vi.getTimerCount()).toBe(0);
+                const remaining = await collect(generator);
+                expect(remaining.at(-1)).toMatchObject({
+                    stage: 'error',
+                    status: 'error',
+                    message: { key: 'unexpectedFailure', detail: failure.message },
+                    facts: { kind: 'pulling', imageId: 'before' },
+                });
+                expect(remaining.at(-1)?.facts).not.toHaveProperty('progress');
+                expect(runtime.inspectImage).toHaveBeenCalledTimes(1);
+                expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+            } finally {
+                process.removeListener('unhandledRejection', unhandled);
+            }
+        });
+
+        it('cancels the owned pull immediately, clears a throttle timer and ignores late output on abort', async () => {
+            const added = vi.spyOn(controller.signal, 'addEventListener');
+            const removed = vi.spyOn(controller.signal, 'removeEventListener');
+            const complete = consume();
+            await pullStarted;
+            emitProgress('Pulling');
+            await vi.advanceTimersByTimeAsync(0);
+            emitProgress('Throttled line');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(vi.getTimerCount()).toBe(1);
+
+            controller.abort();
+            expect(token?.isCancellationRequested).toBe(true);
+            expect(vi.getTimerCount()).toBe(0);
+            emitProgress('Output after abort');
+            rejectPull(new Error('aborted'));
+            await complete;
+
+            expect(progressLines()).toEqual(['Pulling']);
+            expect(events.at(-1)).toMatchObject({ message: { key: 'setupCancelled' } });
+            expect(events.at(-1)?.facts).not.toHaveProperty('progress');
+            expect(runtime.inspectImage).toHaveBeenCalledTimes(1);
+            expect(runtime.stopContainer).not.toHaveBeenCalled();
+            expect(runtime.removeContainer).not.toHaveBeenCalled();
+            expect(removed).toHaveBeenCalledExactlyOnceWith('abort', added.mock.calls[0][1]);
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it('cancels and releases a pull when the consumer returns at a progress yield, then permits a clean retry', async () => {
+            const added = vi.spyOn(controller.signal, 'addEventListener');
+            const removed = vi.spyOn(controller.signal, 'removeEventListener');
+            await reachPull();
+            const next = generator.next();
+            await pullStarted;
+            emitProgress('Downloading');
+            expect((await next).value).toMatchObject({ facts: { progress: 'Downloading' } });
+            emitProgress('Pending latest line');
+
+            expect((await generator.return(undefined)).done).toBe(true);
+            expect(token?.isCancellationRequested).toBe(true);
+            expect(removed).toHaveBeenCalledExactlyOnceWith('abort', added.mock.calls[0][1]);
+            expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
+            expect(runtime.inspectImage).toHaveBeenCalledTimes(1);
+            expect(vi.getTimerCount()).toBe(0);
+            emitProgress('Output after unsubscribe');
+            rejectPull(new Error('cancelled owned pull'));
+            await vi.advanceTimersByTimeAsync(0);
+
+            vi.mocked(runtime.pullImage).mockResolvedValue(undefined);
+            const retry = await collect(service.provision(new AbortController().signal));
+            expect(retry.at(-1)?.stage).toBe('done');
+            expect(retry.every((event) => !event.facts || !('progress' in event.facts))).toBe(true);
+            expect(vi.getTimerCount()).toBe(0);
+        });
+    });
+
     describe('setup stage facts', () => {
         it('emits allow-listed facts on every done stage without credentials or env', async () => {
             const password = 'private-password-123';
@@ -392,7 +663,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                     const remaining = await collect(generator);
                     expect(remaining.at(-1)?.stage).toBe('done');
                     expect(runtime.inspectImage).toHaveBeenCalledTimes(2);
-                    expect(runtime.pullImage).toHaveBeenCalledExactlyOnceWith(imageRef, expect.anything());
+                    expect(runtime.pullImage).toHaveBeenCalledExactlyOnceWith(
+                        imageRef,
+                        expect.anything(),
+                        expect.any(Function),
+                    );
                 } finally {
                     await generator.return(undefined);
                 }
