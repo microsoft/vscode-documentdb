@@ -231,7 +231,9 @@ the image, creating and starting the container, and waiting for DocumentDB to ac
 Command output is available through **View setup log**.
 
 A settled row with facts offers **Details** alongside a concise factual summary. It starts collapsed
-and shows available evidence, not step durations. Checking reports PATH presence for both CLI
+and shows available evidence, not step durations. Every stage reserves one summary line while pending
+or active, so adding its summary does not move the following rows. Longer content can still wrap
+naturally in narrow panels. Checking reports PATH presence for both CLI
 executables but probes only the selected engine; its Details omit explanatory notes. Long image
 and container IDs are shortened visually and their full values are available via mouse and keyboard
 tooltips. An updated image includes its previous ID when already known. While pulling, the known

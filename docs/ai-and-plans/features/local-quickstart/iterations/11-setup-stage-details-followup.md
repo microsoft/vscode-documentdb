@@ -241,3 +241,30 @@ The PR remains draft. Check real-workbench short-panel layout and actual
 screen-reader speech before requesting human review. Full-ID tooltips, visible
 keyboard focus, discovery facts and changing activity have been verified in the
 browser in all three themes; spoken output is not inferred from that evidence.
+
+## Creating-container layout correction — 2026-11-10
+
+**Done, commit `9f5ad480`:** the operator reported that the Creating container
+summary added lines and moved the following rows. The leader reproduced a
+20 px pending/active row becoming 37 px on completion at 900 px and 1280 px
+viewports. Only Checking reserved its detail line, despite every stage now
+receiving a summary.
+
+Advised (Opus 5.5, 80% confidence): use the existing `reserveDetailSpace` option
+for every shared setup row. Terra applied that one-line correction without
+changing summaries, controls, package APIs or accessible text. Two regressions
+failed before the fix and passed afterward, covering reserved hidden lines and
+the same detail container holding the completed summary and Details toggle.
+
+Case 1 verification: `npm run build` passed; all 260 Local Quick Start webview
+tests passed, including 50 focused disclosure tests. Root type check also passed.
+Live measurements in dark, light and high contrast at both 900 px and 1280 px
+showed Creating container remaining **37 px** through pending, active and done,
+with **0 px** movement of Starting container and summary/Details on one line.
+All 45 live Local Quick Start routes passed.
+
+Narrow panels still wrap long content naturally rather than clipping summaries
+or hiding controls; this fix reserves one normal detail line, not arbitrary
+future wrapped height. No new wording, persisted data, timing or telemetry was
+introduced. Case 2 remains deferred while the PR is draft; the complete suite
+passed for the preceding follow-up. The temporary scenario helper was stopped.
