@@ -19,11 +19,15 @@ The run began at 09:22:28 UTC. Advisor: Opus 5.5; leader: Sol.
 | Item | Operator requests | Implementation | Model | Status |
 | ---- | ----------------- | -------------- | ----- | ------ |
 | F1 | 2, 4, 6 | Discover both CLI executables without changing engine preference; carry previous image ID when already inspected; emit known image facts at pull start | Sol: host/readiness contract spans modules | Done `40056c79` |
-| F2 | 1, 2, 3, 4, 5, 6, 7 | Capitalized evidence segments, truthful CLI labels, full-ID tooltips, previous image identity, concise summaries and active image facts; remove checking explanation notes | Terra: bounded presentation work | Queued |
-| F3 | 8 | Stream the latest bounded, masked engine-output line during pull, with coalescing and cancellation cleanup | Sol: command streaming and generator lifecycle | Queued |
+| F2 | 1, 2, 3, 4, 5, 6, 7 | Capitalized evidence segments, truthful CLI labels, full-ID tooltips, previous image identity, concise summaries and active image facts; remove checking explanation notes | Terra: bounded presentation work | Done `c6752605` |
+| F3 | 8 | Stream the latest bounded, masked engine-output line during pull, with coalescing and cancellation cleanup | Sol: command streaming and generator lifecycle | F3a done `a203ac50`; F3b in progress |
 | F4 | All | Browser coverage in all themes, accessible ID tooltips and progress checks; update related design/docs | Terra: isolated fixtures/scenarios and docs | Queued |
 
-These items share files and run sequentially. There is one code commit per item;
+These items share files and normally run sequentially. F3 is split into F3a
+(host streaming) and F3b (webview rendering): F3a can run alongside F2 because
+its runtime/service/test files do not overlap F2's webview files; F3b waits for
+both. This coordination change does not add scope or alter the four-item count.
+There is one code commit per item or explicit sub-item;
 documentation/progress notes are committed separately. Case 1 runs after the
 implementation batch. The operator explicitly requested the complete Case 2 list
 again, even though the PR remains draft.
@@ -108,3 +112,29 @@ never persist discovery facts. Fifteen tests added; all 565 service tests and
 root type check passed. Nineteen existing exact probe/version assertions retained.
 Remaining risk is the normal executable-disappears-after-lookup race, not a new
 claim that the unselected engine was probed.
+
+**F2 Done (2026-11-10), commit `c6752605`:** Terra capitalized the evidence
+sentences, identified the actual selected CLI and other executable presence,
+removed checking explanations, added concise summaries and full-ID tooltips, and
+displayed the already-known active image. Unknown selected CLI uses a generic
+label rather than inventing Docker. Forty-five tests added; all 250 focused
+webview tests and root type check passed. Advised (Opus 5.5, 86% confidence,
+joint review with F3a): approved; summary success wording requires confirming
+done facts, and shortened IDs retain full accessible descriptions.
+
+**F3a Done (2026-11-10), commit `a203ac50`:** Sol connected existing sanitized
+stdout/stderr to the pull generator through one latest slot, coalesced at 250 ms.
+No inferred totals, extra network/API calls or per-line telemetry were added.
+Abort, rejection, completion and iterator-return cleanup are tested; terminal
+facts omit ephemeral progress. Ten tests added; all 575 service tests and root
+type check passed. The existing pull-call assertion gained its required callback;
+its original inspection-count and known-image assertions were preserved.
+Advised (Opus 5.5, 86% confidence): approved, no blocking issue.
+
+**F3b placement clarification:** the reviewer initially suggested showing progress
+only in Details, which would hide it during the active pull and contradict the
+accepted request. A narrow advisor follow-up approved visible ordinary-text
+`Engine output: ...` after the active image summary, outside the separate polite
+stage announcement (80% confidence). It also required checking that StatusList is
+not a live-region wrapper and preserving stage-status object identity when
+repeated active events do not change status. These checks are part of F3b.
