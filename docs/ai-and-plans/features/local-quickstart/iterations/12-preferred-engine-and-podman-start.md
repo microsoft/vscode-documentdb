@@ -253,6 +253,15 @@ This documentation-only approval does not start those implementation checks.
 2. **P2 — preference and execution-time fallback.** `resolveContainerCli(preferred)` detects both
    CLIs using the existing `onPath` shape, `preferredEngine` in options and router, and readiness
    memoized per CLI. Fresh execution re-resolves both CLIs; no Configure result determines it.
+
+   **Done (2026-11-10), commit `7f5ad767`:** Sol implemented both-CLI resolution, strict
+   preference options, instance-aware readiness/start and evidence-sensitive memoization.
+   The leader identified that pinning readiness lost the original fallback evidence;
+   advised (`claude-opus-5.5`), high confidence, the service now overlays a clone after the
+   runtime memo so checking and terminal snapshots preserve the actual selection without
+   polluting pinned checks. Case 1: build passed; 679 focused tests passed, including
+   44 new preference, PATH-change, ownership and fallback-evidence cases.
+
 3. **P3 — check-free Configure and Introduction copy.** Add the row with Docker always the default,
    remove eager checks from wizard mount and pre-execution steps, and split metadata access from
    readiness where needed. No detection-dependent hints or validation.
@@ -281,9 +290,9 @@ live engine status remains unknown until execution.
 | Item | Assigned model | Reason | State |
 | --- | --- | --- | --- |
 | P1 | `gpt-6.1-sol` | Persisted ownership, lifecycle and concurrent runtime isolation | Done: `deecc32f` |
-| P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | In progress |
-| P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | Queued |
-| P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | Queued |
+| P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | Done: `7f5ad767` |
+| P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | In progress |
+| P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | In progress |
 | P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Queued |
 | P6 | `gpt-6.1-sol` | Evidence, telemetry and scenario integration | Queued |
 
@@ -310,6 +319,20 @@ Source verification:
 [6.0 listing](https://github.com/containers/podman/blob/v6.0.0/cmd/podman/machine/list.go),
 [5.8 startup](https://github.com/containers/podman/blob/v5.8.0/pkg/machine/shim/host.go),
 [6.0 startup](https://github.com/containers/podman/blob/v6.0.0/pkg/machine/shim/host.go).
+
+**Remote Podman experiment, 2026-11-10:** after the operator authorized experiments against
+their WSL-to-Windows Podman connection, Opus recommended an isolated lifecycle smoke test
+after implementation, not as a prerequisite for P2. Read-only probes confirmed client and
+server 6.1.4, a reachable rootless remote Linux engine, and a default connection through the
+Windows-shared WSL socket. `machine list --format json` returned `[]` from this WSL client.
+This environment can validate provisioning and engine ownership but cannot exercise the
+native Windows/macOS machine-start button. No machine or existing container was stopped.
+
+**Deferred operator question:** the approved WSL socket-start guidance applies to native
+Podman, but a WSL client using the Windows-shared socket requires starting the Windows
+machine instead. Opus identified this separate wording gap. Connection-specific WSL
+guidance is not silently added to this implementation; the approved no-machine-button
+platform gate is unchanged.
 
 ## 5. Tests
 
