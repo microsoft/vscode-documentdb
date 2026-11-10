@@ -9,16 +9,18 @@ verified: 2026-08-14
 
 > The decisions that shaped Local Quick Start, and what was rejected on the way.
 
-| #    | Decision                                               | Status              | Changed from the proposal?                | Date       | PR    |
-| ---- | ------------------------------------------------------ | ------------------- | ----------------------------------------- | ---------- | ----- |
-| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                      | 2026-06-25 | —     |
-| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review          | 2026-07-06 | —     |
-| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely | 2026-08-03 | #798  |
-| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                 | 2026-08-09 | #876  |
-| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred             | 2026-09-29 | #979  |
-| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added          | 2026-09-29 | #979  |
-| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                      | 2026-10-15 | #1018 |
-| 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface      | 2026-11-10 | —     |
+| #    | Decision                                               | Status              | Changed from the proposal?                       | Date       | PR    |
+| ---- | ------------------------------------------------------ | ------------------- | ------------------------------------------------ | ---------- | ----- |
+| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                             | 2026-06-25 | —     |
+| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review                 | 2026-07-06 | —     |
+| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely        | 2026-08-03 | #798  |
+| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                        | 2026-08-09 | #876  |
+| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred                    | 2026-09-29 | #979  |
+| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added                 | 2026-09-29 | #979  |
+| 0007 | Image usage telemetry follows VS Code's setting        | Accepted            | Accepted as proposed                             | 2026-10-15 | #1018 |
+| 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface             | 2026-11-10 | —     |
+| 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | —     |
+| 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | —     |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -501,3 +503,73 @@ styling. Context notes use VS Code's description foreground with a Fluent second
 since the existing dark theme can give primary and secondary foregrounds the same colour. High
 contrast follows its theme's description colour rather than forcing opacity or an arbitrary gray.
 No evidence, disclosure controls, full-ID tooltips or severity semantics are removed.
+
+---
+
+## 0009 — Preferred engine and instance ownership
+
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** —
+
+**Evidence:** [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) §§3.1–3.4, Q1–Q5 and Q7
+
+### Question
+
+How should a fresh setup choose between Docker and Podman without checking availability in
+Configure, while keeping existing instance data attached to its engine?
+
+### Decision
+
+1. Configure always puts a **Container engine** row first, with Docker and Podman as static choices
+   and no engine checks or availability hints. A fresh form defaults to Docker; the preference is
+   not persisted.
+2. During execution, check both CLIs and use the preferred one if its CLI is on `PATH`. Fall back
+   only when that CLI is missing. An installed but stopped engine remains selected. If neither CLI
+   is present, report the preferred engine as missing.
+3. Store `engineCli` on the instance and provisioning lease. Lifecycle, reconciliation, and
+   recreation—including Start fresh—use that recorded owner; a different preference never moves the
+   instance or its volume.
+4. A legacy record without `engineCli` remains unrecorded in Configure and resolves using today's
+   CLI order only during execution. It is not inferred or written during Configure.
+5. A start action is offered only for the engine selected for that run. Podman runs neither read
+   nor write provider memory and ignore Docker provider memory, Docker Desktop evidence, and Docker
+   start actions. Docker's existing provider-memory behavior is unchanged.
+
+### Why
+
+The approved resolutions keep Configure independent of machine availability, prevent a stopped
+preferred engine from silently placing data in another engine, and treat the recorded engine as a
+fact about where the instance's container and volume live. Podman provider memory would be stale;
+preserving Docker's existing memory avoids changing Docker recovery behavior. See the approved
+options and trade-offs in [iteration 12](./iterations/12-preferred-engine-and-podman-start.md).
+
+---
+
+## 0010 — Platform-gated Podman machine startup
+
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** —
+
+**Evidence:** [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) §§3.5–3.6, Q5–Q6
+
+### Question
+
+When should Quick Start offer to start Podman, and which machine should the action target?
+
+### Decision
+
+1. Offer **Start Podman machine** only on macOS and Windows, after a failed readiness check when a
+   stopped machine is identified. Start the machine marked `Default: true` by name; if none is
+   marked default, use the sole machine. If several machines have no default, or the machine is
+   already starting, show no button.
+2. The button starts only the selected run's Podman machine and runs only after an explicit click.
+   If no machine exists, initialization remains manual. Ambiguous selection remains manual, with
+   guidance naming the machines.
+3. Linux and WSL get copy-only `systemctl --user start podman.socket` guidance and no machine-start
+   button. Remote sessions get no local start action.
+
+### Why
+
+The approved platform gate reflects that Podman uses a machine on macOS and Windows, while Linux
+and WSL run Podman natively. A remote engine is not on the local machine. The default-or-sole rule
+targets the machine Podman uses without choosing among ambiguous machines. See
+[iteration 12](./iterations/12-preferred-engine-and-podman-start.md) for the approved alternatives
+and source verification.

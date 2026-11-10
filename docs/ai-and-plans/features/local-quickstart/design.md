@@ -26,22 +26,28 @@ verified: 2026-08-14
 > [docker-readiness-implementation-plan.md](./iterations/04-ui-redesign/docker-readiness-implementation-plan.md)
 > supersedes the Docker Desktop-only examples in this historical design. Docker
 > Engine and Docker Desktop are supported providers; the prerequisite is a Docker
-> CLI that can reach a Linux-container daemon from the extension host.
+> or Podman CLI that can reach a Linux-container daemon from the extension host.
 >
-> **Approved follow-up, not implemented (2026-11-10):**
-> [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) adds a Container engine
-> preference in Configure with Docker always the default and no availability checks.
-> Execution detects both Docker and Podman CLIs, selects the preferred one if installed,
-> and otherwise falls back to the other. Existing instances keep their owning engine;
-> Podman machine start is offered only on macOS and Windows with a detected eligible machine.
-> This approved plan supersedes the older Docker-only assumptions below for future work,
-> not as a statement of implemented behavior.
+> **Approved engine behavior (2026-11-10):**
+> [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) specifies a first-row,
+> check-free Container engine preference in Configure. A fresh form defaults to Docker and does
+> not persist the preference. Execution detects both CLIs, uses the preferred one if its CLI is
+> installed, and falls back to the other only when that CLI is missing and the other is installed,
+> not when its engine is stopped.
+> Instances record their owning engine, which remains fixed for lifecycle and recreation, including
+> Start fresh; legacy records are resolved only during execution. Podman runs neither read nor write
+> provider memory and ignore Docker evidence, while Docker's existing provider-memory behavior is
+> unchanged. On macOS and Windows, an explicit Podman machine start is available only for a stopped
+> default machine or the sole machine. Initialization and ambiguous selection remain manual; Linux
+> and WSL get copy-only socket guidance, and remote sessions do not start a local engine.
+> This approved design supersedes the older Docker-only assumptions below. Iteration 12 records
+> implementation phases and source provenance; the code remains authoritative for runtime behavior.
 
 ---
 
 ## 1. One-sentence goal
 
-From an empty machine-with-Docker to an open local DocumentDB connection,
+From an empty machine with a supported container engine to an open local DocumentDB connection,
 without leaving VS Code.
 
 ---
@@ -57,7 +63,7 @@ without leaving VS Code.
 | TLS exception                      | Gated to emulator wizard                                            | Gated step in regular new-connection wizard (localhost + private IPs + local domains) |
 | Container creation UI              | Notification-based interstitial                                     | Webview (tRPC router, card-based, same design language as query insights tab)         |
 | Legacy migration                   | Not addressed                                                       | First launch: existing emulator connections → `Local Connections (Legacy)` folder     |
-| Container runtime                  | Docker-specific                                                     | Docker-first (v1). OCI/podman follow-up issues tracked separately.                    |
+| Container runtime                  | Docker-specific                                                     | Docker-first in iteration 2; superseded by the approved engine preference above.      |
 
 ---
 
@@ -643,11 +649,12 @@ The container is shared machine state. No window "owns" it.
 
 ## 13. Cross-cutting rules
 
-1. **Opt-in only.** Never install Docker, never start Docker silently,
+1. **Opt-in only.** Never install a container engine, never start one silently,
    never modify containers the extension didn't create.
-2. **Explicit Docker start.** If Docker is stopped, offer a user-clicked
-   provider action only when the extension has positive launch evidence. Never
-   start a root-managed service or use elevation.
+2. **Explicit engine start.** Start actions require a user click. Offer
+   **Start Podman machine** only on macOS or Windows when a stopped default
+   machine or the sole machine is identified. Never start a root-managed
+   service or use elevation.
 3. **No background pulls.** Image pulled only inside user-initiated flows.
 4. **No required form fields** in the happy path.
 5. **Canonical port `10260`** for both Quick Start and manual connections.
@@ -655,13 +662,14 @@ The container is shared machine state. No window "owns" it.
    and `PromptPortStep.ts`) must be fixed before Quick Start ships.
 6. **No nag toasts.** Updates and warnings stay in the tree description.
 7. **Uninstalling the extension does not remove the container.**
-8. **Docker-first, OCI later.** v1 targets Docker. Podman/OCI follow-up
-   issues are tracked separately. The container runtime is accessed through
-   **`@microsoft/vscode-container-client`** — the Microsoft-maintained library
-   the PostgreSQL extension uses, which ships both a `DockerClient` and a
-   `PodmanClient` behind one interface (with mount/label/platform/port arg
-   helpers). Adding podman/OCI later is therefore a client swap, not a
-   rewrite, and we avoid hand-rolling `docker` CLI strings.
+8. **Docker and Podman are supported.** Configure presents a nonpersisted
+   preference, defaulting to Docker for a fresh form. Execution detects both
+   CLIs and falls back to the other only when the preferred CLI is missing and
+   the other is installed. The container
+   runtime is accessed through **`@microsoft/vscode-container-client`** — the
+   Microsoft-maintained library the PostgreSQL extension uses, which ships
+   both a `DockerClient` and a `PodmanClient` behind one interface (with
+   mount/label/platform/port argument helpers).
 9. **No dependency on the Docker VS Code extension.** Quick Start manages
    the container itself, in-tree. The Docker extension is optional and
    aimed at advanced users; a hard dependency would break the zero-friction
