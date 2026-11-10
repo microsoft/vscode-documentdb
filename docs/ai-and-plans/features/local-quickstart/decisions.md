@@ -485,3 +485,19 @@ Active pulling therefore uses one non-wrapping line: image and origin before out
 engine output instead of the already-selected image. Long text is ellipsized visually, not removed
 from the DOM; its full value remains in the title and setup log. This supersedes the earlier
 two-line active-pull presentation.
+
+### Typography simplification, 2026-11-10
+
+The operator approved uniform styling below the unchanged main stage labels: regular base200
+proportional text for summaries, fact labels, values and links, without monospace. Ordinary text
+shares the primary foreground; links keep their action colour and focus treatment. Supplementary
+context stays muted at the same size, weight and font. Important qualifications, specifically an
+unconfirmed port marked "As requested", remain in the primary foreground rather than being treated
+as incidental context.
+
+This is a deliberate Local Quick Start exception to the shared Details defaults for code-like
+values and secondary-colour fact terms. It does not change Diagnose connection or package-wide
+styling. Context notes use VS Code's description foreground with a Fluent secondary-colour fallback,
+since the existing dark theme can give primary and secondary foregrounds the same colour. High
+contrast follows its theme's description colour rather than forcing opacity or an arbitrary gray.
+No evidence, disclosure controls, full-ID tooltips or severity semantics are removed.

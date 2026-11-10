@@ -245,6 +245,15 @@ explanation and recovery actions remain visible in the message block below the l
 row retains its last-checked time and re-check action; its Details replaces the old Docker-check
 accordion. See [0008](./decisions.md#0008---set-up-stages-expand-to-show-what-each-stage-did).
 
+The main stage labels and status icons retain their existing typography. Everything ordinary below
+them uses one proportional UI font at base200 (12 px, 16 px line height), regular weight. Summaries,
+fact labels and values share the primary foreground; ports, names and identifiers do not switch to
+monospace. Links retain their interaction colour and focus styling but use the same text size.
+Only supplementary context uses the theme's description foreground, with a secondary-foreground
+fallback. Important qualifications such as a port shown "As requested" remain primary text.
+Severity messages retain their semantic emphasis. These are Local Quick Start overrides; the shared
+StatusList defaults and other consumers, including Diagnose connection, are unchanged.
+
 ### 5.5 Webview: Success
 
 On readiness success, Done retains the five completed rows and their Details, followed by the

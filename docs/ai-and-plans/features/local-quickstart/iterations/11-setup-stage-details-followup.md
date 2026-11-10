@@ -302,3 +302,76 @@ No localization key, host streaming behavior or telemetry changed.
 The temporary scenario helper was stopped after verification. The PR remains
 draft; Case 2 formatting, localization, lint and packaging are deferred until
 ready for review, rather than rerun for this scoped correction.
+
+## Unified stage typography — 2026-11-10
+
+**Done, commit `1af902e0`:** the operator approved simplifying all five Local
+Quick Start stages while retaining useful muted add-ons. Main labels and status
+icons are unchanged. Ordinary summaries, fact terms, values and action links use
+the same proportional UI font at 12 px, regular weight and 16 px line height.
+Fact terms and values share the primary foreground; links keep their action
+colour and focus styling. Code-like values no longer switch to monospace, and
+shortened ID triggers are focusable spans retaining full-value tooltip descriptions.
+
+Optional context remains muted at that same size and weight. A separate internal
+qualification field keeps the unconfirmed-port "As requested" text in the primary
+foreground. The local context-note colour uses VS Code's description foreground,
+falling back to Fluent's secondary foreground. This avoids the existing adaptive
+dark theme mapping both primary and secondary text to the same colour without
+changing the shared theme. High contrast continues to respect its own colours;
+in the representative high-contrast palette, description text is also white.
+
+Advised (Opus 5.5, medium-high confidence): implement consumer-scoped overrides,
+not shared-package changes. The implementation review recommended the description
+foreground for optional notes (85% confidence). Terra applied that exact
+refinement without changing the general muted class elsewhere in the view.
+Three tests were added; existing model/DOM assertions were updated only for the
+approved removal of code styling and the explicit qualification distinction.
+Meaningful message severity emphasis, every evidence value, disclosure behavior,
+keyboard focus, telemetry and single-line pull activity remain unchanged.
+
+### Verification
+
+- `npm run build`: passed (final Case 1 run 38.20 s).
+- Focused webview suite: 264 tests in 10 files passed (19.93 s).
+- Root `tsc --noEmit -p .`: passed during implementation.
+- Browser scenario contracts: 31 passed (2.04 s).
+- All 45 live Local Quick Start routes passed using the forwarded preview origin.
+- Computed styles in dark, light and high contrast confirmed unchanged 14 px /
+  20 px main labels; ordinary summaries, fact labels, values, links and ID triggers
+  use 12 px / 16 px, regular weight and the same proportional font. There are no
+  code elements in stage Details.
+- All three shortened 71-character IDs remained keyboard-accessible with matching
+  full tooltip descriptions; tooltip text also remained 12 px regular.
+- Optional notes were visibly secondary in dark and light, while "As requested"
+  matched the primary value colour. High contrast followed its theme, without
+  opacity tricks.
+- At 440 px and 900 px in every theme, long active-pull output remained one line
+  in a 37 px row, with 0 px movement of the following row.
+
+The original shared browser tab's pointer-driven sweep stalled; a fresh forwarded
+preview completed all 45 routes. This was an automation limitation, not bypassed
+product assertions. An existing scenario server was reused after the attempted
+temporary helper found its port occupied; no existing server was stopped.
+
+This is Case 1 on a draft PR. Full Case 2, including formatting, localization
+validation, lint and packaging, remains deferred until ready for review. No
+localization key or host API changed. Shared StatusList defaults and Diagnose
+connection remain untouched.
+
+### Models and host costs
+
+Snapshot at 12:12:51 UTC, from this request's start at 11:48:44 UTC:
+
+| Model | Role | AIU |
+| ----- | ---- | ---: |
+| `gpt-6.1-sol` | Leader and browser validation | 277.1 |
+| `claude-opus-5.5` | Two advisor consultations | 58.3 |
+| `gpt-6.1-terra` | Implementation and note-colour refinement | 22.6 |
+| `gpt-5.6-luna` | Case 1 checks | 0.6 |
+| **Total** | Independently rounded host values | **358.6** |
+
+Implementation turns took 4m06s plus the narrow note-colour refinement; the final
+check agent took 1m15s. The snapshot reports leader 277.1 AIU and subagents 81.4 AIU.
+Monetary cost was not reported. Reporting and publishing after the snapshot are
+not included.

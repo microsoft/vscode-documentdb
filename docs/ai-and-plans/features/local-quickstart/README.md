@@ -61,6 +61,8 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 - **Settled setup stages offer evidence in Details.** Rows with facts start collapsed on both Set up
   and Done and have concise factual summaries; explanations and recovery actions remain in the
   failure block. Full image and container IDs are available through mouse and keyboard tooltips.
+  Below the unchanged main labels, summaries, facts and links use one regular proportional text
+  style; only optional context is muted, while important qualifications remain prominent.
   Checking reports which Docker and Podman executables are on PATH but probes only the selected engine, without
   explanatory notes in its Details. Active pulling uses one non-wrapping summary line: known image
   and origin initially, replaced by bounded engine output when available, not an estimated percentage. Sample-data loading
