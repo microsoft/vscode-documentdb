@@ -240,6 +240,16 @@ This documentation-only approval does not start those implementation checks.
 1. **P1 — engine per instance.** `engineCli` on the record and lease, runtime calls with an explicit
    CLI, and legacy records resolving as today. This has no user-visible change, but it must come
    first: without it, P2 can strand an instance.
+
+   **Done (2026-11-10), commit `deecc32f`:** Sol implemented record/lease ownership,
+   engine-scoped operations and readiness, mixed-engine reconciliation, logs and credential
+   restoration. Opus review required removal of ephemeral lookup caching; the correction
+   preserves retry after installing an engine without reloading. Decisions: operator-approved
+   owning-engine pinning; advised (`claude-opus-5.5`), 90% confidence, that only actual
+   record/container ownership is cached. Case 1: `npm run build` passed; 605 focused tests
+   passed, including 22 new ownership, failure-isolation and retry regressions. Router
+   readiness/start selection remains P2's work.
+
 2. **P2 — preference and execution-time fallback.** `resolveContainerCli(preferred)` detects both
    CLIs using the existing `onPath` shape, `preferredEngine` in options and router, and readiness
    memoized per CLI. Fresh execution re-resolves both CLIs; no Configure result determines it.
@@ -270,8 +280,8 @@ live engine status remains unknown until execution.
 
 | Item | Assigned model | Reason | State |
 | --- | --- | --- | --- |
-| P1 | `gpt-6.1-sol` | Persisted ownership, lifecycle and concurrent runtime isolation | In progress |
-| P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | Queued |
+| P1 | `gpt-6.1-sol` | Persisted ownership, lifecycle and concurrent runtime isolation | Done: `deecc32f` |
+| P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | In progress |
 | P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | Queued |
 | P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | Queued |
 | P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Queued |
