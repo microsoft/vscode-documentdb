@@ -461,11 +461,19 @@ describe('ClusterItemBase.connect', () => {
     it('reuses the cached client, and does not re-authenticate, when credentials are cached', async () => {
         mockHasCredentials.mockReturnValue(true);
         const cached = makeClient(vi.fn());
-        (ClustersClientMock.getClient as Mock).mockResolvedValue(cached);
-
         const item = new ConnectTestClusterItem(makeCluster(), null);
+        item.lastConnectionOutcome = 'canceled';
+        item.lastConnectionCorrelationId = 'previous-attempt';
+        ClustersClientMock.getClient.mockImplementationOnce(async (_clusterId, _signal, onAttempt): Promise<ClustersClient> => {
+            expect(item.lastConnectionOutcome).toBeUndefined();
+            expect(item.lastConnectionCorrelationId).toBeUndefined();
+            onAttempt?.('current-attempt');
+            return cached;
+        });
 
         await expect(item.connect()).resolves.toBe(cached);
+        expect(item.lastConnectionOutcome).toBe('connected');
+        expect(item.lastConnectionCorrelationId).toBe('current-attempt');
         expect(item.authenticateCalls).toBe(0);
         // Subclasses such as Kubernetes restore a tunnel here; skipping it would reuse a dead client.
         expect(item.beforeCachedCalls).toBe(1);
@@ -513,6 +521,7 @@ describe('ClusterItemBase.connect', () => {
         // Dismissing "Connecting to …" is a request for nothing to happen. Letting it escape
         // would report the user's own cancellation back to them as a command failure.
         await expect(item.connect()).resolves.toBeNull();
+        expect(item.lastConnectionOutcome).toBe('canceled');
     });
 
     it('propagates a genuine failure on the cached path so the command can report it', async () => {
@@ -524,6 +533,27 @@ describe('ClusterItemBase.connect', () => {
         // Only cancellation is swallowed; a real failure must not look like a quiet abort.
         await expect(item.connect()).rejects.toThrow('server down');
     });
+
+    it.each(['connected', 'canceled', 'failed'] as const)(
+        'clears stale %s outcome and correlation before an unclassified authentication result',
+        async (previousOutcome): Promise<void> => {
+            mockHasCredentials.mockReturnValue(false);
+            const item = new ConnectTestClusterItem(makeCluster(), null);
+            item.lastConnectionOutcome = previousOutcome;
+            item.lastConnectionCorrelationId = 'previous-attempt';
+            mockHasCredentials.mockImplementationOnce((): boolean => {
+                expect(item.lastConnectionOutcome).toBeUndefined();
+                expect(item.lastConnectionCorrelationId).toBeUndefined();
+                return false;
+            });
+
+            await expect(item.connect()).resolves.toBeNull();
+
+            expect(item.authenticateCalls).toBe(1);
+            expect(item.lastConnectionOutcome).toBeUndefined();
+            expect(item.lastConnectionCorrelationId).toBeUndefined();
+        },
+    );
 
     it('returns null when authentication fails or the user cancels the prompt', async () => {
         mockHasCredentials.mockReturnValue(false);

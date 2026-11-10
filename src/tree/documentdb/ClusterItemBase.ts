@@ -144,6 +144,8 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      *         error handling can report it. Only cancellation is swallowed.
      */
     public async connect(): Promise<ClustersClient | null> {
+        this.lastConnectionOutcome = undefined;
+        this.lastConnectionCorrelationId = undefined;
         if (CredentialCache.hasCredentials(this.cluster.clusterId)) {
             await this.beforeCachedClientConnect();
 
