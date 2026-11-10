@@ -11,6 +11,9 @@ vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
+    ThemeColor: class ThemeColor {
+        constructor(public readonly id: string) {}
+    },
     workspace: { getConfiguration: vi.fn() },
 }));
 
@@ -20,10 +23,10 @@ vi.mock('@vscode/l10n', () => ({
 }));
 
 const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
-const mockOpenUrl = vi.fn();
+const { mockShowEntraUnavailableDetails } = vi.hoisted(() => ({ mockShowEntraUnavailableDetails: vi.fn() }));
 const mockSettingsUpdate = vi.fn();
-vi.mock('../../../utils/openUrl', () => ({
-    openUrl: (...args: unknown[]): unknown => mockOpenUrl(...args),
+vi.mock('../../auth/showEntraUnavailableDetails', () => ({
+    showEntraUnavailableDetails: mockShowEntraUnavailableDetails,
 }));
 vi.mock('../../../extensionVariables', () => ({
     ext: {
@@ -34,20 +37,21 @@ vi.mock('../../../extensionVariables', () => ({
 }));
 beforeEach(() => {
     vi.clearAllMocks();
-    mockOpenUrl.mockResolvedValue(true);
+    mockShowEntraUnavailableDetails.mockReset().mockResolvedValue(undefined);
     vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
         inspect: vi.fn().mockReturnValue(undefined),
         update: mockSettingsUpdate,
     } as unknown as vscode.WorkspaceConfiguration);
 });
 
-vi.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@microsoft/vscode-azext-utils')>()),
     AzureWizardPromptStep: class AzureWizardPromptStep {},
 }));
 
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { PromptAuthMethodStep as NewConnectionAuthStep } from '../../../commands/newConnection/PromptAuthMethodStep';
 import { PromptAuthMethodStep as UpdateCredentialsAuthStep } from '../../../commands/updateCredentials/PromptAuthMethodStep';
-import { Links } from '../../../constants';
 import { AuthMethodId, type createAuthMethodQuickPickItems } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from './ChooseAuthMethodStep';
@@ -259,7 +263,7 @@ describe.each([
         expect(mockSettingsUpdate).not.toHaveBeenCalled();
     });
 
-    it('opens Learn More repeatedly before selecting a real method without changing trust', async () => {
+    it('shows details repeatedly before selecting a real method without changing trust', async () => {
         const showQuickPick = vi
             .fn()
             .mockImplementationOnce((items: ReturnType<typeof createAuthMethodQuickPickItems>) =>
@@ -277,24 +281,23 @@ describe.each([
             selectedAuthMethod: undefined as AuthMethodId | undefined,
             selectedAuthenticationMethod: undefined as AuthMethodId | undefined,
         };
-        mockOpenUrl.mockImplementation(() => {
+        mockShowEntraUnavailableDetails.mockImplementation(() => {
             expect(context.selectedAuthMethod).toBeUndefined();
             expect(context.selectedAuthenticationMethod).toBeUndefined();
-            return Promise.resolve(true);
+            return Promise.resolve();
         });
 
         await makeStep().prompt(context as never);
 
-        expect(mockOpenUrl).toHaveBeenNthCalledWith(1, Links.EntraTrustedServers);
-        expect(mockOpenUrl).toHaveBeenNthCalledWith(2, Links.EntraTrustedServers);
+        expect(mockShowEntraUnavailableDetails).toHaveBeenCalledTimes(2);
         expect(showQuickPick).toHaveBeenCalledTimes(3);
         expect(context.selectedAuthMethod ?? context.selectedAuthenticationMethod).toBe(AuthMethodId.NoAuth);
         expect(context.telemetry.properties).toMatchObject({ authMethod: AuthMethodId.NoAuth });
         expect(mockSettingsUpdate).not.toHaveBeenCalled();
     });
 
-    it('does not select authentication when canceled after Learn More', async () => {
-        const canceled = new Error('canceled');
+    it('does not select authentication when the picker is canceled after details', async () => {
+        const canceled = new UserCancelledError();
         const showQuickPick = vi
             .fn()
             .mockImplementationOnce((items: ReturnType<typeof createAuthMethodQuickPickItems>) =>
@@ -313,10 +316,53 @@ describe.each([
         await expect(makeStep().prompt(context as never)).rejects.toBe(canceled);
 
         expect(showQuickPick).toHaveBeenCalledTimes(2);
+        expect(mockShowEntraUnavailableDetails).toHaveBeenCalledOnce();
         expect(context.selectedAuthMethod).toBeUndefined();
         expect(context.selectedAuthenticationMethod).toBeUndefined();
         expect(context.telemetry.properties).toMatchObject({ authMethod: undefined });
         expect(mockSettingsUpdate).not.toHaveBeenCalled();
+    });
+
+    it('waits for details to settle before reprompting or selecting authentication', async () => {
+        let closeDetails!: () => void;
+        let detailsOpened!: () => void;
+        const detailsStarted = new Promise<void>((resolve) => {
+            detailsOpened = resolve;
+        });
+        mockShowEntraUnavailableDetails.mockImplementation(
+            () =>
+                new Promise<void>((resolve) => {
+                    closeDetails = resolve;
+                    detailsOpened();
+                }),
+        );
+        const showQuickPick = vi
+            .fn()
+            .mockImplementationOnce((items: ReturnType<typeof createAuthMethodQuickPickItems>) =>
+                Promise.resolve(items.find((item) => item.entraUnavailable)),
+            )
+            .mockResolvedValueOnce({ authMethod: AuthMethodId.NativeAuth });
+        const context = {
+            connectionString: 'mongodb://other.example.com/',
+            availableAuthMethods: [],
+            telemetry: { properties: {}, measurements: {} },
+            ui: { showQuickPick },
+            selectedAuthMethod: undefined as AuthMethodId | undefined,
+            selectedAuthenticationMethod: undefined as AuthMethodId | undefined,
+        };
+
+        const pending = makeStep().prompt(context as never);
+        await detailsStarted;
+        expect(showQuickPick).toHaveBeenCalledOnce();
+        expect(context.selectedAuthMethod).toBeUndefined();
+        expect(context.selectedAuthenticationMethod).toBeUndefined();
+        expect(context.telemetry.properties).toMatchObject({ authMethod: undefined });
+        expect(mockSettingsUpdate).not.toHaveBeenCalled();
+        closeDetails();
+        await pending;
+
+        expect(showQuickPick).toHaveBeenCalledTimes(2);
+        expect(context.selectedAuthMethod ?? context.selectedAuthenticationMethod).toBe(AuthMethodId.NativeAuth);
     });
 });
 

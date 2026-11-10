@@ -5,11 +5,10 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import { l10n } from 'vscode';
-import { Links } from '../../constants';
 import { createAuthMethodQuickPickItemsWithSupportInfo } from '../../documentdb/auth/AuthMethod';
 import { evaluateEntraDestinationFromSettings } from '../../documentdb/auth/entraDestinationSettings';
+import { showEntraUnavailableDetails } from '../../documentdb/auth/showEntraUnavailableDetails';
 import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
-import { openUrl } from '../../utils/openUrl';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
@@ -63,7 +62,7 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
                 { options: quickPickItems.map((item) => item.authMethod).join(','), reason: 'credentialsBeingUpdated' },
             );
             if (selectedItem?.entraUnavailable) {
-                await openUrl(Links.EntraTrustedServers);
+                await showEntraUnavailableDetails();
             }
         } while (selectedItem?.entraUnavailable);
         if (!selectedItem) {

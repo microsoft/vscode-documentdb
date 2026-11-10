@@ -5,9 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { Links } from '../../../constants';
 import { traceAuthFlow, traceAuthOperation } from '../../../utils/authTrace';
-import { openUrl } from '../../../utils/openUrl';
 
 import {
     AuthMethodId,
@@ -18,6 +16,7 @@ import {
     isSupportedAuthMethod,
 } from '../../auth/AuthMethod';
 import { evaluateEntraDestinationFromSettings } from '../../auth/entraDestinationSettings';
+import { showEntraUnavailableDetails } from '../../auth/showEntraUnavailableDetails';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
@@ -108,7 +107,7 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
                 },
             );
             if (selectedItem.entraUnavailable) {
-                await openUrl(Links.EntraTrustedServers);
+                await showEntraUnavailableDetails();
             }
         } while (selectedItem.entraUnavailable);
         if (isSupportedAuthMethod(selectedItem.authMethod) === false) {
