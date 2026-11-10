@@ -21,6 +21,7 @@ verified: 2026-08-14
 | 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface             | 2026-11-10 | —     |
 | 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | #1076 |
 | 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | #1076 |
+| 0011 | Rootful default machine and a slow machine list        | Proposed            | Amends 0010 after a native Windows test          | 2026-11-10 | #1076 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -573,3 +574,45 @@ and WSL run Podman natively. A remote engine is not on the local machine. The de
 targets the machine Podman uses without choosing among ambiguous machines. See
 [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) for the approved alternatives
 and source verification.
+
+---
+
+## 0011 — Rootful default machine and a slow machine list
+
+**Status:** Proposed · **Date:** 2026-11-10 · **PR:** #1076 · **Raised by:** a reviewer's native
+Windows test
+
+**Evidence:** [iteration 13](./iterations/13-preferred-engine-implementation-review.md), "Native
+Windows Podman test"
+
+### Question
+
+0010 targets the machine marked `Default: true`. What should happen when Podman marks no machine,
+or does not answer in time?
+
+### Decision
+
+This amends 0010 item 1; the rest of 0010 stands.
+
+1. When several machines exist and none is marked default, read the default connection from
+   `podman system connection list`. A default connection named `<machine>-root` selects that
+   machine. If it names no machine, selection stays ambiguous and there is no button.
+2. A `podman machine list` that reaches the 10-second process deadline is retried once, inside the
+   same readiness deadline. A second timeout leaves the machine unknown, with no button.
+
+### Why
+
+`machine list` marks a machine as default only when the default connection carries the machine's
+own name. A rootful machine's default connection is `<name>-root`, so Podman 6.1.4 reports
+`Default: false` for it. Rootful is a common setup, for example for kind. The sole-machine rule
+hid this with one machine; with several, 0010 withheld the button although the default was not
+ambiguous.
+
+On Windows, WSL shuts down its idle VM about a minute after a machine stops, and `machine list`
+blocked for 4.5 to 11.3 seconds while it did. The next call returns in about 0.3 seconds, so one
+retry is enough and a longer deadline is not needed.
+
+### Not verified
+
+Item 1 is unit-tested only; the test machine had one Podman machine. Item 2 was measured on the
+unfixed build and is not yet re-tested live. The operator has not reviewed this entry.
