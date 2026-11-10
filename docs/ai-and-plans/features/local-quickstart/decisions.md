@@ -21,7 +21,7 @@ verified: 2026-08-14
 | 0008 | Set up stages expand to show what each stage did       | Accepted            | Amends 0003's single failure surface             | 2026-11-10 | —     |
 | 0009 | Preferred engine and instance ownership                | Accepted            | Configure is check-free; Docker is fresh default | 2026-11-10 | #1076 |
 | 0010 | Platform-gated Podman machine startup                  | Accepted            | Button only for eligible macOS/Windows machines  | 2026-11-10 | #1076 |
-| 0011 | Rootful default machine and a slow machine list        | Proposed            | Amends 0010 after a native Windows test          | 2026-11-10 | #1076 |
+| 0011 | Rootful default machine and a slow machine list        | Accepted            | Amends 0010 after a native Windows test          | 2026-11-10 | #1076 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -579,7 +579,7 @@ and source verification.
 
 ## 0011 — Rootful default machine and a slow machine list
 
-**Status:** Proposed · **Date:** 2026-11-10 · **PR:** #1076 · **Raised by:** a reviewer's native
+**Status:** Accepted · **Date:** 2026-11-10 · **PR:** #1076 · **Raised by:** a reviewer's native
 Windows test
 
 **Evidence:** [iteration 13](./iterations/13-preferred-engine-implementation-review.md), "Native
@@ -615,4 +615,4 @@ retry is enough and a longer deadline is not needed.
 ### Not verified
 
 Item 1 is unit-tested only; the test machine had one Podman machine. Item 2 was measured on the
-unfixed build and is not yet re-tested live. The operator has not reviewed this entry.
+unfixed build and is not yet re-tested live.
