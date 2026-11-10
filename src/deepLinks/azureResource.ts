@@ -23,7 +23,7 @@ export async function readAzureResource(
     request: AzureResourceReadRequest,
 ): Promise<{ readonly name: string }> {
     ext.outputChannel.trace(
-        `[DeepLink] Reading ${request.kind === 'vcore' ? 'vCore cluster' : 'RU account'} ${request.name} from Azure`,
+        `[DeepLink] Reading ${request.kind === 'vcore' ? 'vCore cluster' : 'RU account'} from Azure`,
     );
     try {
         if (request.kind === 'vcore') {

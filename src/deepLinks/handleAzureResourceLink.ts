@@ -29,7 +29,7 @@ export async function handleAzureResourceLinkRequest(
 ): Promise<DiscoveryRevealResult | undefined> {
     context.telemetry.properties.failureStage = 'parseResourceId';
     const link = parseAzureResourceLink(request.resourceId, request.tenantId);
-    ext.outputChannel.trace(`[DeepLink] Azure link parsed: kind=${link.kind} resource=${link.name}`);
+    ext.outputChannel.trace(`[DeepLink] Azure link parsed: kind=${link.kind}`);
     context.valuesToMask.push(link.subscriptionId, link.resourceGroup, link.name);
     context.telemetry.properties.azureResourceKind = link.kind;
 
@@ -228,7 +228,7 @@ export async function handleAzureResourceLinkRequest(
             }
 
             context.telemetry.properties.failureStage = 'revealCluster';
-            ext.outputChannel.trace(`[DeepLink] Revealing ${displayName} in the Discovery view`);
+            ext.outputChannel.trace('[DeepLink] Revealing the cluster in the Discovery view');
             const result = await measureDeepLinkPhase(context, 'treeReveal', () =>
                 revealInDiscoveryView(
                     context,

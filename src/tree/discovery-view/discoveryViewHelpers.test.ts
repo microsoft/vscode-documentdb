@@ -224,6 +224,21 @@ describe('Discovery view helpers', () => {
         );
     });
 
+    it('does not trace resource, database or collection names while revealing descendants', async (): Promise<void> => {
+        const database = 'private-database-name';
+        const collection = 'private-collection-name';
+        databaseNode = { ...createNode(`${clusterNode.id}/${database}`), databaseInfo: { name: database } };
+        collectionNode = { ...createNode(`${databaseNode.id}/${collection}`), collectionInfo: { name: collection } };
+
+        await revealInDiscoveryView(context, { ...request, database, collection });
+
+        expect(reveal).toHaveBeenLastCalledWith(collectionNode, { select: true, focus: true, expand: true });
+        const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
+        for (const value of [request.displayName, request.azureResourceId, request.subscriptionId, database, collection]) {
+            expect(logged).not.toContain(value);
+        }
+    });
+
     it('reports loading before each ancestor reveal and connecting before cluster expansion', async (): Promise<void> => {
         const report = vi.fn<(message: string) => void>();
 

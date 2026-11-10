@@ -266,18 +266,21 @@ describe('handleAzureResourceLinkRequest', (): void => {
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Cancelled from the progress notification');
     });
 
-    it('logs the parsed link and confirmation without Azure identifiers', async (): Promise<void> => {
+    it('logs the parsed link and confirmation without parameter values or Azure names', async (): Promise<void> => {
         await handleAzureResourceLinkRequest(context, request);
 
         expect(ext.outputChannel.trace).toHaveBeenNthCalledWith(
             1,
-            '[DeepLink] Azure link parsed: kind=vcore resource=my-resource',
+            '[DeepLink] Azure link parsed: kind=vcore',
         );
         expect(ext.outputChannel.trace).toHaveBeenNthCalledWith(2, '[DeepLink] Showing Azure confirmation');
         const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
         expect(logged).not.toContain(link.subscriptionId);
         expect(logged).not.toContain('tenant-id');
         expect(logged).not.toContain(link.resourceId);
+        for (const value of [link.name, link.resourceGroup, 'My-Resource', 'sales', 'orders']) {
+            expect(logged).not.toContain(value);
+        }
     });
 
     it('parses, confirms, resolves, reads, computes, confirms filter changes, applies, and reveals using the ARM display name', async (): Promise<void> => {
@@ -349,7 +352,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Showing filter change confirmation');
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Filter change confirmation: accepted');
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Applying filter changes');
-        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Revealing My-Resource in the Discovery view');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Revealing the cluster in the Discovery view');
     });
 
     it('shows link details first and every filter change with the resolved subscription name second', async (): Promise<void> => {

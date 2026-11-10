@@ -193,7 +193,7 @@ export async function revealInDiscoveryView(
             if (request.database) {
                 context.telemetry.properties.failureStage = 'findDatabase';
                 report?.(vscode.l10n.t('Opening the database…'));
-                ext.outputChannel.trace(`[DeepLink] Looking up database ${request.database}`);
+                ext.outputChannel.trace('[DeepLink] Looking up the database');
                 const dbId = `${clusterNode.id}/${request.database}`;
                 const node = (await provider.findNodeById(dbId)) ?? (await provider.findChildById(clusterNode, dbId));
                 if (
@@ -216,7 +216,7 @@ export async function revealInDiscoveryView(
                 }
 
                 databaseNode = node as DatabaseItem;
-                ext.outputChannel.trace(`[DeepLink] Revealing database ${request.database}`);
+                ext.outputChannel.trace('[DeepLink] Revealing the database');
                 await ext.discoveryTreeView.reveal(databaseNode, {
                     select: true,
                     focus: !request.collection,
@@ -226,7 +226,7 @@ export async function revealInDiscoveryView(
                 if (request.collection) {
                     context.telemetry.properties.failureStage = 'findCollection';
                     report?.(vscode.l10n.t('Opening the collection…'));
-                    ext.outputChannel.trace(`[DeepLink] Looking up collection ${request.collection}`);
+                    ext.outputChannel.trace('[DeepLink] Looking up the collection');
                     const collId = `${databaseNode.id}/${request.collection}`;
                     const collectionNode =
                         (await provider.findNodeById(collId)) ?? (await provider.findChildById(databaseNode, collId));
@@ -249,7 +249,7 @@ export async function revealInDiscoveryView(
                         );
                     }
 
-                    ext.outputChannel.trace(`[DeepLink] Revealing collection ${request.collection}`);
+                    ext.outputChannel.trace('[DeepLink] Revealing the collection');
                     await ext.discoveryTreeView.reveal(collectionNode, {
                         select: true,
                         focus: true,

@@ -53,8 +53,20 @@ describe('readAzureResource', () => {
         await expect(readAzureResource(context, subscription, request)).resolves.toEqual({ name: 'My-Resource' });
         expect(getClusterInformationFromAzure).toHaveBeenCalledWith(context, subscription, 'my-group', 'my-resource');
         expect(createCosmosDBManagementClient).not.toHaveBeenCalled();
-        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Reading vCore cluster my-resource from Azure');
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Reading vCore cluster from Azure');
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[DeepLink] Azure resource read finished');
+    });
+
+    it.each(['vcore', 'ru'] as const)('does not trace resource names or groups for %s reads', async (kind) => {
+        vi.mocked(getClusterInformationFromAzure).mockResolvedValue({ name: 'My-Resource' } as MongoCluster);
+        getAccount.mockResolvedValue({ name: 'My-Resource', kind: 'MongoDB' });
+
+        await readAzureResource(context, subscription, { ...request, kind });
+
+        const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
+        for (const value of [request.name, request.resourceGroup, 'My-Resource', subscription.name]) {
+            expect(logged).not.toContain(value);
+        }
     });
 
     it('returns the ARM casing for a MongoDB RU account, regardless of kind casing', async () => {
