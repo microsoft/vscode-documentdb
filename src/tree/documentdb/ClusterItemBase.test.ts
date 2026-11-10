@@ -464,12 +464,14 @@ describe('ClusterItemBase.connect', () => {
         const item = new ConnectTestClusterItem(makeCluster(), null);
         item.lastConnectionOutcome = 'canceled';
         item.lastConnectionCorrelationId = 'previous-attempt';
-        ClustersClientMock.getClient.mockImplementationOnce(async (_clusterId, _signal, onAttempt): Promise<ClustersClient> => {
-            expect(item.lastConnectionOutcome).toBeUndefined();
-            expect(item.lastConnectionCorrelationId).toBeUndefined();
-            onAttempt?.('current-attempt');
-            return cached;
-        });
+        ClustersClientMock.getClient.mockImplementationOnce(
+            async (_clusterId, _signal, onAttempt): Promise<ClustersClient> => {
+                expect(item.lastConnectionOutcome).toBeUndefined();
+                expect(item.lastConnectionCorrelationId).toBeUndefined();
+                onAttempt?.('current-attempt');
+                return cached;
+            },
+        );
 
         await expect(item.connect()).resolves.toBe(cached);
         expect(item.lastConnectionOutcome).toBe('connected');

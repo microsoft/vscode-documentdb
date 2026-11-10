@@ -255,9 +255,7 @@ describe('resolveAzureSubscription', (): void => {
         azureSubscriptionProvider.signIn.mockResolvedValue(false);
         (vscode.window.showInformationMessage as Mock).mockResolvedValue('Sign in to tenant');
 
-        await expect(
-            resolveAzureSubscription(context, { ...request, tenantId: 'tenant-id' }),
-        ).resolves.toBeUndefined();
+        await expect(resolveAzureSubscription(context, { ...request, tenantId: 'tenant-id' })).resolves.toBeUndefined();
 
         expect(azureSubscriptionProvider.signIn).toHaveBeenCalledExactlyOnceWith('tenant-id');
         expect(azureSubscriptionProvider.getSubscriptions).toHaveBeenCalledExactlyOnceWith(false);

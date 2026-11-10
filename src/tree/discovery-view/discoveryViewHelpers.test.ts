@@ -234,7 +234,13 @@ describe('Discovery view helpers', () => {
 
         expect(reveal).toHaveBeenLastCalledWith(collectionNode, { select: true, focus: true, expand: true });
         const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
-        for (const value of [request.displayName, request.azureResourceId, request.subscriptionId, database, collection]) {
+        for (const value of [
+            request.displayName,
+            request.azureResourceId,
+            request.subscriptionId,
+            database,
+            collection,
+        ]) {
             expect(logged).not.toContain(value);
         }
     });

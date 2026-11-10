@@ -152,6 +152,10 @@ values. Publishers must not put personal information, credentials, resource IDs,
   `visibilityProviderApplied`, `visibilityTenantApplied`, and `visibilitySubscriptionApplied`
   flags record each successful write, even if a later write fails. `visibilityChangesApplied`
   becomes true after the application finishes with changes.
+  The shared subscription setter can resolve after writing fallback storage even when the
+  primary setting write failed; `visibilitySubscriptionApplied` does not prove that the
+  effective filter changed in that pre-existing corner case. Tree navigation still fails
+  with an actionable filter message. See [CP-F3](./iterations/03-copilot-review-verification.md#cp-f3---verify-the-effective-subscription-filter).
 
 Unit tests cover source validation, explicit outcomes, phase measurements and correlation. They
 do not establish backend ingestion or GDPR classification; new fields/events still need those

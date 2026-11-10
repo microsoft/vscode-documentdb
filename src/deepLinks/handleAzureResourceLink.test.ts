@@ -269,10 +269,7 @@ describe('handleAzureResourceLinkRequest', (): void => {
     it('logs the parsed link and confirmation without parameter values or Azure names', async (): Promise<void> => {
         await handleAzureResourceLinkRequest(context, request);
 
-        expect(ext.outputChannel.trace).toHaveBeenNthCalledWith(
-            1,
-            '[DeepLink] Azure link parsed: kind=vcore',
-        );
+        expect(ext.outputChannel.trace).toHaveBeenNthCalledWith(1, '[DeepLink] Azure link parsed: kind=vcore');
         expect(ext.outputChannel.trace).toHaveBeenNthCalledWith(2, '[DeepLink] Showing Azure confirmation');
         const logged = vi.mocked(ext.outputChannel.trace).mock.calls.flat().join(' ');
         expect(logged).not.toContain(link.subscriptionId);

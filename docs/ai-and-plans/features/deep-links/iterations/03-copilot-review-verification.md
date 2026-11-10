@@ -22,15 +22,15 @@ created: 2026-11-10
 
 ## Summary
 
-| ID | Finding | Copilot | Verified | Accepted recommendation |
-| --- | --- | --- | --- | --- |
-| CP-F5 | Canceled connect still reveals descendants | med | med | Stop after a canceled connect |
-| CP-F2 | Canceled tenant sign-in reported as not found | med | med | Treat `false` as cancellation |
-| CP-F1 | Suppression flag not reference-counted | high | low | Per-cluster count, idempotent release |
-| CP-F8 | Stale `lastConnectionOutcome` in `connect()` | med | low; valid despite outdated location | Reset at the start of `connect()` |
-| CP-F4+6 | Names logged despite "never logged" promise | med | low | Drop values from trace lines |
-| CP-F3 | Subscription filter write may silently fail | med | low; pre-existing | Won't fix in #1067 |
-| CP-F7 | Case-insensitive collection fallback | med | low; pre-existing | Won't fix in #1067 |
+| ID      | Finding                                       | Copilot | Verified                             | Accepted recommendation               |
+| ------- | --------------------------------------------- | ------- | ------------------------------------ | ------------------------------------- |
+| CP-F5   | Canceled connect still reveals descendants    | med     | med                                  | Stop after a canceled connect         |
+| CP-F2   | Canceled tenant sign-in reported as not found | med     | med                                  | Treat `false` as cancellation         |
+| CP-F1   | Suppression flag not reference-counted        | high    | low                                  | Per-cluster count, idempotent release |
+| CP-F8   | Stale `lastConnectionOutcome` in `connect()`  | med     | low; valid despite outdated location | Reset at the start of `connect()`     |
+| CP-F4+6 | Names logged despite "never logged" promise   | med     | low                                  | Drop values from trace lines          |
+| CP-F3   | Subscription filter write may silently fail   | med     | low; pre-existing                    | Won't fix in #1067                    |
+| CP-F7   | Case-insensitive collection fallback          | med     | low; pre-existing                    | Won't fix in #1067                    |
 
 The original review recommends five small code changes covering six threads. CP-F5
 and CP-F2 are the most user-visible. None was judged a merge blocker by that review.
@@ -49,11 +49,11 @@ releases only after it returns. The race needs two confirmed dashboard links to 
 same cluster, a failed/canceled first connect, then a successful second expansion
 after release. The worst result is one extra cluster-wide dashboard panel.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Won't fix | No churn | Module remains subtly wrong; Copilot's high headline remains |
-| **`Map<string, number>` with a release closure guarded by `released`** | Isolated, self-evidently correct, trivial test | None identified |
-| Ownership tokens (`Set<symbol>` per cluster) | Same correctness | More code without benefit |
+| Option                                                                 | Pros                                           | Cons                                                         |
+| ---------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------ |
+| Won't fix                                                              | No churn                                       | Module remains subtly wrong; Copilot's high headline remains |
+| **`Map<string, number>` with a release closure guarded by `released`** | Isolated, self-evidently correct, trivial test | None identified                                              |
+| Ownership tokens (`Set<symbol>` per cluster)                           | Same correctness                               | More code without benefit                                    |
 
 **Accepted:** counter and idempotent release. Test overlapping owners, duplicate
 release, final cleanup, reacquisition and independent clusters.
@@ -89,11 +89,11 @@ The link ultimately stops with the accurate, actionable error "Could not find ..
 in the Discovery view ... a filter may still hide it." Nothing wrong is opened.
 Only `visibilitySubscriptionApplied=true` is inaccurate in this corner case.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Return effective outcome from setter and abort | Correct at source | Changes shared Filter Entries behavior; scope creep |
-| Re-read locally after the write | Local | Only improves telemetry; user result unchanged |
-| **Won't fix in #1067** | No churn; actionable existing failure | Applied flag can be wrong |
+| Option                                         | Pros                                  | Cons                                                |
+| ---------------------------------------------- | ------------------------------------- | --------------------------------------------------- |
+| Return effective outcome from setter and abort | Correct at source                     | Changes shared Filter Entries behavior; scope creep |
+| Re-read locally after the write                | Local                                 | Only improves telemetry; user result unchanged      |
+| **Won't fix in #1067**                         | No churn; actionable existing failure | Applied flag can be wrong                           |
 
 **Accepted: won't fix.** The shared helper is unchanged by this PR. Fixing regular
 filter UI and setter semantics belongs in a separate change. Document the telemetry
@@ -115,10 +115,10 @@ The Connections path does not trace names. These are names rather than secrets a
 only local trace output, but logs get pasted into public issues and can identify
 customers.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Weaken the PR description | No code | Weakens contract; inconsistent paths |
-| **Drop values while retaining step/category traces** | Preserves promise and useful diagnostics | Update existing assertions |
+| Option                                               | Pros                                     | Cons                                 |
+| ---------------------------------------------------- | ---------------------------------------- | ------------------------------------ |
+| Weaken the PR description                            | No code                                  | Weakens contract; inconsistent paths |
+| **Drop values while retaining step/category traces** | Preserves promise and useful diagnostics | Update existing assertions           |
 
 **Accepted:** keep kind and step information, not names. Assert resource, ARM
 display, resource-group, database and collection values never appear in traces.
@@ -153,11 +153,11 @@ An exact-name guard rejects the wrong node, causing a "not found" error instead 
 opening the wrong collection. Database names cannot differ only by case. Connections
 already uses the same lookup on main.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Exact direct-child lookup in Discovery | Local | Fixes only one path |
-| Exact-first match in shared `TreeParentCache.findChildById` | Fixes both paths | Shared tree change needs its own tests |
-| **Won't fix in #1067** | No churn; fails closed | Rare incorrect "not found" remains |
+| Option                                                      | Pros                   | Cons                                   |
+| ----------------------------------------------------------- | ---------------------- | -------------------------------------- |
+| Exact direct-child lookup in Discovery                      | Local                  | Fixes only one path                    |
+| Exact-first match in shared `TreeParentCache.findChildById` | Fixes both paths       | Shared tree change needs its own tests |
+| **Won't fix in #1067**                                      | No churn; fails closed | Rare incorrect "not found" remains     |
 
 **Accepted: won't fix.** Prefer an exact-first shared lookup when that cache is
 changed separately; do not broaden this deep-link fix.
@@ -198,5 +198,45 @@ No localized user-facing string changes are expected; trace text does not requir
 
 ## Implementation and verification log
 
-Pending implementation. Record each work item, commit and check result here.
-Live cloud/workbench verification remains separate from automated checks.
+| Item    | Implementation                                                                                                                                         | Commit                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| CP-F5   | Return immediately after canceled cluster expansion; database-only and collection-link tests prove no descendant reveal or storage lookup follows.     | [2e9373f0](https://github.com/microsoft/vscode-documentdb/commit/2e9373f0) |
+| CP-F2   | A false tenant sign-in result records cancellation and returns before another subscription lookup or error button.                                     | [1c1dcae4](https://github.com/microsoft/vscode-documentdb/commit/1c1dcae4) |
+| CP-F1   | Per-cluster counts retain every active owner; releases are idempotent, including after final release and reacquisition.                                | [920ac1e3](https://github.com/microsoft/vscode-documentdb/commit/920ac1e3) |
+| CP-F8   | Clear outcome and correlation before either connection path; tests cover three stale outcomes, cached success with a fresh ID, and fresh cancellation. | [951e7965](https://github.com/microsoft/vscode-documentdb/commit/951e7965) |
+| CP-F4+6 | Trace only bounded resource categories and navigation steps; tests reject requested/ARM resource names, groups, databases and collections.             | [2d938c5c](https://github.com/microsoft/vscode-documentdb/commit/2d938c5c) |
+| CP-F3   | Won't fix: shared pre-existing setter behavior, accurate actionable tree failure; document the applied-flag caveat in the feature README.              | No code change                                                             |
+| CP-F7   | Won't fix: shared pre-existing case-insensitive fallback fails closed; an exact-first shared lookup belongs in a separate change.                      | No code change                                                             |
+
+Regression-first execution reproduced each fix area before implementation.
+Case 1 passed: `npm run build`, then
+`npx vitest run src/tree/connections-view/connectionsViewHelpers.test.ts src/deepLinks src/tree/documentdb src/tree/discovery-view src/commands/openClusterDashboard`
+passed **17 files / 271 tests**. An initially incomplete typed test context was
+corrected before the successful build.
+
+### Case 2 - final local verification
+
+All required checks passed on 2026-11-10 after the five fixes:
+
+| Check                     | Result                                                            |
+| ------------------------- | ----------------------------------------------------------------- |
+| `npm run l10n`            | Not needed: no `vscode.l10n.t()` string added, changed or removed |
+| `npm run prettier-fix`    | Passed; formatting changes included in the verification follow-up |
+| `npm run l10n:check`      | Passed; 2,845 localization keys up to date                        |
+| `npm run lint`            | Passed                                                            |
+| `npm run build`           | Passed, including workspace source builds                         |
+| `npm run typecheck:tests` | Passed separately for all participating workspaces                |
+| `npx vitest run`          | Passed: 336 files, 5,912 tests passed, one skipped                |
+| `npm run package`         | Passed: VSIX produced, 202 files, 8.55 MB                         |
+
+The earlier [cross-vendor AI pre-review](./03-azure-resource-links-review.md)
+and this verified Copilot supplement are committed review evidence. GPT Astra's
+advisory was planning, not an additional independent branch review.
+
+All eight Copilot threads received replies with the published fix commits or the
+accepted won't-fix rationale and are resolved. CP-F4 and CP-F6 share one fix;
+CP-F8 is addressed at the shared `connect()` entry point despite its moved thread.
+CP-F3 and CP-F7 remain known limitations, not claimed fixes.
+
+Live cloud/workbench verification remains separate from automated checks; none is
+claimed here. The PR's existing non-draft status was not changed.
