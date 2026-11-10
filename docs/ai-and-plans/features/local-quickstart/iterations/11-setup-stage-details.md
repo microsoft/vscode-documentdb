@@ -227,6 +227,35 @@ Rules:
 
 ## 6. Sequencing
 
+### Execution record — 2026-11-10
+
+Operator instruction: implement this accepted plan, use Opus 5.5 for the work-item
+plan, run Case 1 and Case 2 until green, and create a PR against the current
+`dev/guanzhousong/quickstart-podman-fallback` branch. Work starts at
+2026-11-10 06:34:52 UTC on `dev/tnaum/quickstart-setup-stage-details`.
+The pre-existing untracked Podman archive is outside this work.
+
+| Item | Scope | Model and reason | Prerequisite | Status |
+| ---- | ----- | ---------------- | ------------ | ------ |
+| P1 | Shared checking-row disclosure, focus/reset behavior; remove accordion | Terra: self-contained webview migration | — | Queued |
+| P2 | Typed runtime image inspection, per-stage facts, non-readiness presentation | Sol: host/webview contract and runtime lifecycle | P1 | Queued |
+| P3 | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2 | Queued |
+| P4 | Aggregate disclosure telemetry, browser scenarios, docs and decision record | Sol: session lifecycle and cross-module verification | P3 | Queued |
+
+Contract review advised by Opus 5.5 (high confidence): store terminal facts by
+`facts.kind`, not `event.stage`; preserve mid-setup Docker failure evidence on the
+owning failed row; leave W5 wording untouched; use the accepted absolute check
+timestamp inside Details. Unknown optional facts are omitted. Inspect results are
+allow-listed; never forward raw records or environment variables. Image creation
+dates must be validated from actual source fields, not the client's synthesized
+date. Readiness facts can omit sample-data outcome before finalization; `hello`
+failure must not retry a successful ping. These refine the illustrative internal
+contract without changing persisted data, authentication, or the accepted UI.
+
+The leader chose sequential ownership and the four commits above (confidence
+100%: phases overlap in service, presentation, and scenario files). No additional
+work items, W5 redesign, step timings, or optional hardening are in scope.
+
 1. **A PR stacked on #1065.** Branch from `dev/guanzhousong/quickstart-podman-fallback` and open
    the PR against that branch, not `main`. When #1065 merges, retarget it to `main`. Keep the
    branch rebased or merged on top of #1065 while it is open.
