@@ -13,6 +13,10 @@ Government, Azure China, and custom Azure clouds with **Microsoft Entra ID** sig
 Native DocumentDB authentication (username and password) works the same way in every cloud and
 needs none of the settings on this page.
 
+Entra account sign-in and managed identity also require a [trusted service
+destination](./entra-id-trusted-servers) and valid TLS certificates. Selecting a cloud or token
+audience does not grant trust to every server in that cloud.
+
 **Table of Contents**
 
 - [What to do when](#what-to-do-when)
@@ -30,35 +34,37 @@ needs none of the settings on this page.
 
 ## What to do when
 
-| When                                                                                | Do this                                                                                                                                                                            |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| You sign in with a username and password                                            | Nothing. This page does not apply.                                                                                                                                                 |
-| Your cluster is in Azure US Government or Azure China and you sign in with Entra ID | Set [`microsoft-sovereign-cloud.environment`](#microsoft-sovereign-cloudenvironment) to that cloud, then sign in again.                                                            |
-| You see _"This cluster is in …, but VS Code sign-in is set to …"_                   | Same as above: select the cluster's cloud.                                                                                                                                         |
-| You use a managed identity and the host name ends in `azure.us` or `azure.cn`       | Nothing. The extension recognizes the cloud.                                                                                                                                       |
-| You see _"We could not determine which Azure cloud this virtual machine is in"_     | Set [`ossrdbmsEndpoint`](#documentdbcustomenvironmentossrdbmsendpoint) to your cloud's value.                                                                                      |
-| Your cluster uses your own DNS name and Entra ID or managed identity is not offered | Set [`hostnameSuffix`](#documentdbcustomenvironmenthostnamesuffix) to that name's suffix, then run **New Connection** or **Update Credentials** again.                             |
-| You see _"The driver does not appear to allow this cluster host…"_                  | Set [`hostnameSuffix`](#documentdbcustomenvironmenthostnamesuffix).                                                                                                                |
-| Sign-in shows **Something went wrong** or AADSTS65002 in US Government or China     | Not fixable on your side yet. Use a username and password or a managed identity. See [AADSTS65002](#sign-in-error-aadsts65002).                                                    |
-| You see another error                                                               | Look it up in [Error messages](#error-messages).                                                                                                                                   |
-| You use a custom cloud                                                              | Follow [Custom clouds](#custom-clouds).                                                                                                                                            |
-| You changed a setting and nothing changed                                           | Select **Retry** or reload the window ([details](#when-a-change-takes-effect)). In a remote window, check that you edited the **Remote** settings ([details](#where-to-set-them)). |
-| You need help                                                                       | [Collect diagnostic information](#collect-diagnostic-information) and [report a problem](#report-a-problem).                                                                       |
+| When                                                                                                                     | Do this                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You sign in with a username and password                                                                                 | Nothing. This page does not apply.                                                                                                                                                 |
+| Your cluster is in Azure US Government or Azure China and you sign in with Entra ID                                      | Set [`microsoft-sovereign-cloud.environment`](#microsoft-sovereign-cloudenvironment) to that cloud, then sign in again.                                                            |
+| You see _"This cluster is in …, but VS Code sign-in is set to …"_                                                          | Same as above: select the cluster's cloud.                                                                                                                                         |
+| You use a managed identity and the service host ends in `mongocluster.cosmos.azure.us` or `mongocluster.cosmos.azure.cn` | Nothing. The extension recognizes the cloud.                                                                                                                                       |
+| You see _"We could not determine which Azure cloud this virtual machine is in"_                                          | Set [`ossrdbmsEndpoint`](#documentdbcustomenvironmentossrdbmsendpoint) to your cloud's value.                                                                                      |
+| Your cluster uses your own DNS name and Entra ID or managed identity is not offered                                      | Compare every host with the Azure portal connection string first; follow [Trusted Servers](./entra-id-trusted-servers) before considering a suffix override.                       |
+| You see _"Microsoft Entra ID isn't allowed for this server"_ or a driver host-rejection error                            | Follow [Trusted Servers](./entra-id-trusted-servers). A broad Azure domain or TLS bypass cannot grant trust.                                                                       |
+| Sign-in shows **Something went wrong** or AADSTS65002 in US Government or China                                          | Not fixable on your side yet. Use a username and password or a managed identity. See [AADSTS65002](#sign-in-error-aadsts65002).                                                    |
+| You see another error                                                                                                    | Look it up in [Error messages](#error-messages).                                                                                                                                   |
+| You use a custom cloud                                                                                                   | Follow [Custom clouds](#custom-clouds).                                                                                                                                            |
+| You changed a setting and nothing changed                                                                                | Select **Retry** or reload the window ([details](#when-a-change-takes-effect)). In a remote window, check that you edited the **Remote** settings ([details](#where-to-set-them)). |
+| You need help                                                                                                            | [Collect diagnostic information](#collect-diagnostic-information) and [report a problem](#report-a-problem).                                                                       |
 
 ## What you need to configure
 
 The same guidance as a matrix. Look up the end of the cluster host name in your connection string,
 and the way you authenticate.
 
-| Cluster host name ends in                             | Entra ID sign-in                                                                         | Managed identity                                                                                                                              |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `azure.com` (public cloud)                            | Nothing                                                                                  | Nothing                                                                                                                                       |
-| `azure.us` (US Government) or `azure.cn` (China)      | [Select the cloud](#microsoft-sovereign-cloudenvironment)                                | Nothing; the host name identifies the cloud                                                                                                   |
-| Your own DNS name, such as `db1.data.contoso.example` | Select the cloud, and set [`hostnameSuffix`](#documentdbcustomenvironmenthostnamesuffix) | Set `hostnameSuffix`. In US Government, China, or a custom cloud, also set [`ossrdbmsEndpoint`](#documentdbcustomenvironmentossrdbmsendpoint) |
-| Anything, in a [custom cloud](#custom-clouds)         | Select `custom` and define the cloud. For your own DNS names, also set `hostnameSuffix`  | Set `ossrdbmsEndpoint`. For your own DNS names, also set `hostnameSuffix`                                                                     |
+| Cluster host name ends in                                                                | Entra ID sign-in                                                                                       | Managed identity                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mongocluster.cosmos.azure.com` (public cloud)                                           | Nothing                                                                                                | Nothing                                                                                                                                                                                                         |
+| `mongocluster.cosmos.azure.us` (US Government) or `mongocluster.cosmos.azure.cn` (China) | [Select the cloud](#microsoft-sovereign-cloudenvironment)                                              | Nothing; the service host name identifies the cloud                                                                                                                                                             |
+| A verified custom service name, such as `db1.data.contoso.example`                       | Select the cloud; follow [Trusted Servers](./entra-id-trusted-servers) before setting `hostnameSuffix` | Follow [Trusted Servers](./entra-id-trusted-servers). In US Government, China, or a custom cloud, also set [`ossrdbmsEndpoint`](#documentdbcustomenvironmentossrdbmsendpoint) if the cloud cannot be determined |
+| A verified service in a [custom cloud](#custom-clouds)                                   | Select `custom` and define the cloud; confirm destination trust separately                             | Set `ossrdbmsEndpoint`; confirm destination trust separately                                                                                                                                                    |
 
-A private endpoint that keeps its Azure host name, such as
-`<cluster>.mongocluster.cosmos.azure.us`, counts as `azure.us` and needs nothing extra.
+A private endpoint that keeps its recognized service host name, such as
+`<cluster>.mongocluster.cosmos.azure.us`, needs no suffix override. Private DNS still has to resolve
+correctly, and the certificate must cover the host name. Live Government, China, and private-link
+endpoint/certificate behavior has not been verified by the extension team.
 
 Do not set the DocumentDB settings unless the table, or an error message, asks for them.
 
@@ -137,21 +143,24 @@ Things to know:
 
 ### `documentDB.customEnvironment.hostnameSuffix`
 
-The DNS suffix of your DocumentDB service, for host names that do not end in `azure.com`,
-`azure.us`, or `azure.cn`. For example, `.data.contoso.example` covers
-`db1.data.contoso.example`.
+An explicit trust grant for a confirmed Azure DocumentDB service suffix that is not already
+recognized. It is one string, not a list. For example, `.data.contoso.example` covers
+`db1.data.contoso.example`, but not the suffix itself.
 
 Setting it does two things for hosts under that suffix:
 
 - **New Connection** and **Update Credentials** offer Microsoft Entra ID and managed identity.
-- The extension sends Microsoft Entra ID tokens to those hosts. Without it, connecting fails with
-  _"The driver does not appear to allow this cluster host for Microsoft Entra ID authentication"_.
+- The extension can send Microsoft Entra ID tokens to those hosts, provided every connection host
+  qualifies and all servers pass TLS certificate and hostname validation.
 
 It applies in every cloud, public cloud included, and never selects the cloud or the token resource.
 
-> **Security:** a token is sent to any host under this suffix. Use the narrowest suffix that covers
-> your clusters, in a domain your organization controls. Confirm it with your network or cloud
-> administrator. Bare top-level domains and public suffixes such as `com.cn` are rejected.
+> **Security:** Microsoft Entra ID tokens are sent to servers ending with this suffix. Add only a
+> suffix you have confirmed belongs to Azure DocumentDB. First compare the host names with the
+> Azure portal connection string and report an unrecognized service endpoint on GitHub. Then,
+> if needed, choose the narrowest service suffix. Broad Azure domains, parents of built-in service
+> suffixes, `cloudapp` labels, sovereign customer-hosting parents, bare TLDs, and common public
+> suffixes are rejected. See [Trusted Servers](./entra-id-trusted-servers) for the full guidance.
 
 ## Where to set them
 
@@ -171,8 +180,9 @@ Changes are saved straight away.
 
 If you prefer to edit JSON, run **Preferences: Open User Settings (JSON)**, or **Preferences: Open
 Remote Settings (JSON)** in a remote window, from the Command Palette. Both DocumentDB properties
-live in one `documentDB.customEnvironment` object. For example, a managed identity connection to a
-private DNS name in US Government:
+live in one `documentDB.customEnvironment` object. The following illustrates a managed identity
+connection to a **previously verified and certificate-covered** private service name in US
+Government; do not copy the suffix without the checks above:
 
 ```json
 {
@@ -193,6 +203,7 @@ VS Code underlines a value it does not accept and explains why.
   for managed identity, where you connect to an Azure VM over SSH.
 - **Workspace and folder settings are ignored**, so a repository's `.vscode/settings.json` cannot
   change where tokens are sent.
+- **Settings Sync does not carry this machine-scoped trust grant** to another machine.
 
 To turn an override off, remove the property (the **Remove** icon on its row in the Settings
 editor), or delete it or set it to an empty string in JSON.
@@ -204,21 +215,25 @@ The extension reads these settings each time it connects to a cluster.
 - If the connection **failed**, select **Retry** under the cluster.
 - If the cluster is **already connected**, run **Developer: Reload Window**.
 - An open **interactive shell** or **Query Playground** keeps the cloud it started with. Close it and
-  open a new one, or reload the window.
+  open a new one, or reload the window, to change its audience or identity. Destination trust is
+  different: each token relay checks the current `hostnameSuffix` against the original session
+  connection. Removing custom trust can stop the next token request; it does not forcibly close
+  an already authenticated socket.
 
 ## Private endpoints and custom DNS names
 
-A private endpoint that keeps its Azure host name needs no extra setting. When the connection
-string uses your own DNS name instead, for example a CNAME to the cluster, set
-[`hostnameSuffix`](#documentdbcustomenvironmenthostnamesuffix) to that name's suffix. Managed
-identity in US Government, China, or a custom cloud also needs
-[`ossrdbmsEndpoint`](#documentdbcustomenvironmentossrdbmsendpoint), because a private name does not
-say which cloud it belongs to.
+A private endpoint using a recognized service FQDN needs no suffix override. Prefer the
+connection string shown in the Azure portal. If a custom alias is necessary, first follow
+[Trusted Servers](./entra-id-trusted-servers); a CNAME alone proves neither permission to receive
+tokens nor certificate coverage. Managed identity in US Government, China, or a custom cloud may
+also need [`ossrdbmsEndpoint`](#documentdbcustomenvironmentossrdbmsendpoint), because a private name
+does not identify the cloud.
 
-For `mongodb://` connection strings, only the host name you entered is checked, not the name it
-resolves to. For `mongodb+srv://` connection strings, the host names that the SRV record points to
-must also end with the trusted suffix. If they do not, for example when a private name points to `azure.us`
-hosts, use the connection string shown in the Azure portal instead.
+Every seed host must be trusted, and SRV targets, discovered servers, and reconnects must remain
+within that connection's approved suffixes and pass certificate validation. Do not substitute
+localhost, an IP address, a tunnel address, or a trailing-dot name for the service FQDN.
+Certificate/hostname-validation bypasses are ignored for Entra, including managed identity; they
+cannot rescue an alias that lacks trust or a matching certificate.
 
 ## Custom clouds
 
@@ -230,14 +245,17 @@ hosts, use the connection string shown in the Azure portal instead.
 3. Connect. The extension finds the token resource from the cloud definition.
 4. If it cannot, the error message names `documentDB.customEnvironment.ossrdbmsEndpoint`. Set it to
    the value your cloud operator gives you.
-5. If your cluster host names do not end in `azure.com`, `azure.us`, or `azure.cn`, set
-   `documentDB.customEnvironment.hostnameSuffix`.
+5. If the service destination is not recognized, follow [Trusted Servers](./entra-id-trusted-servers)
+   before considering `documentDB.customEnvironment.hostnameSuffix`.
 
 The extension never falls back to the public cloud for a custom cloud.
 
 ## How the extension chooses the cloud
 
 This section is for troubleshooting. You do not need it to configure a connection.
+
+Cloud inference below is separate from destination trust. The trusted-server check runs before
+token acquisition; a host classified as public, Government, or China is not thereby trusted.
 
 **Entra ID sign-in** uses the cloud in `microsoft-sovereign-cloud.environment`. Before signing in,
 the extension compares it with the cluster's host names. If a host name ends in `azure.com`,
@@ -268,15 +286,15 @@ The **Who can fix it** column tells you whether to change a setting yourself or 
 
 The extension stops before requesting a token when the configuration cannot work.
 
-| Message starts with                                                                          | What to do                                                                                                              | Who can fix it                      |
-| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| This cluster is in _&lt;cloud&gt;_, but VS Code sign-in is set to _&lt;cloud&gt;_            | Change [`microsoft-sovereign-cloud.environment`](#microsoft-sovereign-cloudenvironment) to the cluster's cloud          | You                                 |
-| The host names of this cluster belong to more than one Azure cloud                           | Fix the connection string so all hosts are in one cloud                                                                 | You                                 |
-| We could not determine which Azure cloud this virtual machine is in                          | Set [`ossrdbmsEndpoint`](#documentdbcustomenvironmentossrdbmsendpoint) to your cloud's value                            | You                                 |
-| VS Code is signed in to a custom cloud, and we could not find which Microsoft Entra resource | Set `ossrdbmsEndpoint` to the value from your cloud operator                                                            | You, with the cloud operator        |
-| The VS Code custom cloud definition could not be read                                        | Complete all six fields of [`microsoft-sovereign-cloud.customEnvironment`](#microsoft-sovereign-cloudcustomenvironment) | You, with the cloud operator        |
-| "documentDB.customEnvironment.ossrdbmsEndpoint" must be an HTTPS resource                    | Correct the value, or clear it                                                                                          | You                                 |
-| The driver does not appear to allow this cluster host for Microsoft Entra ID authentication  | Set [`hostnameSuffix`](#documentdbcustomenvironmenthostnamesuffix) to your service's DNS suffix                         | You, with the network administrator |
+| Message starts with                                                                          | What to do                                                                                                                                                                        | Who can fix it               |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| This cluster is in _&lt;cloud&gt;_, but VS Code sign-in is set to _&lt;cloud&gt;_              | Change [`microsoft-sovereign-cloud.environment`](#microsoft-sovereign-cloudenvironment) to the cluster's cloud                                                                    | You                          |
+| The host names of this cluster belong to more than one Azure cloud                           | Fix the connection string so all hosts are in one cloud                                                                                                                           | You                          |
+| We could not determine which Azure cloud this virtual machine is in                          | Set [`ossrdbmsEndpoint`](#documentdbcustomenvironmentossrdbmsendpoint) to your cloud's value                                                                                      | You                          |
+| VS Code is signed in to a custom cloud, and we could not find which Microsoft Entra resource | Set `ossrdbmsEndpoint` to the value from your cloud operator                                                                                                                      | You, with the cloud operator |
+| The VS Code custom cloud definition could not be read                                        | Complete all six fields of [`microsoft-sovereign-cloud.customEnvironment`](#microsoft-sovereign-cloudcustomenvironment)                                                           | You, with the cloud operator |
+| "documentDB.customEnvironment.ossrdbmsEndpoint" must be an HTTPS resource                    | Correct the value, or clear it                                                                                                                                                    | You                          |
+| Microsoft Entra ID isn't allowed for this server, or the driver does not allow the host      | Check every host against the Azure portal connection string; report a missing endpoint before granting a narrow custom suffix. See [Trusted Servers](./entra-id-trusted-servers). | You, with the cluster owner  |
 
 ### From Microsoft Entra ID
 
@@ -331,9 +349,11 @@ lines that start with `[Authentication]`. The one that matters most for cloud pr
 | `hostCloud`       | The cloud identified from the cluster host names, `none` for your own DNS names, or `conflicting`                                                                                                                                                                     |
 | `errorKind`       | Only on `entraCloud.unresolved`: which of the [before sign-in](#before-sign-in) messages was shown                                                                                                                                                                    |
 
-These lines contain no tokens, passwords, tenant IDs, or cluster host names. A later line lists
-`allowedHosts`, the host suffixes that may receive the token, which can include your
-`hostnameSuffix`.
+These cloud-resolution lines contain no tokens, passwords, tenant IDs, or cluster host names.
+
+`entraDestination.evaluated` records a bounded destination class, not a host name. If a custom
+suffix admits the connection, a separate `[Auth]` entry records that suffix. Redact private suffixes
+before sharing the output.
 
 ### The sign-in logs
 

@@ -69,12 +69,16 @@ readable without a support round trip.
   playground worker asks the main thread for a token; the main thread resolves its scope.
 - [managedIdentityConnectionString.ts](../../../../src/documentdb/auth/managedIdentityConnectionString.ts):
   writes a best-effort cloud-aware `TOKEN_RESOURCE` into copied connection strings.
-- [oidcAllowedHosts.ts](../../../../src/documentdb/auth/oidcAllowedHosts.ts): already accepts
-  `*.azure.us` and `*.azure.cn` hosts (#639, #934). Custom suffixes come from the machine-scoped
-  `documentDB.customEnvironment` object, not workspace overrides; bare TLDs and common two-label
-  public suffixes are rejected. The same closed Azure TLD list and validated suffix recognize
-  DocumentDB hosts in New Connection and Update Credentials, making managed identity available
-  for public, Government, China, and configured service domains without matching lookalikes.
+- [oidcAllowedHosts.ts](../../../../src/documentdb/auth/oidcAllowedHosts.ts): narrows Entra
+  destinations to hosts below `mongocluster.cosmos.azure.com`, `mongocluster.cosmos.azure.us`,
+  `mongocluster.cosmos.azure.cn`, or the validated single custom suffix. Every seed must qualify.
+  The existing `documentDB.customEnvironment.hostnameSuffix` is machine-scoped; workspace/folder
+  settings and Settings Sync cannot grant trust. Broad Azure/service parents, `cloudapp` labels,
+  sovereign customer-hosting parents, bare TLDs and common public suffixes are rejected.
+- [oidcClientOptions.ts](../../../../src/documentdb/auth/oidcClientOptions.ts): sanitizes URI
+  authentication, TLS-bypass and CA/proxy overrides, narrows `ALLOWED_HOSTS`, and forces certificate
+  validation plus policy-first `checkServerIdentity` for main-thread and worker OIDC clients.
+  Custom trust does not waive certificate or all-host requirements.
 - [entraErrors/](../../../../src/documentdb/auth/entraErrors/): the single classifier table,
   pure text classifier, recent token-failure registry, and Entra error explainer.
 - [errorExplanationService.ts](../../../../src/services/errorExplanationService.ts): the
@@ -88,6 +92,10 @@ Entra and managed identity attempts attach only `cloudCategory`, `tokenResourceR
 `worker.startup` telemetry. The attempt's trace context owns these properties; raw resolution
 details (including resources and local IMDS evidence) are never spread into telemetry.
 See [telemetry correlation IDs](../../telemetry-correlation-ids.md#entra-cloud-resolution).
+Destination checks additionally project bounded `entraDestinationClass` and, on rejection,
+`microsoftCloudDomain` / `serviceLabel` flags through `authTrace` into existing startup properties.
+See the [unexecuted WI0 query](../deep-links/iterations/04-entra-token-destination-hardening.md#wi0-bounded-measurement-query-not-executed);
+no production sizing or measurement-first release is claimed.
 
 `ClustersClient` sends the same extension `appName` to known `azure.com`, `azure.us`, and
 `azure.cn` endpoints using the existing closed Azure suffix matcher. Lookalikes are excluded.
@@ -98,16 +106,17 @@ Local resolution traces retain an IMDS `azEnvironment` only when it matches
 `AZUREPUBLICCLOUD` recognition is unchanged. No new IMDS-to-cloud mapping is inferred (D7),
 and this local evidence is excluded from startup telemetry.
 
-The existing Entra diagnostics rule table also recognizes the driver's precise OIDC
-`ALLOWED_HOSTS` host-rejection message. Through `ErrorExplanationService`, it returns a
-text-only explanation naming `documentDB.customEnvironment.hostnameSuffix` in user
-settings, without echoing the host, changing the error, or requiring a recent token failure.
+The Entra diagnostics rule table also recognizes the driver's precise OIDC `ALLOWED_HOSTS`
+host-rejection message through `ErrorExplanationService`, without echoing the host, changing the
+error, or requiring a recent token failure. Destination rejections use the trusted-server explanation and
+Learn More/recovery flow; neither a driver error nor a picker row grants trust. Compare portal
+connection strings and report a missing endpoint before considering a narrow suffix override.
 
 Both custom-environment properties have Settings schema patterns and actionable validation
-messages. The audience validation added in R1 is reused; the hostname-suffix pattern mirrors
-the existing normalizer, including case, an optional leading dot, valid DNS labels, and R5's
-bare/common-public-suffix rejection. Empty or whitespace-only values still clear either property.
-There is no new runtime validation path.
+messages. The audience validation added in R1 is reused. The hostname-suffix schema checks DNS
+shape, an optional leading dot and common public suffixes; the runtime destination policy also
+rejects broad service/customer-hosting parents. Empty or whitespace-only values still clear either
+property. The audience/resource-manager configuration is independent of destination trust.
 
 The hostname property is `hostnameSuffix`, renamed before shipping without a compatibility alias.
 Earlier iteration records retain the original property name.
@@ -119,6 +128,10 @@ credential lookup remain real. These are offline wiring checks, not live soverei
 
 ## Documents
 
+- [Entra destination hardening](../deep-links/iterations/04-entra-token-destination-hardening.md):
+  accepted Option B scope, local enforcement evidence, and live verification limits.
+- [Trusted-server user guide](../../../user-manual/entra-id-trusted-servers.md): service FQDNs,
+  certificate requirements, and the existing narrow machine trust override.
 - [research-findings.md](research-findings.md): the reported failure, error analysis, where the GUIDs
   come from, precedent, how other extensions handle sovereign clouds, per-cloud values with sources,
   and open questions.
@@ -131,6 +144,8 @@ credential lookup remain real. These are offline wiring checks, not live soverei
 ## Open gaps
 
 - No sovereign-cloud test access. Behavior after the change is inferred, not observed.
+- The new service suffix policy does not supply live Government/China/private-link endpoint or
+  certificate evidence. Manual recovery/picker/navigation and localization layout are pending.
 - Not confirmed which audience DocumentDB accepts in US Government. ARM metadata publishes the
   `usgovcloudapi.net` URI as the OSSRDBMS resource there, but no DocumentDB document confirms it.
 - Whether China clusters accept the public audience today (check telemetry before shipping, D11).

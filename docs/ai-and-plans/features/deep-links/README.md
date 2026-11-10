@@ -15,6 +15,8 @@ code:
 **Status:** in progress — the action switch is new; `local` is its first non-`connect` action.
 Iteration 3 ([plan](./iterations/03-azure-resource-links.md)) added `/connect/azure` for Azure
 portal links and an `open=` argument; implemented, not yet manually verified or released.
+Iteration 4 ([accepted plan](./iterations/04-entra-token-destination-hardening.md#accepted-execution-plan-2026-11-10))
+hardens Entra token destinations across all connection entry points, not just links.
 
 > How a URL from outside VS Code reaches this extension, and why the vocabulary looks the way it
 > does.
@@ -48,11 +50,48 @@ Local" link has no connection string by definition, because the container does n
 - `src/tree/discovery-view/discoveryViewHelpers.ts` — `revealInDiscoveryView`, which finds the
   cluster by `azureResourceId` and expands it, which connects it once (D0015)
 - `src/extension.ts` — registers it via `vscode.window.registerUriHandler`
+- `src/documentdb/auth/oidcAllowedHosts.ts` and `oidcClientOptions.ts`: shared destination policy,
+  sanitized OIDC options, and per-socket certificate/hostname enforcement for host and worker clients
 
 ## User docs
 
 - [docs/user-manual/how-to-construct-url.md](../../../user-manual/how-to-construct-url.md) — **the
   public contract.** Any change to the vocabulary belongs there in the same PR.
+- [Microsoft Entra ID Trusted Servers](../../../user-manual/entra-id-trusted-servers.md): the public
+  rejection/recovery and custom-suffix trust contract, including the setting's security consequence.
+
+## Entra token destination boundary
+
+The policy admits only hosts below `mongocluster.cosmos.azure.com`,
+`mongocluster.cosmos.azure.us`, `mongocluster.cosmos.azure.cn`, or a validated narrow custom suffix.
+Every seed must qualify before token acquisition. A connection receives only the suffix patterns it
+needs; driver seed checks and a policy-first `checkServerIdentity` protect SRV targets, topology
+members and reconnects before application/token bytes are sent. TLS certificate and hostname
+validation remain mandatory. URI authentication, TLS-bypass, CA and proxy overrides cannot weaken
+the OIDC configuration; native/password and no-auth behavior is unchanged.
+
+The operator selected **Option B**, retaining the existing machine-scoped, single-string
+`documentDB.customEnvironment.hostnameSuffix`; no new setting, list, kill switch, per-connection
+bypass, or mandatory ARM attestation is introduced. See [D0018](./decisions.md#0018--entra-tokens-go-only-to-service-destinations-with-the-existing-option-b-override)
+for the exact operator statement and the separately attributed implementation choices.
+
+Interactive sign-in remains eager **after** the destination check; deferring consent to the driver's
+60-second callback would not cancel a pending VS Code prompt. Each worker token relay checks the
+current suffix against the original session connection, but uses the captured authentication
+identity and audience, not request-message identity fields or live `CredentialCache` entries.
+Untrusted OIDC declarations cannot preselect Entra. Picker explanations open Learn More and return
+to the picker without granting trust. Editing an approved connection to a rejected destination
+saves the string and clears an Entra/managed-identity selection; saved rejected connections offer
+explicit recovery, never a silent authentication fallback.
+
+The database token audience is shared with Azure Database for PostgreSQL and MySQL. A token sent
+to an untrusted server may therefore be replayable wherever the identity has database roles and
+network access, subject to expiry and access policies. Restricting destinations does not change
+that audience.
+
+The [WI0 sample query](./iterations/04-entra-token-destination-hardening.md#wi0-bounded-measurement-query-not-executed)
+uses existing startup events; `entraDestination.evaluated` is an Output trace operation, not a new
+telemetry event. No production query or pre-enforcement sizing has been performed.
 
 ## UX review
 
@@ -173,6 +212,12 @@ checks in the telemetry pipeline before dashboard use.
 
 ## Open gaps
 
+- **Iteration 4 verification is not live endpoint evidence.** The 28-case local protocol harness
+  exercises real TLS and dummy tokens. Its later-SRV rejection uses a trailing-dot host that passes
+  the driver's parent-domain check, not an arbitrary out-of-domain poll answer. Live Government,
+  China, private-link endpoint/certificate coverage, manual consent/picker/modal/recovery
+  presentation, Learn More navigation, and localization layout remain open. No service-team
+  confirmation, upstream driver report, or service-specific audience request is claimed.
 - **Discovery plugin actions are unimplemented.** The handler's original JSDoc anticipated that
   "other modes … will be handled by our discoverability plugins", and five discovery plugins exist
   (`service-atlas-mongodb`, `service-azure-mongo-ru`, `service-azure-mongo-vcore`,

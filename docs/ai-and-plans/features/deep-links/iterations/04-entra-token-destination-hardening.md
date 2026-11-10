@@ -65,6 +65,9 @@ The implementation branch is `dev/tnaum/entra-token-destination-hardening`, stac
   per-socket TLS enforcement still precede token transmission.
 - Strip **every case variant** of URI authentication and TLS parameters. The installed
   case-insensitive URL wrapper's single `delete()` can leave another casing behind.
+- Remove URI-supplied CA/CRL and proxy overrides as well: review found these could replace peer
+  trust or routing despite the hostname hook. Extension-controlled TLS configuration is a separate
+  trust boundary; an untrusted connection string cannot supply its own.
 - Recheck current policy at each token relay, using the worker's original connection and captured
   authentication identity, never request-message identity fields or live credential-cache entries.
 - Use a selectable explanatory picker row that opens **Learn More**, then returns to the picker.
@@ -149,16 +152,16 @@ Coding agents use the harness's configured coding model; the operator explicitly
 `claude-opus-5.5` for the read-only advisor. Each batch gets a separate commit and an inline
 completion note. Non-overlapping batches may run concurrently.
 
-| Batch | Original items | Ownership and deliverable | Prerequisite |
-| --- | --- | --- | --- |
-| B0 | plan | Leader: commit this revised plan before coding | source proposal committed |
-| B1 | WI2, WI3, WI8 core | Policy/builder worker: `oidcAllowedHosts.ts` and tests; new `oidcClientOptions.ts` and tests, `entraDestinationSettings.ts`. Keep legacy exports until consumers migrate. | B0 |
-| B2 | WI0, WI4, WI5 | Lifecycle worker: Entra/managed-identity handlers and tests, `WorkerSessionManager`, `workerTypes`, `playgroundWorker`, `ShellSessionManager`, `PlaygroundEvaluator`, related tests and `authTrace`. Narrow driver options, original-session relays, bounded telemetry and safe output records. | B1 |
-| B3 | WI4 proof | Harness worker: new `oidcDestination.harness.test.ts` and its fixtures only. Real installed driver, loopback TLS, dummy token, seed/SRV/topology/polling/reconnect/session tests. | B1 |
-| B4a | WI6 pickers | Picker worker: `AuthMethod`, `ChooseAuthMethodStep`, authentication/new/update-credentials contexts, new-connection and update-credentials prompt/orchestration files and their tests. | B1 |
-| B4b | WI6 saved state | Connection worker: update-connection-string execution/tests, `DocumentDBClusterItem`, failure presentation, `ClusterItemBase`, `ConnectionsBranchDataProvider`, `constants`, `entraErrorRules` and related tests. | B4a |
-| B5 | WI7, WI8 docs | Documentation worker: setting description, new public page, sovereign/managed-identity user guidance, active feature docs/decisions and acceptance evidence. | B2, B3, B4b |
-| B6 | verification | Leader/check worker: Case 1 and full Case 2, required fixes, AI pre-review committed under this feature's iterations; publish stacked PR. | B5 |
+| Batch | Original items     | Ownership and deliverable                                                                                                                                                                                                                                                                       | Prerequisite              |
+| ----- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| B0    | plan               | Leader: commit this revised plan before coding                                                                                                                                                                                                                                                  | source proposal committed |
+| B1    | WI2, WI3, WI8 core | Policy/builder worker: `oidcAllowedHosts.ts` and tests; new `oidcClientOptions.ts` and tests, `entraDestinationSettings.ts`. Keep legacy exports until consumers migrate.                                                                                                                       | B0                        |
+| B2    | WI0, WI4, WI5      | Lifecycle worker: Entra/managed-identity handlers and tests, `WorkerSessionManager`, `workerTypes`, `playgroundWorker`, `ShellSessionManager`, `PlaygroundEvaluator`, related tests and `authTrace`. Narrow driver options, original-session relays, bounded telemetry and safe output records. | B1                        |
+| B3    | WI4 proof          | Harness worker: new `oidcDestination.harness.test.ts` and its fixtures only. Real installed driver, loopback TLS, dummy token, seed/SRV/topology/polling/reconnect/session tests.                                                                                                               | B1                        |
+| B4a   | WI6 pickers        | Picker worker: `AuthMethod`, `ChooseAuthMethodStep`, authentication/new/update-credentials contexts, new-connection and update-credentials prompt/orchestration files and their tests.                                                                                                          | B1                        |
+| B4b   | WI6 saved state    | Connection worker: update-connection-string execution/tests, `DocumentDBClusterItem`, failure presentation, `ClusterItemBase`, `ConnectionsBranchDataProvider`, `constants`, `entraErrorRules` and related tests.                                                                               | B4a                       |
+| B5    | WI7, WI8 docs      | Documentation worker: setting description, new public page, sovereign/managed-identity user guidance, active feature docs/decisions and acceptance evidence.                                                                                                                                    | B2, B3, B4b               |
+| B6    | verification       | Leader/check worker: Case 1 and full Case 2, required fixes, AI pre-review committed under this feature's iterations; publish stacked PR.                                                                                                                                                       | B5                        |
 
 Focused root tests use `npx vitest run <owned test paths>`; the `extension` project includes
 `src/**/*.test.{ts,tsx}`. No workspace-package source changes are planned. Intentional non-TDD
@@ -186,8 +189,146 @@ must remain unchanged.
 
 ### Progress
 
-- B0: source proposal committed as `e572791ce`; revised plan awaiting its own commit.
-- B1–B6: pending.
+The nine original required items (WI0–WI8) are grouped into eight execution batches
+(B0, B1, B2, B3, B4a, B4b, B5, B6). WI9 remains excluded.
+
+- **B0 — Done (2026-11-10), commits `e572791ce`, `639ebd072`:** original source and revised
+  execution plan committed before coding. Operator chose Option B with the existing setting;
+  Opus 5.5 advised interfaces and eager sign-in after destination validation (high confidence
+  in inspected local behavior; no numeric confidence supplied).
+- **B1 — Done (2026-11-10), commit `95f7267f2`:** shared fail-closed every-host policy,
+  hardened single suffix, secure OIDC options and machine-only settings glue. Advised
+  (`claude-opus-5.5`, high confidence): URI CA/CRL and proxy options must not redefine peer trust;
+  strip every case variant while preserving extension-controlled CA and stored native strings.
+  Final measurement correction includes both service labels and `windows.net`, without changing
+  authorization. Policy/builder/settings tests and driver parsing assertions cover these decisions.
+- **B2 — Done (2026-11-10), commit `b0982d727`:** handlers, workers and relays use shared policy
+  before audience/token acquisition. Session identity remains captured; current machine trust
+  is reevaluated without live credential-cache reads. Advised (`claude-opus-5.5`, high confidence):
+  eager interactive sign-in preserves consent behavior. Worker, shell and nine direct playground
+  relay tests cover forged requests, removed trust, stale sessions and native rejection.
+- **B3 — Done (2026-11-10), commit `414c4e226`:** 28 real-driver TLS/BSON tests use dummy tokens,
+  controlled DNS and loopback sockets. Advised (`claude-opus-5.5`, high confidence in local proof):
+  assert application/token bytes, not server-side TLS completion. Three worker repetitions passed.
+  The SRV-polling case exercises a trailing-dot result, not an arbitrary out-of-domain result.
+- **B4a — Done (2026-11-10), commit `7f178d4d9`:** all pickers use current destination policy;
+  Learn More loops without selecting auth or writing settings. Advised (`claude-opus-5.5`, high
+  confidence): both Azure resource callers must pass the actual connection string; tests drive
+  both contexts, including Entra-only modes. The link constant moved into this batch for dependency
+  safety (leader coordination decision).
+- **B4b — Done (2026-11-10), commit `c1207ab77`:** edits clear disallowed identity methods and
+  recompute choices; saved selections fail without fallback. Safe modal details, Learn More and
+  action-only recovery work on fresh and cached failures. Advised (`claude-opus-5.5`, high
+  confidence): retain the narrow `instanceof` predicate because IPC reconstructs real instances.
+  Twenty-two added edit/recovery tests plus updated diagnostics assertions passed.
+- **B5 — implemented, documentation commit pending:** public trusted-server page, setting consequence/link, related user guidance and active
+  deep-links/sovereign-clouds/managed-identities decisions updated. A bounded WI0 query is provided
+  below; no production telemetry query was executed. Targeted read-only validation passed for
+  14 Markdown files, 33 added local links/anchors, the explicit Learn More permalink and unchanged
+  setting schema/scope. `git diff --check` passed for the owned documentation/setting files.
+  No build, lint, formatting, localization or site-rendering command was run for B5.
+- **B6 — in progress:** first Case 1 passed 978 tests; the final expanded Case 1 passed
+  **1,001 tests in 40 files** plus `npm run build`. The first full Case 2 passed every command
+  except lint's twelve new-file errors; those were corrected without weakening assertions.
+  The final full Case 2 rerun is in progress. The
+  [AI pre-review and dispositions](./05-entra-token-destination-hardening-review.md) record all
+  findings and fixes. Live/cloud/workbench/localized-layout checks remain explicitly unverified.
+
+### Lead usage snapshot
+
+Window: 2026-11-10 15:19:08 UTC through 16:29 UTC (about 70 minutes wall-clock).
+Source: the #1073 `agent-stats.mjs` helper and this session's host events, with explicit advisor
+roles for all five consultations. This snapshot excludes subsequent leader work and the final
+response. No failed/retried model launch occurred; sync-agent follow-up was unsupported, so
+subsequent narrower reviews used fresh contexts.
+
+| Model             | Role    | Requests | Summed model time |   AIU | Share |
+| ----------------- | ------- | -------: | ----------------: | ----: | ----: |
+| `claude-opus-5.5` | advisor |      180 |            21m32s | 770.1 | 57.7% |
+| `gpt-6.1-sol`     | leader  |       27 |             8m40s |  75.3 |  5.6% |
+| `gpt-6.1-sol`     | coding  |      225 |            48m32s | 488.7 | 36.6% |
+| `gpt-5.6-luna`    | checks  |       10 |               40s |   1.1 |  0.1% |
+
+Each role has one model in this run, so these rows also give role totals. Leader: **75.3 AIU**;
+subagents: **1,259.9 AIU**; run: **1,335.2 AIU**. AIU are not dollars.
+All coding batches used the harness default `gpt-6.1-sol`; only the operator-named advisor model
+was explicitly selected.
+
+| Model / role                |      Input |  Output | Cache read | Cache write | Reasoning |
+| --------------------------- | ---------: | ------: | ---------: | ----------: | --------: |
+| `claude-opus-5.5` / advisor | 15,204,466 | 116,667 | 14,719,685 |     484,411 |    67,944 |
+| `gpt-6.1-sol` / leader      |  2,069,542 |  28,889 |  1,962,541 |     106,920 |     5,854 |
+| `gpt-6.1-sol` / coding      | 14,909,478 | 186,307 | 14,270,512 |     638,291 |    62,592 |
+| `gpt-5.6-luna` / checks     |    187,118 |   2,216 |    165,286 |      21,802 |     1,457 |
+
+Cache and reasoning fields may overlap input/output; they must not be added into a token total.
+Summed request spans overlap and are not wall-clock elapsed time. The helper does not report a
+separate end-to-end check/CI duration here; command logs provide individual execution evidence.
+No hosted CI result is included in this local snapshot.
+
+Optimization: advising was the largest measured category. Five consultations included integration
+and review-driven rework; the initial broad advisor investigation was particularly expensive.
+Future runs can start with smaller source-backed decision packets and retain an available advisor
+context, while preserving the operator's chosen model and the required risky-logic review gates.
+
+### WI0 bounded measurement query (not executed)
+
+`src/utils/authTrace.ts` writes the local Output operation `entraDestination.evaluated`.
+That is **not a telemetry event name**. When an `AuthTraceContext` has `startupProperties`,
+`traceAuthFlow` projects `entraDestinationClass` into the existing `connect.startup` and
+`worker.startup` events. Its closed values are `documentdbService`, `customSuffix`, `otherAzure`,
+and `other`. Rejections additionally project string-valued `microsoftCloudDomain` and
+`serviceLabel` booleans. The service-label flag tests exact `mongocluster` or `documentdb` DNS
+labels; the Microsoft-domain flag includes `windows.net` and its DNS children with a dot-boundary
+check. These flags classify rejections only and do not authorize destinations. They are not
+hostnames, resource identifiers, or a full endpoint inventory.
+
+This example uses the documented `RawEventsVSCodeExt` schema and lowercased ingested property
+names. It bounds the time window to seven days, the extension/event population, and the number
+of returned groups. Run only through the authorized telemetry workflow:
+
+```kusto
+let endTime = now();
+let startTime = endTime - 7d;
+RawEventsVSCodeExt
+| where ServerTimestamp >= startTime and ServerTimestamp < endTime
+| where EventName startswith "ms-azuretools.vscode-documentdb/"
+| where EventName endswith "connect.startup" or EventName endswith "worker.startup"
+| extend auth = tostring(Properties.authmethod),
+         destinationClass = tostring(Properties.entradestinationclass),
+         surface = tostring(Properties.surface),
+         outcome = tostring(Properties.startupoutcome),
+         microsoftCloudDomain = tostring(Properties.microsoftclouddomain),
+         serviceLabel = tostring(Properties.servicelabel)
+| where auth in ("MicrosoftEntraID", "ManagedIdentity")
+| extend destinationClass = iff(isempty(destinationClass), "notRecorded", destinationClass)
+| summarize attempts = count()
+    by day = bin(ServerTimestamp, 1d), surface, auth, destinationClass,
+       microsoftCloudDomain, serviceLabel, outcome
+| order by day desc, attempts desc
+| take 200
+```
+
+`otherAzure`/`other` are rejected classes; `customSuffix` counts admitted custom destinations,
+not the number of custom domains or users. `notRecorded` means missing instrumentation/evaluation,
+not a trusted or rejected destination. These are startup attempts, not unique clusters or users:
+a tree connection and its shell can count separately. Picker-only decisions, cached-client reuse,
+driver reconnects and later token relays are not independent startup events, so this is not a
+complete rejection census. The 200-group cap can truncate the result.
+
+The query has **not been executed**, ingestion is not verified, and there is no production
+population estimate or pre-enforcement sizing. Shipping measurement and enforcement together
+cannot establish what a measurement-first release would have shown.
+
+### Local evidence limits
+
+The 28-test `oidcDestination.harness.test.ts` exercises the real driver and TLS with dummy tokens.
+Its later-SRV rejection uses a trailing-dot host that passes the driver's parent-domain check but
+fails destination policy; it does not demonstrate an arbitrary out-of-domain poll answer reaching
+the hook. Government/China/private-link service endpoint and certificate acceptance remain
+unverified. Manual consent/picker/modal/recovery presentation, Learn More navigation and locale
+layout are still open. No production query, service-team confirmation, service-specific audience
+request or upstream driver report was performed.
 
 ## Goal
 
@@ -880,6 +1021,10 @@ There is no global switch. The self-service route is option B, hardened:
 
 ## Work items and dependencies
 
+The table below is the original proposal. The accepted execution plan above takes precedence:
+WI0 and enforcement ship together without pre-enforcement sizing, and WI8 retains the existing
+single string, with no list or compatibility alias.
+
 | Work item                                            | Deliverable                                                                                                                                                                                                                                                                                                                                                                                  | Prerequisite                   |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | WI0: Measurement                                     | Bounded `entraDestinationClass` value in auth telemetry, and a query sizing the population in [R8](#r8-compatibility-cost-is-small-unrecognized-entra-destinations-already-fail)                                                                                                                                                                                                             | None; can ship ahead           |
@@ -955,7 +1100,11 @@ If a `TDD:` contract fails, stop for operator approval rather than changing the 
 
 ## Review decisions and release gates
 
-Before implementation approval, settle:
+The following are the original pre-approval questions. The accepted execution plan above settles
+the implementation scope in items 1–4 and 6–7, while preserving the explicit live-evidence gaps.
+Item 5 remains follow-up work; no service-team audience request or upstream report was performed.
+
+Original questions:
 
 1. The authoritative built-in suffix inventory and which sovereign/private endpoint cases still
    need service-owner or live-environment verification. In particular, whether

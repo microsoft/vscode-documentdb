@@ -10,25 +10,26 @@ created: 2026-08-24
 
 > The decisions that shaped the deep-link vocabulary, and what was rejected on the way.
 
-| #    | Decision                                            | Status              | Changed from the proposal?                    | Date       | PR    |
-| ---- | --------------------------------------------------- | ------------------- | --------------------------------------------- | ---------- | ----- |
-| 0001 | The action goes in the path, not the query          | Accepted            | Accepted as proposed                          | 2026-08-24 | #898  |
-| 0002 | An empty path means `connect`, forever              | Accepted            | Accepted as proposed                          | 2026-08-24 | #898  |
-| 0003 | The action list is hand-written, never the registry | Accepted            | Raised from an implementation note to a rule  | 2026-08-24 | #898  |
-| 0004 | `local` names the product, not the internal command | Accepted            | Retained during maintainer review             | 2026-08-24 | #898  |
-| 0005 | `local` opens the wizard without a confirmation     | Superseded by D0007 | Reversed after maintainer review              | 2026-08-24 | #898  |
-| 0006 | Local links model the resource type                 | Accepted            | Added during maintainer review                | 2026-09-01 | #898  |
-| 0007 | Local links show one lightweight confirmation       | Accepted            | Reversed 0005 during maintainer review        | 2026-09-01 | #898  |
-| 0008 | Azure resource links use `/connect/azure`           | Accepted            | Renamed from `/discovery/azure` by maintainer | 2026-11-05 | #1067 |
-| 0009 | Azure links resolve through our Discovery tree      | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
-| 0010 | The resource ID selects vCore or RU; we handle both | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
-| 0011 | Azure links change visibility filters permanently   | Accepted            | Changed from a session-only proposal          | 2026-11-05 | #1067 |
-| 0012 | Azure links confirm like `/local`                   | Accepted (modified) | Accepted as proposed                          | 2026-11-05 | #1067 |
-| 0013 | `open=` names the surface; `dashboard` always opens | Accepted            | Override of the setting added by maintainer   | 2026-11-05 | #1067 |
-| 0014 | `open=` applies to `/connect` as well               | Accepted            | Accepted as proposed                          | 2026-11-05 | #1067 |
-| 0015 | An Azure link always expands the cluster node       | Accepted            | Orchestrator's collapsed variant reversed     | 2026-11-05 | #1067 |
-| 0016 | The Azure confirmation comes before the lookup      | Accepted            | Requested by maintainer after testing         | 2026-11-05 | #1067 |
-| 0017 | A `/connect` link asks once per target              | Accepted            | Requested by maintainer                       | 2026-11-05 | #1067 |
+| #    | Decision                                                       | Status              | Changed from the proposal?                            | Date       | PR      |
+| ---- | -------------------------------------------------------------- | ------------------- | ----------------------------------------------------- | ---------- | ------- |
+| 0001 | The action goes in the path, not the query                     | Accepted            | Accepted as proposed                                  | 2026-08-24 | #898    |
+| 0002 | An empty path means `connect`, forever                         | Accepted            | Accepted as proposed                                  | 2026-08-24 | #898    |
+| 0003 | The action list is hand-written, never the registry            | Accepted            | Raised from an implementation note to a rule          | 2026-08-24 | #898    |
+| 0004 | `local` names the product, not the internal command            | Accepted            | Retained during maintainer review                     | 2026-08-24 | #898    |
+| 0005 | `local` opens the wizard without a confirmation                | Superseded by D0007 | Reversed after maintainer review                      | 2026-08-24 | #898    |
+| 0006 | Local links model the resource type                            | Accepted            | Added during maintainer review                        | 2026-09-01 | #898    |
+| 0007 | Local links show one lightweight confirmation                  | Accepted            | Reversed 0005 during maintainer review                | 2026-09-01 | #898    |
+| 0008 | Azure resource links use `/connect/azure`                      | Accepted            | Renamed from `/discovery/azure` by maintainer         | 2026-11-05 | #1067   |
+| 0009 | Azure links resolve through our Discovery tree                 | Accepted            | Accepted as proposed                                  | 2026-11-05 | #1067   |
+| 0010 | The resource ID selects vCore or RU; we handle both            | Accepted            | Accepted as proposed                                  | 2026-11-05 | #1067   |
+| 0011 | Azure links change visibility filters permanently              | Accepted            | Changed from a session-only proposal                  | 2026-11-05 | #1067   |
+| 0012 | Azure links confirm like `/local`                              | Accepted (modified) | Accepted as proposed                                  | 2026-11-05 | #1067   |
+| 0013 | `open=` names the surface; `dashboard` always opens            | Accepted            | Override of the setting added by maintainer           | 2026-11-05 | #1067   |
+| 0014 | `open=` applies to `/connect` as well                          | Accepted            | Accepted as proposed                                  | 2026-11-05 | #1067   |
+| 0015 | An Azure link always expands the cluster node                  | Accepted            | Orchestrator's collapsed variant reversed             | 2026-11-05 | #1067   |
+| 0016 | The Azure confirmation comes before the lookup                 | Accepted            | Requested by maintainer after testing                 | 2026-11-05 | #1067   |
+| 0017 | A `/connect` link asks once per target                         | Accepted            | Requested by maintainer                               | 2026-11-05 | #1067   |
+| 0018 | Entra service destinations with the existing Option B override | Accepted            | Operator selected the existing machine-scoped setting | 2026-11-10 | Pending |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -689,3 +690,66 @@ certificate validation.
 ### Rejected alternatives
 
 - **Keep the three questions.** Every one after the first repeated what the user had just accepted.
+
+---
+
+## 0018 — Entra tokens go only to service destinations with the existing Option B override
+
+**Status:** Accepted · **Date:** 2026-11-10 · **Raised by:** the operator's authorization of
+[iteration 4](./iterations/04-entra-token-destination-hardening.md#accepted-execution-plan-2026-11-10)
+
+### Operator choice
+
+The operator explicitly selected:
+
+> the serlf service override is the option B, the existing machine scoped setting.
+
+Retain the existing **single-string**, **machine-scoped**
+`documentDB.customEnvironment.hostnameSuffix`. No new setting, list/alias, global kill switch,
+per-connection bypass, mandatory ARM permission or remote allowlist is introduced. No additional
+operator rationale is inferred from that statement.
+
+The accepted scope applies the same fail-closed destination policy to links, pasted and edited
+strings, saved connections, account sign-in, managed identity, shells, and playgrounds. All seeds
+must match a recognized service suffix or the explicitly trusted narrow suffix. Broad Azure
+parents and known customer-hosting namespaces cannot be trusted through the setting. The three
+built-in service suffixes are `mongocluster.cosmos.azure.com`, `mongocluster.cosmos.azure.us`,
+and `mongocluster.cosmos.azure.cn`. Government is included on the operator
+confirmation recorded in the plan, not on new live or service-owner evidence.
+
+### Advisor and implementation choices
+
+These are pragmatic implementation reasons supporting the accepted scope, not additional
+operator quotes or service-team confirmations:
+
+- Keep interactive acquisition eager, after policy approval: the driver's 60-second automated
+  callback timeout cannot cancel an outstanding VS Code consent prompt.
+- Strip case variants of URI auth and TLS options, ignore hostname/certificate bypasses for OIDC,
+  and remove URI-supplied CA/proxy trust overrides found during review. Force certificate validation
+  and a policy-first hostname hook for each socket, including topology changes and reconnects.
+- Recheck the current custom suffix at each worker token relay against the original connection.
+  Snapshot the authentication method, tenant/client identity and audience when the session starts;
+  neither worker-message fields nor live `CredentialCache` entries may change the principal.
+- A selectable explanatory picker row opens Learn More and returns to the picker. It cannot
+  select Entra, write a setting, or prefill a trusted suffix.
+- Save an edited connection string but clear an Entra/managed-identity selection when its destination
+  becomes disallowed. Keep the selection for approved-to-approved edits. Saved rejected connections
+  use explicit Learn More, Update Credentials and Update Connection String recovery.
+
+The setting consequence is explicit: tokens are sent to servers under the suffix. The public
+[trusted-server page](../../../user-manual/entra-id-trusted-servers.md) asks users to compare every
+host with the Azure portal connection string and report an unrecognized service endpoint before
+granting narrow trust. This does not require every database user to have ARM access.
+
+### Evidence limits and alternatives
+
+Local protocol tests use real TLS and dummy tokens, not live service credentials. The later-SRV
+rejection specifically exercises a trailing-dot answer within the driver's permitted parent domain;
+it is not evidence that arbitrary out-of-domain polling answers reached the socket hook. Government,
+China and private-link service/certificate behavior, manual UX and locale layout remain unverified.
+The bounded measurement query is supplied but not executed; there is no pre-enforcement sizing.
+No upstream report, service-team confirmation, or DocumentDB-specific audience request was performed.
+
+New trust lists, global switches and per-connection bypasses are outside the accepted Option B
+scope. ARM-attested destinations and a service-specific token audience remain follow-up questions,
+not mechanisms shipped by this change.
