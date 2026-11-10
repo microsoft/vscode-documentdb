@@ -328,6 +328,9 @@ export async function revealInConnectionsView(
         expand: true,
     });
     recordDeepLinkConnectionAttempt(context, connectionNode);
+    if (context.telemetry.properties.deepLinkOutcome === 'canceled') {
+        return;
+    }
 
     // Step 2: Reveal the database (if provided)
     if (database) {

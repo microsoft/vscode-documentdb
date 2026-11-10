@@ -120,6 +120,42 @@ describe('buildConnectionsViewTargetPath', () => {
 describe('revealInConnectionsView', () => {
     const context = { telemetry: { properties: {}, measurements: {} } } as IActionContext;
 
+    it.each([undefined, 'items'])(
+        'stops after the connection reveal when connecting is canceled with collection=%s',
+        async (collection): Promise<void> => {
+            const canceledContext: IActionContext = {
+                ...context,
+                telemetry: {
+                    ...context.telemetry,
+                    properties: { deepLinkCorrelationId: 'link-id' },
+                    measurements: {},
+                },
+            };
+            const node = {
+                id: 'connectionsView/connection-id',
+                getTreeItem: (): TreeItem => ({ label: connection.name }),
+                lastConnectionOutcome: 'canceled',
+                lastConnectionCorrelationId: 'connection-attempt-id',
+            };
+            vi.mocked(ext.connectionsBranchDataProvider.findNodeById).mockResolvedValue(node);
+
+            await revealInConnectionsView(canceledContext, connection.id, false, 'db', collection);
+
+            expect(revealConnectionsViewElement).toHaveBeenCalledExactlyOnceWith(canceledContext, node.id, {
+                select: true,
+                focus: false,
+                expand: true,
+            });
+            expect(ConnectionStorageService.get).toHaveBeenCalledTimes(1);
+            expect(canceledContext.telemetry.properties).toMatchObject({
+                deepLinkOutcome: 'canceled',
+                result: 'Canceled',
+                userCancelledAtStep: 'ConnectCluster',
+                connectionCorrelationId: 'connection-attempt-id',
+            });
+        },
+    );
+
     it.each([false, true])(
         'reveals nested connection, database, and collection paths with isEmulator=%s',
         async (isEmulator): Promise<void> => {
