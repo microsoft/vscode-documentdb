@@ -757,7 +757,9 @@ describe('Local Quick Start stage details', () => {
         const region = host.querySelector(`[aria-labelledby="${toggle('Pulling official image')!.id}"]`);
         const triggers = [...region!.querySelectorAll<HTMLElement>('[role="group"][tabindex="0"]')];
         expect(triggers.every((node) => node.tagName === 'SPAN')).toBe(true);
-        expect(triggers.every((node) => node.getAttribute('aria-labelledby') === node.firstElementChild?.id)).toBe(true);
+        expect(triggers.every((node) => node.getAttribute('aria-labelledby') === node.firstElementChild?.id)).toBe(
+            true,
+        );
         expect(triggers.map((node) => node.textContent)).toEqual(['sha256:012345678901…', 'sha256:987654321098…']);
         await act(async () => {
             triggers[0].focus();
@@ -937,7 +939,9 @@ describe('Local Quick Start stage details', () => {
         await click(toggle('Starting container')!);
         expect(host.textContent).toContain('10273');
         const region = host.querySelector(`[aria-labelledby="${toggle('Starting container')!.id}"]`);
-        const boundPort = [...region!.querySelectorAll('dd')].find((node) => node.textContent?.includes('As requested'));
+        const boundPort = [...region!.querySelectorAll('dd')].find((node) =>
+            node.textContent?.includes('As requested'),
+        );
         expect(boundPort?.textContent).toBe('10273 · As requested');
         expect(boundPort?.querySelector('span')?.className).toBe('');
         expect(boundPort?.querySelector('code')).toBeNull();

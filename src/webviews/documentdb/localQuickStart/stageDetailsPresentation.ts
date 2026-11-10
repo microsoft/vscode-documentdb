@@ -78,9 +78,7 @@ export function buildStageSummary(
 }
 
 function idFact(label: string, value: string, limit: number): StageDetailFact {
-    return value.length > limit
-        ? { label, value: `${value.slice(0, limit)}…`, fullValue: value }
-        : { label, value };
+    return value.length > limit ? { label, value: `${value.slice(0, limit)}…`, fullValue: value } : { label, value };
 }
 
 export function buildStageDetailRows(facts: StageFacts | undefined): readonly StageDetailFact[] {

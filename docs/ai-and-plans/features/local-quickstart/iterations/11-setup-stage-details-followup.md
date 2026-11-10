@@ -363,13 +363,13 @@ connection remain untouched.
 
 Snapshot at 12:12:51 UTC, from this request's start at 11:48:44 UTC:
 
-| Model | Role | AIU |
-| ----- | ---- | ---: |
-| `gpt-6.1-sol` | Leader and browser validation | 277.1 |
-| `claude-opus-5.5` | Two advisor consultations | 58.3 |
-| `gpt-6.1-terra` | Implementation and note-colour refinement | 22.6 |
-| `gpt-5.6-luna` | Case 1 checks | 0.6 |
-| **Total** | Independently rounded host values | **358.6** |
+| Model             | Role                                      |       AIU |
+| ----------------- | ----------------------------------------- | --------: |
+| `gpt-6.1-sol`     | Leader and browser validation             |     277.1 |
+| `claude-opus-5.5` | Two advisor consultations                 |      58.3 |
+| `gpt-6.1-terra`   | Implementation and note-colour refinement |      22.6 |
+| `gpt-5.6-luna`    | Case 1 checks                             |       0.6 |
+| **Total**         | Independently rounded host values         | **358.6** |
 
 Implementation turns took 4m06s plus the narrow note-colour refinement; the final
 check agent took 1m15s. The snapshot reports leader 277.1 AIU and subagents 81.4 AIU.

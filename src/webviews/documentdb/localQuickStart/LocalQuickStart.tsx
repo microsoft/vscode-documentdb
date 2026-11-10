@@ -2095,11 +2095,7 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const setup = (
         <>
-            <StatusList
-                ariaLabel={l10n.t('Setup progress')}
-                statusLabels={stageStatusLabels}
-                highlightRowsOnHover
-            >
+            <StatusList ariaLabel={l10n.t('Setup progress')} statusLabels={stageStatusLabels} highlightRowsOnHover>
                 {PROVISION_STAGES.map((stage) => (
                     <SetupStageRow
                         key={stage}
