@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type AzureWizardPromptStep, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { AuthMethodId, type createAuthMethodQuickPickItems } from '../../documentdb/auth/AuthMethod';
@@ -33,7 +33,10 @@ vi.mock('vscode', () => ({
 }));
 vi.mock('@vscode/l10n', () => ({ t: (message: string): string => message }));
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-utils')>()),
+    ...(await importOriginal<{
+        AzureWizardPromptStep: typeof AzureWizardPromptStep;
+        UserCancelledError: typeof UserCancelledError;
+    }>()),
     AzureWizardPromptStep: class AzureWizardPromptStep {},
 }));
 vi.mock('../../extensionVariables', () => ({ ext: { outputChannel: mocks.output } }));
@@ -69,7 +72,12 @@ describe('new connection authentication picker', () => {
             .mockResolvedValueOnce({ authMethod: AuthMethodId.NativeAuth });
         const context = createContext(showQuickPick);
         mocks.showInformationMessage.mockImplementation(
-            (_title: string, _options: vscode.MessageOptions, _learnMore: vscode.MessageItem, back: vscode.MessageItem) => {
+            (
+                _title: string,
+                _options: vscode.MessageOptions,
+                _learnMore: vscode.MessageItem,
+                back: vscode.MessageItem,
+            ) => {
                 expect(showQuickPick).toHaveBeenCalledOnce();
                 expect(context.selectedAuthenticationMethod).toBeUndefined();
                 return Promise.resolve(dismissal === 'back' ? back : undefined);

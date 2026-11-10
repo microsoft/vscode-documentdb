@@ -26,11 +26,11 @@ import {
     ItemType,
     type ConnectionItem,
 } from '../../services/connectionStorageService';
+import { type TreeElement } from '../../tree/TreeElement';
 import { ConnectionsBranchDataProvider } from '../../tree/connections-view/ConnectionsBranchDataProvider';
 import { DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
 import { type ConnectionClusterModel } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { type TreeCluster } from '../../tree/models/BaseClusterModel';
-import { type TreeElement } from '../../tree/TreeElement';
 import { ConnectionStringStep } from './ConnectionStringStep';
 import { ExecuteStep } from './ExecuteStep';
 import { type UpdateCSWizardContext } from './UpdateCSWizardContext';
@@ -159,7 +159,7 @@ describe('updateConnectionString rejected-destination recovery', () => {
         } as unknown as vscode.WorkspaceConfiguration);
         vi.mocked(ConnectionStorageService.get).mockImplementation(async () => structuredClone(storedConnection));
         vi.mocked(ConnectionStorageService.save).mockImplementation(async (_zone, connection): Promise<void> => {
-            storedConnection = structuredClone(connection as ConnectionItem);
+            storedConnection = structuredClone(connection);
         });
         showInputBox.mockResolvedValue(approvedUri);
         showQuickPick.mockImplementation(async (items: Array<{ authMethod?: AuthMethodId }>) =>

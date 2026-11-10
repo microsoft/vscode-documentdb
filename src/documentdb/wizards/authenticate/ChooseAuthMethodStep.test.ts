@@ -45,11 +45,14 @@ beforeEach(() => {
 });
 
 vi.mock('@microsoft/vscode-azext-utils', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@microsoft/vscode-azext-utils')>()),
+    ...(await importOriginal<{
+        AzureWizardPromptStep: typeof AzureWizardPromptStep;
+        UserCancelledError: typeof UserCancelledError;
+    }>()),
     AzureWizardPromptStep: class AzureWizardPromptStep {},
 }));
 
-import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { UserCancelledError, type AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import { PromptAuthMethodStep as NewConnectionAuthStep } from '../../../commands/newConnection/PromptAuthMethodStep';
 import { PromptAuthMethodStep as UpdateCredentialsAuthStep } from '../../../commands/updateCredentials/PromptAuthMethodStep';
 import { AuthMethodId, type createAuthMethodQuickPickItems } from '../../auth/AuthMethod';
