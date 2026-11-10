@@ -717,6 +717,24 @@ built-in service suffixes are `mongocluster.cosmos.azure.com`, `mongocluster.cos
 and `mongocluster.cosmos.azure.cn`. Government is included on the operator
 confirmation recorded in the plan, not on new live or service-owner evidence.
 
+### Operator-requested picker amendment (2026-11-10; implementation pending)
+
+The operator approved replacing the earlier direct-navigation picker behavior with a modal-first
+flow. Keep the existing unavailable row label, **Microsoft Entra ID: not available**, and detail,
+**Entra ID is used only with Azure DocumentDB clusters.** Selecting it opens an informational
+modal titled **Microsoft Entra ID isn't available for this server.** Its detail is:
+
+> Microsoft Entra ID is available only for Azure DocumentDB
+> or servers allowed by the trusted-server setting.
+
+The optional instruction **Choose another authentication method, or select Learn More.** may be
+added if needed, within a four-short-line limit. **Back** or Escape closes the modal and returns to
+the picker without opening a browser. **Learn More** opens the trusted-server page and then returns
+to the picker; if opening the page fails, show a nonblocking warning. This presentation change does
+not change destination policy, trust, settings, authentication, or token behavior. The prior
+direct-navigation choice is superseded prospectively; no rationale beyond the operator's request
+is inferred.
+
 ### Advisor and implementation choices
 
 These are pragmatic implementation reasons supporting the accepted scope, not additional
@@ -735,8 +753,9 @@ operator quotes or service-team confirmations:
 - Recheck the current custom suffix at each worker token relay against the original connection.
   Snapshot the authentication method, tenant/client identity and audience when the session starts;
   neither worker-message fields nor live `CredentialCache` entries may change the principal.
-- A selectable explanatory picker row opens Learn More and returns to the picker. It cannot
-  select Entra, write a setting, or prefill a trusted suffix.
+- The earlier direct-navigation picker behavior is superseded by the dated operator-requested
+  modal-first amendment above. The row cannot select Entra, write a setting, or prefill a trusted
+  suffix.
 - Save an edited connection string but clear an Entra/managed-identity selection when its destination
   becomes disallowed. Keep the selection for approved-to-approved edits. Saved rejected connections
   use explicit Learn More, Update Credentials and Update Connection String recovery.

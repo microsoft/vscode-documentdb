@@ -79,10 +79,14 @@ Interactive sign-in remains eager **after** the destination check; deferring con
 60-second callback would not cancel a pending VS Code prompt. Each worker token relay checks the
 current suffix against the original session connection, but uses the captured authentication
 identity and audience, not request-message identity fields or live `CredentialCache` entries.
-Untrusted OIDC declarations cannot preselect Entra. Picker explanations open Learn More and return
-to the picker without granting trust. Editing an approved connection to a rejected destination
-saves the string and clears an Entra/managed-identity selection; saved rejected connections offer
-explicit recovery, never a silent authentication fallback.
+Untrusted OIDC declarations cannot preselect Entra. In the current implementation, selecting the
+unavailable Entra row opens Learn More and returns to the picker. The operator-approved
+[modal-first follow-up](./iterations/04-entra-token-destination-hardening.md#approved-modal-first-picker-follow-up-2026-11-10-pending)
+will replace that direct navigation: Back or Escape returns without opening a browser, while Learn
+More opens the trusted-server page and then returns. Neither path grants trust. Editing an approved
+connection to a rejected destination saves the string and clears an Entra/managed-identity
+selection; saved rejected connections offer explicit recovery, never a silent authentication
+fallback.
 
 The database token audience is shared with Azure Database for PostgreSQL and MySQL. A token sent
 to an untrusted server may therefore be replayable wherever the identity has database roles and

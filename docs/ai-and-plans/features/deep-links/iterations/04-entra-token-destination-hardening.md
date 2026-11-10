@@ -30,6 +30,9 @@ code:
 
 > **Status:** B1–B7 implemented; final Case 1 and Case 2 passed locally on 2026-11-10.
 > Live-cloud, workbench UX and human author review remain pending.
+> Those implementation and verification results describe the prior B0–B7 revision. The
+> operator-approved modal-first picker follow-up below is pending and has not shipped or been
+> verified.
 > The execution plan below records the accepted scope. The research and proposal remain as
 > supporting evidence, not a claim that the vulnerability has been fixed.
 >
@@ -90,6 +93,53 @@ These are implementation details advised by Opus 5.5, not new service-owner conf
 The advisor's source-backed packet identified the driver callback timeout, URI casing behavior,
 TLS-option precedence, worker serialization boundary and session identity requirements.
 Confidence is high for the inspected local behavior; live endpoint support remains unverified.
+
+### Approved modal-first picker follow-up (2026-11-10; pending)
+
+This follow-up supersedes only the prior picker direct-navigation choice above. B0–B7 and their
+recorded results remain accurate for that earlier revision; the modal-first flow is not implemented
+or verified yet. Keep the unavailable row label **Microsoft Entra ID: not available** and detail
+**Entra ID is used only with Azure DocumentDB clusters.** Selecting that row must await a shared
+informational modal:
+
+- Title: **Microsoft Entra ID isn't available for this server.**
+- Detail: **Microsoft Entra ID is available only for Azure DocumentDB**
+  **or servers allowed by the trusted-server setting.**
+- Optional instruction, if needed: **Choose another authentication method, or select Learn More.**
+  Keep the modal body within four short lines.
+- Actions: **Learn More** and **Back** (the close affordance).
+- Back or Escape closes the modal and returns to the picker without opening a browser. Selecting
+  **Learn More** awaits `openUrl(Links.EntraTrustedServers)`, checks for `false`, and displays a
+  nonblocking warning using the existing repository wording/pattern on failure; after that, return
+  to the picker. Escape on the actual quick pick still cancels the wizard.
+
+Export `showEntraUnavailableDetails(): Promise<void>` from the shared helper
+`src/documentdb/auth/showEntraUnavailableDetails.ts`. Use direct `vscode.window` APIs so modal
+dismissal is not translated by the azext wrapper into `UserCancelledError`. Replace direct
+navigation at all three call sites—`ChooseAuthMethodStep`,
+`newConnection/PromptAuthMethodStep`, and `updateCredentials/PromptAuthMethodStep`—with an awaited
+call to the helper. No setting writes, trust changes, authentication-method changes, or token
+changes are in scope. This does not alter the separate rejected-connection error modal or its
+**Learn More** behavior.
+
+#### Work items and dependencies
+
+| Item | Owner / approved model | Scope and deliverable | Depends on |
+| ---- | ---------------------- | --------------------- | ---------- |
+| M1 | Leader, docs editor (`gpt-6-luna`; mechanical docs-only edits) | This plan and the active feature decision/README accurately record the approved flow and pending work. Owned paths: `docs/ai-and-plans/features/deep-links/README.md`, `docs/ai-and-plans/features/deep-links/decisions.md`, and this plan. `docs/ai-and-plans/README.md` was read only as the layout reference. No code, tests, or other docs. The leader commits these docs before M2 starts. | — |
+| M2 | Coding agent (`gpt-6.1-terra`; implementation/tests) | Sources: `src/documentdb/auth/showEntraUnavailableDetails.ts`, `src/documentdb/wizards/authenticate/ChooseAuthMethodStep.ts`, `src/commands/newConnection/PromptAuthMethodStep.ts`, and `src/commands/updateCredentials/PromptAuthMethodStep.ts`. Update `src/documentdb/wizards/authenticate/ChooseAuthMethodStep.test.ts`; add `src/documentdb/auth/showEntraUnavailableDetails.test.ts`, `src/commands/newConnection/PromptAuthMethodStep.test.ts`, and `src/commands/updateCredentials/PromptAuthMethodStep.test.ts`. Cover awaited modal/action ordering, both dismissal paths, open failure warning, return to picker, and quick-pick Escape cancellation. | M1 |
+| M3 | Advisor (`claude-opus-5.5`; independent review) | Review the implemented modal-first flow and focused tests against the accepted behavior and verify rejection-modal Learn More and destination/trust policy remain unchanged. | M2 |
+| M4 | Leader | After M2 and M3, run Case 1 (`npm run build` and the focused Vitest command below); resolve blockers and publish the implementation update. Case 1 does not run localization, formatting, lint, packaging, or the full suite. If a later handoff is for review, Case 2 also runs `npm run l10n` when localized strings changed. | M2, M3 |
+
+Focused test command for M2/M4:
+
+```bash
+npx vitest run \
+  src/documentdb/auth/showEntraUnavailableDetails.test.ts \
+  src/documentdb/wizards/authenticate/ChooseAuthMethodStep.test.ts \
+  src/commands/newConnection/PromptAuthMethodStep.test.ts \
+  src/commands/updateCredentials/PromptAuthMethodStep.test.ts
+```
 
 ### Shared interfaces
 
