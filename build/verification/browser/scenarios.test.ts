@@ -91,7 +91,7 @@ describe('L2-dev manifest and routes', (): void => {
                     .filter((route): boolean => route.scenario === name)
                     .map((route) => route.theme),
             ).toEqual(['dark', 'light', 'high-contrast']);
-            const scenario = scenarios.localQuickStart[name];
+            const scenario: Scenario<'localQuickStart'> = scenarios.localQuickStart[name];
             expect(scenario.rpc['localQuickStart.getWizardContext']).toBeDefined();
             expect(scenario.assertions).toContainEqual(
                 expect.objectContaining({
