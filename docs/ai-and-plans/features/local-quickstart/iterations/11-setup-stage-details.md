@@ -238,7 +238,7 @@ The pre-existing untracked Podman archive is outside this work.
 | Item | Scope | Model and reason | Prerequisite | Status |
 | ---- | ----- | ---------------- | ------------ | ------ |
 | P1 | Shared checking-row disclosure, focus/reset behavior; remove accordion | Terra: self-contained webview migration | — | Done `fa4a4d69` |
-| P2 | Typed runtime image inspection, per-stage facts, non-readiness presentation | Sol: host/webview contract and runtime lifecycle | P1 | Queued |
+| P2 | Typed runtime image inspection, per-stage facts, non-readiness presentation | Sol: host/webview contract and runtime lifecycle | P1 | Done `1e018adc` |
 | P3 | Readiness attempts, best-effort hello, sample-data outcomes and success sentence | Sol: readiness lifecycle and cross-module behavior | P2 | Queued |
 | P4 | Aggregate disclosure telemetry, browser scenarios, docs and decision record | Sol: session lifecycle and cross-module verification | P3 | Queued |
 
@@ -267,6 +267,19 @@ confidence, no remaining findings. Focused webview suite: 155 passed, followed b
 7 focused disclosure tests after correction; root `tsc --noEmit -p .` passed.
 Full build/Case 2 are scheduled after the implementation batch. Thirteen tests
 added across presentation and disclosure behavior.
+
+**P2 Done (2026-11-10), commit `1e018adc`:** Sol added the allow-listed
+`StageFacts` contract, bounded image inspection, checking/pulling/creating/starting
+evidence, per-run fact storage and presentation. Advised (Opus 5.5, high
+confidence): absence requires a successful strict image listing; synthesized
+creation dates are not evidence; IDs never fall back to names. Advisor found
+volume outcomes were recorded before operations completed. The approved
+correction makes that internal optional fact unknown until established, preserving
+all actual volume operations and durability assertions. The operator's existing
+unknown-fact rule authorizes omission, not a new user-visible outcome.
+Final advisor approval: high confidence. Added 63 tests; 706 focused tests passed
+before the correction, 112 targeted tests afterward, root type check passed.
+Four regressions were observed failing before the correction.
 
 1. **A PR stacked on #1065.** Branch from `dev/guanzhousong/quickstart-podman-fallback` and open
    the PR against that branch, not `main`. When #1065 merges, retarget it to `main`. Keep the
