@@ -50,12 +50,14 @@ import { formatQuickStartMessage } from '../../../services/localQuickStart/quick
 import {
     type AdvancedQuickStartOptions,
     type DockerProvider,
+    type DockerLaunchResult,
     type DockerReadiness,
     type DockerRecoveryCommand,
     type DockerStatusResult,
     InstanceState,
     type InstanceStatusUpdate,
     type PortAvailability,
+    type PodmanMachineState,
     PROVISION_STAGES,
     type ProvisionStage,
     QUICK_START_CONTAINER_NAME,
@@ -310,7 +312,7 @@ function planItems(): readonly PlanItem[] {
     ];
 }
 
-function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
+function dockerGuidance(podmanMachine?: PodmanMachineState): Readonly<Record<DockerGuidanceKey, string>> {
     return {
         installDocker: l10n.t('Install Docker or Podman, then reopen DocumentDB Local setup.'),
         installDockerWindows: l10n.t(
@@ -346,7 +348,25 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
         dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
         daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
         podmanNotRunning: l10n.t(
-            'Podman is installed but its machine is not running. Run "podman machine start" or start it from Podman Desktop, then check again.',
+            'Podman is not reachable. Start its machine in Podman Desktop or check its connection, then check again.',
+        ),
+        podmanSocketNotRunning: l10n.t(
+            'Start the Podman user socket with this command, then check again.',
+        ),
+        podmanMachineMissing: l10n.t(
+            'No Podman machine was found. Run this command to create one, then check again.',
+        ),
+        podmanMachineAmbiguous: l10n.t(
+            'Several Podman machines were found without a unique default: {0}. Start the machine you want, then check again.',
+            podmanMachine?.kind === 'ambiguous' ? podmanMachine.names.join(', ') : '',
+        ),
+        podmanMachineOtherActive: l10n.t(
+            'Another Podman machine is already starting or running: {0}. Check that machine, then check again.',
+            podmanMachine?.kind === 'otherActive' ? podmanMachine.active : '',
+        ),
+        podmanMachineRunning: l10n.t(
+            'The Podman machine "{0}" is running, but its engine is not reachable. Check the machine and its connection, then check again.',
+            podmanMachine?.kind === 'running' ? podmanMachine.name : '',
         ),
         daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
         wslIntegrationUnavailable: l10n.t(
@@ -415,6 +435,7 @@ function dockerStartLabels(): Readonly<Record<DockerStartLabelKey, string>> {
     return {
         startDockerDesktop: l10n.t('Start Docker Desktop'),
         startDocker: l10n.t('Start Docker'),
+        startPodmanMachine: l10n.t('Start Podman machine'),
     };
 }
 
@@ -742,6 +763,7 @@ export const LocalQuickStart = (): JSX.Element => {
     // any invocation from a superseded/cancelled stream, so a late/flushed event can't overwrite
     // state after Cancel / Start over / a new Start.
     const streamGenerationRef = useRef(0);
+    const autoWaitGenRef = useRef(-1);
 
     // Validate the settings client-side, mirroring the router's zod schema so a valid form never
     // dead-ends on a server rejection. Returns the offending field (for a per-field error state,
@@ -836,7 +858,6 @@ export const LocalQuickStart = (): JSX.Element => {
     const stageStatusLabels = useMemo(() => stageStatusWords(), []);
     const planItemList = useMemo(() => planItems(), []);
     const dockerFailureLabelMap = useMemo(() => dockerFailureLabels(), []);
-    const dockerGuidanceMap = useMemo(() => dockerGuidance(), []);
     const dockerGuideMap = useMemo(() => dockerGuides(), []);
     const dockerStartLabelMap = useMemo(() => dockerStartLabels(), []);
     const dockerRecoveryNoteMap = useMemo(() => dockerRecoveryNotes(), []);
@@ -1119,27 +1140,33 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const handleStopWaiting = useCallback((): void => {
         stopDockerWait();
-        setDockerActionMessage(l10n.t('Stopped waiting for Docker.'));
+        setDockerActionMessage(
+            lastDockerProblemRef.current?.problem.startAction === 'startPodmanMachine' ||
+                lastDockerProblemRef.current?.problem.engine === 'podman'
+                ? l10n.t('Stopped waiting for Podman.')
+                : l10n.t('Stopped waiting for Docker.'),
+        );
     }, [stopDockerWait]);
 
-    const handleStartDocker = useCallback((): void => {
+    const beginDockerWait = useCallback((launch: () => Promise<DockerLaunchResult>, isPodman: boolean): void => {
         stopDockerWait();
         setDockerActionMessage(undefined);
         setStartingDocker(true);
         setDockerWaitElapsedMs(0);
         const abortController = new AbortController();
         dockerPollAbortRef.current = abortController;
-        void trpcClient.localQuickStart.startDockerProvider
-            .mutate({ preferredEngine }, { signal: abortController.signal })
+        const startedAt = Date.now();
+        dockerWaitTimerRef.current = setInterval(() => setDockerWaitElapsedMs(Date.now() - startedAt), 250);
+        void launch()
             .then(async (launchResult) => {
                 if (abortController.signal.aborted) return;
                 if (launchResult === 'notAvailable' || launchResult === 'failed') {
                     stopDockerWait();
-                    setDockerActionMessage(l10n.t('Docker could not be started.'));
+                    setDockerActionMessage(
+                        isPodman ? l10n.t('Podman could not be started.') : l10n.t('Docker could not be started.'),
+                    );
                     return;
                 }
-                const startedAt = Date.now();
-                dockerWaitTimerRef.current = setInterval(() => setDockerWaitElapsedMs(Date.now() - startedAt), 250);
                 let latestResult: DockerStatusResult | undefined;
                 const outcome = await pollDockerReadiness({
                     signal: abortController.signal,
@@ -1162,20 +1189,37 @@ export const LocalQuickStart = (): JSX.Element => {
                 if (outcome === 'ready' && latestResult) {
                     applyDockerRecovery();
                 } else if (outcome === 'deadline') {
-                    setDockerActionMessage(l10n.t('Docker did not become ready before the wait timed out.'));
+                    setDockerActionMessage(
+                        isPodman
+                            ? l10n.t('Podman did not become ready before the wait timed out.')
+                            : l10n.t('Docker did not become ready before the wait timed out.'),
+                    );
                 } else if (outcome === 'stopped') {
                     // Docker answered, but with a non-transient problem (e.g. permission denied). The
                     // readiness card below already updated via onResult; announce the transition too,
                     // otherwise the spinner just disappears and the Announcer says nothing.
-                    setDockerActionMessage(l10n.t('Docker started, but it is not usable yet. See the details below.'));
+                    setDockerActionMessage(
+                        isPodman
+                            ? l10n.t('Podman started, but it is not usable yet. See the details below.')
+                            : l10n.t('Docker started, but it is not usable yet. See the details below.'),
+                    );
                 }
             })
             .catch(() => {
                 if (abortController.signal.aborted) return;
                 stopDockerWait();
-                setDockerActionMessage(l10n.t('The Docker readiness check failed.'));
+                setDockerActionMessage(
+                    isPodman ? l10n.t('The Podman readiness check failed.') : l10n.t('The Docker readiness check failed.'),
+                );
             });
     }, [applyDockerRecovery, applyReadiness, preferredEngine, stopDockerWait, trpcClient]);
+
+    const handleStartDocker = useCallback((): void => {
+        beginDockerWait(
+            () => trpcClient.localQuickStart.startDockerProvider.mutate({ preferredEngine }),
+            lastDockerProblemRef.current?.problem.startAction === 'startPodmanMachine',
+        );
+    }, [beginDockerWait, preferredEngine, trpcClient]);
 
     // Re-run only the Docker check, after the user follows the guidance. It never starts or resumes
     // provisioning: a pass clears the blocker in place, a fresh failure updates the evidence.
@@ -1481,6 +1525,21 @@ export const LocalQuickStart = (): JSX.Element => {
             ? (stageDockerFailure ??
               (checkStageFailed && checkReadiness && checkReadiness.outcome !== 'ready' ? checkReadiness : undefined))
             : undefined;
+    useEffect(() => {
+        if (
+            phase !== 'failed' ||
+            startingDocker ||
+            checkingDockerAgain ||
+            dockerProblem?.failureKind !== 'daemonStarting' ||
+            dockerProblem.podmanMachine?.kind !== 'starting' ||
+            autoWaitGenRef.current === streamGenerationRef.current
+        ) {
+            return;
+        }
+        autoWaitGenRef.current = streamGenerationRef.current;
+        beginDockerWait(() => Promise.resolve('launchAttempted'), true);
+    }, [beginDockerWait, checkingDockerAgain, dockerProblem, phase, startingDocker]);
+
     const dockerPresentation = dockerProblem ? getDockerReadinessPresentation(dockerProblem) : undefined;
     // Held so the block keeps its content while it collapses away, instead of blanking first and
     // then closing an empty gap.
@@ -1488,6 +1547,11 @@ export const LocalQuickStart = (): JSX.Element => {
         lastDockerProblemRef.current = { problem: dockerProblem, presentation: dockerPresentation };
     }
     const shownDocker = lastDockerProblemRef.current;
+    const dockerGuidanceMap = useMemo(
+        () => dockerGuidance(shownDocker?.problem.podmanMachine),
+        [shownDocker?.problem.podmanMachine],
+    );
+    const shownPodman = shownDocker?.problem.cli === 'podman' || shownDocker?.problem.engineEvidence === 'podmanShim';
     const recoveryCommand = shownDocker?.presentation.showCopyCommand ? shownDocker.problem.recoveryCommand : undefined;
     // A Docker-only re-check cleared the blocker. When that blocker was the check stage itself,
     // nothing has run yet, so the run can simply go ahead; a later stage's failure still stands.
@@ -2028,13 +2092,13 @@ export const LocalQuickStart = (): JSX.Element => {
                         }
                     >
                         <div>
-                            {
-                                dockerGuidanceMap[
+                            {shownPodman && (startingDocker || shownDocker.problem.failureKind === 'daemonStarting')
+                                ? l10n.t('Waiting for Podman to start. This can take a minute.')
+                                : dockerGuidanceMap[
                                     startingDocker
                                         ? 'daemonStarting'
                                         : (shownDocker.presentation.guidance ?? 'notAccessible')
-                                ]
-                            }
+                                ]}
                         </div>
                         {recoveryCommand && (
                             <div className={styles.recoveryCommand}>
@@ -2076,7 +2140,9 @@ export const LocalQuickStart = (): JSX.Element => {
     const setupSubtitle = isProvisioning
         ? l10n.t('This can take a few minutes. Elapsed time: {0}', formatElapsed(elapsedMs))
         : canContinueSetup
-          ? l10n.t('Docker is ready now. Nothing has been created on your machine yet.')
+          ? shownPodman
+              ? l10n.t('Podman is ready now. Nothing has been created on your machine yet.')
+              : l10n.t('Docker is ready now. Nothing has been created on your machine yet.')
           : checkStageFailed
             ? l10n.t('Setup stopped at the first stage. Nothing was created on your machine.')
             : undefined;
@@ -2430,11 +2496,18 @@ export const LocalQuickStart = (): JSX.Element => {
                 }
                 politeness="assertive"
             />
-            <Announcer when={startingDocker} message={l10n.t('Waiting for Docker to start.')} />
+            <Announcer
+                when={startingDocker}
+                message={shownPodman ? l10n.t('Waiting for Podman to start.') : l10n.t('Waiting for Docker to start.')}
+            />
             <Announcer
                 key={`docker-recovered-${dockerRecoveredKey}`}
                 when={dockerRecoveredKey > 0}
-                message={l10n.t('Docker is ready. Setup has not run yet.')}
+                message={
+                    shownPodman
+                        ? l10n.t('Podman is ready. Setup has not run yet.')
+                        : l10n.t('Docker is ready. Setup has not run yet.')
+                }
             />
             <Announcer
                 key={`recovery-copied-${copyAnnouncementKey}`}

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PodmanClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash } from '@microsoft/vscode-processutils';
@@ -19,6 +19,11 @@ import {
 import { type RunDockerProbeOptions } from './dockerProbes';
 import { type ContainerCliPresence, type DockerProbeEvidence, type DockerProviderMemory } from './quickStartTypes';
 import * as containerCli from './containerCli';
+import {
+    getDockerStartCapability,
+    type DockerProviderLauncherDependencies,
+    type DockerStartCapabilityInput,
+} from './DockerProviderLauncher';
 
 function commandResponse<T>(args: string[], parse: (output: string) => T): PromiseCommandResponse<T> {
     return {
@@ -51,6 +56,156 @@ function evidence(
         ...overrides,
     };
 }
+
+describe('live Podman machine readiness', () => {
+    beforeEach(() => {
+        vi.spyOn(containerCli, 'findOnPath').mockReturnValue('/usr/local/bin/podman');
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    function machineService(
+        overrides: DockerReadinessServiceDependencies = {},
+        stdout: string = '[{"Name":"custom-vm","Default":true,"Running":false,"Starting":false}]',
+    ): {
+        service: DockerReadinessService;
+        list: ReturnType<typeof vi.fn>;
+        capability: ReturnType<typeof vi.fn>;
+    } {
+        const list = vi.fn().mockResolvedValue({ exitCode: 0, stdout });
+        const capability = vi.fn((
+            input: DockerStartCapabilityInput,
+            dependencies: DockerProviderLauncherDependencies = {},
+        ) => getDockerStartCapability(input, {
+            ...dependencies, runProcess: list, pathExists: async () => true,
+        }));
+        return {
+            list,
+            capability,
+            service: new DockerReadinessService({
+                client: { ...createClient(), id: PodmanClient.ClientId },
+                shellProvider: new Bash(),
+                platform: 'darwin',
+                environmentVariables: { DOCKER_HOST: 'unix:///run/podman.sock' },
+                runProbe: async (options) => evidence(options.probe, options.probe === 'info'
+                    ? { exitCode: 1, stderr: 'Cannot connect to Podman' }
+                    : { stdout: 'podman version 6.0.2' }),
+                probeEndpoint: async (endpoint) => ({
+                    kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ECONNREFUSED',
+                }),
+                getStartCapability: capability,
+                readProviderMemory: () => undefined,
+                writeProviderMemory: async () => undefined,
+                ...overrides,
+            }),
+        };
+    }
+
+    it.each(['darwin', 'win32'] as const)('discovers and offers the selected Podman machine on %s', async (platform) => {
+        const executable = platform === 'win32' ? 'C:\\Podman\\podman.exe' : '/usr/local/bin/podman';
+        vi.mocked(containerCli.findOnPath).mockReturnValue(executable);
+        const { service, list } = machineService({ platform });
+        expect(await service.getReadiness()).toMatchObject({
+            cli: 'podman', failureKind: 'daemonUnavailable', startAction: 'startPodmanMachine',
+            podmanMachine: { kind: 'stopped', name: 'custom-vm' },
+        });
+        expect(list).toHaveBeenCalledExactlyOnceWith(
+            executable, ['machine', 'list', '--format', 'json'], expect.any(Object),
+        );
+    });
+
+    it.each([
+        { stdout: '[]', machine: { kind: 'none' }, failure: 'daemonUnavailable', recovery: 'podmanMachineInit' },
+        { stdout: '[{"Name":"vm","Default":true,"Running":false,"Starting":true}]', machine: { kind: 'starting', name: 'vm' }, failure: 'daemonStarting', recovery: undefined },
+        { stdout: '[{"Name":"vm","Default":true,"Running":true,"Starting":false}]', machine: { kind: 'running', name: 'vm' }, failure: 'daemonUnavailable', recovery: undefined },
+        { stdout: '[{"Name":"a","Default":false,"Running":false,"Starting":false},{"Name":"b","Default":false,"Running":false,"Starting":false}]', machine: { kind: 'ambiguous', names: ['a', 'b'] }, failure: 'daemonUnavailable', recovery: undefined },
+        { stdout: '[{"Name":"a","Default":true,"Running":false,"Starting":false},{"Name":"b","Default":false,"Running":true,"Starting":false}]', machine: { kind: 'otherActive', active: 'b' }, failure: 'daemonUnavailable', recovery: undefined },
+        { stdout: 'bad json', machine: { kind: 'unknown' }, failure: 'daemonUnavailable', recovery: undefined },
+    ])('carries live $machine.kind facts without a start button', async ({ stdout, machine, failure, recovery }) => {
+        const { service } = machineService({}, stdout);
+        const result = await service.getReadiness();
+        expect(result).toMatchObject({ podmanMachine: machine, failureKind: failure });
+        expect(result.startAction).toBeUndefined();
+        expect(result.recoveryCommand?.id).toBe(recovery);
+    });
+
+    it.each([
+        { platform: 'linux', remoteName: undefined },
+        { platform: 'linux', remoteName: 'wsl' },
+        { platform: 'darwin', remoteName: 'ssh-remote' },
+        { platform: 'win32', remoteName: 'dev-container' },
+        { platform: 'darwin', remoteName: 'codespaces' },
+        { platform: 'win32', remoteName: 'other-remote' },
+    ] as const)('never discovers a host machine on $platform/$remoteName', async ({ platform, remoteName }) => {
+        const { service, list, capability } = machineService({ platform, remoteName });
+        const result = await service.getReadiness();
+        expect(result.startAction).toBeUndefined();
+        expect(result.podmanMachine).toBeUndefined();
+        expect(list).not.toHaveBeenCalled();
+        expect(capability).not.toHaveBeenCalled();
+        expect(containerCli.findOnPath).not.toHaveBeenCalled();
+    });
+
+    it.each(['podman', 'docker'] as const)('does not perform healthy machine lookups for %s', async (cli) => {
+        const { service, list, capability } = machineService({
+            client: { ...createClient(), id: cli === 'podman' ? PodmanClient.ClientId : undefined },
+            runProbe: async (options) => evidence(options.probe, {
+                stdout: options.probe === 'info' ? '{"OSType":"linux"}' : 'podman version 6.0.2',
+            }),
+        });
+        expect(await service.getReadiness()).toMatchObject({ outcome: 'ready' });
+        expect(list).not.toHaveBeenCalled();
+        expect(capability).not.toHaveBeenCalled();
+        expect(containerCli.findOnPath).not.toHaveBeenCalled();
+    });
+
+    it('does not perform a machine lookup for a permission failure', async () => {
+        const { service, list } = machineService({
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'EACCES',
+            }),
+        });
+        expect(await service.getReadiness()).toMatchObject({ failureKind: 'permissionDenied' });
+        expect(list).not.toHaveBeenCalled();
+        expect(containerCli.findOnPath).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])('requires Podman on PATH for a positive Docker CLI shim (present=%s)', async (present) => {
+        vi.mocked(containerCli.findOnPath).mockReturnValue(present ? '/usr/local/bin/podman' : undefined);
+        const { service, list } = machineService({ client: createClient() });
+        const result = await service.getReadiness();
+        expect(result).toMatchObject({ cli: 'docker', engine: 'podman', engineEvidence: 'podmanShim' });
+        expect(result.startAction).toBe(present ? 'startPodmanMachine' : undefined);
+        expect(list).toHaveBeenCalledTimes(present ? 1 : 0);
+    });
+
+    it('never promotes an inferred Podman endpoint into machine evidence', async () => {
+        const { service, list } = machineService({
+            client: createClient(),
+            runProbe: async (options) => evidence(options.probe, options.probe === 'info'
+                ? { exitCode: 1, stderr: 'Cannot connect to the Docker daemon' }
+                : { stdout: 'Docker version 28.1.1' }),
+        });
+        const result = await service.getReadiness();
+        expect(result).toMatchObject({ engine: 'unknown', engineEvidence: 'endpointPath' });
+        expect(result.startAction).not.toBe('startPodmanMachine');
+        expect(list).not.toHaveBeenCalled();
+        expect(containerCli.findOnPath).not.toHaveBeenCalled();
+    });
+
+    it('re-reads machine state during an explicit forced check without provider storage', async () => {
+        const readProviderMemory = vi.fn();
+        const writeProviderMemory = vi.fn();
+        const { service, list } = machineService({ readProviderMemory, writeProviderMemory });
+        expect((await service.getReadiness()).startAction).toBe('startPodmanMachine');
+        list.mockResolvedValueOnce({ exitCode: 0, stdout: '[]' });
+        const result = await service.getReadiness({ forceRefresh: true });
+        expect(result.startAction).toBeUndefined();
+        expect(result.podmanMachine).toEqual({ kind: 'none' });
+        expect(list).toHaveBeenCalledTimes(2);
+        expect(readProviderMemory).not.toHaveBeenCalled();
+        expect(writeProviderMemory).not.toHaveBeenCalled();
+    });
+});
 
 describe('DockerReadinessService', () => {
     describe('preferred engine resolution', () => {
@@ -1112,7 +1267,11 @@ describe('DockerReadinessService', () => {
             ...(failure ? { failureKind: failure === 'EACCES' ? 'permissionDenied' : 'daemonUnavailable' } : { outcome: 'ready' }),
         });
         expect(result.startAction).toBeUndefined();
-        expect(result.recoveryCommand).toBeUndefined();
+        if (failure === 'ECONNREFUSED' && platform === 'linux') {
+            expect(result.recoveryCommand?.id).toBe('linuxStartPodmanSocket');
+        } else {
+            expect(result.recoveryCommand).toBeUndefined();
+        }
         expect(readProviderMemory).not.toHaveBeenCalled();
         expect(writeProviderMemory).not.toHaveBeenCalled();
         expect(getStartCapability).not.toHaveBeenCalled();
@@ -2153,7 +2312,7 @@ describe('DockerReadinessService', () => {
         const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
         const service = new DockerReadinessService({ writeProviderMemory });
 
-        await service.recordLaunchResult(result);
+        await service.recordLaunchResult(result, 'docker');
 
         expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
     });

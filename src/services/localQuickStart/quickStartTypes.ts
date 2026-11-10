@@ -394,7 +394,22 @@ export type DockerStartAction =
     | 'startDockerDesktopMacOS'
     | 'startDockerDesktopLinux'
     | 'startDockerDesktopWindowsFromWsl'
-    | 'startRootlessDockerEngineLinux';
+    | 'startRootlessDockerEngineLinux'
+    | 'startPodmanMachine';
+
+export interface PodmanMachineFact {
+    readonly name: string;
+    readonly isDefault: boolean;
+    readonly running: boolean;
+    readonly starting: boolean;
+}
+
+export type PodmanMachineState =
+    | { readonly kind: 'stopped' | 'starting' | 'running'; readonly name: string }
+    | { readonly kind: 'otherActive'; readonly active: string }
+    | { readonly kind: 'none' }
+    | { readonly kind: 'ambiguous'; readonly names: readonly string[] }
+    | { readonly kind: 'unknown' };
 
 export type DockerLaunchResult = 'started' | 'launchAttempted' | 'notAvailable' | 'failed';
 
@@ -429,7 +444,13 @@ export interface DockerSocketGroupFacts {
 }
 
 export interface DockerRecoveryCommand {
-    readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslStartServiceNoSystemd' | 'wslRestartFromWindows';
+    readonly id:
+        | 'linuxDockerGroup'
+        | 'linuxStartService'
+        | 'wslStartServiceNoSystemd'
+        | 'wslRestartFromWindows'
+        | 'linuxStartPodmanSocket'
+        | 'podmanMachineInit';
     readonly commandLine: string;
     readonly requiresElevation: boolean;
 }
@@ -460,6 +481,7 @@ interface DockerReadinessBase {
     readonly providerRecordedAtMs?: number;
     readonly executionTarget: DockerExecutionTarget;
     readonly startAction?: DockerStartAction;
+    readonly podmanMachine?: PodmanMachineState;
     readonly permissionDetail?: DockerPermissionDetail;
     readonly recoveryCommand?: DockerRecoveryCommand;
     readonly checkedAtMs: number;

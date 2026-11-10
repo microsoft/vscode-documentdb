@@ -94,6 +94,24 @@ const failed: DockerReadiness = {
     canContinueAnyway: false,
     daemonReachable: false,
 };
+const stoppedPodman: DockerReadiness = {
+    ...failed,
+    cli: 'podman',
+    engine: 'podman',
+    engineEvidence: 'selectedCli',
+    provider: 'podman',
+    providerEvidence: 'none',
+    environment: 'macos',
+    failureKind: 'daemonUnavailable',
+    startAction: 'startPodmanMachine',
+    podmanMachine: { kind: 'stopped', name: 'custom-vm' },
+};
+const startingPodman: DockerReadiness = {
+    ...stoppedPodman,
+    failureKind: 'daemonStarting',
+    startAction: undefined,
+    podmanMachine: { kind: 'starting', name: 'custom-vm' },
+};
 
 function status(readiness: DockerReadiness): object {
     return { readiness, status: { state: InstanceState.NotInstalled }, canReuseExistingData: false };
@@ -144,6 +162,7 @@ describe('Local Quick Start stage details', () => {
         });
         client.trpc.localQuickStart.startQuickStart.subscribe.mockClear();
         client.trpc.localQuickStart.startDockerProvider.mutate.mockReset().mockResolvedValue(undefined);
+        client.trpc.localQuickStart.copyRecoveryCommand.mutate.mockReset().mockResolvedValue(undefined);
         host = document.createElement('div');
         document.body.appendChild(host);
         root = createRoot(host);
@@ -247,7 +266,7 @@ describe('Local Quick Start stage details', () => {
             await act(async () => vi.advanceTimersByTimeAsync(1000));
 
             expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledWith(
-                { preferredEngine: 'podman' }, expect.any(Object),
+                { preferredEngine: 'podman' },
             );
             expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith(
                 expect.objectContaining({ preferredEngine: 'podman', forceRefresh: true, polled: true }),
@@ -257,6 +276,236 @@ describe('Local Quick Start stage details', () => {
             vi.useRealTimers();
         }
     });
+
+    it('automatically waits for an initially starting Podman machine without sending a startup mutation', async () => {
+        await start();
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({
+            ...ready, cli: 'podman', engine: 'podman', provider: 'podman',
+        }));
+        vi.useFakeTimers();
+        try {
+            await event({ stage: 'checking', status: 'error', dockerReadiness: startingPodman });
+            expect(button('Stop waiting')).toBeDefined();
+            expect(host.textContent).toContain('Waiting for Podman to start');
+            expect(host.textContent).toContain('Waiting 00:00');
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+            await act(async () => vi.advanceTimersByTimeAsync(1_100));
+            await act(async () => vi.advanceTimersByTimeAsync(100));
+            expect(host.textContent).toContain('Ready to set up');
+            expect(host.textContent).toContain('Podman is ready now.');
+            expect(host.textContent).toContain('Podman is ready. Setup has not run yet.');
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith({
+                preferredEngine: 'docker', forceRefresh: true, polled: true, suppressCommandEcho: false,
+            }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not automatically restart the same execution wait after Stop or new starting facts', async () => {
+        await start();
+        client.trpc.localQuickStart.getDockerStatus.query.mockImplementation(async () => status({ ...startingPodman }));
+        vi.useFakeTimers();
+        try {
+            await event({ stage: 'checking', status: 'error', dockerReadiness: startingPodman });
+            await act(async () => vi.advanceTimersByTimeAsync(1_000));
+            expect(button('Stop waiting')).toBeDefined();
+            await click(button('Stop waiting'));
+            const count = client.trpc.localQuickStart.getDockerStatus.query.mock.calls.length;
+            await act(async () => vi.advanceTimersByTimeAsync(10_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count);
+            await click(button('Check Docker again'));
+            await act(async () => vi.advanceTimersByTimeAsync(10_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count + 1);
+            expect([...host.querySelectorAll('button')].some((candidate) =>
+                candidate.textContent?.trim() === 'Stop waiting',
+            )).toBe(false);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+
+            await click(button('Retry setup'));
+            await event({ stage: 'checking', status: 'error', dockerReadiness: { ...startingPodman } });
+            expect(button('Stop waiting')).toBeDefined();
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not restart an automatic Podman wait after its deadline', async () => {
+        await start();
+        client.trpc.localQuickStart.getDockerStatus.query.mockImplementation(async () => status({ ...startingPodman }));
+        vi.useFakeTimers();
+        try {
+            await event({ stage: 'checking', status: 'error', dockerReadiness: startingPodman });
+            await act(async () => vi.advanceTimersByTimeAsync(90_100));
+            await act(async () => vi.advanceTimersByTimeAsync(100));
+            const count = client.trpc.localQuickStart.getDockerStatus.query.mock.calls.length;
+            expect(host.textContent).toContain('Podman did not become ready before the wait timed out.');
+            await act(async () => vi.advanceTimersByTimeAsync(10_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not automatically poll an initially starting Docker Desktop daemon', async () => {
+        await start();
+        vi.useFakeTimers();
+        try {
+            await event({
+                stage: 'checking', status: 'error',
+                dockerReadiness: {
+                    ...failed, failureKind: 'daemonStarting', provider: 'dockerDesktop',
+                    providerEvidence: 'rememberedProvider',
+                },
+            });
+            await act(async () => vi.advanceTimersByTimeAsync(5_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).not.toHaveBeenCalled();
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+            expect([...host.querySelectorAll('button')].some((candidate) =>
+                candidate.textContent?.trim() === 'Stop waiting',
+            )).toBe(false);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('starts the wait timer on click and cancels waiting without canceling a pending Podman start', async () => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(stoppedPodman));
+        await click(button('Change the container engine'));
+        await click(host.querySelector<HTMLInputElement>('input[value="podman"]')!);
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+        let finishStart = (_result: string): void => undefined;
+        client.trpc.localQuickStart.startDockerProvider.mutate.mockReturnValueOnce(new Promise((resolve) => {
+            finishStart = resolve;
+        }));
+        vi.useFakeTimers();
+        try {
+            await click(button('Start Podman machine'));
+            await act(async () => vi.advanceTimersByTimeAsync(2_000));
+            expect(host.textContent).toContain('Waiting 00:02');
+            expect(host.textContent).toContain('Waiting for Podman to start');
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).toHaveBeenCalledExactlyOnceWith({
+                preferredEngine: 'podman',
+            });
+            await click(button('Stop waiting'));
+            await act(async () => vi.advanceTimersByTimeAsync(100));
+            expect(host.textContent).toContain('Stopped waiting for Podman.');
+            await act(async () => {
+                finishStart('launchAttempted');
+                await vi.advanceTimersByTimeAsync(5_000);
+            });
+            expect(client.trpc.localQuickStart.getDockerStatus.query.mock.calls.some(
+                ([input]) => (input as { polled?: boolean } | undefined)?.polled,
+            )).toBe(false);
+            expect(host.textContent).not.toContain('Waiting 00:');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it.each(['started', 'launchAttempted'] as const)(
+        'continues readiness polling after a click-time race returns %s',
+        async (launchResult) => {
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(stoppedPodman));
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+            client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValueOnce(launchResult);
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status({
+                ...ready, cli: 'podman', engine: 'podman', provider: 'podman',
+            }));
+            vi.useFakeTimers();
+            try {
+                await click(button('Start Podman machine'));
+                await act(async () => vi.advanceTimersByTimeAsync(1_000));
+                expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenLastCalledWith({
+                    preferredEngine: 'docker', forceRefresh: true, polled: true, suppressCommandEcho: false,
+                }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+                expect(host.textContent).toContain('Ready to set up');
+                expect(host.textContent).not.toContain('could not be started');
+            } finally {
+                vi.useRealTimers();
+            }
+        },
+    );
+
+    it('stops active Podman readiness polling without sending a startup cancellation', async () => {
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(stoppedPodman));
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: stoppedPodman });
+        client.trpc.localQuickStart.startDockerProvider.mutate.mockResolvedValueOnce('launchAttempted');
+        vi.useFakeTimers();
+        try {
+            await click(button('Start Podman machine'));
+            await act(async () => vi.advanceTimersByTimeAsync(1_000));
+            const calls = client.trpc.localQuickStart.getDockerStatus.query.mock.calls;
+            const options = calls.at(-1)?.[1] as { signal: AbortSignal };
+            const count = calls.length;
+            expect(options.signal.aborted).toBe(false);
+            await click(button('Stop waiting'));
+            expect(options.signal.aborted).toBe(true);
+            await act(async () => vi.advanceTimersByTimeAsync(10_000));
+            expect(client.trpc.localQuickStart.getDockerStatus.query).toHaveBeenCalledTimes(count);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate.mock.calls[0]).toHaveLength(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it.each([
+        { machine: { kind: 'ambiguous', names: ['vm-one', '<img src=x onerror=alert(1)>'] }, text: 'vm-one, <img src=x onerror=alert(1)>' },
+        { machine: { kind: 'otherActive', active: '<b>busy-vm</b>' }, text: '<b>busy-vm</b>' },
+        { machine: { kind: 'running', name: '<em>running-vm</em>' }, text: '<em>running-vm</em>' },
+    ] as const)('renders $machine.kind machine names as plain text with no start action', async ({ machine, text }) => {
+        const readiness: DockerReadiness = { ...stoppedPodman, startAction: undefined, podmanMachine: machine };
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+        expect(host.textContent).toContain(text);
+        expect(host.querySelector('img, b, em')).toBeNull();
+        expect([...host.querySelectorAll('button')].some((candidate) =>
+            candidate.textContent?.trim() === 'Start Podman machine',
+        )).toBe(false);
+    });
+
+    it.each([
+        { environment: 'macos', machine: { kind: 'none' }, id: 'podmanMachineInit', commandLine: 'podman machine init' },
+        { environment: 'linux', machine: undefined, id: 'linuxStartPodmanSocket', commandLine: 'systemctl --user start podman.socket' },
+        { environment: 'wsl', machine: undefined, id: 'linuxStartPodmanSocket', commandLine: 'systemctl --user start podman.socket' },
+    ] as const)('copies Podman recovery without starting anything on $environment', async ({ environment, machine, id, commandLine }) => {
+        const readiness: DockerReadiness = {
+            ...stoppedPodman, environment, startAction: undefined, podmanMachine: machine,
+            recoveryCommand: { id, commandLine, requiresElevation: false },
+        };
+        client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+        await start();
+        await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+        expect(host.textContent).toContain(commandLine);
+        await click(button('Copy'));
+        expect(client.trpc.localQuickStart.copyRecoveryCommand.mutate).toHaveBeenCalledExactlyOnceWith(id);
+        expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        expect([...host.querySelectorAll('button')].some((candidate) =>
+            /Start (?:Podman machine|Docker)/.test(candidate.textContent ?? ''),
+        )).toBe(false);
+    });
+
+    it.each(['ssh', 'devContainer', 'codespaces', 'otherRemote'] as const)(
+        'never offers a local Podman machine action in %s', async (environment) => {
+            const readiness: DockerReadiness = {
+                ...stoppedPodman, environment, startAction: undefined, podmanMachine: undefined,
+            };
+            client.trpc.localQuickStart.getDockerStatus.query.mockResolvedValue(status(readiness));
+            await start();
+            await event({ stage: 'checking', status: 'error', dockerReadiness: readiness });
+            expect([...host.querySelectorAll('button')].some((candidate) =>
+                candidate.textContent?.trim() === 'Start Podman machine',
+            )).toBe(false);
+            expect(client.trpc.localQuickStart.startDockerProvider.mutate).not.toHaveBeenCalled();
+        },
+    );
 
     it.each([
         ['podman', 'Podman · kept from the existing instance'],

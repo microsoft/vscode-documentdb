@@ -35,6 +35,7 @@ import { meterSilentCatch as meterQuickStartSilentCatch } from '../../utils/accu
 import {
     type ContainerEngineRequest,
     createContainerClient,
+    findOnPath,
     resolveContainerCli,
     resolvePinnedContainerCli,
     type ResolvedContainerCli,
@@ -240,10 +241,31 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     public async startAvailableDockerProvider(request: ContainerEngineRequest): Promise<DockerLaunchResult> {
         const readiness = await this.readinessService.getReadiness({ engine: request, forceRefresh: true });
         if (!readiness.startAction) {
+            if (readiness.podmanMachine?.kind === 'running') {
+                return 'started';
+            }
+            if (readiness.podmanMachine?.kind === 'starting') {
+                return 'launchAttempted';
+            }
             return 'notAvailable';
         }
-        const result = await launchDockerProvider(readiness.startAction);
-        await this.readinessService.recordLaunchResult(result, readiness.cli);
+        const result =
+            readiness.startAction === 'startPodmanMachine'
+                ? await launchDockerProvider(
+                      readiness.startAction,
+                      { onOutput: (output) => getQuickStartOutputChannel().appendLine(sanitizeOutput(output, [])) },
+                      {
+                          environment: readiness.environment,
+                          provider: 'podman',
+                          providerEvidence: 'none',
+                          podmanExecutable: findOnPath('podman'),
+                      },
+                  )
+                : await launchDockerProvider(readiness.startAction);
+        await this.readinessService.recordLaunchResult(
+            result,
+            readiness.startAction === 'startPodmanMachine' ? 'podman' : (readiness.cli ?? 'docker'),
+        );
         return result;
     }
 

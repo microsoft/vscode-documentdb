@@ -264,6 +264,74 @@ describe('ContainerRuntime output channel', () => {
         expect(launch).not.toHaveBeenCalled();
     });
 
+    it('re-resolves the Podman executable on click and sends startup output to the setup log', async () => {
+        const readiness = vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
+            outcome: 'diagnosed', failureKind: 'daemonUnavailable', cliInstalled: true,
+            daemonReachable: false, environment: 'windows', endpointKind: 'namedPipe',
+            provider: 'podman', providerEvidence: 'none', executionTarget: 'local',
+            checkedAtMs: 1, canContinueAnyway: false, startAction: 'startPodmanMachine', cli: 'podman',
+            podmanMachine: { kind: 'stopped', name: 'old-default' },
+        });
+        const executable = 'C:\\New Podman\\podman.exe';
+        const lookup = vi.spyOn(containerCli, 'findOnPath').mockReturnValue(executable);
+        const launch = vi.spyOn(DockerProviderLauncher, 'startDockerProvider').mockImplementation(
+            async (_action, dependencies) => {
+                dependencies?.onOutput?.('machine startup output');
+                return 'launchAttempted';
+            },
+        );
+        const record = vi.spyOn(DockerReadinessService.prototype, 'recordLaunchResult').mockResolvedValue(undefined);
+        const request = { kind: 'pinned', cli: 'podman' } as const;
+        expect(await ContainerRuntime.startAvailableDockerProvider(request)).toBe('launchAttempted');
+        expect(readiness).toHaveBeenCalledExactlyOnceWith({ engine: request, forceRefresh: true });
+        expect(lookup).toHaveBeenCalledExactlyOnceWith('podman');
+        expect(launch).toHaveBeenCalledExactlyOnceWith('startPodmanMachine', expect.any(Object), {
+            environment: 'windows', provider: 'podman', providerEvidence: 'none', podmanExecutable: executable,
+        });
+        expect(record).toHaveBeenCalledExactlyOnceWith('launchAttempted', 'podman');
+        expect(lines).toContain('machine startup output');
+    });
+
+    it.each(['failed', 'notAvailable'] as const)(
+        'records a %s Podman-machine launch as Podman even with the Docker CLI shim',
+        async (result) => {
+            vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
+                outcome: 'diagnosed', failureKind: 'daemonUnavailable', cliInstalled: true,
+                daemonReachable: false, environment: 'macos', endpointKind: 'unixSocket',
+                provider: 'podman', providerEvidence: 'none', executionTarget: 'local',
+                checkedAtMs: 1, canContinueAnyway: false, startAction: 'startPodmanMachine', cli: 'docker',
+                engine: 'podman', engineEvidence: 'podmanShim',
+                podmanMachine: { kind: 'stopped', name: 'custom-vm' },
+            });
+            vi.spyOn(containerCli, 'findOnPath').mockReturnValue('/usr/local/bin/podman');
+            vi.spyOn(DockerProviderLauncher, 'startDockerProvider').mockResolvedValue(result);
+            const record = vi.spyOn(DockerReadinessService.prototype, 'recordLaunchResult').mockResolvedValue(undefined);
+
+            expect(await ContainerRuntime.startAvailableDockerProvider({
+                kind: 'preferred', preferred: 'docker',
+            })).toBe(result);
+            expect(record).toHaveBeenCalledExactlyOnceWith(result, 'podman');
+        },
+    );
+
+    it.each([
+        ['running', 'started'],
+        ['starting', 'launchAttempted'],
+    ] as const)('continues waiting if click-time readiness finds the machine %s', async (kind, expected) => {
+        vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
+            outcome: 'diagnosed', failureKind: kind === 'starting' ? 'daemonStarting' : 'daemonUnavailable',
+            cliInstalled: true, daemonReachable: false, environment: 'macos', endpointKind: 'unixSocket',
+            provider: 'podman', providerEvidence: 'none', executionTarget: 'local',
+            checkedAtMs: 1, canContinueAnyway: false, cli: 'podman',
+            podmanMachine: { kind, name: 'custom-vm' },
+        });
+        const launch = vi.spyOn(DockerProviderLauncher, 'startDockerProvider');
+        expect(await ContainerRuntime.startAvailableDockerProvider({
+            kind: 'preferred', preferred: 'podman',
+        })).toBe(expected);
+        expect(launch).not.toHaveBeenCalled();
+    });
+
     it.each([
         ['Docker', { Id: 'sha256:image-id', Created: '2026-10-28T00:00:00Z' }],
         [

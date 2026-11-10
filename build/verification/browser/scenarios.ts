@@ -192,6 +192,12 @@ const setupSteps = [
     ...continueSteps,
     { action: 'click', role: 'button', name: 'Start DocumentDB Local' },
 ] as const satisfies readonly ScenarioStep[];
+const podmanSetupSteps = [
+    ...continueSteps,
+    { action: 'click', role: 'button', name: 'Change the container engine' },
+    { action: 'click', role: 'radio', name: 'Podman' },
+    { action: 'click', role: 'button', name: 'Start DocumentDB Local' },
+] as const satisfies readonly ScenarioStep[];
 const atlasSteps = [
     { action: 'fill', role: 'textbox', name: 'Public Key', value: 'stage0-public-key' },
     { action: 'fill', role: 'textbox', name: 'Private Key', value: 'stage0-private-key' },
@@ -319,6 +325,39 @@ const missingReadiness = {
     platformSupported: true,
     canContinueAnyway: false,
     daemonReachable: false,
+} as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
+
+const stoppedPodmanMachine = {
+    ...readyDocker.readiness,
+    outcome: 'diagnosed',
+    canContinueAnyway: false,
+    failureKind: 'daemonUnavailable',
+    daemonReachable: false,
+    environment: 'macos',
+    cli: 'podman',
+    engine: 'podman',
+    engineEvidence: 'selectedCli',
+    provider: 'podman',
+    providerEvidence: 'none',
+    startAction: 'startPodmanMachine',
+    podmanMachine: { kind: 'stopped', name: 'documentdb-dev' },
+} as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
+const startingPodmanMachine = {
+    ...stoppedPodmanMachine,
+    failureKind: 'daemonStarting',
+    startAction: undefined,
+    podmanMachine: { kind: 'starting', name: 'documentdb-dev' },
+} as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
+const linuxPodmanSocketDown = {
+    ...stoppedPodmanMachine,
+    environment: 'linux',
+    startAction: undefined,
+    podmanMachine: undefined,
+    recoveryCommand: {
+        id: 'linuxStartPodmanSocket',
+        commandLine: 'systemctl --user start podman.socket',
+        requiresElevation: false,
+    },
 } as const satisfies QuickStartOutputs['getDockerStatus']['readiness'];
 
 function dockerMissing(
@@ -2785,6 +2824,163 @@ export const scenarios = {
                         'Unix socket',
                     ],
                     excludes: [...privateDetails, ...checkingNotes, 'Docker CLI Found'],
+                },
+            ],
+        },
+        'podman-machine-starting-initial': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getDockerStatus': {
+                    type: 'query',
+                    results: [
+                        { ...readyDocker, readiness: startingPodmanMachine },
+                        {
+                            ...readyDocker,
+                            readiness: {
+                                ...readyDocker.readiness,
+                                outcome: 'ready',
+                                canContinueAnyway: false,
+                                daemonReachable: true,
+                                environment: 'macos',
+                                cli: 'podman',
+                                engine: 'podman',
+                                engineEvidence: 'selectedCli',
+                                provider: 'podman',
+                                providerEvidence: 'liveDaemon',
+                                startAction: undefined,
+                                podmanMachine: undefined,
+                                cliVersion: '6.0.2',
+                            },
+                        },
+                    ],
+                },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [{ stage: 'checking', status: 'error', dockerReadiness: startingPodmanMachine }],
+                },
+            },
+            steps: podmanSetupSteps,
+            readiness: {
+                content: ['Ready to set up', 'Continue setup', 'Podman CLI 6.0.2 found'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'sequence',
+                    name: 'An already-starting Podman machine automatically enters the wait before becoming ready',
+                    milestones: ['.fui-MessageBar [role="progressbar"]'],
+                    minimumGapMs: 0,
+                    minimumSpanMs: 0,
+                },
+                {
+                    kind: 'text',
+                    name: 'Read-only polling ends with Podman ready without starting setup again',
+                    selector: 'body',
+                    includes: ['Ready to set up', 'Continue setup', 'Podman CLI 6.0.2 found'],
+                    excludes: ['Stop waiting', 'Waiting 00:', 'Podman could not be started'],
+                },
+                {
+                    kind: 'calls',
+                    name: 'An already-starting Podman machine never receives a startup mutation',
+                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                },
+            ],
+        },
+        'podman-machine-stopped-mac': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getDockerStatus': {
+                    type: 'query',
+                    results: [
+                        { ...readyDocker, readiness: stoppedPodmanMachine },
+                        {
+                            ...readyDocker,
+                            readiness: startingPodmanMachine,
+                        },
+                    ],
+                },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [{ stage: 'checking', status: 'error', dockerReadiness: stoppedPodmanMachine }],
+                },
+            },
+            steps: [...podmanSetupSteps, { action: 'click', role: 'button', name: 'Start Podman machine' }],
+            readiness: {
+                content: ['Waiting for Podman to start', 'Waiting 00:', 'Stop waiting'],
+                noProgressbar: false,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'The selected Podman machine enters the existing wait without a Docker action',
+                    selector: 'body',
+                    includes: ['Waiting for Podman to start', 'Stop waiting'],
+                    excludes: ['Start Docker Desktop', 'Podman could not be started'],
+                },
+                {
+                    kind: 'calls',
+                    name: 'Only an explicit click starts the selected Podman machine',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: { preferredEngine: 'podman' },
+                    count: 1,
+                    steps: [],
+                },
+                {
+                    kind: 'calls',
+                    name: 'Stopping the wait does not send another startup action',
+                    path: 'localQuickStart.startDockerProvider',
+                    input: { preferredEngine: 'podman' },
+                    count: 1,
+                    steps: [{ action: 'click', role: 'button', name: 'Stop waiting' }],
+                },
+                {
+                    kind: 'text',
+                    name: 'Cancel stops waiting without claiming the machine was stopped',
+                    selector: 'body',
+                    includes: ['Start Podman machine'],
+                    excludes: ['Waiting 00:', 'Podman could not be started'],
+                },
+            ],
+        },
+        'podman-linux-socket-down': {
+            config: base.config,
+            rpc: {
+                ...base.rpc,
+                'localQuickStart.getDockerStatus': {
+                    type: 'query', results: [{ ...readyDocker, readiness: linuxPodmanSocketDown }],
+                },
+                'localQuickStart.startQuickStart': {
+                    type: 'subscription',
+                    results: [{ stage: 'checking', status: 'error', dockerReadiness: linuxPodmanSocketDown }],
+                },
+            },
+            steps: podmanSetupSteps,
+            readiness: {
+                content: ['Start the Podman user socket', 'systemctl --user start podman.socket', 'Copy'],
+                noProgressbar: true,
+            },
+            assertions: [
+                {
+                    kind: 'text',
+                    name: 'Linux offers Podman socket guidance, never a machine or Docker start',
+                    selector: 'body',
+                    includes: ['systemctl --user start podman.socket', 'Copy'],
+                    excludes: ['Start Podman machine', 'Start Docker Desktop', 'sudo systemctl start docker'],
+                },
+                {
+                    kind: 'calls',
+                    name: 'A Linux Podman failure never launches a local machine',
+                    path: 'localQuickStart.startDockerProvider', input: undefined, count: 0, steps: [],
+                },
+                {
+                    kind: 'calls',
+                    name: 'Copy requests only the approved Podman socket command',
+                    path: 'localQuickStart.copyRecoveryCommand',
+                    input: 'linuxStartPodmanSocket',
+                    count: 1,
+                    steps: [{ action: 'click', role: 'button', name: 'Copy' }],
                 },
             ],
         },

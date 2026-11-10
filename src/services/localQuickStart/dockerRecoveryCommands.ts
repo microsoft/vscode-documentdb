@@ -10,6 +10,7 @@ import {
     type DockerPermissionDetail,
     type DockerRecoveryCommand,
     type DockerServiceManager,
+    type PodmanMachineState,
 } from './quickStartTypes';
 
 const RECOVERY_COMMANDS: Readonly<Record<DockerRecoveryCommand['id'], DockerRecoveryCommand>> = {
@@ -33,6 +34,16 @@ const RECOVERY_COMMANDS: Readonly<Record<DockerRecoveryCommand['id'], DockerReco
         commandLine: 'wsl --shutdown',
         requiresElevation: false,
     },
+    linuxStartPodmanSocket: {
+        id: 'linuxStartPodmanSocket',
+        commandLine: 'systemctl --user start podman.socket',
+        requiresElevation: false,
+    },
+    podmanMachineInit: {
+        id: 'podmanMachineInit',
+        commandLine: 'podman machine init',
+        requiresElevation: false,
+    },
 };
 
 export function getDockerRecoveryCommandById(id: DockerRecoveryCommand['id']): DockerRecoveryCommand {
@@ -45,7 +56,20 @@ export function getDockerRecoveryCommand(
     endpointKind: DockerEndpointKind,
     permissionDetail: DockerPermissionDetail = 'unknown',
     serviceManager: DockerServiceManager = 'unknown',
+    podman?: { readonly machine?: PodmanMachineState },
 ): DockerRecoveryCommand | undefined {
+    if (podman) {
+        if (failureKind !== 'daemonUnavailable') {
+            return undefined;
+        }
+        if (environment === 'linux' || environment === 'wsl') {
+            return RECOVERY_COMMANDS.linuxStartPodmanSocket;
+        }
+        if ((environment === 'macos' || environment === 'windows') && podman.machine?.kind === 'none') {
+            return RECOVERY_COMMANDS.podmanMachineInit;
+        }
+        return undefined;
+    }
     if (
         failureKind === 'permissionDenied' &&
         endpointKind === 'unixSocket' &&

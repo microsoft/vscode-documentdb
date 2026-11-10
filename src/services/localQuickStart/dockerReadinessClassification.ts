@@ -16,7 +16,72 @@ import {
     type DockerProviderEvidence,
     type DockerProviderMemory,
     type DockerReadinessOutcome,
+    type PodmanMachineFact,
+    type PodmanMachineState,
 } from './quickStartTypes';
+
+export function parsePodmanMachineList(output: string): readonly PodmanMachineFact[] | undefined {
+    try {
+        const parsed: unknown = JSON.parse(output);
+        if (!Array.isArray(parsed)) {
+            return undefined;
+        }
+        const machines: PodmanMachineFact[] = [];
+        for (const value of parsed as unknown[]) {
+            if (
+                typeof value !== 'object' ||
+                value === null ||
+                !('Name' in value) ||
+                typeof value.Name !== 'string' ||
+                !value.Name.trim() ||
+                !('Default' in value) ||
+                typeof value.Default !== 'boolean' ||
+                !('Running' in value) ||
+                typeof value.Running !== 'boolean' ||
+                !('Starting' in value) ||
+                typeof value.Starting !== 'boolean'
+            ) {
+                return undefined;
+            }
+            machines.push({
+                name: value.Name,
+                isDefault: value.Default,
+                running: value.Running,
+                starting: value.Starting,
+            });
+        }
+        return machines;
+    } catch {
+        return undefined;
+    }
+}
+
+export function classifyPodmanMachineState(machines: readonly PodmanMachineFact[]): PodmanMachineState {
+    if (machines.length === 0) {
+        return { kind: 'none' };
+    }
+    const defaults = machines.filter((machine) => machine.isDefault);
+    let target: PodmanMachineFact | undefined;
+    if (defaults.length === 1) {
+        target = defaults[0];
+    } else if (defaults.length === 0 && machines.length === 1) {
+        target = machines[0];
+    }
+    if (!target) {
+        return { kind: 'ambiguous', names: machines.map((machine) => machine.name) };
+    }
+    if (target.starting) {
+        return { kind: 'starting', name: target.name };
+    }
+    if (target.running) {
+        return { kind: 'running', name: target.name };
+    }
+    const active = machines.find((machine) => machine !== target && (machine.starting || machine.running));
+    if (active) {
+        return { kind: 'otherActive', active: active.name };
+    }
+    return { kind: 'stopped', name: target.name };
+}
 
 export interface ContainerEngineInput {
     readonly cli: 'docker' | 'podman';

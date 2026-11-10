@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import { API } from '../../../DocumentDBExperiences';
+import * as vscode from 'vscode';
 
 const mockStartDockerProvider = vi.fn();
 const mockIsDockerReady = vi.fn();
@@ -223,6 +224,18 @@ describe('localQuickStartRouter', () => {
             expect.objectContaining({ forceRefresh: true, resetProviderMemory: true }),
             undefined,
         );
+    });
+
+    it.each([
+        ['linuxStartPodmanSocket', 'systemctl --user start podman.socket'],
+        ['podmanMachineInit', 'podman machine init'],
+    ] as const)('copies the fixed %s command without starting an engine', async (id, commandLine) => {
+        const context = createContext();
+        const caller = createCallerFactory(localQuickStartRouter)(context);
+        await caller.copyRecoveryCommand(id);
+        expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(commandLine);
+        expect(mockStartDockerProvider).not.toHaveBeenCalled();
+        expect(context.actionContext.telemetry.properties.recoveryCommandId).toBe(id);
     });
 
     it('returns and records the typed provider launch result', async () => {

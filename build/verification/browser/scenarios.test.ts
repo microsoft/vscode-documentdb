@@ -32,8 +32,8 @@ describe('L2-dev manifest and routes', (): void => {
 
     it('round-trips every scenario and theme, without duplicate routes', (): void => {
         const routes = scenarioRoutes();
-        expect(routes).toHaveLength(150);
-        expect(new Set(routes.map((route): string => route.path)).size).toBe(150);
+        expect(routes).toHaveLength(159);
+        expect(new Set(routes.map((route): string => route.path)).size).toBe(159);
         for (const route of routes) expect(parseScenarioRoute(route.path)).toEqual(route);
     });
 
@@ -71,10 +71,10 @@ describe('L2-dev manifest and routes', (): void => {
     });
 
     it('provides path-only all/view/theme helpers and rejects unknown subsets', (): void => {
-        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(150);
+        expect(runnerRoutes('/scenarios/run-all.js')).toHaveLength(159);
         expect(runnerRoutes('/scenarios/run-all/connectionDiagnostics.js')).toHaveLength(84);
-        expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(54);
-        expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(18);
+        expect(runnerRoutes('/scenarios/run-all/localQuickStart.js')).toHaveLength(63);
+        expect(runnerRoutes('/scenarios/run-all/localQuickStart/dark.js')).toHaveLength(21);
         expect(runnerRoutes('/scenarios/run-all/unknown.js')).toBeUndefined();
         expect(runnerRoutes('/scenarios/run-all.js?view=localQuickStart')).toBeUndefined();
         const snippet = scenarioRunner(scenarioRoutes());
@@ -101,6 +101,43 @@ describe('L2-dev manifest and routes', (): void => {
             }));
         },
     );
+
+    it('covers native Podman click/wait and Linux copy-only recovery in every theme', (): void => {
+        const machine = scenarios.localQuickStart['podman-machine-stopped-mac'];
+        const socket = scenarios.localQuickStart['podman-linux-socket-down'];
+        for (const name of ['podman-machine-stopped-mac', 'podman-linux-socket-down']) {
+            expect(scenarioRoutes().filter((route): boolean => route.scenario === name)).toHaveLength(3);
+        }
+        expect(machine.steps).toContainEqual({ action: 'click', role: 'button', name: 'Start Podman machine' });
+        expect(machine.assertions).toContainEqual(expect.objectContaining({
+            kind: 'calls', path: 'localQuickStart.startDockerProvider', count: 1,
+            input: { preferredEngine: 'podman' },
+        }));
+        expect(socket.assertions).toContainEqual(expect.objectContaining({
+            kind: 'calls', path: 'localQuickStart.startDockerProvider', count: 0,
+        }));
+        expect(socket.assertions).toContainEqual(expect.objectContaining({
+            kind: 'calls', path: 'localQuickStart.copyRecoveryCommand', input: 'linuxStartPodmanSocket', count: 1,
+        }));
+    });
+
+    it('covers an initially starting Podman machine with read-only polling in every theme', (): void => {
+        const scenario = scenarios.localQuickStart['podman-machine-starting-initial'];
+        expect(scenarioRoutes().filter((route): boolean =>
+            route.scenario === 'podman-machine-starting-initial',
+        )).toHaveLength(3);
+        expect(scenario.steps).not.toContainEqual({
+            action: 'click', role: 'button', name: 'Start Podman machine',
+        });
+        expect(scenario.assertions).toContainEqual(expect.objectContaining({
+            kind: 'calls', path: 'localQuickStart.startDockerProvider', count: 0,
+        }));
+        expect(scenario.assertions).toContainEqual(expect.objectContaining({
+            kind: 'sequence', milestones: ['.fui-MessageBar [role="progressbar"]'],
+        }));
+        expect(scenario.readiness.content).toContain('Ready to set up');
+        expect(scenario.readiness.content).toContain('Podman CLI 6.0.2 found');
+    });
 
     it('emits the host initial-data contract and theme kind before the Vite boot', (): void => {
         for (const route of scenarioRoutes()) {

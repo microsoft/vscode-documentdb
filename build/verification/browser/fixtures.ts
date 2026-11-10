@@ -602,6 +602,10 @@ export const fixtures = {
             'localQuickStart.checkPassword': reply<Outputs['localQuickStart']['checkPassword']>('query', 'ok'),
             'localQuickStart.reportStepChange': reply<void>('mutation', undefined),
             'localQuickStart.reportDetailsOpened': reply<void>('mutation', undefined),
+            'localQuickStart.startDockerProvider': reply<Outputs['localQuickStart']['startDockerProvider']>(
+                'mutation', 'launchAttempted',
+            ),
+            'localQuickStart.copyRecoveryCommand': reply<void>('mutation', undefined),
             'localQuickStart.onInstanceChanged': { type: 'subscription', results: [instance], keepOpen: true },
         },
     },

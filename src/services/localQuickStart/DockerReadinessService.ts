@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import {
     createContainerClient,
+    findOnPath,
     resolveContainerCli,
     resolvePinnedContainerCli,
     type ContainerCli,
@@ -33,7 +34,7 @@ import {
     type ResolvedDockerEndpoint,
     type RunDockerProbeOptions,
 } from './dockerProbes';
-import { getDockerStartCapability } from './DockerProviderLauncher';
+import { getDockerStartCapability, type DockerStartCapability } from './DockerProviderLauncher';
 import {
     classifyContainerEngine,
     classifyDockerFailure,
@@ -448,7 +449,7 @@ export class DockerReadinessService {
         }
     }
 
-    public async recordLaunchResult(result: DockerLaunchResult, cli: ContainerCli = 'docker'): Promise<void> {
+    public async recordLaunchResult(result: DockerLaunchResult, cli: ContainerCli): Promise<void> {
         if (result === 'notAvailable' || result === 'failed') {
             for (const state of this.checks.values()) {
                 state.memoized = undefined;
@@ -719,8 +720,10 @@ export class DockerReadinessService {
                 rememberedProvider = undefined;
                 await this.dependencies.writeProviderMemory(undefined);
             }
+            const engine = classifyContainerEngine({ ...engineInput, endpointAddress: endpoint.address, dockerSocketTarget });
+            const isPodman = cli === 'podman' || engine.engineEvidence === 'podmanShim';
             const provider =
-                cli === 'docker'
+                !isPodman
                     ? classifyDockerProvider({
                           environment,
                           daemonReachable: false,
@@ -736,7 +739,7 @@ export class DockerReadinessService {
             ) {
                 await this.dependencies.writeProviderMemory(undefined);
             }
-            const classification = classifyDockerFailure({
+            let classification = classifyDockerFailure({
                 infoProbe,
                 endpointProbe,
                 serverErrors: infoFacts?.serverErrors,
@@ -744,18 +747,45 @@ export class DockerReadinessService {
                 providerMayBeStarting:
                     provider.provider === 'dockerDesktop' && provider.providerEvidence === 'rememberedProvider',
             });
-            const startCapability =
-                cli === 'docker'
-                    ? await this.dependencies.getStartCapability({
-                          environment,
-                          ...provider,
-                          endpointAddress: endpoint.address,
-                          cancellationToken,
-                      })
-                    : provider;
+            let startCapability: DockerStartCapability = provider;
+            if (
+                isPodman &&
+                classification.failureKind === 'daemonUnavailable' &&
+                (environment === 'macos' || environment === 'windows')
+            ) {
+                const podmanExecutable = findOnPath('podman', {
+                    platform: this.dependencies.platform,
+                    environmentVariables: this.dependencies.environmentVariables,
+                });
+                if (podmanExecutable) {
+                    startCapability = await this.dependencies.getStartCapability(
+                        {
+                            environment,
+                            provider: 'podman',
+                            providerEvidence: 'none',
+                            podmanExecutable,
+                            cancellationToken,
+                        },
+                        { onOutput: (output) => this.dependencies.createProbeOutput?.().appendDiagnostic?.(output) },
+                    );
+                    if (callerCancelled) {
+                        throw new vscode.CancellationError();
+                    }
+                }
+                if (startCapability.podmanMachine?.kind === 'starting') {
+                    classification = { failureKind: 'daemonStarting', outcome: 'diagnosed' };
+                }
+            } else if (!isPodman) {
+                startCapability = await this.dependencies.getStartCapability({
+                    environment,
+                    ...provider,
+                    endpointAddress: endpoint.address,
+                    cancellationToken,
+                });
+            }
             let permissionDetail: DockerPermissionDetail | undefined;
             if (
-                cli === 'docker' &&
+                !isPodman &&
                 classification.failureKind === 'permissionDenied' &&
                 endpoint.kind === 'unixSocket'
             ) {
@@ -763,7 +793,7 @@ export class DockerReadinessService {
                 permissionDetail = resolveDockerPermissionDetail(groupFacts);
             }
             const serviceManager =
-                cli === 'docker' &&
+                !isPodman &&
                 classification.failureKind === 'daemonUnavailable' &&
                 endpoint.kind === 'unixSocket' &&
                 environment === 'wsl'
@@ -771,7 +801,7 @@ export class DockerReadinessService {
                     : 'unknown';
             const failureResult = {
                 environment,
-                ...classifyContainerEngine({ ...engineInput, endpointAddress: endpoint.address, dockerSocketTarget }),
+                ...engine,
                 endpointKind: endpoint.kind,
                 endpointSource: endpoint.source,
                 ...startCapability,
@@ -781,16 +811,14 @@ export class DockerReadinessService {
                         : undefined,
                 executionTarget: getDockerExecutionTarget(environment),
                 permissionDetail,
-                recoveryCommand:
-                    cli === 'docker'
-                        ? getDockerRecoveryCommand(
-                              classification.failureKind,
-                              environment,
-                              endpoint.kind,
-                              permissionDetail,
-                              serviceManager,
-                          )
-                        : undefined,
+                recoveryCommand: getDockerRecoveryCommand(
+                    classification.failureKind,
+                    environment,
+                    endpoint.kind,
+                    permissionDetail,
+                    serviceManager,
+                    isPodman ? { machine: startCapability.podmanMachine } : undefined,
+                ),
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled,
                 cliVersion,

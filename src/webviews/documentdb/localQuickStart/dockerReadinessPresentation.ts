@@ -42,6 +42,11 @@ export type DockerGuidanceKey =
     | 'dockerDesktopNotRunning'
     | 'daemonNotRunning'
     | 'podmanNotRunning'
+    | 'podmanSocketNotRunning'
+    | 'podmanMachineMissing'
+    | 'podmanMachineAmbiguous'
+    | 'podmanMachineOtherActive'
+    | 'podmanMachineRunning'
     | 'daemonStarting'
     | 'wslIntegrationUnavailable'
     | 'remoteDockerUnavailable'
@@ -67,7 +72,7 @@ export type DockerGuideKey =
     | 'linuxContainers'
     | 'learnMore';
 
-export type DockerStartLabelKey = 'startDockerDesktop' | 'startDocker';
+export type DockerStartLabelKey = 'startDockerDesktop' | 'startDocker' | 'startPodmanMachine';
 
 export type DockerExecutionTargetKey = 'local' | 'wsl' | 'ssh' | 'devContainer' | 'codespaces' | 'otherRemote';
 
@@ -270,6 +275,23 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
         case 'permissionDenied':
             return getPermissionGuidance(readiness);
         case 'daemonUnavailable':
+            if (readiness.cli === 'podman' || readiness.engineEvidence === 'podmanShim') {
+                if (readiness.environment === 'linux' || readiness.environment === 'wsl') {
+                    return 'podmanSocketNotRunning';
+                }
+                switch (readiness.podmanMachine?.kind) {
+                    case 'none':
+                        return 'podmanMachineMissing';
+                    case 'ambiguous':
+                        return 'podmanMachineAmbiguous';
+                    case 'otherActive':
+                        return 'podmanMachineOtherActive';
+                    case 'running':
+                        return 'podmanMachineRunning';
+                    default:
+                        break;
+                }
+            }
             if (readiness.environment === 'wsl' && readiness.provider === 'dockerDesktop' && !readiness.startAction) {
                 return 'wslIntegrationUnavailable';
             }
@@ -279,7 +301,9 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
             if (readiness.provider === 'dockerDesktop' && readiness.providerEvidence !== 'installedApplication') {
                 return 'dockerDesktopNotRunning';
             }
-            return readiness.cli === 'podman' ? 'podmanNotRunning' : 'daemonNotRunning';
+            return readiness.cli === 'podman' || readiness.engineEvidence === 'podmanShim'
+                ? 'podmanNotRunning'
+                : 'daemonNotRunning';
         case 'daemonStarting':
             return 'daemonStarting';
         case 'contextUnavailable':
@@ -318,7 +342,9 @@ function getGuide(readiness: DockerReadiness): DockerGuideKey {
             if (isRemoteEnvironment(readiness)) {
                 return 'remoteDocker';
             }
-            return readiness.cli === 'podman' ? 'podmanMachine' : 'dockerTroubleshooting';
+            return readiness.cli === 'podman' || readiness.engineEvidence === 'podmanShim'
+                ? 'podmanMachine'
+                : 'dockerTroubleshooting';
         case 'windowsContainers':
             return 'linuxContainers';
         case 'unsupportedHost':
@@ -335,6 +361,8 @@ function getGuide(readiness: DockerReadiness): DockerGuideKey {
 
 function getStartLabel(startAction: DockerStartAction | undefined): DockerStartLabelKey | undefined {
     switch (startAction) {
+        case 'startPodmanMachine':
+            return 'startPodmanMachine';
         case 'startRootlessDockerEngineLinux':
             return 'startDocker';
         case 'startDockerDesktopWindows':
@@ -450,6 +478,8 @@ function getRecoveryNote(readiness: DockerReadiness): DockerRecoveryNoteKey | un
         case 'linuxStartService':
         case 'wslStartServiceNoSystemd':
             return 'runsDockerService';
+        case 'linuxStartPodmanSocket':
+        case 'podmanMachineInit':
         case undefined:
             return undefined;
     }
