@@ -36,9 +36,17 @@ test('summary separates the same model into leading and coding, and totals by ro
         [
             usage('sol', { duration: 1000, inputTokens: 100, outputTokens: 20, copilotUsage: { totalNanoAiu: 2e9 } }),
             event('subagent.started', { agentName: 'general-purpose', agentDisplayName: 'implementation' }, 'coder'),
-            usage('sol', { duration: 2000, inputTokens: 200, outputTokens: 30, copilotUsage: { totalNanoAiu: 3e9 } }, 'coder'),
+            usage(
+                'sol',
+                { duration: 2000, inputTokens: 200, outputTokens: 30, copilotUsage: { totalNanoAiu: 3e9 } },
+                'coder',
+            ),
             event('subagent.started', { agentName: 'code-review', agentDisplayName: 'advisor' }, 'reviewer'),
-            usage('opus', { duration: 3000, inputTokens: 300, outputTokens: 40, copilotUsage: { totalNanoAiu: 5e9 } }, 'reviewer'),
+            usage(
+                'opus',
+                { duration: 3000, inputTokens: 300, outputTokens: 40, copilotUsage: { totalNanoAiu: 5e9 } },
+                'reviewer',
+            ),
         ],
         ['--summary', '--role', 'reviewer=advisor'],
     );
@@ -53,7 +61,15 @@ test('summary separates the same model into leading and coding, and totals by ro
 
 test('summary includes host token categories without adding cache or reasoning to other tokens', () => {
     const result = run(
-        [usage('sol', { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 800, cacheWriteTokens: 150, reasoningTokens: 25 })],
+        [
+            usage('sol', {
+                inputTokens: 1000,
+                outputTokens: 100,
+                cacheReadTokens: 800,
+                cacheWriteTokens: 150,
+                reasoningTokens: 25,
+            }),
+        ],
         ['--summary'],
     );
     assert.equal(result.status, 0, result.stderr);
@@ -65,15 +81,15 @@ test('missing metrics remain unavailable while explicitly reported zeros remain 
     const result = run([usage('sol', { inputTokens: 0, cacheReadTokens: 0 })], ['--summary']);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /\| sol \| leader \| 1 \| not reported by host \| not reported by host \| - \|/);
-    assert.match(result.stdout, /\| sol \| leader \| 0 \| not reported by host \| 0 \| not reported by host \| not reported by host \|/);
+    assert.match(
+        result.stdout,
+        /\| sol \| leader \| 0 \| not reported by host \| 0 \| not reported by host \| not reported by host \|/,
+    );
 });
 
 test('partially reported metrics are labelled instead of presented as complete totals', () => {
     const result = run(
-        [
-            usage('sol', { duration: 1000, inputTokens: 25, copilotUsage: { totalNanoAiu: 2e9 } }),
-            usage('sol'),
-        ],
+        [usage('sol', { duration: 1000, inputTokens: 25, copilotUsage: { totalNanoAiu: 2e9 } }), usage('sol')],
         ['--summary'],
     );
     assert.equal(result.status, 0, result.stderr);
@@ -84,10 +100,7 @@ test('partially reported metrics are labelled instead of presented as complete t
 });
 
 test('run totals do not substitute zero for an unreported leader cost or duration', () => {
-    const result = run(
-        [usage('sol'), usage('luna', { copilotUsage: { totalNanoAiu: 1e9 } }, 'runner')],
-        ['--summary'],
-    );
+    const result = run([usage('sol'), usage('luna', { copilotUsage: { totalNanoAiu: 1e9 } }, 'runner')], ['--summary']);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /leader AIU not reported by host, subagents 1\.0 AIU, run 1\.0 \(partial\) AIU/);
     assert.match(result.stdout, /leader model requests 1, not reported by host summed/);
@@ -96,7 +109,12 @@ test('run totals do not substitute zero for an unreported leader cost or duratio
 test('role metadata survives a since cutoff while earlier usage is excluded', () => {
     const result = run(
         [
-            event('subagent.started', { agentName: 'task', agentDisplayName: 'checks' }, 'runner', '2026-11-10T11:00:00Z'),
+            event(
+                'subagent.started',
+                { agentName: 'task', agentDisplayName: 'checks' },
+                'runner',
+                '2026-11-10T11:00:00Z',
+            ),
             usage('old-model', { copilotUsage: { totalNanoAiu: 99e9 } }, 'runner', '2026-11-10T11:00:01Z'),
             usage('new-model', { copilotUsage: { totalNanoAiu: 1e9 } }, 'runner'),
         ],
@@ -136,7 +154,10 @@ test('model switches and missing model identifiers are kept in separate rows', (
 
 test('agent detail selection does not narrow whole-run summary totals', () => {
     const result = run(
-        [usage('sol', { copilotUsage: { totalNanoAiu: 1e9 } }), usage('luna', { copilotUsage: { totalNanoAiu: 2e9 } }, 'coder')],
+        [
+            usage('sol', { copilotUsage: { totalNanoAiu: 1e9 } }),
+            usage('luna', { copilotUsage: { totalNanoAiu: 2e9 } }, 'coder'),
+        ],
         ['--summary', '--agent', 'coder', '--role', 'coder=coding'],
     );
     assert.equal(result.status, 0, result.stderr);
@@ -150,7 +171,11 @@ test('existing checkpoint details retain elapsed, tool, check and usage reportin
         [
             event('subagent.started', { agentName: 'task', agentDisplayName: 'runner' }, 'runner'),
             usage('luna', { duration: 1000, inputTokens: 25, copilotUsage: { totalNanoAiu: 1e9 } }, 'runner'),
-            event('tool.execution_start', { toolCallId: 'build', toolName: 'bash', arguments: { command: 'npm run build' } }, 'runner'),
+            event(
+                'tool.execution_start',
+                { toolCallId: 'build', toolName: 'bash', arguments: { command: 'npm run build' } },
+                'runner',
+            ),
             event('tool.execution_complete', { toolCallId: 'build', success: false }, 'runner', '2026-11-10T12:00:02Z'),
             event('subagent.completed', {}, 'runner', '2026-11-10T12:00:03Z'),
         ],
