@@ -87,7 +87,7 @@ not in scope. No operator decisions or rationales beyond the request are invente
 ## Verification
 
 - Focused service and webview tests: `npx vitest run --project extension src/services/localQuickStart/ src/webviews/documentdb/localQuickStart/`.
-- Browser suite: `npx vitest run --config build/verification/browser/vitest.config.ts`.
+- Browser scenario contracts: `npx vitest run --config build/verification/browser/vitest.config.ts build/verification/browser/scenarios.test.ts`.
 - Live scenarios in dark/light/high-contrast: both CLIs, Podman-selected check,
   active image plus changing output, expanded full-ID mouse/keyboard tooltips,
   Updated previous identity and non-empty settled summaries.
@@ -172,3 +172,72 @@ The leader reviewed the mechanical fixture/count/documentation changes directly
 (100% confidence: assertions strengthen the expressly requested behavior, with
 no added runtime API or inferred facts). Case 1 and the full requested Case 2
 verification follow this implementation batch.
+
+## Final verification and cost report
+
+Both requested verification cases passed on the completed follow-up. Generated
+localization and formatting were committed separately as `b87560b8`; no
+behavioral corrections were needed after the checks.
+
+| Case | Command                                      | Result                                 |
+| ---- | -------------------------------------------- | -------------------------------------- |
+| 1    | `npm run build`                              | Passed, 36.092 s                       |
+| 1    | Focused service/webview Vitest command above | Passed                                 |
+| 2    | `npm run l10n`                               | Passed                                 |
+| 2    | `npm run prettier-fix`                       | Passed                                 |
+| 2    | `npm run l10n:check`                         | Passed                                 |
+| 2    | `npm run lint`                               | Passed                                 |
+| 2    | `npm run build`                              | Passed                                 |
+| 2    | `npm run typecheck:tests`                    | Passed                                 |
+| 2    | `npx vitest run`                             | Passed                                 |
+| 2    | `npm run package`                            | Passed; `vscode-documentdb-1.0.2.vsix` |
+
+The check agent took 9m53s; the host recorded 8m46s for the command batch.
+Individual times and runtime-suite totals were not retained in its final report,
+so none are invented here. The focused implementation runs recorded 575 service
+tests and 258 webview tests passing; the browser contract suite recorded 31.
+All 45 live Local Quick Start routes passed, plus the full-ID and changing-output
+checks described above. The leader stopped its temporary Vite helper afterward.
+
+### Work-item timings and implementation costs
+
+| Item | Commits    | Coding model    | Agent time | Coding AIU |
+| ---- | ---------- | --------------- | ---------- | ---------- |
+| F1   | `40056c79` | `gpt-6.1-sol`   | 4m45s      | 41.7       |
+| F2   | `c6752605` | `gpt-6.1-terra` | 7m05s      | 38.0       |
+| F3a  | `a203ac50` | `gpt-6.1-sol`   | 6m02s      | 38.5       |
+| F3b  | `ba8c43de` | `gpt-6.1-sol`   | 3m41s      | 26.0       |
+| F4   | `f2a07985` | `gpt-6.1-terra` | 4m57s      | 24.8       |
+
+Times are summed agent elapsed times, not additive wall time: F2 and F3a ran in
+parallel. The leader separately completed F4's initially blocked browser checks.
+Six Opus consultations covered planning, the cheap progress option, F1 review,
+F2/F3a review, active placement clarification and F3b review. No operator question
+is parked. Technical verdicts were followed, including the clarified visible
+placement instead of the initial hidden-Details suggestion.
+
+### AIU by model, including the advisor
+
+Host-log snapshot: **2026-11-10 10:22:11 UTC**, approximately one hour after the
+follow-up began. The combined column includes the initial implementation and this
+follow-up since 06:34:52 UTC. Every counted usage record supplied AIU; monetary
+cost was not reported. Totals are rounded independently.
+
+| Model             | Role                             | This follow-up AIU | Combined AIU |
+| ----------------- | -------------------------------- | -----------------: | -----------: |
+| `claude-opus-5.5` | Advisor                          |              404.4 |       1057.4 |
+| `gpt-6.1-sol`     | Leader and coding                |              303.5 |        721.5 |
+| `gpt-6.1-terra`   | Presentation, scenarios and docs |               62.8 |        146.3 |
+| `gpt-5.6-luna`    | Checks                           |                1.2 |         13.4 |
+| `gpt-6-luna`      | Initial-round typing fixes only  |           Not used |          1.0 |
+| **Total**         |                                  |          **771.9** |   **1939.6** |
+
+The same snapshot reports follow-up leader 197.4 AIU and subagents 574.5 AIU.
+Report-writing and publishing after this snapshot are not yet included.
+
+### Remaining operator checks
+
+The PR remains draft. Check real-workbench short-panel layout and actual
+screen-reader speech before requesting human review. Full-ID tooltips, visible
+keyboard focus, discovery facts and changing activity have been verified in the
+browser in all three themes; spoken output is not inferred from that evidence.
