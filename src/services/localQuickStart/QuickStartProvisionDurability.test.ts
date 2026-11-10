@@ -345,7 +345,82 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const events = await collect(new QuickStartServiceImpl(runtime).provision(new AbortController().signal));
             const facts = events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts;
             expect(facts).toMatchObject({ kind: 'pulling', result });
+            if (result === 'updated') {
+                expect(facts).toHaveProperty('previousImageId', 'old');
+            } else {
+                expect(facts).not.toHaveProperty('previousImageId');
+            }
+            expect(runtime.inspectImage).toHaveBeenCalledTimes(2);
+            expect(runtime.pullImage).toHaveBeenCalledTimes(1);
             expect(events.at(-1)?.stage).toBe('done');
+        });
+
+        it.each(['default', 'custom', 'reused'] as const)(
+            'emits known %s image facts before either inspection or pulling starts',
+            async (origin) => {
+                const imageRef = `${QUICK_START_IMAGE_REPOSITORY}:${origin === 'default' ? 'latest' : '0.116.0'}`;
+                if (origin === 'reused') {
+                    await upsertInstance({
+                        alias: DEFAULT_ALIAS,
+                        displayName: 'DocumentDB Local',
+                        port: QUICK_START_PORT,
+                        phase: 'ready',
+                        imageRef,
+                    });
+                    await writeConnectionString(
+                        DEFAULT_ALIAS,
+                        `mongodb://testuser:stored-password@localhost:${QUICK_START_PORT}/`,
+                        { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+                    );
+                }
+                const runtime = runtimeFor({ volumeExists: origin === 'reused' });
+                const generator = new QuickStartServiceImpl(runtime).provision(new AbortController().signal, {
+                    ...(origin === 'custom' ? { imageTag: '0.116.0' } : {}),
+                });
+                try {
+                    let event = await generator.next();
+                    while (!event.done && event.value.stage !== 'pulling') {
+                        event = await generator.next();
+                    }
+                    expect(event.value).toMatchObject({
+                        stage: 'pulling',
+                        status: 'active',
+                        facts: { kind: 'pulling', imageRef, imageOrigin: origin },
+                    });
+                    expect(runtime.inspectImage).not.toHaveBeenCalled();
+                    expect(runtime.pullImage).not.toHaveBeenCalled();
+                    const remaining = await collect(generator);
+                    expect(remaining.at(-1)?.stage).toBe('done');
+                    expect(runtime.inspectImage).toHaveBeenCalledTimes(2);
+                    expect(runtime.pullImage).toHaveBeenCalledExactlyOnceWith(imageRef, expect.anything());
+                } finally {
+                    await generator.return(undefined);
+                }
+            },
+        );
+
+        it('masks the previous image ID when an updated image contains a run secret', async () => {
+            const password = 'private-password-123';
+            const runtime = runtimeFor({
+                overrides: {
+                    inspectImage: vi
+                        .fn()
+                        .mockResolvedValueOnce({ id: `old-${password}` })
+                        .mockResolvedValueOnce({ id: 'new-image' }),
+                },
+            });
+            const events = await collect(
+                new QuickStartServiceImpl(runtime).provision(new AbortController().signal, {
+                    username: 'testuser',
+                    password,
+                }),
+            );
+            expect(events.find((event) => event.stage === 'pulling' && event.status === 'done')?.facts).toMatchObject({
+                result: 'updated',
+                previousImageId: 'old-***',
+            });
+            expect(JSON.stringify(events)).not.toContain(password);
+            expect(runtime.inspectImage).toHaveBeenCalledTimes(2);
         });
 
         it('captures failed port evidence and records previous removal only after it succeeded', async () => {

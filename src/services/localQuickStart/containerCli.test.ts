@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DockerClient, PodmanClient } from '@microsoft/vscode-container-client';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createContainerClient, findOnPath, resolveContainerCli } from './containerCli';
 
 function lookup(present: ReadonlyArray<string>, platform: NodeJS.Platform = 'darwin', env?: NodeJS.ProcessEnv) {
@@ -22,6 +22,7 @@ describe('resolveContainerCli', () => {
         expect(resolveContainerCli(lookup(['/usr/local/bin/docker', '/opt/podman/bin/podman']))).toEqual({
             cli: 'docker',
             executable: 'docker',
+            onPath: { docker: true, podman: true },
         });
     });
 
@@ -29,17 +30,26 @@ describe('resolveContainerCli', () => {
         expect(resolveContainerCli(lookup(['/opt/podman/bin/podman']))).toEqual({
             cli: 'podman',
             executable: 'podman',
+            onPath: { docker: false, podman: true },
         });
     });
 
     it('stays on docker when neither is installed so readiness reports the missing CLI', () => {
-        expect(resolveContainerCli(lookup([]))).toEqual({ cli: 'docker', executable: 'docker' });
+        expect(resolveContainerCli(lookup([]))).toEqual({
+            cli: 'docker',
+            executable: 'docker',
+            onPath: { docker: false, podman: false },
+        });
     });
 
     it('runs the absolute podman.exe path on Windows, found through Path and PATHEXT', () => {
         expect(
             resolveContainerCli(lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', windowsEnv)),
-        ).toEqual({ cli: 'podman', executable: 'C:\\Program Files\\RedHat\\Podman\\podman.EXE' });
+        ).toEqual({
+            cli: 'podman',
+            executable: 'C:\\Program Files\\RedHat\\Podman\\podman.EXE',
+            onPath: { docker: false, podman: true },
+        });
     });
 
     it('follows podman to its new location on Windows', () => {
@@ -53,7 +63,32 @@ describe('resolveContainerCli', () => {
         expect(resolveContainerCli(lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', env))).toEqual({
             cli: 'podman',
             executable: 'C:\\Program Files\\RedHat\\Podman\\podman.EXE',
+            onPath: { docker: false, podman: true },
         });
+    });
+
+    it('reports Docker alone on PATH without changing the selected executable', () => {
+        expect(resolveContainerCli(lookup(['/usr/local/bin/docker']))).toEqual({
+            cli: 'docker',
+            executable: 'docker',
+            onPath: { docker: true, podman: false },
+        });
+    });
+
+    it('looks up each CLI once even when Docker wins', () => {
+        const isExecutable = vi.fn(() => true);
+        expect(
+            resolveContainerCli({
+                platform: 'linux',
+                environmentVariables: { PATH: '/usr/bin' },
+                isExecutable,
+            }),
+        ).toEqual({
+            cli: 'docker',
+            executable: 'docker',
+            onPath: { docker: true, podman: true },
+        });
+        expect(isExecutable.mock.calls).toEqual([['/usr/bin/docker'], ['/usr/bin/podman']]);
     });
 
     it('ignores empty PATH entries instead of probing the working directory', () => {

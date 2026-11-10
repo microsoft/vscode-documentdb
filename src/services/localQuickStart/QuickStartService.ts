@@ -963,9 +963,9 @@ export class QuickStartServiceImpl {
             }
 
             // --- pulling ---
-            yield stageEvent('pulling', 'active');
-            activeDockerStage = 'pulling';
             facts = pullingFacts(undefined);
+            yield { ...stageEvent('pulling', 'active'), facts };
+            activeDockerStage = 'pulling';
             const imageBefore = await this.runtime.inspectImage(imageRef, cts.token);
             facts = pullingFacts(imageBefore);
             await this.runProvisionStage(
@@ -978,16 +978,20 @@ export class QuickStartServiceImpl {
                 [imageRef],
             );
             const imageAfter = await this.runtime.inspectImage(imageRef, cts.token);
+            const result =
+                imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
+                    ? imageBefore === 'absent'
+                        ? 'downloaded'
+                        : imageBefore.id === imageAfter.id
+                          ? 'upToDate'
+                          : 'updated'
+                    : undefined;
             facts = {
                 ...pullingFacts(imageAfter),
-                result:
-                    imageBefore !== undefined && imageAfter && imageAfter !== 'absent'
-                        ? imageBefore === 'absent'
-                            ? 'downloaded'
-                            : imageBefore.id === imageAfter.id
-                              ? 'upToDate'
-                              : 'updated'
-                        : undefined,
+                result,
+                ...(result === 'updated' && imageBefore && imageBefore !== 'absent'
+                    ? { previousImageId: masked(imageBefore.id) }
+                    : {}),
             };
             activeDockerStage = undefined;
             yield { ...stageEvent('pulling', 'done'), facts };

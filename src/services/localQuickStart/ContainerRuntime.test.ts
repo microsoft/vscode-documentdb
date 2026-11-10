@@ -17,8 +17,11 @@ import {
     getExitCode,
     getPublishedHostPort,
 } from './ContainerRuntime';
+import * as containerCli from './containerCli';
 import type * as DockerCommand from './dockerCommand';
 import { runDockerCommand, type DockerCommandOptions } from './dockerCommand';
+import type * as DockerProbes from './dockerProbes';
+import { runDockerProbe } from './dockerProbes';
 
 vi.mock('@microsoft/vscode-container-client', async () => ({
     ...(await vi.importActual<typeof ContainerClient>('@microsoft/vscode-container-client')),
@@ -27,6 +30,10 @@ vi.mock('@microsoft/vscode-container-client', async () => ({
 vi.mock('./dockerCommand', async () => ({
     ...(await vi.importActual<typeof DockerCommand>('./dockerCommand')),
     runDockerCommand: vi.fn(),
+}));
+vi.mock('./dockerProbes', async () => ({
+    ...(await vi.importActual<typeof DockerProbes>('./dockerProbes')),
+    runDockerProbe: vi.fn(),
 }));
 
 const PASSWORD = 'hunter2-generated-password';
@@ -88,6 +95,45 @@ describe('ContainerRuntime output channel', () => {
 
         expect(lines).toContain('$ docker …');
         expect(lines.join('\n')).not.toContain(PASSWORD);
+    });
+
+    it('refreshes PATH presence without recreating an unchanged selected client or probing the other CLI', async () => {
+        vi.spyOn(containerCli, 'resolveContainerCli')
+            .mockReturnValueOnce({
+                cli: 'docker',
+                executable: 'discovered-docker',
+                onPath: { docker: true, podman: false },
+            })
+            .mockReturnValueOnce({
+                cli: 'docker',
+                executable: 'discovered-docker',
+                onPath: { docker: true, podman: true },
+            });
+        const createClient = vi.spyOn(containerCli, 'createContainerClient');
+        vi.mocked(runDockerProbe).mockImplementation(async (options) => ({
+            probe: options.probe,
+            stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '',
+            stderr: '',
+            endedBy: 'exit',
+            durationMs: 1,
+        }));
+
+        await expect(ContainerRuntime.isDockerReady({ forceRefresh: true })).resolves.toMatchObject({
+            outcome: 'ready',
+            cli: 'docker',
+            cliOnPath: { docker: true, podman: false },
+        });
+        await expect(ContainerRuntime.isDockerReady({ forceRefresh: true })).resolves.toMatchObject({
+            outcome: 'ready',
+            cli: 'docker',
+            cliOnPath: { docker: true, podman: true },
+        });
+        expect(createClient).toHaveBeenCalledTimes(1);
+        expect(runDockerProbe).toHaveBeenCalledTimes(6);
+        for (const [options] of vi.mocked(runDockerProbe).mock.calls) {
+            const command = typeof options.command === 'function' ? await options.command() : await options.command;
+            expect(command.command).toBe('discovered-docker');
+        }
     });
 
     it.each([

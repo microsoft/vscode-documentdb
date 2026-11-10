@@ -246,6 +246,8 @@ export interface PullingStageFacts {
     readonly imageOrigin: 'default' | 'custom' | 'reused';
     readonly result?: 'downloaded' | 'updated' | 'upToDate';
     readonly imageId?: string;
+    readonly previousImageId?: string;
+    readonly progress?: string;
     readonly digest?: string;
     readonly imageVersion?: string;
     readonly createdAtMs?: number;
@@ -347,6 +349,8 @@ export type DockerHostEnvironment =
     | 'unsupported';
 
 export type ContainerEngine = 'docker' | 'podman' | 'unknown';
+
+export type ContainerCliPresence = Readonly<Record<'docker' | 'podman', boolean>>;
 
 export type ContainerEngineEvidence =
     | 'selectedCli'
@@ -458,6 +462,7 @@ interface DockerReadinessBase {
     readonly cliVersion?: string;
     /** Which CLI ran the check; `podman` only when Docker's was missing. */
     readonly cli?: 'docker' | 'podman';
+    readonly cliOnPath?: ContainerCliPresence;
     readonly engine?: ContainerEngine;
     readonly engineEvidence?: ContainerEngineEvidence;
     readonly serverVersion?: string;

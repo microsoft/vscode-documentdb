@@ -186,6 +186,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     private client: DockerClient | PodmanClient = createContainerClient(this.cli);
     private readonly readinessService = new DockerReadinessService({
         getClient: () => this.refreshClient(),
+        getCliOnPath: () => this.cli.onPath,
         shellProvider: SHELL_PROVIDER,
         createProbeOutput: () => {
             const channel = getQuickStartOutputChannel();
@@ -202,9 +203,9 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     private refreshClient(): DockerClient | PodmanClient {
         const cli = resolveContainerCli();
         if (cli.cli !== this.cli.cli || cli.executable !== this.cli.executable) {
-            this.cli = cli;
             this.client = createContainerClient(cli);
         }
+        this.cli = cli;
         return this.client;
     }
 

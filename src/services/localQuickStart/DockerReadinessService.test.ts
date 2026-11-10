@@ -17,7 +17,7 @@ import {
     type DockerReadinessServiceDependencies,
 } from './DockerReadinessService';
 import { type RunDockerProbeOptions } from './dockerProbes';
-import { type DockerProbeEvidence, type DockerProviderMemory } from './quickStartTypes';
+import { type ContainerCliPresence, type DockerProbeEvidence, type DockerProviderMemory } from './quickStartTypes';
 
 function commandResponse<T>(args: string[], parse: (output: string) => T): PromiseCommandResponse<T> {
     return {
@@ -52,6 +52,124 @@ function evidence(
 }
 
 describe('DockerReadinessService', () => {
+    it.each([
+        {
+            state: 'ready',
+            outcome: 'ready',
+            cliOnPath: { docker: true, podman: true },
+            probeCount: 3,
+        },
+        {
+            state: 'unreachable',
+            outcome: 'diagnosed',
+            cliOnPath: { docker: true, podman: true },
+            probeCount: 3,
+        },
+        {
+            state: 'missing',
+            outcome: 'diagnosed',
+            cliOnPath: { docker: false, podman: false },
+            probeCount: 2,
+        },
+        {
+            state: 'timeout',
+            outcome: 'indeterminate',
+            cliOnPath: { docker: true, podman: false },
+            probeCount: 3,
+        },
+        {
+            state: 'unsupported',
+            outcome: 'diagnosed',
+            cliOnPath: { docker: false, podman: true },
+            probeCount: 0,
+        },
+    ])('carries PATH presence independently of $state readiness', async ({ state, outcome, cliOnPath, probeCount }) => {
+        const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (state === 'missing') {
+                return evidence(options.probe, { spawnErrorCode: 'ENOENT' });
+            }
+            if (state === 'timeout') {
+                return evidence(options.probe, { endedBy: 'deadline' });
+            }
+            if (state === 'unreachable' && options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            return evidence(options.probe, {
+                stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '[]',
+            });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            getCliOnPath: () => cliOnPath,
+            shellProvider: new Bash(),
+            platform: state === 'unsupported' ? 'aix' : 'linux',
+            arch: 'x64',
+            environmentVariables: {},
+            runProbe,
+            resolveDockerSocketTarget: async () => ({}),
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: state === 'unreachable' ? 'ECONNREFUSED' : undefined,
+            }),
+            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+            readProviderMemory: () => undefined,
+            writeProviderMemory: async () => undefined,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            outcome,
+            cli: 'docker',
+            cliOnPath,
+            daemonReachable: state === 'ready',
+        });
+        expect(runProbe).toHaveBeenCalledTimes(probeCount);
+    });
+
+    it('snapshots presence immediately after discovery and refreshes it only for a new check', async () => {
+        const order: string[] = [];
+        let cliOnPath: ContainerCliPresence = { docker: true, podman: false };
+        const getCliOnPath = vi.fn(() => {
+            order.push('presence');
+            return cliOnPath;
+        });
+        const service = new DockerReadinessService({
+            getClient: () => {
+                order.push('client');
+                cliOnPath = { docker: true, podman: true };
+                return createClient();
+            },
+            getCliOnPath,
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe: async (options): Promise<DockerProbeEvidence> => {
+                cliOnPath = { docker: false, podman: true };
+                return evidence(options.probe, {
+                    stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '',
+                });
+            },
+            writeProviderMemory: async () => undefined,
+        });
+
+        const first = await service.getReadiness();
+        expect(first.cliOnPath).toEqual({ docker: true, podman: true });
+        expect(order).toEqual(['client', 'presence']);
+        expect(await service.getReadiness()).toBe(first);
+        expect(getCliOnPath).toHaveBeenCalledTimes(1);
+        await service.getReadiness({ forceRefresh: true });
+        expect(order).toEqual(['client', 'presence', 'client', 'presence']);
+    });
+
+    it.each([false, true])('omits unknown PATH presence with an undefined getter=%s', async (injectGetter) => {
+        const service = new DockerReadinessService({
+            client: createClient(),
+            platform: 'aix',
+            ...(injectGetter ? { getCliOnPath: () => undefined } : {}),
+        });
+        expect(await service.getReadiness()).not.toHaveProperty('cliOnPath');
+    });
+
     it.each([
         {
             name: 'Podman component behind the Docker CLI',
