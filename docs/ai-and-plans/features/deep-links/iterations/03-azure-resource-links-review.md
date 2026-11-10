@@ -42,6 +42,11 @@ cancellation, or recovery defect. Severity is separate from confidence and merge
 
 ## GitHub Copilot comment reconciliation
 
+The later [Copilot feedback](./03-copilot-review-feedback.md) and
+[verified recommendations](./03-copilot-review-verification.md) capture eight threads
+against `a3cca123` and the operator's 2026-11-10 dispositions. Their `CP-F` IDs
+are separate from this review's original F1-F8.
+
 At review time, the GitHub API returned no inline review comments, submitted reviews, or
 Copilot-authored conversation comments for this draft PR. There were no Copilot findings or
 comment links to merge.
