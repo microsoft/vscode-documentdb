@@ -1,6 +1,6 @@
 ---
 name: lead
-description: 'Operator-invoked only, with /lead. The leader runs a multi-item coding task: breaks it into work items, delegates coding to subagents on tiered models, consults an operator-named advisor model for technical judgment, reviews changes, commits each item separately, reports progress after every agent return and records progress inline in the source plan or review document. Never load this skill unless the operator typed /lead.'
+description: 'Operator-invoked only, with /lead. The leader runs a multi-item coding task: breaks it into work items, delegates coding to subagents on tiered models, consults an operator-named advisor model for technical judgment, reviews changes, commits each item separately, reports progress after every agent return, summarizes costs and tokens by model and role, and records progress inline in the source plan or review document. Never load this skill unless the operator typed /lead.'
 argument-hint: 'advisor: <model>; then a task description, issue, or path to a plan or review document'
 disable-model-invocation: true
 ---
@@ -355,6 +355,49 @@ End with a short report:
 - the decisions made, who made each, with confidence;
 - the questions you escalated and the questions you parked;
 - the advisor consultations: how many, for which items, and where you did not follow the advisor;
-- the run totals from the last checkpoint (leader, subagents, run);
+- usage grouped by model and role, including tokens where reported (see below);
 - the checks you ran and their results;
 - open questions for the operator.
+
+### Usage and cost optimization
+
+Always include the usage breakdown, without waiting for a separate request. Its purpose is
+**cost optimization across runs**, not exact billing reconciliation. Use full model IDs and
+keep **leading and coding separate**, even when both use the same model.
+
+Record each agent's role alongside its ID when delegating: `advisor`, `coding`, `review`,
+`checks`, or `exploration`. This is the work actually assigned, not the model's capability.
+Include failed, cancelled and retried attempts. Pass explicit roles to the helper, especially
+for advisors launched through a review agent:
+
+```bash
+node .github/skills/lead/scripts/agent-stats.mjs --session <your session folder> \
+  --since <ISO time /lead started> --summary \
+  --role <advisor_id>=advisor --role <coding_id>=coding
+```
+
+Repeat `--role` for the other agents. The helper separates leader usage automatically and uses
+known agent types for defaults; unknown types stay `unclassified`. `--summary` covers the whole
+window, even if `--agent` was supplied. Ordinary checkpoints remain short; reserve these tables
+for the final report.
+
+- **Outcome and work items:** status, commit and actual model per item; note substitutions from
+  the recommended model, retries and review-driven rework. List unverified work first.
+- **Usage:** copy the model/role table (requests, summed model-request time, AIU and share),
+  followed by role totals so leading, coding, advising and checks can be compared directly.
+  Keep the leader/subagent/run total too. Never omit advisor or leader overhead.
+- **Tokens:** include the helper's input, output, cache-read, cache-write and reasoning counts
+  by model and role where available. Cache and reasoning fields may overlap input/output;
+  do not sum them into a purported total. Missing data is "not reported by host", not zero;
+  retain partial-coverage labels. Never infer AIU from tokens, model prices or multipliers.
+- **Scope and timing:** give the start and snapshot times. For follow-ups, show this task's
+  usage separately from cumulative usage, labelled with each window. Report wall-clock elapsed,
+  summed model-request time, and check/CI time separately where available; overlapping spans
+  are not additive. State whether the final response is excluded. AIU are not dollars.
+- **Optimization note:** briefly identify the largest measured cost category and significant
+  retry/review overhead, with a possible change for a future run. Do not rank model quality
+  from unlike work or silently change the approved model plan.
+
+Use sensible rounding; small snapshot differences are not a blocker. Do not spend extra
+consultations or rerun work to reconcile pennies. Keep the chat report compact and record
+detailed evidence in the existing work-item document, not a new parallel reporting ledger.
