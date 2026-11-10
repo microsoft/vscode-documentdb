@@ -229,16 +229,16 @@ describe('ContainerRuntime output channel', () => {
     });
 
     it.each([
-        { kind: 'preferred', preferred: 'docker' },
-        { kind: 'preferred', preferred: 'podman' },
-        { kind: 'pinned', cli: 'docker' },
-        { kind: 'pinned', cli: 'podman' },
-    ] as const)('force-checks the same engine request before launch ($kind)', async (request) => {
+        { request: { kind: 'preferred', preferred: 'docker' }, resolvedCli: 'podman' },
+        { request: { kind: 'preferred', preferred: 'podman' }, resolvedCli: 'docker' },
+        { request: { kind: 'pinned', cli: 'docker' }, resolvedCli: 'docker' },
+        { request: { kind: 'pinned', cli: 'podman' }, resolvedCli: 'podman' },
+    ] as const)('force-checks the same engine request before launch ($request.kind)', async ({ request, resolvedCli }) => {
         const readiness = vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
             outcome: 'diagnosed', failureKind: 'daemonUnavailable', cliInstalled: true,
             daemonReachable: false, environment: 'linux', endpointKind: 'unixSocket',
             provider: 'dockerEngine', providerEvidence: 'activeContext', executionTarget: 'local',
-            checkedAtMs: 1, canContinueAnyway: false, startAction: 'startRootlessDockerEngineLinux',
+            checkedAtMs: 1, canContinueAnyway: false, startAction: 'startRootlessDockerEngineLinux', cli: resolvedCli,
         });
         const launch = vi.spyOn(DockerProviderLauncher, 'startDockerProvider').mockResolvedValue('launchAttempted');
         const record = vi.spyOn(DockerReadinessService.prototype, 'recordLaunchResult').mockResolvedValue(undefined);
@@ -247,7 +247,7 @@ describe('ContainerRuntime output channel', () => {
 
         expect(readiness).toHaveBeenCalledExactlyOnceWith({ engine: request, forceRefresh: true });
         expect(launch).toHaveBeenCalledExactlyOnceWith('startRootlessDockerEngineLinux');
-        expect(record).toHaveBeenCalledExactlyOnceWith('launchAttempted');
+        expect(record).toHaveBeenCalledExactlyOnceWith('launchAttempted', resolvedCli);
     });
 
     it('does not launch a different provider when the selected engine has no start action', async () => {

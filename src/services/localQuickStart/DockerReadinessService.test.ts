@@ -137,6 +137,24 @@ describe('DockerReadinessService', () => {
             expect(getClient).toHaveBeenCalledTimes(2);
         });
 
+        it.each([
+            { preferred: 'docker', cli: 'podman', expectReset: false },
+            { preferred: 'podman', cli: 'docker', expectReset: true },
+        ] as const)('uses the resolved CLI rather than $preferred preference when resetting memory', async ({ preferred, cli, expectReset }) => {
+            vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
+                cli, executable: cli, preferred, fellBack: true,
+                onPath: { docker: cli === 'docker', podman: cli === 'podman' },
+            });
+            const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+            const service = createService({ writeProviderMemory });
+
+            await service.getReadiness({
+                engine: { kind: 'preferred', preferred }, forceRefresh: true, resetProviderMemory: true,
+            });
+
+            expect(writeProviderMemory.mock.calls.some(([value]) => value === undefined)).toBe(expectReset);
+        });
+
         it.each(['executable', 'preferred', 'onPath'] as const)('keys readiness memoization by %s evidence', async (field) => {
             const original: containerCli.ResolvedContainerCli = {
                 cli: 'docker', executable: 'docker', preferred: 'docker', fellBack: false,
@@ -947,18 +965,22 @@ describe('DockerReadinessService', () => {
             });
             expect(runProbe).toHaveBeenCalledTimes(engine === 'podman' ? 2 : 3);
             expect(probeEndpoint).not.toHaveBeenCalled();
-            expect(writeProviderMemory.mock.calls).toEqual([
-                [
-                    {
-                        provider: storedProvider,
-                        endpointKind: 'unknown',
-                        hostEnvironment: 'linux',
-                        daemonArchitecture: 'arm64',
-                        osType: 'OSType' in info ? info.OSType : info.host.os,
-                        recordedAtMs: 1_000,
-                    },
-                ],
-            ]);
+            expect(writeProviderMemory.mock.calls).toEqual(
+                cli === 'podman'
+                    ? []
+                    : [
+                          [
+                              {
+                                  provider: storedProvider,
+                                  endpointKind: 'unknown',
+                                  hostEnvironment: 'linux',
+                                  daemonArchitecture: 'arm64',
+                                  osType: 'OSType' in info ? info.OSType : info.host.os,
+                                  recordedAtMs: 1_000,
+                              },
+                          ],
+                      ],
+            );
         },
     );
 
@@ -986,14 +1008,25 @@ describe('DockerReadinessService', () => {
         expect(runProbe).toHaveBeenCalledTimes(state === 'unsupported' ? 0 : 2);
     });
 
-    it('adds Podman engine facts without changing legacy remembered-provider behavior', async () => {
+    it('ignores remembered Docker Desktop and Docker start capability for stopped Podman', async () => {
         const runProbe = vi.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
                 return evidence('info', { exitCode: 1 });
             }
             return evidence('cliVersion', { stdout: 'podman version 6.0.2' });
         });
+        const readProviderMemory = vi.fn((): DockerProviderMemory => ({
+            provider: 'dockerDesktop',
+            endpointKind: 'unixSocket',
+            hostEnvironment: 'linux',
+            recordedAtMs: 500,
+        }));
         const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+        const getStartCapability = vi.fn().mockResolvedValue({
+            provider: 'dockerDesktop',
+            providerEvidence: 'installedApplication',
+            startAction: 'startDockerDesktopLinux',
+        });
         const service = new DockerReadinessService({
             resolveDockerSocketTarget: async () => ({}),
             client: { ...createClient(), id: PodmanClient.ClientId },
@@ -1003,26 +1036,88 @@ describe('DockerReadinessService', () => {
             now: () => 1_000,
             runProbe,
             probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
-            readProviderMemory: () => ({
-                provider: 'dockerDesktop',
-                endpointKind: 'unixSocket',
-                hostEnvironment: 'linux',
-                recordedAtMs: 500,
-            }),
+            readProviderMemory,
             writeProviderMemory,
-            getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+            getStartCapability,
         });
 
-        await expect(service.getReadiness()).resolves.toMatchObject({
-            failureKind: 'daemonStarting',
+        const result = await service.getReadiness();
+        expect(result).toMatchObject({
+            failureKind: 'unknown',
             engine: 'podman',
             engineEvidence: 'selectedCli',
-            provider: 'dockerDesktop',
-            providerEvidence: 'rememberedProvider',
-            providerRecordedAtMs: 500,
+            provider: 'unknown',
+            providerEvidence: 'none',
+            providerRecordedAtMs: undefined,
+            recoveryCommand: undefined,
         });
+        expect(result.startAction).toBeUndefined();
         expect(runProbe).toHaveBeenCalledTimes(2);
+        expect(readProviderMemory).not.toHaveBeenCalled();
         expect(writeProviderMemory).not.toHaveBeenCalled();
+        expect(getStartCapability).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        { name: 'healthy', platform: 'linux', host: 'unix:///var/run/docker.sock', failure: undefined },
+        { name: 'stopped Linux', platform: 'linux', host: 'unix:///var/run/docker.sock', failure: 'ECONNREFUSED' },
+        { name: 'stopped WSL', platform: 'linux', host: 'unix:///var/run/docker.sock', failure: 'ECONNREFUSED', remoteName: 'wsl' },
+        { name: 'Desktop endpoint', platform: 'darwin', host: 'unix:///Users/user/.docker/run/docker.sock', failure: 'ECONNREFUSED' },
+        { name: 'rootless endpoint', platform: 'linux', host: 'unix:///run/user/1000/docker.sock', failure: 'ECONNREFUSED' },
+        { name: 'permission denied', platform: 'linux', host: 'unix:///var/run/docker.sock', failure: 'EACCES' },
+        { name: 'Windows Desktop installed', platform: 'win32', host: 'npipe:////./pipe/docker_engine', failure: 'ENOENT' },
+    ] as const)('does not use Docker memory or actions for $name Podman, even on reset', async (scenario) => {
+        const { platform, host, failure } = scenario;
+        const readProviderMemory = vi.fn((): DockerProviderMemory => ({
+            provider: 'dockerDesktop',
+            endpointKind: platform === 'win32' ? 'namedPipe' : 'unixSocket',
+            hostEnvironment: platform === 'win32' ? 'windows' : platform === 'darwin' ? 'macos' : 'linux',
+            recordedAtMs: 500,
+        }));
+        const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+        const getStartCapability = vi.fn().mockResolvedValue({
+            provider: 'dockerDesktop',
+            providerEvidence: 'installedApplication',
+            startAction: 'startDockerDesktopWindows',
+        });
+        const probeSocketGroup = vi.fn();
+        const detectServiceManager = vi.fn();
+        const service = new DockerReadinessService({
+            client: { ...createClient(), id: PodmanClient.ClientId },
+            shellProvider: new Bash(),
+            platform,
+            remoteName: 'remoteName' in scenario ? scenario.remoteName : undefined,
+            environmentVariables: { DOCKER_HOST: host },
+            runProbe: async (options) =>
+                options.probe === 'info' && failure
+                    ? evidence('info', { exitCode: 1, stderr: 'Cannot connect to Podman' })
+                    : evidence(options.probe, { stdout: options.probe === 'info' ? '{"OSType":"linux"}' : 'podman version 6.0.2' }),
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source, accessErrorCode: failure }),
+            resolveDockerSocketTarget: async () => ({}),
+            readProviderMemory,
+            writeProviderMemory,
+            getStartCapability,
+            probeSocketGroup,
+            detectServiceManager,
+        });
+
+        const result = await service.getReadiness({ forceRefresh: true, resetProviderMemory: true });
+
+        expect(result).toMatchObject({
+            cli: 'podman',
+            engine: 'podman',
+            engineEvidence: 'selectedCli',
+            provider: failure ? 'unknown' : 'podman',
+            providerEvidence: failure ? 'none' : 'liveDaemon',
+            ...(failure ? { failureKind: failure === 'EACCES' ? 'permissionDenied' : 'daemonUnavailable' } : { outcome: 'ready' }),
+        });
+        expect(result.startAction).toBeUndefined();
+        expect(result.recoveryCommand).toBeUndefined();
+        expect(readProviderMemory).not.toHaveBeenCalled();
+        expect(writeProviderMemory).not.toHaveBeenCalled();
+        expect(getStartCapability).not.toHaveBeenCalled();
+        expect(probeSocketGroup).not.toHaveBeenCalled();
+        expect(detectServiceManager).not.toHaveBeenCalled();
     });
 
     it('keeps a Podman endpoint inference unknown on failure', async () => {
@@ -2062,6 +2157,20 @@ describe('DockerReadinessService', () => {
 
         expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
     });
+
+    it.each(['started', 'launchAttempted', 'notAvailable', 'failed'] as const)(
+        'never accesses Docker memory after a %s Podman launch',
+        async (result) => {
+            const readProviderMemory = vi.fn();
+            const writeProviderMemory = vi.fn().mockResolvedValue(undefined);
+            const service = new DockerReadinessService({ readProviderMemory, writeProviderMemory });
+
+            await service.recordLaunchResult(result, 'podman');
+
+            expect(readProviderMemory).not.toHaveBeenCalled();
+            expect(writeProviderMemory).not.toHaveBeenCalled();
+        },
+    );
 
     it('suppresses successful poll transcripts and retains failing probe transcripts', async () => {
         const onCommand = vi.fn();

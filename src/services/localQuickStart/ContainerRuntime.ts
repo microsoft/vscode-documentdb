@@ -243,7 +243,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
             return 'notAvailable';
         }
         const result = await launchDockerProvider(readiness.startAction);
-        await this.readinessService.recordLaunchResult(result);
+        await this.readinessService.recordLaunchResult(result, readiness.cli);
         return result;
     }
 

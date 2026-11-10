@@ -16,6 +16,7 @@ import {
     createContainerClient,
     resolveContainerCli,
     resolvePinnedContainerCli,
+    type ContainerCli,
     type ResolvedContainerCli,
 } from './containerCli';
 import { getDockerShellProvider } from './dockerCommand';
@@ -334,7 +335,7 @@ export class DockerReadinessService {
             }
         }
         state.memoized = undefined;
-        if (request.resetProviderMemory) {
+        if (resolved.cli === 'docker' && request.resetProviderMemory) {
             await this.dependencies.writeProviderMemory(undefined);
         }
         return this.runAndMemoize(request, resolved, state);
@@ -447,12 +448,14 @@ export class DockerReadinessService {
         }
     }
 
-    public async recordLaunchResult(result: DockerLaunchResult): Promise<void> {
+    public async recordLaunchResult(result: DockerLaunchResult, cli: ContainerCli = 'docker'): Promise<void> {
         if (result === 'notAvailable' || result === 'failed') {
             for (const state of this.checks.values()) {
                 state.memoized = undefined;
             }
-            await this.dependencies.writeProviderMemory(undefined);
+            if (cli === 'docker') {
+                await this.dependencies.writeProviderMemory(undefined);
+            }
         }
     }
 
@@ -603,14 +606,16 @@ export class DockerReadinessService {
                     daemonOperatingSystem: infoFacts.operatingSystem,
                     engine: engine.engine,
                 });
-                await this.dependencies.writeProviderMemory({
-                    provider: provider.provider === 'podman' ? 'unknown' : provider.provider,
-                    endpointKind,
-                    hostEnvironment: environment,
-                    daemonArchitecture,
-                    osType,
-                    recordedAtMs: this.dependencies.now(),
-                });
+                if (cli === 'docker') {
+                    await this.dependencies.writeProviderMemory({
+                        provider: provider.provider === 'podman' ? 'unknown' : provider.provider,
+                        endpointKind,
+                        hostEnvironment: environment,
+                        daemonArchitecture,
+                        osType,
+                        recordedAtMs: this.dependencies.now(),
+                    });
+                }
                 if (osType === 'windows') {
                     return {
                         outcome: 'diagnosed',
@@ -701,7 +706,7 @@ export class DockerReadinessService {
                 !!requestedContext &&
                 contextsResolved &&
                 !contexts.some((context) => context.name === requestedContext);
-            const storedMemory = this.dependencies.readProviderMemory();
+            const storedMemory = cli === 'docker' ? this.dependencies.readProviderMemory() : undefined;
             let rememberedProvider = storedMemory;
             if (contextUnavailable && rememberedProvider) {
                 rememberedProvider = undefined;
@@ -714,13 +719,16 @@ export class DockerReadinessService {
                 rememberedProvider = undefined;
                 await this.dependencies.writeProviderMemory(undefined);
             }
-            const provider = classifyDockerProvider({
-                environment,
-                daemonReachable: false,
-                contexts,
-                activeEndpoint: endpoint,
-                rememberedProvider,
-            });
+            const provider =
+                cli === 'docker'
+                    ? classifyDockerProvider({
+                          environment,
+                          daemonReachable: false,
+                          contexts,
+                          activeEndpoint: endpoint,
+                          rememberedProvider,
+                      })
+                    : { provider: 'unknown' as const, providerEvidence: 'none' as const };
             if (
                 rememberedProvider &&
                 provider.providerEvidence === 'activeContext' &&
@@ -736,18 +744,26 @@ export class DockerReadinessService {
                 providerMayBeStarting:
                     provider.provider === 'dockerDesktop' && provider.providerEvidence === 'rememberedProvider',
             });
-            const startCapability = await this.dependencies.getStartCapability({
-                environment,
-                ...provider,
-                endpointAddress: endpoint.address,
-                cancellationToken,
-            });
+            const startCapability =
+                cli === 'docker'
+                    ? await this.dependencies.getStartCapability({
+                          environment,
+                          ...provider,
+                          endpointAddress: endpoint.address,
+                          cancellationToken,
+                      })
+                    : provider;
             let permissionDetail: DockerPermissionDetail | undefined;
-            if (classification.failureKind === 'permissionDenied' && endpoint.kind === 'unixSocket') {
+            if (
+                cli === 'docker' &&
+                classification.failureKind === 'permissionDenied' &&
+                endpoint.kind === 'unixSocket'
+            ) {
                 const groupFacts = await this.dependencies.probeSocketGroup(endpoint.address);
                 permissionDetail = resolveDockerPermissionDetail(groupFacts);
             }
             const serviceManager =
+                cli === 'docker' &&
                 classification.failureKind === 'daemonUnavailable' &&
                 endpoint.kind === 'unixSocket' &&
                 environment === 'wsl'
@@ -765,13 +781,16 @@ export class DockerReadinessService {
                         : undefined,
                 executionTarget: getDockerExecutionTarget(environment),
                 permissionDetail,
-                recoveryCommand: getDockerRecoveryCommand(
-                    classification.failureKind,
-                    environment,
-                    endpoint.kind,
-                    permissionDetail,
-                    serviceManager,
-                ),
+                recoveryCommand:
+                    cli === 'docker'
+                        ? getDockerRecoveryCommand(
+                              classification.failureKind,
+                              environment,
+                              endpoint.kind,
+                              permissionDetail,
+                              serviceManager,
+                          )
+                        : undefined,
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled,
                 cliVersion,
