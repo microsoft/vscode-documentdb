@@ -265,6 +265,16 @@ This documentation-only approval does not start those implementation checks.
 3. **P3 — check-free Configure and Introduction copy.** Add the row with Docker always the default,
    remove eager checks from wizard mount and pre-execution steps, and split metadata access from
    readiness where needed. No detection-dependent hints or validation.
+
+   **Done (2026-11-10), commit `346dc9cd`:** Sol added static engine selection,
+   metadata-only opening/context, explicit preference forwarding and three Configure
+   scenarios. Opus review required keeping recorded metadata and credential warnings out
+   of shared live state; five additional regressions preserve data-removed state and
+   container-environment credential recovery. Advised (`claude-opus-5.5`), 85% confidence.
+   Focused tests: 362 passed; browser harness: 34 passed. The integration build currently
+   reports only P5's pending guidance/start-label/recovery-ID UI wiring; it will be rerun
+   after that wiring is complete. P3's initial standalone type check passed.
+
 4. **P4 — W1 replaced.** No provider memory for Podman runs, and no Docker evidence or start action
    for them.
 
@@ -299,9 +309,9 @@ live engine status remains unknown until execution.
 | --- | --- | --- | --- |
 | P1 | `gpt-6.1-sol` | Persisted ownership, lifecycle and concurrent runtime isolation | Done: `deecc32f` |
 | P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | Done: `7f5ad767` |
-| P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | In progress |
+| P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | Done: `346dc9cd` |
 | P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | Done: `00fd6724` |
-| P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Queued |
+| P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Backend reviewed; UI in progress |
 | P6 | `gpt-6.1-sol` | Evidence, telemetry and scenario integration | Queued |
 
 P1's first worker stopped after the runtime split exposed a command log consumer outside
