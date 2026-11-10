@@ -105,9 +105,12 @@ does not. See [Sovereign Clouds](../sovereign-clouds#the-settings) for those ind
 This setting has **machine scope**. Workspace/folder settings and Settings Sync cannot grant this
 trust. In a remote window, only the remote machine's setting is used, not your local User value.
 Remove the property or leave it empty to withdraw custom trust. New connection attempts and
-shell/playground token requests recheck the current suffix; an already authenticated socket is
-not forcibly disconnected. Open sessions retain their original identity and token audience, so
-restart them to change either.
+new sockets on existing connections recheck current trust, including when a token is cached.
+Token requests also recheck after acquisition, before returning a token. An already authenticated
+socket is not forcibly disconnected. A shell or playground session using custom trust is
+permanently revoked when that suffix changes; restart the session after confirming the new setting,
+even if you restore the original suffix. Open sessions retain their original destination restrictions,
+identity and token audience rather than adopting replacement trust in place.
 
 The DocumentDB output records the custom suffix when it admits a connection, never the token or
 connection string. Review the suffix for private information before sharing output.

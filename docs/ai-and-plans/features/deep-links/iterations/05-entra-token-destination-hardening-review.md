@@ -110,7 +110,9 @@ disconnect. That predates this change and does not send tokens to the new reject
 Driver-wrapped destination failures can use the generic diagnostics modal/documentation rather
 than the dedicated seed-policy modal.
 
-The PR remains a draft for human author review and the explicitly recorded live/manual checks.
+The PR was a draft at this earlier review. PR #1077 is now out of draft; current follow-up
+implementation and verification are recorded in [iteration 6](./06-copilot-review-follow-up.md).
+The explicitly recorded live/manual checks still require human verification.
 
 ## Modal-first picker follow-up review (2026-11-10)
 
@@ -138,3 +140,17 @@ revision, not this incremental flow change.
 Human checks remain: per-OS modal line breaks and Back/Escape, picker focus on return, and
 browser-failure warning presentation alongside the restored picker. This advisor approval is not
 a claim of human author sign-off.
+
+## Subsequent Copilot review follow-up (2026-11-10)
+
+The preceding modal-first verdict and 67-test Case 1 result describe `49e1bf6e7`, not the current
+follow-up. The operator requested a shorter title and implementation of Astra's assessed work
+plan. The current informational title is **Microsoft Entra ID unavailable**; browser rejection
+now warns and returns normally rather than propagating. This intentionally supersedes that
+specific earlier contract while preserving real picker cancellation.
+
+Astra verified all eight GitHub Copilot comments, including acquisition-time and cached-token
+socket revocation, native SRV sanitization order, recovery cache invalidation and telemetry.
+The [iteration 6 record](./06-copilot-review-follow-up.md) contains the scoped implementation,
+independent logic-review dispositions, model assignments and final verification evidence.
+Earlier local results and remaining live-cloud/workbench limits are not rewritten as new evidence.

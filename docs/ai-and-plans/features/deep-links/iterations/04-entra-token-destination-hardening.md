@@ -32,7 +32,9 @@ code:
 > Live-cloud, workbench UX and human author review remain pending.
 > Those implementation and verification results describe the prior B0–B7 revision. The
 > operator-approved modal-first picker follow-up below is implemented with passing Case 1
-> checks. Its full Case 2 checks are deferred until ready-for-review.
+> checks. The subsequent [Copilot follow-up](./06-copilot-review-follow-up.md) records the current
+> short title, browser-failure handling, revocation/recovery fixes and integrated verification.
+> PR #1077 is now out of draft; earlier deferred-check statements describe their original revision.
 > The execution plan below records the accepted scope. The research and proposal remain as
 > supporting evidence, not a claim that the vulnerability has been fixed.
 >
@@ -121,6 +123,14 @@ navigation at all three call sites—`ChooseAuthMethodStep`,
 call to the helper. No setting writes, trust changes, authentication-method changes, or token
 changes are in scope. This does not alter the separate rejected-connection error modal or its
 **Learn More** behavior.
+
+**Subsequent amendment (2026-11-10):** the operator requested a shorter UI title and implementation
+of the advisor's Copilot follow-up plan. The current title is **Microsoft Entra ID unavailable**.
+Both a false browser-launch result and a rejected launch warn nonblockingly and return to the
+picker. The separate rejected-connection modal likewise handles browser failures locally so
+client/credential cleanup can finish. The earlier title and M1-M4 results below remain historical
+evidence; current implementation and checks are recorded in
+[iteration 6](./06-copilot-review-follow-up.md).
 
 #### Work items and dependencies
 

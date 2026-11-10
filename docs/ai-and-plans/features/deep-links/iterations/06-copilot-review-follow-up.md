@@ -63,6 +63,15 @@ already-authenticated sessions, and general connected-edit lifecycle changes are
 - Focused validation: auth handler/options/policy/harness, worker manager/worker/evaluator,
   and shell manager Vitest files using the root configuration.
 
+**Done (2026-11-10), commit `9d54bf86d`:** Sol implemented the original/current policy
+intersection, callback pre/post checks, synchronous worker-generation revocation, teardown cleanup,
+post-acquisition relay checks and pre-SRV native sanitization. Added 34 regressions; 440 focused
+tests and root TypeScript passed. The valid-certificate driver harness proves a revoked cached-token
+reconnect sends no application payload without relying on another callback.
+Advised (`gpt-6-astra`): high-confidence approval with no findings, including installed dependency,
+worker lifecycle, policy/provider classification and original-grant review. No plan change.
+Leader, 95% confidence: item ownership stayed disjoint and no settings/public schemas changed.
+
 ### WI-2: navigation, short title, recovery and telemetry
 
 - Recommended/actual model: `gpt-6.1-sol`; successful-save detection and cached tree recovery
@@ -84,6 +93,16 @@ already-authenticated sessions, and general connected-edit lifecycle changes are
   `experience=this.experience.api`, `failurePhase=cachedClientConnect`.
 - Tests: both launch outcomes/dismissal; original-error cleanup; rejected edit/retry with
   differing stable/tree IDs; unsuccessful-edit isolation; bounded telemetry; all three pickers.
+
+**Done (2026-11-10), commit `9bb8e7772`:** Sol implemented the exact short title, local browser
+failure warnings, successful-save-only rejection recovery and bounded telemetry. Added 17 tests;
+137 tests in the ten focused files passed. Existing rejection-propagation expectations changed
+intentionally under the operator's requested fix; dismissal/cancellation and original-error
+assertions remain. The successful-save flag is set only after storage succeeds.
+Advised (`gpt-6-astra`): high-confidence approval with no findings, including full lifecycle and
+persistence review. Leader, 95% confidence: scoped file ownership and stable/tree identity
+separation match the approved plan. The worker's initial type check saw only concurrent WI-1
+errors; WI-1's subsequent integrated root type check passed.
 
 ### WI-3: documentation, generated localization and integration
 
@@ -118,3 +137,45 @@ Advisor `8679a4b4-6898-4929-8ae3-10027dffed19`, `gpt-6-astra`: 10m54s elapsed,
 Tokens: 1.6M input (1.5M cache read, 103k cache write), 23k output.
 Snapshot totals: leader 25.9 AIU; subagents 391.6 AIU; run 417.4 AIU.
 Next: coding, advisor logic review, focused checks, per-item commits, integrated checks.
+
+### Checkpoint: WI-2 implementation returned, 19:58 UTC
+
+Plan: 0/3 done, WI-1 running, WI-2 implementation complete and advisor review next, WI-3 queued.
+Sol worker `b0cdc9cc-4aa2-4eaf-b6d1-132996ad2e9e`: 4m14s elapsed, 40.6 AIU,
+16 requests (3m01s summed), 1m43s tool spans; host detected five check invocations, 1m17s,
+none failed. Tokens: 1.1M input (980k cache read, 71k cache write), 13k output.
+Snapshot totals: leader 49.5 AIU; subagents 646.8 AIU; run 696.3 AIU.
+
+### Checkpoint: WI-2 advisor returned, 20:01 UTC
+
+Astra approved WI-2 without rework. Plan: WI-2 ready to commit; WI-1 running; WI-3 queued.
+Advisor `49b546e1-bacf-47f0-b352-8660bbd02934`: 2m12s elapsed, 113.3 AIU,
+ten requests (2m06s summed), 16s tool spans; no tests/builds.
+Tokens: 377k input (330k cache read, 47k cache write), 4k output.
+Snapshot totals: leader 53.4 AIU; subagents 784.5 AIU; run 837.9 AIU.
+
+### Checkpoint: WI-1 implementation returned, 20:02 UTC
+
+Plan: 1/3 done (`9bb8e7772`); WI-1 advisor review running; WI-3 queued.
+Sol worker `2187fc61-a7c1-41ea-9d63-628840d6839e`: 9m09s elapsed, 97.3 AIU,
+47 requests (7m02s summed), 2m27s tool spans; host detected seven check invocations,
+2m03s, none failed. Tokens: 3.9M input (3.8M cache read, 123k cache write), 28k output.
+Worker evidence: 34 regressions; 440 focused tests passed; root type check passed.
+Snapshot totals: leader 56.0 AIU; subagents 784.5 AIU; run 840.6 AIU.
+Next: advisor WI-1 logic review and integrated Case 1 checks, then final Case 2.
+
+### Checkpoint: WI-1 advisor and Case 1 returned, 20:04 UTC
+
+Plan: 2/3 done (`9d54bf86d`, `9bb8e7772`); WI-3 integration in progress, none parked.
+Astra approved WI-1 without rework. The reused planning advisor's aggregate helper snapshot:
+676.6 AIU, 35 model requests (13m10s summed), 1m23s tool spans; no tests/builds.
+Tokens: 2.7M input (2.5M cache read, 229k cache write), 29k output.
+The helper's multi-turn elapsed/turn fields reflect the first turn, so they are not used as
+the WI-1 review duration.
+
+Case 1 checker `9bf44fef-fdf7-4446-a431-f377a0974af0`, host-selected `gpt-5.6-luna`:
+1m06s elapsed, 0.6 AIU, three requests (10s summed), 53s tool spans.
+Tokens: 51k input (34k cache read, 17k cache write), 646 output.
+**Integrated Case 1 passed:** `npm run build`; 577 tests in 19 files, 7.92s runtime.
+Snapshot totals: leader 66.2 AIU; subagents 928.3 AIU; run 994.6 AIU.
+Next: commit active documentation and completion notes, then run all Case 2 commands.

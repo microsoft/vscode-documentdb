@@ -79,14 +79,27 @@ Interactive sign-in remains eager **after** the destination check; deferring con
 60-second callback would not cancel a pending VS Code prompt. Each worker token relay checks the
 current suffix against the original session connection, but uses the captured authentication
 identity and audience, not request-message identity fields or live `CredentialCache` entries.
+Checks also run after token acquisition and before returning a token. New TLS sockets intersect
+current trust with the connection's original restrictions, even when the driver has cached a token.
+Worker generations using custom trust share a synchronous revocation latch with the host;
+changing that suffix permanently revokes the generation, so recreate the session rather than
+adopting replacement trust in place. Already-authenticated sockets are not forcibly disconnected.
 Untrusted OIDC declarations cannot preselect Entra. Selecting the unavailable Entra row opens an
-informational modal, not a browser. In the implemented
+informational modal titled **Microsoft Entra ID unavailable**, not a browser. In the implemented
 [modal-first follow-up](./iterations/04-entra-token-destination-hardening.md#approved-modal-first-picker-follow-up-2026-11-10),
 Back or Escape returns to the picker without navigation; only the explicit Learn More action
-opens the trusted-server page and then returns. Neither path grants trust. Editing an approved
+opens the trusted-server page and then returns. Browser refusal or rejection shows a nonblocking
+warning and still returns normally, including from the connection-failure modal so its original
+failure cleanup can finish. Neither path grants trust. Editing an approved
 connection to a rejected destination saves the string and clears an Entra/managed-identity
 selection; saved rejected connections offer explicit recovery, never a silent authentication
-fallback.
+fallback. A successful connection-string edit during rejection recovery clears stale client,
+credentials and failed children before refresh; Retry reads the corrected saved connection.
+Native and no-auth worker connections remove conflicting OIDC options before SRV fallback so
+TXT authentication-database options retain their normal precedence.
+
+The [Copilot follow-up](./iterations/06-copilot-review-follow-up.md) records Astra's assessment
+of all eight review comments, implementation items, model assignments and integrated verification.
 
 The database token audience is shared with Azure Database for PostgreSQL and MySQL. A token sent
 to an untrusted server may therefore be replayable wherever the identity has database roles and

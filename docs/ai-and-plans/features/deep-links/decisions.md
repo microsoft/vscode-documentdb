@@ -736,6 +736,24 @@ is inferred. Implemented in `49e1bf6e7` after the plan-first commit `c86ff2fc6`;
 the behavior, and Case 1 passed the build plus all 67 focused tests. Full Case 2, including
 formatting and localization generation, is deferred until ready-for-review.
 
+### Operator-requested short-title and review follow-up (2026-11-10)
+
+The operator subsequently requested implementing the Astra-assessed Copilot findings and said
+the modal title was too long for the UI. The current title is
+**Microsoft Entra ID unavailable**; the longer title above is retained as historical wording.
+The detail, buttons and unavailable picker row are unchanged. Both browser refusal and rejected
+launch now show the existing nonblocking warning and return normally, preserving picker navigation
+and original connection-failure cleanup. This supersedes the earlier rejection-propagation behavior,
+not wizard cancellation.
+
+The [follow-up plan](./iterations/06-copilot-review-follow-up.md) also closes gaps in the already
+accepted boundary: recheck after acquisition and on every new socket, and atomically revoke
+custom-trusted worker generations when the suffix changes. Original connection restrictions,
+identity and audience remain fixed. A revoked worker generation must be recreated; this does not
+add automatic trust adoption or terminate already-authenticated sockets. Astra chose the shared
+revocation latch to avoid the window before an asynchronous policy-update message reaches a worker.
+No new operator rationale or trust-setting decision is inferred.
+
 ### Advisor and implementation choices
 
 These are pragmatic implementation reasons supporting the accepted scope, not additional
