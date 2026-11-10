@@ -287,8 +287,8 @@ export class DockerReadinessService {
                 ? resolvePinnedContainerCli(request.engine.cli)
                 : this.suppliedClient && !request.engine
                   ? resolvePinnedContainerCli(this.suppliedClient.id === PodmanClient.ClientId ? 'podman' : 'docker')
-                  : resolveContainerCli();
-        const key = `${resolved.cli}|${resolved.executable}`;
+                  : resolveContainerCli(request.engine?.kind === 'preferred' ? request.engine.preferred : 'docker');
+        const key = `${resolved.cli}|${resolved.executable}|${resolved.preferred}|${resolved.onPath.docker}|${resolved.onPath.podman}`;
         let state = this.checks.get(key);
         if (!state) {
             state = {};
@@ -357,6 +357,8 @@ export class DockerReadinessService {
             (readiness): DockerReadiness => ({
                 ...readiness,
                 cli,
+                preferredEngine: resolved.preferred,
+                cliFallback: resolved.fellBack,
                 ...(cliOnPath !== undefined ? { cliOnPath } : {}),
             }),
         );

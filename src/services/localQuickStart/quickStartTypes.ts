@@ -11,7 +11,7 @@
  */
 
 import { type CancellationToken } from 'vscode';
-import { type ContainerEngineRequest } from './containerCli';
+import { type ContainerCli, type ContainerEngineRequest } from './containerCli';
 
 /** Official DocumentDB local image (github.com/microsoft/documentdb README). */
 export const QUICK_START_IMAGE_REPOSITORY = 'ghcr.io/documentdb/documentdb/documentdb-local';
@@ -38,6 +38,7 @@ export function resolveQuickStartImage(imageTag?: string): string {
  * onto an existing data volume — the stored credentials must be reused there.
  */
 export interface AdvancedQuickStartOptions {
+    preferredEngine?: ContainerCli;
     /** Explicit host port. Unlike the default, a conflict ERRORS (never auto-relocated). */
     port?: number;
     /** Custom username (requires a password). Ignored on a Missing-recreate. */
@@ -227,6 +228,8 @@ export interface QuickStartMessage {
     readonly environment?: DockerHostEnvironment;
     /** Image reference, for `imageNotFound`. */
     readonly image?: string;
+    /** Owning engine, when its pinned CLI is missing. */
+    readonly engineCli?: ContainerCli;
     /** The container's exit code, for `containerExited`. */
     readonly exitCode?: number;
     /** Raw daemon / driver text, rendered verbatim beside the localized copy. */
@@ -462,8 +465,10 @@ interface DockerReadinessBase {
     readonly checkedAtMs: number;
     readonly cliInstalled: boolean;
     readonly cliVersion?: string;
-    /** Which CLI ran the check; `podman` only when Docker's was missing. */
-    readonly cli?: 'docker' | 'podman';
+    /** Which CLI ran the check. */
+    readonly cli?: ContainerCli;
+    readonly preferredEngine?: ContainerCli;
+    readonly cliFallback?: boolean;
     readonly cliOnPath?: ContainerCliPresence;
     readonly engine?: ContainerEngine;
     readonly engineEvidence?: ContainerEngineEvidence;

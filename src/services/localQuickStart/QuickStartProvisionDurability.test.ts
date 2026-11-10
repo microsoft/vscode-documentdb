@@ -51,6 +51,7 @@ import {
     QUICK_START_LABEL_KEY,
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
+    type DockerReadiness,
     type StageEvent,
 } from './quickStartTypes';
 
@@ -146,11 +147,14 @@ interface RuntimeOptions {
 function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
     const runtime: IContainerRuntime = {
         resolveCli: vi.fn((request: Parameters<ContainerRuntimeHost['resolveCli']>[0]) => ({
-            cli: request.kind === 'pinned' ? request.cli : 'docker',
-            executable: request.kind === 'pinned' ? request.cli : 'docker',
+            cli: request.kind === 'pinned' ? request.cli : request.preferred,
+            executable: request.kind === 'pinned' ? request.cli : request.preferred,
             onPath: { docker: true, podman: true },
+            preferred: request.kind === 'pinned' ? request.cli : request.preferred,
+            fellBack: false,
         })),
         forCli: vi.fn(() => runtime),
+        startAvailableDockerProvider: vi.fn().mockResolvedValue('notAvailable'),
         isDockerReady: vi.fn().mockResolvedValue({
             outcome: 'ready',
             environment: 'linux',
@@ -255,13 +259,226 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     describe('instance engine ownership', () => {
         const stored = 'mongodb://admin:stored-password@localhost:10260/?tls=true';
 
+        it.each(['docker', 'podman'] as const)('uses the fresh %s preference consistently without persisting it', async (preferredEngine) => {
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+
+            await service.checkInstanceDockerReadiness({}, preferredEngine);
+            expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                engine: { kind: 'preferred', preferred: preferredEngine },
+            });
+            await service.startDockerProvider(preferredEngine);
+            expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith({
+                kind: 'preferred', preferred: preferredEngine,
+            });
+            expect(await getInstance(DEFAULT_ALIAS)).toBeUndefined();
+
+            await collect(service.provision(new AbortController().signal, { preferredEngine }));
+
+            expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'preferred', preferred: preferredEngine });
+            expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                engine: { kind: 'pinned', cli: preferredEngine },
+            });
+            expect(runtime.forCli).toHaveBeenCalledWith(expect.objectContaining({
+                cli: preferredEngine, preferred: preferredEngine, fellBack: false,
+            }));
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli: preferredEngine, phase: 'ready' });
+            expect(await getInstance(DEFAULT_ALIAS)).not.toHaveProperty('preferredEngine');
+        });
+
+        it.each(['docker', 'podman'] as const)('keeps the stored %s owner for readiness, launch and provision despite a conflicting preference', async (engineCli) => {
+            const preferredEngine = engineCli === 'docker' ? 'podman' : 'docker';
+            await upsertInstance({
+                alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT,
+                phase: 'ready', engineCli,
+            });
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+
+            await service.checkInstanceDockerReadiness({ forceRefresh: true }, preferredEngine);
+            expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                forceRefresh: true, engine: { kind: 'pinned', cli: engineCli },
+            });
+            await service.startDockerProvider(preferredEngine);
+            expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith({ kind: 'pinned', cli: engineCli });
+            await collect(service.provision(new AbortController().signal, { preferredEngine, startFresh: true }));
+            expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'pinned', cli: engineCli });
+            expect(runtime.resolveCli).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'preferred' }));
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli, phase: 'ready' });
+        });
+
+        it('ignores a new preference for a legacy record across readiness, launch and provision', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT, phase: 'ready',
+            });
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+
+            await service.checkInstanceDockerReadiness({}, 'podman');
+            expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                engine: { kind: 'preferred', preferred: 'docker' },
+            });
+            await service.startDockerProvider('podman');
+            expect(runtime.startAvailableDockerProvider).toHaveBeenLastCalledWith({
+                kind: 'preferred', preferred: 'docker',
+            });
+            await collect(service.provision(new AbortController().signal, {
+                preferredEngine: 'podman', startFresh: true,
+            }));
+            expect(runtime.resolveCli).toHaveBeenCalledWith({ kind: 'preferred', preferred: 'docker' });
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli: 'docker', phase: 'ready' });
+        });
+
+        it('uses the execution-time fallback for provisioning operations and readiness', async () => {
+            const runtime = runtimeFor();
+            vi.mocked(runtime.resolveCli).mockReturnValue({
+                cli: 'docker', executable: 'docker', preferred: 'podman', fellBack: true,
+                onPath: { docker: true, podman: false },
+            });
+            const service = new QuickStartServiceImpl(runtime);
+            await collect(service.provision(new AbortController().signal, { preferredEngine: 'podman' }));
+            expect(runtime.forCli).toHaveBeenCalledWith(expect.objectContaining({
+                cli: 'docker', preferred: 'podman', fellBack: true,
+            }));
+            expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                engine: { kind: 'pinned', cli: 'docker' },
+            });
+            expect(await getInstance(DEFAULT_ALIAS)).toMatchObject({ engineCli: 'docker', phase: 'ready' });
+        });
+
+        it.each([false, true])('retains the original checking selection without mutating pinned runtime readiness (fallback=%s)', async (fellBack) => {
+            const selection = {
+                cli: 'podman',
+                executable: 'podman',
+                preferred: fellBack ? 'docker' : 'podman',
+                fellBack,
+                onPath: { docker: false, podman: true },
+            } as const;
+            const pinned: DockerReadiness = {
+                outcome: 'ready',
+                environment: 'linux',
+                endpointKind: 'unixSocket',
+                provider: 'podman',
+                providerEvidence: 'liveDaemon',
+                executionTarget: 'local',
+                checkedAtMs: 1,
+                canContinueAnyway: false,
+                cliInstalled: true,
+                daemonReachable: true,
+                cli: 'podman',
+                preferredEngine: 'podman',
+                cliFallback: false,
+            };
+            const runtime = runtimeFor();
+            vi.mocked(runtime.resolveCli).mockReturnValue(selection);
+            vi.mocked(runtime.isDockerReady).mockResolvedValue(pinned);
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(events).toContainEqual(expect.objectContaining({ stage: 'checking', status: 'done' }));
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(runtime.isDockerReady).toHaveBeenCalledExactlyOnceWith({
+                engine: { kind: 'pinned', cli: 'podman' },
+            });
+            expect(service.getDockerReadinessSnapshot()).toMatchObject({
+                cli: 'podman', preferredEngine: selection.preferred, cliFallback: fellBack,
+            });
+            expect(service.getDockerReadinessSnapshot()).not.toBe(pinned);
+            const directPinned = await runtime.isDockerReady({ engine: { kind: 'pinned', cli: 'podman' } });
+            expect(directPinned).toBe(pinned);
+            expect(directPinned).toMatchObject({ preferredEngine: 'podman', cliFallback: false });
+        });
+
+        it.each(['pulling', 'creating'] as const)('retains the original fallback in the forced terminal snapshot after %s fails', async (stage) => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT,
+                phase: 'ready', engineCli: 'podman',
+            });
+            const selection = {
+                cli: 'podman', executable: 'podman', preferred: 'docker', fellBack: true,
+                onPath: { docker: false, podman: true },
+            } as const;
+            const pinned: DockerReadiness = {
+                outcome: 'ready',
+                environment: 'linux',
+                endpointKind: 'unixSocket',
+                provider: 'podman',
+                providerEvidence: 'liveDaemon',
+                executionTarget: 'local',
+                checkedAtMs: 1,
+                canContinueAnyway: false,
+                cliInstalled: true,
+                daemonReachable: true,
+                cli: 'podman',
+                preferredEngine: 'podman',
+                cliFallback: false,
+            };
+            const unavailable: DockerReadiness = {
+                ...pinned,
+                outcome: 'diagnosed',
+                failureKind: 'daemonUnavailable',
+                daemonReachable: false,
+                checkedAtMs: 2,
+            };
+            const runtime = runtimeFor();
+            vi.mocked(runtime.resolveCli).mockReturnValue(selection);
+            vi.mocked(runtime.isDockerReady).mockResolvedValueOnce(pinned).mockResolvedValue(unavailable);
+            vi.mocked(stage === 'pulling' ? runtime.pullImage : runtime.createAndRunContainer)
+                .mockRejectedValue(new Error('engine became unavailable'));
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal, { startFresh: true }));
+
+            expect(events.at(-1)).toMatchObject({
+                stage: 'error',
+                dockerReadiness: {
+                    cli: 'podman', preferredEngine: 'docker', cliFallback: true,
+                    failureKind: 'daemonUnavailable',
+                },
+            });
+            expect(runtime.isDockerReady).toHaveBeenLastCalledWith({
+                forceRefresh: true, suppressCommandEcho: true, engine: { kind: 'pinned', cli: 'podman' },
+            });
+            expect(service.getDockerReadinessSnapshot()).toBe(events.at(-1)?.dockerReadiness);
+            expect(service.getDockerReadinessSnapshot()).toMatchObject({
+                preferredEngine: 'docker', cliFallback: true,
+            });
+            expect(await runtime.isDockerReady({ engine: { kind: 'pinned', cli: 'podman' } })).toBe(unavailable);
+            expect(unavailable).toMatchObject({ preferredEngine: 'podman', cliFallback: false });
+        });
+
+        it('does not overlay selection evidence onto readiness from a different CLI', async () => {
+            const runtime = runtimeFor();
+            const pinned = {
+                ...await runtime.isDockerReady(),
+                cli: 'docker',
+                preferredEngine: 'docker',
+                cliFallback: false,
+            } as const;
+            vi.mocked(runtime.isDockerReady).mockResolvedValue(pinned);
+            const service = new QuickStartServiceImpl(runtime);
+
+            const result = await service.checkDockerReadiness(
+                { engine: { kind: 'pinned', cli: 'docker' } },
+                { cli: 'podman', preferred: 'docker', fellBack: true },
+            );
+
+            expect(result).toBe(pinned);
+            expect(result).toMatchObject({ preferredEngine: 'docker', cliFallback: false });
+        });
+
         it('persists the selected engine on the lease and record without switching during provision', async () => {
             const runtime = runtimeFor();
             const podman = runtimeFor();
             let preferred: 'docker' | 'podman' = 'podman';
             vi.mocked(runtime.resolveCli).mockImplementation((request) => {
                 const cli = request.kind === 'pinned' ? request.cli : preferred;
-                return { cli, executable: cli, onPath: { docker: preferred === 'docker', podman: true } };
+                const requested = request.kind === 'pinned' ? request.cli : request.preferred;
+                return {
+                    cli, executable: cli, onPath: { docker: preferred === 'docker', podman: true },
+                    preferred: requested, fellBack: cli !== requested,
+                };
             });
             vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
             vi.mocked(runtime.isDockerReady).mockImplementation(async () => {
@@ -308,7 +525,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const podman = runtimeFor();
             vi.mocked(runtime.resolveCli).mockImplementation((request) => {
                 const cli = request.kind === 'pinned' ? request.cli : podmanInstalled ? 'podman' : 'docker';
-                return { cli, executable: cli, onPath: { docker: false, podman: podmanInstalled } };
+                const preferred = request.kind === 'pinned' ? request.cli : request.preferred;
+                return {
+                    cli, executable: cli, onPath: { docker: false, podman: podmanInstalled },
+                    preferred, fellBack: cli !== preferred,
+                };
             });
             vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
             if (listingFails) {
@@ -414,7 +635,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const runtime = runtimeFor({ volumeExists: true });
             vi.mocked(runtime.resolveCli).mockImplementation((request) => {
                 const cli = request.kind === 'pinned' ? request.cli : 'podman';
-                return { cli, executable: cli, onPath: { docker: false, podman: true } };
+                const preferred = request.kind === 'pinned' ? request.cli : request.preferred;
+                return {
+                    cli, executable: cli, onPath: { docker: false, podman: true },
+                    preferred, fellBack: cli !== preferred,
+                };
             });
             const service = new QuickStartServiceImpl(runtime);
             expect(runtime.resolveCli).not.toHaveBeenCalled();
@@ -427,7 +652,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(service.getStatus().state).toBe(InstanceState.Running);
         });
 
-        it('does not fall back to Docker when an existing instance has lost its Podman CLI', async () => {
+        it.each([false, true])('does not fall back when an existing instance has lost its Podman CLI (Docker installed=%s)', async (dockerInstalled) => {
             const record = {
                 alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: QUICK_START_PORT,
                 phase: 'ready' as const, engineCli: 'podman' as const,
@@ -435,6 +660,10 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             await upsertInstance(record);
             const runtime = runtimeFor();
             const podman = runtimeFor();
+            vi.mocked(runtime.resolveCli).mockReturnValue({
+                cli: 'podman', executable: 'podman', preferred: 'podman', fellBack: false,
+                onPath: { docker: dockerInstalled, podman: false },
+            });
             vi.mocked(runtime.forCli).mockImplementation(({ cli }) => cli === 'podman' ? podman : runtime);
             vi.mocked(runtime.isDockerReady).mockResolvedValue({
                 outcome: 'diagnosed', cli: 'podman', failureKind: 'cliMissing',
@@ -446,7 +675,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
             const events = await collect(service.provision(new AbortController().signal, { startFresh: true }));
 
-            expect(events.at(-1)).toMatchObject({ status: 'error', message: { key: 'dockerCliMissing' } });
+            expect(events.at(-1)).toMatchObject({
+                status: 'error', message: { key: 'dockerCliMissing', engineCli: 'podman' },
+            });
             expect(await getInstance(DEFAULT_ALIAS)).toMatchObject(record);
             expect(runtime.isDockerReady).toHaveBeenCalledWith({ engine: { kind: 'pinned', cli: 'podman' } });
             expect(runtime.pullImage).not.toHaveBeenCalled();

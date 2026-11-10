@@ -34,6 +34,8 @@ export interface ResolvedContainerCli {
     /** What the client runs: the bare name, or on Windows the absolute path. */
     readonly executable: string;
     readonly onPath: ContainerCliPresence;
+    readonly preferred: ContainerCli;
+    readonly fellBack: boolean;
 }
 
 /** The first match on PATH, honouring PATHEXT on Windows. */
@@ -60,28 +62,39 @@ export function findOnPath(command: string, lookup: ContainerCliLookup = {}): st
 }
 
 /**
- * Docker when its CLI is on PATH, else Podman when that is, else Docker so readiness reports the
- * missing CLI the way it always has.
+ * Prefer the requested CLI, falling back only when it is missing from PATH.
  */
-export function resolveContainerCli(lookup: ContainerCliLookup = {}): ResolvedContainerCli {
+export function resolveContainerCli(
+    preferred: ContainerCli = 'docker',
+    lookup: ContainerCliLookup = {},
+): ResolvedContainerCli {
     const docker = findOnPath('docker', lookup);
     const podman = findOnPath('podman', lookup);
-    const cli: ContainerCli = docker || !podman ? 'docker' : 'podman';
+    const preferredFound = preferred === 'docker' ? docker : podman;
+    const other = preferred === 'docker' ? 'podman' : 'docker';
+    const otherFound = other === 'docker' ? docker : podman;
+    const cli = !preferredFound && otherFound ? other : preferred;
     const found = cli === 'docker' ? docker : podman;
     // On Windows the container client caches each bare name's `which` result for the process
     // lifetime, so a CLI that moved would keep failing; an absolute path skips that cache.
     const executable = (lookup.platform ?? process.platform) === 'win32' && found ? found : cli;
-    return { cli, executable, onPath: { docker: !!docker, podman: !!podman } };
+    return {
+        cli,
+        executable,
+        onPath: { docker: !!docker, podman: !!podman },
+        preferred,
+        fellBack: cli !== preferred,
+    };
 }
 
 /** An instance's owning engine must never fall back to another engine. */
 export function resolvePinnedContainerCli(cli: ContainerCli, lookup: ContainerCliLookup = {}): ResolvedContainerCli {
-    const found = findOnPath(cli, lookup);
-    const executable = (lookup.platform ?? process.platform) === 'win32' && found ? found : cli;
+    const resolved = resolveContainerCli(cli, lookup);
     return {
+        ...resolved,
         cli,
-        executable,
-        onPath: { docker: cli === 'docker' && !!found, podman: cli === 'podman' && !!found },
+        executable: resolved.cli === cli ? resolved.executable : cli,
+        fellBack: false,
     };
 }
 

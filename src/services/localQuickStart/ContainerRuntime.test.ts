@@ -22,6 +22,8 @@ import type * as DockerCommand from './dockerCommand';
 import { runDockerCommand, type DockerCommandOptions } from './dockerCommand';
 import type * as DockerProbes from './dockerProbes';
 import { runDockerProbe } from './dockerProbes';
+import { DockerReadinessService } from './DockerReadinessService';
+import * as DockerProviderLauncher from './DockerProviderLauncher';
 
 vi.mock('@microsoft/vscode-container-client', async () => ({
     ...(await vi.importActual<typeof ContainerClient>('@microsoft/vscode-container-client')),
@@ -161,11 +163,15 @@ describe('ContainerRuntime output channel', () => {
                 cli: 'docker',
                 executable: 'discovered-docker',
                 onPath: { docker: true, podman: false },
+                preferred: 'docker',
+                fellBack: false,
             })
             .mockReturnValueOnce({
                 cli: 'docker',
                 executable: 'discovered-docker',
                 onPath: { docker: true, podman: true },
+                preferred: 'docker',
+                fellBack: false,
             });
         const createClient = vi.spyOn(containerCli, 'createContainerClient');
         vi.mocked(runDockerProbe).mockImplementation(async (options) => ({
@@ -210,6 +216,52 @@ describe('ContainerRuntime output channel', () => {
         expect(commands).toEqual(['owning-podman', 'owning-docker', 'owning-podman']);
         expect(ContainerRuntime.forCli({ cli: 'podman', executable: 'owning-podman' })).toBe(podman);
         expect(ContainerRuntime.forCli({ cli: 'podman', executable: 'moved-podman' })).not.toBe(podman);
+    });
+
+    it.each(['docker', 'podman'] as const)('passes the requested %s preference to execution-time resolution', (preferred) => {
+        const resolved: containerCli.ResolvedContainerCli = {
+            cli: preferred, executable: preferred, preferred, fellBack: false,
+            onPath: { docker: true, podman: true },
+        };
+        const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue(resolved);
+        expect(ContainerRuntime.resolveCli({ kind: 'preferred', preferred })).toBe(resolved);
+        expect(resolve).toHaveBeenCalledExactlyOnceWith(preferred);
+    });
+
+    it.each([
+        { kind: 'preferred', preferred: 'docker' },
+        { kind: 'preferred', preferred: 'podman' },
+        { kind: 'pinned', cli: 'docker' },
+        { kind: 'pinned', cli: 'podman' },
+    ] as const)('force-checks the same engine request before launch ($kind)', async (request) => {
+        const readiness = vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
+            outcome: 'diagnosed', failureKind: 'daemonUnavailable', cliInstalled: true,
+            daemonReachable: false, environment: 'linux', endpointKind: 'unixSocket',
+            provider: 'dockerEngine', providerEvidence: 'activeContext', executionTarget: 'local',
+            checkedAtMs: 1, canContinueAnyway: false, startAction: 'startRootlessDockerEngineLinux',
+        });
+        const launch = vi.spyOn(DockerProviderLauncher, 'startDockerProvider').mockResolvedValue('launchAttempted');
+        const record = vi.spyOn(DockerReadinessService.prototype, 'recordLaunchResult').mockResolvedValue(undefined);
+
+        await expect(ContainerRuntime.startAvailableDockerProvider(request)).resolves.toBe('launchAttempted');
+
+        expect(readiness).toHaveBeenCalledExactlyOnceWith({ engine: request, forceRefresh: true });
+        expect(launch).toHaveBeenCalledExactlyOnceWith('startRootlessDockerEngineLinux');
+        expect(record).toHaveBeenCalledExactlyOnceWith('launchAttempted');
+    });
+
+    it('does not launch a different provider when the selected engine has no start action', async () => {
+        vi.spyOn(DockerReadinessService.prototype, 'getReadiness').mockResolvedValue({
+            outcome: 'diagnosed', failureKind: 'cliMissing', cliInstalled: false,
+            daemonReachable: false, environment: 'linux', endpointKind: 'unknown',
+            provider: 'unknown', providerEvidence: 'none', executionTarget: 'local',
+            checkedAtMs: 1, canContinueAnyway: false,
+        });
+        const launch = vi.spyOn(DockerProviderLauncher, 'startDockerProvider');
+        await expect(ContainerRuntime.startAvailableDockerProvider({
+            kind: 'pinned', cli: 'podman',
+        })).resolves.toBe('notAvailable');
+        expect(launch).not.toHaveBeenCalled();
     });
 
     it.each([

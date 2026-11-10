@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PodmanClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash } from '@microsoft/vscode-processutils';
@@ -18,6 +18,7 @@ import {
 } from './DockerReadinessService';
 import { type RunDockerProbeOptions } from './dockerProbes';
 import { type ContainerCliPresence, type DockerProbeEvidence, type DockerProviderMemory } from './quickStartTypes';
+import * as containerCli from './containerCli';
 
 function commandResponse<T>(args: string[], parse: (output: string) => T): PromiseCommandResponse<T> {
     return {
@@ -52,6 +53,151 @@ function evidence(
 }
 
 describe('DockerReadinessService', () => {
+    describe('preferred engine resolution', () => {
+        afterEach(() => vi.restoreAllMocks());
+
+        function createService(overrides: DockerReadinessServiceDependencies = {}): DockerReadinessService {
+            return new DockerReadinessService({
+                getClient: () => createClient(),
+                getCliOnPath: (resolved) => resolved.onPath,
+                platform: 'linux',
+                arch: 'x64',
+                environmentVariables: {},
+                runProbe: async (options) => evidence(options.probe, {
+                    stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '[]',
+                }),
+                resolveDockerSocketTarget: async () => ({}),
+                probeEndpoint: async (endpoint) => ({
+                    kind: endpoint.kind, source: endpoint.source, accessErrorCode: 'ECONNREFUSED',
+                }),
+                getStartCapability: async ({ provider, providerEvidence }) => ({ provider, providerEvidence }),
+                readProviderMemory: () => undefined,
+                writeProviderMemory: async () => undefined,
+                ...overrides,
+            });
+        }
+
+        it.each(['docker', 'podman'] as const)('does not fall back when installed preferred %s is stopped', async (preferred) => {
+            const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
+                cli: preferred, executable: preferred, preferred, fellBack: false,
+                onPath: { docker: true, podman: true },
+            });
+            const getClient = vi.fn((resolved: containerCli.ResolvedContainerCli) => ({
+                ...createClient(),
+                info: async () => ({
+                    ...commandResponse(['info'], (output) => JSON.parse(output) as unknown),
+                    command: resolved.cli,
+                }),
+            }));
+            const service = createService({
+                getClient,
+                runProbe: async (options) => {
+                    const command = await (typeof options.command === 'function' ? options.command() : options.command);
+                    return evidence(
+                        options.probe,
+                        options.probe === 'info' && command.command === preferred
+                            ? { exitCode: 1, stderr: 'Cannot connect to the engine' }
+                            : { stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '[]' },
+                    );
+                },
+            });
+
+            const result = await service.getReadiness({ engine: { kind: 'preferred', preferred } });
+
+            expect(resolve).toHaveBeenCalledExactlyOnceWith(preferred);
+            expect(result).toMatchObject({
+                cli: preferred, preferredEngine: preferred, cliFallback: false,
+                cliInstalled: true, daemonReachable: false, outcome: 'diagnosed',
+            });
+            expect(getClient).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ cli: preferred }));
+        });
+
+        it('returns fallback evidence from this execution and re-resolves before a memo hit', async () => {
+            const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue({
+                cli: 'docker', executable: 'docker', preferred: 'podman', fellBack: true,
+                onPath: { docker: true, podman: false },
+            });
+            const getClient = vi.fn(() => createClient());
+            const service = createService({ getClient });
+            const request = { engine: { kind: 'preferred', preferred: 'podman' } } as const;
+            const first = await service.getReadiness(request);
+            expect(first).toMatchObject({ cli: 'docker', preferredEngine: 'podman', cliFallback: true });
+            expect(await service.getReadiness(request)).toBe(first);
+            expect(resolve).toHaveBeenCalledTimes(2);
+            expect(getClient).toHaveBeenCalledTimes(1);
+
+            resolve.mockReturnValue({
+                cli: 'podman', executable: 'podman', preferred: 'podman', fellBack: false,
+                onPath: { docker: true, podman: true },
+            });
+            expect(await service.getReadiness(request)).toMatchObject({
+                cli: 'podman', preferredEngine: 'podman', cliFallback: false,
+                cliOnPath: { docker: true, podman: true },
+            });
+            expect(getClient).toHaveBeenCalledTimes(2);
+        });
+
+        it.each(['executable', 'preferred', 'onPath'] as const)('keys readiness memoization by %s evidence', async (field) => {
+            const original: containerCli.ResolvedContainerCli = {
+                cli: 'docker', executable: 'docker', preferred: 'docker', fellBack: false,
+                onPath: { docker: true, podman: false },
+            };
+            const resolve = vi.spyOn(containerCli, 'resolveContainerCli').mockReturnValue(original);
+            const getClient = vi.fn(() => createClient());
+            const service = createService({ getClient });
+            const first = await service.getReadiness();
+            expect(await service.getReadiness()).toBe(first);
+            const changed: containerCli.ResolvedContainerCli = {
+                ...original,
+                ...(field === 'executable' ? { executable: '/new/docker' } : {}),
+                ...(field === 'preferred' ? { preferred: 'podman', fellBack: true } : {}),
+                ...(field === 'onPath' ? { onPath: { docker: true, podman: true } } : {}),
+            };
+            resolve.mockReturnValue(changed);
+
+            const second = await service.getReadiness({
+                engine: { kind: 'preferred', preferred: changed.preferred },
+            });
+            expect(second).not.toBe(first);
+            expect(getClient).toHaveBeenCalledTimes(2);
+            expect(second).toMatchObject({
+                preferredEngine: changed.preferred, cliFallback: changed.fellBack, cliOnPath: changed.onPath,
+            });
+        });
+
+        it('isolates forced and in-flight checks with different preferences for the same selected CLI', async () => {
+            vi.spyOn(containerCli, 'resolveContainerCli').mockImplementation((preferred = 'docker') => ({
+                cli: 'docker', executable: 'docker', preferred, fellBack: preferred !== 'docker',
+                onPath: { docker: true, podman: false },
+            }));
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            const getClient = vi.fn(() => createClient());
+            const service = createService({
+                getClient,
+                runProbe: async (options) => {
+                    await gate;
+                    return evidence(options.probe, {
+                        stdout: options.probe === 'info' ? '{"OSType":"linux"}' : '',
+                    });
+                },
+            });
+            const docker = service.getReadiness({ engine: { kind: 'preferred', preferred: 'docker' } });
+            const podman = service.getReadiness({
+                engine: { kind: 'preferred', preferred: 'podman' }, forceRefresh: true,
+            });
+            const duplicate = service.getReadiness({
+                engine: { kind: 'preferred', preferred: 'podman' }, forceRefresh: true,
+            });
+            expect(getClient).toHaveBeenCalledTimes(2);
+            release();
+            expect(await docker).toMatchObject({ preferredEngine: 'docker', cliFallback: false });
+            const podmanResult = await podman;
+            expect(podmanResult).toMatchObject({ preferredEngine: 'podman', cliFallback: true });
+            expect(await duplicate).toBe(podmanResult);
+        });
+    });
+
     it.each([
         {
             state: 'ready',

@@ -5,7 +5,13 @@
 
 import { DockerClient, PodmanClient } from '@microsoft/vscode-container-client';
 import { describe, expect, it, vi } from 'vitest';
-import { createContainerClient, findOnPath, resolveContainerCli, resolvePinnedContainerCli } from './containerCli';
+import {
+    type ContainerCli,
+    createContainerClient,
+    findOnPath,
+    resolveContainerCli,
+    resolvePinnedContainerCli,
+} from './containerCli';
 
 function lookup(present: ReadonlyArray<string>, platform: NodeJS.Platform = 'darwin', env?: NodeJS.ProcessEnv) {
     return {
@@ -18,67 +24,84 @@ function lookup(present: ReadonlyArray<string>, platform: NodeJS.Platform = 'dar
 const windowsEnv = { Path: 'C:\\Windows;C:\\Program Files\\RedHat\\Podman;C:\\tools', PATHEXT: '.COM;.EXE;.CMD' };
 
 describe('resolveContainerCli', () => {
+    it('defaults the preference to Docker', () => {
+        expect(resolveContainerCli(undefined, lookup(['/usr/local/bin/docker', '/opt/podman/bin/podman'])))
+            .toMatchObject({ cli: 'docker', preferred: 'docker', fellBack: false });
+    });
+
     it('prefers docker when both are on PATH', () => {
-        expect(resolveContainerCli(lookup(['/usr/local/bin/docker', '/opt/podman/bin/podman']))).toEqual({
+        expect(resolveContainerCli('docker', lookup(['/usr/local/bin/docker', '/opt/podman/bin/podman']))).toEqual({
             cli: 'docker',
             executable: 'docker',
             onPath: { docker: true, podman: true },
+            preferred: 'docker',
+            fellBack: false,
         });
     });
 
     it('falls back to podman when docker is missing', () => {
-        expect(resolveContainerCli(lookup(['/opt/podman/bin/podman']))).toEqual({
+        expect(resolveContainerCli('docker', lookup(['/opt/podman/bin/podman']))).toEqual({
             cli: 'podman',
             executable: 'podman',
             onPath: { docker: false, podman: true },
+            preferred: 'docker',
+            fellBack: true,
         });
     });
 
     it('stays on docker when neither is installed so readiness reports the missing CLI', () => {
-        expect(resolveContainerCli(lookup([]))).toEqual({
+        expect(resolveContainerCli('docker', lookup([]))).toEqual({
             cli: 'docker',
             executable: 'docker',
             onPath: { docker: false, podman: false },
+            preferred: 'docker',
+            fellBack: false,
         });
     });
 
     it('runs the absolute podman.exe path on Windows, found through Path and PATHEXT', () => {
         expect(
-            resolveContainerCli(lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', windowsEnv)),
+            resolveContainerCli('docker', lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', windowsEnv)),
         ).toEqual({
             cli: 'podman',
             executable: 'C:\\Program Files\\RedHat\\Podman\\podman.EXE',
             onPath: { docker: false, podman: true },
+            preferred: 'docker',
+            fellBack: true,
         });
     });
 
     it('follows podman to its new location on Windows', () => {
-        expect(resolveContainerCli(lookup(['C:\\tools\\podman.CMD'], 'win32', windowsEnv)).executable).toBe(
+        expect(resolveContainerCli('docker', lookup(['C:\\tools\\podman.CMD'], 'win32', windowsEnv)).executable).toBe(
             'C:\\tools\\podman.CMD',
         );
     });
 
     it('reads a quoted Windows PATH entry', () => {
         const env = { Path: '"C:\\Program Files\\RedHat\\Podman";C:\\Windows', PATHEXT: '.EXE' };
-        expect(resolveContainerCli(lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', env))).toEqual({
+        expect(resolveContainerCli('docker', lookup(['C:\\Program Files\\RedHat\\Podman\\podman.EXE'], 'win32', env))).toEqual({
             cli: 'podman',
             executable: 'C:\\Program Files\\RedHat\\Podman\\podman.EXE',
             onPath: { docker: false, podman: true },
+            preferred: 'docker',
+            fellBack: true,
         });
     });
 
     it('reports Docker alone on PATH without changing the selected executable', () => {
-        expect(resolveContainerCli(lookup(['/usr/local/bin/docker']))).toEqual({
+        expect(resolveContainerCli('docker', lookup(['/usr/local/bin/docker']))).toEqual({
             cli: 'docker',
             executable: 'docker',
             onPath: { docker: true, podman: false },
+            preferred: 'docker',
+            fellBack: false,
         });
     });
 
     it('looks up each CLI once even when Docker wins', () => {
         const isExecutable = vi.fn(() => true);
         expect(
-            resolveContainerCli({
+            resolveContainerCli('docker', {
                 platform: 'linux',
                 environmentVariables: { PATH: '/usr/bin' },
                 isExecutable,
@@ -87,12 +110,55 @@ describe('resolveContainerCli', () => {
             cli: 'docker',
             executable: 'docker',
             onPath: { docker: true, podman: true },
+            preferred: 'docker',
+            fellBack: false,
         });
         expect(isExecutable.mock.calls).toEqual([['/usr/bin/docker'], ['/usr/bin/podman']]);
     });
 
     it('ignores empty PATH entries instead of probing the working directory', () => {
         expect(findOnPath('podman', lookup(['podman'], 'linux', { PATH: ':/usr/bin:' }))).toBeUndefined();
+    });
+
+    it.each(['docker', 'podman'] as const)('resolves %s across the complete PATH presence matrix', (preferred) => {
+        for (const docker of [false, true]) {
+            for (const podman of [false, true]) {
+                const present = [
+                    ...(docker ? ['/usr/local/bin/docker'] : []),
+                    ...(podman ? ['/opt/podman/bin/podman'] : []),
+                ];
+                const other = preferred === 'docker' ? 'podman' : 'docker';
+                const onPath = { docker, podman };
+                const cli: ContainerCli = onPath[preferred] || !onPath[other] ? preferred : other;
+                expect(resolveContainerCli(preferred, lookup(present))).toEqual({
+                    cli, executable: cli, onPath, preferred, fellBack: cli !== preferred,
+                });
+            }
+        }
+    });
+
+    it('checks both CLIs even when the preferred Podman is found', () => {
+        const isExecutable = vi.fn(() => true);
+        resolveContainerCli('podman', {
+            platform: 'linux', environmentVariables: { PATH: '/usr/bin' }, isExecutable,
+        });
+        expect(isExecutable.mock.calls).toEqual([['/usr/bin/docker'], ['/usr/bin/podman']]);
+    });
+
+    it('re-reads changed PATH on the next resolution', () => {
+        const environmentVariables = { PATH: '/old' };
+        const options = lookup(['/old/docker', '/new/podman'], 'linux', environmentVariables);
+        expect(resolveContainerCli('podman', options)).toMatchObject({ cli: 'docker', fellBack: true });
+        environmentVariables.PATH = '/new';
+        expect(resolveContainerCli('podman', options)).toMatchObject({ cli: 'podman', fellBack: false });
+    });
+
+    it('preserves the preferred Windows executable and PATHEXT order', () => {
+        expect(resolveContainerCli('podman', lookup([
+            'C:\\tools\\docker.EXE', 'C:\\tools\\podman.COM', 'C:\\tools\\podman.EXE',
+        ], 'win32', windowsEnv))).toMatchObject({
+            cli: 'podman', executable: 'C:\\tools\\podman.COM', preferred: 'podman', fellBack: false,
+        });
     });
 });
 
@@ -111,7 +177,9 @@ describe('createContainerClient', () => {
             ).toEqual({
                 cli: 'podman',
                 executable: 'podman',
-                onPath: { docker: false, podman: true },
+                onPath: { docker: true, podman: true },
+                preferred: 'podman',
+                fellBack: false,
             });
         });
 
@@ -119,7 +187,9 @@ describe('createContainerClient', () => {
             expect(resolvePinnedContainerCli('podman', lookup(['/usr/local/bin/docker']))).toEqual({
                 cli: 'podman',
                 executable: 'podman',
-                onPath: { docker: false, podman: false },
+                onPath: { docker: true, podman: false },
+                preferred: 'podman',
+                fellBack: false,
             });
         });
 

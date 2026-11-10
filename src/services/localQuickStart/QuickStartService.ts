@@ -46,7 +46,7 @@ import {
     type RuntimeImageFacts,
     SETUP_CLEANUP_TIMEOUT_MS,
 } from './ContainerRuntime';
-import { type ContainerCli, type ResolvedContainerCli } from './containerCli';
+import { type ContainerCli, type ContainerEngineRequest, type ResolvedContainerCli } from './containerCli';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
 import { maskSecrets, sanitizeOutput } from './outputMasking';
 import {
@@ -76,6 +76,7 @@ import {
     containerName,
     DEFAULT_ALIAS,
     type DockerHostEnvironment,
+    type DockerLaunchResult,
     type DockerReadiness,
     type InstanceMetadata,
     InstanceState,
@@ -494,16 +495,18 @@ export class QuickStartServiceImpl {
     private hydrated = false;
     private readonly engineReadiness = new Map<ContainerCli, DockerReadiness>();
 
-    private async resolveInstanceCli(alias: string): Promise<ResolvedContainerCli> {
+    private async engineRequestFor(alias: string, preferred: ContainerCli = 'docker'): Promise<ContainerEngineRequest> {
         const entry = this.stateFor(alias);
         const record = await getInstance(alias);
         const cli = record?.engineCli ?? entry.engineCli;
         if (record?.engineCli) {
             entry.engineCli = record.engineCli;
         }
-        return this.runtime.resolveCli(
-            cli ? { kind: 'pinned', cli } : { kind: 'preferred', preferred: 'docker' },
-        );
+        return cli ? { kind: 'pinned', cli } : { kind: 'preferred', preferred: record ? 'docker' : preferred };
+    }
+
+    private async resolveInstanceCli(alias: string): Promise<ResolvedContainerCli> {
+        return this.runtime.resolveCli(await this.engineRequestFor(alias));
     }
 
     private async engineFor(alias: string): Promise<IContainerEngineOps> {
@@ -619,13 +622,33 @@ export class QuickStartServiceImpl {
     /** Check Docker and retain the result for tree presentation. */
     public async checkDockerReadiness(
         request?: Parameters<IContainerRuntime['isDockerReady']>[0],
+        selection?: Pick<ResolvedContainerCli, 'cli' | 'preferred' | 'fellBack'>,
     ): Promise<DockerReadiness> {
-        const readiness = await this.runtime.isDockerReady(request);
+        const checked = await this.runtime.isDockerReady(request);
+        const readiness =
+            selection && checked.cli === selection.cli
+                ? { ...checked, preferredEngine: selection.preferred, cliFallback: selection.fellBack }
+                : checked;
         const cli = readiness.cli ?? (request?.engine?.kind === 'pinned' ? request.engine.cli : undefined);
         if (cli) {
             this.engineReadiness.set(cli, readiness);
         }
         return readiness;
+    }
+
+    public async checkInstanceDockerReadiness(
+        request: Parameters<IContainerRuntime['isDockerReady']>[0] = {},
+        preferred: ContainerCli = 'docker',
+        alias: string = DEFAULT_ALIAS,
+    ): Promise<DockerReadiness> {
+        return this.checkDockerReadiness({ ...request, engine: await this.engineRequestFor(alias, preferred) });
+    }
+
+    public async startDockerProvider(
+        preferred: ContainerCli = 'docker',
+        alias: string = DEFAULT_ALIAS,
+    ): Promise<DockerLaunchResult> {
+        return this.runtime.startAvailableDockerProvider(await this.engineRequestFor(alias, preferred));
     }
 
     public getStatus(alias: string = DEFAULT_ALIAS): QuickStartStatus {
@@ -842,7 +865,8 @@ export class QuickStartServiceImpl {
         // generated ones would fail against existing data.
         const startFresh = options?.startFresh === true;
         const priorState = this.stateFor(alias).state;
-        const resolved = await this.resolveInstanceCli(alias);
+        const engineRequest = await this.engineRequestFor(alias, options?.preferredEngine);
+        const resolved = this.runtime.resolveCli(engineRequest);
         const engine = this.runtime.forCli(resolved);
         const stored = startFresh ? undefined : await this.getReusableCredentials(alias);
         const wantsCustomCredentials = !!(options?.username && options?.password);
@@ -933,7 +957,10 @@ export class QuickStartServiceImpl {
             // --- checking ---
             yield stageEvent('checking', 'active');
             const readiness = await this.runProvisionStage('checking', provisionCorrelationId, async () => {
-                const result = await this.checkDockerReadiness({ engine: { kind: 'pinned', cli: resolved.cli } });
+                const result = await this.checkDockerReadiness(
+                    { engine: { kind: 'pinned', cli: resolved.cli } },
+                    resolved,
+                );
                 this.throwIfAborted(signal);
                 const continueAfterIndeterminateReadiness =
                     options?.continueAnyway === true && result.outcome === 'indeterminate';
@@ -1309,7 +1336,7 @@ export class QuickStartServiceImpl {
             const aborted = signal.aborted;
             createTimedOut = error instanceof DockerCommandTimeoutError;
             const dockerReadiness =
-                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness(resolved.cli) : undefined;
+                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness(resolved) : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
             const detail = errMessage(error);
             if (error instanceof ReadinessTimeoutError || error instanceof ReadinessFailedError) {
@@ -1322,7 +1349,12 @@ export class QuickStartServiceImpl {
             let message: QuickStartMessage = aborted ? { key: 'setupCancelled' } : { key: 'unexpectedFailure', detail };
             if (!aborted && error instanceof DockerNotReadyError) {
                 this.stateFor(alias).pendingReadiness = undefined;
-                message = { key: error.messageKey };
+                message = {
+                    key: error.messageKey,
+                    ...(error.messageKey === 'dockerCliMissing' && engineRequest.kind === 'pinned'
+                        ? { engineCli: resolved.cli }
+                        : {}),
+                };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('checking', 'error', message);
             } else if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
@@ -1479,14 +1511,17 @@ export class QuickStartServiceImpl {
         }
     }
 
-    private async getProvisioningDockerReadiness(engineCli: ContainerCli): Promise<DockerReadiness | undefined> {
+    private async getProvisioningDockerReadiness(selection: ResolvedContainerCli): Promise<DockerReadiness | undefined> {
         try {
             // Echo only failing probes: a healthy `docker info` dump would bury the real error in the setup log.
-            const readiness = await this.checkDockerReadiness({
-                forceRefresh: true,
-                suppressCommandEcho: true,
-                engine: { kind: 'pinned', cli: engineCli },
-            });
+            const readiness = await this.checkDockerReadiness(
+                {
+                    forceRefresh: true,
+                    suppressCommandEcho: true,
+                    engine: { kind: 'pinned', cli: selection.cli },
+                },
+                selection,
+            );
             return readiness.outcome === 'diagnosed' ? readiness : undefined;
         } catch {
             meterQuickStartSilentCatch('provision_getDockerReadiness');
@@ -2952,10 +2987,10 @@ export class QuickStartServiceImpl {
                 if (record && entry.state === InstanceState.NotInstalled) {
                     entry.displayName = record.displayName;
                     entry.port = record.port;
+                    const cliMissing = this.engineReadiness.get(owner)?.cliInstalled === false;
                     this.setStatus(alias, InstanceState.Error, undefined, {
-                        key: this.engineReadiness.get(owner)?.cliInstalled === false
-                            ? 'dockerCliMissing'
-                            : 'dockerDaemonUnreachable',
+                        key: cliMissing ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
+                        ...(cliMissing && record.engineCli ? { engineCli: record.engineCli } : {}),
                     });
                 }
                 count('skippedUnavailableEngine');

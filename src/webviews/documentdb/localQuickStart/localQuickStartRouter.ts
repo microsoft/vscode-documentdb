@@ -22,7 +22,7 @@ import { CancellationTokenLike } from '@microsoft/vscode-processutils';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { getQuickStartOutputChannel, startDockerProvider } from '../../../services/localQuickStart/ContainerRuntime';
+import { getQuickStartOutputChannel } from '../../../services/localQuickStart/ContainerRuntime';
 import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/dockerRecoveryCommands';
 import { getPasswordEncodingProblem } from '../../../services/localQuickStart/quickStartCredentials';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
@@ -70,6 +70,7 @@ function getCustomCredentialProblem(username = '', password = ''): CredentialVal
  */
 const advancedOptionsSchema = z
     .object({
+        preferredEngine: z.enum(['docker', 'podman']).optional(),
         port: z.number().int().min(1024).max(65535).optional(),
         // Not trimmed: the credentials are stored exactly as sent, so surrounding whitespace is
         // rejected rather than silently removed.
@@ -160,6 +161,7 @@ export const localQuickStartRouter = router({
                     polled: z.boolean().optional(),
                     resetProviderMemory: z.boolean().optional(),
                     suppressCommandEcho: z.boolean().optional(),
+                    preferredEngine: z.enum(['docker', 'podman']).optional(),
                 })
                 .optional(),
         )
@@ -169,12 +171,15 @@ export const localQuickStartRouter = router({
                 tctx.actionContext.telemetry.suppressAll = true;
             }
             const cancellationToken = ctx.signal ? CancellationTokenLike.fromAbortSignal(ctx.signal) : undefined;
-            const readiness = await QuickStartService.checkDockerReadiness({
-                forceRefresh: input?.forceRefresh,
-                resetProviderMemory: input?.resetProviderMemory,
-                suppressCommandEcho: input?.suppressCommandEcho,
-                cancellationToken,
-            });
+            const readiness = await QuickStartService.checkInstanceDockerReadiness(
+                {
+                    forceRefresh: input?.forceRefresh,
+                    resetProviderMemory: input?.resetProviderMemory,
+                    suppressCommandEcho: input?.suppressCommandEcho,
+                    cancellationToken,
+                },
+                input?.preferredEngine,
+            );
             // Refresh the live container state so the panel opens with an accurate badge
             // (e.g. Missing when the container was removed in another window), which drives
             // whether the Advanced credential/image fields are shown (§12).
@@ -268,12 +273,14 @@ export const localQuickStartRouter = router({
         }),
 
     /** Revalidate and launch the provider action selected by the extension host. */
-    startDockerProvider: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
-        const tctx = sessionContext(ctx);
-        const result = await startDockerProvider();
-        tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
-        return result;
-    }),
+    startDockerProvider: publicProcedureWithTelemetry
+        .input(z.object({ preferredEngine: z.enum(['docker', 'podman']).default('docker') }).optional())
+        .mutation(async ({ ctx, input }) => {
+            const tctx = sessionContext(ctx);
+            const result = await QuickStartService.startDockerProvider(input?.preferredEngine ?? 'docker');
+            tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
+            return result;
+        }),
 
     /**
      * Success hand-off (§5.5): open the managed instance in the Connections view.

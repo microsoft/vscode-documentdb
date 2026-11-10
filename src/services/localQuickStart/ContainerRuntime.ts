@@ -147,6 +147,7 @@ export interface RuntimeImageFacts {
  */
 export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
+    startAvailableDockerProvider(request: ContainerEngineRequest): Promise<DockerLaunchResult>;
     isPortFree(port?: number): Promise<boolean>;
     resolveCli(request: ContainerEngineRequest): ResolvedContainerCli;
     forCli(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): IContainerEngineOps;
@@ -213,7 +214,9 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     });
 
     public resolveCli(request: ContainerEngineRequest): ResolvedContainerCli {
-        return request.kind === 'pinned' ? resolvePinnedContainerCli(request.cli) : resolveContainerCli();
+        return request.kind === 'pinned'
+            ? resolvePinnedContainerCli(request.cli)
+            : resolveContainerCli(request.preferred);
     }
 
     private engineFor(resolved: Pick<ResolvedContainerCli, 'cli' | 'executable'>): ContainerEngineOps {
@@ -234,8 +237,8 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         return this.readinessService.getReadiness(request);
     }
 
-    public async startAvailableDockerProvider(): Promise<DockerLaunchResult> {
-        const readiness = await this.readinessService.getReadiness({ forceRefresh: true });
+    public async startAvailableDockerProvider(request: ContainerEngineRequest): Promise<DockerLaunchResult> {
+        const readiness = await this.readinessService.getReadiness({ engine: request, forceRefresh: true });
         if (!readiness.startAction) {
             return 'notAvailable';
         }
@@ -631,6 +634,8 @@ export const ContainerRuntime: IContainerRuntime = containerRuntime;
 /**
  * Recompute provider capability and revalidate the selected action immediately before launch.
  */
-export async function startDockerProvider(): Promise<DockerLaunchResult> {
-    return containerRuntime.startAvailableDockerProvider();
+export async function startDockerProvider(
+    request: ContainerEngineRequest = { kind: 'preferred', preferred: 'docker' },
+): Promise<DockerLaunchResult> {
+    return containerRuntime.startAvailableDockerProvider(request);
 }

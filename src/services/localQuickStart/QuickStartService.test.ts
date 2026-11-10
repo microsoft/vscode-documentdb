@@ -115,11 +115,14 @@ interface IContainerRuntime extends ContainerRuntimeHost, IContainerEngineOps {}
 function mockRuntime(overrides: Partial<IContainerRuntime>): IContainerRuntime {
     const runtime: IContainerRuntime = {
         resolveCli: vi.fn((request: ContainerEngineRequest) => ({
-            cli: request.kind === 'pinned' ? request.cli : 'docker',
-            executable: request.kind === 'pinned' ? request.cli : 'docker',
+            cli: request.kind === 'pinned' ? request.cli : request.preferred,
+            executable: request.kind === 'pinned' ? request.cli : request.preferred,
             onPath: { docker: true, podman: true },
+            preferred: request.kind === 'pinned' ? request.cli : request.preferred,
+            fellBack: false,
         })),
         forCli: vi.fn(() => runtime),
+        startAvailableDockerProvider: vi.fn().mockResolvedValue('notAvailable'),
         listByLabel: vi.fn().mockResolvedValue([]),
         inspectContainer: vi.fn().mockResolvedValue(undefined),
         inspectImage: vi.fn().mockResolvedValue(undefined),
