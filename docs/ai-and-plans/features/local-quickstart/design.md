@@ -27,6 +27,15 @@ verified: 2026-08-14
 > supersedes the Docker Desktop-only examples in this historical design. Docker
 > Engine and Docker Desktop are supported providers; the prerequisite is a Docker
 > CLI that can reach a Linux-container daemon from the extension host.
+>
+> **Approved follow-up, not implemented (2026-11-10):**
+> [iteration 12](./iterations/12-preferred-engine-and-podman-start.md) adds a Container engine
+> preference in Configure with Docker always the default and no availability checks.
+> Execution detects both Docker and Podman CLIs, selects the preferred one if installed,
+> and otherwise falls back to the other. Existing instances keep their owning engine;
+> Podman machine start is offered only on macOS and Windows with a detected eligible machine.
+> This approved plan supersedes the older Docker-only assumptions below for future work,
+> not as a statement of implemented behavior.
 
 ---
 

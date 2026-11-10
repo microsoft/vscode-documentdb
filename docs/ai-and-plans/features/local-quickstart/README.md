@@ -76,6 +76,11 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   appropriate.
 - **Podman machine startup is manual for now.** On macOS and Windows, users initialize and start
   the machine from a terminal; the extension does not provide a Podman start button yet.
+- **Approved follow-up, not implemented:** [iteration 12](./iterations/12-preferred-engine-and-podman-start.md)
+  adds a check-free Container engine preference in Configure, always defaulting to Docker.
+  Only execution detects both CLIs, uses the preference if installed and otherwise falls back.
+  Instances retain their owning engine, and a Podman machine start button is gated to macOS
+  and Windows. This replaces iteration 10's parked W1/W8 proposal, not the current behavior above.
 - **Collision safety is non-negotiable.** A pre-existing container holding a planned name or port is
   never recreated over. Ours gets re-adopted; anything else is rejected with an inline error.
 - **Existing data is preserved.** A managed container with no stored credentials has them restored
@@ -107,6 +112,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-10-15 | #1018 | Image usage telemetry follows VS Code's setting              | [decisions.md#0007](./decisions.md#0007---image-usage-telemetry-follows-vs-codes-setting)                                                                      |
 | 2026-11-09 | —     | Partial container-runtime transparency; W1/W5/W8 pending     | [iterations/10-container-runtime-transparency.md](./iterations/10-container-runtime-transparency.md); [user manual](../../../user-manual/local-quick-start.md) |
 | 2026-11-10 | —     | Details on settled Set up and Done stages; no step durations | [iterations/11-setup-stage-details.md](./iterations/11-setup-stage-details.md)                                                                                 |
+| 2026-11-10 | —     | Approved plan only: check-free Docker-default preference, execution-time fallback, Podman start | [iterations/12-preferred-engine-and-podman-start.md](./iterations/12-preferred-engine-and-podman-start.md) |
 
 ## Decisions
 
@@ -133,5 +139,6 @@ correlation ids (0006), and the image's usage telemetry following VS Code's sett
 2. [design.md](./design.md) — the current UX and architecture design (iteration 2)
 3. [decisions.md](./decisions.md) — why the model is what it is
 
-`design-iteration-1.md` and everything under `iterations/` is history. Read a specific iteration
-only when you need provenance for a particular behavior.
+`design-iteration-1.md` and implemented or superseded iterations are history. Read a specific
+iteration only when you need provenance for a particular behavior. Iteration 12 is an approved,
+not-yet-implemented plan; its intended behavior must not be mistaken for current product behavior.
