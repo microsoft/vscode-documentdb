@@ -56,16 +56,16 @@ is not the accepted stage-Details decision now recorded as 0008 in [decisions.md
 
 ## 2. How it works today
 
-| Area | Today | Source |
-| --- | --- | --- |
-| CLI choice | `resolveContainerCli`: Docker if `docker` is on PATH, else Podman if `podman` is, else Docker, so readiness can report a missing CLI. Both PATH results are already returned as `onPath`. It is re-resolved on every readiness check. | `containerCli.ts` |
-| Which client runs commands | `ContainerRuntimeImpl` holds **one** `client`. `refreshClient()` replaces it during readiness, and pull, run, inspect, start, stop, remove, volume, exec and logs all use whichever client was last resolved. | `ContainerRuntime.ts` |
-| Instance record | `alias`, `displayName`, `port`, `phase`, `imageRef`. It does **not** record which engine holds the container and its data volume. | `quickStartStore.ts` |
-| Provider memory | `globalState` key `DOCKER_PROVIDER_MEMORY_KEY`. It is written on every reachable check, for **any** CLI: Podman writes `provider: 'unknown'` over a Docker record. It is read while the daemon is down, to classify `rememberedProvider`, `daemonStarting` and the Docker Desktop start action on Linux. | `DockerReadinessService.ts` (`runReadiness`) |
-| The W1 leak | With the Podman CLI and the daemon down, a remembered `dockerDesktop`, or Docker Desktop installed on disk (`installedApplication`), can make the panel offer **Start Docker Desktop** to a Podman user. | `classifyDockerProvider`, `getDockerStartCapability` |
-| Start actions | Docker Desktop (Windows, macOS, Linux, Windows from WSL) and rootless Docker Engine (Linux). There is no Podman action yet. | `DockerProviderLauncher.ts` |
-| Platform signal | `detectDockerHostEnvironment` returns `windows`, `macos`, `linux`, `wsl`, `ssh`, `devContainer`, `codespaces`, `otherRemote` or `unsupported`. | `DockerReadinessService.ts` |
-| Introduction copy (W4) | Plan step 1 says "…Docker is used when both are installed." | `LocalQuickStart.tsx`, `build/verification/browser/scenarios.ts` |
+| Area                       | Today                                                                                                                                                                                                                                                                                                    | Source                                                           |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| CLI choice                 | `resolveContainerCli`: Docker if `docker` is on PATH, else Podman if `podman` is, else Docker, so readiness can report a missing CLI. Both PATH results are already returned as `onPath`. It is re-resolved on every readiness check.                                                                    | `containerCli.ts`                                                |
+| Which client runs commands | `ContainerRuntimeImpl` holds **one** `client`. `refreshClient()` replaces it during readiness, and pull, run, inspect, start, stop, remove, volume, exec and logs all use whichever client was last resolved.                                                                                            | `ContainerRuntime.ts`                                            |
+| Instance record            | `alias`, `displayName`, `port`, `phase`, `imageRef`. It does **not** record which engine holds the container and its data volume.                                                                                                                                                                        | `quickStartStore.ts`                                             |
+| Provider memory            | `globalState` key `DOCKER_PROVIDER_MEMORY_KEY`. It is written on every reachable check, for **any** CLI: Podman writes `provider: 'unknown'` over a Docker record. It is read while the daemon is down, to classify `rememberedProvider`, `daemonStarting` and the Docker Desktop start action on Linux. | `DockerReadinessService.ts` (`runReadiness`)                     |
+| The W1 leak                | With the Podman CLI and the daemon down, a remembered `dockerDesktop`, or Docker Desktop installed on disk (`installedApplication`), can make the panel offer **Start Docker Desktop** to a Podman user.                                                                                                 | `classifyDockerProvider`, `getDockerStartCapability`             |
+| Start actions              | Docker Desktop (Windows, macOS, Linux, Windows from WSL) and rootless Docker Engine (Linux). There is no Podman action yet.                                                                                                                                                                              | `DockerProviderLauncher.ts`                                      |
+| Platform signal            | `detectDockerHostEnvironment` returns `windows`, `macos`, `linux`, `wsl`, `ssh`, `devContainer`, `codespaces`, `otherRemote` or `unsupported`.                                                                                                                                                           | `DockerReadinessService.ts`                                      |
+| Introduction copy (W4)     | Plan step 1 says "…Docker is used when both are installed."                                                                                                                                                                                                                                              | `LocalQuickStart.tsx`, `build/verification/browser/scenarios.ts` |
 
 **A gap this plan must close first.** With a preference, Docker and Podman can both be installed
 and the instance can live in Podman. Lifecycle commands from the tree (Start, Stop, Delete,
@@ -111,11 +111,11 @@ export function resolveContainerCli(preferred: ContainerCli = 'docker', lookup?:
 A new row in the existing settings table (`SettingItem`), placed first, because it decides where
 everything else runs:
 
-| State | Summary value | Editor |
-| --- | --- | --- |
-| Fresh setup, untouched | `Docker` | Radio group: **Docker** · **Podman**, with Docker selected regardless of what is installed. |
-| Fresh setup, user chooses Podman | `Podman` | Same radio group. No availability badges or detection results. |
-| Recreate onto existing data | `Podman · kept from the existing instance` (read-only example) | None. The stored instance's engine owns its data volume (§3.3); this is not an environment-derived preference default. |
+| State                            | Summary value                                                  | Editor                                                                                                                 |
+| -------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Fresh setup, untouched           | `Docker`                                                       | Radio group: **Docker** · **Podman**, with Docker selected regardless of what is installed.                            |
+| Fresh setup, user chooses Podman | `Podman`                                                       | Same radio group. No availability badges or detection results.                                                         |
+| Recreate onto existing data      | `Podman · kept from the existing instance` (read-only example) | None. The stored instance's engine owns its data volume (§3.3); this is not an environment-derived preference default. |
 
 - **Configure performs no engine checks and does not wait for them.** Do not call
   `getDockerStatus`, the CLI resolver, platform detection or readiness from wizard mount,
@@ -176,14 +176,14 @@ everything else runs:
 The button is chosen for the **engine this run selected** (preference, then fallback), from
 execution-time evidence:
 
-| Run's engine | Platform (`environment`) | Live evidence at check time | Button |
-| --- | --- | --- | --- |
-| Docker | any | as today (Docker Desktop installed, active context, rootless socket) | as today |
-| Podman CLI | `macos`, `windows` | `daemonUnavailable`, and `podman machine list` shows a stopped target machine (§3.6) | **Start Podman machine** |
-| Podman CLI | `macos`, `windows` | no machine | none. Guidance: run `podman machine init`, with Copy |
-| Podman CLI | `linux`, `wsl` | any | none. Copy command `systemctl --user start podman.socket` |
-| Docker CLI connected to Podman (shim, positive) | `macos`, `windows` | as for the Podman CLI, using the `podman` executable when it is on PATH | **Start Podman machine** |
-| any | `ssh`, `devContainer`, `codespaces`, `otherRemote` | any | none (the engine is not on this machine) |
+| Run's engine                                    | Platform (`environment`)                           | Live evidence at check time                                                          | Button                                                    |
+| ----------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Docker                                          | any                                                | as today (Docker Desktop installed, active context, rootless socket)                 | as today                                                  |
+| Podman CLI                                      | `macos`, `windows`                                 | `daemonUnavailable`, and `podman machine list` shows a stopped target machine (§3.6) | **Start Podman machine**                                  |
+| Podman CLI                                      | `macos`, `windows`                                 | no machine                                                                           | none. Guidance: run `podman machine init`, with Copy      |
+| Podman CLI                                      | `linux`, `wsl`                                     | any                                                                                  | none. Copy command `systemctl --user start podman.socket` |
+| Docker CLI connected to Podman (shim, positive) | `macos`, `windows`                                 | as for the Podman CLI, using the `podman` executable when it is on PATH              | **Start Podman machine**                                  |
+| any                                             | `ssh`, `devContainer`, `codespaces`, `otherRemote` | any                                                                                  | none (the engine is not on this machine)                  |
 
 - **Platform gate (W8).** Only `macos` and `windows` run Podman in a machine. On Linux and in WSL,
   Podman runs natively, so there is no machine to start, and a socket-down state has only inferred
@@ -296,15 +296,15 @@ This documentation-only approval does not start those implementation checks.
 The operator approved the recommended choices below, with Q4 and Q7 amended so Configure
 does not check availability and always defaults to Docker for a fresh preference.
 
-| # | Question | Approved resolution |
-| --- | --- | --- |
-| Q1 | What happens to provider memory? | **A.** None for Podman runs; Docker's memory unchanged |
-| Q2 | When does setup fall back to the other engine? | **A.** During execution, only when the preferred CLI is not found |
-| Q3 | Does the instance record its engine? | **A.** Yes, `engineCli` on the record |
-| Q4 | Is the preference itself persisted? | **A, amended.** No; a fresh Configure form always defaults to Docker, without detection |
-| Q5 | When the selected engine is down, is the other engine offered? | **A.** No; one button, for the selected engine only |
-| Q6 | Which Podman machine does the button start? | **A.** The `Default: true` machine by name; the only machine if just one; else no button |
-| Q7 | Where does the Configure row appear? | **A, amended.** Always, first in the table, with static choices and no availability hints |
+| #   | Question                                                       | Approved resolution                                                                       |
+| --- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Q1  | What happens to provider memory?                               | **A.** None for Podman runs; Docker's memory unchanged                                    |
+| Q2  | When does setup fall back to the other engine?                 | **A.** During execution, only when the preferred CLI is not found                         |
+| Q3  | Does the instance record its engine?                           | **A.** Yes, `engineCli` on the record                                                     |
+| Q4  | Is the preference itself persisted?                            | **A, amended.** No; a fresh Configure form always defaults to Docker, without detection   |
+| Q5  | When the selected engine is down, is the other engine offered? | **A.** No; one button, for the selected engine only                                       |
+| Q6  | Which Podman machine does the button start?                    | **A.** The `Default: true` machine by name; the only machine if just one; else no button  |
+| Q7  | Where does the Configure row appear?                           | **A, amended.** Always, first in the table, with static choices and no availability hints |
 
 ### Q1 — What happens to provider memory?
 
