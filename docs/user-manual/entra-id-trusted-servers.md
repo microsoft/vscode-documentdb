@@ -12,6 +12,10 @@ explicitly trusted, narrow service suffix. This applies to **account sign-in and
 whether a connection comes from a link, a pasted string, a saved or edited connection, the shell,
 or the Query Playground. Username/password and no-authentication connections are unchanged.
 
+The authentication method you select is authoritative. When you select Username and Password
+or No Authentication, conflicting URI options that would make the driver perform OIDC are removed
+from the runtime connection. Other native authentication options and TLS settings are preserved.
+
 If you see **Microsoft Entra ID isn't allowed for this server**, check the connection string
 before changing any setting. Choosing **Learn More** opens this page; it does not grant trust or
 fill in settings.

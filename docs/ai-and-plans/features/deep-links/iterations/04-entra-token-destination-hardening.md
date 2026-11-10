@@ -5,6 +5,9 @@ status: implemented
 created: 2026-11-10
 code:
     - src/documentdb/auth/oidcAllowedHosts.ts
+    - src/documentdb/auth/nonOidcConnectionString.ts
+    - src/documentdb/auth/NativeAuthHandler.ts
+    - src/documentdb/auth/NoAuthHandler.ts
     - src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts
     - src/documentdb/auth/ManagedIdentityAuthHandler.ts
     - src/documentdb/auth/documentdbTokenResource.ts
@@ -25,9 +28,8 @@ code:
 
 # Iteration 4 - Entra token destination hardening
 
-> **Status:** B1–B6 implemented and locally verified; B7 integration bypass fix pending.
-> Case 1 and Case 2 will be repeated after B7. Live-cloud, workbench UX and human author
-> review remain pending.
+> **Status:** B1–B7 implemented; final Case 1 and Case 2 passed locally on 2026-11-10.
+> Live-cloud, workbench UX and human author review remain pending.
 > The execution plan below records the accepted scope. The research and proposal remain as
 > supporting evidence, not a claim that the vulnerability has been fixed.
 >
@@ -168,9 +170,12 @@ main-thread paths and the common shell/playground worker branch. Genuine native 
 
 B7 adds a pure `removeConflictingOidcMechanism(connectionString: string): string` helper in
 `src/documentdb/auth/nonOidcConnectionString.ts`. It detects any case variant of an
-`authMechanism` key with a trimmed, case-insensitive `MONGODB-OIDC` value, then removes all
-case variants of both authentication keys from the runtime string. Otherwise it returns the
-input unchanged. `NativeAuthHandler`, `NoAuthHandler` and the non-Entra worker branch call it
+`authMechanism` key whose value the installed driver resolves to OIDC, then removes all
+case variants of both authentication keys from the runtime string. This includes the driver's
+ordered regex matching for abbreviated/regex-valued mechanisms, not just literal
+`MONGODB-OIDC`; exact trimmed OIDC is also removed conservatively. Otherwise it returns the
+input unchanged. Invalid regexes fail explicitly as in the driver.
+`NativeAuthHandler`, `NoAuthHandler` and the non-Entra worker branch call it
 before constructing the driver. Persisted strings are unchanged. Tests must inspect the real
 driver's effective mechanism, plus worker constructor arguments, not just string formatting.
 No new setting, dialog, fallback to Entra or trust input is introduced.
@@ -251,29 +256,40 @@ the blocking non-Entra dispatch gap. WI9 remains excluded.
   below; no production telemetry query was executed. Targeted read-only validation passed for
   14 Markdown files, 33 added local links/anchors, the explicit Learn More permalink and unchanged
   setting schema/scope. `git diff --check` passed for the owned documentation/setting files.
-  No build, lint, formatting, localization or site-rendering command was run for B5.
+  The B5 worker did not run build, lint, formatting, localization or site rendering; the later
+  full Case 2 runs covered repository formatting/localization/build checks.
 - **B6 — Done (2026-11-10), localization commit `7a0d3675c`:** first Case 1 passed 978 tests; the final expanded Case 1 passed
   **1,001 tests in 40 files** plus `npm run build`. The first full Case 2 passed every command
   except lint's twelve new-file errors; those were corrected without weakening assertions.
   The final full Case 2 rerun passed all eight commands. The
   [AI pre-review and dispositions](./05-entra-token-destination-hardening-review.md) record all
   findings and fixes. Live/cloud/workbench/localized-layout checks remain explicitly unverified.
+  After the B7 parser-parity correction, both cases were repeated in full: **1,085 focused tests
+  in 42 files**, then **6,349 full-suite tests passed and 1 skipped in 347 files**.
+- **B7 — Done (2026-11-10), commit `87c6bb52e`:** selected Native/No Authentication can no longer
+  run URI-selected machine OIDC outside the guarded handlers. Advised (`claude-opus-5.5`, high
+  confidence): match the installed driver's effective mechanism, including regex/abbreviation
+  semantics, before removing competing runtime properties. Preserve genuine native strings and
+  TLS options exactly. Four focused files passed 106 tests; TypeScript and focused lint passed.
+  The leader corrected the worker mock to expose the real enum after the helper gained that
+  dependency (one surgical test edit outside coding-agent execution).
 
-B7 is pending implementation; its plan is committed before coding. The verification results below
-are the green pre-B7 run and will be superseded by a complete repeated Case 1/Case 2 run.
-The PR will remain a draft for the operator's final review and recorded manual/live checks.
+All nine execution batches are complete. B7's additional plan was committed as `05c14f5bc`
+before its implementation. The results below supersede the pre-B7 green run and cover the
+final approved parser-parity correction. The PR remains a draft for the operator's final review
+and recorded manual/live checks; **Case 2 was not deferred**.
 
 | Verification                              | Final result                                                   |
 | ----------------------------------------- | -------------------------------------------------------------- |
 | Case 1: `npm run build`                   | Passed                                                         |
-| Case 1: all affected focused Vitest tests | 40 files, 1,001 tests passed                                   |
+| Case 1: all affected focused Vitest tests | 42 files, 1,085 tests passed                                   |
 | Case 2: `npm run l10n`                    | Passed; source bundle committed separately                     |
 | Case 2: `npm run prettier-fix`            | Passed                                                         |
 | Case 2: `npm run l10n:check`              | Passed                                                         |
 | Case 2: `npm run lint`                    | Passed after twelve lint fixes                                 |
 | Case 2: `npm run build`                   | Passed                                                         |
 | Case 2: `npm run typecheck:tests`         | Passed, exact workspace script                                 |
-| Case 2: `npx vitest run --reporter=dot`   | 345 files; 6,265 passed, 1 skipped; 84.90 seconds              |
+| Case 2: `npx vitest run --reporter=dot`   | 347 files; 6,349 passed, 1 skipped; 82.25 seconds              |
 | Case 2: `npm run package`                 | Passed; unsigned local VSIX, 204 files, 8.56 MB; not published |
 
 A sixth, narrowly scoped Opus 5.5 consultation clarified the SRV acceptance wording after the
@@ -286,29 +302,32 @@ design, not a new token-destination exception.
 
 ### Lead usage snapshot
 
-Window: 2026-11-10 15:19:08 UTC through 16:29 UTC (about 70 minutes wall-clock).
+Window: 2026-11-10 15:19:08 UTC through 16:59 UTC (about 100 minutes wall-clock).
 Source: the #1073 `agent-stats.mjs` helper and this session's host events, with explicit advisor
-roles for all five consultations. This snapshot excludes subsequent leader work and the final
-response. No failed/retried model launch occurred; sync-agent follow-up was unsupported, so
-subsequent narrower reviews used fresh contexts.
+roles for all nine completed consultations and the failed review attempt. This snapshot excludes
+subsequent leader work and the final response. One advisor launch failed with `401 Unauthorized`
+before work and was retried once on the same model. Sync-agent follow-up was unsupported, so
+subsequent narrower reviews used fresh contexts. One coding attempt stopped without edits over
+the invalid `DB-OIDC` example; the actual driver error was retained and the narrow task continued.
+All attempts, including the stopped attempt and test rework, are included where the host reports usage.
 
 | Model             | Role    | Requests | Summed model time |   AIU | Share |
 | ----------------- | ------- | -------: | ----------------: | ----: | ----: |
-| `claude-opus-5.5` | advisor |      180 |            21m32s | 770.1 | 57.7% |
-| `gpt-6.1-sol`     | leader  |       27 |             8m40s |  75.3 |  5.6% |
-| `gpt-6.1-sol`     | coding  |      225 |            48m32s | 488.7 | 36.6% |
+| `claude-opus-5.5` | advisor |      212 |            25m20s | 903.7 | 56.2% |
+| `gpt-6.1-sol`     | leader  |       52 |            17m50s | 151.3 |  9.4% |
+| `gpt-6.1-sol`     | coding  |      256 |            54m18s | 550.5 | 34.3% |
 | `gpt-5.6-luna`    | checks  |       10 |               40s |   1.1 |  0.1% |
 
-Each role has one model in this run, so these rows also give role totals. Leader: **75.3 AIU**;
-subagents: **1,259.9 AIU**; run: **1,335.2 AIU**. AIU are not dollars.
+Each role has one model in this run, so these rows also give role totals. Leader: **151.3 AIU**;
+subagents: **1,455.3 AIU**; run: **1,606.6 AIU**. AIU are not dollars.
 All coding batches used the harness default `gpt-6.1-sol`; only the operator-named advisor model
 was explicitly selected.
 
 | Model / role                |      Input |  Output | Cache read | Cache write | Reasoning |
 | --------------------------- | ---------: | ------: | ---------: | ----------: | --------: |
-| `claude-opus-5.5` / advisor | 15,204,466 | 116,667 | 14,719,685 |     484,411 |    67,944 |
-| `gpt-6.1-sol` / leader      |  2,069,542 |  28,889 |  1,962,541 |     106,920 |     5,854 |
-| `gpt-6.1-sol` / coding      | 14,909,478 | 186,307 | 14,270,512 |     638,291 |    62,592 |
+| `claude-opus-5.5` / advisor | 16,455,244 | 137,821 | 15,832,334 |     622,468 |    77,754 |
+| `gpt-6.1-sol` / leader      |  5,700,380 |  56,908 |  5,544,588 |     155,636 |    17,724 |
+| `gpt-6.1-sol` / coding      | 16,210,029 | 209,061 | 15,462,753 |     746,508 |    69,929 |
 | `gpt-5.6-luna` / checks     |    187,118 |   2,216 |    165,286 |      21,802 |     1,457 |
 
 Cache and reasoning fields may overlap input/output; they must not be added into a token total.
@@ -316,11 +335,10 @@ Summed request spans overlap and are not wall-clock elapsed time. The helper doe
 separate end-to-end check/CI duration here; command logs provide individual execution evidence.
 No hosted CI result is included in this local snapshot.
 
-The later SRV clarification is outside this snapshot: 3 requests, 23 seconds summed model time,
-20.5 AIU; input 90,662, output 1,918, cache read 59,688, cache write 30,966, reasoning 877.
-It brings the advisor consultation count to six; it did not write code or run checks.
+The snapshot includes the SRV clarification, B7 diagnosis, unsuccessful review launch, parser-parity
+finding and final B7 approval. Failed-attempt metrics absent from host events are not inferred as zero.
 
-Optimization: advising was the largest measured category. Five consultations included integration
+Optimization: advising was the largest measured category. Nine consultations included integration
 and review-driven rework; the initial broad advisor investigation was particularly expensive.
 Future runs can start with smaller source-backed decision packets and retain an available advisor
 context, while preserving the operator's chosen model and the required risky-logic review gates.

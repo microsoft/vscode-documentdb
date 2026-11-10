@@ -6,6 +6,7 @@ created: 2026-11-10
 code:
     - src/documentdb/auth/oidcAllowedHosts.ts
     - src/documentdb/auth/oidcClientOptions.ts
+    - src/documentdb/auth/nonOidcConnectionString.ts
     - src/documentdb/playground/PlaygroundEvaluator.ts
     - src/documentdb/wizards/authenticate/ChooseAuthMethodStep.ts
 ---
@@ -20,9 +21,12 @@ The leader committed the proposal (`e572791ce`) and revised execution plan (`639
 coding. This review covers the resulting stacked change against
 `dev/tnaum/url-handler-improvmements`, not `main`.
 
-Six read-only Opus consultations covered the execution plan, shared trust boundary, token
+Nine completed read-only Opus consultations covered the execution plan, shared trust boundary, token
 lifecycle/protocol harness/pickers, corrected builder/saved-connection recovery, and final
-integration, and exact SRV acceptance wording. Reviewers inspected implementation and installed driver source; their reviews did
+integration, exact SRV acceptance wording, and the B7 selected-method bypass and parser-parity correction.
+One additional review launch failed with `401 Unauthorized` before work and was retried once on
+the same requested model; no model substitution was used.
+Reviewers inspected implementation and installed driver source; their reviews did
 not run builds or use real credentials, Azure resources or production telemetry.
 Coding workers and the leader ran the local tests recorded in the source plan.
 
@@ -48,6 +52,25 @@ the hardening work, **not a claim that the human author performed their final re
 The advisor approved the corrected builder and saved-connection paths, and approved integration
 subject to the specified measurement fix, which was applied. All advisor recommendations were
 followed. No unresolved local implementation finding remains.
+
+### B7 final integration findings
+
+- **Blocking selected-method bypass:** an OIDC URI could trigger the driver's Azure/GCP/Kubernetes
+  machine workflow under No Authentication or Native with an empty password, avoiding the guarded
+  Entra handlers. Fixed in `87c6bb52e`: sanitize conflicting mechanisms in both non-Entra handlers
+  and the common worker branch before driver construction.
+- **High-confidence parser-parity correction:** the initial literal OIDC check was insufficient.
+  Driver 7.2.0 resolves mechanism values as regular expressions against its ordered enum.
+  `OIDC`, `oidc`, `-OIDC` and `MONGODB-.IDC` therefore select OIDC. The corrected helper mirrors
+  that resolution, strips every casing of both authentication keys, and preserves byte-identical
+  non-OIDC input. Invalid regexes retain explicit errors. `DB-OIDC` is actually invalid under
+  the driver's word-boundary rule; the advisor's initial example was corrected using the installed
+  driver's observed behavior rather than weakening a test.
+
+Opus approved the final B7 helper and all three call sites with high confidence. Four focused
+files passed 106 tests; root TypeScript and focused lint also passed. The worker mock exposes the
+real driver enum so tests use production mechanism order. No real network, IMDS request or
+credential was used. Recheck mechanism parsing as well as transport hooks after driver upgrades.
 
 ## Reviewed invariants
 

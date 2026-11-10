@@ -727,6 +727,11 @@ operator quotes or service-team confirmations:
 - Strip case variants of URI auth and TLS options, ignore hostname/certificate bypasses for OIDC,
   and remove URI-supplied CA/proxy trust overrides found during review. Force certificate validation
   and a policy-first hostname hook for each socket, including topology changes and reconnects.
+- Honor explicitly selected Native/No Authentication before constructing a driver client. Remove
+  competing URI mechanisms that the installed driver resolves to OIDC, including abbreviated or
+  regex-valued mechanisms, on both main-thread and worker paths. Preserve genuine native
+  mechanisms and TLS settings. This closes the B7 dispatch bypass found during final integration;
+  literal comparison to `MONGODB-OIDC` alone does not match the installed driver's parser.
 - Recheck the current custom suffix at each worker token relay against the original connection.
   Snapshot the authentication method, tenant/client identity and audience when the session starts;
   neither worker-message fields nor live `CredentialCache` entries may change the principal.
