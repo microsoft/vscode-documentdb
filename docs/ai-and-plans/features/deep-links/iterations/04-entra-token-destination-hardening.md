@@ -151,13 +151,13 @@ permissions. ARM-derived connections must still use the common authentication po
 
 ## Work items and dependencies
 
-| Work item | Deliverable | Prerequisite |
-| --- | --- | --- |
-| WI1: Endpoint inventory | Evidence-backed service suffixes, SRV/private endpoint examples, sovereign-cloud verification limits | None |
-| WI2: Shared destination policy | Fail-closed validation of all hosts, narrow driver allowlist, custom-service handling, unit tests | WI1 |
-| WI3: Authentication and worker integration | Pre-token enforcement across interactive Entra, managed identity, saved connections, shell/playground; protocol-level tests | WI2 |
-| WI4: Connection UX | Policy-aware authentication choices and clear target/error presentation without bypass | WI2 |
-| WI5: Verification and documentation | Acceptance matrix results and approved intent documented in both affected features | WI3, WI4 |
+| Work item                                  | Deliverable                                                                                                                 | Prerequisite |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| WI1: Endpoint inventory                    | Evidence-backed service suffixes, SRV/private endpoint examples, sovereign-cloud verification limits                        | None         |
+| WI2: Shared destination policy             | Fail-closed validation of all hosts, narrow driver allowlist, custom-service handling, unit tests                           | WI1          |
+| WI3: Authentication and worker integration | Pre-token enforcement across interactive Entra, managed identity, saved connections, shell/playground; protocol-level tests | WI2          |
+| WI4: Connection UX                         | Policy-aware authentication choices and clear target/error presentation without bypass                                      | WI2          |
+| WI5: Verification and documentation        | Acceptance matrix results and approved intent documented in both affected features                                          | WI3, WI4     |
 
 Implement WI2-WI4 together for the security fix. A picker-only or URL-handler-only change is not
 an acceptable substitute.
@@ -167,21 +167,21 @@ an acceptable substitute.
 Use dummy tokens and controlled local/in-memory infrastructure; no real user token should be sent
 to a test sink. Assert token-provider calls and captured authentication payloads, not only errors.
 
-| Scenario | Required result |
-| --- | --- |
-| Customer-controlled `*.cloudapp.azure.com` destination | Rejected before token acquisition; no token sent |
-| Unrelated domain, deceptive suffix, malformed connection | Explicit rejection, with no permissive fallback |
-| Mixed approved and unapproved seed hosts, in either order | Entire Entra attempt rejected before token acquisition |
-| Supported service endpoints in each supported cloud | Authentication reaches the intended server using the correct audience |
-| Legitimate SRV and private-endpoint forms | Continue to work with certificate validation enabled |
-| Initial SRV results outside policy | Rejected before requesting or transmitting a token |
-| Unapproved topology member, reconnect destination, or later SRV result | No cached or newly acquired token transmitted to that destination |
-| Saved credentials or authentication picker skipped | Same destination policy enforced |
-| Interactive Entra, managed identity, shell, playground | Equivalent destination protection |
-| Explicit trusted custom service | Works without widening the built-in policy |
-| Link-supplied audience/authentication properties or purported source | Cannot change audience or establish destination trust |
-| New-connection confirmation canceled | No connection created and no token requested |
-| Non-Entra native/password connection | Existing supported behavior preserved |
+| Scenario                                                               | Required result                                                       |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Customer-controlled `*.cloudapp.azure.com` destination                 | Rejected before token acquisition; no token sent                      |
+| Unrelated domain, deceptive suffix, malformed connection               | Explicit rejection, with no permissive fallback                       |
+| Mixed approved and unapproved seed hosts, in either order              | Entire Entra attempt rejected before token acquisition                |
+| Supported service endpoints in each supported cloud                    | Authentication reaches the intended server using the correct audience |
+| Legitimate SRV and private-endpoint forms                              | Continue to work with certificate validation enabled                  |
+| Initial SRV results outside policy                                     | Rejected before requesting or transmitting a token                    |
+| Unapproved topology member, reconnect destination, or later SRV result | No cached or newly acquired token transmitted to that destination     |
+| Saved credentials or authentication picker skipped                     | Same destination policy enforced                                      |
+| Interactive Entra, managed identity, shell, playground                 | Equivalent destination protection                                     |
+| Explicit trusted custom service                                        | Works without widening the built-in policy                            |
+| Link-supplied audience/authentication properties or purported source   | Cannot change audience or establish destination trust                 |
+| New-connection confirmation canceled                                   | No connection created and no token requested                          |
+| Non-Entra native/password connection                                   | Existing supported behavior preserved                                 |
 
 Extend the existing policy, authentication-handler, sovereign integration, authentication-picker,
 worker-manager, and URI-handler suites; add the smallest protocol harness needed to prove token
