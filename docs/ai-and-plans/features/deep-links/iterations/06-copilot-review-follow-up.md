@@ -361,3 +361,92 @@ bounded to affected hunks and dependency evidence while retaining the required t
 review. This is a cost observation, not a model-quality comparison across unlike assignments.
 
 Open implementation questions: **none**. Remaining human work is the manual checks listed first.
+
+## Independent Opus 5.5 review
+
+The operator subsequently requested an independent `claude-opus-5.5` review of the completed
+changes, supplied with the original Copilot discoveries. The leader sent all eight original
+comments verbatim, the shortened-title requirement, accepted boundaries, implementation commits
+and final check results. The reviewer independently inspected the actual diff
+`4d2fbd6cc..dee991ca8`, relevant call sites and installed driver sources. It made no edits and ran
+no tests/builds.
+
+**Verdict: no significant issues, no new high-confidence bugs or regressions; all eight original
+findings fixed.** No additional code change or repair round was requested.
+
+| Original comment                          | Disposition | Source-backed evidence                                                                                                                                                                                                                                                             |
+| ----------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4529518469: localization/title            | Fixed       | `showEntraUnavailableDetails.ts:14` uses the short title; `l10n/bundle.l10n.json:1533` contains its generated entry.                                                                                                                                                               |
+| 4529518550: post-acquisition trust        | Fixed       | `ManagedIdentityAuthHandler.ts:109`, `ShellSessionManager.ts:482`, `PlaygroundEvaluator.ts:498` and the shared callback wrapper check after acquisition, outside provider-failure handling.                                                                                        |
+| 4529518602: cached-token/new-socket trust | Fixed       | `oidcClientOptions.ts:54` intersects original/live restrictions; the TLS hook checks each new socket. The driver passes the hook into `tls.connect` without TLS-session reuse. Worker init carries a structured-cloned shared latch; configuration changes and teardown revoke it. |
+| 4529518636: picker browser rejection      | Fixed       | `showEntraUnavailableDetails.ts:24` handles false/rejection with a warning and normal return; all three pickers await it.                                                                                                                                                          |
+| 4529518681: native SRV order              | Fixed       | `WorkerSessionManager.ts:369` sanitizes before SRV preparation; `playgroundWorker.ts:238` retains the guard. Regression tests preserve TXT/explicit authentication-database precedence.                                                                                            |
+| 4529518724: failure-modal cleanup         | Fixed       | `showClusterConnectFailure.ts:60` handles both browser failures and returns the selected action normally so caller cleanup continues.                                                                                                                                              |
+| 4529518778: saved-rejection recovery      | Fixed       | `updateConnectionString.ts:77` evicts stable-ID caches and resets tree-ID error state only after the successful-save marker; Retry reloads storage.                                                                                                                                |
+| 4529518823: telemetry classification      | Fixed       | `ClusterItemBase.ts:170` adds the three exact bounded fields without sensitive values.                                                                                                                                                                                             |
+
+### Remaining limitations and assumptions
+
+- Already-authenticated sockets are intentionally not terminated. Revoked custom-trusted workers
+  require recreation even if the old suffix is restored; host clients instead recheck live trust.
+- The configuration listener acts when VS Code delivers its change event; the shared latch avoids
+  an additional asynchronous worker-message window.
+- Opus noted an **existing ordinary-edit edge case**, not a follow-up regression: after a root
+  refresh rebuilds nodes, the cached recovery child still carries the old rejected node and works.
+  A context-menu edit on the rebuilt node is classified as an ordinary edit and may retain old
+  cached credentials, so Retry can fail again. General ordinary-edit lifecycle changes were
+  explicitly outside the accepted plan; this review does not claim that workflow is fixed.
+- The reviewer assumed `ensureWorker` calls do not overlap, as the existing code comment requires.
+  It did not verify live-cloud or manual modal behavior and relied on the recorded green checks.
+
+The source remained unchanged at `dee991ca8` throughout review. Previous green Case 1/Case 2
+results therefore still apply; only this review record is added afterward. No external mutation.
+
+### Review checkpoint and usage
+
+Review agent `17dbe200-4e64-4981-a7aa-815659354495` returned at the **20:32 UTC snapshot**:
+5m11s elapsed, 39 requests (4m58s summed), 9s tool spans; no tests/builds; **179.5 AIU**.
+The leader accepted the verdict without coding changes. No advisor recommendation was overridden.
+
+Follow-up window: **2026-11-10 20:26:22 UTC to 20:32 UTC**, excluding subsequent report writing,
+commit and final response. Summed request spans are 6m08s, not wall time.
+
+| Model             | Role   | Requests | Model time |   AIU | Share |
+| ----------------- | ------ | -------: | ---------: | ----: | ----: |
+| `claude-opus-5.5` | Review |       39 |      4m58s | 179.5 | 94.4% |
+| `gpt-6.1-sol`     | Leader |        4 |      1m10s |  10.7 |  5.6% |
+
+Follow-up role totals: review **179.5 AIU**, leader **10.7 AIU**, run **190.2 AIU**.
+
+| Model             | Role   |     Input | Output | Cache read | Cache write | Reasoning |
+| ----------------- | ------ | --------: | -----: | ---------: | ----------: | --------: |
+| `claude-opus-5.5` | Review | 3,414,067 | 26,413 |  3,292,370 |     121,615 |    17,527 |
+| `gpt-6.1-sol`     | Leader |   517,732 |  4,040 |    511,412 |       6,308 |     1,435 |
+
+Cumulative window: **2026-11-10 19:38:56 UTC to 20:32 UTC**. This includes earlier reporting
+between the first usage snapshot and the review request, so it is not simply the sum of those
+two reported snapshots.
+
+| Model             | Role    | Requests | Model time |   AIU | Share |
+| ----------------- | ------- | -------: | ---------: | ----: | ----: |
+| `claude-opus-5.5` | Review  |       39 |      4m58s | 179.5 | 13.4% |
+| `gpt-5.6-luna`    | Checks  |       30 |      1m52s |   3.2 |  0.2% |
+| `gpt-6-astra`     | Advisor |       49 |     16m01s | 839.4 | 62.8% |
+| `gpt-6.1-sol`     | Leader  |       63 |     11m38s | 131.9 |  9.9% |
+| `gpt-6.1-sol`     | Coding  |       75 |     11m18s | 182.5 | 13.7% |
+
+Cumulative role totals equal those rows: leader **131.9 AIU**, subagents **1204.6 AIU**,
+run **1336.5 AIU**.
+
+| Model             | Role    |     Input | Output | Cache read | Cache write | Reasoning |
+| ----------------- | ------- | --------: | -----: | ---------: | ----------: | --------: |
+| `claude-opus-5.5` | Review  | 3,414,067 | 26,413 |  3,292,370 |     121,615 |    17,527 |
+| `gpt-5.6-luna`    | Checks  |   705,849 |  8,485 |    674,076 |      31,683 |     4,758 |
+| `gpt-6-astra`     | Advisor | 3,359,935 | 34,821 |  3,073,535 |     286,253 |    12,396 |
+| `gpt-6.1-sol`     | Leader  | 5,754,040 | 36,680 |  5,597,138 |     156,713 |     8,332 |
+| `gpt-6.1-sol`     | Coding  | 6,295,098 | 45,203 |  5,985,147 |     309,726 |    10,077 |
+
+AIU are not dollars; cache/reasoning fields can overlap input/output. Reviewing dominates the
+follow-up by design; advising remains the largest cumulative category. No retry or model
+substitution occurred. Future reviews can use a narrower packet if only a subset changed, but this
+operator request explicitly called for all eight original findings and the complete follow-up.
