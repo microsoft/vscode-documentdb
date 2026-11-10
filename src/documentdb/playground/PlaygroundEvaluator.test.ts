@@ -17,6 +17,7 @@ import {
     type resolveManagedIdentityTokenResource,
 } from '../auth/documentdbTokenResource';
 import { type getManagedIdentityAccessToken } from '../auth/managedIdentityTokenProvider';
+import { getRecentEntraTokenFailure, recordEntraTokenFailure, resetEntraTokenFailuresForTests } from '../auth/entraErrors/entraTokenFailures';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { PlaygroundEvaluator } from './PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from './WorkerSessionManager';
@@ -128,6 +129,7 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
 
     beforeEach((): void => {
         vi.clearAllMocks();
+        resetEntraTokenFailuresForTests();
         mocks.callbacks = undefined;
         mocks.initMessage = undefined;
         mocks.clusterId = undefined;
@@ -293,6 +295,48 @@ describe('PlaygroundEvaluator token relay lifecycle', () => {
             for (const secret of [accessToken, accountLabel, connectionString, 'original.database.example.com']) {
                 expect(output).not.toContain(secret);
             }
+        },
+    );
+
+    it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+        'blocks pending %s token delivery when machine trust is revoked without changing failure context',
+        async (authMethod): Promise<void> => {
+            customSuffix = 'database.example.com';
+            await initializeSession(authMethod, 'mongodb://original.database.example.com/');
+            recordEntraTokenFailure(clusterId, { cloudCategory: 'custom', authMethod: 'interactive' });
+            const failure = getRecentEntraTokenFailure(clusterId);
+            let finish!: () => void;
+            const gate = new Promise<void>((resolve) => { finish = resolve; });
+            if (authMethod === AuthMethodId.ManagedIdentity) {
+                mocks.managedIdentityToken.mockImplementationOnce(async () => {
+                    await gate;
+                    return { accessToken, expiresOnTimestamp: 4_000_000_000_000 };
+                });
+            } else {
+                mocks.interactiveToken.mockImplementationOnce(async () => {
+                    await gate;
+                    return { accessToken, id: 'session', account: { id: 'account', label: accountLabel }, scopes: [] };
+                });
+            }
+            const startupProperties: Record<string, string> = {};
+            const response = vi.fn();
+            const pending = mocks.callbacks!.onTokenRequest!(
+                { type: 'tokenRequest', requestId: 'pending' }, response, () => true, undefined,
+                { ...traceContext, startupProperties },
+            );
+            await vi.waitFor(() => expect(
+                authMethod === AuthMethodId.ManagedIdentity ? mocks.managedIdentityToken : mocks.interactiveToken,
+            ).toHaveBeenCalledTimes(1));
+            customSuffix = undefined;
+            finish();
+            await pending;
+            expect(response).toHaveBeenCalledExactlyOnceWith({
+                type: 'tokenError', requestId: 'pending', error: "Microsoft Entra ID isn't allowed for this server.",
+                errorName: 'EntraDestinationRejectedError',
+            });
+            expect(getRecentEntraTokenFailure(clusterId)).toBe(failure);
+            expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+            expect(JSON.stringify(response.mock.calls)).not.toContain(accessToken);
         },
     );
 

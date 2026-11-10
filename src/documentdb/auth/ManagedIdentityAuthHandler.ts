@@ -18,7 +18,7 @@ import { classifyEntraError } from './entraErrors/classifyEntraError';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
-import { buildOidcClientConfiguration } from './oidcClientOptions';
+import { buildOidcClientConfiguration, createOidcDestinationPolicy } from './oidcClientOptions';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
 /**
@@ -49,16 +49,18 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
         timings?: ConnectionStartupTimings,
         traceContext?: AuthTraceContext,
     ): Promise<AuthHandlerResponse> {
-        const decision = evaluateEntraDestinationFromSettings(this.clusterCredentials.connectionString);
+        const { connectionString, clusterId } = this.clusterCredentials;
+        const decision = evaluateEntraDestinationFromSettings(connectionString);
         traceEntraDestination(decision, this.tokenCorrelationId, traceContext);
         if (!decision.allowed) {
             throw new EntraDestinationRejectedError(decision);
         }
+        const policy = createOidcDestinationPolicy(connectionString, getEntraCustomHostnameSuffix);
         const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
         const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
         let resolved: Awaited<ReturnType<typeof resolveManagedIdentityTokenResource>>;
         try {
-            resolved = await resolveManagedIdentityTokenResource(this.clusterCredentials.connectionString);
+            resolved = await resolveManagedIdentityTokenResource(connectionString);
             traceAuthFlow('entraCloud.resolved', resolved.details, this.tokenCorrelationId, traceContext);
         } catch (error) {
             if (error instanceof TokenResourceResolutionError) {
@@ -73,12 +75,13 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
             );
             throw error;
         }
+        policy.assertAllowed();
         this.notify((observer) =>
             observer.onSignInConfigurationResolved?.({
                 details: resolved.details,
                 cloudCategory: resolved.cloudCategory,
                 tokenResourceReason: resolved.reason,
-                allowedHosts: decision.allowedHostPatterns,
+                allowedHosts: policy.allowedHostPatterns,
             }),
         );
         traceAuthFlow(
@@ -95,17 +98,19 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
         );
 
         const configuration = buildOidcClientConfiguration({
-            connectionString: this.clusterCredentials.connectionString,
-            customHostnameSuffix: getEntraCustomHostnameSuffix(),
+            connectionString,
+            policy,
             oidcCallback: async (): Promise<OIDCResponse> => {
-                const currentDecision = evaluateEntraDestinationFromSettings(this.clusterCredentials.connectionString);
+                const currentDecision = evaluateEntraDestinationFromSettings(connectionString);
                 traceEntraDestination(currentDecision, this.tokenCorrelationId, traceContext);
                 if (!currentDecision.allowed) {
                     throw new EntraDestinationRejectedError(currentDecision);
                 }
+                policy.assertAllowed();
                 this.notify((observer) => observer.onTokenStarted?.());
+                let token: Awaited<ReturnType<typeof getManagedIdentityAccessToken>>;
                 try {
-                    const token = await traceAuthOperation(
+                    token = await traceAuthOperation(
                         'managedIdentity.oidcCallback',
                         () =>
                             withTokenAcquisitionTiming(timings, () =>
@@ -121,20 +126,11 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                         this.tokenCorrelationId,
                         traceContext,
                     );
-
-                    clearEntraTokenFailure(this.clusterCredentials.clusterId);
-                    this.notify((observer) =>
-                        observer.onTokenAcquired?.({ accessToken: token.accessToken, tenantId }),
-                    );
-                    return {
-                        accessToken: token.accessToken,
-                        expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
-                    };
                 } catch (error) {
                     if (traceContext?.startupProperties) {
                         traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                     }
-                    recordEntraTokenFailure(this.clusterCredentials.clusterId, {
+                    recordEntraTokenFailure(clusterId, {
                         cloudCategory: resolved.cloudCategory,
                         authMethod: 'managedIdentity',
                         ruleId: classifyEntraError(error instanceof Error ? error.message : String(error))?.ruleId,
@@ -142,6 +138,15 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                     this.notify((observer) => observer.onTokenFailed?.(error));
                     throw error;
                 }
+                policy.assertAllowed();
+                clearEntraTokenFailure(clusterId);
+                this.notify((observer) =>
+                    observer.onTokenAcquired?.({ accessToken: token.accessToken, tenantId }),
+                );
+                return {
+                    accessToken: token.accessToken,
+                    expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
+                };
             },
         });
         if (configuration.ignoredTlsBypass || this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity) {

@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
+import { type PeerCertificate } from 'tls';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type CachedClusterCredentials } from '../CredentialCache';
@@ -15,7 +16,7 @@ import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import * as tokenResources from './documentdbTokenResource';
 import { EntraErrorExplainer } from './entraErrors/EntraErrorExplainer';
-import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
+import { getRecentEntraTokenFailure, recordEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
@@ -130,6 +131,7 @@ describe('ManagedIdentityAuthHandler', () => {
             surface: 'extension',
             startupProperties,
         });
+
         expect(startupProperties).toEqual({
             entraDestinationClass: 'documentdbService',
             cloudCategory: 'public',
@@ -142,6 +144,33 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(options.authMechanism).toBe('MONGODB-OIDC');
         expect(options.tls).toBe(true);
         expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.mongocluster.cosmos.azure.com']);
+    });
+
+    it.each([false, true])('blocks a pending token on trust removal without replacing failure context (prior=%s)', async (prior): Promise<void> => {
+        let suffix: string | undefined = 'database.example.com';
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            get: vi.fn().mockReturnValue({ ossrdbmsEndpoint: 'https://database.example.com' }),
+            inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const startupProperties: Record<string, string> = {};
+        const { options } = await new ManagedIdentityAuthHandler(buildCredentials({
+            connectionString: 'mongodb://cluster.database.example.com/',
+        })).configureAuth(undefined, { startupCorrelationId: 'startup', surface: 'extension', startupProperties });
+        if (prior) {
+            recordEntraTokenFailure('cluster-1', { cloudCategory: 'custom', authMethod: 'managedIdentity' });
+        }
+        const failure = getRecentEntraTokenFailure('cluster-1');
+        let finish!: (value: { accessToken: string; expiresOnTimestamp: number }) => void;
+        getManagedIdentityAccessToken.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+        const pending = invokeOidcCallback(options);
+        await vi.waitFor(() => expect(getManagedIdentityAccessToken).toHaveBeenCalledTimes(1));
+        suffix = undefined;
+        finish({ accessToken: 'must-not-return', expiresOnTimestamp: Date.now() + 3_600_000 });
+        await expect(pending).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+        expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+        expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
+        expect(options.checkServerIdentity?.('cluster.database.example.com', {} as PeerCertificate))
+            .toBeInstanceOf(EntraDestinationRejectedError);
     });
 
     it('strips authMechanism, authMechanismProperties, and credentials from the connection string', async () => {
@@ -253,6 +282,30 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(response.accessToken).toBe('a-token');
         expect(response.expiresInSeconds).toBeGreaterThan(0);
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+    });
+
+    it('captures the original destination and identity before resolving the audience', async (): Promise<void> => {
+        const credentials = buildCredentials({
+            managedIdentityConfig: { clientId: 'original-client', tenantId: 'original-tenant' },
+        });
+        const original = credentials.connectionString;
+        vi.spyOn(tokenResources, 'resolveManagedIdentityTokenResource').mockImplementationOnce(async () => {
+            credentials.connectionString = 'mongodb://attacker.example/';
+            credentials.managedIdentityConfig = { clientId: 'changed-client', tenantId: 'changed-tenant' };
+            return {
+                resource: 'https://database.example',
+                scope: 'https://database.example/.default',
+                cloudCategory: 'public',
+                reason: 'host',
+                details: {},
+            };
+        });
+        const { options, connectionString } = await new ManagedIdentityAuthHandler(credentials).configureAuth();
+        expect(connectionString).toBe(original);
+        await expect(invokeOidcCallback(options)).resolves.toMatchObject({ accessToken: 'a-token' });
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledWith(
+            ['https://database.example/.default'], 'original-client', 'original-tenant', expect.any(String), undefined,
+        );
     });
 
     it('reuses one token correlation ID across OIDC callback retries', async () => {

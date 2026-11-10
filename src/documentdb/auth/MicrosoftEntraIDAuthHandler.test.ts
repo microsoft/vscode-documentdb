@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { type PeerCertificate } from 'tls';
 import type * as documentdbTokenResource from './documentdbTokenResource';
 
 const getSessionFromVSCode = vi.fn();
@@ -33,7 +34,7 @@ import { buildAuthConnectionTarget } from './authConnectionTarget';
 import { AuthMethodId } from './AuthMethod';
 import { resolveInteractiveTokenResource, TokenResourceResolutionError } from './documentdbTokenResource';
 import { EntraErrorExplainer } from './entraErrors/EntraErrorExplainer';
-import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
+import { getRecentEntraTokenFailure, recordEntraTokenFailure, resetEntraTokenFailuresForTests } from './entraErrors/entraTokenFailures';
 import { MicrosoftEntraIDAuthHandler } from './MicrosoftEntraIDAuthHandler';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
 
@@ -141,6 +142,62 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(cloudResolutionTrace).toContain('"tokenResource":"https://ossrdbms-aad.database.windows.net"');
         expect(cloudResolutionTrace).not.toContain('my-cluster');
         expect(getRecentEntraTokenFailure('cluster-1')).toBeUndefined();
+    });
+
+    it.each([false, true])('blocks eager token completion after trust removal without replacing failure context (prior=%s)', async (prior): Promise<void> => {
+        let suffix: string | undefined = 'database.example.com';
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+        } as unknown as vscode.WorkspaceConfiguration);
+        if (prior) {
+            recordEntraTokenFailure('cluster-1', { cloudCategory: 'custom', authMethod: 'interactive' });
+        }
+        const failure = getRecentEntraTokenFailure('cluster-1');
+        let finish!: (value: { accessToken: string }) => void;
+        getSessionFromVSCode.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+        const startupProperties: Record<string, string> = {};
+        const configuring = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.database.example.com/'))
+            .configureAuth(undefined, { startupCorrelationId: 'startup', surface: 'extension', startupProperties });
+        await vi.waitFor(() => expect(getSessionFromVSCode).toHaveBeenCalledTimes(1));
+        suffix = undefined;
+        finish({ accessToken: 'must-not-return' });
+        await expect(configuring).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+        expect(getRecentEntraTokenFailure('cluster-1')).toBe(failure);
+        expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+    });
+
+    it('rechecks the eager captured-token callback and existing TLS hook after trust removal', async (): Promise<void> => {
+        let suffix: string | undefined = 'database.example.com';
+        vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+            inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const { options } = await new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://cluster.database.example.com/')).configureAuth();
+        const callback = options.authMechanismProperties!.OIDC_CALLBACK!;
+        await expect(callback({ version: 1, timeoutContext: new AbortController().signal })).resolves.toMatchObject({ accessToken: 'access-token' });
+        suffix = undefined;
+        await expect(callback({ version: 1, timeoutContext: new AbortController().signal })).rejects.toBeInstanceOf(EntraDestinationRejectedError);
+        expect(options.checkServerIdentity?.('cluster.database.example.com', {} as PeerCertificate))
+            .toBeInstanceOf(EntraDestinationRejectedError);
+        expect(getSessionFromVSCode).toHaveBeenCalledTimes(1);
+    });
+
+    it('captures the original destination and tenant before resolving the audience', async (): Promise<void> => {
+        const original = 'mongodb://cluster.mongocluster.cosmos.azure.com/';
+        const credentials = buildCredentials(original);
+        vi.mocked(resolveInteractiveTokenResource).mockImplementationOnce(async () => {
+            credentials.connectionString = 'mongodb://attacker.example/';
+            credentials.entraIdConfig = { tenantId: 'changed-tenant' };
+            return {
+                resource: 'https://database.example',
+                scope: 'https://database.example/.default',
+                cloudCategory: 'public',
+                reason: 'host',
+                details: {},
+            };
+        });
+        const { connectionString } = await new MicrosoftEntraIDAuthHandler(credentials).configureAuth();
+        expect(connectionString).toBe(original);
+        expect(getSessionFromVSCode).toHaveBeenCalledWith(['https://database.example/.default'], 'tenant', { createIfNone: true });
     });
 
     it('requests the resolved US Government scope and records its category on the existing trace', async () => {

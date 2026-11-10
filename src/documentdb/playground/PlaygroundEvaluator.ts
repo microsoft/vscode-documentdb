@@ -495,6 +495,11 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 accessToken = session.accessToken;
             }
 
+            const currentDecision = evaluateEntraDestinationFromSettings(connectionString);
+            traceEntraDestination(currentDecision, msg.requestId, traceContext);
+            if (!currentDecision.allowed) {
+                throw new EntraDestinationRejectedError(currentDecision);
+            }
             if (isCurrent()) {
                 clearEntraTokenFailure(clusterId);
             }

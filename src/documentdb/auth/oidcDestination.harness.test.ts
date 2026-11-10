@@ -13,7 +13,7 @@ import { join } from 'path';
 import tls, { type ConnectionOptions, type PeerCertificate, type TLSSocket } from 'tls';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
-import { buildOidcClientConfiguration } from './oidcClientOptions';
+import { buildOidcClientConfiguration, createOidcDestinationPolicy, type OidcDestinationPolicy } from './oidcClientOptions';
 
 const SEED = 'cluster.mongocluster.cosmos.azure.com';
 const REJECTED = 'sink.cloudapp.azure.com';
@@ -249,11 +249,12 @@ function makeClient(
     connectionString: string,
     callback: () => Promise<{ accessToken: string }>,
     baseOptions: MongoClientOptions = {},
+    policy: OidcDestinationPolicy = createOidcDestinationPolicy(connectionString, () => 'trusted.example'),
 ): MongoClient {
     const configuration = buildOidcClientConfiguration({
         connectionString,
         oidcCallback: callback,
-        customHostnameSuffix: 'trusted.example',
+        policy,
         baseOptions,
     });
     const client = new MongoClient(configuration.connectionString, {
@@ -459,6 +460,40 @@ afterAll((): void => {
 });
 
 describe('offline OIDC destination protocol (real installed driver and TLS)', (): void => {
+    it('rejects cached-token reconnects after trust removal despite a still-valid certificate', async (): Promise<void> => {
+        const seed = await startEndpoint();
+        const hostname = 'cluster.trusted.example';
+        const connectionString = `mongodb://${hostname}:${seed.port}/?directConnection=true`;
+        let suffix: string | undefined = 'trusted.example';
+        const policy = createOidcDestinationPolicy(connectionString, () => suffix);
+        const callback = vi.fn(async (): Promise<{ accessToken: string }> => ({ accessToken: `${DUMMY_TOKEN}1` }));
+        const client = makeClient(connectionString, callback, {}, policy);
+        await client.connect();
+        await client.db().command({ ping: 1 });
+        expect(seed.payloads).toEqual([{ jwt: `${DUMMY_TOKEN}1` }]);
+        suffix = undefined;
+
+        const stopped = new Promise<void>((resolve) => seed.server.close(() => resolve()));
+        for (const socket of seed.sockets) {
+            socket.destroy();
+        }
+        await stopped;
+        const reconnectStart = attempts.length;
+        const replacement = await startEndpoint(false, seed.port);
+        await until(
+            () => attempts.slice(reconnectStart).filter((attempt) => attempt.checkError && attempt.socket.closed).length >= 2,
+            'revoked policy rejected two replacement sockets',
+        );
+        await closeClient(client);
+        expect(callback).toHaveBeenCalledTimes(1);
+        expectNoApplicationData(replacement);
+        for (const attempt of attempts.slice(reconnectStart).filter((entry) => entry.certificate)) {
+            expect(attempt.checkError).toBeInstanceOf(EntraDestinationRejectedError);
+            expect(tls.checkServerIdentity(hostname, attempt.certificate!)).toBeUndefined();
+        }
+        expectFreshIdentityChecks(hostname, 4);
+    });
+
     it.each(positiveHosts)('authenticates %s with only the intended dummy token', async (host): Promise<void> => {
         const endpoint = await startEndpoint();
         const callback = vi.fn(async (): Promise<{ accessToken: string }> => ({ accessToken: `${DUMMY_TOKEN}1` }));

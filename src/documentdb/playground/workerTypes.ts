@@ -58,6 +58,12 @@ export interface SerializableExecutionResult {
 
 // ─── Main → Worker messages ─────────────────────────────────────────────────
 
+export interface SerializableOidcDestinationPolicy {
+    readonly originalConnectionString: string;
+    readonly customHostnameSuffix?: string;
+    readonly revoked: SharedArrayBuffer;
+}
+
 export type MainToWorkerMessage =
     | {
           readonly type: 'init';
@@ -65,8 +71,7 @@ export type MainToWorkerMessage =
           /** Connection string (with embedded credentials for SCRAM, without for Entra ID) */
           readonly connectionString: string;
           readonly clientOptions: SerializableMongoClientOptions;
-          /** Validated machine-scoped suffix; the worker rebuilds its own secure OIDC options. */
-          readonly oidcCustomHostnameSuffix?: string;
+          readonly oidcDestinationPolicy?: SerializableOidcDestinationPolicy;
           readonly databaseName: string;
           readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth';
           /** Tenant ID for Entra ID clusters */

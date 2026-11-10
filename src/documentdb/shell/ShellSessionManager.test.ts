@@ -16,7 +16,7 @@ import {
     TokenResourceResolutionError,
 } from '../auth/documentdbTokenResource';
 import { EntraErrorExplainer } from '../auth/entraErrors/EntraErrorExplainer';
-import { getRecentEntraTokenFailure, resetEntraTokenFailuresForTests } from '../auth/entraErrors/entraTokenFailures';
+import { getRecentEntraTokenFailure, recordEntraTokenFailure, resetEntraTokenFailuresForTests } from '../auth/entraErrors/entraTokenFailures';
 import { CredentialCache } from '../CredentialCache';
 import { PlaygroundEvaluator } from '../playground/PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
@@ -316,6 +316,47 @@ describe('ShellSessionManager', () => {
                     error: "Microsoft Entra ID isn't allowed for this server.",
                     errorName: 'EntraDestinationRejectedError',
                 });
+                manager.dispose();
+            },
+        );
+
+        it.each([AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity])(
+            'rejects pending %s completion after trust removal without clearing or recording provider failure',
+            async (authMethod): Promise<void> => {
+                let suffix: string | undefined = 'database.example.com';
+                vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+                    get: vi.fn(),
+                    inspect: vi.fn(() => ({ globalValue: { hostnameSuffix: suffix } })),
+                } as unknown as vscode.WorkspaceConfiguration);
+                CredentialCache.setAuthCredentials(clusterId, authMethod, 'mongodb://original.database.example.com/');
+                const manager = createManager();
+                await initializeSession(manager);
+                recordEntraTokenFailure(clusterId, { cloudCategory: 'custom', authMethod: 'interactive' });
+                const failure = getRecentEntraTokenFailure(clusterId);
+                let finish!: () => void;
+                const gate = new Promise<void>((resolve) => { finish = resolve; });
+                const provider = authMethod === AuthMethodId.ManagedIdentity ? mockGetManagedIdentityAccessToken : mockGetSessionFromVSCode;
+                provider.mockImplementationOnce(async () => {
+                    await gate;
+                    return { accessToken: 'must-not-post', account: { label: 'private-account' } };
+                });
+                const response = vi.fn();
+                const startupProperties: Record<string, string> = {};
+                const pending = workerCallbacks.onTokenRequest!(
+                    { type: 'tokenRequest', requestId: 'pending' }, response, () => true, undefined,
+                    { startupCorrelationId: 'startup', surface, startupProperties },
+                );
+                await vi.waitFor(() => expect(provider).toHaveBeenCalledTimes(1));
+                suffix = undefined;
+                finish();
+                await pending;
+                expect(response).toHaveBeenCalledExactlyOnceWith({
+                    type: 'tokenError', requestId: 'pending', error: "Microsoft Entra ID isn't allowed for this server.",
+                    errorName: 'EntraDestinationRejectedError',
+                });
+                expect(getRecentEntraTokenFailure(clusterId)).toBe(failure);
+                expect(startupProperties.entraFailureKind).not.toBe('tokenAcquisitionFailed');
+                expect(JSON.stringify(response.mock.calls)).not.toContain('must-not-post');
                 manager.dispose();
             },
         );

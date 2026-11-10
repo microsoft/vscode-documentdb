@@ -479,6 +479,11 @@ export class ShellSessionManager implements vscode.Disposable {
                 this._displayName = session.account.label || undefined;
             }
 
+            const currentDecision = evaluateEntraDestinationFromSettings(connectionString);
+            traceEntraDestination(currentDecision, msg.requestId, traceContext);
+            if (!currentDecision.allowed) {
+                throw new EntraDestinationRejectedError(currentDecision);
+            }
             if (isCurrent()) {
                 clearEntraTokenFailure(this._connectionInfo.clusterId);
             }

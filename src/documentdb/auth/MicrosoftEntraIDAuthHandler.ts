@@ -25,7 +25,7 @@ import { evaluateEntraDestinationFromSettings, getEntraCustomHostnameSuffix } fr
 import { classifyEntraError } from './entraErrors/classifyEntraError';
 import { clearEntraTokenFailure, recordEntraTokenFailure } from './entraErrors/entraTokenFailures';
 import { EntraDestinationRejectedError } from './oidcAllowedHosts';
-import { buildOidcClientConfiguration } from './oidcClientOptions';
+import { buildOidcClientConfiguration, createOidcDestinationPolicy } from './oidcClientOptions';
 
 /**
  * Handler for Microsoft Entra ID authentication via OIDC.
@@ -48,14 +48,17 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         traceContext?: AuthTraceContext,
     ): Promise<AuthHandlerResponse> {
         const authCorrelationId = randomUUID();
-        const decision = evaluateEntraDestinationFromSettings(this.clusterCredentials.connectionString);
+        const { connectionString, clusterId } = this.clusterCredentials;
+        const tenantId = this.clusterCredentials.entraIdConfig?.tenantId;
+        const decision = evaluateEntraDestinationFromSettings(connectionString);
         traceEntraDestination(decision, authCorrelationId, traceContext);
         if (!decision.allowed) {
             throw new EntraDestinationRejectedError(decision);
         }
+        const policy = createOidcDestinationPolicy(connectionString, getEntraCustomHostnameSuffix);
         let resolved: Awaited<ReturnType<typeof resolveInteractiveTokenResource>>;
         try {
-            resolved = await resolveInteractiveTokenResource(this.clusterCredentials.connectionString);
+            resolved = await resolveInteractiveTokenResource(connectionString);
             traceAuthFlow('entraCloud.resolved', resolved.details, authCorrelationId, traceContext);
         } catch (error) {
             if (error instanceof TokenResourceResolutionError) {
@@ -70,19 +73,19 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             );
             throw error;
         }
+        policy.assertAllowed();
         this.notify((observer) =>
             observer.onSignInConfigurationResolved?.({
                 details: resolved.details,
                 cloudCategory: resolved.cloudCategory,
                 tokenResourceReason: resolved.reason,
-                allowedHosts: decision.allowedHostPatterns,
+                allowedHosts: policy.allowedHostPatterns,
             }),
         );
 
         // Get Microsoft Entra ID token. Only an interactive caller may open sign-in; a non-interactive
         // caller looks up an existing session silently and never forces a new one.
         const interactive = this.policy.interactive;
-        const tenantId = this.clusterCredentials.entraIdConfig?.tenantId;
         let session: vscode.AuthenticationSession | undefined;
         this.notify((observer) => observer.onTokenStarted?.());
         try {
@@ -125,7 +128,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
                 if (traceContext?.startupProperties) {
                     traceContext.startupProperties.entraFailureKind = 'tokenAcquisitionFailed';
                 }
-                recordEntraTokenFailure(this.clusterCredentials.clusterId, {
+                recordEntraTokenFailure(clusterId, {
                     cloudCategory: resolved.cloudCategory,
                     authMethod: 'interactive',
                     ruleId: classifyEntraError(error instanceof Error ? error.message : String(error))?.ruleId,
@@ -135,7 +138,8 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             throw error;
         }
 
-        clearEntraTokenFailure(this.clusterCredentials.clusterId);
+        policy.assertAllowed();
+        clearEntraTokenFailure(clusterId);
         const acquiredSession = session;
         this.notify((observer) =>
             observer.onTokenAcquired?.({
@@ -148,8 +152,8 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         );
 
         const configuration = buildOidcClientConfiguration({
-            connectionString: this.clusterCredentials.connectionString,
-            customHostnameSuffix: getEntraCustomHostnameSuffix(),
+            connectionString,
+            policy,
             oidcCallback: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
                 Promise.resolve({
                     accessToken: session.accessToken,

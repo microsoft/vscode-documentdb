@@ -24,8 +24,12 @@ import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
 import { removeConflictingOidcMechanism } from '../auth/nonOidcConnectionString';
-import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
-import { buildOidcClientConfiguration } from '../auth/oidcClientOptions';
+import { EntraDestinationRejectedError, normalizeCustomHostnameSuffix } from '../auth/oidcAllowedHosts';
+import {
+    buildOidcClientConfiguration,
+    createOidcDestinationPolicy,
+    type OidcDestinationPolicy,
+} from '../auth/oidcClientOptions';
 import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
 import { type MainToWorkerMessage, type WorkerStartupStage, type WorkerToMainMessage } from './workerTypes';
 
@@ -151,10 +155,36 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
     // per window, and so the worker never needs @azure/identity.
     let connectionString = msg.connectionString;
     if (msg.authMechanism === 'MicrosoftEntraID' || msg.authMechanism === 'ManagedIdentity') {
+        const snapshot = msg.oidcDestinationPolicy;
+        if (
+            !snapshot ||
+            typeof snapshot.originalConnectionString !== 'string' ||
+            !(snapshot.revoked instanceof SharedArrayBuffer) ||
+            snapshot.revoked.byteLength !== Int32Array.BYTES_PER_ELEMENT ||
+            (snapshot.customHostnameSuffix !== undefined &&
+                (typeof snapshot.customHostnameSuffix !== 'string' ||
+                    normalizeCustomHostnameSuffix(snapshot.customHostnameSuffix) !== snapshot.customHostnameSuffix))
+        ) {
+            throw new EntraDestinationRejectedError({ hostCount: 0 });
+        }
+        const originalPolicy = createOidcDestinationPolicy(
+            snapshot.originalConnectionString,
+            () => snapshot.customHostnameSuffix,
+        );
+        const revoked = new Int32Array(snapshot.revoked);
+        const policy: OidcDestinationPolicy = {
+            allowedHostPatterns: originalPolicy.allowedHostPatterns,
+            assertAllowed(host?: string): void {
+                if (Atomics.load(revoked, 0) !== 0) {
+                    throw new EntraDestinationRejectedError({ firstHost: host, hostCount: 0 });
+                }
+                originalPolicy.assertAllowed(host);
+            },
+        };
         const usesManagedIdentity = msg.authMechanism === 'ManagedIdentity';
         const configuration = buildOidcClientConfiguration({
             connectionString,
-            customHostnameSuffix: msg.oidcCustomHostnameSuffix,
+            policy,
             baseOptions: options,
             oidcCallback: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
                 const requestId = randomUUID();
