@@ -2415,7 +2415,6 @@ export const scenarios = {
                     'Setting up DocumentDB Local',
                     'Checking container engine',
                     'Pulling official image',
-                    'Image ghcr.io/documentdb/documentdb-local:latest · Custom tag',
                     'Engine output: Downloading layer one',
                     'View setup log',
                 ],
@@ -2425,14 +2424,16 @@ export const scenarios = {
             assertions: [
                 {
                     kind: 'text',
-                    name: 'Active pull shows known image and literal engine activity without invented totals',
+                    name: 'Active pull shows literal engine activity instead of the image without invented totals',
                     selector: '[aria-label="Setup progress"] [role="listitem"]:nth-child(2)',
-                    includes: [
+                    includes: ['Engine output: Downloading layer one'],
+                    excludes: [
+                        ...privateDetails,
                         'Image ghcr.io/documentdb/documentdb-local:latest',
                         'Custom tag',
-                        'Engine output: Downloading layer one',
+                        '\\b\\d+\\s*%',
+                        '\\b\\d+\\s*(?:MB|GB)\\b',
                     ],
-                    excludes: [...privateDetails, '\\b\\d+\\s*%', '\\b\\d+\\s*(?:MB|GB)\\b'],
                 },
                 {
                     kind: 'attribute',

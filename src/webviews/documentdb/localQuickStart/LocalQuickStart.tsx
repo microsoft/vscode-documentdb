@@ -187,7 +187,14 @@ const useStyles = makeStyles({
         color: tokens.colorPaletteRedForeground1,
     },
     imagePath: { overflowWrap: 'anywhere' },
-    pullActivity: { display: 'flex', flexDirection: 'column' },
+    pullActivity: {
+        display: 'block',
+        minWidth: 0,
+        maxWidth: '100%',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
     dockerStatus: { display: 'flex', flexDirection: 'column', gap: '10px' },
     recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '8px' },
     // Copy stays pinned top-right: a multi-line command must not push it down or wrap it away.
@@ -2066,16 +2073,14 @@ export const LocalQuickStart = (): JSX.Element => {
             return undefined;
         }
         const stageFacts = facts[stage];
-        if (
-            stage === 'pulling' &&
-            stageStatus.pulling === 'active' &&
-            stageFacts?.kind === 'pulling' &&
-            stageFacts.progress?.trim()
-        ) {
+        if (stage === 'pulling' && stageStatus.pulling === 'active') {
+            const activity =
+                stageFacts?.kind === 'pulling' && stageFacts.progress?.trim()
+                    ? l10n.t('Engine output: {0}', stageFacts.progress)
+                    : text;
             return (
-                <span className={styles.pullActivity}>
-                    <span>{text}</span>
-                    <span>{l10n.t('Engine output: {0}', stageFacts.progress)}</span>
+                <span className={styles.pullActivity} title={activity}>
+                    {activity}
                 </span>
             );
         }

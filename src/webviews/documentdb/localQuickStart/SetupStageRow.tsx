@@ -3,12 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { makeStyles } from '@fluentui/react-components';
 import { StatusListItem, type StatusListItemStatus } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX, type ReactNode, type RefObject, useCallback, useRef } from 'react';
 import { type ProvisionStage } from '../../../services/localQuickStart/quickStartTypes';
 import { SetupStageDetails } from './SetupStageDetails';
 import { type StageDetailFact } from './stageDetailsPresentation';
+
+const useStyles = makeStyles({
+    activePull: {
+        // The active row has no disclosure; constrain the copy and its detail Text to the row.
+        '& > div': { flexGrow: 1 },
+        '& > div > span': { maxWidth: '100%' },
+    },
+});
 
 interface SetupStageRowProps {
     readonly stage: ProvisionStage;
@@ -37,6 +46,7 @@ export const SetupStageRow = ({
     mutedClassName,
     onShowOutput,
 }: SetupStageRowProps): JSX.Element => {
+    const styles = useStyles();
     const attachedRef = useRef<HTMLButtonElement | null>(null);
     const toggleRef = useCallback(
         (element: HTMLButtonElement | null): void => {
@@ -51,6 +61,7 @@ export const SetupStageRow = ({
     const settledFacts = (status === 'done' || status === 'error') && facts?.length ? facts : undefined;
     return (
         <StatusListItem
+            className={stage === 'pulling' && status === 'active' ? styles.activePull : undefined}
             label={label}
             status={status}
             detail={detail}

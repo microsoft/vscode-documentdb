@@ -490,7 +490,7 @@ describe('Local Quick Start stage details', () => {
         expect(toggle('Pulling official image')).not.toBeNull();
     });
 
-    it('updates literal pull output below the image without live announcements or repeated step effects', async () => {
+    it('replaces the active image summary with literal pull output without repeated step effects', async () => {
         await start();
         const pullingFacts = { kind: 'pulling', imageRef: 'image:custom', imageOrigin: 'custom' } as const;
         await event({ stage: 'pulling', status: 'active', facts: pullingFacts });
@@ -512,13 +512,16 @@ describe('Local Quick Start stage details', () => {
         const primary = button('Setting up…');
         const focus = document.activeElement;
         try {
-            for (const progress of ['<b>Downloading layer</b>', 'Extracting layer']) {
+            for (const progress of ['<b>Downloading layer</b>', 'Extracting layer', 'x'.repeat(160)]) {
                 await event({ stage: 'pulling', status: 'active', facts: { ...pullingFacts, progress } });
-                const output = [...host.querySelectorAll('span')].find(
+                const outputs = [...host.querySelectorAll<HTMLSpanElement>('span[title]')].filter(
                     (node) => node.textContent === `Engine output: ${progress}`,
                 );
-                expect(output).toBeDefined();
-                expect(output?.previousElementSibling?.textContent).toBe(summary);
+                expect(outputs).toHaveLength(1);
+                const output = outputs[0];
+                expect(host.textContent).not.toContain(summary);
+                expect(output?.title).toBe(`Engine output: ${progress}`);
+                expect(output?.children).toHaveLength(0);
                 expect(output?.querySelector('b')).toBeNull();
                 expect(output?.closest('[aria-live], [role="status"], [role="alert"], [role="log"]')).toBeNull();
                 expect(announcement?.textContent).toBe('Pulling official image…');
@@ -545,6 +548,24 @@ describe('Local Quick Start stage details', () => {
         await event({ stage: 'done', status: 'done' });
         expect(host.textContent).not.toContain('Engine output:');
         expect(host.textContent).toContain('Image image:custom');
+    });
+
+    it('retains the full active image summary before pull output arrives', async () => {
+        await start();
+        const imageRef = `image:${'x'.repeat(160)}`;
+        const summary = `Image ${imageRef} · Custom tag`;
+        await event({
+            stage: 'pulling',
+            status: 'active',
+            facts: { kind: 'pulling', imageRef, imageOrigin: 'custom' },
+        });
+        const image = [...host.querySelectorAll<HTMLSpanElement>('span[title]')].find(
+            (node) => node.textContent === summary,
+        );
+        expect(image?.title).toBe(summary);
+        expect(image?.children).toHaveLength(0);
+        expect(host.textContent).not.toContain('Engine output:');
+        expect(toggle('Pulling official image')).toBeNull();
     });
 
     it.each([undefined, '', ' \n\t'])(
