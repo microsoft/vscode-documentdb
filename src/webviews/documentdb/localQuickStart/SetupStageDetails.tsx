@@ -38,6 +38,7 @@ const ShortId = ({ fact }: { readonly fact: StageDetailFact }): JSX.Element => {
     const id = useId();
     return (
         <Tooltip content={{ children: fact.fullValue, className: styles.idTooltip }} relationship="description">
+            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the full identifier tooltip */}
             <span className={styles.idTrigger} tabIndex={0} role="group" aria-labelledby={id}>
                 <span id={id}>{fact.value}</span>
             </span>
