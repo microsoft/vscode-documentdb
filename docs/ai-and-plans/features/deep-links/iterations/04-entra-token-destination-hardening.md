@@ -1,7 +1,7 @@
 ---
 feature: deep-links
 kind: plan
-status: proposed
+status: in-progress
 created: 2026-11-10
 code:
     - src/documentdb/auth/oidcAllowedHosts.ts
@@ -25,8 +25,9 @@ code:
 
 # Iteration 4 - Entra token destination hardening
 
-> **Status:** proposed for review; not approved or implemented.
-> This file records the proposal, not a claim that the vulnerability has been fixed.
+> **Status:** implementation authorized by the operator on 2026-11-10; verification pending.
+> The execution plan below records the accepted scope. The research and proposal remain as
+> supporting evidence, not a claim that the vulnerability has been fixed.
 >
 > **Extended 2026-11-10** with endpoint-inventory and driver-enforcement research
 > ([Research findings](#research-findings-2026-11-10)). Those findings found two further ways a
@@ -34,6 +35,159 @@ code:
 > driver's host check, and URI TLS-bypass parameters survive into Entra connections. They also
 > identify a supported per-connection enforcement point. The design, work items and acceptance
 > matrix below were revised accordingly.
+
+## Accepted execution plan (2026-11-10)
+
+The operator requested implementation of this document, explicitly selected **Option B, the
+existing machine-scoped setting**, requested an Opus 5.5 advisor, and required the plan to be
+committed before implementation. The source proposal was committed as `e572791ce`.
+The implementation branch is `dev/tnaum/entra-token-destination-hardening`, stacked on
+`dev/tnaum/url-handler-improvmements` (PR #1067), not on `main`.
+
+### Settled scope and pragmatic choices
+
+- Implement WI0–WI8 together; WI9 is out of scope. WI0 adds bounded measurement and an example
+  population query, but no production telemetry query has been run and no measurement-first
+  release is claimed.
+- Keep the existing **single string** `documentDB.customEnvironment.hostnameSuffix`, its machine
+  scope and its current custom-cloud audience role. No list, alias, new setting, global switch,
+  per-connection trust checkbox, ARM attestation or remote allowlist is introduced.
+- Ship the three proposed service suffixes, including Government on the operator confirmation
+  already recorded in R6. Live Government, China and private-link behavior and certificate
+  coverage remain explicitly unverified.
+- Apply the proposal's custom-suffix restrictions. Reject parents of built-in service suffixes
+  and of known customer-hosting namespaces, as well as a `cloudapp` label. This also prevents
+  `usgovcloudapi.net` from undoing the restriction on its `cloudapp` children.
+- Keep interactive token acquisition **eager, after the destination policy check**, rather than
+  moving consent into the driver's callback. Opus found the callback's 60-second automated
+  timeout does not cancel a pending VS Code consent prompt. This follows the proposal's
+  pre-acquisition requirement while preserving sign-in behavior. Driver seed validation and
+  per-socket TLS enforcement still precede token transmission.
+- Strip **every case variant** of URI authentication and TLS parameters. The installed
+  case-insensitive URL wrapper's single `delete()` can leave another casing behind.
+- Recheck current policy at each token relay, using the worker's original connection and captured
+  authentication identity, never request-message identity fields or live credential-cache entries.
+- Use a selectable explanatory picker row that opens **Learn More**, then returns to the picker.
+  It cannot select Entra or change trust. Use the proposed short English copy.
+- Editing to a rejected destination saves the string, clears a selected Entra/managed-identity
+  method and recomputes methods; editing between approved destinations retains the selection.
+- Rejected saved connections fail through the existing modal flow, with **Learn More** and
+  recovery actions for **Update Credentials** and **Update Connection String**. No silent fallback.
+- **Learn More** targets the public documentation page
+  `https://microsoft.github.io/vscode-documentdb/user-manual/entra-id-trusted-servers/`.
+  It does not write or prefill settings. The page ships with this change.
+
+These are implementation details advised by Opus 5.5, not new service-owner confirmations.
+The advisor's source-backed packet identified the driver callback timeout, URI casing behavior,
+TLS-option precedence, worker serialization boundary and session identity requirements.
+Confidence is high for the inspected local behavior; live endpoint support remains unverified.
+
+### Shared interfaces
+
+The policy and OIDC builder are extension-host independent so the worker uses the same logic:
+
+```typescript
+// oidcAllowedHosts.ts
+export const BUILT_IN_ENTRA_DESTINATION_SUFFIXES: readonly [
+    'mongocluster.cosmos.azure.com',
+    'mongocluster.cosmos.azure.us',
+    'mongocluster.cosmos.azure.cn',
+];
+export type EntraDestinationClass = 'documentdbService' | 'customSuffix' | 'otherAzure' | 'other';
+export interface EntraDestinationDecision {
+    allowed: boolean;
+    destinationClass: EntraDestinationClass;
+    allowedHostPatterns: readonly string[];
+    customSuffixUsed?: string;
+    rejection?: { microsoftCloudDomain: boolean; serviceLabel: boolean };
+    firstHost?: string;
+    hostCount: number;
+}
+export function isEntraDestinationHostAllowed(host: string, patterns: readonly string[]): boolean;
+export function evaluateEntraDestination(
+    connectionString: string,
+    customHostnameSuffix?: unknown,
+): EntraDestinationDecision;
+export class EntraDestinationRejectedError extends Error {
+    firstHost: string;
+    additionalHostCount: number;
+}
+export function isEntraDestinationRejectedError(error: unknown): error is EntraDestinationRejectedError;
+
+// oidcClientOptions.ts
+export function createEntraCheckServerIdentity(
+    patterns: readonly string[],
+): (host: string, cert: PeerCertificate) => Error | undefined;
+export function buildOidcClientConfiguration(input: {
+    connectionString: string;
+    customHostnameSuffix?: unknown;
+    oidcCallback: OIDCCallbackFunction;
+    baseOptions?: MongoClientOptions;
+}): {
+    connectionString: string;
+    options: MongoClientOptions;
+    decision: EntraDestinationDecision;
+    ignoredTlsBypass: boolean;
+};
+
+// entraDestinationSettings.ts: VS Code glue only
+export function getEntraCustomHostnameSuffix(): unknown;
+export function evaluateEntraDestinationFromSettings(connectionString: string): EntraDestinationDecision;
+```
+
+The builder rejects before returning options. It clears URI credentials, all case variants of
+`authMechanism`, `authMechanismProperties`, `tls`, `ssl`, TLS-bypass aliases and
+`rejectUnauthorized`; removes conflicting TLS keys from base options; and sets mandatory TLS,
+certificate/hostname validation, narrowed `ALLOWED_HOSTS` and a policy-first
+`tls.checkServerIdentity` hook. Persisted strings are not rewritten by this runtime sanitization.
+Host matching is DNS-label-boundary based, ASCII LDH only, case-insensitive, rejects IPs and
+trailing dots, requires a label before the suffix, and authorizes **every** seed.
+
+### Work assignment and commit boundaries
+
+Coding agents use the harness's configured coding model; the operator explicitly selected
+`claude-opus-5.5` for the read-only advisor. Each batch gets a separate commit and an inline
+completion note. Non-overlapping batches may run concurrently.
+
+| Batch | Original items | Ownership and deliverable | Prerequisite |
+| --- | --- | --- | --- |
+| B0 | plan | Leader: commit this revised plan before coding | source proposal committed |
+| B1 | WI2, WI3, WI8 core | Policy/builder worker: `oidcAllowedHosts.ts` and tests; new `oidcClientOptions.ts` and tests, `entraDestinationSettings.ts`. Keep legacy exports until consumers migrate. | B0 |
+| B2 | WI0, WI4, WI5 | Lifecycle worker: Entra/managed-identity handlers and tests, `WorkerSessionManager`, `workerTypes`, `playgroundWorker`, `ShellSessionManager`, `PlaygroundEvaluator`, related tests and `authTrace`. Narrow driver options, original-session relays, bounded telemetry and safe output records. | B1 |
+| B3 | WI4 proof | Harness worker: new `oidcDestination.harness.test.ts` and its fixtures only. Real installed driver, loopback TLS, dummy token, seed/SRV/topology/polling/reconnect/session tests. | B1 |
+| B4a | WI6 pickers | Picker worker: `AuthMethod`, `ChooseAuthMethodStep`, authentication/new/update-credentials contexts, new-connection and update-credentials prompt/orchestration files and their tests. | B1 |
+| B4b | WI6 saved state | Connection worker: update-connection-string execution/tests, `DocumentDBClusterItem`, failure presentation, `ClusterItemBase`, `ConnectionsBranchDataProvider`, `constants`, `entraErrorRules` and related tests. | B4a |
+| B5 | WI7, WI8 docs | Documentation worker: setting description, new public page, sovereign/managed-identity user guidance, active feature docs/decisions and acceptance evidence. | B2, B3, B4b |
+| B6 | verification | Leader/check worker: Case 1 and full Case 2, required fixes, AI pre-review committed under this feature's iterations; publish stacked PR. | B5 |
+
+Focused root tests use `npx vitest run <owned test paths>`; the `extension` project includes
+`src/**/*.test.{ts,tsx}`. No workspace-package source changes are planned. Intentional non-TDD
+expectation changes include the old broad allowlist, handler `ALLOWED_HOSTS`, and the old
+unrecognized-host managed-identity preselection. Cloud-mismatch regression tests use an approved
+service host so they reach audience validation. Existing NativeAuth `TDD:` worker contracts
+must remain unchanged.
+
+### Verification and evidence
+
+- Test each enforcement layer independently, including mixed seeds, case-variant `ENVIRONMENT`,
+  all TLS bypasses, native behavior, current-setting removal and forged worker identity fields.
+- The protocol harness uses a temporary CA, service-named certificates, driver `lookup` mapping
+  to loopback and controlled DNS answers. It asserts token-provider calls and captured
+  application/token bytes, not just error messages or server-side TLS completion.
+- Pin TLS session behavior and driver-internal SRV polling assumptions. Re-run these probes on
+  driver upgrades; do not claim a blocked topology/polling path without an exercised harness.
+- Run Case 1 (`npm run build`, focused tests), then all Case 2 commands requested by the operator:
+  `npm run l10n`, `npm run prettier-fix`, `npm run l10n:check`, `npm run lint`,
+  `npm run build`, `npm run typecheck:tests`, `npx vitest run`, `npm run package`.
+  Fix change-related failures and repeat affected checks until green. Do not weaken TDD contracts.
+- Record results separately from manual/live gaps: consent/picker/modal/recovery presentation,
+  Learn More navigation, every shipped locale's layout budgets, sovereign/private-link service
+  acceptance. No production sizing, service-team audience request or upstream report is claimed.
+
+### Progress
+
+- B0: source proposal committed as `e572791ce`; revised plan awaiting its own commit.
+- B1–B6: pending.
 
 ## Goal
 
