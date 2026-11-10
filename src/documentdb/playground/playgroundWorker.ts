@@ -23,6 +23,7 @@ import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
+import { removeConflictingOidcMechanism } from '../auth/nonOidcConnectionString';
 import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
 import { buildOidcClientConfiguration } from '../auth/oidcClientOptions';
 import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
@@ -204,6 +205,8 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         if (configuration.ignoredTlsBypass) {
             log('info', '[Auth] TLS validation bypass parameters are ignored for Microsoft Entra ID connections.');
         }
+    } else {
+        connectionString = removeConflictingOidcMechanism(connectionString);
     }
 
     // Create and connect the database client

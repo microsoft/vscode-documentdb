@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type MongoClientOptions } from 'mongodb';
+import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { type PeerCertificate } from 'tls';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntraDestinationRejectedError } from '../auth/oidcAllowedHosts';
@@ -11,17 +11,21 @@ import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerType
 
 const transport = vi.hoisted(() => ({ on: vi.fn(), postMessage: vi.fn() }));
 const driver = vi.hoisted(() => ({
-    construct: vi.fn(),
+    construct: vi.fn<(connectionString: string, options: MongoClientOptions) => void>(),
     connect: vi.fn(),
 }));
 
 vi.mock('worker_threads', () => ({ parentPort: transport }));
-vi.mock('mongodb', () => ({
-    MongoClient: vi.fn().mockImplementation(function (connectionString: string, options: MongoClientOptions) {
-        driver.construct(connectionString, options);
-        return { connect: driver.connect };
-    }),
-}));
+vi.mock('mongodb', async () => {
+    const { AuthMechanism } = await vi.importActual<{ AuthMechanism: Readonly<Record<string, string>> }>('mongodb');
+    return {
+        AuthMechanism,
+        MongoClient: vi.fn().mockImplementation(function (connectionString: string, options: MongoClientOptions) {
+            driver.construct(connectionString, options);
+            return { connect: driver.connect };
+        }),
+    };
+});
 vi.mock('@documentdb-js/shell-runtime', () => ({
     DocumentDBShellRuntime: vi.fn().mockImplementation(function () {
         return {};
@@ -87,7 +91,7 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
             });
             await waitForInit();
             expect(driver.construct).toHaveBeenCalledTimes(1);
-            const [connectionString, options] = driver.construct.mock.calls[0] as [string, MongoClientOptions];
+            const [connectionString, options] = driver.construct.mock.calls[0];
             expect(connectionString).not.toMatch(/user|password|tls|authMechanism|ENVIRONMENT/i);
             expect(options).toMatchObject({
                 tls: true,
@@ -124,7 +128,7 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
     it.each(['com', 'us', 'cn'])('narrows the actual prepared azure.%s driver hosts', async (suffix): Promise<void> => {
         init({ connectionString: `mongodb://resolved.mongocluster.cosmos.azure.${suffix}:10260/` });
         await waitForInit();
-        const options = driver.construct.mock.calls[0][1] as MongoClientOptions;
+        const options = driver.construct.mock.calls[0][1];
         expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual([`*.mongocluster.cosmos.azure.${suffix}`]);
     });
 
@@ -134,13 +138,13 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
             oidcCustomHostnameSuffix: 'database.example.com',
         });
         await waitForInit();
-        const options = driver.construct.mock.calls[0][1] as MongoClientOptions;
+        const options = driver.construct.mock.calls[0][1];
         expect(options.authMechanismProperties?.ALLOWED_HOSTS).toEqual(['*.database.example.com']);
     });
 
     it('preserves a rejected relay error through worker initialization', async (): Promise<void> => {
         driver.connect.mockImplementationOnce(async (): Promise<void> => {
-            const options = driver.construct.mock.calls[0][1] as MongoClientOptions;
+            const options = driver.construct.mock.calls[0][1];
             const callback = options.authMechanismProperties?.OIDC_CALLBACK;
             if (!callback) {
                 throw new Error('Expected the OIDC callback');
@@ -200,4 +204,82 @@ describe('playground worker OIDC configuration at the driver boundary', () => {
             expect(driver.construct).toHaveBeenCalledExactlyOnceWith(connectionString, clientOptions);
         },
     );
+
+    describe.each(['NativeAuth', 'NoAuth'] as const)('explicit worker auth %s', (authMechanism): void => {
+        it.each([
+            'ENVIRONMENT:azure,TOKEN_RESOURCE:https://database.example.com',
+            'ENVIRONMENT:gcp,TOKEN_RESOURCE:https://database.example.com',
+            'ENVIRONMENT:k8s,TOKEN_RESOURCE:https://database.example.com',
+            'OIDC_CALLBACK:untrusted',
+        ])('sanitizes URI OIDC with %s without creating a token callback', async (properties): Promise<void> => {
+            const username = '00000000-0000-0000-0000-000000000001';
+            const userInfo = authMechanism === 'NativeAuth' ? `${username}:@` : '';
+            const original =
+                `mongodb://${userInfo}attacker.cloudapp.azure.com/?authMechanism=SCRAM-SHA-256` +
+                '&AUTHMECHANISM=%20mOnGoDb-OiDc%20&AuthMechanism=MONGODB-OIDC' +
+                `&authMechanismProperties=${encodeURIComponent(properties)}` +
+                '&AUTHMECHANISMPROPERTIES=ENVIRONMENT:gcp&AuthMechanismProperties=ENVIRONMENT:k8s&ssl=false';
+            const clientOptions = { serverSelectionTimeoutMS: 1234 };
+            init({ authMechanism, connectionString: original, clientOptions });
+            await waitForInit();
+            expect(driver.construct).toHaveBeenCalledTimes(1);
+            const [connectionString, options] = driver.construct.mock.calls[0];
+            expect(connectionString).not.toMatch(/authMechanism|ENVIRONMENT|OIDC_CALLBACK/i);
+            expect(options).toEqual(clientOptions);
+            expect(options.authMechanismProperties?.OIDC_CALLBACK).toBeUndefined();
+            const { MongoClient } = await vi.importActual<{ MongoClient: typeof MongoClientType }>('mongodb');
+            const effective = new MongoClient(connectionString, options).options;
+            expect(effective.credentials?.mechanism).not.toBe('MONGODB-OIDC');
+            expect(effective.credentials?.mechanismProperties.ENVIRONMENT).toBeUndefined();
+            expect(effective.credentials?.mechanismProperties.OIDC_CALLBACK).toBeUndefined();
+            if (authMechanism === 'NativeAuth') {
+                expect(effective.credentials).toMatchObject({ username, password: '', mechanism: 'DEFAULT' });
+            } else {
+                expect(effective.credentials).toBeUndefined();
+            }
+            expect(effective.tls).toBe(false);
+            expect(effective.serverSelectionTimeoutMS).toBe(1234);
+            expect(driver.connect).toHaveBeenCalledOnce();
+            expect(transport.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenRequest' }));
+            expect(transport.postMessage).toHaveBeenCalledWith({
+                type: 'initResult',
+                requestId: 'init-request',
+                success: true,
+            });
+        });
+
+        it.each([
+            'mongodb://user:dummy@db.example.com/?authMechanism=SCRAM-SHA-256&ssl=false',
+            'mongodb://user@db.example.com/?authMechanism=GSSAPI&authMechanismProperties=SERVICE_NAME:documentdb&authSource=%24external&tls=false',
+            'mongodb://db.example.com/?authMechanism=MONGODB-X509&authSource=%24external&tls=true&tlsInsecure=true',
+        ])('preserves genuine native mechanisms and TLS settings: %s', async (original): Promise<void> => {
+            const clientOptions = { serverSelectionTimeoutMS: 1234 };
+            init({ authMechanism, connectionString: original, clientOptions });
+            await waitForInit();
+            expect(driver.construct).toHaveBeenCalledExactlyOnceWith(original, clientOptions);
+            const [connectionString, options] = driver.construct.mock.calls[0];
+            const { MongoClient } = await vi.importActual<{ MongoClient: typeof MongoClientType }>('mongodb');
+            const before = new MongoClient(original, clientOptions).options;
+            const after = new MongoClient(connectionString, options).options;
+            expect(after.credentials).toEqual(before.credentials);
+            expect(after.tls).toBe(before.tls);
+            expect(after.rejectUnauthorized).toBe(before.rejectUnauthorized);
+            expect(transport.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenRequest' }));
+        });
+
+        it('rejects invalid input before constructing a client or requesting tokens', async (): Promise<void> => {
+            init({ authMechanism, connectionString: 'invalid' });
+            await waitForInit();
+            expect(driver.construct).not.toHaveBeenCalled();
+            expect(driver.connect).not.toHaveBeenCalled();
+            expect(transport.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'tokenRequest' }));
+            expect(transport.postMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: 'initResult',
+                    success: false,
+                    error: expect.stringMatching(/Invalid scheme/),
+                }),
+            );
+        });
+    });
 });

@@ -12,8 +12,8 @@ import { AuthMethodId } from './AuthMethod';
 /**
  * Handler for anonymous ("no authentication") connections.
  *
- * The connection string is passed through verbatim — including any user-supplied
- * `tls`/`ssl` overrides — and no credentials are embedded. The extension never
+ * Conflicting URI OIDC declarations are removed; otherwise the connection string is passed through
+ * verbatim — including any user-supplied `tls`/`ssl` overrides — and no credentials are embedded. The extension never
  * forces TLS here; the only client options added are the TLS exception and its
  * fail-fast timeout, applied exactly as in {@link NativeAuthHandler}
  * (see {@link buildAuthConnectionTarget}).
