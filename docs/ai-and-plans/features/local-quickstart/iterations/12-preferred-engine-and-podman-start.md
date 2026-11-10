@@ -271,9 +271,9 @@ This documentation-only approval does not start those implementation checks.
    scenarios. Opus review required keeping recorded metadata and credential warnings out
    of shared live state; five additional regressions preserve data-removed state and
    container-environment credential recovery. Advised (`claude-opus-5.5`), 85% confidence.
-   Focused tests: 362 passed; browser harness: 34 passed. The integration build currently
-   reports only P5's pending guidance/start-label/recovery-ID UI wiring; it will be rerun
-   after that wiring is complete. P3's initial standalone type check passed.
+   Focused tests: 362 passed; browser harness: 34 passed. The first integration build
+   reported only P5's pending UI wiring; after that wiring, `npm run build` passed,
+   completing P3's Case 1 build verification.
 
 4. **P4 — W1 replaced.** No provider memory for Podman runs, and no Docker evidence or start action
    for them.
@@ -287,6 +287,17 @@ This documentation-only approval does not start those implementation checks.
 
 5. **P5 — W8.** Machine detection, the `startPodmanMachine` action, the platform gate, the button
    and the wait.
+
+   **Done (2026-11-10), commit `165bc3d1f`:** Sol implemented verified live machine
+   selection and platform gating, explicit-name startup, non-killing startup observation,
+   output draining, recovery copy and button/wait integration. Opus review required
+   preserving Docker memory for shim launches, quietly polling click-time state changes,
+   and automatically polling an already-starting Podman machine once per execution
+   generation. Advised (`claude-opus-5.5`), final 90% confidence. Added 134 regressions;
+   559 focused tests and 36 browser-harness tests passed; the Case 1 build passed.
+   The real WSL lifecycle smoke test passed separately. Native Windows/macOS startup is
+   still a manual-matrix item, not claimed as live-tested.
+
 6. **P6 — fallback display, telemetry, docs.** The detail-line segment, the Details fact, the user
    manual, the README timeline, and accepted decisions for engine preference and platform-gated
    startup. Use the next available decision numbers; iteration 10's draft numbers must not
@@ -311,8 +322,8 @@ live engine status remains unknown until execution.
 | P2 | `gpt-6.1-sol` | Resolver, readiness and execution interfaces cross modules | Done: `7f5ad767` |
 | P3 | `gpt-6.1-sol` | Check-free behavior spans command, service, router and webview | Done: `346dc9cd` |
 | P4 | `gpt-6.1-terra` | Bounded provider-evidence isolation | Done: `00fd6724` |
-| P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Backend reviewed; UI in progress |
-| P6 | `gpt-6.1-sol` | Evidence, telemetry and scenario integration | Queued |
+| P5 | `gpt-6.1-sol` | Platform detection and long-running process lifecycle | Done: `165bc3d1f` |
+| P6 | `gpt-6.1-sol` | Evidence, telemetry and scenario integration | Backend in progress; docs drafted by `gpt-6-luna` |
 
 P1's first worker stopped after the runtime split exposed a command log consumer outside
 its initial file list. The leader authorized that necessary consumer migration; no
@@ -345,6 +356,17 @@ server 6.1.4, a reachable rootless remote Linux engine, and a default connection
 Windows-shared WSL socket. `machine list --format json` returned `[]` from this WSL client.
 This environment can validate provisioning and engine ownership but cannot exercise the
 native Windows/macOS machine-start button. No machine or existing container was stopped.
+
+**Live lifecycle result: passed.** An isolated Vitest harness used the real
+`QuickStartService` and `ContainerRuntime`, in-memory VS Code host state/secrets, and the
+remote Podman engine. It pulled the official DocumentDB Local image (version 1.0.1), bound
+only loopback on a free high port, provisioned and authenticated successfully, and verified
+Podman ownership in both the lease and ready record. Stop/start/reconcile passed; requesting
+Docker afterward still managed the record in Podman. Normal service deletion and independent
+CLI checks confirmed that only the uniquely named test container and volume were removed,
+pre-existing resources were unchanged, and no credential/scratch files remained. Runtime:
+39.27 seconds. The downloaded image remains in the shared cache. Sample data was disabled.
+Native machine startup remains unverified on this WSL extension host.
 
 **Deferred operator question:** the approved WSL socket-start guidance applies to native
 Podman, but a WSL client using the Windows-shared socket requires starting the Windows
